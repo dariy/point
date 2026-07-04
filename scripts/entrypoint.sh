@@ -15,6 +15,19 @@ start_remark42() {
         echo "remark42: REMARK_SECRET/REMARK_URL not set, not starting comments engine"
         return 0
     fi
+    # Admin basic-auth password for server-to-server moderation calls (Point →
+    # remark42 admin API on loopback). Generated once and persisted; exported so
+    # both processes see the same value. The public /comments proxy strips
+    # basic auth, so this never becomes an outside-facing surface.
+    if [ -z "$ADMIN_PASSWD" ]; then
+        if [ ! -s /data/remark42/admin_passwd ]; then
+            head -c 24 /dev/urandom | base64 | tr -d '/+=\n' > /data/remark42/admin_passwd
+            chmod 600 /data/remark42/admin_passwd
+            chown appuser:appuser /data/remark42/admin_passwd 2>/dev/null || true
+        fi
+        ADMIN_PASSWD=$(cat /data/remark42/admin_passwd)
+    fi
+    export ADMIN_PASSWD
     # Replicate upstream docker-init.sh: bake REMARK_URL into the web assets
     find /app/remark42/web -regex '.*\.\(html\|js\|mjs\)$' -exec sed -i "s|{% REMARK_URL %}|${REMARK_URL}|g" {} \;
     (

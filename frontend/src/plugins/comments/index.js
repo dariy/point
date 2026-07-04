@@ -8,6 +8,8 @@
 // beforehand; it exposes window.REMARK42.{createInstance,changeTheme,destroy}
 // and fires "REMARK42::ready" on window after the first init.
 
+import CommentsAdminPage from './CommentsAdminPage.js';
+
 const SCRIPT_ID = 'remark42-embed-script';
 
 function isDark() {
@@ -70,3 +72,7 @@ export function mount(el, ctx) {
     },
   };
 }
+
+// Route module for the /light/comments moderation page (nav-menu pattern:
+// one chunk = public slot mount + admin page default export).
+export default CommentsAdminPage;

@@ -105,10 +105,10 @@ var Registry = []Descriptor{
 
 	// Remark42 comments: widget embedded after post content (post-comments
 	// slot), served by the remark42 sidecar through the gated /comments reverse
-	// proxy. Off by default — external-service opt-in, consistent with mcp.
-	// NOTE: /light/comments joins Routes with the admin moderation page
-	// (point-m3sv.5) — listing it earlier would register a dead SPA route.
-	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Slot: "post-comments", Routes: []string{"/comments"}, EntryName: "comments", DefaultEnabled: false},
+	// proxy, plus the /light/comments moderation page (nav-menu pattern: one
+	// plugin = public surface + admin page). Off by default — external-service
+	// opt-in, consistent with mcp.
+	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Slot: "post-comments", Routes: []string{"/comments", "/light/comments", "/api/admin/comments"}, EntryName: "comments", DefaultEnabled: false},
 
 	// Previous/next post links at the foot of the article (non-immersive view).
 	// No JS chunk — the post renderer gates the block on this plugin's enabled
