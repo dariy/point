@@ -388,7 +388,7 @@ export default class HomePage extends Component {
       // starts tracking the finger promptly instead of feeling laggy.
       commitThresholdPx: 8,
       onPinchMove: (scaleDelta) => this._pinchStep(scaleDelta),
-      onPinchEnd: () => { this._pinchAccum = 1; },
+      onPinchEnd: () => this._onPinchEnd(),
       onSwipeMove: (dx, dy) => {
         // A commit is already animating to the next page; ignore new drags until
         // it settles so a second commit can't orphan the first's ghost overlay.
@@ -476,6 +476,13 @@ export default class HomePage extends Component {
   // ── Pinch / wheel / keyboard zoom ──────────────────────────────────────────
   // Pinch is handled by GestureController's onPinchMove; here we add the desktop
   // paths: ctrl+wheel (trackpad pinch) and +/- keys. All funnel into _zoomBy.
+  //
+  // A zoom step only re-flows the grid via CSS (instant, no remount). The
+  // per_page reconcile — which updates the route and REBUILDS the post content,
+  // tearing down this very gesture controller — is deferred: flushed on
+  // onPinchEnd, and debounced for the discrete wheel/key paths. Reconciling on
+  // every step would destroy the in-flight pinch mid-gesture (the same trap the
+  // timeline plugin documents), so the zoom would appear frozen after one step.
 
   /** Accumulate incremental pinch scale and step a column once it crosses ±18%. */
   _pinchStep(scaleDelta) {
@@ -484,14 +491,23 @@ export default class HomePage extends Component {
     else if (this._pinchAccum < 1 / 1.18) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller cards, more cols
   }
 
-  /** Apply a ±1 column zoom step and re-fit per_page to the viewport. */
+  _onPinchEnd() {
+    this._pinchAccum = 1;
+    this._commitZoom(); // gesture's over — safe to refetch/remount now
+  }
+
+  /** Apply a ±1 column zoom step: instant CSS re-flow, deferred per_page refit. */
   _zoomBy(delta) {
     const grid = this.$('.posts-grid');
     if (!grid) return;
-    stepZoom(grid, delta);
-    // CSS re-flows the live grid instantly; reconcile refits per_page (and page)
-    // so the next fetch fills the new column count. fromResize bypasses the URL
-    // per_page guard.
+    stepZoom(grid, delta); // CSS-only: pins columns + squares cards, no remount
+    clearTimeout(this._zoomCommitTimer);
+    this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
+  }
+
+  /** Refit per_page (and page) to the new column count — the remounting step. */
+  _commitZoom() {
+    clearTimeout(this._zoomCommitTimer);
     this._reconcilePerPage({ fromResize: true });
   }
 
@@ -518,6 +534,7 @@ export default class HomePage extends Component {
   _teardownZoomInputs() {
     if (this._onZoomKey) window.removeEventListener('keydown', this._onZoomKey);
     if (this._onZoomWheel && this._zoomWheelEl) this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
+    clearTimeout(this._zoomCommitTimer);
     this._onZoomKey = null;
     this._onZoomWheel = null;
     this._zoomWheelEl = null;
