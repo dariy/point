@@ -27,10 +27,18 @@ REMARK42_DATA=${REMARK42_DATA:-$PROJECT_ROOT/data/remark42-local}
 RUNTIME=$(command -v podman || command -v docker)
 
 mkdir -p "$REMARK42_DATA"
+# remark42's server drops to uid 1001 inside the container; the volume must be
+# writable for that uid or avatar writes (and thus anonymous login) 500.
+# No :U on the mount — it would chown back to the container's root at start.
+if [[ "$RUNTIME" == *podman ]]; then
+    podman unshare chown -R 1001:1001 "$REMARK42_DATA"
+else
+    sudo chown -R 1001:1001 "$REMARK42_DATA"
+fi
 "$RUNTIME" rm -f remark42-local >/dev/null 2>&1 || true
 "$RUNTIME" run -d --name remark42-local --restart unless-stopped \
     -p 127.0.0.1:8081:8080 \
-    -v "$REMARK42_DATA:/srv/var:z,U" \
+    -v "$REMARK42_DATA:/srv/var:z" \
     -e REMARK_URL="$REMARK_URL" \
     -e SECRET="$REMARK_SECRET" \
     -e SITE=remark \
