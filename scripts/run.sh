@@ -41,6 +41,18 @@ if [ -f .env ]; then
     set +a
 fi
 
+# Comments engine: the in-process supervisor only manages the binary bundled
+# into the packaged container; locally remark42 runs as a sidecar container on
+# 127.0.0.1:8081 that Point's /comments proxy targets.
+if [ -n "${REMARK_SECRET:-}" ] && [ -n "${REMARK_URL:-}" ] && [ -n "${ADMIN_PASSWD:-}" ]; then
+    if curl -sf -o /dev/null --max-time 2 http://127.0.0.1:8081/ping; then
+        echo "==> remark42-local already running on :8081"
+    else
+        echo "==> Starting remark42-local sidecar..."
+        ./scripts/run-remark42-local.sh
+    fi
+fi
+
 echo "==> Building CSS..."
 ./scripts/build-css.sh
 

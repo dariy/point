@@ -38,6 +38,13 @@ func (s *RemarkSupervisor) startLocked() {
 		slog.Info("RemarkSupervisor: REMARK_URL or REMARK_SECRET not set, not starting comments engine")
 		return
 	}
+	// Outside the packaged container (local dev) there is no bundled binary;
+	// remark42 runs as a sidecar container instead (scripts/run-remark42-local.sh)
+	// and the /comments proxy reaches it on the same port.
+	if _, err := os.Stat("/app/remark42/remark42"); err != nil {
+		slog.Info("RemarkSupervisor: no bundled remark42 binary, assuming external comments engine on :8081")
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
