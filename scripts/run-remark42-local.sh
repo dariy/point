@@ -36,6 +36,27 @@ else
     sudo chown -R 1001:1001 "$REMARK42_DATA"
 fi
 "$RUNTIME" rm -f remark42-local >/dev/null 2>&1 || true
+
+# Email login for comments: reuses the engine's SMTP_* vars from .env
+# (any SMTP relay — Mailgun, Brevo, self-hosted). Set AUTH_EMAIL_ENABLE=true
+# in .env to turn it on for local dev.
+EMAIL_ARGS=()
+if [ "${AUTH_EMAIL_ENABLE:-false}" = "true" ] && [ -n "${SMTP_HOST:-}" ]; then
+    EMAIL_ARGS=(
+        -e AUTH_EMAIL_ENABLE=true
+        -e SMTP_HOST="$SMTP_HOST"
+        -e SMTP_PORT="${SMTP_PORT:-587}"
+        -e SMTP_USERNAME="${SMTP_USERNAME:-}"
+        -e SMTP_PASSWORD="${SMTP_PASSWORD:-}"
+        -e AUTH_EMAIL_FROM="${SMTP_FROM:-${SMTP_USERNAME:-}}"
+    )
+    if [ "${SMTP_PORT:-587}" = "465" ]; then
+        EMAIL_ARGS+=(-e SMTP_TLS=true)
+    else
+        EMAIL_ARGS+=(-e SMTP_STARTTLS=true)
+    fi
+fi
+
 "$RUNTIME" run -d --name remark42-local --restart unless-stopped \
     -p 127.0.0.1:8081:8080 \
     -v "$REMARK42_DATA:/srv/var:z" \
@@ -44,6 +65,7 @@ fi
     -e SITE=remark \
     -e AUTH_ANON="${AUTH_ANON:-true}" \
     -e ADMIN_PASSWD="$ADMIN_PASSWD" \
+    "${EMAIL_ARGS[@]}" \
     ghcr.io/umputun/remark42:latest
 
 echo -n "waiting for remark42"

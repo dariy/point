@@ -116,22 +116,29 @@ func (s *RemarkSupervisor) startLocked() {
 		env = append(env, "AUTH_EMAIL_ENABLE=true")
 
 		smtpHost, _ := s.settings.GetSetting(bgCtx, "remark_smtp_host", "")
-		if smtpHost == "" {
-			slog.Warn("RemarkSupervisor: email login enabled but remark_smtp_host is not set; login emails cannot be sent")
+		if smtpHost != "" {
+			// Admin-UI SMTP settings (Settings → Comments).
+			smtpPort, _ := s.settings.GetSetting(bgCtx, "remark_smtp_port", "587")
+			smtpUser, _ := s.settings.GetSetting(bgCtx, "remark_smtp_username", "")
+			smtpPass, _ := s.settings.GetSecret(bgCtx, "remark_smtp_password")
+			smtpTLS, _ := s.settings.GetSetting(bgCtx, "remark_smtp_tls", "true")
+			emailFrom, _ := s.settings.GetSetting(bgCtx, "remark_email_from", "")
+			env = append(env,
+				"SMTP_HOST="+smtpHost,
+				"SMTP_PORT="+smtpPort,
+				"SMTP_USERNAME="+smtpUser,
+				"SMTP_PASSWORD="+smtpPass,
+				"SMTP_TLS="+smtpTLS,
+				"AUTH_EMAIL_FROM="+emailFrom,
+			)
+		} else if smtpEnv := smtpEnvFallback(os.Getenv); smtpEnv != nil {
+			// No admin-UI SMTP config: reuse the engine's SMTP_* .env vars
+			// (the ones password reset uses — Mailgun, Brevo, self-hosted,
+			// anything with an SMTP relay) so email is configured once.
+			env = append(env, smtpEnv...)
+		} else {
+			slog.Warn("RemarkSupervisor: email login enabled but no SMTP configured (remark_smtp_host setting or SMTP_HOST in .env); login emails cannot be sent")
 		}
-		smtpPort, _ := s.settings.GetSetting(bgCtx, "remark_smtp_port", "587")
-		smtpUser, _ := s.settings.GetSetting(bgCtx, "remark_smtp_username", "")
-		smtpPass, _ := s.settings.GetSecret(bgCtx, "remark_smtp_password")
-		smtpTLS, _ := s.settings.GetSetting(bgCtx, "remark_smtp_tls", "true")
-		emailFrom, _ := s.settings.GetSetting(bgCtx, "remark_email_from", "")
-		env = append(env,
-			"SMTP_HOST="+smtpHost,
-			"SMTP_PORT="+smtpPort,
-			"SMTP_USERNAME="+smtpUser,
-			"SMTP_PASSWORD="+smtpPass,
-			"SMTP_TLS="+smtpTLS,
-			"AUTH_EMAIL_FROM="+emailFrom,
-		)
 	}
 
 	cmd.Env = env
@@ -164,6 +171,37 @@ func (s *RemarkSupervisor) startLocked() {
 			s.startLocked()
 		}
 	}()
+}
+
+// smtpEnvFallback builds remark42 SMTP env entries from the engine's own
+// SMTP_* variables. Returns nil when SMTP_HOST is unset. remark42 uses
+// SMTP_TLS for implicit TLS (port 465) and SMTP_STARTTLS otherwise (587),
+// matching what SendEmail infers from the port.
+func smtpEnvFallback(getenv func(string) string) []string {
+	host := getenv("SMTP_HOST")
+	if host == "" {
+		return nil
+	}
+	port := getenv("SMTP_PORT")
+	if port == "" {
+		port = "587"
+	}
+	from := getenv("SMTP_FROM")
+	if from == "" {
+		from = getenv("SMTP_USERNAME")
+	}
+	tlsFlag := "SMTP_STARTTLS=true"
+	if port == "465" {
+		tlsFlag = "SMTP_TLS=true"
+	}
+	return []string{
+		"SMTP_HOST=" + host,
+		"SMTP_PORT=" + port,
+		"SMTP_USERNAME=" + getenv("SMTP_USERNAME"),
+		"SMTP_PASSWORD=" + getenv("SMTP_PASSWORD"),
+		tlsFlag,
+		"AUTH_EMAIL_FROM=" + from,
+	}
 }
 
 // Restart stops the current sidecar process (if any) and starts a new one with fresh settings.
