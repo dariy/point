@@ -334,6 +334,14 @@
     }
 }
 
+/* --- Comments (remark42 plugin, appended to article.post-single) --- */
+.post-comments {
+    max-width: var(--content-narrow);
+    margin: var(--spacing-2xl) auto 0;
+    padding-top: var(--spacing-xl);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
 /* --- Ultrawide Tier (point-x52z.16) --- */
 .post-layout-grid {
     display: block; /* default */

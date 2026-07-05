@@ -28,7 +28,10 @@ export function mount(el, ctx) {
   window.remark_config = {
     host: `${window.location.origin}/comments`,
     site_id: 'remark',
-    url: post?.slug ? `${window.location.origin}/posts/${post.slug}` : undefined,
+    // Thread key + link target in notification emails / moderation. Keyed by
+    // id, not slug, so renaming a slug keeps the thread; GetPostBySlug resolves
+    // numeric /posts/<id> permalinks so those links render the post.
+    url: post?.id ? `${window.location.origin}/posts/${post.id}` : undefined,
     theme: isDark() ? 'dark' : 'light',
   };
 
@@ -57,13 +60,17 @@ export function mount(el, ctx) {
     document.head.appendChild(s);
   }
 
-  // Follow the site theme toggle (app.js dispatches `themechange`).
+  // Follow the site theme toggle (app.js dispatches `themechange`) and, for
+  // the "auto" theme, OS-level scheme flips (which don't fire `themechange`).
   const onTheme = () => window.REMARK42?.changeTheme?.(isDark() ? 'dark' : 'light');
   document.addEventListener('themechange', onTheme);
+  const mql = window.matchMedia('(prefers-color-scheme: dark)');
+  mql.addEventListener('change', onTheme);
 
   return {
     unmount() {
       document.removeEventListener('themechange', onTheme);
+      mql.removeEventListener('change', onTheme);
       if (onReady) window.removeEventListener('REMARK42::ready', onReady);
       // Global destroy tears down the current (only) instance's iframe and
       // window/document listeners; absent when the embed never initialised.

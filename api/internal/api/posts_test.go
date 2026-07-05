@@ -443,7 +443,7 @@ func TestPostHandler_UpdateSettings(t *testing.T) {
 	}()
 
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewSettingsHandler(settingsSvc)
+	handler := NewSettingsHandler(settingsSvc, nil)
 	e := echo.New()
 
 	// UpdateSettings

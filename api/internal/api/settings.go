@@ -11,11 +11,15 @@ import (
 )
 
 type SettingsHandler struct {
-	settingsService *services.SettingsService
+	settingsService  *services.SettingsService
+	remarkSupervisor *services.RemarkSupervisor
 }
 
-func NewSettingsHandler(settingsService *services.SettingsService) *SettingsHandler {
-	return &SettingsHandler{settingsService: settingsService}
+func NewSettingsHandler(settingsService *services.SettingsService, remarkSupervisor *services.RemarkSupervisor) *SettingsHandler {
+	return &SettingsHandler{
+		settingsService:  settingsService,
+		remarkSupervisor: remarkSupervisor,
+	}
 }
 
 // publicSettingKeys are settings safe to expose to unauthenticated users.
@@ -53,6 +57,10 @@ var writableSecretKeys = map[string]bool{
 	"instagram_access_token":     true,
 	"instagram_user_id":          true,
 	"instagram_token_expires_at": true,
+	"remark_auth_github_cid":     true,
+	"remark_auth_github_csec":    true,
+	"remark_auth_google_cid":     true,
+	"remark_auth_google_csec":    true,
 }
 
 // secretIsSetKeys are secret keys whose presence (but never value) is surfaced to
@@ -65,6 +73,10 @@ var secretIsSetKeys = []string{
 	"instagram_access_token",
 	"instagram_user_id",
 	"instagram_token_expires_at",
+	"remark_auth_github_cid",
+	"remark_auth_github_csec",
+	"remark_auth_google_cid",
+	"remark_auth_google_csec",
 }
 
 // addSecretIsSetFlags annotates the settings map with "<key>_is_set" booleans
@@ -116,8 +128,20 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
+	remarkChanged := false
+
 	for key, value := range updates {
+		if len(key) >= 12 && key[:12] == "remark_auth_" {
+			remarkChanged = true
+		}
 		if writableSecretKeys[key] {
+			// Secret values are never echoed back to the client (only
+			// "<key>_is_set"), so their form fields render empty. An empty
+			// submission means "unchanged", not "clear" — otherwise every
+			// save of a panel containing an untouched secret would wipe it.
+			if value == "" {
+				continue
+			}
 			if err := h.settingsService.SetSecret(ctx, key, value); err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
@@ -126,6 +150,10 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		if err := h.settingsService.SetSetting(ctx, key, value, "string"); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+	}
+
+	if remarkChanged && h.remarkSupervisor != nil {
+		go h.remarkSupervisor.Restart()
 	}
 
 	all, err := h.settingsService.GetAllSettings(ctx)

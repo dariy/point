@@ -21,6 +21,12 @@ export const LABEL_OVERRIDES = {
   gemini_prompt_title: "Title guidance",
   gemini_prompt_tags: "Tags guidance",
   gemini_prompt_excerpt: "Excerpt guidance",
+  remark_auth_anon: "Enable anonymous comments",
+  remark_auth_email_enable: "Enable email login",
+  remark_auth_github_cid: "GitHub Client ID",
+  remark_auth_github_csec: "GitHub Client Secret",
+  remark_auth_google_cid: "Google Client ID",
+  remark_auth_google_csec: "Google Client Secret",
 };
 
 // Keys rendered as <input type="number">.
@@ -50,6 +56,7 @@ export function isToggleKey(key) {
     key.includes("enable") ||
     key.includes("show") ||
     key.includes("use") ||
+    key.includes("_anon") ||
     key === "multi_user_mode" ||
     key === "require_registration_code"
   );
@@ -66,7 +73,7 @@ function isNumericKey(key) {
 }
 
 function isSecretKey(key) {
-  return key === "gemini_api_key" || key.includes("secret");
+  return key === "gemini_api_key" || key.includes("secret") || key.includes("csec");
 }
 
 /** Markup for a single setting input (without its label wrapper). */

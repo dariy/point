@@ -81,6 +81,16 @@ const PLUGIN_SETTINGS = {
   passkeys: { sections: ["passkeys"] },
   "api-keys": { sections: ["api-keys"] },
   "offline-sync": { sections: ["offline-data", "sync-queue"] },
+  comments: {
+    keys: [
+      "remark_auth_anon",
+      "remark_auth_email_enable",
+      "remark_auth_github_cid",
+      "remark_auth_github_csec",
+      "remark_auth_google_cid",
+      "remark_auth_google_csec",
+    ],
+  },
 };
 
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;

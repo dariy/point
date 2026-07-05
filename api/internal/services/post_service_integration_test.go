@@ -4,6 +4,7 @@ package services
 
 import (
 	"context"
+	"strconv"
 	"testing"
 )
 
@@ -105,6 +106,20 @@ func TestPostService_GetPostBySlug(t *testing.T) {
 	_, err = svc.GetPostBySlug(ctx, "nonexistent-slug")
 	if err == nil {
 		t.Error("expected error for non-existent slug")
+	}
+
+	// Numeric fallback: /posts/<id> permalinks resolve to the post by ID.
+	got3, err := svc.GetPostBySlug(ctx, strconv.FormatInt(post.ID, 10))
+	if err != nil {
+		t.Fatalf("GetPostBySlug (numeric id) failed: %v", err)
+	}
+	if got3.ID != post.ID {
+		t.Errorf("expected post ID %d from numeric lookup, got %d", post.ID, got3.ID)
+	}
+
+	_, err = svc.GetPostBySlug(ctx, "999999")
+	if err == nil {
+		t.Error("expected error for numeric lookup with no matching post")
 	}
 }
 
