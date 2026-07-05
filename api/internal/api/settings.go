@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"point-api/internal/services"
 
@@ -61,6 +62,7 @@ var writableSecretKeys = map[string]bool{
 	"remark_auth_github_csec":    true,
 	"remark_auth_google_cid":     true,
 	"remark_auth_google_csec":    true,
+	"remark_smtp_password":       true,
 }
 
 // secretIsSetKeys are secret keys whose presence (but never value) is surfaced to
@@ -77,6 +79,7 @@ var secretIsSetKeys = []string{
 	"remark_auth_github_csec",
 	"remark_auth_google_cid",
 	"remark_auth_google_csec",
+	"remark_smtp_password",
 }
 
 // addSecretIsSetFlags annotates the settings map with "<key>_is_set" booleans
@@ -131,7 +134,7 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 	remarkChanged := false
 
 	for key, value := range updates {
-		if len(key) >= 12 && key[:12] == "remark_auth_" {
+		if strings.HasPrefix(key, "remark_") {
 			remarkChanged = true
 		}
 		if writableSecretKeys[key] {

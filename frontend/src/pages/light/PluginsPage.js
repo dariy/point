@@ -89,6 +89,12 @@ const PLUGIN_SETTINGS = {
       "remark_auth_github_csec",
       "remark_auth_google_cid",
       "remark_auth_google_csec",
+      "remark_smtp_host",
+      "remark_smtp_port",
+      "remark_smtp_username",
+      "remark_smtp_password",
+      "remark_smtp_tls",
+      "remark_email_from",
     ],
   },
 };

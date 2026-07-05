@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
-	"path/filepath"
+	"time"
 )
 
 type RemarkSupervisor struct {
@@ -64,6 +65,10 @@ func (s *RemarkSupervisor) startLocked() {
 	cmd := exec.CommandContext(ctx, "/app/remark42/remark42", "server")
 	// Put remark42 in its own process group to prevent signals like SIGINT from killing it before the context does
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Graceful stop: SIGTERM on context cancel so bolt closes cleanly; SIGKILL
+	// only if it hasn't exited after WaitDelay.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = 5 * time.Second
 
 	env := os.Environ()
 	env = append(env, "SECRET="+os.Getenv("REMARK_SECRET"))
@@ -102,6 +107,24 @@ func (s *RemarkSupervisor) startLocked() {
 	emailEnable, _ := s.settings.GetSetting(bgCtx, "remark_auth_email_enable", "false")
 	if emailEnable == "true" {
 		env = append(env, "AUTH_EMAIL_ENABLE=true")
+
+		smtpHost, _ := s.settings.GetSetting(bgCtx, "remark_smtp_host", "")
+		if smtpHost == "" {
+			slog.Warn("RemarkSupervisor: email login enabled but remark_smtp_host is not set; login emails cannot be sent")
+		}
+		smtpPort, _ := s.settings.GetSetting(bgCtx, "remark_smtp_port", "587")
+		smtpUser, _ := s.settings.GetSetting(bgCtx, "remark_smtp_username", "")
+		smtpPass, _ := s.settings.GetSecret(bgCtx, "remark_smtp_password")
+		smtpTLS, _ := s.settings.GetSetting(bgCtx, "remark_smtp_tls", "true")
+		emailFrom, _ := s.settings.GetSetting(bgCtx, "remark_email_from", "")
+		env = append(env,
+			"SMTP_HOST="+smtpHost,
+			"SMTP_PORT="+smtpPort,
+			"SMTP_USERNAME="+smtpUser,
+			"SMTP_PASSWORD="+smtpPass,
+			"SMTP_TLS="+smtpTLS,
+			"AUTH_EMAIL_FROM="+emailFrom,
+		)
 	}
 
 	cmd.Env = env
@@ -121,6 +144,18 @@ func (s *RemarkSupervisor) startLocked() {
 		err := cmd.Wait()
 		slog.Info("RemarkSupervisor: remark42 exited", "err", err)
 		close(done)
+		if ctx.Err() != nil {
+			return // intentional stop (Restart cancelled the context)
+		}
+		// Crash: relaunch so comments come back without a container restart.
+		// ponytail: fixed 5s backoff; make it exponential if it ever flaps hard.
+		time.Sleep(5 * time.Second)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.done == done { // no concurrent Restart got here first
+			slog.Info("RemarkSupervisor: restarting remark42 after crash")
+			s.startLocked()
+		}
 	}()
 }
 

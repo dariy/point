@@ -27,6 +27,12 @@ export const LABEL_OVERRIDES = {
   remark_auth_github_csec: "GitHub Client Secret",
   remark_auth_google_cid: "Google Client ID",
   remark_auth_google_csec: "Google Client Secret",
+  remark_smtp_host: "SMTP host",
+  remark_smtp_port: "SMTP port",
+  remark_smtp_username: "SMTP username",
+  remark_smtp_password: "SMTP password",
+  remark_smtp_tls: "SMTP TLS",
+  remark_email_from: "Login email sender address",
 };
 
 // Keys rendered as <input type="number">.
@@ -37,6 +43,7 @@ export const NUMERIC_KEYS = new Set([
   "session_ttl_days",
   "cleanup_interval_days",
   "atlas_post_limit",
+  "remark_smtp_port",
 ]);
 
 /** Humanized label for a setting key (snake_case → Title Case), with overrides. */
@@ -52,11 +59,13 @@ export function labelFor(key) {
 
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
 export function isToggleKey(key) {
+  if (key.includes("username")) return false; // "username" would match "use"
   return (
     key.includes("enable") ||
     key.includes("show") ||
     key.includes("use") ||
     key.includes("_anon") ||
+    key.includes("_tls") ||
     key === "multi_user_mode" ||
     key === "require_registration_code"
   );
@@ -73,7 +82,12 @@ function isNumericKey(key) {
 }
 
 function isSecretKey(key) {
-  return key === "gemini_api_key" || key.includes("secret") || key.includes("csec");
+  return (
+    key === "gemini_api_key" ||
+    key.includes("secret") ||
+    key.includes("csec") ||
+    key.includes("password")
+  );
 }
 
 /** Markup for a single setting input (without its label wrapper). */
@@ -162,7 +176,14 @@ function inputHtml(key, value, { posts = [] }) {
     return `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
   }
   if (isSecretKey(key)) {
-    return `<input type="password" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" autocomplete="new-password">`;
+    // Secret values are never echoed back by the API; blank means "keep".
+    const input = `<input type="password" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" autocomplete="new-password" placeholder="Leave blank to keep the current value">`;
+    const oauthProvider = { remark_auth_github_csec: "github", remark_auth_google_csec: "google" }[key];
+    if (oauthProvider) {
+      return `${input}
+      <small class="form-hint">Callback URL for the OAuth app: <code>${escapeHtml(window.location.origin)}/comments/auth/${oauthProvider}/callback</code></small>`;
+    }
+    return input;
   }
   return `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
 }
