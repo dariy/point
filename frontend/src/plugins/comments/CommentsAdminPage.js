@@ -14,6 +14,7 @@ import { api } from '../../api/client.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
+import { X_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, RESTORE_SVG } from '../../utils/icons.js';
 
 // remark42 returns sanitized comment HTML; the moderation list only needs
 // readable text, so flatten it via DOMParser (inert document — nothing loads
@@ -61,20 +62,26 @@ export default class CommentsAdminPage extends Component {
       const url = c.locator?.url || '';
       const name = c.user?.name || c.user?.id || 'unknown';
       return `
-        <tr data-i="${i}">
-          <td>
-            <strong>${escapeHtml(name)}</strong><br>
-            <small class="text-muted"><time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time></small>
+        <tr data-i="${i}" class="post-row-main">
+          <td class="meta-col">
+            <strong>${escapeHtml(name)}</strong>
           </td>
-          <td>${escapeHtml(textOf(c.text))}</td>
-          <td>
-            ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || 'post')} ↗</a>` : '<span class="text-muted">—</span>'}
+          <td class="title-col">
+            ${url ? `<a href="${escapeHtml(url)}" class="table-link muted" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || 'post')} ${EXTERNAL_LINK_SVG}</a>` : '<span class="text-muted">—</span>'}
           </td>
-          <td class="actions-col">
-            <div class="actions" style="justify-content: flex-end;">
-              <button class="btn btn-sm btn-secondary" data-action="block" data-i="${i}">Block the author</button>
-              <button class="btn btn-sm btn-danger" data-action="delete" data-i="${i}">Delete</button>
+          <td class="updated-col">
+            <time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time>
+          </td>
+          <td class="actions-col" rowspan="2">
+            <div class="actions">
+              <button class="btn btn-sm btn-secondary" data-action="block" data-i="${i}" title="Block the author">${X_SVG}</button>
+              <button class="btn btn-sm btn-danger" data-action="delete" data-i="${i}" title="Delete">${TRASH_SVG}</button>
             </div>
+          </td>
+        </tr>
+        <tr data-i="${i}" class="post-row-tags">
+          <td colspan="3" class="tags-col" style="white-space: normal;">
+            ${escapeHtml(textOf(c.text))}
           </td>
         </tr>`;
     }).join('');
@@ -84,9 +91,9 @@ export default class CommentsAdminPage extends Component {
           <thead>
             <tr>
               <th style="width: 20%;">Author</th>
-              <th style="width: 40%;">Comment</th>
-              <th style="width: 25%;">Post</th>
-              <th style="width: 15%; text-align: right;">Actions</th>
+              <th style="width: 50%;">Post</th>
+              <th style="width: 20%;">Date</th>
+              <th style="width: 10%;"></th>
             </tr>
           </thead>
           <tbody>
@@ -99,12 +106,12 @@ export default class CommentsAdminPage extends Component {
   _renderBlocked(blocked) {
     if (!blocked.length) return '<p class="empty-state">No blocked users.</p>';
     const rows = blocked.map((u, i) => `
-      <tr data-i="${i}">
+      <tr data-i="${i}" class="post-row-main">
         <td><strong>${escapeHtml(u.name || u.id)}</strong></td>
         <td>blocked until ${escapeHtml(formatDate(u.time))}</td>
         <td class="actions-col">
-          <div class="actions" style="justify-content: flex-end;">
-            <button class="btn btn-sm btn-secondary" data-action="unblock" data-i="${i}">Unblock</button>
+          <div class="actions">
+            <button class="btn btn-sm btn-secondary" data-action="unblock" data-i="${i}" title="Unblock">${RESTORE_SVG}</button>
           </div>
         </td>
       </tr>`).join('');
@@ -115,7 +122,7 @@ export default class CommentsAdminPage extends Component {
             <tr>
               <th>User</th>
               <th>Status</th>
-              <th style="text-align: right;">Actions</th>
+              <th style="width: 1%;"></th>
             </tr>
           </thead>
           <tbody>
