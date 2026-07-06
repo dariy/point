@@ -65,6 +65,13 @@ fi
     -e SITE=remark \
     -e AUTH_ANON="${AUTH_ANON:-true}" \
     -e ADMIN_PASSWD="$ADMIN_PASSWD" \
+    -e ADMIN_SHARED_ID="$(sqlite3 "$PROJECT_ROOT/data/point.db" "SELECT 'point_' || id FROM users;" 2>/dev/null | tr '\n' ',' | sed 's/,$//')" \
+    -e AUTH_CUSTOM_NAME="point" \
+    -e AUTH_CUSTOM_CID="point" \
+    -e AUTH_CUSTOM_CSEC="point" \
+    -e AUTH_CUSTOM_AUTH_URL="$REMARK_URL" \
+    -e AUTH_CUSTOM_TOKEN_URL="$REMARK_URL" \
+    -e AUTH_CUSTOM_INFO_URL="$REMARK_URL" \
     "${EMAIL_ARGS[@]}" \
     ghcr.io/umputun/remark42:latest
 

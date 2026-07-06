@@ -149,7 +149,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
-	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings)
+	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo)
 	go remarkSupervisor.Start()
 
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)

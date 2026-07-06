@@ -3,10 +3,13 @@ package services
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"point-api/internal/repository"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -14,15 +17,17 @@ import (
 
 type RemarkSupervisor struct {
 	settings *SettingsService
+	repo     repository.Repository
 	cmd      *exec.Cmd
 	mu       sync.Mutex
 	cancel   context.CancelFunc
 	done     chan struct{} // closed when the current process has fully exited
 }
 
-func NewRemarkSupervisor(settings *SettingsService) *RemarkSupervisor {
+func NewRemarkSupervisor(settings *SettingsService, repo repository.Repository) *RemarkSupervisor {
 	return &RemarkSupervisor{
 		settings: settings,
+		repo:     repo,
 	}
 }
 
@@ -96,6 +101,15 @@ func (s *RemarkSupervisor) startLocked() {
 	anon, _ := s.settings.GetSetting(bgCtx, "remark_auth_anon", "true")
 	env = append(env, "AUTH_ANON="+anon)
 
+	env = append(env,
+		"AUTH_CUSTOM_NAME=point",
+		"AUTH_CUSTOM_CID=point",
+		"AUTH_CUSTOM_CSEC=point",
+		"AUTH_CUSTOM_AUTH_URL="+remarkURL,
+		"AUTH_CUSTOM_TOKEN_URL="+remarkURL,
+		"AUTH_CUSTOM_INFO_URL="+remarkURL,
+	)
+
 	// OAuth creds are stored via SetSecret (secrets table), not SetSetting.
 	githubCID, _ := s.settings.GetSecret(bgCtx, "remark_auth_github_cid")
 	githubCSEC, _ := s.settings.GetSecret(bgCtx, "remark_auth_github_csec")
@@ -138,6 +152,24 @@ func (s *RemarkSupervisor) startLocked() {
 			env = append(env, smtpEnv...)
 		} else {
 			slog.Warn("RemarkSupervisor: email login enabled but no SMTP configured (remark_smtp_host setting or SMTP_HOST in .env); login emails cannot be sent")
+		}
+	}
+
+	// Add all Point users as Remark42 admins
+	if s.repo != nil {
+		rows, err := s.repo.DB().QueryContext(bgCtx, "SELECT id FROM users")
+		if err == nil {
+			defer func() { _ = rows.Close() }()
+			var adminIDs []string
+			for rows.Next() {
+				var id int64
+				if err := rows.Scan(&id); err == nil {
+					adminIDs = append(adminIDs, fmt.Sprintf("point_%d", id))
+				}
+			}
+			if len(adminIDs) > 0 {
+				env = append(env, "ADMIN_SHARED_ID="+strings.Join(adminIDs, ","))
+			}
 		}
 	}
 
