@@ -106,7 +106,7 @@ export default class CommentsAdminPage extends Component {
               <th style="width: 10%;"></th>
             </tr>
           </thead>
-          <tbody>${tableRows}</tbody>
+          <tbody id="posts-tbody">${tableRows}</tbody>
         </table>
       </div>`;
 
@@ -117,15 +117,17 @@ export default class CommentsAdminPage extends Component {
       return `
         <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
           <div class="post-card-body">
-            <div class="post-card-top">
-              <span class="post-card-title"><strong>${escapeHtml(name)}</strong></span>
+            <div class="post-card-top" style="align-items: baseline; flex-wrap: wrap;">
+              <span class="post-card-title" style="flex: 1;">
+                <strong>${escapeHtml(name)}</strong>
+                <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
+                  ${url ? `on <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color: inherit;">${escapeHtml(c.title || c.locator?.title || 'post')}</a> · ` : ''}
+                  <time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time>
+                </span>
+              </span>
             </div>
-            <div class="post-card-chips" style="white-space: normal; color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--spacing-sm);">
+            <div class="post-card-chips" style="white-space: normal; color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--spacing-xs);">
               ${escapeHtml(textOf(c.text))}
-            </div>
-            <div class="post-card-meta">
-              ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || 'post')}</a> · ` : ''}
-              <time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time>
             </div>
           </div>
           <div class="post-card-swipe-actions">
@@ -170,7 +172,7 @@ export default class CommentsAdminPage extends Component {
               <th style="width: 1%;"></th>
             </tr>
           </thead>
-          <tbody>${tableRows}</tbody>
+          <tbody id="posts-tbody">${tableRows}</tbody>
         </table>
       </div>`;
 
@@ -179,11 +181,13 @@ export default class CommentsAdminPage extends Component {
       return `
         <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
           <div class="post-card-body">
-            <div class="post-card-top">
-              <span class="post-card-title"><strong>${escapeHtml(u.name || u.id)}</strong></span>
-            </div>
-            <div class="post-card-meta">
-              blocked until ${escapeHtml(formatDate(u.time))}
+            <div class="post-card-top" style="align-items: baseline;">
+              <span class="post-card-title">
+                <strong>${escapeHtml(u.name || u.id)}</strong>
+                <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
+                  blocked until ${escapeHtml(formatDate(u.time))}
+                </span>
+              </span>
             </div>
           </div>
           <div class="post-card-swipe-actions">
