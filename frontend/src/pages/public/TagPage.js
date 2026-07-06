@@ -556,11 +556,11 @@ export default class TagPage extends Component {
   // every step would destroy the in-flight pinch mid-gesture (the same trap the
   // timeline plugin documents), so the zoom would appear frozen after one step.
 
-  /** Accumulate incremental pinch scale and step a column once it crosses ±18%. */
+  /** Accumulate incremental pinch scale and step a column once it crosses ±40%. */
   _pinchStep(scaleDelta) {
     this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
-    if (this._pinchAccum > 1.18) { this._zoomBy(-1); this._pinchAccum = 1; }        // spread → bigger cards, fewer cols
-    else if (this._pinchAccum < 1 / 1.18) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller cards, more cols
+    if (this._pinchAccum > 1.4) { this._zoomBy(-1); this._pinchAccum = 1; }        // spread → bigger cards, fewer cols
+    else if (this._pinchAccum < 1 / 1.4) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller cards, more cols
   }
 
   _onPinchEnd() {
@@ -597,7 +597,15 @@ export default class TagPage extends Component {
     this._onZoomWheel = (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
-      this._zoomBy(e.deltaY > 0 ? 1 : -1);
+      // Trackpad pinches stream many tiny deltas — accumulate so one step needs
+      // a deliberate gesture. A discrete mouse-wheel notch (~±100-120) still
+      // steps immediately. Direction change resets the run.
+      if (Math.sign(e.deltaY) !== Math.sign(this._wheelAccum || 0)) this._wheelAccum = 0;
+      this._wheelAccum = (this._wheelAccum || 0) + e.deltaY;
+      if (Math.abs(this._wheelAccum) >= 100) {
+        this._zoomBy(this._wheelAccum > 0 ? 1 : -1);
+        this._wheelAccum = 0;
+      }
     };
     // Desktop Safari does NOT send ctrl+wheel for a trackpad pinch — it fires its
     // own gesturestart/change/end events with a cumulative `scale`. Handle those
@@ -606,8 +614,8 @@ export default class TagPage extends Component {
     this._onGestureChange = (e) => {
       e.preventDefault();
       const rel = e.scale / (this._gestureScale || 1);
-      if (rel > 1.18) { this._zoomBy(-1); this._gestureScale = e.scale; }        // spread → fewer cols
-      else if (rel < 1 / 1.18) { this._zoomBy(1); this._gestureScale = e.scale; } // pinch → more cols
+      if (rel > 1.4) { this._zoomBy(-1); this._gestureScale = e.scale; }        // spread → fewer cols
+      else if (rel < 1 / 1.4) { this._zoomBy(1); this._gestureScale = e.scale; } // pinch → more cols
     };
     this._onGestureEnd = (e) => { e.preventDefault(); this._commitZoom(); };
     this._zoomWheelEl = this.$(".site-main");

@@ -408,6 +408,12 @@
    count (and per_page) still fills the viewport. */
 body.grid-zoom .posts-grid {
     grid-template-columns: repeat(var(--posts-grid-cols, 3), 1fr);
+    /* The grid-expand mount stretches the grid to the viewport and its
+       minmax(min-content, 1fr) rows absorb that height, opening phantom gaps
+       between the square cards. Size rows to the cards and pack them at the
+       top instead (align-content:stretch would re-inflate auto rows). */
+    grid-auto-rows: auto;
+    align-content: start;
 }
 
 body.grid-zoom .post-card-slot {
