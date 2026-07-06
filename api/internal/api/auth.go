@@ -401,6 +401,7 @@ func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expir
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
 	})
 	c.SetCookie(&http.Cookie{
 		Name:     "XSRF-TOKEN",
@@ -408,6 +409,7 @@ func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expir
 		Expires:  expiresAt,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
 	})
 }
 
@@ -420,6 +422,7 @@ func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
 	})
 	c.SetCookie(&http.Cookie{
 		Name:     "XSRF-TOKEN",
@@ -427,5 +430,6 @@ func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
 		Expires:  past,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
 	})
 }
