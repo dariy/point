@@ -47,6 +47,10 @@ var publicSettingKeys = map[string]bool{
 	"exif_visibility":         true,
 	"nav_menu_mode":           true,
 	"footer_copyright":        true,
+
+	// Comments (remark42) embed appearance — read by the public widget config.
+	"remark_simple_view": true,
+	"remark_no_footer":   true,
 }
 
 // writableSecretKeys are secrets the admin may set through the API.

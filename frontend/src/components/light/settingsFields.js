@@ -21,6 +21,8 @@ export const LABEL_OVERRIDES = {
   gemini_prompt_title: "Title guidance",
   gemini_prompt_tags: "Tags guidance",
   gemini_prompt_excerpt: "Excerpt guidance",
+  remark_simple_view: "Simple view (minimal widget UI)",
+  remark_no_footer: "Hide widget footer",
   remark_auth_anon: "Enable anonymous comments",
   remark_auth_email_enable: "Enable email login",
   remark_auth_github_cid: "GitHub Client ID",
@@ -57,6 +59,18 @@ export function labelFor(key) {
   );
 }
 
+// Toggle keys whose effective default is ON when the setting was never saved.
+// Must mirror the backend read-time defaults (remark_supervisor.go reads the
+// remark_* keys with default "true"; the comments embed treats absent
+// remark_simple_view / remark_no_footer as true) — otherwise the panel would
+// show OFF for an unset key and a no-change save would flip real behavior.
+export const DEFAULT_ON_KEYS = new Set([
+  "remark_simple_view",
+  "remark_no_footer",
+  "remark_auth_anon",
+  "remark_smtp_tls",
+]);
+
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
 export function isToggleKey(key) {
   if (key.includes("username")) return false; // "username" would match "use"
@@ -66,6 +80,8 @@ export function isToggleKey(key) {
     key.includes("use") ||
     key.includes("_anon") ||
     key.includes("_tls") ||
+    key === "remark_simple_view" ||
+    key === "remark_no_footer" ||
     key === "multi_user_mode" ||
     key === "require_registration_code"
   );
@@ -203,7 +219,7 @@ export function renderFields(keys, settings, ctx = {}) {
   const toggles = [];
 
   for (const key of keys) {
-    const value = settings[key] ?? "";
+    const value = settings[key] ?? (DEFAULT_ON_KEYS.has(key) ? "true" : "");
     const label = labelFor(key);
 
     if (isToggleKey(key)) {

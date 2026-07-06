@@ -9,8 +9,15 @@
 // and fires "REMARK42::ready" on window after the first init.
 
 import CommentsAdminPage from './CommentsAdminPage.js';
+import { store } from '../../store.js';
 
 const SCRIPT_ID = 'remark42-embed-script';
+
+// Admin-tunable embed appearance settings default to ON: absent (never saved)
+// must read as true, so only an explicit "false" turns them off.
+function boolSetting(v) {
+  return v !== false && v !== 'false';
+}
 
 function isDark() {
   const t = document.documentElement.dataset.theme;
@@ -99,9 +106,12 @@ export function mount(el, ctx) {
   root.id = 'remark42';
   el.appendChild(root);
 
+  const settings = store.get('settings') || {};
   window.remark_config = {
     host: `${window.location.origin}/comments`,
     site_id: 'remark',
+    simple_view: boolSetting(settings.remark_simple_view),
+    no_footer: boolSetting(settings.remark_no_footer),
     // Thread key + link target in notification emails / moderation. Keyed by
     // id, not slug, so renaming a slug keeps the thread; GetPostBySlug resolves
     // numeric /posts/<id> permalinks so those links render the post.

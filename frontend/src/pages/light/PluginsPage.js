@@ -83,6 +83,8 @@ const PLUGIN_SETTINGS = {
   "offline-sync": { sections: ["offline-data", "sync-queue"] },
   comments: {
     keys: [
+      "remark_simple_view",
+      "remark_no_footer",
       "remark_auth_anon",
       "remark_auth_email_enable",
       "remark_auth_github_cid",
