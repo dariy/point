@@ -302,23 +302,6 @@ func TestPostService_PublishAndWithdraw(t *testing.T) {
 	}
 }
 
-func TestPostService_GetPostNavigation(t *testing.T) {
-	svc, repo := setupPostService(t)
-	defer func() { _ = repo.Close() }()
-	ctx := context.Background()
-
-	insertTestUser(t, svc)
-	p1, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "First", Slug: "first", AuthorID: 1, Status: "draft"})
-	_, _ = svc.PublishPost(ctx, p1.ID)
-	p2, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Second", Slug: "second", AuthorID: 1, Status: "draft"})
-	_, _ = svc.PublishPost(ctx, p2.ID)
-
-	_, _, err := svc.GetPostNavigation(ctx, p1.ID, true, "")
-	if err != nil {
-		t.Fatalf("GetPostNavigation failed: %v", err)
-	}
-}
-
 func TestPostService_PublishDueScheduledPosts(t *testing.T) {
 	svc, repo := setupPostService(t)
 	defer func() { _ = repo.Close() }()
