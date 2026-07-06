@@ -182,10 +182,18 @@ export function computePerPage(minPerPage, gridEl = null) {
     // opposite. Taking the max of the regular slots is stable regardless of how
     // many posts are currently rendered or where the hero sits — no feedback
     // loop. Falls back to the token when only the hero is present.
-    const slots = [...gridEl.querySelectorAll('.post-card-slot:not(.featured-post)')];
-    rowH =
-      slots.reduce((m, s) => Math.max(m, s.getBoundingClientRect().height), 0) ||
-      tokenPx('var(--post-cardhas-image-min-height)', gridEl);
+    if (zoomCols) {
+      // Zoomed cards stretch to fill their 1fr row, so measuring a slot's
+      // height feeds back: taller row → fewer rows computed → refetch → even
+      // taller rows. Use the square base (column width) instead — the leftover
+      // after fitting squares becomes a modest per-row stretch, not a spiral.
+      rowH = (gridEl.getBoundingClientRect().width - (cols - 1) * gap) / cols;
+    } else {
+      const slots = [...gridEl.querySelectorAll('.post-card-slot:not(.featured-post)')];
+      rowH =
+        slots.reduce((m, s) => Math.max(m, s.getBoundingClientRect().height), 0) ||
+        tokenPx('var(--post-cardhas-image-min-height)', gridEl);
+    }
     top = gridEl.getBoundingClientRect().top;
     reserve = belowGridReserve(gridEl);
   } else {

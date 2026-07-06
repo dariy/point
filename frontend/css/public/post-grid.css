@@ -408,17 +408,19 @@
    count (and per_page) still fills the viewport. */
 body.grid-zoom .posts-grid {
     grid-template-columns: repeat(var(--posts-grid-cols, 3), 1fr);
-    /* The grid-expand mount stretches the grid to the viewport and its
-       minmax(min-content, 1fr) rows absorb that height, opening phantom gaps
-       between the square cards. Size rows to the cards and pack them at the
-       top instead (align-content:stretch would re-inflate auto rows). */
-    grid-auto-rows: auto;
-    align-content: start;
 }
 
 body.grid-zoom .post-card-slot {
+    /* aspect-ratio floors the row at square during track sizing; min-height
+       then stretches the card to fill the row once the grid-expand mount's
+       1fr rows share out the leftover viewport height — cards grow a little
+       taller than wide instead of leaving a dead band above the paginator. */
     aspect-ratio: 1;
-    min-height: 0;
+    /* Pin the width to the column so aspect-ratio can't transfer the stretched
+       height back into the inline axis (a 459px-tall card would go 459px wide
+       and overflow its 368px track). */
+    width: 100%;
+    min-height: 100%;
     /* Neutralise featured/orphan full-row spans (they'd stretch one card into a
        wide box). !important beats the high-specificity orphan rules above. */
     grid-column: auto !important;
