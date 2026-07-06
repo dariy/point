@@ -64,7 +64,23 @@
     grid-column: 3;
     justify-self: end;
     display: flex;
+    align-items: center;
     gap: var(--spacing-sm);
+}
+
+.footer-sliding-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    transition: max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.footer-sliding-actions.is-expanded {
+    max-width: 400px;
+    opacity: 1;
 }
 
 /* Grid zoom slider — mouse/trackpad users on zoom-capable grid pages only

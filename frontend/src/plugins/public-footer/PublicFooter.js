@@ -21,6 +21,7 @@ import {
   LOGIN_SVG,
   LOGOUT_SVG,
   DASHBOARD_SVG,
+  SLIDERS_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
@@ -122,10 +123,15 @@ export class PublicFooter extends Component {
             </div>
             <div class="footer-right">
               <div class="footer-actions">
-                ${zoomSlider}
-                ${rssButton}
+                <div class="footer-sliding-actions">
+                  ${zoomSlider}
+                  ${rssButton}
+                  ${authButton}
+                </div>
+                <button class="footer-action-btn footer-slider-btn" id="footer-slider-btn" type="button" aria-label="Toggle actions" title="More Actions">
+                  ${SLIDERS_SVG}
+                </button>
                 ${themeToggle}
-                ${authButton}
               </div>
             </div>
           </div>
@@ -178,6 +184,10 @@ export class PublicFooter extends Component {
     this.$("#theme-toggle")?.addEventListener("click", () => {
       const current = store.get("theme") || "auto";
       store.set("theme", current === "dark" ? "light" : "dark");
+    });
+
+    this.$("#footer-slider-btn")?.addEventListener("click", () => {
+      this.$(".footer-sliding-actions")?.classList.toggle("is-expanded");
     });
 
     this.$("#footer-logout")?.addEventListener("click", async () => {
