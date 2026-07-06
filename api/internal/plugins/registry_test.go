@@ -50,13 +50,15 @@ func TestBuildManifest_OmitsDisabledAndResolvesChunks(t *testing.T) {
 		}
 	}
 
-	var immersive *ManifestEntry
-	for i := range manifest {
-		if manifest[i].ID == "immersive" {
-			immersive = &manifest[i]
+	var immersive ManifestEntry
+	found := false
+	for _, e := range manifest {
+		if e.ID == "immersive" {
+			immersive = e
+			found = true
 		}
 	}
-	if immersive == nil {
+	if !found {
 		t.Fatalf("enabled plugin 'immersive' missing from manifest")
 	}
 	if immersive.Entry != "/assets/js/p/immersive-ABC123.js" {
