@@ -73,7 +73,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
 
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
-	cacheKey := fmt.Sprintf("homepage_p%d.json", page)
+	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
+	// same page at a different post count must not serve a stale-sized blob.
+	cacheKey := fmt.Sprintf("homepage_p%d_pp%d.json", page, perPage)
 	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
@@ -323,7 +325,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	pathSlugs := splitPathParam(c.QueryParam("path"))
 
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
-	cacheKey := fmt.Sprintf("tagpage_%s_path-%s_p%d.json", slug, strings.Join(pathSlugs, "/"), page)
+	// per_page is part of the key (device-fit / pinch-zoom controlled) so the same
+	// page at a different post count isn't served a stale-sized cached blob.
+	cacheKey := fmt.Sprintf("tagpage_%s_path-%s_p%d_pp%d.json", slug, strings.Join(pathSlugs, "/"), page, perPage)
 	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)

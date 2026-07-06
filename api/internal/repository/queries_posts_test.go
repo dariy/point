@@ -163,6 +163,57 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 	}
 }
 
+// TestRepository_GetPostNavigation_TagScoped verifies the optional tag argument
+// restricts adjacency to posts under that tag (skipping untagged neighbours),
+// while pages are always excluded.
+func TestRepository_GetPostNavigation_TagScoped(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	uid, pidA := insertUserAndPost(t, repo, "p-a", "published")
+	_, pidB := insertUserAndPost(t, repo, "p-b", "published")
+	_, pidC := insertUserAndPost(t, repo, "p-c", "published")
+	// Chronology: A oldest, B middle, C newest.
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01' WHERE id=?`, pidA)
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-03-01' WHERE id=?`, pidB)
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-05-01' WHERE id=?`, pidC)
+
+	// A page between A and C must never surface as a neighbour.
+	_, _ = repo.DB().Exec(
+		`INSERT INTO posts (title, slug, content, author_id, status, published_at, type) VALUES ('Pg','pg','C',?,'published','2024-04-01','page')`, uid)
+
+	// A and C carry the 'travel' tag; B does not.
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'Travel','travel')`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,1),(?,1)`, pidA, pidC)
+
+	// Unscoped: prev of C is its immediate neighbour B.
+	prev, next, err := repo.GetPostNavigation(ctx, pidC, true, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation (unscoped): %v", err)
+	}
+	if prev == nil || prev.ID != pidB {
+		t.Errorf("unscoped prev = %v, want p-b (%d)", prev, pidB)
+	}
+	if next != nil {
+		t.Errorf("unscoped next = %v, want nil", next)
+	}
+
+	// Tag-scoped: B is skipped, so prev of C is A.
+	prev, next, err = repo.GetPostNavigation(ctx, pidC, true, "travel")
+	if err != nil {
+		t.Fatalf("GetPostNavigation (tag): %v", err)
+	}
+	if prev == nil || prev.ID != pidA {
+		t.Errorf("tag-scoped prev = %v, want p-a (%d)", prev, pidA)
+	}
+	if next != nil {
+		t.Errorf("tag-scoped next = %v, want nil", next)
+	}
+}
+
 func TestRepository_ReplacePostContentPath(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {

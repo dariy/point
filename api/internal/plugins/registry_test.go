@@ -215,6 +215,32 @@ func TestIsLockedOff(t *testing.T) {
 	}
 }
 
+func TestExclusivePeers(t *testing.T) {
+	// tags-atlas is in the exclusive "tags-viz" area; its peers are the other two.
+	peers := ExclusivePeers("tags-atlas")
+	want := map[string]bool{"tags-map": true, "tags-graph": true}
+	if len(peers) != len(want) {
+		t.Fatalf("tags-atlas peers = %v, want %d members", peers, len(want))
+	}
+	for _, p := range peers {
+		if !want[p] {
+			t.Errorf("unexpected peer %q", p)
+		}
+	}
+	// Non-exclusive plugin (core area) has no exclusive peers.
+	if got := ExclusivePeers("immersive"); got != nil {
+		t.Errorf("core-area plugin should have no exclusive peers, got %v", got)
+	}
+	// Plain plugin with no area at all.
+	if got := ExclusivePeers("timeline"); got != nil {
+		t.Errorf("area-less plugin should have no exclusive peers, got %v", got)
+	}
+	// Unknown id.
+	if got := ExclusivePeers("does-not-exist"); got != nil {
+		t.Errorf("unknown plugin should have no exclusive peers, got %v", got)
+	}
+}
+
 func TestDefaultPresets(t *testing.T) {
 	presets := DefaultPresets()
 	for _, id := range []string{"minimalistic", "standalone", "fully-featured"} {
