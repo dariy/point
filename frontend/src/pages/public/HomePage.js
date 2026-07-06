@@ -20,6 +20,7 @@ import { store } from '../../store.js';
 import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom } from '../../utils/gridFit.js';
 
 export default class HomePage extends Component {
@@ -29,6 +30,8 @@ export default class HomePage extends Component {
   }
 
   onRouteUpdate(params, query) {
+    // Any URL-driven change invalidates the history entry enterImmersive() pushed.
+    this._immersivePushed = false;
     const prevVc = this._loadedVc;
     this.props.params = params;
     this.props.query = query;
@@ -265,11 +268,8 @@ export default class HomePage extends Component {
         showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
         forceImmersive: immersive,
         startIndex: startIndex,
-        onEnterImmersive: (idx = 0) => {
-          const hash = idx === 0 ? "" : `#${idx + 1}`;
-          window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
-          this.setState({ forceImmersive: true, startIndex: idx });
-        },
+        onExitImmersive: () => exitImmersive(this),
+        onEnterImmersive: (idx = 0) => enterImmersive(this, idx),
       });
       return;
     }
@@ -934,17 +934,8 @@ export default class HomePage extends Component {
       // persists across pagination, swipes, and direct loads of later pages.
       if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
 
-      // Check for hash to set initial slide index (e.g. #2 -> index 1)
-      let startIndex = 0;
-      let forceImmersive = false;
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#')) {
-        const num = parseInt(hash.slice(1), 10);
-        if (!isNaN(num) && num > 0) {
-          startIndex = Math.max(0, num - 1);
-          if (num > 1) forceImmersive = true;
-        }
-      }
+      // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
+      const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);
 
       this.setState({ loading: false, data, error: null, startIndex, forceImmersive });
     } catch (err) {

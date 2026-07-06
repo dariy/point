@@ -13,6 +13,7 @@ import { PostContent, shouldUseImmersive } from '../../components/public/PostCon
 import { api } from '../../api/client.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 
 export default class PreviewPage extends Component {
   constructor(container, props = {}) {
@@ -84,11 +85,8 @@ export default class PreviewPage extends Component {
         nextPost: null,
         forceImmersive: immersive,
         startIndex: this.state.startIndex,
-        onEnterImmersive: (idx = 0) => {
-          const hash = idx === 0 ? "" : `#${idx + 1}`;
-          window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
-          this.setState({ forceImmersive: true, startIndex: idx });
-        },
+        onExitImmersive: () => exitImmersive(this),
+        onEnterImmersive: (idx = 0) => enterImmersive(this, idx),
       });
     }
   }
@@ -108,17 +106,8 @@ export default class PreviewPage extends Component {
       const post = await api.get(`/posts/preview/${encodeURIComponent(token)}`);
       document.title = `Preview: ${post.title}`;
 
-      // Check for hash to set initial slide index (e.g. #2 -> index 1)
-      let startIndex = 0;
-      let forceImmersive = false;
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#')) {
-        const num = parseInt(hash.slice(1), 10);
-        if (!isNaN(num) && num > 0) {
-          startIndex = Math.max(0, num - 1);
-          if (num > 1) forceImmersive = true;
-        }
-      }
+      // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
+      const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);
 
       this.setState({ loading: false, post, error: null, startIndex, forceImmersive });
     } catch (err) {

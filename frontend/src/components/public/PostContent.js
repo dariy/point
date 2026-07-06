@@ -112,8 +112,14 @@ export class PostContent extends Component {
         // Extra context the sheet overlay renders (ignored by classic MediaViewer)
         post,
         editUrl: `/light/posts/${post.id}/edit`,
-        onToggleImmersive: this.props.onToggleImmersive,
         onClose: async () => {
+          // A post forced into immersive mode (header expand, image click,
+          // #N link) unwinds one level: back to its article view. Only
+          // intrinsically immersive posts close out to the list/Atlas below.
+          if (!shouldUseImmersive(post) && this.props.onExitImmersive) {
+            this.props.onExitImmersive();
+            return;
+          }
           // A post opened from the Atlas returns there — closing reselects its
           // place and highlights the post chip — instead of landing on the
           // post's page in the home feed. The Atlas leaves a context marker on
@@ -144,7 +150,10 @@ export class PostContent extends Component {
           }
         },
         onStep: (index) => {
-          const hash = index === 0 ? "" : `#${index + 1}`;
+          // Forced-immersive posts keep #1 on the first slide — the hash is
+          // what marks the forced state, so it must survive stepping back.
+          const forced = !shouldUseImmersive(post);
+          const hash = index === 0 && !forced ? "" : `#${index + 1}`;
           window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
         }
       };
