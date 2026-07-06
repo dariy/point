@@ -61,35 +61,68 @@ export default class CommentsAdminPage extends Component {
       const url = c.locator?.url || '';
       const name = c.user?.name || c.user?.id || 'unknown';
       return `
-        <li class="comment-mod-item" data-i="${i}">
-          <div class="comment-mod-meta">
-            <strong>${escapeHtml(name)}</strong>
-            <time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time>
-            ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || 'post')} ↗</a>` : ''}
-          </div>
-          <p class="comment-mod-text">${escapeHtml(textOf(c.text))}</p>
-          <div class="comment-mod-actions">
-            <button class="btn btn-sm btn-secondary" data-action="delete" data-i="${i}">Delete</button>
-            <button class="btn btn-sm btn-secondary" data-action="block" data-i="${i}">Block the author</button>
-          </div>
-        </li>`;
+        <tr data-i="${i}">
+          <td>
+            <strong>${escapeHtml(name)}</strong><br>
+            <small class="text-muted"><time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time></small>
+          </td>
+          <td>${escapeHtml(textOf(c.text))}</td>
+          <td>
+            ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || 'post')} ↗</a>` : '<span class="text-muted">—</span>'}
+          </td>
+          <td class="actions-col">
+            <div class="actions" style="justify-content: flex-end;">
+              <button class="btn btn-sm btn-secondary" data-action="block" data-i="${i}">Block the author</button>
+              <button class="btn btn-sm btn-danger" data-action="delete" data-i="${i}">Delete</button>
+            </div>
+          </td>
+        </tr>`;
     }).join('');
-    return `<ul class="comment-mod-list">${rows}</ul>`;
+    return `
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width: 20%;">Author</th>
+              <th style="width: 40%;">Comment</th>
+              <th style="width: 25%;">Post</th>
+              <th style="width: 15%; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>`;
   }
 
   _renderBlocked(blocked) {
     if (!blocked.length) return '<p class="empty-state">No blocked users.</p>';
     const rows = blocked.map((u, i) => `
-      <li class="comment-mod-item" data-i="${i}">
-        <div class="comment-mod-meta">
-          <strong>${escapeHtml(u.name || u.id)}</strong>
-          <span>blocked until ${escapeHtml(formatDate(u.time))}</span>
-        </div>
-        <div class="comment-mod-actions">
-          <button class="btn btn-sm btn-secondary" data-action="unblock" data-i="${i}">Unblock</button>
-        </div>
-      </li>`).join('');
-    return `<ul class="comment-mod-list">${rows}</ul>`;
+      <tr data-i="${i}">
+        <td><strong>${escapeHtml(u.name || u.id)}</strong></td>
+        <td>blocked until ${escapeHtml(formatDate(u.time))}</td>
+        <td class="actions-col">
+          <div class="actions" style="justify-content: flex-end;">
+            <button class="btn btn-sm btn-secondary" data-action="unblock" data-i="${i}">Unblock</button>
+          </div>
+        </td>
+      </tr>`).join('');
+    return `
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Status</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>`;
   }
 
   afterRender() {
