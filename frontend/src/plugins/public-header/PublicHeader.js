@@ -22,7 +22,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { hideFlyout } from '../../utils/tags.js';
 
@@ -33,7 +33,6 @@ export class PublicHeader extends Component {
       breadcrumb = [],
       editUrl = null,
       showShare = false,
-      immersive = false,
       onToggleImmersive = null,
       slot = '',
     } = this.props;
@@ -52,9 +51,8 @@ export class PublicHeader extends Component {
 
     const immersiveToggleHtml = onToggleImmersive
       ? `<button type="button" class="header-action-btn immersive-toggle-btn"
-                 title="${immersive ? 'Article view' : 'Immersive mode'}"
-                 aria-label="${immersive ? 'Article view' : 'Immersive mode'}">
-           ${immersive ? ARTICLE_SVG : EXPAND_SVG}
+                 title="Immersive mode" aria-label="Immersive mode">
+           ${EXPAND_SVG}
          </button>`
       : '';
 

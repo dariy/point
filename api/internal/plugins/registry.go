@@ -103,6 +103,12 @@ var Registry = []Descriptor{
 	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
+	// Remark42 comments: widget embedded after post content (post-comments
+	// slot), served by the remark42 sidecar through the gated /comments reverse
+	// proxy, plus the /light/comments moderation page (nav-menu pattern: one
+	// plugin = public surface + admin page).
+	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Slot: "post-comments", Routes: []string{"/comments", "/light/comments", "/api/admin/comments"}, EntryName: "comments", DefaultEnabled: true},
+
 	// Previous/next post links at the foot of the article (non-immersive view).
 	// No JS chunk — the post renderer gates the block on this plugin's enabled
 	// state, so toggling it off simply drops the navigation from article pages.

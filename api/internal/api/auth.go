@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
+	"github.com/go-pkgz/auth/v2/token"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
@@ -91,6 +94,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	c.SetCookie(cookie)
+	h.setRemark42Cookies(c, user, expiresAt)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "Login successful",
@@ -122,6 +126,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 		Secure:   h.cfg.AppEnv == "production",
 	}
 	c.SetCookie(newCookie)
+	h.clearRemark42Cookies(c)
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
@@ -337,4 +342,94 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"detail": "Password reset successfully. You can now log in."})
+}
+
+func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expiresAt time.Time) {
+	secret := os.Getenv("REMARK_SECRET")
+	if secret == "" {
+		return
+	}
+	svc := token.NewService(token.Opts{
+		SecretReader: token.SecretFunc(func(id string) (string, error) {
+			return secret, nil
+		}),
+		CookieDuration: time.Until(expiresAt),
+		Issuer:         "remark42",
+	})
+
+	name := user.DisplayName
+	if name == "" {
+		name = user.Username
+	}
+
+	var authorName string
+	err := h.repo.DB().QueryRowContext(c.Request().Context(), "SELECT value FROM blog_settings WHERE key = 'author_name'").Scan(&authorName)
+	if err == nil && authorName != "" {
+		name = authorName
+	}
+
+	var logoURL string
+	_ = h.repo.DB().QueryRowContext(c.Request().Context(), "SELECT value FROM blog_settings WHERE key = 'logo_url'").Scan(&logoURL)
+
+	u := &token.User{
+		ID:      fmt.Sprintf("point_%d", user.ID),
+		Name:    name,
+		Picture: logoURL,
+	}
+	u.SetAdmin(true)
+
+	xsrf := GenerateToken()[:20]
+
+	claims := token.Claims{
+		User: u,
+	}
+	claims.Audience = jwt.ClaimStrings{"remark"}
+	claims.Issuer = "remark42"
+	claims.ExpiresAt = jwt.NewNumericDate(expiresAt)
+	claims.ID = xsrf
+
+	tokenStr, err := svc.Token(claims)
+	if err != nil {
+		slog.Error("Failed to generate remark42 token", "err", err)
+		return
+	}
+
+	c.SetCookie(&http.Cookie{
+		Name:     "JWT",
+		Value:    tokenStr,
+		Expires:  expiresAt,
+		HttpOnly: true,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
+	})
+	c.SetCookie(&http.Cookie{
+		Name:     "XSRF-TOKEN",
+		Value:    xsrf,
+		Expires:  expiresAt,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
+	})
+}
+
+func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
+	past := time.Now().Add(-1 * time.Hour).UTC().Round(0)
+	c.SetCookie(&http.Cookie{
+		Name:     "JWT",
+		Value:    "",
+		Expires:  past,
+		HttpOnly: true,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
+	})
+	c.SetCookie(&http.Cookie{
+		Name:     "XSRF-TOKEN",
+		Value:    "",
+		Expires:  past,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
+	})
 }

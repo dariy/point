@@ -79,5 +79,6 @@ export const store =
 //  'user'           {object|null}              Current authenticated user, or null
 //  'settings'       {object}                  Public blog settings from /api/settings/public
 //  'theme'          {'dark'|'light'|'auto'}   Active UI theme
+//  'pagination'     {page, pages, total}|null  Grid page state feeding the footer paginator
 //  'toast'          {message, type, id}        Most recent toast notification
 //  'offline_status' {pending, failed, syncing, has_ops}  Mutation queue state

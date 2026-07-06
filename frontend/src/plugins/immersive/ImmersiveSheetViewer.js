@@ -26,7 +26,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.js';
-import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, ARTICLE_SVG, CHEVRON_SVG } from '../../utils/icons.js';
+import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.js';
 
 const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
 
@@ -92,6 +92,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
               ${tagsHtml}
               ${this._renderActions()}
             </div>
+            <div class="immersive-sheet-comments"></div>
           </div>
           ${this._renderFooter(navPrev, navNext)}
         </div>
@@ -99,18 +100,15 @@ export class ImmersiveSheetViewer extends MediaViewer {
   }
 
   _renderActions() {
-    const { editUrl, onToggleImmersive } = this.props;
+    const { editUrl } = this.props;
     const user = store.get('user');
 
-    const articleBtn = onToggleImmersive
-      ? `<button class="immersive-sheet-action" type="button" data-action="article">${ARTICLE_SVG}<span>Article</span></button>`
-      : '';
     const editBtn = (user && editUrl)
       ? `<a class="immersive-sheet-action" href="${escapeHtml(editUrl)}" data-action="edit">${EDIT_SVG}<span>Edit</span></a>`
       : '';
     const shareBtn = `<button class="immersive-sheet-action" type="button" data-action="share">${SHARE_SVG}<span>Share</span></button>`;
 
-    return `<div class="immersive-sheet-actions">${articleBtn}${editBtn}${shareBtn}</div>`;
+    return `<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
   }
 
   _renderFooter(prev, next) {
@@ -189,10 +187,31 @@ export class ImmersiveSheetViewer extends MediaViewer {
       });
     }
 
+    const commentsEl = this.$('.immersive-sheet-comments');
+    if (commentsEl && pluginHost.isEnabled("comments")) {
+      pluginHost.fill("post-comments", commentsEl, {
+        post: this.props.post,
+        url: window.location.href,
+      }).then(res => { this._sheetCommentsComps = res; });
+    }
+
     this._wireSheetControls();
 
-    this._onResize = () => { if (!this._sheetOpen) this._measureSheet(); };
+    this._onResize = () => { 
+      this._measureSheet(); 
+      if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+    };
     window.addEventListener('resize', this._onResize);
+    
+    const sheetEl = this.$('.immersive-sheet');
+    if (sheetEl) {
+      this._sheetObserver = new ResizeObserver(() => {
+        this._measureSheet();
+        if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+      });
+      this._sheetObserver.observe(sheetEl);
+    }
+    
     this._measureSheet();
   }
 
@@ -215,8 +234,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       if (action === 'edit') return; // let the link navigate
       e.preventDefault();
       e.stopPropagation();
-      if (action === 'article') this.props.onToggleImmersive?.();
-      else if (action === 'share') sharePost({ title: document.title, url: window.location.href });
+      if (action === 'share') sharePost({ title: document.title, url: window.location.href });
     });
 
     this._on(this.$('.immersive-sheet-theme'), 'click', (e) => {
@@ -356,7 +374,12 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _cleanup() {
     super._cleanup();
     if (this._onResize) { window.removeEventListener('resize', this._onResize); this._onResize = null; }
+    if (this._sheetObserver) { this._sheetObserver.disconnect(); this._sheetObserver = null; }
     this._sheetFlyoutCleanup?.();
     this._sheetFlyoutCleanup = null;
+    if (this._sheetCommentsComps) {
+      this._sheetCommentsComps.forEach(c => c?.unmount?.());
+      this._sheetCommentsComps = null;
+    }
   }
 }

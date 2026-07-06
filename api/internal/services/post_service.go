@@ -402,7 +402,17 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.Post, e
 }
 
 func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Post, error) {
-	return s.repo.GetPostBySlug(ctx, strings.ToLower(slug))
+	post, err := s.repo.GetPostBySlug(ctx, strings.ToLower(slug))
+	if err == nil {
+		return post, nil
+	}
+	// Numeric fallback: /posts/<id> is the post's permanent URL (used as the
+	// comment-thread key, which must survive slug changes). A real slug that
+	// happens to be all digits wins over an ID of the same value.
+	if id, convErr := strconv.ParseInt(slug, 10, 64); convErr == nil {
+		return s.repo.GetPost(ctx, id)
+	}
+	return post, err
 }
 
 func (s *PostService) ListPublishedPostStubs(ctx context.Context) ([]repository.PostStub, error) {

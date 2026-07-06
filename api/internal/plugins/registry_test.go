@@ -50,13 +50,15 @@ func TestBuildManifest_OmitsDisabledAndResolvesChunks(t *testing.T) {
 		}
 	}
 
-	var immersive *ManifestEntry
-	for i := range manifest {
-		if manifest[i].ID == "immersive" {
-			immersive = &manifest[i]
+	var immersive ManifestEntry
+	found := false
+	for _, e := range manifest {
+		if e.ID == "immersive" {
+			immersive = e
+			found = true
 		}
 	}
-	if immersive == nil {
+	if !found {
 		t.Fatalf("enabled plugin 'immersive' missing from manifest")
 	}
 	if immersive.Entry != "/assets/js/p/immersive-ABC123.js" {
@@ -159,9 +161,9 @@ func TestRegistry_UniqueIDs(t *testing.T) {
 	// Every plugin defaults enabled except: the alternative immersive viewer,
 	// which ships off so the default public viewer stays Standard; the two
 	// non-default tags-viz alternatives (only Atlas is on by default in the
-	// exclusive area); and the MCP server, a powerful remote-control surface
-	// admins must opt into.
-	defaultOff := map[string]bool{"immersive-sheet": true, "tags-map": true, "tags-graph": true, "mcp": true}
+	// exclusive area); and the external-service opt-ins (MCP server, remark42
+	// comments) admins must enable deliberately.
+	defaultOff := map[string]bool{"immersive-sheet": true, "tags-map": true, "tags-graph": true, "mcp": true, "comments": true}
 	for _, d := range Registry {
 		if !d.DefaultEnabled && !defaultOff[d.ID] {
 			t.Errorf("plugin %q unexpectedly defaults disabled", d.ID)
@@ -212,6 +214,32 @@ func TestIsLockedOff(t *testing.T) {
 	// A disabled plugin is never "locked off".
 	if IsLockedOff("immersive-sheet", map[string]string{}) {
 		t.Errorf("disabled plugin must not be reported locked")
+	}
+}
+
+func TestExclusivePeers(t *testing.T) {
+	// tags-atlas is in the exclusive "tags-viz" area; its peers are the other two.
+	peers := ExclusivePeers("tags-atlas")
+	want := map[string]bool{"tags-map": true, "tags-graph": true}
+	if len(peers) != len(want) {
+		t.Fatalf("tags-atlas peers = %v, want %d members", peers, len(want))
+	}
+	for _, p := range peers {
+		if !want[p] {
+			t.Errorf("unexpected peer %q", p)
+		}
+	}
+	// Non-exclusive plugin (core area) has no exclusive peers.
+	if got := ExclusivePeers("immersive"); got != nil {
+		t.Errorf("core-area plugin should have no exclusive peers, got %v", got)
+	}
+	// Plain plugin with no area at all.
+	if got := ExclusivePeers("timeline"); got != nil {
+		t.Errorf("area-less plugin should have no exclusive peers, got %v", got)
+	}
+	// Unknown id.
+	if got := ExclusivePeers("does-not-exist"); got != nil {
+		t.Errorf("unknown plugin should have no exclusive peers, got %v", got)
 	}
 }
 

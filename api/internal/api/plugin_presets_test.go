@@ -106,6 +106,31 @@ func TestUpdatePreset_UnknownPlugin400(t *testing.T) {
 	}
 }
 
+// TestApplyPreset_ExclusiveAreaKeepsFirst applies "fully-featured" (which
+// enables every plugin, including all three tag-viz alternatives) and verifies
+// the exclusive-area guard leaves only the first member (tags-atlas) enabled.
+func TestApplyPreset_ExclusiveAreaKeepsFirst(t *testing.T) {
+	h, svc, e := newPluginsHandler(t)
+	ctx := context.Background()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/plugins/presets/fully-featured/apply", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("fully-featured")
+	if err := h.ApplyPreset(c); err != nil {
+		t.Fatalf("ApplyPreset error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	all, _ := svc.GetAllSettings(ctx)
+	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 1 || got[0] != "tags-atlas" {
+		t.Errorf("exclusive area should keep only tags-atlas, got %v", got)
+	}
+}
+
 func equalSlice(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

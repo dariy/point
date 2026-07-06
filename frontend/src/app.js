@@ -372,9 +372,11 @@ const routes = [
 // route never overrides a core path of the same pattern.
 for (const entry of pluginHost.routes()) {
   for (const path of entry.routes) {
-    // A plugin's `routes` mixes frontend paths and server API prefixes; only the
-    // SPA (frontend) paths belong in the client router.
-    if (path.startsWith("/api/")) continue;
+    // A plugin's `routes` mixes frontend paths, server API prefixes and
+    // server-proxied paths (e.g. the comments plugin's /comments reverse
+    // proxy); only /light admin pages belong in the client router — public
+    // route plugins go through the tags-route claim instead.
+    if (!path.startsWith("/light")) continue;
     if (routes.some((r) => r.path === path)) continue;
     routes.push({
       path,

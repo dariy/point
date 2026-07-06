@@ -1,3 +1,7 @@
+# Remark42 comment engine (build with --pull so :latest refreshes; pin via arg if a release breaks)
+ARG REMARK42_VERSION=latest
+FROM ghcr.io/umputun/remark42:${REMARK42_VERSION} AS remark42
+
 # Build stage
 FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.4-alpine3.23 AS builder
 ARG TARGETOS
@@ -65,6 +69,9 @@ COPY --chown=appuser:appuser --from=builder /app/migrate-paths .
 COPY --chown=appuser:appuser --from=builder /app/data.yml .
 # Copy frontend assets (includes built js/ bundle from builder stage)
 COPY --chown=appuser:appuser --from=builder /app/frontend/ /app/frontend/
+
+# Remark42 binary + web assets (started by entrypoint.sh when REMARK_SECRET/REMARK_URL are set)
+COPY --chown=appuser:appuser --from=remark42 /srv /app/remark42
 
 # Accept build version as argument and stamp it into index.html for cache-busting
 ARG BUILD_VERSION=dev

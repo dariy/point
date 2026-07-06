@@ -397,6 +397,41 @@
     font-size: var(--font-size-3xl);
 }
 
+/* ===========================
+   Pinch zoom (near-square cards)
+   =========================== */
+/* `--posts-grid-cols` is set on <body> from the stored zoom (see gridFit.js).
+   The column count is pinned and every slot is squared so rows auto-fit the
+   viewport — fewer columns = a few big squares, more = many small ones.
+   ponytail: image cards dominate the list, so aspect-ratio squares them cleanly;
+   text-only cards grow taller and gridFit measures the tallest slot, so the row
+   count (and per_page) still fills the viewport. */
+body.grid-zoom .posts-grid {
+    grid-template-columns: repeat(var(--posts-grid-cols, 3), 1fr);
+    /* Rows share the viewport height evenly with no content/aspect floor:
+       gridFit rounds the row count to the squarest fit, and letting tracks
+       compress a little below square (instead of flooring at it) is what
+       allows rounding *up* — otherwise a 1.9-row fit collapses to one row of
+       stretched sausages with the leftover dumped into their height. */
+    grid-auto-rows: minmax(0, 1fr);
+}
+
+body.grid-zoom .post-card-slot {
+    /* Fill the cell exactly — the card's shape is whatever cols × rows slice
+       of the viewport gridFit computed (≈ square). Cards clip overflow. */
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    /* Neutralise featured/orphan full-row spans (they'd stretch one card into a
+       wide box). !important beats the high-specificity orphan rules above. */
+    grid-column: auto !important;
+}
+
+body.grid-zoom .post-card,
+body.grid-zoom .featured-post .post-card.has-image {
+    min-height: 0;
+}
+
 .featured-post .post-card-content.overlay .post-card-excerpt {
     font-size: var(--font-size-base);
     -webkit-line-clamp: 4;

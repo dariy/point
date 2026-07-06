@@ -11,10 +11,11 @@ import { Component } from '../Component.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { DEBUG } from '../../utils/debug.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
-  THEMES_SVG, MENU_SVG, PLUS_SVG, CHEVRON_SVG, PLUGINS_SVG,
+  THEMES_SVG, MENU_SVG, PLUS_SVG, CHEVRON_SVG, PLUGINS_SVG, COMMENTS_SVG,
 } from '../../utils/icons.js';
 
 const WRITE_ITEMS = [
@@ -47,7 +48,14 @@ export class LightSidebar extends Component {
     const { collapsed } = this.state;
     const version = store.get('version') || '';
 
-    const isManageActive = MANAGE_ITEMS.some(item => 
+    // Plugin-provided pages join the Manage group only while their plugin is
+    // enabled (the manifest is enabled-only, so a disabled plugin disappears).
+    const manageItems = [...MANAGE_ITEMS];
+    if (pluginHost.isEnabled('comments')) {
+      manageItems.splice(1, 0, { href: '/light/comments', label: 'Comments', icon: COMMENTS_SVG });
+    }
+
+    const isManageActive = manageItems.some(item =>
        currentPath === item.href || currentPath.startsWith(item.href + '/')
     );
     const manageExpanded = this.state.manageExpanded || isManageActive;
@@ -67,7 +75,7 @@ export class LightSidebar extends Component {
     };
 
     const writeItems = WRITE_ITEMS.map(renderItem).join('');
-    const manageItems = MANAGE_ITEMS.map(renderItem).join('');
+    const manageItemsHtml = manageItems.map(renderItem).join('');
 
     return `
       <aside class="light-sidebar${collapsed ? ' is-collapsed' : ''}">
@@ -100,7 +108,7 @@ export class LightSidebar extends Component {
               <span class="nav-group-title">Manage</span>
               <span class="toggle-icon">${CHEVRON_SVG}</span>
             </button>
-            <ul class="nav-group-items">${manageItems}</ul>
+            <ul class="nav-group-items">${manageItemsHtml}</ul>
           </div>
         </nav>
 
@@ -120,6 +128,8 @@ export class LightSidebar extends Component {
   }
 
   afterRender() {
+    this.subscribeStore(store, 'plugin_toggled', () => this.renderToDOM());
+
     const { collapsed } = this.state;
     document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
 
