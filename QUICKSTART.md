@@ -123,6 +123,47 @@ Send the key in the `Authorization` header of your requests:
 curl -H "Authorization: Bearer point_pat_..." http://localhost:8000/api/posts
 ```
 
+## Comments on Posts (Optional)
+
+Point bundles the [remark42](https://remark42.com) comment engine inside the same
+container — no extra services to run. It stays dormant until configured.
+
+### Enable in 3 steps
+
+1. Set both values in your `.env` (then `docker compose up -d` to recreate):
+
+   ```bash
+   # Your blog's public URL + /comments
+   REMARK_URL=https://blog.example.com/comments
+   # Any long random string (e.g. `openssl rand -hex 32`)
+   REMARK_SECRET=<random-string>
+   ```
+
+2. Restart: `docker compose up -d`
+3. Turn on **Comments (Remark42)** in **Admin → Plugins**.
+
+A comment box appears under every public post. Anonymous commenting is on by
+default (`AUTH_ANON=true`); to require logins instead, set `AUTH_ANON=false` and
+configure remark42 OAuth providers (`AUTH_GITHUB_CID`, …) in `.env` — see the
+[remark42 docs](https://remark42.com/docs/configuration/authorization/).
+
+### Moderation
+
+- **Admin → Comments** (`/light/comments`): recent comments with delete and
+  block-author actions, plus the blocked-users list — uses your normal Point
+  login, nothing extra to set up.
+- Optionally, moderate inside the widget itself: log into the widget via an
+  OAuth provider and list that user's ID in the `ADMIN_SHARED_ID` env var.
+
+### Notes
+
+- Comment data (and remark42's automatic daily backups) live in
+  `./data/remark42`, so your existing `./data` backup routine covers it.
+- Toggling the plugin off hides the widget and 404s everything under
+  `/comments` — the engine itself keeps idling inside the container (~40 MB).
+- The engine is upgraded together with Point: each image update ships the
+  then-current remark42 release.
+
 ## Instagram Cross-Posting (Optional)
 
 Point can automatically publish your post photos to an Instagram Business or Creator

@@ -64,8 +64,13 @@ podman build $PULL_FLAG \
 echo "Stopping and removing existing container..."
 podman rm -f point-test 2>/dev/null || true
 
+# Host data dir, overridable via POINT_DATA_DIR in .env (defaults to ../data)
+_DATA_DIR=$(grep -E '^POINT_DATA_DIR=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]' || true)
+DATA_DIR=${_DATA_DIR:-../data}
+unset _DATA_DIR
+
 # Pre-create data dirs as host user so --userns=keep-id containers can write
-mkdir -p ../data/media/originals ../data/media/thumbnails ../data/logs ../data/backups
+mkdir -p "$DATA_DIR/media/originals" "$DATA_DIR/media/thumbnails" "$DATA_DIR/logs" "$DATA_DIR/backups"
 
 # Optionally mount PHOTO_LIBRARY_PATH as a read-only volume when set in .env
 _PHOTO_PATH=$(grep -E '^PHOTO_LIBRARY_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]' || true)
@@ -87,7 +92,7 @@ podman run -d \
     --user "$(id -u):$(id -g)" \
     --userns=keep-id \
     -p "${HOST_PORT}:8000" \
-    -v ../data:/data:z,U \
+    -v "$DATA_DIR:/data:z,U" \
     --env-file .env \
     -e TZ=UTC \
     -e DATABASE_URL=/data/point.db \

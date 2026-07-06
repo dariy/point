@@ -27,6 +27,7 @@ For manual steps, environment variables, and update instructions see [QUICKSTART
 - **Tag hierarchy**: many-to many relationship.
 - **Geo-tags**: each tag can be bound to world coordinates.
 - **Map**: highlights all geo-tags on a world map. Thanks to leaflet.
+- **Comments**: optional built-in [remark42](https://remark42.com) engine — widget under every post, moderation inside the Point admin, anonymous or OAuth commenting
 - **Post scheduling**: publish posts at a future date/time
 - **Drag-and-drop creation**: drop an image on any page to instantly create a post
 - **Immersive mode**: full-screen, distraction-free viewing
@@ -48,6 +49,8 @@ The app is configured via environment variables (or a `.env` file in the working
 | `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |
 | `STORAGE_PATH` | `./data` | Media file root |
 | `GEMINI_API_KEY` | *(empty)* | Google Gemini key for AI media analysis |
+| `REMARK_URL` | *(empty)* | Public URL of the comments endpoint (`<APP_URL>/comments`) — with `REMARK_SECRET`, starts the bundled remark42 engine |
+| `REMARK_SECRET` | *(empty)* | JWT-signing secret for remark42 (any long random string) |
 | `PHOTO_LIBRARY_PATH` | *(empty)* | Path to a read-only photo library to import from |
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |

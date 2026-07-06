@@ -16,11 +16,13 @@ body {
 
 .site-wrapper {
     min-height: 100vh;
+    /* dvh (dynamic) wins: it tracks the mobile toolbar collapsing on scroll, so
+       the wrapper grows to fill the enlarged viewport and the footer stays at the
+       bottom. Do NOT pin this to svh (smallest) — svh can't grow past the
+       toolbar-shown height, so once iPad/mobile scroll hides the toolbar the
+       viewport outgrows the wrapper and a toolbar-tall dead space opens below the
+       footer. */
     min-height: 100dvh;
-    /* svh (smallest, toolbars-shown) last: on iOS Safari vh/dvh resolve taller
-       than the visible area, so the page scrolls a sliver past the footer into
-       dead space. svh never exceeds the guaranteed-visible height. */
-    min-height: 100svh;
     display: flex;
     flex-direction: column;
 }

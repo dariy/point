@@ -10,6 +10,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -148,7 +149,10 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
-	settingsHandler := api.NewSettingsHandler(svcs.Settings)
+	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo)
+	go remarkSupervisor.Start()
+
+	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
@@ -452,6 +456,21 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		Version:         cfg.AppVersion,
 		UploadRoot:      cfg.PhotoLibraryPath,
 	})
+
+	// ── Comments plugin (/comments → remark42 sidecar) ─────────────────────────
+	// Gated reverse proxy to the remark42 process started by entrypoint.sh on
+	// loopback; this is its only external access path (see api.RegisterCommentsProxy).
+	remark42URL, _ := url.Parse("http://127.0.0.1:8081")
+	api.RegisterCommentsProxy(e, svcs.Settings, remark42URL)
+
+	// Moderation endpoints for the /light/comments admin page. ADMIN_PASSWD is
+	// generated and exported by entrypoint.sh when the sidecar is configured.
+	commentsAdmin := api.NewCommentsAdminHandler(remark42URL, os.Getenv("ADMIN_PASSWD"))
+	commentsAdminGroup := e.Group("/api/admin/comments", api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "comments"))
+	commentsAdminGroup.GET("/recent", commentsAdmin.Recent)
+	commentsAdminGroup.GET("/blocked", commentsAdmin.Blocked)
+	commentsAdminGroup.DELETE("/comment/:id", commentsAdmin.DeleteComment)
+	commentsAdminGroup.PUT("/user/:id/block", commentsAdmin.SetBlock)
 
 	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
 	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))

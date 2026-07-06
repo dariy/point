@@ -19,6 +19,11 @@ services:
       - STORAGE_PATH=/data
       - FRONTEND_DIR=/app/frontend
       - HOST=0.0.0.0
+      # Comments via the bundled remark42 engine (optional) — set both in .env
+      # to start it, then enable the "Comments" plugin in Admin → Plugins.
+      - REMARK_URL=${REMARK_URL:-}
+      - REMARK_SECRET=${REMARK_SECRET:-}
+      - AUTH_ANON=${AUTH_ANON:-true}
       # - PHOTO_LIBRARY_PATH=/photos
     volumes:
       - ${DATA_PATH:-./data}:/data:z,U

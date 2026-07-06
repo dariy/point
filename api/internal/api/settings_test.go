@@ -20,7 +20,7 @@ func TestSettingsHandler_GetPublicSettings(t *testing.T) {
 
 	svc := services.NewSettingsService(repo)
 	_ = svc.SetSetting(ctx, "blog_title", "Test Blog", "string")
-	h := NewSettingsHandler(svc)
+	h := NewSettingsHandler(svc, nil)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/public", nil)
@@ -46,7 +46,7 @@ func TestSettingsHandler_GetSettings_SecretKeysAbsent(t *testing.T) {
 	_ = svc.SetSecret(ctx, "gemini_api_key", "gkey")
 	_ = svc.SetSetting(ctx, "blog_title", "My Blog", "string")
 
-	h := NewSettingsHandler(svc)
+	h := NewSettingsHandler(svc, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
 	rec := httptest.NewRecorder()
@@ -83,7 +83,7 @@ func TestSettingsHandler_UpdateSettings_SecretRouted(t *testing.T) {
 	ctx := context.Background()
 
 	svc := services.NewSettingsService(repo)
-	h := NewSettingsHandler(svc)
+	h := NewSettingsHandler(svc, nil)
 	e := echo.New()
 
 	body, _ := json.Marshal(map[string]string{"gemini_api_key": "new_key", "blog_title": "Updated"})
@@ -123,7 +123,7 @@ func TestSettingsHandler_GetSettingByKey(t *testing.T) {
 
 	svc := services.NewSettingsService(repo)
 	_ = svc.SetSetting(ctx, "my_key", "my_value", "string")
-	h := NewSettingsHandler(svc)
+	h := NewSettingsHandler(svc, nil)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/my_key", nil)
@@ -144,7 +144,7 @@ func TestUpdateSettings_InvalidBind(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 
 	svc := services.NewSettingsService(repo)
-	h := NewSettingsHandler(svc)
+	h := NewSettingsHandler(svc, nil)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(`"not_an_object"`)))
@@ -159,7 +159,7 @@ func TestSettingsHandler_DBErrors(t *testing.T) {
 	h := setupHandlers(t)
 	_ = h.repo.Close()
 	e := echo.New()
-	sh := NewSettingsHandler(h.settingsSvc)
+	sh := NewSettingsHandler(h.settingsSvc, nil)
 
 	t.Run("GetPublicSettings", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)

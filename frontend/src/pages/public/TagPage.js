@@ -35,7 +35,8 @@ import {
   rubberBand,
 } from "../../core/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { computePerPage, cachedPerPage } from "../../utils/gridFit.js";
+import { enterImmersive, exitImmersive, decodeImmersiveHash } from "../../utils/immersiveNav.js";
+import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom } from "../../utils/gridFit.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -51,6 +52,8 @@ export default class TagPage extends Component {
   }
 
   onRouteUpdate(params, query) {
+    // Any URL-driven change invalidates the history entry enterImmersive() pushed.
+    this._immersivePushed = false;
     const prevVc = this._loadedVc;
     this.props.params = params;
     this.props.query = query;
@@ -173,6 +176,7 @@ export default class TagPage extends Component {
     if (this._unmounted || this._isPostView()) return;
     const grid = this.$(".posts-grid");
     if (!grid) return;
+    applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
     // actual resize re-fits it to the new window.
@@ -242,9 +246,13 @@ export default class TagPage extends Component {
       </div>`;
   }
   afterRender() {
+    // Reset the footer paginator's feed; _mountPostContent republishes it when
+    // the grid view has pages, so the post/loading/error views show none.
+    store.set("pagination", null);
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._teardownZoomInputs();
     const settings = store.get("settings") || {};
     const rootMenu = store.get("navTags") || [];
     const isCustomMenu = settings.nav_menu_mode === "custom";
@@ -379,15 +387,8 @@ export default class TagPage extends Component {
         tagSlug: slug,
         forceImmersive: immersive,
         startIndex: this.state.startIndex,
-        onEnterImmersive: (idx = 0) => {
-          const hash = idx === 0 ? "" : `#${idx + 1}`;
-          window.history.replaceState(
-            null,
-            "",
-            window.location.pathname + window.location.search + hash,
-          );
-          this.setState({ forceImmersive: true, startIndex: idx });
-        },
+        onExitImmersive: () => exitImmersive(this),
+        onEnterImmersive: (idx = 0) => enterImmersive(this, idx),
       });
     } else {
       // ── Grid view ───────────────────────────────────────────────────────────
@@ -400,6 +401,8 @@ export default class TagPage extends Component {
         editUrl: tag ? `/light/tags/${tag.slug}` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline,
+        // Same distraction-free toggle the home grid offers.
+        distractionToggle: true,
       }).then(comps => {
         if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
@@ -456,6 +459,12 @@ export default class TagPage extends Component {
       );
     }
 
+    // Publish the page state for the footer paginator — on desktop and
+    // phone-landscape it replaces the in-flow paginator above (CSS swaps them).
+    store.set("pagination", pagination.pages > 1
+      ? { page: pagination.page, pages: pagination.pages, total: pagination.total }
+      : null);
+
     this._setupGestures(pagination);
     this._preloadAdjacentGrids(pagination, slug);
 
@@ -472,6 +481,7 @@ export default class TagPage extends Component {
     this._postChildren = [];
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._teardownZoomInputs();
     this._clearPageGhosts();
   }
 
@@ -484,6 +494,8 @@ export default class TagPage extends Component {
     const atStart = () => pagination.page <= 1;
 
     this._gesture = new GestureController(this.$(".site-main"), {
+      onPinchMove: (scaleDelta) => this._pinchStep(scaleDelta),
+      onPinchEnd: () => this._onPinchEnd(),
       onSwipeMove: (dx, dy) => {
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const dir = dx < 0 ? "next" : "prev";
@@ -534,6 +546,116 @@ export default class TagPage extends Component {
         }
       },
     });
+
+    this._setupZoomInputs();
+  }
+
+  // ── Pinch / wheel / keyboard zoom ──────────────────────────────────────────
+  // Pinch is handled by GestureController's onPinchMove; here we add the desktop
+  // paths: ctrl+wheel (trackpad pinch) and +/- keys. All funnel into _zoomBy.
+  //
+  // A zoom step only re-flows the grid via CSS (instant, no remount). The
+  // per_page reconcile — which updates the route and REBUILDS the post content,
+  // tearing down this very gesture controller — is deferred: flushed on
+  // onPinchEnd, and debounced for the discrete wheel/key paths. Reconciling on
+  // every step would destroy the in-flight pinch mid-gesture (the same trap the
+  // timeline plugin documents), so the zoom would appear frozen after one step.
+
+  /** Accumulate incremental pinch scale and step a column once it crosses ±40%. */
+  _pinchStep(scaleDelta) {
+    this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
+    if (this._pinchAccum > 1.4) { this._zoomBy(-1); this._pinchAccum = 1; }        // spread → bigger cards, fewer cols
+    else if (this._pinchAccum < 1 / 1.4) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller cards, more cols
+  }
+
+  _onPinchEnd() {
+    this._pinchAccum = 1;
+    this._commitZoom(); // gesture's over — safe to refetch/remount now
+  }
+
+  /** Apply a ±1 column zoom step: instant CSS re-flow, deferred per_page refit. */
+  _zoomBy(delta) {
+    const grid = this.$(".posts-grid");
+    if (!grid) return;
+    stepZoom(grid, delta); // CSS-only: pins columns + squares cards, no remount
+    clearTimeout(this._zoomCommitTimer);
+    this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
+  }
+
+  /** Refit per_page (and page) to the new column count — the remounting step. */
+  _commitZoom() {
+    clearTimeout(this._zoomCommitTimer);
+    this._reconcilePerPage({ fromResize: true });
+  }
+
+  _setupZoomInputs() {
+    this._teardownZoomInputs();
+    // Marks this page as zoom-capable — the footer slider is only shown when
+    // this class is present (search shares the grid but doesn't opt in).
+    document.body.classList.add("grid-zoomable");
+    // Footer slider sets an absolute column count; commit is debounced here
+    // like every other zoom path.
+    this._onZoomRequest = (e) => {
+      requestZoom(e.detail?.cols || 0);
+      clearTimeout(this._zoomCommitTimer);
+      this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
+    };
+    window.addEventListener("point:grid-zoom-request", this._onZoomRequest);
+    this._onZoomKey = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === "+" || e.key === "=") { e.preventDefault(); this._zoomBy(-1); }
+      else if (e.key === "-" || e.key === "_") { e.preventDefault(); this._zoomBy(1); }
+    };
+    window.addEventListener("keydown", this._onZoomKey);
+    // Trackpad pinch on Chrome/Firefox/Edge arrives as a wheel event with ctrlKey.
+    this._onZoomWheel = (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      // Trackpad pinches stream many tiny deltas — accumulate so one step needs
+      // a deliberate gesture. A discrete mouse-wheel notch (~±100-120) still
+      // steps immediately. Direction change resets the run.
+      if (Math.sign(e.deltaY) !== Math.sign(this._wheelAccum || 0)) this._wheelAccum = 0;
+      this._wheelAccum = (this._wheelAccum || 0) + e.deltaY;
+      if (Math.abs(this._wheelAccum) >= 100) {
+        this._zoomBy(this._wheelAccum > 0 ? 1 : -1);
+        this._wheelAccum = 0;
+      }
+    };
+    // Desktop Safari does NOT send ctrl+wheel for a trackpad pinch — it fires its
+    // own gesturestart/change/end events with a cumulative `scale`. Handle those
+    // so Safari pinch works (and preventDefault stops Safari's own page zoom).
+    this._onGestureStart = (e) => { e.preventDefault(); this._gestureScale = 1; };
+    this._onGestureChange = (e) => {
+      e.preventDefault();
+      const rel = e.scale / (this._gestureScale || 1);
+      if (rel > 1.4) { this._zoomBy(-1); this._gestureScale = e.scale; }        // spread → fewer cols
+      else if (rel < 1 / 1.4) { this._zoomBy(1); this._gestureScale = e.scale; } // pinch → more cols
+    };
+    this._onGestureEnd = (e) => { e.preventDefault(); this._commitZoom(); };
+    this._zoomWheelEl = this.$(".site-main");
+    this._zoomWheelEl?.addEventListener("wheel", this._onZoomWheel, { passive: false });
+    this._zoomWheelEl?.addEventListener("gesturestart", this._onGestureStart, { passive: false });
+    this._zoomWheelEl?.addEventListener("gesturechange", this._onGestureChange, { passive: false });
+    this._zoomWheelEl?.addEventListener("gestureend", this._onGestureEnd, { passive: false });
+  }
+
+  _teardownZoomInputs() {
+    document.body.classList.remove("grid-zoomable");
+    if (this._onZoomRequest) window.removeEventListener("point:grid-zoom-request", this._onZoomRequest);
+    this._onZoomRequest = null;
+    if (this._onZoomKey) window.removeEventListener("keydown", this._onZoomKey);
+    if (this._zoomWheelEl) {
+      this._zoomWheelEl.removeEventListener("wheel", this._onZoomWheel);
+      this._zoomWheelEl.removeEventListener("gesturestart", this._onGestureStart);
+      this._zoomWheelEl.removeEventListener("gesturechange", this._onGestureChange);
+      this._zoomWheelEl.removeEventListener("gestureend", this._onGestureEnd);
+    }
+    clearTimeout(this._zoomCommitTimer);
+    this._onZoomKey = null;
+    this._onZoomWheel = null;
+    this._zoomWheelEl = null;
   }
 
   // ── Adjacent-page preloading + swipe peek ──────────────────────────────────
@@ -688,11 +810,19 @@ export default class TagPage extends Component {
   }
 
   beforeUnmount() {
+    // Non-grid pages (post, search) share the footer — don't leave a stale
+    // paginator feed behind.
+    store.set("pagination", null);
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._teardownZoomInputs();
     this._clearPageGhosts();
     this._committedGhost?.remove();
     this._committedGhost = null;
+    // Drop the zoom class so grids on other pages (e.g. search) aren't squared;
+    // the preference lives in localStorage and re-applies on the next mount.
+    document.body.classList.remove("grid-zoom");
+    document.body.style.removeProperty("--posts-grid-cols");
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
     removeCanonical();
@@ -701,6 +831,7 @@ export default class TagPage extends Component {
   mount() {
     // Seed the per_page cache from the window size so the first fetch is sized
     // before the grid exists to be measured.
+    applyZoomVar(); // reflect a sticky zoom before the first grid paints
     if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
     this._resizeHandler = () => this._onResize();
     window.addEventListener("resize", this._resizeHandler);
@@ -741,17 +872,8 @@ export default class TagPage extends Component {
         let nav = null;
         try { nav = await getPostNavigation(post.id, slug); } catch { /* optional */ }
 
-        // Check for hash to set initial slide index (e.g. #2 -> index 1)
-        let startIndex = 0;
-        let forceImmersive = false;
-        const hash = window.location.hash;
-        if (hash && hash.startsWith("#")) {
-          const num = parseInt(hash.slice(1), 10);
-          if (!isNaN(num) && num > 0) {
-            startIndex = Math.max(0, num - 1);
-            if (num > 1) forceImmersive = true;
-          }
-        }
+        // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
+        const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);
 
         this.setState({
           loading: false,

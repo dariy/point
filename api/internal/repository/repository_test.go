@@ -29,14 +29,15 @@ func setupNewSchemaTestDB(t *testing.T) Repository {
 // helpers: insert a user and a published post, return (userID, postID).
 func insertUserAndPost(t *testing.T, repo Repository, slug, status string) (int64, int64) {
 	t.Helper()
-	res, err := repo.DB().Exec(
-		`INSERT OR IGNORE INTO users (username, email, password_hash, display_name) VALUES ('u1','e1','h','D')`)
-	if err != nil {
+	if _, err := repo.DB().Exec(
+		`INSERT OR IGNORE INTO users (username, email, password_hash, display_name) VALUES ('u1','e1','h','D')`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
-	uid, _ := res.LastInsertId()
-	if uid == 0 {
-		_ = repo.DB().QueryRow(`SELECT id FROM users WHERE username='u1'`).Scan(&uid)
+	// Always resolve uid by lookup: on repeat calls the INSERT OR IGNORE is a
+	// no-op and LastInsertId would return the previous post's rowid, not the user.
+	var uid int64
+	if err := repo.DB().QueryRow(`SELECT id FROM users WHERE username='u1'`).Scan(&uid); err != nil {
+		t.Fatalf("lookup user: %v", err)
 	}
 	res2, err := repo.DB().Exec(
 		`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('T', ?, 'C', ?, ?, datetime('now'))`,

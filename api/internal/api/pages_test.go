@@ -509,6 +509,40 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	}
 }
 
+// TestPagesHandler_TagsModuleDisabled404 verifies that when no tag-viz plugin is
+// enabled the /tags endpoints (graph, cloud, map) all report 404 — the
+// not-accessible branch of tagsModuleAccessible.
+func TestPagesHandler_TagsModuleDisabled404(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	for _, id := range []string{"tags-atlas", "tags-map", "tags-graph"} {
+		_ = h.settingsSvc.SetSetting(ctx, "plugin."+id+".enabled", "false", "string")
+	}
+
+	e := echo.New()
+	is404 := func(t *testing.T, err error) {
+		t.Helper()
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph", nil)
+	is404(t, ph.GetTagsGraph(e.NewContext(req, httptest.NewRecorder())))
+
+	req = httptest.NewRequest(http.MethodGet, "/api/pages/graph/tag/1", nil)
+	c := e.NewContext(req, httptest.NewRecorder())
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	is404(t, ph.GetTagCloud(c))
+
+	req = httptest.NewRequest(http.MethodGet, "/api/pages/map", nil)
+	is404(t, ph.GetMapPage(e.NewContext(req, httptest.NewRecorder())))
+}
+
 func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()
