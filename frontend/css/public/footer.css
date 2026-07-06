@@ -66,6 +66,7 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+    padding-left: var(--spacing-sm);
 }
 
 .footer-sliding-actions {
@@ -75,7 +76,9 @@
     overflow: hidden;
     max-width: 0;
     opacity: 0;
-    transition: max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition:
+        max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .footer-sliding-actions.is-expanded {
@@ -112,14 +115,18 @@
     border-radius: var(--border-radius);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
     text-decoration: none;
     box-shadow: var(--shadow-sm);
 }
 
 @media (pointer: coarse) {
     .footer-action-btn::after {
-        content: '';
+        content: "";
         position: absolute;
         top: 50%;
         left: 50%;
