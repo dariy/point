@@ -20,7 +20,7 @@ import { store } from '../../store.js';
 import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { computePerPage, cachedPerPage, stepZoom, applyZoomVar } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom } from '../../utils/gridFit.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -210,6 +210,9 @@ export default class HomePage extends Component {
   }
 
   afterRender() {
+    // Reset the footer paginator's feed; _mountPostContent republishes it when
+    // the grid view has pages, so static/immersive/error views show none.
+    store.set('pagination', null);
     const settings = store.get('settings') || {};
     const { data, forceImmersive, startIndex } = this.state;
     const isStaticHomePage = data && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
@@ -336,6 +339,12 @@ export default class HomePage extends Component {
         }),
       );
     }
+
+    // Publish the page state for the footer paginator — on desktop and
+    // phone-landscape it replaces the in-flow paginator above (CSS swaps them).
+    store.set('pagination', pagination.pages > 1
+      ? { page: pagination.page, pages: pagination.pages, total: pagination.total }
+      : null);
 
     this._setupGestures(pagination);
     this._preloadAdjacentGrids(pagination);
@@ -513,6 +522,17 @@ export default class HomePage extends Component {
 
   _setupZoomInputs() {
     this._teardownZoomInputs();
+    // Marks this page as zoom-capable — the footer slider is only shown when
+    // this class is present (search shares the grid but doesn't opt in).
+    document.body.classList.add('grid-zoomable');
+    // Footer slider sets an absolute column count; commit is debounced here
+    // like every other zoom path.
+    this._onZoomRequest = (e) => {
+      requestZoom(e.detail?.cols || 0);
+      clearTimeout(this._zoomCommitTimer);
+      this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
+    };
+    window.addEventListener('point:grid-zoom-request', this._onZoomRequest);
     this._onZoomKey = (e) => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target;
@@ -554,6 +574,9 @@ export default class HomePage extends Component {
   }
 
   _teardownZoomInputs() {
+    document.body.classList.remove('grid-zoomable');
+    if (this._onZoomRequest) window.removeEventListener('point:grid-zoom-request', this._onZoomRequest);
+    this._onZoomRequest = null;
     if (this._onZoomKey) window.removeEventListener('keydown', this._onZoomKey);
     if (this._zoomWheelEl) {
       this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
@@ -873,6 +896,9 @@ export default class HomePage extends Component {
   }
 
   beforeUnmount() {
+    // Non-grid pages (post, search) share the footer — don't leave a stale
+    // paginator feed behind.
+    store.set('pagination', null);
     this._teardownGestures();
     this._clearPageGhosts();
     this._committedGhost?.remove();

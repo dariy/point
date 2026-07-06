@@ -408,19 +408,20 @@
    count (and per_page) still fills the viewport. */
 body.grid-zoom .posts-grid {
     grid-template-columns: repeat(var(--posts-grid-cols, 3), 1fr);
+    /* Rows share the viewport height evenly with no content/aspect floor:
+       gridFit rounds the row count to the squarest fit, and letting tracks
+       compress a little below square (instead of flooring at it) is what
+       allows rounding *up* — otherwise a 1.9-row fit collapses to one row of
+       stretched sausages with the leftover dumped into their height. */
+    grid-auto-rows: minmax(0, 1fr);
 }
 
 body.grid-zoom .post-card-slot {
-    /* aspect-ratio floors the row at square during track sizing; min-height
-       then stretches the card to fill the row once the grid-expand mount's
-       1fr rows share out the leftover viewport height — cards grow a little
-       taller than wide instead of leaving a dead band above the paginator. */
-    aspect-ratio: 1;
-    /* Pin the width to the column so aspect-ratio can't transfer the stretched
-       height back into the inline axis (a 459px-tall card would go 459px wide
-       and overflow its 368px track). */
+    /* Fill the cell exactly — the card's shape is whatever cols × rows slice
+       of the viewport gridFit computed (≈ square). Cards clip overflow. */
     width: 100%;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
     /* Neutralise featured/orphan full-row spans (they'd stretch one card into a
        wide box). !important beats the high-specificity orphan rules above. */
     grid-column: auto !important;

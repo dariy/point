@@ -35,7 +35,7 @@ import {
   rubberBand,
 } from "../../core/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { computePerPage, cachedPerPage, stepZoom, applyZoomVar } from "../../utils/gridFit.js";
+import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom } from "../../utils/gridFit.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -243,6 +243,9 @@ export default class TagPage extends Component {
       </div>`;
   }
   afterRender() {
+    // Reset the footer paginator's feed; _mountPostContent republishes it when
+    // the grid view has pages, so the post/loading/error views show none.
+    store.set("pagination", null);
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._gesture?.destroy();
     this._trackpad?.destroy();
@@ -460,6 +463,12 @@ export default class TagPage extends Component {
       );
     }
 
+    // Publish the page state for the footer paginator — on desktop and
+    // phone-landscape it replaces the in-flow paginator above (CSS swaps them).
+    store.set("pagination", pagination.pages > 1
+      ? { page: pagination.page, pages: pagination.pages, total: pagination.total }
+      : null);
+
     this._setupGestures(pagination);
     this._preloadAdjacentGrids(pagination, slug);
 
@@ -585,6 +594,17 @@ export default class TagPage extends Component {
 
   _setupZoomInputs() {
     this._teardownZoomInputs();
+    // Marks this page as zoom-capable — the footer slider is only shown when
+    // this class is present (search shares the grid but doesn't opt in).
+    document.body.classList.add("grid-zoomable");
+    // Footer slider sets an absolute column count; commit is debounced here
+    // like every other zoom path.
+    this._onZoomRequest = (e) => {
+      requestZoom(e.detail?.cols || 0);
+      clearTimeout(this._zoomCommitTimer);
+      this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
+    };
+    window.addEventListener("point:grid-zoom-request", this._onZoomRequest);
     this._onZoomKey = (e) => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target;
@@ -626,6 +646,9 @@ export default class TagPage extends Component {
   }
 
   _teardownZoomInputs() {
+    document.body.classList.remove("grid-zoomable");
+    if (this._onZoomRequest) window.removeEventListener("point:grid-zoom-request", this._onZoomRequest);
+    this._onZoomRequest = null;
     if (this._onZoomKey) window.removeEventListener("keydown", this._onZoomKey);
     if (this._zoomWheelEl) {
       this._zoomWheelEl.removeEventListener("wheel", this._onZoomWheel);
@@ -791,6 +814,9 @@ export default class TagPage extends Component {
   }
 
   beforeUnmount() {
+    // Non-grid pages (post, search) share the footer — don't leave a stale
+    // paginator feed behind.
+    store.set("pagination", null);
     this._gesture?.destroy();
     this._trackpad?.destroy();
     this._teardownZoomInputs();

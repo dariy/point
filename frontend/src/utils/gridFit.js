@@ -73,6 +73,17 @@ export function applyZoomVar() {
     document.body.classList.remove('grid-zoom');
     document.body.style.removeProperty('--posts-grid-cols');
   }
+  // Let detached zoom UIs (the footer slider) mirror every change, whatever
+  // input path caused it — pinch, wheel, keys, or the slider itself.
+  window.dispatchEvent(
+    new CustomEvent('point:grid-zoom', { detail: { cols: cols ? clampZoom(cols) : 0 } }),
+  );
+}
+
+/** Set an absolute zoom column count (from the footer slider) and apply it. */
+export function requestZoom(cols) {
+  setZoom(clampZoom(cols));
+  applyZoomVar();
 }
 
 /**
@@ -223,7 +234,11 @@ export function computePerPage(minPerPage, gridEl = null) {
 
   const avail = Math.max(rowH, window.innerHeight - top - reserve);
   // Floor (not round): a partial row would spill over the reserved footer band.
-  const rows = Math.max(1, Math.floor((avail + gap) / (rowH + gap)));
+  // Zoom is the exception: its rows are minmax(0, 1fr) so they compress as
+  // happily as they stretch — round to whichever count is nearer square
+  // (flooring a 1.9-row fit would leave one row of double-height sausages).
+  const fit = (avail + gap) / (rowH + gap);
+  const rows = Math.max(1, zoomCols ? Math.round(fit) : Math.floor(fit));
   // Fit the viewport exactly so pagination + footer stay on-screen. We do NOT
   // floor at posts_per_page here: on narrow desktop widths (few columns) the
   // setting can exceed what fits and would push the footer off-screen. The

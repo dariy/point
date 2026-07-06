@@ -37,9 +37,27 @@
     color: var(--color-primary);
 }
 
-.footer-content .pagination {
-    grid-column: 2;
+/* Grid paginator, relocated into the footer's centre slot on desktop and
+   phone-landscape. Portrait phones keep the in-flow paginator below the grid,
+   so the footer copy stays hidden there and the in-flow one is hidden here
+   (body.grid-zoomable marks the grid pages that publish the footer copy —
+   search keeps its own in-flow paginator everywhere). */
+.footer-pagination {
+    display: none;
+}
+
+.footer-pagination .pagination {
     margin-top: 0;
+}
+
+@media (min-width: 769px), (orientation: landscape) {
+    .footer-pagination {
+        display: block;
+    }
+
+    body.grid-zoomable #pagination-mount {
+        display: none;
+    }
 }
 
 .footer-actions {
@@ -47,6 +65,22 @@
     justify-self: end;
     display: flex;
     gap: var(--spacing-sm);
+}
+
+/* Grid zoom slider — mouse/trackpad users on zoom-capable grid pages only
+   (body.grid-zoomable is set by the home/tag pages; touch users pinch). */
+.footer-zoom {
+    display: none;
+    width: 110px;
+    align-self: center;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    body.grid-zoomable .footer-zoom {
+        display: inline-block;
+    }
 }
 
 .footer-action-btn {
