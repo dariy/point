@@ -65,12 +65,12 @@ export default class CommentsAdminPage extends Component {
           <div class="comment-mod-meta">
             <strong>${escapeHtml(name)}</strong>
             <time datetime="${escapeHtml(c.time || '')}">${escapeHtml(formatDate(c.time))}</time>
-            ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">post ↗</a>` : ''}
+            ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || 'post')} ↗</a>` : ''}
           </div>
           <p class="comment-mod-text">${escapeHtml(textOf(c.text))}</p>
           <div class="comment-mod-actions">
             <button class="btn btn-sm btn-secondary" data-action="delete" data-i="${i}">Delete</button>
-            <button class="btn btn-sm btn-secondary" data-action="block" data-i="${i}">Block author</button>
+            <button class="btn btn-sm btn-secondary" data-action="block" data-i="${i}">Block the author</button>
           </div>
         </li>`;
     }).join('');
