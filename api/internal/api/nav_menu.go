@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"point-api/internal/services"
 
@@ -11,10 +12,11 @@ import (
 
 type NavMenuHandler struct {
 	settingsService *services.SettingsService
+	tagService      *services.TagService
 }
 
-func NewNavMenuHandler(settingsService *services.SettingsService) *NavMenuHandler {
-	return &NavMenuHandler{settingsService: settingsService}
+func NewNavMenuHandler(settingsService *services.SettingsService, tagService *services.TagService) *NavMenuHandler {
+	return &NavMenuHandler{settingsService: settingsService, tagService: tagService}
 }
 
 // GetAdminNavMenu returns the current nav menu configuration for the admin editor.
@@ -36,11 +38,32 @@ func (h *NavMenuHandler) GetAdminNavMenu(c echo.Context) error {
 		items = []services.NavTagNode{}
 	}
 
+	// The tags-mode tree regardless of the active mode, so the menu editor can
+	// preview a mode switch without saving first.
+	tagItems := []services.NavTagNode{}
+	if h.tagService != nil {
+		if nodes, err := h.tagService.GetHierarchicalNavTags(ctx, nil, false, 0); err == nil && nodes != nil {
+			tagItems = nodes
+		}
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"mode":            mode,
 		"items":           items,
 		"custom_markdown": all["custom_markdown"],
+		"inline_max":      inlineMaxOrDefault(all["nav_inline_max"]),
+		"tag_items":       tagItems,
 	})
+}
+
+// inlineMaxOrDefault parses the nav_inline_max setting; out-of-range or unset
+// values fall back to the default of 4 visible links.
+func inlineMaxOrDefault(raw string) int {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 10 {
+		return 4
+	}
+	return n
 }
 
 // UpdateAdminNavMenu saves the nav menu mode and custom items.
@@ -52,17 +75,24 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 		Mode           string                `json:"mode"`
 		Items          []services.NavTagNode `json:"items"`
 		CustomMarkdown string                `json:"custom_markdown"`
+		InlineMax      int                   `json:"inline_max"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	if body.Mode != "tags" && body.Mode != "custom" {
+	if body.Mode != "tags" && body.Mode != "custom" && body.Mode != "none" {
 		body.Mode = "tags"
 	}
 
 	if err := h.settingsService.SetSetting(ctx, "nav_menu_mode", body.Mode, "string"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if body.InlineMax >= 1 && body.InlineMax <= 10 {
+		if err := h.settingsService.SetSetting(ctx, "nav_inline_max", strconv.Itoa(body.InlineMax), "string"); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 	}
 
 	if body.Items == nil {
@@ -80,9 +110,15 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	inlineMax := body.InlineMax
+	if inlineMax < 1 || inlineMax > 10 {
+		all, _ := h.settingsService.GetAllSettings(ctx)
+		inlineMax = inlineMaxOrDefault(all["nav_inline_max"])
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"mode":            body.Mode,
 		"items":           body.Items,
 		"custom_markdown": body.CustomMarkdown,
+		"inline_max":      inlineMax,
 	})
 }

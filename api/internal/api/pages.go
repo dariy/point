@@ -1164,6 +1164,11 @@ func (h *PagesHandler) GetNavMenu(c echo.Context) error {
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 
+	// Mode "none": the site runs without a menu (identity + crumbs + tools).
+	if allSettings["nav_menu_mode"] == "none" {
+		return c.JSON(http.StatusOK, map[string]interface{}{"menu": []services.NavTagNode{}})
+	}
+
 	if allSettings["nav_menu_mode"] == "custom" {
 		raw := allSettings["custom_nav_menu"]
 		if raw != "" {

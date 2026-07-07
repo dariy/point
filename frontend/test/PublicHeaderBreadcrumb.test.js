@@ -140,24 +140,15 @@ describe('Breadcrumbs plugin', () => {
     assert.ok(markup.includes('Test Blog'), 'Site crumb should display blog title');
   });
 
-  test('site crumb has dropdown caret when navTags provided', () => {
+  test('site crumb is a plain home link even when navTags provided', () => {
+    // The site-title flyout was removed; nav tags are shown inline in the
+    // nav zone instead. Child-tag dropdowns on breadcrumb items remain.
     const markup = renderWith(
       { pathname: '/', query: {} },
       { navTags: [{ name: 'Travel', slug: 'travel', post_count: 10 }] },
     );
-    // The caret is rendered via CSS (.has-dropdown::after); markup signals it
-    // with the has-dropdown class and aria-haspopup on the site crumb.
-    assert.ok(markup.includes('has-dropdown'), 'Should have has-dropdown class');
-    assert.ok(markup.includes('aria-haspopup="true"'), 'Should mark the dropdown for assistive tech');
-  });
-
-  test('site crumb has no dropdown caret when navTags empty', () => {
-    const markup = renderWith(
-      { pathname: '/', query: {} },
-      { navTags: [] },
-    );
-    assert.ok(!markup.includes('has-dropdown'), 'Should not render dropdown when no navTags');
-    assert.ok(!markup.includes('aria-haspopup'), 'Should not mark a dropdown when no navTags');
+    assert.ok(!markup.includes('has-dropdown'), 'Site crumb should not render a dropdown');
+    assert.ok(!markup.includes('aria-haspopup'), 'Site crumb should not announce a popup');
   });
 
   // ── Aria-live announcement ────────────────────────────────────────────────

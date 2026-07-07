@@ -100,6 +100,9 @@ podman run -d \
     -e FRONTEND_DIR=/app/frontend \
     -e PORT=8000 \
     -e HOST=0.0.0.0 \
+    -e TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}" \
+    -e NOTIFY_TELEGRAM_CHAN="${NOTIFY_TELEGRAM_CHAN:-}" \
+    -e NOTIFY_ADMINS="${NOTIFY_ADMINS:-}" \
     "${PHOTO_IMPORT_ARGS[@]}" \
     point:dev
 

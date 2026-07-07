@@ -160,7 +160,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
-	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
+	navMenuHandler := api.NewNavMenuHandler(svcs.Settings, svcs.Tag)
 	instagramImportService := services.NewInstagramImportService(svcs.Instagram, svcs.Media, svcs.Post)
 	instagramHandler := api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg)
 

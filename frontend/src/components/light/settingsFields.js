@@ -35,6 +35,8 @@ export const LABEL_OVERRIDES = {
   remark_smtp_password: "SMTP password",
   remark_smtp_tls: "SMTP TLS",
   remark_email_from: "Login email sender address",
+  remark_telegram_token: "Telegram Bot Token",
+  remark_telegram_chan: "Telegram Channel ID",
 };
 
 // Keys rendered as <input type="number">.
@@ -100,6 +102,7 @@ function isNumericKey(key) {
 function isSecretKey(key) {
   return (
     key === "gemini_api_key" ||
+    key === "remark_telegram_token" ||
     key.includes("secret") ||
     key.includes("csec") ||
     key.includes("password")
