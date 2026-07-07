@@ -12,10 +12,11 @@ import (
 
 type NavMenuHandler struct {
 	settingsService *services.SettingsService
+	tagService      *services.TagService
 }
 
-func NewNavMenuHandler(settingsService *services.SettingsService) *NavMenuHandler {
-	return &NavMenuHandler{settingsService: settingsService}
+func NewNavMenuHandler(settingsService *services.SettingsService, tagService *services.TagService) *NavMenuHandler {
+	return &NavMenuHandler{settingsService: settingsService, tagService: tagService}
 }
 
 // GetAdminNavMenu returns the current nav menu configuration for the admin editor.
@@ -37,11 +38,21 @@ func (h *NavMenuHandler) GetAdminNavMenu(c echo.Context) error {
 		items = []services.NavTagNode{}
 	}
 
+	// The tags-mode tree regardless of the active mode, so the menu editor can
+	// preview a mode switch without saving first.
+	tagItems := []services.NavTagNode{}
+	if h.tagService != nil {
+		if nodes, err := h.tagService.GetHierarchicalNavTags(ctx, nil, false, 0); err == nil && nodes != nil {
+			tagItems = nodes
+		}
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"mode":            mode,
 		"items":           items,
 		"custom_markdown": all["custom_markdown"],
 		"inline_max":      inlineMaxOrDefault(all["nav_inline_max"]),
+		"tag_items":       tagItems,
 	})
 }
 

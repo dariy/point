@@ -95,3 +95,165 @@
     padding-left: var(--spacing-lg);
     font-weight: 400;
 }
+
+/* ===========================
+   Menu editor preview (/light/menu) — mini headers laid out by HeaderFold
+   =========================== */
+
+.menu-preview-strip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    overflow-x: auto;
+    padding-bottom: var(--spacing-xs);
+}
+
+.menu-preview-fig {
+    margin: 0;
+}
+
+.menu-preview-caption {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.menu-preview-vp {
+    max-width: 100%;
+}
+
+.pvh {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.pvh-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex: 0 0 auto;
+}
+
+.pvh-logo {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.pvh-title {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pvh-spacer {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.pvh-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--site-nav-gap);
+    flex: 0 0 auto;
+}
+
+/* Preview reuses the real nav link styles (scoped copy — the public rules
+   are scoped to .site-nav-items). */
+.pvh .nav-menu-link {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-secondary);
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+}
+
+.pvh .nav-menu-link.in-more {
+    display: none;
+}
+
+.pvh .nav-more {
+    position: relative;
+    display: inline-flex;
+}
+
+.pvh .nav-more.is-empty {
+    display: none;
+}
+
+.pvh .nav-more-caret {
+    margin-left: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.pvh-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex: 0 0 auto;
+}
+
+.pvh-iconbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    background: var(--surface-card);
+}
+
+.pvh-iconbtn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.pvh-burger {
+    display: none;
+}
+
+.pvh-folded .pvh-nav {
+    display: none;
+}
+
+.pvh-folded .pvh-burger {
+    display: inline-flex;
+}
+
+/* Inline cap control */
+.menu-inline-cap-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+}
+
+.menu-inline-cap-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.menu-inline-cap-label small {
+    color: var(--text-tertiary);
+}
+
+.menu-inline-max-input {
+    width: 80px;
+    text-align: center;
+}
