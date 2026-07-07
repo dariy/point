@@ -1,0 +1,97 @@
+/* ===========================
+   Nav zone — inline menu links (nav-menu plugin)
+   =========================== */
+
+.site-nav-items .nav-menu-link {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border: none;
+    background: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.site-nav-items .nav-menu-link:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.site-nav-items .nav-menu-link.active {
+    color: var(--text-primary);
+    box-shadow: inset 0 calc(-2 * var(--border-width)) 0 var(--color-primary);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+/* A link folded into More ▾ by the header fold controller */
+.site-nav-items .nav-menu-link.in-more {
+    display: none;
+}
+
+/* ── More ▾ overflow ── */
+
+.nav-more {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.nav-more.is-empty {
+    display: none;
+}
+
+.nav-more-caret {
+    margin-left: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.nav-more-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + var(--spacing-xs));
+    right: 0;
+    min-width: 180px;
+    background: var(--bg-elevated);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-xs) 0;
+    z-index: 110;
+}
+
+.nav-more.open .nav-more-panel {
+    display: block;
+}
+
+.nav-more-item {
+    display: block;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.nav-more-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.nav-more-sub {
+    padding-left: var(--spacing-lg);
+    font-weight: 400;
+}

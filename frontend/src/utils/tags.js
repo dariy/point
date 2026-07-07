@@ -217,7 +217,9 @@ export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null)
     const a = document.createElement('a');
     a.href = t.href || `/tags/${t.slug}`;
     a.className = 'flyout-item child-link';
-    a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count ?? t.post_count ?? ''}</span>`;
+    // No count badge for countless items (custom menu links have no posts).
+    const count = t.count ?? t.post_count;
+    a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span>${count ? ` <span class="count">${count}</span>` : ''}`;
     a.addEventListener('click', (e) => {
       e.preventDefault();
       _hideFlyout();
