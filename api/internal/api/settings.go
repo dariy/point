@@ -46,6 +46,7 @@ var publicSettingKeys = map[string]bool{
 	"immersive_nav_direction": true,
 	"exif_visibility":         true,
 	"nav_menu_mode":           true,
+	"nav_inline_max":          true,
 	"footer_copyright":        true,
 
 	// Comments (remark42) embed appearance — read by the public widget config.

@@ -567,6 +567,62 @@ func TestNavMenuHandler_UpdateAdminNavMenu_InvalidMode(t *testing.T) {
 	}
 }
 
+func TestNavMenuHandler_UpdateAdminNavMenu_NoneMode(t *testing.T) {
+	h := newNavMenuHandler(t)
+	e := echo.New()
+
+	body := `{"mode":"none","items":[]}`
+	req := httptest.NewRequest(http.MethodPut, "/api/nav-menu", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.UpdateAdminNavMenu(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("UpdateAdminNavMenu: %v", err)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/nav-menu", nil)
+	rec2 := httptest.NewRecorder()
+	_ = h.GetAdminNavMenu(e.NewContext(req2, rec2))
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec2.Body.Bytes(), &resp)
+	if resp["mode"] != "none" {
+		t.Errorf("expected mode 'none', got %v", resp["mode"])
+	}
+}
+
+func TestNavMenuHandler_InlineMax_RoundTripAndClamp(t *testing.T) {
+	h := newNavMenuHandler(t)
+	e := echo.New()
+
+	// Valid value persists and round-trips.
+	body := `{"mode":"tags","items":[],"inline_max":6}`
+	req := httptest.NewRequest(http.MethodPut, "/api/nav-menu", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.UpdateAdminNavMenu(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("UpdateAdminNavMenu: %v", err)
+	}
+	req2 := httptest.NewRequest(http.MethodGet, "/api/nav-menu", nil)
+	rec2 := httptest.NewRecorder()
+	_ = h.GetAdminNavMenu(e.NewContext(req2, rec2))
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec2.Body.Bytes(), &resp)
+	if resp["inline_max"] != float64(6) {
+		t.Errorf("expected inline_max 6, got %v", resp["inline_max"])
+	}
+
+	// Out-of-range value is ignored — the stored value survives.
+	body = `{"mode":"tags","items":[],"inline_max":99}`
+	req3 := httptest.NewRequest(http.MethodPut, "/api/nav-menu", strings.NewReader(body))
+	req3.Header.Set("Content-Type", "application/json")
+	rec3 := httptest.NewRecorder()
+	_ = h.UpdateAdminNavMenu(e.NewContext(req3, rec3))
+	var resp3 map[string]interface{}
+	_ = json.Unmarshal(rec3.Body.Bytes(), &resp3)
+	if resp3["inline_max"] != float64(6) {
+		t.Errorf("expected inline_max to stay 6 on invalid input, got %v", resp3["inline_max"])
+	}
+}
+
 func TestParseMapsCoords_NotAllowedHost(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/?q=https://maps.facebook.com/test", nil)
