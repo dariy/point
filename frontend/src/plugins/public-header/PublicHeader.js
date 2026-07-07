@@ -25,6 +25,7 @@ import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { hideFlyout } from '../../utils/tags.js';
+import { HeaderFold } from '../../utils/headerFold.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -87,28 +88,37 @@ export class PublicHeader extends Component {
         <div id="search-typeahead-mount" class="search-typeahead-mount"></div>
         <div class="site-header-inner">
 
-          <div class="site-header">
-            <div class="site-branding">
-              <a href="/" class="site-title-link">
-                <h1 class="site-title">
-                  ${logoHtml}
-                </h1>
-                ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
-              </a>
-              ${crumbHtml}
-              ${(immersiveToggleHtml || shareButtonHtml || editButtonHeader)
-                ? `<div class="branding-actions">
-                ${immersiveToggleHtml}
-                ${shareButtonHtml}
-                ${editButtonHeader}
-              </div>`
-                : ''}
-            </div>
+          <!-- Zone: identity — logo (+ subtitle); the textual blog title is the
+               breadcrumb's site crumb, so "title → logo" folds in the context zone. -->
+          <div class="site-identity">
+            <a href="/" class="site-title-link">
+              <h1 class="site-title">
+                ${logoHtml}
+              </h1>
+              ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
+            </a>
           </div>
+
+          <!-- Zone: context — breadcrumbs + count (the only elastic zone) -->
+          ${crumbHtml}
+          ${(immersiveToggleHtml || shareButtonHtml || editButtonHeader)
+            ? `<div class="branding-actions">
+            ${immersiveToggleHtml}
+            ${shareButtonHtml}
+            ${editButtonHeader}
+          </div>`
+            : ''}
 
           ${slot ? `<div class="site-nav-slot">${slot}</div>` : ''}
 
-          <nav class="site-nav" aria-label="Main navigation">
+          <!-- Zone: nav — visible menu links (filled by the nav-menu plugin);
+               folds into the burger as a whole (fold-nav). -->
+          <nav class="site-nav" aria-label="Site menu">
+            <div class="site-nav-items"></div>
+          </nav>
+
+          <!-- Zone: tools — search, burger; last to fold, never folds away. -->
+          <div class="site-tools">
 
             <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
               <input type="search" name="q" placeholder="${searchPlaceholder}" aria-label="Search posts" tabindex="-1">
@@ -116,9 +126,6 @@ export class PublicHeader extends Component {
                 ${SEARCH_SVG}
               </button>
             </form>
-
-            <!-- Normal nav items (hidden when fold-nav active) -->
-            <div class="site-nav-items"></div>
 
             <!-- Burger (shown when fold-nav active) -->
             <div class="nav-burger" id="nav-burger">
@@ -147,7 +154,7 @@ export class PublicHeader extends Component {
               </div>
             </div>
 
-          </nav>
+          </div>
 
         </div>
       </div>`;
@@ -178,15 +185,25 @@ export class PublicHeader extends Component {
     this._group = this.$('.site-header-group');
     this._inner = this.$('.site-header-inner');
 
-    // Shell slots inside the header. The breadcrumbs and nav-menu are rendered
-    // inline by core today; once those features are extracted into plugin chunks
-    // (Phase 4) the host fills their regions here. No-op until a chunk claims the
-    // slot, so behavior is unchanged.
+    // One fold controller owns the header's space; components and plugins
+    // contribute ordered fold ops (see utils/headerFold.js for the order map).
+    this._fold = new HeaderFold({
+      observe: this._group,
+      fits: () => this._rowFits(),
+    });
+    this._registerCoreFolds();
+
+    // Shell slots inside the header. Slot content changes the row's width, so
+    // each fill is followed by a relayout. The nav-menu plugin receives the
+    // whole inner row: it renders into `.site-nav-items` and the burger slots,
+    // and registers its own links → More fold stage (order 30) via `fold`.
     if (pluginHost.hasSlot('breadcrumbs')) {
-      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group });
+      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group })
+        .then(() => this._fold?.relayout());
     }
     if (pluginHost.hasSlot('nav-menu')) {
-      pluginHost.fill('nav-menu', this.$('.site-nav'), { ...this.props });
+      pluginHost.fill('nav-menu', this._inner, { ...this.props, fold: this._fold })
+        .then(() => this._fold?.relayout());
     }
 
     // Distraction-free toggle: the post list asks for it (distractionToggle);
@@ -194,11 +211,11 @@ export class PublicHeader extends Component {
     // out of the fold logic and lets the plugin CSS keep it visible when
     // distraction-free hides the rest of the header.
     if (this.props.distractionToggle && pluginHost.hasSlot('post-list-tools')) {
-      const nav = this.$('.site-nav');
-      if (nav) {
+      const tools = this.$('.site-tools');
+      if (tools) {
         const holder = document.createElement('div');
         holder.className = 'distraction-tool';
-        nav.appendChild(holder);
+        tools.insertBefore(holder, tools.firstChild);
         // Keep the mount so beforeUnmount can tear it down — the plugin sets
         // global state (body.distraction-free class, button portalled to body)
         // that survives our container clear and would otherwise lock the site
@@ -314,10 +331,95 @@ export class PublicHeader extends Component {
     }
 
 
-    // ResizeObserver drives the progressive fold
-    this._ro = new ResizeObserver(() => this._updateFold());
-    this._ro.observe(this._group);
-    this._updateFold();
+    // Initial fold pass (HeaderFold's own ResizeObserver keeps it current).
+    this._fold.relayout();
+  }
+
+  /**
+   * Register the header's own fold stages. Order slots 30 (nav links → More)
+   * belongs to the nav-menu plugin; see utils/headerFold.js for the full map.
+   */
+  _registerCoreFolds() {
+    const group = this._group;
+    const checkEllipsis = () => {
+      const folded = group.querySelectorAll('.crumb-pair.folded');
+      folded.forEach((p) => p.classList.remove('show-ellipsis'));
+      if (folded.length) folded[folded.length - 1].classList.add('show-ellipsis');
+    };
+
+    // 10 — ornament: the subtitle goes first.
+    this._fold.register(10, {
+      reset: () => group.classList.remove('fold-title'),
+      ops: () => [() => group.classList.add('fold-title')],
+    });
+
+    // 20 — history: facet pairs, then ancestor tag pairs, left to right. The
+    // blog-title (site) pair is spared here; it folds at 50.
+    this._fold.register(20, {
+      reset: () => {
+        group.querySelectorAll('.crumb-pair.folded').forEach((p) => {
+          p.classList.remove('folded', 'show-ellipsis');
+        });
+        group.querySelector('#crumb-popover')?.classList.remove('is-open');
+      },
+      ops: () => {
+        const pairs = [...group.querySelectorAll('.crumb-pair')];
+        const facets = pairs.filter((p) => p.classList.contains('crumb-facet-pair'));
+        const tags = pairs.filter(
+          (p) => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair',
+        );
+        return [...facets, ...tags].map((p) => () => {
+          p.classList.add('folded');
+          checkEllipsis();
+        });
+      },
+    });
+
+    // 40 — the nav zone collapses into the burger.
+    this._fold.register(40, {
+      reset: () => {
+        group.classList.remove('fold-nav');
+        this._closeBurger();
+      },
+      ops: () => [() => group.classList.add('fold-nav')],
+    });
+
+    // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
+    // (Unfolding is covered by stage 20's reset, which unfolds every pair.)
+    this._fold.register(50, {
+      ops: () => {
+        const sitePair = group.querySelector('#site-crumb-pair');
+        return sitePair
+          ? [() => { sitePair.classList.add('folded'); checkEllipsis(); }]
+          : [];
+      },
+    });
+
+    // 60 — last resort: ellipsize the current crumb (click opens the full path).
+    this._fold.register(60, {
+      reset: () => group.classList.remove('fold-current'),
+      ops: () => [() => group.classList.add('fold-current')],
+    });
+  }
+
+  /**
+   * The row fits when the tools zone (always the last, rightmost zone) ends
+   * inside the inner container and hasn't wrapped to a second row (the inner
+   * row flex-wraps on narrow screens for the middle slot).
+   */
+  _rowFits() {
+    const inner = this._inner;
+    if (!inner) return true;
+    void inner.offsetWidth; // force reflow before measuring
+    const tools = inner.querySelector('.site-tools');
+    const first = inner.firstElementChild;
+    if (!tools || !first || tools === first) return true;
+    const cs = getComputedStyle(inner);
+    const right = inner.getBoundingClientRect().right - (parseFloat(cs.paddingRight) || 0);
+    const toolsRect = tools.getBoundingClientRect();
+    const firstRect = first.getBoundingClientRect();
+    if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
+    return toolsRect.right <= right + 1;
   }
 
   _saveRecentSearch(q) {
@@ -420,107 +522,14 @@ export class PublicHeader extends Component {
     navBurger.querySelector('.burger-toggle')?.setAttribute('aria-expanded', 'false');
   }
 
-  _overflows(inner) {
-    void inner.offsetWidth; // force reflow
-
-    const innerRight = inner.getBoundingClientRect().right;
-    const navEl = inner.querySelector('.site-nav');
-
-    const content = inner.querySelector('.site-breadcrumb');
-
-    if (content) {
-      const cRect = content.getBoundingClientRect();
-      const nRect = navEl ? navEl.getBoundingClientRect() : null;
-      
-      const sameRow = nRect ? Math.abs(nRect.top - cRect.top) < cRect.height : true;
-      
-      if (nRect) {
-         const limit = sameRow ? nRect.left : innerRight;
-         return cRect.right > limit - 1;
-      }
-      return cRect.right > innerRight + 1;
-    }
-
-    // Fallback: nav (or header) exits the container boundary.
-    if (navEl) return navEl.getBoundingClientRect().right > innerRight + 1;
-    const headerEl = inner.querySelector('.site-header');
-    return headerEl ? headerEl.getBoundingClientRect().right > innerRight + 1 : false;
-  }
-
-  _resetFold() {
-    const group = this._group;
-    if (!group) return;
-    group.classList.remove('fold-title', 'fold-nav', 'fold-current');
-    group.querySelectorAll('.crumb-pair.folded').forEach((p) => {
-      p.classList.remove('folded', 'show-ellipsis');
-    });
-    this._closeBurger();
-    group.querySelector('#crumb-popover')?.classList.remove('is-open');
-  }
-
-  _updateFold() {
-    const inner = this._inner;
-    const group = this._group;
-    if (!inner || !group) return;
-
-    this._resetFold();
-    if (!this._overflows(inner)) return;
-
-    // Step 1: hide site subtitle
-    group.classList.add('fold-title');
-    if (!this._overflows(inner)) return;
-
-    // Step 2: fold breadcrumb pairs left to right (excluding site title)
-    // Drop facet pairs first, then tag pairs
-    const allPairs = [...group.querySelectorAll('.crumb-pair')];
-    const facetPairs = allPairs.filter(p => p.classList.contains('crumb-facet-pair'));
-    const tagPairs = allPairs.filter(p => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair');
-    const sitePair = allPairs.find(p => p.id === 'site-crumb-pair');
-
-    const checkEllipsis = () => {
-      const allFolded = group.querySelectorAll('.crumb-pair.folded');
-      allFolded.forEach(p => p.classList.remove('show-ellipsis'));
-      if (allFolded.length > 0) {
-        allFolded[allFolded.length - 1].classList.add('show-ellipsis');
-      }
-    };
-
-    // Fold facet pairs
-    for (const pair of facetPairs) {
-      pair.classList.add('folded');
-      checkEllipsis();
-      if (!this._overflows(inner)) return;
-    }
-
-    // Fold tag pairs left to right
-    for (const pair of tagPairs) {
-      pair.classList.add('folded');
-      checkEllipsis();
-      if (!this._overflows(inner)) return;
-    }
-
-    // Step 3: fold site title if it still overflows
-    if (sitePair) {
-      sitePair.classList.add('folded');
-      checkEllipsis();
-      if (!this._overflows(inner)) return;
-    }
-
-    // Step 4: collapse nav to burger
-    group.classList.add('fold-nav');
-    if (!this._overflows(inner)) return;
-
-    // Step 5: last resort — ellipsis on breadcrumb-current
-    group.classList.add('fold-current');
-  }
-
   beforeRender() {
-    this._ro?.disconnect();
-    this._ro = null;
+    this._fold?.destroy();
+    this._fold = null;
   }
 
   beforeUnmount() {
-    this._ro?.disconnect();
+    this._fold?.destroy();
+    this._fold = null;
     hideFlyout();
     // Clears body.distraction-free and removes the button portalled to body.
     this._dfPlugin?.unmount?.();
