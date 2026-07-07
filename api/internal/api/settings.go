@@ -67,6 +67,7 @@ var writableSecretKeys = map[string]bool{
 	"remark_auth_google_cid":     true,
 	"remark_auth_google_csec":    true,
 	"remark_smtp_password":       true,
+	"remark_telegram_token":      true,
 }
 
 // secretIsSetKeys are secret keys whose presence (but never value) is surfaced to
@@ -84,6 +85,7 @@ var secretIsSetKeys = []string{
 	"remark_auth_google_cid",
 	"remark_auth_google_csec",
 	"remark_smtp_password",
+	"remark_telegram_token",
 }
 
 // addSecretIsSetFlags annotates the settings map with "<key>_is_set" booleans

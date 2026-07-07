@@ -155,6 +155,16 @@ func (s *RemarkSupervisor) startLocked() {
 		}
 	}
 
+	telegramToken, _ := s.settings.GetSecret(bgCtx, "remark_telegram_token")
+	telegramChan, _ := s.settings.GetSetting(bgCtx, "remark_telegram_chan", "")
+	if telegramToken != "" && telegramChan != "" {
+		env = append(env,
+			"NOTIFY_ADMINS=telegram",
+			"TELEGRAM_TOKEN="+telegramToken,
+			"NOTIFY_TELEGRAM_CHAN="+telegramChan,
+		)
+	}
+
 	// Add all Point users as Remark42 admins
 	if s.repo != nil {
 		rows, err := s.repo.DB().QueryContext(bgCtx, "SELECT id FROM users")

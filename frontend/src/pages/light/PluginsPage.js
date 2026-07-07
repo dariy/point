@@ -97,6 +97,8 @@ const PLUGIN_SETTINGS = {
       "remark_smtp_password",
       "remark_smtp_tls",
       "remark_email_from",
+      "remark_telegram_token",
+      "remark_telegram_chan",
     ],
   },
 };
