@@ -55,12 +55,14 @@ export class Breadcrumbs extends Component {
       return `<a href="${escapeHtml(c.href)}" class="popover-item">${lockIcon}${escapeHtml(c.name)}</a>`;
     }).join('');
 
-    const siteHasChildren = navTags.length > 0;
+    // The site crumb is a plain home link. Menu navigation lives in the nav
+    // zone (inline links / More / burger) — the old navTags flyout on the
+    // title was invisible to touch and raced the nav fetch on first load.
     const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
     const siteClass = siteHasFollowingCrumbs ? 'breadcrumb-link' : 'breadcrumb-current';
     const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
-      <a href="/" class="${siteClass} crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}</a>
+      <a href="/" class="${siteClass} crumb-site" data-crumb="site"
+         aria-label="${title}">${title}</a>
       ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
     </span>`;
 
@@ -193,20 +195,6 @@ export class Breadcrumbs extends Component {
         });
       }
     };
-
-    const siteCrumb = this.$('.crumb-site');
-    const siteTitleLink = group ? group.querySelector('.site-title-link') : null;
-    
-    if (navTags.length) {
-      const rootItems = navTags.map(t => ({
-        name: t.name,
-        slug: t.slug,
-        count: t.post_count,
-        href: t.url || (t.slug ? `/tags/${t.slug}` : null),
-      }));
-      if (siteCrumb) attachCrumbDropdown(siteCrumb, rootItems);
-      if (siteTitleLink) attachCrumbDropdown(siteTitleLink, rootItems);
-    }
 
     const breadcrumbSlugs = (this.props.breadcrumb || [])
       .map(b => b.slug)
