@@ -211,6 +211,27 @@
     opacity: 0.8;
 }
 
+/* Breadcrumb dropdown: ancestor trail shown above the drill-down children.
+   Ancestor links carry a subtle indent chevron; the current crumb is a
+   non-link, emphasised row. */
+.flyout-path .ancestor-link {
+    opacity: 0.85;
+    font-size: var(--font-size-sm);
+}
+
+.flyout-path-current {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--surface-active);
+    gap: 1em;
+    cursor: default;
+}
+
 .flyout-current {
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--surface-active);

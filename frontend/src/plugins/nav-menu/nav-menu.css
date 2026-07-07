@@ -1,0 +1,265 @@
+/* ===========================
+   Nav zone — inline menu links (nav-menu plugin)
+   =========================== */
+
+.site-nav-items .nav-menu-link {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border: none;
+    background: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.site-nav-items .nav-menu-link:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.site-nav-items .nav-menu-link.active {
+    color: var(--text-primary);
+    box-shadow: inset 0 calc(-2 * var(--border-width)) 0 var(--color-primary);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+/* A link folded into More ▾ by the header fold controller */
+.site-nav-items .nav-menu-link.in-more {
+    display: none;
+}
+
+/* ── More ▾ overflow ── */
+
+.nav-more {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.nav-more.is-empty {
+    display: none;
+}
+
+.nav-more-caret {
+    margin-left: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.nav-more-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + var(--spacing-xs));
+    right: 0;
+    min-width: 180px;
+    background: var(--bg-elevated);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-xs) 0;
+    z-index: 110;
+}
+
+.nav-more.open .nav-more-panel {
+    display: block;
+}
+
+.nav-more-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.nav-more-item:hover,
+.nav-more-item.is-flyout-open {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+/* Submenu affordance: a parent whose children open in the shared dropdown. */
+.nav-more-item-caret {
+    color: var(--text-tertiary);
+    font-size: var(--font-size-md);
+    line-height: 1;
+}
+
+/* ===========================
+   Menu editor preview (/light/menu) — mini headers laid out by HeaderFold
+   =========================== */
+
+.menu-preview-strip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    overflow-x: auto;
+    padding-bottom: var(--spacing-xs);
+}
+
+.menu-preview-fig {
+    margin: 0;
+}
+
+.menu-preview-caption {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.menu-preview-vp {
+    max-width: 100%;
+}
+
+.pvh {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.pvh-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex: 0 0 auto;
+}
+
+.pvh-logo {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.pvh-title {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pvh-spacer {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.pvh-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--site-nav-gap);
+    flex: 0 0 auto;
+}
+
+/* Preview reuses the real nav link styles (scoped copy — the public rules
+   are scoped to .site-nav-items). */
+.pvh .nav-menu-link {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-secondary);
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+}
+
+.pvh .nav-menu-link.in-more {
+    display: none;
+}
+
+.pvh .nav-more {
+    position: relative;
+    display: inline-flex;
+}
+
+.pvh .nav-more.is-empty {
+    display: none;
+}
+
+.pvh .nav-more-caret {
+    margin-left: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.pvh-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex: 0 0 auto;
+}
+
+.pvh-iconbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    background: var(--surface-card);
+}
+
+.pvh-iconbtn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.pvh-burger {
+    display: none;
+}
+
+.pvh-folded .pvh-nav {
+    display: none;
+}
+
+.pvh-folded .pvh-burger {
+    display: inline-flex;
+}
+
+/* Inline cap control */
+.menu-inline-cap-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+}
+
+.menu-inline-cap-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.menu-inline-cap-label small {
+    color: var(--text-tertiary);
+}
+
+.menu-inline-max-input {
+    width: 80px;
+    text-align: center;
+}

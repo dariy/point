@@ -102,6 +102,11 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"tags_visibility", "hidden", "string"},
 		{"atlas_post_limit", "10", "integer"},
 		{"enable_backup", "false", "boolean"},
+
+		// Header nav: tags mode with the first 4 root tags inline, so the
+		// header is useful before the menu editor is ever opened.
+		{"nav_menu_mode", "tags", "string"},
+		{"nav_inline_max", "4", "string"},
 	}
 
 	// Seed per-plugin enabled state (plugin.<id>.enabled). Existing installs lack

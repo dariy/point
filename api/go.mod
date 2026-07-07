@@ -18,7 +18,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stefanfritsch/goldmark-fences v1.0.0
 	github.com/stretchr/testify v1.11.1
-	github.com/yuin/goldmark v1.7.16
+	github.com/yuin/goldmark v1.7.17
 	golang.org/x/crypto v0.53.0
 	golang.org/x/term v0.44.0
 	golang.org/x/time v0.15.0
