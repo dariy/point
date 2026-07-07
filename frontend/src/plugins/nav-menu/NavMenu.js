@@ -144,42 +144,55 @@ export class NavMenu {
     this.fold?.relayout();
   }
 
-  /** Dropdowns for inline items with children (hover-intent / tap-toggle). */
-  _wireInline() {
+  /** The child links (href-bearing) of a menu item, shaped for the dropdown. */
+  _childItems(it) {
+    return it.children
+      .filter((c) => c.href)
+      .map((c) => ({ name: c.name, slug: c.slug, count: c.count, href: c.href }));
+  }
+
+  /**
+   * Wire a menu link that stands for an item with children so it reveals those
+   * children in the shared header dropdown — hover-intent on fine pointers,
+   * tap-to-open (then tap-again-to-navigate) on coarse. Used for both inline
+   * links and the parent rows inside the More ▾ panel, so both surfaces behave
+   * identically instead of More dumping the whole subtree inline.
+   */
+  _wireChildFlyout(el, childItems) {
     const group = this.navItemsEl.closest('.site-header-group');
     const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-    let hoverTimer = null;
 
+    if (canHover) {
+      el.addEventListener('mouseenter', () => {
+        clearTimeout(this._hoverTimer);
+        this._hoverTimer = setTimeout(() => showCrumbDropdown(el, childItems, navigate, group), 180);
+      });
+      el.addEventListener('mouseleave', () => clearTimeout(this._hoverTimer));
+      el.addEventListener('click', () => { clearTimeout(this._hoverTimer); hideFlyout(); });
+    } else {
+      el.addEventListener('click', (e) => {
+        if (el.classList.contains('is-flyout-open')) {
+          const href = el.getAttribute('href');
+          if (href && href !== '#') {
+            hideFlyout();
+            navigate(href);
+            e.preventDefault();
+            return;
+          }
+        }
+        e.preventDefault();
+        showCrumbDropdown(el, childItems, navigate, group);
+      });
+    }
+  }
+
+  /** Dropdowns for inline items with children (hover-intent / tap-toggle). */
+  _wireInline() {
     this.navItemsEl.querySelectorAll('.nav-menu-link.has-children').forEach((el) => {
       const it = this._inline[Number(el.dataset.navI)];
       if (!it) return;
-      const items = it.children
-        .filter((c) => c.href)
-        .map((c) => ({ name: c.name, slug: c.slug, count: c.count, href: c.href }));
-      if (!items.length) return;
-
-      if (canHover) {
-        el.addEventListener('mouseenter', () => {
-          clearTimeout(hoverTimer);
-          hoverTimer = setTimeout(() => showCrumbDropdown(el, items, navigate, group), 180);
-        });
-        el.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
-        el.addEventListener('click', () => { clearTimeout(hoverTimer); hideFlyout(); });
-      } else {
-        el.addEventListener('click', (e) => {
-          if (el.classList.contains('is-flyout-open')) {
-            const href = el.getAttribute('href');
-            if (href && href !== '#') {
-              hideFlyout();
-              navigate(href);
-              e.preventDefault();
-              return;
-            }
-          }
-          e.preventDefault();
-          showCrumbDropdown(el, items, navigate, group);
-        });
-      }
+      const childItems = this._childItems(it);
+      if (childItems.length) this._wireChildFlyout(el, childItems);
     });
 
     const moreBtn = this.navItemsEl.querySelector('.nav-more-btn');
@@ -188,6 +201,8 @@ export class NavMenu {
       const more = moreBtn.closest('.nav-more');
       const open = more.classList.toggle('open');
       moreBtn.setAttribute('aria-expanded', String(open));
+      // Closing the panel also dismisses any open child dropdown.
+      if (!open) hideFlyout();
     });
   }
 
@@ -196,6 +211,7 @@ export class NavMenu {
     if (!more) return;
     more.classList.remove('open');
     more.querySelector('.nav-more-btn')?.setAttribute('aria-expanded', 'false');
+    hideFlyout();
   }
 
   /** Inline links currently visible (not folded into More), left to right. */
@@ -229,18 +245,29 @@ export class NavMenu {
       ...this._configOverflow,
     ];
     if (!panelItems.length) {
+      // Transient: a fold relayout unfolds every link before re-folding, so
+      // the panel empties mid-cycle. Hide the shell (CSS also hides an empty
+      // `.open` panel) but keep the open state — closing here would clobber a
+      // menu the user just opened whenever any ResizeObserver relayout fires.
       more.classList.add('is-empty');
-      this._closeMore();
       return;
     }
     more.classList.remove('is-empty');
-    more.querySelector('.nav-more-panel').innerHTML = panelItems.map((it) => {
-      let html = `<a href="${escapeHtml(it.href || '#')}" class="nav-more-item">${escapeHtml(it.name)}</a>`;
-      it.children.forEach((c) => {
-        if (!c.href) return;
-        html += `<a href="${escapeHtml(c.href)}" class="nav-more-item nav-more-sub">${escapeHtml(c.name)}</a>`;
-      });
-      return html;
+    // Parents only — a parent with children reveals them in the shared
+    // dropdown (like inline links) rather than flattening the whole subtree.
+    const panel = more.querySelector('.nav-more-panel');
+    panel.innerHTML = panelItems.map((it, i) => {
+      const hasChildren = this._childItems(it).length > 0;
+      const caret = hasChildren
+        ? `<span class="nav-more-item-caret" aria-hidden="true">›</span>`
+        : '';
+      return `<a href="${escapeHtml(it.href || '#')}"
+         class="nav-more-item${hasChildren ? ' has-children' : ''}"
+         data-more-i="${i}">${escapeHtml(it.name)}${caret}</a>`;
     }).join('');
+    panel.querySelectorAll('.nav-more-item.has-children').forEach((el) => {
+      const childItems = this._childItems(panelItems[Number(el.dataset.moreI)]);
+      if (childItems.length) this._wireChildFlyout(el, childItems);
+    });
   }
 }

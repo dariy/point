@@ -360,7 +360,9 @@ export class PublicHeader extends Component {
         group.querySelectorAll('.crumb-pair.folded').forEach((p) => {
           p.classList.remove('folded', 'show-ellipsis');
         });
-        group.querySelector('#crumb-popover')?.classList.remove('is-open');
+        // A crumb dropdown anchored to a now-reflowing crumb would be
+        // mispositioned; close it so it re-opens against the new layout.
+        hideFlyout();
       },
       ops: () => {
         const pairs = [...group.querySelectorAll('.crumb-pair')];
@@ -377,10 +379,12 @@ export class PublicHeader extends Component {
 
     // 40 — the nav zone collapses into the burger.
     this._fold.register(40, {
-      reset: () => {
-        group.classList.remove('fold-nav');
-        this._closeBurger();
-      },
+      // Don't close an open burger here: every relayout runs reset, and opening
+      // the burger dropdown can itself trigger one (a scrollbar appearing shifts
+      // the observed width), which would slam the menu shut the instant it
+      // opens. When the nav genuinely un-folds, `.nav-burger` is display:none
+      // via CSS, so a lingering is-open state stays invisible until it refolds.
+      reset: () => group.classList.remove('fold-nav'),
       ops: () => [() => group.classList.add('fold-nav')],
     });
 

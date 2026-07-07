@@ -35,26 +35,6 @@ export class Breadcrumbs extends Component {
       ? `Showing ${ariaLabels.join(', ')} — ${total} post${total !== 1 ? 's' : ''}`
       : '';
 
-    const allCrumbsForPopover = [
-      { name: settings.blog_title || 'Photo Blog', href: '/' },
-      ...breadcrumb.map(c => ({
-        name: c.name,
-        href: c.href || (c.slug ? `/tags/${c.slug}` : '/'),
-        is_hidden: c.is_hidden,
-      })),
-      ...(yearLabel ? [{ name: yearLabel, href: null }] : []),
-      ...(queryLabel ? [{ name: queryLabel, href: null }] : []),
-    ];
-
-    const popoverItemsHtml = allCrumbsForPopover.map((c, i) => {
-      const isLast = i === allCrumbsForPopover.length - 1;
-      const lockIcon = c.is_hidden ? LOCK_SVG : '';
-      if (isLast || !c.href) {
-        return `<span class="popover-item is-current">${lockIcon}${escapeHtml(c.name)}</span>`;
-      }
-      return `<a href="${escapeHtml(c.href)}" class="popover-item">${lockIcon}${escapeHtml(c.name)}</a>`;
-    }).join('');
-
     // The site crumb is a plain home link. Menu navigation lives in the nav
     // zone (inline links / More / burger) — the old navTags flyout on the
     // title was invisible to touch and raced the nav fetch on first load.
@@ -129,8 +109,26 @@ export class Breadcrumbs extends Component {
       ${siteCrumbHtml}
       ${tagCrumbsHtml}
       ${facetCrumbsHtml}
-      <div class="crumb-popover" id="crumb-popover">${popoverItemsHtml}</div>
     `;
+  }
+
+  /**
+   * Ancestor trail shown at the top of a crumb dropdown: Home + every crumb up
+   * to and including `upToIndex` (which is flagged `current`). Lets the folded
+   * "…" ancestors stay reachable inside the anchored dropdown on mobile.
+   */
+  _buildPath(upToIndex) {
+    const { settings = {}, breadcrumb = [] } = this.props;
+    const path = [{ name: settings.blog_title || 'Photo Blog', href: '/' }];
+    breadcrumb.slice(0, upToIndex + 1).forEach((c, i) => {
+      path.push({
+        name: c.name,
+        href: c.href || (c.slug ? `/tags/${c.slug}` : '/'),
+        is_hidden: c.is_hidden,
+        current: i === upToIndex,
+      });
+    });
+    return path;
   }
 
   _crumbHasChildren(crumb, navTags) {
@@ -167,13 +165,29 @@ export class Breadcrumbs extends Component {
 
     const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     let hoverTimer = null;
-    const attachCrumbDropdown = (el, items) => {
-      if (!items.length) return;
+
+    // The trail is "hidden" when the header has folded ancestors into "…" or
+    // ellipsized the current crumb. Only then does the dropdown need to carry
+    // the ancestor path — on a wide header the trail is already fully visible,
+    // so the dropdown stays children-only. Evaluated at open time because the
+    // fold state changes on resize after this wiring runs.
+    const trailHidden = () =>
+      !!group?.querySelector('.crumb-pair.folded') ||
+      !!group?.classList.contains('fold-current');
+
+    // `buildPath` (optional) returns the ancestor trail lazily; `children` is
+    // the drill-down list. The final spec is assembled per open.
+    const attachCrumbDropdown = (el, children, buildPath = null) => {
+      if (!children.length && !buildPath) return;
+      const openSpec = () => ({
+        path: (buildPath && trailHidden()) ? buildPath() : [],
+        children,
+      });
       if (canHover) {
         el.addEventListener('mouseenter', () => {
           clearTimeout(hoverTimer);
           hoverTimer = setTimeout(
-            () => showCrumbDropdown(el, items, navigate, group),
+            () => showCrumbDropdown(el, openSpec(), navigate, group),
             180,
           );
         });
@@ -191,7 +205,7 @@ export class Breadcrumbs extends Component {
             }
           }
           e.preventDefault();
-          showCrumbDropdown(el, items, navigate, group);
+          showCrumbDropdown(el, openSpec(), navigate, group);
         });
       }
     };
@@ -213,29 +227,33 @@ export class Breadcrumbs extends Component {
         count: c.post_count,
         href: c.url || tagHref(c.slug, childPath),
       }));
-      attachCrumbDropdown(el, childItems);
+      attachCrumbDropdown(el, childItems, () => this._buildPath(idx));
     });
 
+    // When the current crumb is a childless leaf it gets no dropdown above, so
+    // whenever the trail is hidden (ancestors folded into "…" or the current
+    // crumb ellipsized) those ancestors would be unreachable. Give that leaf a
+    // path-only dropdown so the trail stays one tap away — same anchored panel,
+    // no children section. The `has-hidden-trail` class drives the affordance.
     const crumbCurrentEls = [...this.container.querySelectorAll('.breadcrumb-current')];
     const lastCrumbCurrent = crumbCurrentEls[crumbCurrentEls.length - 1] || null;
-    const crumbPopover = this.$('#crumb-popover');
-    if (lastCrumbCurrent && crumbPopover) {
+    if (
+      lastCrumbCurrent &&
+      !lastCrumbCurrent.classList.contains('has-dropdown') &&
+      breadcrumbSlugs.length
+    ) {
+      const path = this._buildPath(this.props.breadcrumb.length - 1);
+      // Marker for the CSS affordance: a "reveal trail" chevron shows on this
+      // crumb only while the header is actually hiding ancestors (see header.css).
+      lastCrumbCurrent.classList.add('crumb-trail-toggle');
       lastCrumbCurrent.addEventListener('click', (e) => {
-        if (!group?.classList.contains('fold-current')) return;
+        if (!trailHidden()) return;
         e.preventDefault();
         e.stopPropagation();
-        const isOpen = crumbPopover.classList.contains('is-open');
-        if (!isOpen) {
-          const rect = lastCrumbCurrent.getBoundingClientRect();
-          crumbPopover.style.top  = `${rect.bottom + 4}px`;
-          crumbPopover.style.left = `${rect.left}px`;
-        }
-        crumbPopover.classList.toggle('is-open', !isOpen);
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!crumbPopover.contains(e.target) && e.target !== lastCrumbCurrent) {
-          crumbPopover.classList.remove('is-open');
+        if (lastCrumbCurrent.classList.contains('is-flyout-open')) {
+          hideFlyout();
+        } else {
+          showCrumbDropdown(lastCrumbCurrent, { path }, navigate, group);
         }
       });
     }

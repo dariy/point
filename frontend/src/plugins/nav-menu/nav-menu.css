@@ -74,7 +74,10 @@
 }
 
 .nav-more-item {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -86,14 +89,17 @@
         color var(--transition-fast);
 }
 
-.nav-more-item:hover {
+.nav-more-item:hover,
+.nav-more-item.is-flyout-open {
     background-color: var(--surface-hover);
     color: var(--text-primary);
 }
 
-.nav-more-sub {
-    padding-left: var(--spacing-lg);
-    font-weight: 400;
+/* Submenu affordance: a parent whose children open in the shared dropdown. */
+.nav-more-item-caret {
+    color: var(--text-tertiary);
+    font-size: var(--font-size-md);
+    line-height: 1;
 }
 
 /* ===========================
