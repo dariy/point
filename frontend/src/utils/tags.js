@@ -7,7 +7,7 @@
  */
 
 import { escapeHtml, setupLongPress } from './helpers.js';
-import { CHEVRON_SVG } from './icons.js';
+import { CHEVRON_SVG, LOCK_SVG } from './icons.js';
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user
@@ -175,6 +175,8 @@ function _hideFlyout() {
     _flyoutEl.classList.add('hidden');
     _flyoutEl.classList.remove('bottom-sheet');
     _flyoutEl.style.minWidth = '';
+    _flyoutEl.style.maxHeight = '';
+    _flyoutEl.style.overflowY = '';
   }
   _activeLink = null;
   if (_activeCard) {
@@ -192,75 +194,114 @@ function _hideFlyout() {
 export function hideFlyout() { _hideFlyout(); }
 
 /**
- * Show a lightweight tag dropdown anchored to a crumb element.
- * For a breadcrumb "site" crumb: items = root navTags (flat list).
- * For a breadcrumb tag crumb:    items = that tag's children from tagIndex.
- *
- * Reuses the existing flyout singleton but renders only the relevant subset.
- *
- * @param {HTMLElement} anchorEl   The crumb element to anchor the flyout to
- * @param {object[]}    items      Array of {name, slug, post_count} items
- * @param {Function}    navigateFn navigate(url) function
- * @param {HTMLElement} [excludeEl] Clicks inside this element won't dismiss flyout
+ * Anchor the shared flyout singleton directly beneath a trigger element and
+ * clamp it inside the viewport. One placement model for every header dropdown
+ * (breadcrumb crumbs, nav "More", nav items) — no bottom-sheet, so the panel
+ * always appears where the finger tapped instead of sliding up from the
+ * screen edge.
  */
-export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null) {
+function _anchorFlyoutTo(anchorEl) {
+  const flyout = _flyoutEl;
+  const gap = 8;
+  const margin = 8;
+
+  // Cap height to the space below (or above) the trigger so a long list
+  // scrolls internally rather than overflowing the viewport.
+  flyout.style.maxHeight = '';
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - anchorRect.bottom - gap - margin;
+  const spaceAbove = anchorRect.top - gap - margin;
+  const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+  flyout.style.maxHeight = `${Math.max(160, (openUp ? spaceAbove : spaceBelow))}px`;
+  flyout.style.overflowY = 'auto';
+
+  const flyW = flyout.offsetWidth;
+  const flyH = flyout.offsetHeight;
+  const top = openUp ? anchorRect.bottom - anchorRect.height - flyH - gap
+                     : anchorRect.bottom + gap;
+
+  // Prefer aligning the panel's left edge with the trigger; clamp to viewport.
+  let left = anchorRect.left;
+  left = Math.max(margin, Math.min(left, window.innerWidth - flyW - margin));
+
+  flyout.style.top = `${top}px`;
+  flyout.style.left = `${left}px`;
+}
+
+function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
+  const a = document.createElement('a');
+  a.href = item.href || `/tags/${item.slug}`;
+  a.className = `flyout-item ${extraClass}`.trim();
+  const lock = item.is_hidden ? LOCK_SVG : '';
+  // No count badge for countless items (custom menu links have no posts).
+  const count = item.count ?? item.post_count;
+  a.innerHTML = `<span class="name">${lock}${escapeHtml(item.name)}</span>${count ? ` <span class="count">${count}</span>` : ''}`;
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    _hideFlyout();
+    navigateFn(a.pathname + a.search + a.hash);
+  });
+  section.appendChild(a);
+}
+
+/**
+ * Show the header dropdown anchored to a trigger element.
+ *
+ * `spec` is either:
+ *   - an Array of {name, slug|href, count} — a flat list (nav "More", nav
+ *     items with children); rendered as a single children section, or
+ *   - an object { path?, children? } — `path` is the ancestor trail
+ *     ({name, href, is_hidden, current}) shown as a top section with the
+ *     current crumb highlighted, `children` the drill-down list below it.
+ *     This is the breadcrumb case: one panel exposes both "jump up the trail"
+ *     and "drill down" so the folded "…" ancestors stay reachable on mobile.
+ *
+ * @param {HTMLElement} anchorEl   The element to anchor the flyout to
+ * @param {object[]|object} spec   Flat item list, or {path, children}
+ * @param {Function}    navigateFn navigate(url) function
+ * @param {HTMLElement} [excludeEl] Clicks inside this element won't dismiss it
+ */
+export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) {
   _hideFlyout();
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
 
-  if (!items || !items.length) return;
+  const path     = Array.isArray(spec) ? []   : (spec?.path || []);
+  const children = Array.isArray(spec) ? spec  : (spec?.children || []);
+  if (!path.length && !children.length) return;
 
-  const section = document.createElement('div');
-  section.className = 'flyout-section flyout-children';
-
-  items.forEach((t) => {
-    const a = document.createElement('a');
-    a.href = t.href || `/tags/${t.slug}`;
-    a.className = 'flyout-item child-link';
-    a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count ?? t.post_count ?? ''}</span>`;
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      _hideFlyout();
-      navigateFn(a.pathname + a.search + a.hash);
+  // Path section — ancestor links + highlighted current crumb. Only worth
+  // rendering when there's an actual trail (more than the current crumb).
+  if (path.length > 1) {
+    const section = document.createElement('div');
+    section.className = 'flyout-section flyout-path';
+    path.forEach((c) => {
+      if (c.current || !c.href) {
+        const span = document.createElement('span');
+        span.className = 'flyout-item flyout-path-current';
+        const lock = c.is_hidden ? LOCK_SVG : '';
+        span.innerHTML = `<span class="name">${lock}${escapeHtml(c.name)}</span>`;
+        section.appendChild(span);
+      } else {
+        _appendFlyoutLink(section, c, navigateFn, 'ancestor-link');
+      }
     });
-    section.appendChild(a);
-  });
+    flyout.appendChild(section);
+  }
 
-  flyout.appendChild(section);
+  if (children.length) {
+    const section = document.createElement('div');
+    section.className = 'flyout-section flyout-children';
+    children.forEach((t) => _appendFlyoutLink(section, t, navigateFn, 'child-link'));
+    flyout.appendChild(section);
+  }
 
+  flyout.classList.remove('bottom-sheet');
   flyout.style.minWidth = 'max-content';
   flyout.style.visibility = 'hidden';
   flyout.classList.remove('hidden');
 
-  const isMobile = window.innerWidth < 640;
-  if (isMobile) {
-    flyout.classList.add('bottom-sheet');
-    flyout.style.top = '';
-    flyout.style.left = '';
-  } else {
-    flyout.classList.remove('bottom-sheet');
-    const flyH = flyout.offsetHeight;
-    const flyW = flyout.offsetWidth;
-    const anchorRect = anchorEl.getBoundingClientRect();
-    const gap = 8;
-
-    let top = anchorRect.bottom + gap;
-    if (top + flyH > window.innerHeight - 8) top = anchorRect.top - flyH - gap;
-
-    let arrowCenterLeft;
-    if (anchorEl.classList.contains('breadcrumb-link') && anchorEl.nextElementSibling && anchorEl.nextElementSibling.classList.contains('breadcrumb-separator')) {
-      const sepRect = anchorEl.nextElementSibling.getBoundingClientRect();
-      arrowCenterLeft = sepRect.left + sepRect.width / 2;
-    } else {
-      arrowCenterLeft = anchorRect.right;
-    }
-
-    let left = arrowCenterLeft - (flyW / 2);
-    left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
-
-    flyout.style.top = `${top}px`;
-    flyout.style.left = `${left}px`;
-  }
+  _anchorFlyoutTo(anchorEl);
 
   flyout.style.visibility = '';
   anchorEl.classList.add('is-flyout-open');
@@ -268,7 +309,8 @@ export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null)
   _activeLink = anchorEl;
   _activeCard = null;
 
-  if (!isMobile) {
+  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if (canHover) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }

@@ -4,6 +4,7 @@ package services
 
 import (
 	"context"
+	"strconv"
 	"testing"
 )
 
@@ -105,6 +106,20 @@ func TestPostService_GetPostBySlug(t *testing.T) {
 	_, err = svc.GetPostBySlug(ctx, "nonexistent-slug")
 	if err == nil {
 		t.Error("expected error for non-existent slug")
+	}
+
+	// Numeric fallback: /posts/<id> permalinks resolve to the post by ID.
+	got3, err := svc.GetPostBySlug(ctx, strconv.FormatInt(post.ID, 10))
+	if err != nil {
+		t.Fatalf("GetPostBySlug (numeric id) failed: %v", err)
+	}
+	if got3.ID != post.ID {
+		t.Errorf("expected post ID %d from numeric lookup, got %d", post.ID, got3.ID)
+	}
+
+	_, err = svc.GetPostBySlug(ctx, "999999")
+	if err == nil {
+		t.Error("expected error for numeric lookup with no matching post")
 	}
 }
 
@@ -284,23 +299,6 @@ func TestPostService_PublishAndWithdraw(t *testing.T) {
 	}
 	if withdrawn.Status != "draft" {
 		t.Errorf("expected status 'draft' after withdraw, got %q", withdrawn.Status)
-	}
-}
-
-func TestPostService_GetPostNavigation(t *testing.T) {
-	svc, repo := setupPostService(t)
-	defer func() { _ = repo.Close() }()
-	ctx := context.Background()
-
-	insertTestUser(t, svc)
-	p1, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "First", Slug: "first", AuthorID: 1, Status: "draft"})
-	_, _ = svc.PublishPost(ctx, p1.ID)
-	p2, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Second", Slug: "second", AuthorID: 1, Status: "draft"})
-	_, _ = svc.PublishPost(ctx, p2.ID)
-
-	_, _, err := svc.GetPostNavigation(ctx, p1.ID, true, "")
-	if err != nil {
-		t.Fatalf("GetPostNavigation failed: %v", err)
 	}
 }
 

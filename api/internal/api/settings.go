@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"point-api/internal/services"
 
@@ -11,11 +12,15 @@ import (
 )
 
 type SettingsHandler struct {
-	settingsService *services.SettingsService
+	settingsService  *services.SettingsService
+	remarkSupervisor *services.RemarkSupervisor
 }
 
-func NewSettingsHandler(settingsService *services.SettingsService) *SettingsHandler {
-	return &SettingsHandler{settingsService: settingsService}
+func NewSettingsHandler(settingsService *services.SettingsService, remarkSupervisor *services.RemarkSupervisor) *SettingsHandler {
+	return &SettingsHandler{
+		settingsService:  settingsService,
+		remarkSupervisor: remarkSupervisor,
+	}
 }
 
 // publicSettingKeys are settings safe to expose to unauthenticated users.
@@ -41,7 +46,12 @@ var publicSettingKeys = map[string]bool{
 	"immersive_nav_direction": true,
 	"exif_visibility":         true,
 	"nav_menu_mode":           true,
+	"nav_inline_max":          true,
 	"footer_copyright":        true,
+
+	// Comments (remark42) embed appearance — read by the public widget config.
+	"remark_simple_view": true,
+	"remark_no_footer":   true,
 }
 
 // writableSecretKeys are secrets the admin may set through the API.
@@ -53,6 +63,12 @@ var writableSecretKeys = map[string]bool{
 	"instagram_access_token":     true,
 	"instagram_user_id":          true,
 	"instagram_token_expires_at": true,
+	"remark_auth_github_cid":     true,
+	"remark_auth_github_csec":    true,
+	"remark_auth_google_cid":     true,
+	"remark_auth_google_csec":    true,
+	"remark_smtp_password":       true,
+	"remark_telegram_token":      true,
 }
 
 // secretIsSetKeys are secret keys whose presence (but never value) is surfaced to
@@ -65,6 +81,12 @@ var secretIsSetKeys = []string{
 	"instagram_access_token",
 	"instagram_user_id",
 	"instagram_token_expires_at",
+	"remark_auth_github_cid",
+	"remark_auth_github_csec",
+	"remark_auth_google_cid",
+	"remark_auth_google_csec",
+	"remark_smtp_password",
+	"remark_telegram_token",
 }
 
 // addSecretIsSetFlags annotates the settings map with "<key>_is_set" booleans
@@ -116,8 +138,20 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
+	remarkChanged := false
+
 	for key, value := range updates {
+		if strings.HasPrefix(key, "remark_") {
+			remarkChanged = true
+		}
 		if writableSecretKeys[key] {
+			// Secret values are never echoed back to the client (only
+			// "<key>_is_set"), so their form fields render empty. An empty
+			// submission means "unchanged", not "clear" — otherwise every
+			// save of a panel containing an untouched secret would wipe it.
+			if value == "" {
+				continue
+			}
 			if err := h.settingsService.SetSecret(ctx, key, value); err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
@@ -126,6 +160,10 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		if err := h.settingsService.SetSetting(ctx, key, value, "string"); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+	}
+
+	if remarkChanged && h.remarkSupervisor != nil {
+		go h.remarkSupervisor.Restart()
 	}
 
 	all, err := h.settingsService.GetAllSettings(ctx)

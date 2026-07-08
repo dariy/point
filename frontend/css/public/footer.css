@@ -37,16 +37,69 @@
     color: var(--color-primary);
 }
 
-.footer-content .pagination {
-    grid-column: 2;
+/* Grid paginator, relocated into the footer's centre slot on desktop and
+   phone-landscape. Portrait phones keep the in-flow paginator below the grid,
+   so the footer copy stays hidden there and the in-flow one is hidden here
+   (body.grid-zoomable marks the grid pages that publish the footer copy —
+   search keeps its own in-flow paginator everywhere). */
+.footer-pagination {
+    display: none;
+}
+
+.footer-pagination .pagination {
     margin-top: 0;
+}
+
+@media (min-width: 769px), (orientation: landscape) {
+    .footer-pagination {
+        display: block;
+    }
+
+    body.grid-zoomable #pagination-mount {
+        display: none;
+    }
 }
 
 .footer-actions {
     grid-column: 3;
     justify-self: end;
     display: flex;
+    align-items: center;
     gap: var(--spacing-sm);
+    padding-left: var(--spacing-sm);
+}
+
+.footer-sliding-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    transition:
+        max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.footer-sliding-actions.is-expanded {
+    max-width: 400px;
+    opacity: 1;
+}
+
+/* Grid zoom slider — mouse/trackpad users on zoom-capable grid pages only
+   (body.grid-zoomable is set by the home/tag pages; touch users pinch). */
+.footer-zoom {
+    display: none;
+    width: 110px;
+    align-self: center;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    body.grid-zoomable .footer-zoom {
+        display: inline-block;
+    }
 }
 
 .footer-action-btn {
@@ -62,14 +115,18 @@
     border-radius: var(--border-radius);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
     text-decoration: none;
     box-shadow: var(--shadow-sm);
 }
 
 @media (pointer: coarse) {
     .footer-action-btn::after {
-        content: '';
+        content: "";
         position: absolute;
         top: 50%;
         left: 50%;

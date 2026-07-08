@@ -8,5 +8,5 @@ import (
 func newNavMenuHandler(t *testing.T) *NavMenuHandler {
 	t.Helper()
 	repo := setupTestDB(t)
-	return NewNavMenuHandler(services.NewSettingsService(repo))
+	return NewNavMenuHandler(services.NewSettingsService(repo), services.NewTagService(repo))
 }

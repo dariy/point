@@ -25,6 +25,7 @@ import { getInstagramStatus } from "../../api/instagram.js";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
+import { pluginHost } from "../../core/pluginHost.js";
 
 // Group headings keyed by Descriptor.Type, rendered in this order.
 const TYPE_GROUPS = [
@@ -80,6 +81,26 @@ const PLUGIN_SETTINGS = {
   passkeys: { sections: ["passkeys"] },
   "api-keys": { sections: ["api-keys"] },
   "offline-sync": { sections: ["offline-data", "sync-queue"] },
+  comments: {
+    keys: [
+      "remark_simple_view",
+      "remark_no_footer",
+      "remark_auth_anon",
+      "remark_auth_email_enable",
+      "remark_auth_github_cid",
+      "remark_auth_github_csec",
+      "remark_auth_google_cid",
+      "remark_auth_google_csec",
+      "remark_smtp_host",
+      "remark_smtp_port",
+      "remark_smtp_username",
+      "remark_smtp_password",
+      "remark_smtp_tls",
+      "remark_email_from",
+      "remark_telegram_token",
+      "remark_telegram_chan",
+    ],
+  },
 };
 
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
@@ -388,6 +409,17 @@ export default class PluginsPage extends Component {
       delete pending[id];
       // An individual toggle diverges from any preset (backend does the same).
       this.setState({ plugins: this._withLocks(plugins), pending, activePreset: "custom" });
+      
+      // Mutate pluginHost directly so navigation menus can immediately appear/disappear without a hard refresh.
+      if (enabled) {
+        pluginHost._byId.set(id, updated);
+        if (!pluginHost._manifest.some(e => e.id === id)) pluginHost._manifest.push(updated);
+      } else {
+        pluginHost._byId.delete(id);
+        pluginHost._manifest = pluginHost._manifest.filter(e => e.id !== id);
+      }
+      store.set('plugin_toggled', Date.now());
+
       store.set("toast", {
         message: `${humanize(id)} ${enabled ? "enabled" : "disabled"}. Reload the public site to see the change.`,
         type: "success",

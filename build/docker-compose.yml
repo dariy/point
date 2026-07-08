@@ -20,6 +20,13 @@ services:
       - FRONTEND_DIR=/app/frontend
       - PORT=8000
       - HOST=0.0.0.0
+      # remark42 comments sidecar — set REMARK_URL/REMARK_SECRET in .env to enable
+      - REMARK_URL=${REMARK_URL:-}
+      - REMARK_SECRET=${REMARK_SECRET:-}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - NOTIFY_TELEGRAM_CHAN=${NOTIFY_TELEGRAM_CHAN:-}
+      - NOTIFY_ADMINS=${NOTIFY_ADMINS:-}
+      - AUTH_ANON=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

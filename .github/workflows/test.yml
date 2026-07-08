@@ -81,6 +81,9 @@ jobs:
           docker run -d --name point-smoke -p 8000:8000 \
             -e DATABASE_URL=/data/point.db \
             -e STORAGE_PATH=/data \
+            -e TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}" \
+            -e NOTIFY_TELEGRAM_CHAN="${NOTIFY_TELEGRAM_CHAN:-}" \
+            -e NOTIFY_ADMINS="${NOTIFY_ADMINS:-}" \
             -v /tmp/point-smoke:/data \
             point:smoke
           for i in $(seq 1 15); do

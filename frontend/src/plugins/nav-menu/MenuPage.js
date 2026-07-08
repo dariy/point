@@ -13,6 +13,8 @@ import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
+import { HeaderFold } from '../../utils/headerFold.js';
+import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.js';
 
 // ── Markdown parser/serialiser ────────────────────────────────────────────────
 
@@ -59,10 +61,13 @@ export default class MenuPage extends Component {
       loading: true,
       saving: false,
       error: null,
-      mode: 'tags', // 'tags' | 'custom'
+      mode: 'tags', // 'tags' | 'custom' | 'none'
       editFormat: 'visual', // 'visual' | 'markdown'
       items: [], // [{label, url, depth}]
+      inlineMax: 4, // links shown inline before More ▾
     };
+    this._tagItems = []; // tags-mode menu (fetched once, for the preview)
+    this._previewFolds = [];
   }
 
   render() {
@@ -118,11 +123,35 @@ export default class MenuPage extends Component {
                   </span>
                 </div>
               </label>
+              <label class="radio-card">
+                <input type="radio" class="radio-input" name="menu-mode" value="none" ${mode === 'none' ? 'checked' : ''}>
+                <div class="radio-content">
+                  <span class="radio-indicator"></span>
+                  <span class="radio-text">
+                    <strong>None</strong>
+                    <small>No menu — the header shows only the title, breadcrumbs and tools.</small>
+                  </span>
+                </div>
+              </label>
             </div>
           </div>
         </section>
 
+        ${mode !== 'none' ? `
+        <section class="menu-inline-cap card">
+          <div class="card-body menu-inline-cap-row">
+            <label for="inline-max-input" class="menu-inline-cap-label">
+              <strong>Links shown inline</strong>
+              <small>Items beyond this number go under “More ▾”. Narrow screens may fold further.</small>
+            </label>
+            <input id="inline-max-input" type="number" min="1" max="10" step="1"
+                   class="form-input menu-inline-max-input" value="${this.state.inlineMax}">
+          </div>
+        </section>` : ''}
+
         ${customEditor}
+
+        ${this._renderPreviewSection()}
 
         <div class="form-actions-sticky">
            <button id="save-menu-btn" class="btn btn-primary" ${saving ? 'disabled' : ''}>
@@ -160,6 +189,111 @@ export default class MenuPage extends Component {
   _renderMarkdownEditor(items) {
     const text = serializeMarkdown(items);
     return `<textarea id="menu-markdown-input" class="form-input font-mono" rows="15" placeholder="- [Label](url)">${escapeHtml(text)}</textarea>`;
+  }
+
+  /**
+   * Live preview: three fixed-width headers laid out by the real HeaderFold
+   * controller — what folds here is what folds on the site.
+   */
+  _renderPreviewSection() {
+    const widths = [['Desktop', 900], ['Mobile landscape', 640], ['Mobile portrait', 360]];
+    return `
+      <section class="menu-preview card">
+        <div class="card-header"><strong>Preview</strong></div>
+        <div class="card-body">
+          <div class="menu-preview-strip">
+            ${widths.map(([label, w]) => `
+              <figure class="menu-preview-fig">
+                <figcaption class="menu-preview-caption">${label} · ${w}px</figcaption>
+                <div class="menu-preview-vp" data-w="${w}" style="width:${w}px"></div>
+              </figure>`).join('')}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  /** Menu items to preview, as {name, hasChildren} — depends on the mode. */
+  _previewItems() {
+    const { mode } = this.state;
+    if (mode === 'none') return [];
+    if (mode === 'custom') {
+      const flat = this.state.editFormat === 'visual'
+        ? this._collectVisualItems()
+        : parseMarkdown(this.container.querySelector('#menu-markdown-input')?.value || '');
+      return flat.filter((i) => i.depth === 0 && i.label)
+        .map((i) => ({ name: i.label }));
+    }
+    return this._tagItems.map((t) => ({ name: t.name }));
+  }
+
+  _updatePreviews() {
+    this._destroyPreviews();
+    const items = this._previewItems();
+    const settings = store.get('settings') || {};
+    const title = settings.blog_title || 'My blog';
+    const inlineMax = this.state.inlineMax;
+
+    this.container.querySelectorAll('.menu-preview-vp').forEach((vp) => {
+      const inline = items.slice(0, inlineMax);
+      const overflow = items.length - inline.length;
+      vp.innerHTML = `
+        <div class="pvh">
+          <span class="pvh-brand"><span class="pvh-logo"></span><span class="pvh-title">${escapeHtml(title)}</span></span>
+          <span class="pvh-spacer"></span>
+          <nav class="pvh-nav">
+            ${inline.map((it) => `<span class="nav-menu-link">${escapeHtml(it.name)}</span>`).join('')}
+            <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">More<span class="nav-more-caret">▾</span></span></span>
+          </nav>
+          <span class="pvh-tools">
+            <span class="pvh-iconbtn">${SEARCH_SVG}</span>
+            <span class="pvh-iconbtn pvh-burger">${MENU_SVG}</span>
+          </span>
+        </div>`;
+
+      const root = vp.querySelector('.pvh');
+      const nav = root.querySelector('.pvh-nav');
+      const more = root.querySelector('.nav-more');
+      const moreBtn = root.querySelector('.nav-more-btn');
+      const links = [...nav.querySelectorAll('.nav-menu-link')].filter((l) => !l.closest('.nav-more'));
+      let foldedCount = 0;
+      const syncMore = () => {
+        const total = foldedCount + overflow;
+        more.classList.toggle('is-empty', total === 0);
+        moreBtn.innerHTML = `More (${total})<span class="nav-more-caret">▾</span>`;
+      };
+      syncMore();
+
+      const fold = new HeaderFold({
+        observe: vp,
+        fits: () => {
+          void root.offsetWidth;
+          const tools = root.querySelector('.pvh-tools');
+          return tools.getBoundingClientRect().right <= root.getBoundingClientRect().right - 7;
+        },
+      });
+      fold.register(30, {
+        reset: () => {
+          links.forEach((l) => l.classList.remove('in-more'));
+          foldedCount = 0;
+          syncMore();
+        },
+        ops: () => links.slice().reverse().map((l) => () => {
+          l.classList.add('in-more');
+          foldedCount += 1;
+          syncMore();
+        }),
+      });
+      fold.register(40, {
+        reset: () => root.classList.remove('pvh-folded'),
+        ops: () => [() => root.classList.add('pvh-folded')],
+      });
+      this._previewFolds.push(fold);
+    });
+  }
+
+  _destroyPreviews() {
+    this._previewFolds.forEach((f) => f.destroy());
+    this._previewFolds = [];
   }
 
   afterRender() {
@@ -257,9 +391,32 @@ export default class MenuPage extends Component {
     });
 
     this.container.querySelector('#save-menu-btn')?.addEventListener('click', () => this._handleSave());
+
+    // Inline cap + item edits update the preview in place (no full re-render,
+    // so inputs keep focus while typing).
+    this.container.querySelector('#inline-max-input')?.addEventListener('change', (e) => {
+      const n = parseInt(e.target.value, 10);
+      if (n >= 1 && n <= 10) this.state.inlineMax = n;
+      e.target.value = this.state.inlineMax;
+      this._updatePreviews();
+    });
+    let previewTimer = null;
+    const schedulePreview = () => {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(() => this._updatePreviews(), 300);
+    };
+    this.container.querySelector('#menu-items-list')?.addEventListener('input', schedulePreview);
+    this.container.querySelector('#menu-markdown-input')?.addEventListener('input', schedulePreview);
+
+    this._updatePreviews();
+  }
+
+  beforeRender() {
+    this._destroyPreviews();
   }
 
   beforeUnmount() {
+    this._destroyPreviews();
     this._cleanupAdminLayout?.();
   }
 
@@ -283,10 +440,13 @@ export default class MenuPage extends Component {
   async _load() {
     try {
       const data = await getAdminNavMenu();
+      // Tags-mode tree (returned regardless of active mode) for the preview.
+      this._tagItems = data.tag_items || [];
       this.setState({
         loading: false,
         mode: data.mode || 'tags',
         items: parseMarkdown(data.custom_markdown),
+        inlineMax: data.inline_max || 4,
         error: null
       });
     } catch (err) {
@@ -327,8 +487,17 @@ export default class MenuPage extends Component {
         mode: this.state.mode,
         custom_markdown: markdown,
         items: apiItems,
+        inline_max: this.state.inlineMax,
       });
-      
+
+      // Sync the public settings store so the header reflects the change
+      // without a reload, then let nav consumers refetch the menu.
+      const settings = store.get('settings') || {};
+      store.set('settings', {
+        ...settings,
+        nav_menu_mode: this.state.mode,
+        nav_inline_max: String(this.state.inlineMax),
+      });
       document.dispatchEvent(new CustomEvent('nav-changed'));
 
       store.set('toast', { message: 'Menu saved.', type: 'success' });

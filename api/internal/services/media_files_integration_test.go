@@ -546,9 +546,6 @@ func TestNewMediaServiceWithAPIKey(t *testing.T) {
 	tags := NewTagService(repo)
 
 	svc := NewMediaService(repo, cfg, settings, tags)
-	if svc == nil {
-		t.Fatal("expected non-nil service")
-	}
 
 	// If genaiClient was initialized (fake key, genai.NewClient may still succeed),
 	// try to call AnalyzeImage to exercise analyzeImageDirectly code paths.

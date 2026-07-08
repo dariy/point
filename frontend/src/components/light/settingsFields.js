@@ -21,6 +21,22 @@ export const LABEL_OVERRIDES = {
   gemini_prompt_title: "Title guidance",
   gemini_prompt_tags: "Tags guidance",
   gemini_prompt_excerpt: "Excerpt guidance",
+  remark_simple_view: "Simple view (minimal widget UI)",
+  remark_no_footer: "Hide widget footer",
+  remark_auth_anon: "Enable anonymous comments",
+  remark_auth_email_enable: "Enable email login",
+  remark_auth_github_cid: "GitHub Client ID",
+  remark_auth_github_csec: "GitHub Client Secret",
+  remark_auth_google_cid: "Google Client ID",
+  remark_auth_google_csec: "Google Client Secret",
+  remark_smtp_host: "SMTP host",
+  remark_smtp_port: "SMTP port",
+  remark_smtp_username: "SMTP username",
+  remark_smtp_password: "SMTP password",
+  remark_smtp_tls: "SMTP TLS",
+  remark_email_from: "Login email sender address",
+  remark_telegram_token: "Telegram Bot Token",
+  remark_telegram_chan: "Telegram Channel ID",
 };
 
 // Keys rendered as <input type="number">.
@@ -31,6 +47,7 @@ export const NUMERIC_KEYS = new Set([
   "session_ttl_days",
   "cleanup_interval_days",
   "atlas_post_limit",
+  "remark_smtp_port",
 ]);
 
 /** Humanized label for a setting key (snake_case → Title Case), with overrides. */
@@ -44,12 +61,29 @@ export function labelFor(key) {
   );
 }
 
+// Toggle keys whose effective default is ON when the setting was never saved.
+// Must mirror the backend read-time defaults (remark_supervisor.go reads the
+// remark_* keys with default "true"; the comments embed treats absent
+// remark_simple_view / remark_no_footer as true) — otherwise the panel would
+// show OFF for an unset key and a no-change save would flip real behavior.
+export const DEFAULT_ON_KEYS = new Set([
+  "remark_simple_view",
+  "remark_no_footer",
+  "remark_auth_anon",
+  "remark_smtp_tls",
+]);
+
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
 export function isToggleKey(key) {
+  if (key.includes("username")) return false; // "username" would match "use"
   return (
     key.includes("enable") ||
     key.includes("show") ||
     key.includes("use") ||
+    key.includes("_anon") ||
+    key.includes("_tls") ||
+    key === "remark_simple_view" ||
+    key === "remark_no_footer" ||
     key === "multi_user_mode" ||
     key === "require_registration_code"
   );
@@ -66,7 +100,13 @@ function isNumericKey(key) {
 }
 
 function isSecretKey(key) {
-  return key === "gemini_api_key" || key.includes("secret");
+  return (
+    key === "gemini_api_key" ||
+    key === "remark_telegram_token" ||
+    key.includes("secret") ||
+    key.includes("csec") ||
+    key.includes("password")
+  );
 }
 
 /** Markup for a single setting input (without its label wrapper). */
@@ -155,7 +195,14 @@ function inputHtml(key, value, { posts = [] }) {
     return `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
   }
   if (isSecretKey(key)) {
-    return `<input type="password" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" autocomplete="new-password">`;
+    // Secret values are never echoed back by the API; blank means "keep".
+    const input = `<input type="password" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" autocomplete="new-password" placeholder="Leave blank to keep the current value">`;
+    const oauthProvider = { remark_auth_github_csec: "github", remark_auth_google_csec: "google" }[key];
+    if (oauthProvider) {
+      return `${input}
+      <small class="form-hint">Callback URL for the OAuth app: <code>${escapeHtml(window.location.origin)}/comments/auth/${oauthProvider}/callback</code></small>`;
+    }
+    return input;
   }
   return `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
 }
@@ -175,7 +222,7 @@ export function renderFields(keys, settings, ctx = {}) {
   const toggles = [];
 
   for (const key of keys) {
-    const value = settings[key] ?? "";
+    const value = settings[key] ?? (DEFAULT_ON_KEYS.has(key) ? "true" : "");
     const label = labelFor(key);
 
     if (isToggleKey(key)) {

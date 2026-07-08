@@ -410,6 +410,25 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit per_page overrides site setting", func(t *testing.T) {
+		// With 12 posts newest-first and per_page=5, the oldest (post-1) sits at
+		// index 11 → page 3 (11/5 + 1). The site default (10) would put it on page 2.
+		req := httptest.NewRequest(http.MethodGet, "/?per_page=5", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("slug")
+		c.SetParamValues("post-1")
+
+		if err := handler.GetPostPage(c); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var resp map[string]interface{}
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
+		if int(resp["page"].(float64)) != 3 {
+			t.Errorf("expected page 3 with per_page=5, got %v", resp["page"])
+		}
+	})
+
 	t.Run("post in tag-context page", func(t *testing.T) {
 		// post-1 has tag 'travel'
 		// Create tag
@@ -443,7 +462,7 @@ func TestPostHandler_UpdateSettings(t *testing.T) {
 	}()
 
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewSettingsHandler(settingsSvc)
+	handler := NewSettingsHandler(settingsSvc, nil)
 	e := echo.New()
 
 	// UpdateSettings

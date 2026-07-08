@@ -91,9 +91,6 @@ func TestNewPostService(t *testing.T) {
 	// Calling NewPostService to ensure it initializes correctly
 	// and to cover the parser configuration logic.
 	svc := NewPostService(nil, nil, nil, nil, "")
-	if svc == nil {
-		t.Fatal("NewPostService returned nil")
-	}
 	if svc.md == nil {
 		t.Error("NewPostService did not initialize goldmark")
 	}

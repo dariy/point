@@ -13,6 +13,7 @@ import { store } from '../../store.js';
 import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
 
 export default class PostPage extends Component {
@@ -31,7 +32,6 @@ export default class PostPage extends Component {
     // Post→post navigation reuses this page via onRouteUpdate and never reaches
     // here, so the marker survives swiping between posts.
     try { sessionStorage.removeItem('atlasOpenContext'); } catch { /* ignore */ }
-    if (this._keyListener) document.removeEventListener('keydown', this._keyListener);
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
     document.getElementById('json-ld-blogposting')?.remove();
@@ -103,11 +103,7 @@ export default class PostPage extends Component {
       currentPath: window.location.pathname,
       editUrl: post ? `/light/posts/${post.id}/edit` : null,
       showShare: !!post,
-      immersive,
-      onToggleImmersive: () => {
-        const next = !immersive;
-        this.setState({ forceImmersive: next });
-      },
+      onToggleImmersive: post && !immersive ? () => enterImmersive(this, 0) : null,
     }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._headerChild = comps[0];
@@ -135,22 +131,9 @@ export default class PostPage extends Component {
       nextPost: nav?.next || null,
       forceImmersive: immersive,
       startIndex: this.state.startIndex,
-      onToggleImmersive: () => this.setState({ forceImmersive: !immersive }),
-      onEnterImmersive: (idx = 0) => {
-        const hash = idx === 0 ? "" : `#${idx + 1}`;
-        window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
-        this.setState({ forceImmersive: true, startIndex: idx });
-      },
+      onExitImmersive: () => exitImmersive(this),
+      onEnterImmersive: (idx = 0) => enterImmersive(this, idx),
     });
-
-    if (!this._keyListener) {
-      this._keyListener = (e) => {
-        if (e.key === 'Escape' && this.state.forceImmersive) {
-          this.setState({ forceImmersive: false });
-        }
-      };
-      document.addEventListener('keydown', this._keyListener);
-    }
   }
 
   /**
@@ -174,6 +157,9 @@ export default class PostPage extends Component {
    * Updates content in-place so header/footer don't blink.
    */
   onRouteUpdate(params, query) {
+    // Any URL-driven change (Back/Forward, cross-post swipe) means the
+    // history entry pushed by enterImmersive() is no longer ours to unwind.
+    this._immersivePushed = false;
     this.props = { ...this.props, params, query };
     // Update state without re-rendering so a stale setState can't show old data.
     this.state = { ...this.state, loading: true, post: null, nav: null, error: null };
@@ -255,11 +241,7 @@ export default class PostPage extends Component {
       currentPath: window.location.pathname,
       editUrl: `/light/posts/${post.id}/edit`,
       showShare: !!post,
-      immersive,
-      onToggleImmersive: () => {
-        const next = !immersive;
-        this.setState({ forceImmersive: next });
-      },
+      onToggleImmersive: !immersive ? () => enterImmersive(this, 0) : null,
     });
 
     this._footerChild?.setProps({ settings, immersiveTags, immersiveNav });
@@ -275,11 +257,6 @@ export default class PostPage extends Component {
       this._contentChild = null;
     }
     if (contentEl) {
-      const onEnterImmersive = (idx = 0) => {
-        const hash = idx === 0 ? "" : `#${idx + 1}`;
-        window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
-        this.setState({ forceImmersive: true, startIndex: idx });
-      };
       this._contentChild = new PostContent(contentEl, {
         post,
         showViewCount: !!settings.show_view_counts,
@@ -288,8 +265,8 @@ export default class PostPage extends Component {
         nextPost: nav?.next || null,
         forceImmersive: immersive,
         startIndex,
-        onToggleImmersive: () => this.setState({ forceImmersive: !immersive }),
-        onEnterImmersive,
+        onExitImmersive: () => exitImmersive(this),
+        onEnterImmersive: (idx = 0) => enterImmersive(this, idx),
       });
       this._contentChild.mount();
       this._children.push(this._contentChild);
@@ -406,17 +383,8 @@ export default class PostPage extends Component {
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
       if (this._unmounted || version !== this._loadVersion) return;
 
-      // Check for hash to set initial slide index (e.g. #2 -> index 1)
-      let startIndex = 0;
-      let forceImmersive = false;
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#')) {
-        const num = parseInt(hash.slice(1), 10);
-        if (!isNaN(num) && num > 0) {
-          startIndex = Math.max(0, num - 1);
-          if (num > 1) forceImmersive = true;
-        }
-      }
+      // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
+      const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);
 
       if (isInPlaceUpdate) {
         this._applyPostUpdate(post, postNav, startIndex, forceImmersive);

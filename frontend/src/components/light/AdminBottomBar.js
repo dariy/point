@@ -2,10 +2,11 @@ import { Component } from '../Component.js';
 import {
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, PLUS_SVG, MENU_SVG,
   TAGS_SVG, MENU_SVG as NAV_MENU_SVG, THEMES_SVG, PLUGINS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
-  SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG
+  SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG, COMMENTS_SVG
 } from '../../utils/icons.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { store } from '../../store.js';
+import { pluginHost } from '../../core/pluginHost.js';
 
 export class AdminBottomBar extends Component {
   render() {
@@ -44,6 +45,7 @@ export class AdminBottomBar extends Component {
             ${this._renderMoreItem('/light/tags', TAGS_SVG, 'Tags')}
             ${this._renderMoreItem('/light/menu', NAV_MENU_SVG, 'Menu')}
             ${this._renderMoreItem('/light/themes', THEMES_SVG, 'Themes')}
+            ${pluginHost.isEnabled('comments') ? this._renderMoreItem('/light/comments', COMMENTS_SVG, 'Comments') : ''}
             ${this._renderMoreItem('/light/plugins', PLUGINS_SVG, 'Plugins')}
             ${this._renderMoreItem('/light/settings', SETTINGS_SVG, 'Settings')}
             ${this._renderMoreItem('/light/security', SECURITY_SVG, 'Security')}
@@ -80,6 +82,8 @@ export class AdminBottomBar extends Component {
   }
 
   afterRender() {
+    this.subscribeStore(store, 'plugin_toggled', () => this.renderToDOM());
+
     const overlay = this.$('#more-sheet-overlay');
     const moreBtn = this.$('#bottom-bar-more');
     const closeBtn = this.$('#more-sheet-close');

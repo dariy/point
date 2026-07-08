@@ -112,8 +112,14 @@ export class PostContent extends Component {
         // Extra context the sheet overlay renders (ignored by classic MediaViewer)
         post,
         editUrl: `/light/posts/${post.id}/edit`,
-        onToggleImmersive: this.props.onToggleImmersive,
         onClose: async () => {
+          // A post forced into immersive mode (header expand, image click,
+          // #N link) unwinds one level: back to its article view. Only
+          // intrinsically immersive posts close out to the list/Atlas below.
+          if (!shouldUseImmersive(post) && this.props.onExitImmersive) {
+            this.props.onExitImmersive();
+            return;
+          }
           // A post opened from the Atlas returns there — closing reselects its
           // place and highlights the post chip — instead of landing on the
           // post's page in the home feed. The Atlas leaves a context marker on
@@ -144,7 +150,10 @@ export class PostContent extends Component {
           }
         },
         onStep: (index) => {
-          const hash = index === 0 ? "" : `#${index + 1}`;
+          // Forced-immersive posts keep #1 on the first slide — the hash is
+          // what marks the forced state, so it must survive stepping back.
+          const forced = !shouldUseImmersive(post);
+          const hash = index === 0 && !forced ? "" : `#${index + 1}`;
           window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
         }
       };
@@ -167,6 +176,14 @@ export class PostContent extends Component {
         this._enhanceCodeBlocks(bodyEl);
       }
       this._setupTagStrip();
+
+      // Comments (remark42 plugin) — mounts below the article when enabled.
+      if (pluginHost.hasSlot('post-comments')) {
+        const holder = document.createElement('div');
+        holder.className = 'post-comments';
+        (this.$('article.post-single') || this.container).appendChild(holder);
+        this._comments = pluginHost.fill('post-comments', holder, { post });
+      }
     }
   }
 
@@ -291,11 +308,21 @@ export class PostContent extends Component {
   // immersive viewer before its mount node is replaced.
   beforeRender() {
     this._teardownViewer();
+    this._teardownComments();
   }
 
   beforeUnmount() {
     this._cleanupStrip?.();
     this._teardownViewer();
+    this._teardownComments();
+  }
+
+  // fill() is async — the handle is a promise resolving to the array of
+  // mounted comments components. Unmount them once resolved.
+  _teardownComments() {
+    const c = this._comments;
+    this._comments = null;
+    if (c) Promise.resolve(c).then((comps) => (comps || []).forEach((x) => x?.unmount?.()));
   }
 
   // fillOne() is async, so the handle is a promise resolving to the viewer

@@ -11,11 +11,11 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    /* dvh (dynamic) wins: it tracks the mobile toolbar collapsing on scroll so
+       the layout grows to fill the enlarged viewport. Do NOT pin to svh — svh
+       can't grow past the toolbar-shown height, so scrolling to hide the toolbar
+       opens a toolbar-tall dead space below the footer. */
     min-height: 100dvh;
-    /* svh (smallest, toolbars-shown) last: on iOS Safari vh/dvh resolve taller
-       than the visible area, leaving dead space you can scroll to below the
-       footer. svh never exceeds the guaranteed-visible height. */
-    min-height: 100svh;
 }
 
 .light-sidebar.is-collapsed {
