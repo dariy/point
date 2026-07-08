@@ -1,0 +1,55 @@
+/* theme-title: "Golden" */
+/* description: "A warm and inviting golden color scheme inspired by the Point hosting page." */
+/* preview-color: "#f59e0b" */
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #f3f4f6;
+  --bg-elevated: #ffffff;
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --surface-hover: #f6f8fa;
+  --text-primary: #1f2328;
+  --text-secondary: #59636e;
+  --text-tertiary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-inverted: #ffffff;
+  --color-primary: #d97706;
+  --color-primary-hover: #b45309;
+  --border-primary: #d1d9e0;
+  --border-secondary: #e5e7eb;
+  --pt-colors-sidebar-bg: #1f2328;
+  --pt-colors-sidebar-text: #59636e;
+  --pt-colors-sidebar-text-hover: #ffffff;
+  --pt-colors-sidebar-active-bg: #2d333b;
+  --pt-colors-sidebar-border: #30363d;
+  --footer-link: #d97706;
+  --font-family: Inter, -apple-system, sans-serif;
+  --spacing-md: 1rem;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #1c2128;
+  --bg-elevated: #161b22;
+  --surface-card: #161b22;
+  --surface-input: #161b22;
+  --surface-hover: #1c2128;
+  --text-primary: #e6edf3;
+  --text-secondary: #9198a1;
+  --text-tertiary: #8b949e;
+  --text-muted: #6e7681;
+  --text-inverted: #0d1117;
+  --color-primary: #f59e0b;
+  --color-primary-hover: #fbbf24;
+  --border-primary: #30363d;
+  --border-secondary: #21262d;
+  --pt-colors-sidebar-bg: #0d1117;
+  --pt-colors-sidebar-text: #9198a1;
+  --pt-colors-sidebar-text-hover: #e6edf3;
+  --pt-colors-sidebar-active-bg: #1c2128;
+  --pt-colors-sidebar-border: #30363d;
+  --footer-link: #f59e0b;
+}
