@@ -128,7 +128,10 @@ export class LightSidebar extends Component {
   }
 
   afterRender() {
-    this.subscribeStore(store, 'plugin_toggled', () => this.renderToDOM());
+    if (!this._subscribedPluginToggled) {
+      this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
+      this._subscribedPluginToggled = true;
+    }
 
     const { collapsed } = this.state;
     document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
