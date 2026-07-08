@@ -29,14 +29,14 @@ body.distraction-free .distraction-toggle {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* Edge page-arrows (created by HomePage). Hidden everywhere by default; only in
-   DF mode, and only for a fine hover-capable pointer — touch users swipe, so
-   they never see them. Idle faint, lifting to full on hover; a disabled arrow at
-   a list end drops out entirely. Parked in the side gutter when the viewport is
-   wider than the content, tucked to the edge otherwise. */
+/* Edge page-arrows (created by HomePage). Hidden everywhere by default; only
+   for a fine hover-capable pointer — touch users swipe, so they never see
+   them. Idle faint, lifting to full on hover; a disabled arrow at a list end
+   drops out entirely. Parked in the side gutter when the viewport is wider
+   than the content, tucked to the edge otherwise. */
 .df-nav-arrow { display: none; }
 @media (hover: hover) and (pointer: fine) {
-  body.distraction-free .df-nav-arrow {
+  .df-nav-arrow {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -55,12 +55,12 @@ body.distraction-free .distraction-toggle {
     transition: opacity 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
-  body.distraction-free .df-nav-arrow:hover { opacity: 1; }
-  body.distraction-free .df-nav-arrow:disabled { display: none; }
-  body.distraction-free .df-nav-prev {
+  .df-nav-arrow:hover { opacity: 1; }
+  .df-nav-arrow:disabled { display: none; }
+  .df-nav-prev {
     left: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
   }
-  body.distraction-free .df-nav-next {
+  .df-nav-next {
     right: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
   }
 }
