@@ -65,6 +65,7 @@ export default class MenuPage extends Component {
       editFormat: 'visual', // 'visual' | 'markdown'
       items: [], // [{label, url, depth}]
       inlineMax: 4, // links shown inline before More ▾
+      moreTitle: 'More', // Title for the More link
     };
     this._tagItems = []; // tags-mode menu (fetched once, for the preview)
     this._previewFolds = [];
@@ -141,11 +142,22 @@ export default class MenuPage extends Component {
         <section class="menu-inline-cap card">
           <div class="card-body menu-inline-cap-row">
             <label for="inline-max-input" class="menu-inline-cap-label">
-              <strong>Links shown inline</strong>
-              <small>Items beyond this number go under “More ▾”. Narrow screens may fold further.</small>
+              <strong>Visible menu slots</strong>
+              <small>The most nav slots shown at once. When items overflow, “More ▾”
+              takes one slot — so with a cap of 3 and 4 links you get 2 links plus
+              More (3 slots), not a lone link hidden behind More. Narrow screens may
+              fold further.</small>
             </label>
             <input id="inline-max-input" type="number" min="1" max="10" step="1"
                    class="form-input menu-inline-max-input" value="${this.state.inlineMax}">
+          </div>
+          <div class="card-body menu-inline-cap-row" style="border-top: 1px solid var(--border)">
+            <label for="more-title-input" class="menu-inline-cap-label">
+              <strong>"More" link title</strong>
+              <small>The text to display for the overflow menu link.</small>
+            </label>
+            <input id="more-title-input" type="text"
+                   class="form-input menu-inline-max-input" value="${escapeHtml(this.state.moreTitle)}">
           </div>
         </section>` : ''}
 
@@ -234,7 +246,10 @@ export default class MenuPage extends Component {
     const inlineMax = this.state.inlineMax;
 
     this.container.querySelectorAll('.menu-preview-vp').forEach((vp) => {
-      const inline = items.slice(0, inlineMax);
+      // Mirror NavMenu: "More ▾" occupies one of the max visible slots, so
+      // when items overflow we show max-1 inline and fold the rest under More.
+      const cap = items.length <= inlineMax ? items.length : inlineMax - 1;
+      const inline = items.slice(0, cap);
       const overflow = items.length - inline.length;
       vp.innerHTML = `
         <div class="pvh">
@@ -242,7 +257,7 @@ export default class MenuPage extends Component {
           <span class="pvh-spacer"></span>
           <nav class="pvh-nav">
             ${inline.map((it) => `<span class="nav-menu-link">${escapeHtml(it.name)}</span>`).join('')}
-            <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">More<span class="nav-more-caret">▾</span></span></span>
+            <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">${escapeHtml(this.state.moreTitle)}<span class="nav-more-caret">▾</span></span></span>
           </nav>
           <span class="pvh-tools">
             <span class="pvh-iconbtn">${SEARCH_SVG}</span>
@@ -259,7 +274,7 @@ export default class MenuPage extends Component {
       const syncMore = () => {
         const total = foldedCount + overflow;
         more.classList.toggle('is-empty', total === 0);
-        moreBtn.innerHTML = `More (${total})<span class="nav-more-caret">▾</span>`;
+        moreBtn.innerHTML = `${escapeHtml(this.state.moreTitle)} (${total})<span class="nav-more-caret">▾</span>`;
       };
       syncMore();
 
@@ -400,6 +415,10 @@ export default class MenuPage extends Component {
       e.target.value = this.state.inlineMax;
       this._updatePreviews();
     });
+    this.container.querySelector('#more-title-input')?.addEventListener('input', (e) => {
+      this.state.moreTitle = e.target.value || 'More';
+      this._updatePreviews();
+    });
     let previewTimer = null;
     const schedulePreview = () => {
       clearTimeout(previewTimer);
@@ -447,6 +466,7 @@ export default class MenuPage extends Component {
         mode: data.mode || 'tags',
         items: parseMarkdown(data.custom_markdown),
         inlineMax: data.inline_max || 4,
+        moreTitle: data.more_title || 'More',
         error: null
       });
     } catch (err) {
@@ -488,6 +508,7 @@ export default class MenuPage extends Component {
         custom_markdown: markdown,
         items: apiItems,
         inline_max: this.state.inlineMax,
+        more_title: this.state.moreTitle,
       });
 
       // Sync the public settings store so the header reflects the change
@@ -497,6 +518,7 @@ export default class MenuPage extends Component {
         ...settings,
         nav_menu_mode: this.state.mode,
         nav_inline_max: String(this.state.inlineMax),
+        nav_more_title: this.state.moreTitle,
       });
       document.dispatchEvent(new CustomEvent('nav-changed'));
 

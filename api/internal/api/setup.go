@@ -107,6 +107,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		// header is useful before the menu editor is ever opened.
 		{"nav_menu_mode", "tags", "string"},
 		{"nav_inline_max", "4", "string"},
+		{"nav_more_title", "More", "string"},
 	}
 
 	// Seed per-plugin enabled state (plugin.<id>.enabled). Existing installs lack
