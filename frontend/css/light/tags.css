@@ -1,7 +1,7 @@
 /* ===========================
    Tags (Admin)
    =========================== */
-.tag {
+.tag:where(:not(#content-editor *)) {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
