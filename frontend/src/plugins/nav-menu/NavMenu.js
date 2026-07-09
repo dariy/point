@@ -84,8 +84,13 @@ export class NavMenu {
 
     const items = this._items();
     const inlineMax = parseInt(settings.nav_inline_max, 10) || DEFAULT_INLINE_MAX;
-    this._inline = items.slice(0, inlineMax);
-    this._configOverflow = items.slice(inlineMax);
+    // If only one item would spill past the cap, showing it inline costs no
+    // more room than the "More ▾" button that would hide it — so absorb it
+    // rather than burying a single link under More. (The fold controller still
+    // collapses links into More when horizontal space actually runs out.)
+    const cap = items.length === inlineMax + 1 ? items.length : inlineMax;
+    this._inline = items.slice(0, cap);
+    this._configOverflow = items.slice(cap);
 
     // Tags button — the active viz is the enabled tags-viz plugin (at most
     // one). None enabled → no tags link. Rendered as one more nav item.
