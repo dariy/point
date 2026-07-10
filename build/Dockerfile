@@ -3,7 +3,7 @@ ARG REMARK42_VERSION=latest
 FROM ghcr.io/umputun/remark42:${REMARK42_VERSION} AS remark42
 
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.4-alpine3.23 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.5-alpine3.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
