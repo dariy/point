@@ -188,6 +188,149 @@
     max-width: 60ch;
 }
 
+/* ── Site map (plugin places) ────────────────────────────────────────────────
+   Schematic wireframes of the public pages on the Plugins page. Regions are
+   real <button>s tagged with data-plugins; .map-hit is the cross-highlight
+   class toggled from JS, .is-off marks regions whose plugin is disabled. */
+.pmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+    align-items: start;
+}
+
+.pmap-page-title {
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.pmap-page-title code {
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--text-muted);
+}
+
+.pmap-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 190px;
+    padding: 6px;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+}
+
+/* The media viewer is an overlay, not a page — darker canvas sells that. */
+.pmap-frame.pmap-overlay {
+    background: var(--color-black-alpha-50);
+    justify-content: center;
+}
+
+.pmap-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.pmap-hdr {
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.pmap-region,
+.pmap-static {
+    flex: 1 1 auto;
+    min-width: fit-content; /* never squish labels — wrap to the next row instead */
+    padding: 4px 6px;
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: center;
+    border-radius: var(--border-radius-sm);
+    white-space: nowrap;
+}
+
+.pmap-static {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+}
+
+.pmap-region {
+    font-family: inherit;
+    border: 1px solid var(--color-primary);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+
+.pmap-region.is-off {
+    border: 1px dashed var(--border-primary);
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.pmap-region:hover,
+.pmap-region:focus-visible,
+.pmap-region.map-hit {
+    box-shadow: 0 0 0 2px var(--color-primary);
+    outline: none;
+}
+
+/* Taller blocks: page body / main content placeholder. */
+.pmap-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 56px;
+}
+
+/* Exclusive-area chooser (tag viz trio, immersive pair): chips side by side. */
+.pmap-choice {
+    padding: var(--spacing-sm);
+    border: 1px dashed var(--border-primary);
+    border-radius: var(--border-radius-sm);
+}
+
+.pmap-choice .pmap-region {
+    flex: 0 1 auto;
+}
+
+/* Plugins with no visual spot (backend services), as hoverable chips. */
+.pmap-offmap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-lg);
+}
+
+.pmap-offmap .pmap-region {
+    flex: 0 1 auto;
+}
+
+.pmap-offmap-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin-right: var(--spacing-xs);
+}
+
+/* Catalog row highlighted from the map (hover) / flashed (click-to-jump). */
+.plugin-card.map-hit {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.plugin-card.map-flash {
+    animation: pmap-flash 1.2s ease-out;
+}
+
+@keyframes pmap-flash {
+    0%, 40% { background-color: var(--color-primary-light); }
+    100% { background-color: var(--surface-card); }
+}
+
 /* ── Per-plugin settings drawer ──────────────────────────────────────────── */
 .plugin-settings-overlay {
     position: fixed;
