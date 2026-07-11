@@ -152,7 +152,7 @@ function onSyncPillClick() {
   const autosave = store.get("autosave_status") || {};
 
   if (autosave.status === "failed") {
-    window.Point.emit("autosave:retry");
+    window.dispatchEvent(new CustomEvent("autosave:retry"));
   } else if (offline.failed) {
     navigate("/light/system");
   } else if (!offline.syncing && offline.pending) {

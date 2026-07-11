@@ -577,9 +577,9 @@ export default class PostEditPage extends Component {
     this._onKeyDown = onKeyDown;
 
     // Retry autosave listener
-    if (window.Point) {
-      this._unsubscribeRetry = window.Point.on('autosave:retry', () => this._save());
-    }
+    if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
+    this._onAutosaveRetry = () => this._save();
+    window.addEventListener("autosave:retry", this._onAutosaveRetry);
 
     const featuredToggle = this.container.querySelector("#featured-toggle");
     const featuredCheck = this.container.querySelector("#featured-check");
@@ -792,7 +792,7 @@ export default class PostEditPage extends Component {
   beforeUnmount() {
     this._cleanupAdminLayout?.();
     this._unmounted = true;
-    if (this._unsubscribeRetry && window.Point) window.Point.off('autosave:retry', this._unsubscribeRetry);
+    if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
     clearTimeout(this._idleTimer);
     clearTimeout(this._maxWaitTimer);
     clearInterval(this._chipInterval);

@@ -582,30 +582,6 @@ body.drag-active::after {
     border-color: var(--color-primary);
 }
 
-/* Advanced options (immersive mode + custom CSS) */
-.advanced-options-details {
-    margin-top: var(--space-2);
-}
-
-.advanced-options-summary {
-    cursor: pointer;
-    font-size: var(--font-sm);
-    color: var(--text-muted);
-    user-select: none;
-    padding: var(--space-2) 0;
-}
-
-.advanced-options-summary:hover {
-    color: var(--text-main);
-}
-
-.advanced-options-body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    margin-top: var(--space-2);
-}
-
 .form-label {
     display: block;
     font-size: var(--font-sm);
