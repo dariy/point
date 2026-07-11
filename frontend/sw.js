@@ -7,7 +7,7 @@
  *  3. Offline API and Image serving.
  */
 
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -16,6 +16,7 @@ const SHELL_URLS = [
   "/assets/js/app.js",
   "/assets/css/main.css",
   "/assets/css/light.css",
+  "/assets/css/viewer.css",
   "/assets/images/favicon.svg",
   "/assets/images/favicon-128.png",
   "/assets/images/favicon-512.png",

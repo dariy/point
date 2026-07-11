@@ -19,10 +19,8 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/common/forms.css \
     "$CSS_DIR"/common/badges.css \
     "$CSS_DIR"/common/modals.css \
-    "$CSS_DIR"/common/flash-messages.css \
     "$CSS_DIR"/common/empty-state.css \
     "$CSS_DIR"/common/pagination.css \
-    "$CSS_DIR"/common/category-chips.css \
     "$CSS_DIR"/common/theme-toggle.css \
     "$CSS_DIR"/common/utilities.css \
     "$CSS_DIR"/common/login-overlay.css \
@@ -44,10 +42,6 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/plugins.css \
     "$CSS_DIR"/light/exif.css \
     "$CSS_DIR"/light/responsive.css \
-    "$CSS_DIR"/common/lightbox.css \
-    "$CSS_DIR"/public/carousel.css \
-    "$CSS_DIR"/public/immersive.css \
-    "$CSS_DIR"/public/immersive-sheet.css \
     > "$CSS_DIR"/light.css
 
 echo "Built light.css ($(wc -c < "$CSS_DIR"/light.css) bytes)"
@@ -58,10 +52,8 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/common/reset.css \
     "$CSS_DIR"/public/tokens.css \
     "$CSS_DIR"/common/buttons.css \
-    "$CSS_DIR"/common/flash-messages.css \
     "$CSS_DIR"/common/empty-state.css \
     "$CSS_DIR"/common/pagination.css \
-    "$CSS_DIR"/common/category-chips.css \
     "$CSS_DIR"/common/theme-toggle.css \
     "$CSS_DIR"/common/utilities.css \
     "$CSS_DIR"/common/login-overlay.css \
@@ -76,10 +68,6 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/public/single-post.css \
     "$CSS_DIR"/public/tag-archive.css \
     "$CSS_DIR"/public/error-page.css \
-    "$CSS_DIR"/public/immersive.css \
-    "$CSS_DIR"/public/immersive-sheet.css \
-    "$CSS_DIR"/public/carousel.css \
-    "$CSS_DIR"/common/lightbox.css \
     "$CSS_DIR"/public/map.css \
     "$CSS_DIR"/public/atlas.css \
     "$CSS_DIR"/public/timeline.css \
@@ -89,6 +77,18 @@ cat "$CSS_DIR"/common/tokens.css \
     > "$CSS_DIR"/main.css
 
 echo "Built main.css ($(wc -c < "$CSS_DIR"/main.css) bytes)"
+
+# Viewer bundle — media viewers shared by the public and admin sections
+# (immersive post viewer, sheet viewer, carousel, lightbox). Loaded via its own
+# always-active <link> in index.html so the rules aren't duplicated into both
+# section bundles.
+cat "$CSS_DIR"/public/immersive.css \
+    "$CSS_DIR"/public/immersive-sheet.css \
+    "$CSS_DIR"/public/carousel.css \
+    "$CSS_DIR"/common/lightbox.css \
+    > "$CSS_DIR"/viewer.css
+
+echo "Built viewer.css ($(wc -c < "$CSS_DIR"/viewer.css) bytes)"
 
 # ── Per-plugin CSS chunks ───────────────────────────────────────────────────
 # Mirror the JS plugin pipeline: a plugin that owns CSS keeps its partials under

@@ -208,9 +208,6 @@
     --input-type--search---backdrop-filter: var(--size-0-5);
     --input-type--search----webkit-backdrop-filter: var(--size-0-5);
     --input-type--search---box-shadow: var(--size-0-0625);
-    --dropdown-toggle--margin-left: var(--size-0-375);
-    --dropdown-menu-min-width: var(--size-11-25);
-    --dropdown-menu-transform: var(--size-0-5);
     --header-action-btn-width: var(--size-2-5);
     --header-action-btn-height: var(--size-2-5);
     --site-nav-gap: var(--size-0-5);
@@ -288,9 +285,7 @@
     --post-card-tag-flyout--webkit-backdrop-filter: var(--size-0-5);
     --from-transform: var(--size-0-25);
     --post-cardhas-image-min-height-alt1: var(--size-31-25);
-    --post-card-slot-min-height: var(--size-20);
     --base---header-height: var(--size-4);
-    --widget-title-border-bottom: var(--size-0-125);
     --count-min-width: var(--size-1-25);
     --count-height: var(--size-1-25);
     --count-padding: var(--size-0-3);
