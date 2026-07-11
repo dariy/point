@@ -26,6 +26,19 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_ENTRY="$ROOT_DIR/frontend/src/app.js"
 PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
 
+# Use the lockfile-pinned esbuild from node_modules — NOT `npx --yes esbuild`,
+# which ignores package.json and downloads whatever is latest on the registry
+# at build time (non-reproducible bundles). Install it first if missing.
+ESBUILD="$ROOT_DIR/node_modules/.bin/esbuild"
+if [ ! -x "$ESBUILD" ]; then
+  echo "esbuild not installed — running npm ci..."
+  (cd "$ROOT_DIR" && npm ci --no-audit --no-fund)
+fi
+
+# Pin the emitted syntax level so output doesn't silently float with the
+# esbuild default (esnext) across toolchain upgrades.
+ES_TARGET="es2022"
+
 # Collect "<id>=<entry>" args for every frontend/src/plugins/<id>/index.js once;
 # both bundle sets share the same plugin entries.
 # ponytail: space-separated string + word-splitting instead of a bash array so
@@ -56,9 +69,10 @@ build_set() {
   mkdir -p "$js_dir"
 
   # ── Core bundle (single file, unchanged contract) ─────────────────────────
-  npx --yes esbuild "$APP_ENTRY" \
+  "$ESBUILD" "$APP_ENTRY" \
       --bundle \
       --format=esm \
+      --target="$ES_TARGET" \
       "--define:__DEBUG__=${debug_val}" \
       "--external:/assets/vendor/*" \
       "$@" \
@@ -70,10 +84,11 @@ build_set() {
     rm -rf "$plugin_out"
     mkdir -p "$plugin_out"
     # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
-    npx --yes esbuild $PLUGIN_ARGS \
+    "$ESBUILD" $PLUGIN_ARGS \
         --bundle \
         --splitting \
         --format=esm \
+        --target="$ES_TARGET" \
         "--define:__DEBUG__=${debug_val}" \
         "--external:/assets/vendor/*" \
         --entry-names="[name]-[hash]" \
@@ -82,6 +97,10 @@ build_set() {
         "$@" \
         --outdir="$plugin_out"
     node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
+    # The metafile is only an intermediate for the manifest builder. It lands
+    # in the served js dir and enumerates every source path (including
+    # disabled plugins'), so drop it rather than expose it via /assets/js.
+    rm -f "$meta"
     echo "Built ${PLUGIN_COUNT} plugin chunk(s) → $plugin_out (see $manifest)"
   else
     echo '{}' > "$manifest"

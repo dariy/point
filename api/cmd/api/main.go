@@ -64,6 +64,29 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 	return "\n  <script>" + scriptContent + "</script>", hashBase64
 }
 
+// inlineScriptRe matches attribute-less inline <script> blocks in index.html.
+// Scripts with attributes (src=, type=module) load external files and are
+// covered by CSP 'self'.
+var inlineScriptRe = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
+
+// inlineScriptHashes returns CSP 'sha256-…' source tokens for every inline
+// <script> in the file, so the script-src policy always matches the shell that
+// is actually served — no hardcoded hash to keep in sync with index.html by
+// hand. Computed once at startup: index.html only changes at build/deploy time
+// (the __BUILD_VERSION__ stamp rewrites URLs, not inline script bodies).
+func inlineScriptHashes(path string) []string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, m := range inlineScriptRe.FindAllSubmatch(b, -1) {
+		h := sha256.Sum256(m[1])
+		out = append(out, "'sha256-"+base64.StdEncoding.EncodeToString(h[:])+"'")
+	}
+	return out
+}
+
 func resolveJSDir(frontendDir string, debug bool) string {
 	// When FRONTEND_DEBUG is on, prefer the debug bundle (frontend/js-debug) if
 	// it was built — it carries plugin/console debug logging. Falls through to
@@ -220,11 +243,16 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"*"},
 	}))
+	// script-src allows the shell's inline <script> blocks by hash, computed
+	// from index.html at startup (see inlineScriptHashes) so an edit to the
+	// inline bootstrap script can never silently break CSP. The per-request
+	// __PLUGINS__ manifest hash is appended where index.html is served.
+	scriptSrc := strings.Join(append([]string{"'self'"}, inlineScriptHashes(filepath.Join(cfg.FrontendDir, "index.html"))...), " ")
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'sha256-h5MCsXkmw9HW4cD8PyxqPx6lksihxngF3WC4UFUG1kM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure
@@ -575,7 +603,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		swPath := filepath.Join(cfg.FrontendDir, "sw.js")
 		e.GET("/sw.js", func(c echo.Context) error {
 			c.Response().Header().Set("Cache-Control", "no-cache")
-			return c.File(swPath)
+			// Stamp the build version into the SW's cache name (CACHE_VERSION
+			// in sw.js) so each deploy retires the previous shell cache; the
+			// byte change is also what triggers the browser's SW update.
+			b, err := os.ReadFile(swPath)
+			if err != nil {
+				return c.File(swPath)
+			}
+			js := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+			return c.Blob(http.StatusOK, "text/javascript; charset=utf-8", []byte(js))
 		})
 	}
 

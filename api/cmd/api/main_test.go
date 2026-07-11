@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -115,6 +117,17 @@ func TestSecurityHeaders(t *testing.T) {
 		AppVersion:  "1.0.0",
 		FrontendDir: t.TempDir(),
 	}
+	// The script-src policy is computed at startup from index.html's inline
+	// <script> blocks (see inlineScriptHashes); give setupEcho a shell with a
+	// known inline script and expect its hash in the header.
+	inline := "console.log('csp probe');"
+	shell := "<html><head><script>" + inline + "</script></head><body></body></html>"
+	if err := os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"), []byte(shell), 0o644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+	sum := sha256.Sum256([]byte(inline))
+	inlineHash := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {
 		t.Fatalf("failed to create repo: %v", err)
@@ -140,7 +153,7 @@ func TestSecurityHeaders(t *testing.T) {
 		{"X-Content-Type-Options", "nosniff"},
 		{"X-Frame-Options", "DENY"},
 		{"X-Xss-Protection", "1; mode=block"},
-		{"Content-Security-Policy", "default-src 'self'; script-src 'self' 'sha256-h5MCsXkmw9HW4cD8PyxqPx6lksihxngF3WC4UFUG1kM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'"},
+		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'"},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
 		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
 	}
