@@ -1,0 +1,1288 @@
+/* ===========================
+   Immersive Layout (Full Screen Post)
+   =========================== */
+/* Lock the document so the immersive overlay can never scroll. The base
+   .site-wrapper carries min-height:100vh; on mobile 100vh (large viewport)
+   exceeds 100dvh (visible viewport), forcing the wrapper taller than the
+   screen and letting the whole page scroll. Cap it to the visible viewport
+   and pin html/body to kill any residual scroll. */
+html:has(.immersive-layout),
+.immersive-layout {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+.immersive-layout .site-wrapper {
+    display: block;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.immersive-layout .site-header-group {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding-top: env(safe-area-inset-top, 0);
+    background: var(--header-bg);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--site-header-group--webkit-backdrop-filter)
+    );
+    border-bottom: none;
+    color: var(--text-primary);
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease,
+        background-color var(--transition-theme),
+        color var(--transition-theme),
+        border-color var(--transition-theme);
+}
+
+.immersive-layout .site-header-inner .site-title,
+.immersive-layout .site-header-inner .site-subtitle,
+.immersive-layout .site-header-inner .light-link,
+.immersive-layout .site-header-inner .breadcrumb-link,
+.immersive-layout .site-header-inner .breadcrumb-current {
+    border-color: var(--color-white-alpha-30);
+    transition:
+        color var(--transition-theme),
+        border-color var(--transition-theme),
+        background-color var(--transition-theme);
+}
+
+.immersive-layout .site-header-inner svg,
+.immersive-layout .site-header-inner .theme-toggle,
+.immersive-layout .site-header-inner .create-post,
+.immersive-layout .site-header-inner .header-action-btn {
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+    transition:
+        color var(--transition-theme),
+        border-color var(--transition-theme),
+        background-color var(--transition-theme),
+        stroke var(--transition-theme),
+        fill var(--transition-theme);
+}
+
+[data-theme="light"].immersive-layout .site-header-group {
+    background: var(--color-white-alpha-75);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter-alt1));
+    -webkit-backdrop-filter: blur(
+        var(--site-header-group--webkit-backdrop-filter-alt1)
+    );
+}
+
+[data-theme="light"].immersive-layout .site-header-inner svg {
+    color: var(--text-primary);
+    stroke: var(--text-primary);
+}
+
+[data-theme="light"].immersive-layout .site-header-inner .site-title,
+[data-theme="light"].immersive-layout .site-header-inner .site-subtitle,
+[data-theme="light"].immersive-layout .site-header-inner .light-link,
+[data-theme="light"].immersive-layout .site-header-inner .breadcrumb-link,
+[data-theme="light"].immersive-layout .site-header-inner .breadcrumb-current {
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+    transition:
+        color var(--transition-theme),
+        border-color var(--transition-theme);
+}
+
+[data-theme="light"].immersive-layout .site-header-inner .breadcrumb-separator {
+    color: var(--text-tertiary);
+    transition: color var(--transition-theme);
+}
+
+.immersive-layout .site-header-inner .header-action-btn:hover {
+    background: var(--color-white-alpha-10);
+}
+
+[data-theme="light"].immersive-layout .site-header-inner .header-action-btn:hover {
+    background: var(--surface-hover);
+}
+
+.immersive-layout .site-main {
+    padding: 0;
+    margin-top: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    margin-top: 0;
+}
+
+.immersive-layout .main-container {
+    max-width: none;
+    margin: 0;
+    height: 100%;
+    padding: 0;
+}
+
+/* Ensure the component mount point stretches to fill the container */
+.immersive-layout #content-mount,
+.immersive-layout #grid-mount {
+    display: block;
+    height: 100%;
+}
+
+.immersive-layout .site-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--footer-bg);
+    /*background: var(--color-black-alpha-60);*/
+    /*linear-gradient(to top, var(--color-black-alpha-95) 0%, var(--color-black-alpha-85) 40%, var(--color-black-alpha-40) 80%, transparent 100%);*/
+    color: var(--color-white-alpha-95);
+    border-top: none;
+    padding-top: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease,
+        background-color var(--transition-theme),
+        background var(--transition-theme),
+        color var(--transition-theme);
+    pointer-events: none;
+}
+
+.immersive-layout .site-footer .footer-content {
+    pointer-events: auto;
+}
+
+[data-theme="light"].immersive-layout .site-footer {
+    background: linear-gradient(
+        to top,
+        var(--color-white-alpha-95) 0%,
+        var(--color-white-alpha-85) 40%,
+        var(--color-white-alpha-40) 80%,
+        transparent 100%
+    );
+    color: var(--text-primary);
+}
+
+.immersive-layout .site-footer .footer-link,
+.immersive-layout .site-footer .footer-copyright {
+    color: var(--footer-text);
+    transition: color var(--transition-theme);
+}
+
+.immersive-layout .footer-content {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: var(--spacing-xs) var(--spacing-md);
+    text-align: left;
+}
+
+/* Copyright (left), tags (grow, right-aligned), buttons (far right). */
+.immersive-layout .footer-content .footer-left {
+    order: 0;
+    flex: 0 0 auto;
+}
+
+.immersive-layout .footer-content .footer-center {
+    order: 1;
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+.immersive-layout .footer-content .footer-right {
+    order: 2;
+    flex: 0 0 auto;
+}
+
+.immersive-layout .footer-content .footer-copyright {
+    white-space: nowrap;
+}
+
+.immersive-layout .footer-content .immersive-tags {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+    pointer-events: auto;
+}
+
+/* Small screens: stack the immersive footer as tags, then buttons, then
+   copyright — overrides the generic footer column order for tag context. */
+@media (max-width: 768px) {
+    .immersive-layout .footer-content {
+        flex-direction: column;
+        align-items: center;
+        gap: var(--spacing-md);
+        text-align: center;
+    }
+
+    .immersive-layout .footer-content .footer-center {
+        order: 0;
+        flex: 0 0 auto;
+        width: 100%;
+    }
+
+    .immersive-layout .footer-content .footer-right {
+        order: 1;
+    }
+
+    .immersive-layout .footer-content .footer-left {
+        order: 2;
+    }
+
+    .immersive-layout .footer-content .immersive-tags {
+        justify-content: center;
+    }
+}
+
+[data-theme="light"].immersive-layout .site-footer .footer-link {
+    color: var(--text-primary);
+}
+
+[data-theme="light"].immersive-layout .site-footer .footer-copyright {
+    color: var(--footer-text);
+}
+
+/* Smooth text hand-off when crossing between immersive posts: the freshly
+   rendered title and footer fade in as the dragged photo settles into place. */
+@keyframes immersiveTextIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.immersive-layout .site-header-inner .breadcrumb-current,
+.immersive-layout .site-footer .footer-content {
+    animation: immersiveTextIn 0.35s ease-out;
+}
+
+/* Immersive Components */
+/* The viewer's gesture root. touch-action:none makes the browser cede the
+   two-finger pinch (and swipe) to the JS GestureController instead of running
+   native page-zoom — without it pinch-zoom is broken. These rules lived on
+   .immersive-wrapper, a class the markup no longer uses (renamed to
+   .media-viewer-wrapper), so they had silently stopped applying.
+   NB: deliberately no position/width/height — .immersive-visuals is
+   position:absolute;inset:0 and fills a sized ancestor; making the wrapper a
+   positioned height:100% containing block collapses the viewer to 0 height. */
+.media-viewer-wrapper {
+    touch-action: none; /* Prevent scroll bouncing on swipe; cede pinch to JS */
+    overscroll-behavior: none; /* Prevent trackpad rubber-banding */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none; /* Block iOS long-tap image callout */
+}
+
+.immersive-visuals {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-carouselle);
+    transition: background-color var(--transition-theme);
+    will-change: transform, opacity;
+}
+
+.media-viewer-wrapper.zoomed .immersive-visuals {
+    cursor: grab;
+}
+
+.media-viewer-wrapper.zoomed .immersive-visuals:active {
+    cursor: grabbing;
+}
+
+.immersive-bg-image {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    /* Show the whole image */
+    transition: opacity 0.3s ease;
+}
+
+.immersive-tags .tag-link {
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    border: var(--border-width) solid var(--text-secondary);
+    backdrop-filter: blur(var(--tag-link-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--tag-link--webkit-backdrop-filter));
+    pointer-events: auto;
+}
+
+.immersive-tags .tag-link:hover {
+    color: var(--text-secondary);
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link {
+    background: var(--color-white-alpha-85);
+    color: var(--text-primary);
+    border: var(--border-width) solid var(--color-black-alpha-10);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link:hover {
+    background: var(--bg-overlay-hover);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+/* Ancestor flyout states — must beat .immersive-tags .tag-link (0,2,0)
+   and the light-theme variant (0,4,0) */
+.immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+.immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.immersive-tags .tag-link.is-flyout-open:hover {
+    color: white;
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+video.immersive-bg-image {
+    margin-bottom: 6em;
+}
+
+.immersive-audio-container {
+    width: 100%;
+    max-width: var(--immersive-audio-container-max-width);
+    padding: var(--spacing-xl);
+    background: var(--bg-overlay);
+    border-radius: var(--border-radius-lg);
+    backdrop-filter: blur(var(--immersive-audio-container-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--immersive-audio-container--webkit-backdrop-filter)
+    );
+    margin-bottom: 6em;
+}
+
+.immersive-audio-player {
+    width: 100%;
+}
+
+.audio-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+}
+
+.immersive-overlay-container {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+    /* Allow clicking through to toggle */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Center the info card */
+    align-items: center;
+    padding: var(--immersive-overlay-container-padding-y)
+        var(--immersive-overlay-container-padding-x);
+    /* Clear header/footer areas */
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
+    background: var(--color-black-alpha-30);
+    /* Slight dim to make text readable */
+}
+
+.post-info-card {
+    pointer-events: auto;
+    background: var(--color-white-alpha-95);
+    backdrop-filter: blur(var(--post-info-card-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--post-info-card--webkit-backdrop-filter)
+    );
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-xl);
+    width: 100%;
+    max-width: var(--post-info-card-max-width);
+    max-height: 80vh;
+    /* Leave some space */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 var(--post-info-card-box-shadow-1)
+        var(--post-info-card-box-shadow-2) var(--color-black-alpha-30);
+    transition:
+        opacity 0.3s ease,
+        background-color var(--transition-theme),
+        color var(--transition-theme),
+        border-color var(--transition-theme),
+        box-shadow var(--transition-theme);
+    overflow: hidden;
+    /* For inner scroll */
+}
+
+[data-theme="dark"] .post-info-card {
+    background: var(--color-rgb-30-30-30-alpha-85);
+    border: var(--border-width) solid var(--color-white-alpha-10);
+}
+
+.post-header-compact {
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.post-content-scrollable {
+    overflow-y: auto;
+    padding-right: var(--spacing-sm);
+    /* Avoid scrollbar covering text */
+    flex: 1;
+    /* Custom scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+
+/* Compact Nav */
+.post-footer-compact {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: var(--border-width) solid var(--border-primary);
+    flex-shrink: 0;
+}
+
+.post-navigation-compact {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-xl);
+}
+
+.post-nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--post-nav-icon-width);
+    height: var(--post-nav-icon-height);
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.post-nav-icon:hover {
+    background: var(--color-primary);
+    color: white;
+    transform: scale(1.1);
+}
+
+.post-nav-icon.disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* UI Hidden State (toggled by JS) */
+.immersive-layout.ui-hidden .site-header-group {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.immersive-layout.ui-hidden .site-footer {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.immersive-layout.ui-hidden .immersive-overlay-container {
+    opacity: 0;
+    transform: scale(0.98);
+    pointer-events: none;
+}
+
+/* Excerpt card — top-left overlay below the header */
+.post-excerpt-card {
+    position: absolute;
+    top: var(--post-excerpt-card-top); /* below fixed header */
+    left: var(--spacing-lg);
+    z-index: 25;
+    max-width: min(
+        var(--post-excerpt-card-max-width),
+        calc(100vw - var(--spacing-xl) * 2)
+    );
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-overlay);
+    color: var(--color-white-alpha-90);
+    border-radius: var(--border-radius);
+    backdrop-filter: blur(var(--post-excerpt-card-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--post-excerpt-card--webkit-backdrop-filter)
+    );
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    pointer-events: none;
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
+}
+
+[data-theme="light"] .post-excerpt-card {
+    background: var(--color-white-alpha-85);
+    color: var(--text-primary);
+}
+
+.immersive-layout.ui-hidden .post-excerpt-card {
+    opacity: 0;
+    transform: translateY(calc(var(--post-excerpt-card-transform) * -1));
+    pointer-events: none;
+}
+
+/* Text slides in immersive mode */
+.immersive-text-slide {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden; /* Parent slide shouldn't scroll */
+}
+
+.immersive-text-content {
+    width: 100%;
+    max-width: var(--post-info-card-max-width);
+    max-height: calc(100% - 12rem); /* Leave space for header/footer */
+    overflow-y: auto;
+    font-size: var(--font-size-lg);
+    line-height: 1.6;
+    padding-right: var(--spacing-md);
+
+    /* Custom scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+
+.immersive-text-content h1,
+.immersive-text-content h2,
+.immersive-text-content h3 {
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-text-content p {
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-text-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+    margin: var(--spacing-md) 0;
+}
+
+/* carousel share button */
+.carousel-share-btn {
+  position: absolute;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  z-index: 60;
+  background: var(--color-black-alpha-40);
+  border-radius: 50%;
+  color: white;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
+}
+.carousel-share-btn:hover {
+  background: var(--color-black-alpha-60);
+  color: white;
+  border: none;
+  box-shadow: none;
+}
+.ui-hidden .carousel-share-btn {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-20px);
+}
+@media (min-width: 768px) {
+  .carousel-share-btn {
+    top: var(--spacing-xl);
+    right: calc(var(--spacing-xl) + var(--header-action-btn-width, 40px) + var(--spacing-md, 16px));
+  }
+}
+
+.immersive-layout .lightbox-close {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .immersive-layout .lightbox-close {
+    display: flex;
+    position: absolute;
+    top: var(--spacing-xl);
+    right: var(--spacing-xl);
+    z-index: 60;
+    width: var(--header-action-btn-width, 40px);
+    height: var(--header-action-btn-height, 40px);
+    background: var(--color-black-alpha-40);
+    border-radius: 50%;
+    color: white;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    font-size: 24px;
+    padding: 0;
+    line-height: 1;
+    transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
+  }
+  
+  .immersive-layout .lightbox-close:hover {
+    background: var(--color-black-alpha-60);
+  }
+
+  .ui-hidden .lightbox-close {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-20px);
+  }
+
+  .immersive-layout .lightbox-close svg {
+    width: var(--svg-width, 24px);
+    height: var(--svg-height, 24px);
+  }
+}
+/* ===========================
+   Immersive Sheet Overlay (swipe-up details)
+   Selected via the immersive_overlay_mode = "sheet" setting.
+   =========================== */
+
+/* In sheet mode the photo is the whole chrome — the fixed site header and
+   footer are replaced by the swipe-up sheet, so hide them. */
+.immersive-overlay-sheet.immersive-layout .site-header-group,
+.immersive-overlay-sheet.immersive-layout .site-footer {
+    display: none;
+}
+
+/* The photo carousel rides up with the sheet; the transform is applied inline
+   by JS, so give it a transform origin and let it move freely. */
+.immersive-sheet-mode .immersive-visuals {
+    will-change: transform;
+}
+
+/* ── Close cross (desktop / non-touch) ────────────────────────────────────────
+   Sheet mode hides the site header, so the only way to dismiss on a device
+   without swipe is this cross. Touch devices swipe down to dismiss instead, so
+   it's hidden there. Higher specificity (and z-index) keeps it above the sheet
+   regardless of bundle order vs. lightbox.css. */
+.immersive-overlay-sheet .lightbox-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    line-height: 1;
+    border-radius: 50%;
+    background: var(--color-black-alpha-40);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 55;
+    transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
+}
+
+.immersive-overlay-sheet .lightbox-close:hover {
+    background: var(--color-black-alpha-60);
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .immersive-overlay-sheet .lightbox-close {
+        display: none;
+    }
+}
+
+/* Fade the cross out with the rest of the chrome when the UI auto-hides. */
+.immersive-overlay-sheet.ui-hidden .lightbox-close {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-20px);
+}
+
+/* ── Swipe-up hint (closed state) ─────────────────────────────────────────── */
+.immersive-sheet-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0) + var(--spacing-lg));
+    transform: translateX(-50%);
+    z-index: 45;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border: none;
+    border-radius: var(--border-radius-full, 999px);
+    background: var(--color-black-alpha-40);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.immersive-sheet-hint-chevron {
+    display: inline-flex;
+    transform: rotate(180deg); /* point the chevron up */
+    animation: immersiveSheetHintBob 1.8s ease-in-out infinite;
+}
+
+@keyframes immersiveSheetHintBob {
+    0%, 100% { transform: rotate(180deg) translateY(0); }
+    50% { transform: rotate(180deg) translateY(2px); }
+}
+
+/* Hide the closed-state affordances once the sheet is open or the UI auto-hides. */
+.immersive-sheet-mode.sheet-open .immersive-sheet-hint,
+body.ui-hidden .immersive-sheet-hint {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(20px);
+}
+
+/* ── The sheet itself ─────────────────────────────────────────────────────── */
+.immersive-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 100vh;
+    top: 100dvh;
+    z-index: 50;
+    max-height: 100vh;
+    max-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-card, var(--bg-primary));
+    color: var(--text-primary);
+    border-top-left-radius: var(--border-radius-xl);
+    border-top-right-radius: var(--border-radius-xl);
+    box-shadow: 0 -8px 32px var(--color-black-alpha-30);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    will-change: transform;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+[data-theme="dark"] .immersive-sheet {
+    background: var(--color-rgb-30-30-30-alpha-85, rgba(30, 30, 30, 0.92));
+    border: var(--border-width) solid var(--color-white-alpha-10);
+}
+
+.immersive-sheet-grip {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 0.3rem;
+    margin: var(--spacing-sm) auto var(--spacing-xs);
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--border-primary);
+    cursor: pointer;
+}
+
+.immersive-sheet-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Cap the content to the same width the footer uses on other pages and
+       centre it, so the sheet reads consistently on wide screens. */
+    width: 100%;
+    max-width: var(--content-max-width);
+    margin-inline: auto;
+    box-sizing: border-box;
+    padding: var(--spacing-md) var(--spacing-xl) var(--spacing-xl);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+
+/* ── Body — camera data floats, the rest wraps around it ──────────────────── */
+.immersive-sheet-body::after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.immersive-sheet-main {
+    min-width: 0;
+}
+
+/* ── Sheet content — breadcrumb doubles as the title ──────────────────────── */
+.immersive-sheet-crumbs {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-crumbs a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.immersive-sheet-crumbs a:hover {
+    color: var(--color-primary);
+}
+
+.immersive-sheet-crumb-sep {
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-crumb-current {
+    font-size: var(--font-size-2xl, 1.6rem);
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+.immersive-sheet-meta {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-sheet-excerpt {
+    margin: 0 0 var(--spacing-lg);
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.immersive-sheet-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+}
+
+/* ── Inline EXIF (second column) ──────────────────────────────────────────── */
+.immersive-sheet-exif {
+    float: right;
+    max-width: min(50%, 18rem);
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    background: var(--bg-tertiary);
+}
+
+@media (max-width: 480px) {
+    .immersive-sheet-exif {
+        float: none;
+        max-width: none;
+        margin: 0 0 var(--spacing-lg);
+    }
+}
+
+.immersive-sheet-exif.hidden {
+    display: none;
+}
+
+.immersive-sheet-exif-title {
+    font-size: var(--font-size-xs, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.immersive-sheet-exif-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    padding: 2px 0;
+}
+
+.immersive-sheet-exif-key {
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-exif-val {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Actions — uniform, aligned buttons ───────────────────────────────────── */
+.immersive-sheet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+}
+
+.immersive-sheet-action {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    height: 2.5rem;
+    padding: 0 var(--spacing-md);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.immersive-sheet-action:hover {
+    background: var(--surface-hover, var(--bg-tertiary));
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow-md);
+}
+
+.immersive-sheet-action svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.immersive-sheet-footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-md);
+    border-top: var(--border-width) solid var(--border-primary);
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-postnav-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-sheet-postnav {
+    flex: 1 1 0;
+    min-width: 0;
+    color: var(--color-primary);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.immersive-sheet-postnav.right {
+    text-align: right;
+}
+
+.immersive-sheet-postnav:hover {
+    text-decoration: underline;
+}
+
+.immersive-sheet-footer-bottom {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.immersive-sheet-copyright {
+    margin: 0;
+    flex: 1 1 auto;
+}
+
+.immersive-sheet-copyright a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.immersive-sheet-copyright a:hover {
+    text-decoration: underline;
+}
+
+.immersive-sheet-footer-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+/* ===========================
+   Carousel
+   =========================== */
+.carousel-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-carouselle);
+    transition: background-color var(--transition-theme);
+}
+
+.carousel-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.carousel-slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 10;
+}
+
+/* Cross-post peek: the preloaded first/last image of an adjacent post that
+   slides in from the opposite edge during a drag (positioned inline by JS). */
+.carousel-slide.edge-ghost {
+    z-index: 5;
+    will-change: transform, opacity;
+}
+
+/* Immersive navigation panels — replace arrow buttons */
+.immersive-nav-panel {
+    position: absolute;
+    top: 0;
+    width: 66.66%;
+    height: 100%;
+    z-index: 20;
+    cursor: pointer;
+    user-select: none;
+}
+
+.immersive-nav-prev { left: -33.33%; }
+.immersive-nav-next { right: -33.33%; }
+
+.immersive-nav-gradient {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.immersive-nav-prev .immersive-nav-gradient {
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.5) 50%, transparent);
+}
+
+.immersive-nav-next .immersive-nav-gradient {
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.5) 50%, transparent);
+}
+
+.carousel-indicators {
+    position: absolute;
+    bottom: var(--carousel-indicators-bottom);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--carousel-indicators-gap);
+    z-index: 20;
+    background: var(--color-black-alpha-30);
+    padding: var(--spacing-sm) var(--carousel-indicators-padding);
+    border-radius: var(--carousel-indicators-border-radius);
+    backdrop-filter: blur(var(--carousel-indicators-backdrop-filter));
+    transition: background-color var(--transition-theme);
+}
+
+.carousel-dot {
+    width: var(--carousel-dot-width);
+    height: var(--carousel-dot-height);
+    border-radius: 50%;
+    background: var(--color-white-alpha-50);
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition-theme),
+        transform 0.2s ease,
+        scale 0.2s ease;
+    padding: 0;
+}
+
+.carousel-dot:hover {
+    background: var(--color-white-alpha-80);
+}
+
+.carousel-dot.active {
+    background: white;
+    transform: scale(1.2);
+}
+
+/* Light mode carousel controls */
+[data-theme="light"].immersive-layout .carousel-indicators {
+    background: var(--color-black-alpha-50);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot {
+    background: var(--color-white-alpha-60);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot:hover {
+    background: var(--color-white-alpha-90);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot.active {
+    background: white;
+}
+
+/* Hide carousel indicators in UI hidden mode */
+.immersive-layout.ui-hidden .carousel-indicators {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+
+/* Fade transitions for navigation */
+@keyframes immersiveFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes immersiveFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.immersive-fade-in {
+  animation: immersiveFadeIn 0.2s ease-out forwards;
+}
+.immersive-fade-out {
+  animation: immersiveFadeOut 0.2s ease-in forwards;
+}
+/* ===========================
+   Lightbox
+   =========================== */
+.lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--bg-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-normal),
+        visibility var(--transition-normal);
+}
+
+.lightbox-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.lightbox-content {
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+.lightbox-content img {
+    max-width: 100%;
+    max-height: 85vh;
+    object-fit: contain;
+    transition: opacity 0.15s ease;
+    border-radius: var(--border-radius, var(--border-radius-lg));
+}
+
+.lightbox-content img.loading {
+    opacity: 0;
+}
+
+.lightbox-caption {
+    text-align: center;
+    padding: var(--spacing-md);
+    color: var(--text-inverted);
+}
+
+.lightbox-close,
+.lightbox-prev,
+.lightbox-next {
+    position: absolute;
+    background: var(--color-black-alpha-50);
+    color: white;
+    border: none;
+    font-size: var(--lightbox-close-font-size);
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.lightbox-close:hover,
+.lightbox-prev:hover,
+.lightbox-next:hover {
+    background: var(--color-black-alpha-70);
+}
+
+.lightbox-close {
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    z-index: 30;
+}
+
+.lightbox-prev {
+    left: var(--spacing-md);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.lightbox-next {
+    right: var(--spacing-md);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.lightbox-share {
+    position: absolute;
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+    background: var(--color-black-alpha-50);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+}
+
+.lightbox-share:hover {
+    background: var(--color-black-alpha-70);
+}
+
+.lightbox-share svg {
+    width: var(--svg-width-alt1);
+    height: var(--svg-height-alt1);
+}
