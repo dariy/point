@@ -649,7 +649,7 @@ func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	p, _ := writer.CreateFormFile("file", "my-audio.mp3")
-	_, _ = p.Write([]byte("fake mp3 data"))
+	_, _ = p.Write(makeTinyMP3(t))
 	_ = writer.WriteField("tags", "nature, landscape, , ")
 	_ = writer.Close()
 

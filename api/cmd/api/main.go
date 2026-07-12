@@ -210,6 +210,16 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		},
 	}))
 	e.Use(middleware.Recover())
+	// Cap request bodies at the configured upload limit (default 50MB). This is
+	// the ceiling for the largest legitimate request (a media upload); every
+	// other endpoint is smaller. Echo enforces it both via Content-Length and
+	// while streaming the body, returning 413 when exceeded — so a client can't
+	// exhaust memory by lying about Content-Length.
+	uploadLimitMB := cfg.MaxUploadSizeMB
+	if uploadLimitMB <= 0 {
+		uploadLimitMB = 50
+	}
+	e.Use(middleware.BodyLimit(fmt.Sprintf("%dM", uploadLimitMB)))
 	// Wildcard origin for the public read API. AllowCredentials is deliberately
 	// omitted: browsers reject `Access-Control-Allow-Origin: *` together with
 	// credentials, and the admin SPA is same-origin (served by this server), so

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -149,6 +150,34 @@ func TestSecurityHeaders(t *testing.T) {
 		if got := headers.Get(tt.key); got != tt.value {
 			t.Errorf("header %s: expected %q, got %q", tt.key, tt.value, got)
 		}
+	}
+}
+
+func TestBodyLimitEnforced(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:      "1.0.0",
+		FrontendDir:     t.TempDir(),
+		MaxUploadSizeMB: 1,
+	}
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// A body over the 1MB limit must be rejected at the middleware layer with
+	// 413 before reaching any handler.
+	oversized := bytes.Repeat([]byte("a"), 2*1024*1024)
+	req := httptest.NewRequest(http.MethodPost, "/api/media/upload", bytes.NewReader(oversized))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413 for oversized body, got %d", rec.Code)
 	}
 }
 
