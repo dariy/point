@@ -981,6 +981,37 @@ func TestSanitizePostCSS(t *testing.T) {
 			t.Errorf("expected empty result for empty input, got %q / %v", result, stripped)
 		}
 	})
+
+	t.Run("content property stripped", func(t *testing.T) {
+		for _, css := range []string{
+			`.el::before { content: "x"; color: red; }`,
+			`.el::before { color: red; content: "x"; }`,
+			`content: "x"`,
+		} {
+			result, stripped := SanitizePostCSS(css)
+			if !containsStr(stripped, "content") {
+				t.Errorf("SanitizePostCSS(%q): expected 'content' in stripped, got %v", css, stripped)
+			}
+			if strings.Contains(result, `"x"`) {
+				t.Errorf("SanitizePostCSS(%q): expected content value removed, got %q", css, result)
+			}
+		}
+	})
+
+	t.Run("justify-content and friends survive", func(t *testing.T) {
+		// Regression: the old \bcontent pattern matched inside
+		// justify-content, turning it into 'justify-;'.
+		css := `.row { display: flex; justify-content: center; align-content: start; place-content: end; }`
+		result, stripped := SanitizePostCSS(css)
+		if len(stripped) != 0 {
+			t.Errorf("expected nothing stripped, got %v", stripped)
+		}
+		for _, want := range []string{"justify-content: center", "align-content: start", "place-content: end"} {
+			if !strings.Contains(result, want) {
+				t.Errorf("expected %q preserved, got %q", want, result)
+			}
+		}
+	})
 }
 
 func containsStr(slice []string, s string) bool {

@@ -203,8 +203,11 @@ var (
 	cssExternalURLRe = regexp.MustCompile(`(?i)url\s*\(\s*['"]?https?://[^)]*['"]?\s*\)`)
 	cssPosFixedRe    = regexp.MustCompile(`(?i)\bposition\s*:\s*fixed\b`)
 	cssPosStickyRe   = regexp.MustCompile(`(?i)\bposition\s*:\s*sticky\b`)
-	cssZIndexRe      = regexp.MustCompile(`(?i)\bz-index\s*:[^;}]*`)
-	cssDangerContent = regexp.MustCompile(`(?i)\bcontent\s*:[^;}]*`)
+	cssZIndexRe = regexp.MustCompile(`(?i)\bz-index\s*:[^;}]*`)
+	// Matches the standalone `content` property only: anchored on a
+	// declaration boundary so justify-content/align-content/place-content
+	// aren't mangled. The boundary is kept via $1 on replacement.
+	cssDangerContent = regexp.MustCompile(`(?i)(^|[;{}])\s*content\s*:[^;}]*`)
 	cssScriptRe      = regexp.MustCompile(`(?i)<\s*script`)
 
 	// Normalization regexes to defeat trivial denylist bypasses.
@@ -243,22 +246,23 @@ func SanitizePostCSS(css string) (string, []string) {
 	type rule struct {
 		re   *regexp.Regexp
 		name string
+		repl string // replacement; may reference capture groups
 	}
 	rules := []rule{
-		{cssImportRe, "@import"},
-		{cssExternalURLRe, "url() with external resource"},
-		{cssPosFixedRe, "position: fixed"},
-		{cssPosStickyRe, "position: sticky"},
-		{cssZIndexRe, "z-index"},
-		{cssDangerContent, "content"},
-		{cssScriptRe, "<script>"},
+		{cssImportRe, "@import", ""},
+		{cssExternalURLRe, "url() with external resource", ""},
+		{cssPosFixedRe, "position: fixed", ""},
+		{cssPosStickyRe, "position: sticky", ""},
+		{cssZIndexRe, "z-index", ""},
+		{cssDangerContent, "content", "$1"},
+		{cssScriptRe, "<script>", ""},
 	}
 
 	result := normalizeCSSForSanitizing(css)
 	for _, r := range rules {
 		if r.re.MatchString(result) {
 			stripped = append(stripped, r.name)
-			result = r.re.ReplaceAllString(result, "")
+			result = r.re.ReplaceAllString(result, r.repl)
 		}
 	}
 
