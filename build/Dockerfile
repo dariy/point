@@ -73,9 +73,10 @@ COPY --chown=appuser:appuser --from=builder /app/frontend/ /app/frontend/
 # Remark42 binary + web assets (started by entrypoint.sh when REMARK_SECRET/REMARK_URL are set)
 COPY --chown=appuser:appuser --from=remark42 /srv /app/remark42
 
-# Accept build version as argument and stamp it into index.html for cache-busting
+# Accept build version as argument. index.html keeps the literal
+# __BUILD_VERSION__ placeholder; the server substitutes APP_VERSION into it at
+# serve time (see cmd/api/main.go), so the shipped file is never mutated.
 ARG BUILD_VERSION=dev
-RUN sed -i "s/__BUILD_VERSION__/${BUILD_VERSION}/g" /app/frontend/index.html
 ENV APP_VERSION=${BUILD_VERSION}
 ENV DATABASE_URL=/data/point.db
 ENV STORAGE_PATH=/data
