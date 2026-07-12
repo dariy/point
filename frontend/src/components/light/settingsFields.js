@@ -135,7 +135,7 @@ function inputHtml(key, value, { posts = [] }) {
   if (key === "logo_url") {
     const v = escapeHtml(String(value || ""));
     const preview = value
-      ? `<img class="settings-logo-preview" src="${v}" alt="Logo preview">`
+      ? `<img class="settings-logo-preview" src="${v}" alt="Logo preview" decoding="async">`
       : "";
     return `<div class="settings-logo-field">
         ${preview}

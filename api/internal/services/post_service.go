@@ -279,7 +279,30 @@ func (s *PostService) RenderContent(content string) (string, error) {
 	if err := s.md.Convert([]byte(preprocessContent(content)), &buf); err != nil {
 		return "", err
 	}
-	return s.policy.Sanitize(buf.String()), nil
+	return addImgLoadingHints(s.policy.Sanitize(buf.String())), nil
+}
+
+// imgTagRe matches an <img …> tag, capturing its attributes in group 1 and
+// tolerating the self-closing XHTML form (…/>) goldmark emits.
+var imgTagRe = regexp.MustCompile(`(?i)<img\b([^>]*?)\s*/?>`)
+
+// addImgLoadingHints adds loading="lazy" and decoding="async" to post-body
+// <img> tags that don't already set them, so image-heavy posts don't fetch and
+// decode every photo up front. Runs after sanitization, so bluemonday never
+// strips the added attributes. Native lazy-loading still fetches images already
+// in (or near) the viewport, so the first image isn't needlessly deferred.
+func addImgLoadingHints(html string) string {
+	return imgTagRe.ReplaceAllStringFunc(html, func(tag string) string {
+		attrs := imgTagRe.FindStringSubmatch(tag)[1]
+		lower := strings.ToLower(attrs)
+		if !strings.Contains(lower, "loading=") {
+			attrs += ` loading="lazy"`
+		}
+		if !strings.Contains(lower, "decoding=") {
+			attrs += ` decoding="async"`
+		}
+		return "<img" + attrs + ">"
+	})
 }
 
 type ListPostsParams struct {
