@@ -148,6 +148,7 @@ type mockRepository struct {
 	MockGetPostsByTagIDsInYearRange     func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
 	MockCountPostsByTagIDsInYearRange   func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
 	MockGetAllPublishedPostContents     func(ctx context.Context) ([]repository.PostContentRow, error)
+	MockListPostLinkAuditRows           func(ctx context.Context) ([]repository.PostLinkAuditRow, error)
 	MockGetHierarchicalPostCounts       func(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
 	MockGetSystemStats                  func(ctx context.Context) (repository.SystemStats, error)
 	MockBackupDB                        func(ctx context.Context, destPath string) error
@@ -1088,6 +1089,13 @@ func (m *mockRepository) GetAllPublishedPostContents(ctx context.Context) ([]rep
 		return m.MockGetAllPublishedPostContents(ctx)
 	}
 	return nil, fmt.Errorf("GetAllPublishedPostContents not implemented")
+}
+
+func (m *mockRepository) ListPostLinkAuditRows(ctx context.Context) ([]repository.PostLinkAuditRow, error) {
+	if m.MockListPostLinkAuditRows != nil {
+		return m.MockListPostLinkAuditRows(ctx)
+	}
+	return nil, fmt.Errorf("ListPostLinkAuditRows not implemented")
 }
 
 func (m *mockRepository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {

@@ -17,6 +17,7 @@ import {
   getMigrations,
   updateMapCoords,
   getDiskInfo,
+  auditPostLinks,
 } from "../../api/system.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
@@ -36,6 +37,8 @@ export default class SystemPage extends Component {
       error: null,
       // Database Migrations is a low-traffic section — collapsed by default.
       migrationsCollapsed: true,
+      auditingLinks: false,
+      linkAudit: null, // { issues, scanned } after a scan
     };
   }
 
@@ -47,7 +50,7 @@ export default class SystemPage extends Component {
   }
 
   _renderContent() {
-    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed } =
+    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit } =
       this.state;
 
     if (loading)
@@ -80,6 +83,17 @@ export default class SystemPage extends Component {
 
         ${diskSection}
 
+        <section class="card system-full-width">
+          <div class="card-header"><h2>Content Health</h2></div>
+          <div class="card-body">
+            <p>Scan published posts for internal links that anonymous visitors can't open (target missing, unpublished, or hidden by a hides-posts tag).</p>
+            <button id="audit-links-btn" class="btn btn-secondary" ${auditingLinks ? "disabled" : ""}>
+              ${auditingLinks ? "Scanning…" : "Check Internal Links"}
+            </button>
+            ${this._renderLinkAudit(linkAudit)}
+          </div>
+        </section>
+
         <section class="card system-full-width system-collapsible${migrationsCollapsed ? " collapsed" : ""}" data-collapsible="migrations">
           <div class="card-header" role="button" tabindex="0" aria-expanded="${migrationsCollapsed ? "false" : "true"}">
             <h2>Database Migrations</h2>
@@ -110,6 +124,35 @@ export default class SystemPage extends Component {
             </div>
           </div>
         </section>
+      </div>`;
+  }
+
+  _renderLinkAudit(audit) {
+    if (!audit) return "";
+    if (!audit.issues.length) {
+      return `<p class="system-msg success">No broken internal links — checked ${audit.scanned} public posts.</p>`;
+    }
+    return `
+      <p class="system-msg error" role="alert">${audit.issues.length} broken link${audit.issues.length === 1 ? "" : "s"} found (checked ${audit.scanned} public posts):</p>
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr><th>Post</th><th>Links to</th><th>Problem</th></tr>
+          </thead>
+          <tbody>
+            ${audit.issues
+              .map(
+                (i) => `
+              <tr>
+                <td><a href="/light/posts/${i.source_id}/edit">${escapeHtml(i.source_title || i.source_slug)}</a></td>
+                <td><code>/posts/${escapeHtml(i.target_slug)}</code></td>
+                <td>${escapeHtml(i.reason)}</td>
+              </tr>
+            `,
+              )
+              .join("")}
+          </tbody>
+        </table>
       </div>`;
   }
 
@@ -145,6 +188,9 @@ export default class SystemPage extends Component {
     this.container
       .querySelector("#update-coords-btn")
       ?.addEventListener("click", () => this._handleUpdateCoords());
+    this.container
+      .querySelector("#audit-links-btn")
+      ?.addEventListener("click", () => this._handleAuditLinks());
 
     // Collapse/expand the Database Migrations card (persisted across re-renders).
     const header = this.container.querySelector('[data-collapsible="migrations"] .card-header');
@@ -201,6 +247,20 @@ export default class SystemPage extends Component {
     } catch (err) {
       store.set("toast", {
         message: err.message || "Failed to clear cache.",
+        type: "error",
+      });
+    }
+  }
+
+  async _handleAuditLinks() {
+    this.setState({ auditingLinks: true });
+    try {
+      const linkAudit = await auditPostLinks();
+      this.setState({ auditingLinks: false, linkAudit });
+    } catch (err) {
+      this.setState({ auditingLinks: false });
+      store.set("toast", {
+        message: err.message || "Link audit failed.",
         type: "error",
       });
     }
