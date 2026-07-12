@@ -30,6 +30,51 @@ jobs:
         run: golangci-lint run --timeout=5m
         working-directory: api
 
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Prefer the lockfile-pinned eslint when the repo ships one (flat
+      # config); until then, pin the last legacy-config release to match the
+      # local gate (scripts/check.sh runs `eslint frontend/src`).
+      - name: JS lint
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+            node_modules/.bin/eslint frontend/src
+          else
+            ESLINT_USE_FLAT_CONFIG=false npx --yes eslint@8.57.1 frontend/src
+          fi
+
+      - name: JS tests
+        run: node --test frontend/test/*.test.js
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Deliberately the newest patch release: govulncheck resolves Go
+          # stdlib symbols from the toolchain in use, so an older patch level
+          # here would re-flag stdlib vulns already fixed upstream.
+          go-version: "1.26.5"
+          cache-dependency-path: api/go.sum
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
+        working-directory: api
+
   test:
     needs: lint
     runs-on: ubuntu-latest
@@ -46,9 +91,11 @@ jobs:
         run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
 
       - name: Run Go tests
+        # -tags=integration matches scripts/check.sh — the integration suite
+        # runs on in-memory sqlite and needs no external services.
         run: |
           cd api
-          go test ./... -coverprofile=coverage.txt -covermode=atomic
+          go test -tags=integration ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v7
