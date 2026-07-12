@@ -7,8 +7,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"path"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -532,7 +534,7 @@ func (s *PostService) FlushViewCounts(ctx context.Context) error {
 		}); err != nil {
 			// On error, we might lose these counts or we could try to re-add them to the buffer
 			// For now, just log the error.
-			fmt.Printf("failed to flush view count for post %d: %v\n", id, err)
+			slog.Error("failed to flush view count", "post_id", id, "error", err)
 		}
 	}
 	return nil
@@ -762,14 +764,29 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
-			go func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-				defer cancel()
-				_ = s.CrossPostToInstagram(ctx2, id)
-			}()
+			go s.crossPostToInstagramAsync(id)
 		}
 	}
 	return post, nil
+}
+
+// crossPostToInstagramAsync runs a cross-post in the background with its own
+// timeout, logging failures and recovering panics (a panic in a raw goroutine
+// would otherwise kill the server). CrossPostToInstagram also records the
+// failure on the post itself via updateInstagramStatus, so the admin UI shows
+// it too.
+func (s *PostService) crossPostToInstagramAsync(postID int64) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("instagram cross-post panicked",
+				"post_id", postID, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	if err := s.CrossPostToInstagram(ctx, postID); err != nil {
+		slog.Error("instagram cross-post failed", "post_id", postID, "error", err)
+	}
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
@@ -829,18 +846,13 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
 		if s.tagService != nil { s.tagService.Invalidate() }
-		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 			if enabledStr == "true" || enabledStr == "1" {
 				for _, p := range published {
 					if p.InstagramShare {
-						id := p.ID
-						go func() {
-							ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-							defer cancel()
-							_ = s.CrossPostToInstagram(ctx2, id)
-						}()
+						go s.crossPostToInstagramAsync(p.ID)
 					}
 				}
 			}
