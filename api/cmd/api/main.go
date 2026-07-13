@@ -9,6 +9,7 @@ import (
 	"html"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -107,6 +108,22 @@ func resolveJSDir(frontendDir string, debug bool) string {
 		return srcDir
 	}
 	return ""
+}
+
+// siteNameFromHost turns a request Host into the name an installed PWA shows
+// under its icon: "www.Point.Photos:8001" → "point.photos". Returns "" when the
+// host is unusable, in which case the manifest's own name is kept.
+func siteNameFromHost(host string) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if hostOnly, _, err := net.SplitHostPort(h); err == nil {
+		h = hostOnly
+	}
+	h = strings.Trim(h, ".")
+	h = strings.TrimPrefix(h, "www.")
+	if h == "" || strings.ContainsAny(h, "/ ") {
+		return ""
+	}
+	return h
 }
 
 type AppServices struct {
@@ -503,7 +520,26 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		manifestPath := filepath.Join(cfg.FrontendDir, "manifest.webmanifest")
 		e.GET("/manifest.webmanifest", func(c echo.Context) error {
 			c.Response().Header().Set("Content-Type", "application/manifest+json")
-			return c.File(manifestPath)
+			// The same image serves several sites (darii.net, point.photos), so
+			// the installed-app name comes from the host the manifest was
+			// fetched from rather than the file's placeholder name.
+			raw, err := os.ReadFile(manifestPath)
+			if err != nil {
+				return c.File(manifestPath)
+			}
+			var m map[string]any
+			if err := json.Unmarshal(raw, &m); err != nil {
+				return c.Blob(http.StatusOK, "application/manifest+json", raw)
+			}
+			if name := siteNameFromHost(c.Request().Host); name != "" {
+				m["name"] = name
+				m["short_name"] = name
+			}
+			out, err := json.Marshal(m)
+			if err != nil {
+				return c.Blob(http.StatusOK, "application/manifest+json", raw)
+			}
+			return c.Blob(http.StatusOK, "application/manifest+json", out)
 		})
 	}
 	if fi, err := os.Stat(filepath.Join(cfg.FrontendDir, "sw.js")); err == nil && !fi.IsDir() {
