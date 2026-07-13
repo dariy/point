@@ -86,6 +86,15 @@ func NewWebAuthnService(repo repository.Repository, rpID, rpDisplayName, rpOrigi
 		RPID:          expectedRpID,
 		RPDisplayName: rpDisplayName,
 		RPOrigins:     []string{rpOrigin},
+		// Login is usernameless (BeginDiscoverableLogin sends an empty
+		// allowCredentials), so registration must produce a client-side
+		// discoverable credential or the authenticator will have nothing to
+		// offer at login time.
+		AuthenticatorSelection: protocol.AuthenticatorSelection{
+			ResidentKey:        protocol.ResidentKeyRequirementRequired,
+			RequireResidentKey: protocol.ResidentKeyRequired(),
+			UserVerification:   protocol.VerificationRequired,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webauthn instance: %w", err)
