@@ -221,10 +221,6 @@ th.status-col {
 }
 
 /* API Keys */
-.revoked-row {
-    opacity: 0.6;
-}
-
 .key-name {
     margin-bottom: 2px;
 }

@@ -20,6 +20,7 @@ const SHELL_URLS = [
   "/assets/js/app.js",
   "/assets/css/main.css",
   "/assets/css/light.css",
+  "/assets/css/viewer.css",
   "/assets/images/favicon.svg",
   "/assets/images/favicon-128.png",
   "/assets/images/favicon-512.png",

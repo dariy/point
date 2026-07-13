@@ -41,7 +41,7 @@ export class PublicHeader extends Component {
     const user = store.get('user');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
     const logoHtml = settings.logo_url
-      ? `<img class="app-logo" src="${escapeHtml(settings.logo_url)}" alt="${escapeHtml(settings.blog_title || 'Logo')}">`
+      ? `<img class="app-logo" src="${escapeHtml(settings.logo_url)}" alt="${escapeHtml(settings.blog_title || 'Logo')}" decoding="async">`
       : APP_LOGO_SVG;
 
     const shareButtonHtml = showShare

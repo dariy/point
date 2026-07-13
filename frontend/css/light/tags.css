@@ -728,10 +728,6 @@
     flex-shrink: 0;
 }
 
-.required-mark {
-    color: var(--color-danger);
-}
-
 .font-mono {
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);

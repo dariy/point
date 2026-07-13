@@ -1,6 +1,6 @@
 module point-api
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/disintegration/imaging v1.6.2
@@ -9,6 +9,7 @@ require (
 	github.com/go-pkgz/auth/v2 v2.1.5
 	github.com/go-webauthn/webauthn v0.17.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/gorilla/css v1.0.1
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/mdigger/goldmark-attributes v0.0.0-20250724115859-bd3108091530
 	github.com/microcosm-cc/bluemonday v1.0.27
@@ -57,7 +58,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.17 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
-	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect

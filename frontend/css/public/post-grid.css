@@ -518,19 +518,6 @@ body.grid-zoom .featured-post .post-card.has-image {
     transform: translateZ(0);
     will-change: transform;
 }
-.placeholder-grid .post-card-slot {
-    background: var(--surface-card);
-    border-radius: var(--border-radius-xl);
-    min-height: var(--post-card-slot-min-height);
-    box-shadow: var(--shadow);
-    opacity: 0.5;
-    animation: pulse 1.5s infinite alternate;
-}
-@keyframes pulse {
-    from { opacity: 0.3; }
-    to { opacity: 0.6; }
-}
-
 /* --- Ultrawide Tier (point-x52z.9) --- */
 @media (min-width: 100rem) {
     .featured-post {

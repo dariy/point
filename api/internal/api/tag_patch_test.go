@@ -118,3 +118,91 @@ func TestTagHandler_PatchPartialSemantics(t *testing.T) {
 		t.Errorf("expected name to remain 'Original Name', got %s", updated2.Name)
 	}
 }
+
+// TestTagHandler_PutPartialSemantics verifies PUT /api/tags/:id keeps
+// omitted fields (regression: a {hides_posts}-only update used to wipe
+// name, slug, kind, in_ancestor_flyout, and parent relationships).
+func TestTagHandler_PutPartialSemantics(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	tagService := services.NewTagService(repo)
+	settingsService := services.NewSettingsService(repo)
+	handler := NewTagHandler(tagService, settingsService)
+
+	e := echo.New()
+	ctx := context.Background()
+
+	parent, err := tagService.CreateTag(ctx, services.CreateTagParams{Name: "Parent"})
+	if err != nil {
+		t.Fatalf("CreateTag parent failed: %v", err)
+	}
+	tag, err := tagService.CreateTag(ctx, services.CreateTagParams{
+		Name:             "Feature",
+		Slug:             "feature",
+		Kind:             "topic",
+		InAncestorFlyout: true,
+		ParentIDs:        []int64{parent.ID},
+	})
+	if err != nil {
+		t.Fatalf("CreateTag failed: %v", err)
+	}
+	tagIDStr := fmt.Sprintf("%d", tag.ID)
+
+	body, _ := json.Marshal(map[string]interface{}{"hides_posts": true})
+	req := httptest.NewRequest(http.MethodPut, "/api/tags/"+tagIDStr, bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(tagIDStr)
+
+	if err := handler.UpdateTag(c); err != nil {
+		t.Fatalf("UpdateTag failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	updated, err := tagService.GetTagByID(ctx, tag.ID)
+	if err != nil {
+		t.Fatalf("GetTagByID failed: %v", err)
+	}
+	if !updated.HidesPosts {
+		t.Error("expected hides_posts to be true")
+	}
+	if updated.Name != "Feature" || updated.Slug != "feature" || updated.Kind != "topic" {
+		t.Errorf("expected name/slug/kind preserved, got %q/%q/%q", updated.Name, updated.Slug, updated.Kind)
+	}
+	if !updated.InAncestorFlyout {
+		t.Error("expected in_ancestor_flyout to stay true")
+	}
+	g, err := tagService.GetTagSnapshot(ctx)
+	if err != nil {
+		t.Fatalf("GetTagSnapshot failed: %v", err)
+	}
+	if len(g.Parents[tag.ID]) != 1 || g.Parents[tag.ID][0] != parent.ID {
+		t.Errorf("expected parent %d preserved, got %v", parent.ID, g.Parents[tag.ID])
+	}
+
+	// An explicit empty parent_ids array still clears relationships.
+	body, _ = json.Marshal(map[string]interface{}{"parent_ids": []int64{}})
+	req = httptest.NewRequest(http.MethodPut, "/api/tags/"+tagIDStr, bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(tagIDStr)
+	if err := handler.UpdateTag(c); err != nil {
+		t.Fatalf("UpdateTag clear parents failed: %v", err)
+	}
+	g, err = tagService.GetTagSnapshot(ctx)
+	if err != nil {
+		t.Fatalf("GetTagSnapshot failed: %v", err)
+	}
+	if len(g.Parents[tag.ID]) != 0 {
+		t.Errorf("expected parents cleared, got %v", g.Parents[tag.ID])
+	}
+}

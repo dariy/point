@@ -2,7 +2,7 @@
  * Theme loader. Fetches theme.css and injects it into the document head.
  */
 
-export async function parseTheme({ bust = false } = {}) {
+export async function loadThemeCss({ bust = false } = {}) {
   const url = bust
     ? `/assets/css/common/theme.css?t=${Date.now()}`
     : '/assets/css/common/theme.css';

@@ -24,6 +24,13 @@
             href="/assets/css/light.css?v=__BUILD_VERSION__"
             media="not all"
         />
+        <!-- Media viewers (immersive, sheet, carousel, lightbox) — shared by
+       both sections, so bundled once instead of duplicated into each. -->
+        <link
+            id="css-viewer"
+            rel="stylesheet"
+            href="/assets/css/viewer.css?v=__BUILD_VERSION__"
+        />
         <!-- Switch CSS media before stylesheets are parsed so the browser never
        has to re-apply a stylesheet mid-load (which triggers Firefox's
        "Layout was forced before the page was fully loaded" warning). -->

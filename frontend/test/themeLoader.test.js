@@ -1,7 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 
-describe('themeParser', () => {
+describe('themeLoader', () => {
   let mockStyleEl;
 
   before(() => {
@@ -20,8 +20,8 @@ describe('themeParser', () => {
       return { ok: true, text: async () => sampleCSS };
     };
 
-    const { parseTheme } = await import('../src/utils/themeParser.js');
-    const css = await parseTheme();
+    const { loadThemeCss } = await import('../src/utils/themeLoader.js');
+    const css = await loadThemeCss();
 
     assert.equal(css, sampleCSS);
     assert.equal(mockStyleEl.textContent, sampleCSS);
@@ -30,8 +30,8 @@ describe('themeParser', () => {
   test('should return empty string on fetch failure', async () => {
     global.fetch = async () => ({ ok: false, status: 404 });
 
-    const { parseTheme } = await import('../src/utils/themeParser.js');
-    const css = await parseTheme();
+    const { loadThemeCss } = await import('../src/utils/themeLoader.js');
+    const css = await loadThemeCss();
 
     assert.equal(css, '');
   });
@@ -39,8 +39,8 @@ describe('themeParser', () => {
   test('should return empty string on network error', async () => {
     global.fetch = async () => { throw new Error('Network error'); };
 
-    const { parseTheme } = await import('../src/utils/themeParser.js');
-    const css = await parseTheme();
+    const { loadThemeCss } = await import('../src/utils/themeLoader.js');
+    const css = await loadThemeCss();
 
     assert.equal(css, '');
   });

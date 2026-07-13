@@ -22,9 +22,6 @@ cleanup() {
     trap - EXIT INT TERM
     echo ""
     echo "==> Shutting down and cleaning up..."
-    if [ -f frontend/index.html.bak ]; then
-        mv frontend/index.html.bak frontend/index.html 2>/dev/null || true
-    fi
     # Only remove data.yml if we copied it to the root during this run
     if [ "${COPIED_DATA_YML:-false}" = "true" ]; then
         rm data.yml 2>/dev/null || true
@@ -78,10 +75,9 @@ lsof -ti:"$PORT" | xargs kill -9 2>/dev/null || true
 # Ensure data directories exist locally
 mkdir -p data/media/originals data/media/thumbnails data/logs data/backups data/themes
 
-# Temporarily stamp version in index.html for cache-busting
-if [ -f frontend/index.html ]; then
-    sed -i.bak "s/__BUILD_VERSION__/$DEV_VERSION/g" frontend/index.html
-fi
+# index.html is served with __BUILD_VERSION__ substituted at serve time (the
+# server reads APP_VERSION — see cmd/api/main.go), so the file on disk is never
+# mutated and stays a normally tracked file.
 
 # Copy data.yml to root if it exists in api but not in root
 # The application looks for it in the current directory or STORAGE_PATH

@@ -25,18 +25,10 @@ import { NotificationLogButton } from "./components/shared/NotificationLogButton
 import { initNotificationLog } from "./utils/notificationLog.js";
 
 // ── Theming Foundation ────────────────────────────────────────────────────
-import "./utils/PointBus.js";
-import { parseTheme } from "./utils/themeParser.js";
-import { PointPostList } from "./components/shared/PointPostList.js";
-import { PointLightbox } from "./components/shared/PointLightbox.js";
+import { loadThemeCss } from "./utils/themeLoader.js";
 
-if (typeof customElements !== "undefined") {
-  customElements.define("point-post-list", PointPostList);
-  customElements.define("point-lightbox", PointLightbox);
-}
-
-// Initialise theme immediately to prevent FOUC
-parseTheme();
+// Load the active theme CSS immediately to prevent FOUC
+loadThemeCss();
 
 // Initialise the plugin host from the server-injected, enabled-only manifest
 // (window.__PLUGINS__). Done at module load so the route table and shell slots
@@ -107,9 +99,10 @@ window.addEventListener("app:login-required", ({ detail }) => {
 
 // ── CSS section switching ─────────────────────────────────────────────────
 //
-// The SPA uses two CSS bundles with incompatible :root token sets:
+// The SPA uses two section CSS bundles with incompatible :root token sets:
 //   main.css  — public blog
 //   light.css — admin interface
+// (viewer.css — shared media viewers — is a third, always-active bundle.)
 //
 // Both <link> elements are present in index.html. The inactive one uses
 // media="not all" so the browser downloads it eagerly (no flash on switch)

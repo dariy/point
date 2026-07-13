@@ -1,6 +1,21 @@
 /* ===========================
    Public Semantic Tokens
-   =========================== */
+   ===========================
+
+   Section-specific token set for the public (main.css) bundle. Tokens that
+   duplicated common/tokens.css name+value were consolidated into common
+   (2026-07-11); what remains here is public-specific.
+
+   Incompatibility surface with light/tokens.css — these names are defined
+   in BOTH section files with DIFFERENT values, which is what forces the
+   dual-bundle (light.css vs main.css) architecture. Renaming any of them
+   is off the table (themes and per-post CSS may reference them):
+     --header-height --content-max-width --bg-primary --text-primary
+     --text-secondary --text-muted --text-inverted --border-primary
+     --border-focus --surface-input --surface-hover --surface-card
+     --header-bg --color-primary --color-primary-hover
+     --svg-width-alt2 --svg-height-alt2 --from-transform
+*/
 :root,
 [data-theme="light"] {
     /* Layout */
@@ -19,10 +34,8 @@
 
     /* Semantic Colors - Text */
     --text-primary: var(--pt-colors-text-primary, var(--color-gray-900));
-    --text-primary-hover: var(--color-black);
     --text-secondary: var(--pt-colors-text-secondary, var(--color-gray-600));
     --text-tertiary: var(--pt-colors-text-tertiary, var(--color-gray-500));
-    --text-immersive: var(--color-white);
     --text-muted: var(--pt-colors-text-muted, var(--color-gray-400));
     --text-inverted: var(--pt-colors-text-inverted, var(--color-white));
 
@@ -59,7 +72,6 @@
     --color-primary: var(--pt-colors-accent);
     --color-primary-hover: var(--pt-colors-accent-hover);
 
-    --logo-fill: var(--color-black);
 
     color-scheme: light;
 }
@@ -78,10 +90,8 @@
 
     /* Semantic Colors - Text */
     --text-primary: var(--pt-colors-text-primary);
-    --text-primary-hover: var(--color-white);
     --text-secondary: var(--pt-colors-text-secondary);
     --text-tertiary: var(--pt-colors-text-tertiary);
-    --text-immersive: #cbd5e1;
     --text-muted: var(--pt-colors-text-muted);
     --text-inverted: #121212;
 
@@ -127,207 +137,18 @@
     --color-primary-hover: var(--pt-colors-accent-hover);
     --color-primary-light: rgba(59, 130, 246, 0.2);
 
-    --logo-fill: var(--color-white);
 
     color-scheme: dark;
 }
 :root {
-    --carousel-prev-width: var(--size-3-125);
-    --carousel-prev-height: var(--size-3-125);
-    --carousel-prev-backdrop-filter: var(--size-0-25);
-    --carousel-prev-left: var(--size-1-25);
-    --carousel-next-right: var(--size-1-25);
-    --carousel-indicators-bottom: var(--size-4);
-    --carousel-indicators-gap: var(--size-0-625);
-    --carousel-indicators-padding: var(--size-0-75);
-    --carousel-indicators-border-radius: var(--size-1-25);
-    --carousel-indicators-backdrop-filter: var(--size-0-25);
-    --carousel-dot-width: var(--size-0-625);
-    --carousel-dot-height: var(--size-0-625);
-    --drop-zone-overlay-backdrop-filter: var(--size-0-5);
-    --drop-zone-overlay--webkit-backdrop-filter: var(--size-0-5);
-    --drop-zone-content-max-width: var(--size-25);
-    --drop-zone-icon-width: var(--size-5);
-    --drop-zone-icon-height: var(--size-5);
-    --50--transform: var(--size-0-625);
-    --bodydrag-over--border: var(--size-0-25);
-    --error-code-font-size: var(--size-7-5);
-    --exif-info-btn-top: var(--size-0-5);
-    --exif-info-btn-right: var(--size-0-5);
-    --exif-info-btn-width: var(--size-1-75);
-    --exif-info-btn-height: var(--size-1-75);
-    --exif-info-btn-backdrop-filter: var(--size-0-25);
-    --exif-info-btn--webkit-backdrop-filter: var(--size-0-25);
-    --exif-info-btn-font-size: var(--size-0-8);
-    --exif-overlay-backdrop-filter: var(--size-0-375);
-    --exif-overlay--webkit-backdrop-filter: var(--size-0-375);
-    --exif-overlay-padding-1: var(--size-0-625);
-    --exif-overlay-padding-2: var(--size-0-875);
-    --exif-overlay-padding-3: var(--size-0-75);
-    --exif-overlay-font-size: var(--size-0-72);
-    --exif-overlay-transform: var(--size-0-25);
-    --exif-overlay-title-font-size: var(--size-0-65);
-    --exif-overlay-title-margin-bottom: var(--size-0-375);
-    --td-padding: var(--size-0-125);
-    --td-padding-right: var(--size-0-625);
-    --td-min-width: var(--size-6);
-    --td-font-size: var(--size-0-68);
-    --exif-flyout-max-width-1: var(--size-20);
-    --exif-flyout-max-width-2: var(--size-1);
-    --exif-flyout-box-shadow-1: var(--size-0-25);
-    --exif-flyout-box-shadow-2: var(--size-1);
-    --exif-flyout-table-font-size: var(--size-0-72);
-    --td-padding-right-alt1: var(--size-0-5);
-    --td-width: var(--size-1-25);
-    --footer-action-btn-width: var(--size-2-5);
-    --footer-action-btn-height: var(--size-2-5);
-    --svg-width: var(--size-1-25);
-    --svg-height: var(--size-1-25);
-    --tag-link-border-radius: var(--size-600);
-    --tag-link-height: var(--size-2);
-    --tag-group-header-border-radius: var(--size-600);
-    --tag-group-header-height: var(--size-2);
-    --tag-link-padding: var(--size-0-25);
-    --toggle-children-padding-y: var(--size-0-5);
-    --toggle-children-padding-x: var(--size-0-25);
-    --tag-children--backdrop-filter: var(--size-0-75);
-    --tag-children--top: var(--size-0-5);
-    --tag-children--height: var(--size-0-5);
-    --from-margin-top: var(--size-0-625);
-    --site-header-group-backdrop-filter: var(--size-0-5);
-    --site-header-group--webkit-backdrop-filter: var(--size-0-5);
-    ----height: var(--size-2);
-    --site-breadcrumb-gap: var(--size-0-4);
-    --app-logo-width: var(--size-1);
-    --app-logo-height: var(--size-1);
-    --header-search-form-height: var(--size-2-5);
-    --header-search-form-width: var(--size-2-5);
-    --input-type--search---height: var(--size-2-5);
-    --input-type--search---border-radius: var(--size-624-938);
-    --input-type--search---padding: var(--size-2-5);
-    --input-type--search---backdrop-filter: var(--size-0-5);
-    --input-type--search----webkit-backdrop-filter: var(--size-0-5);
-    --input-type--search---box-shadow: var(--size-0-0625);
-    --dropdown-toggle--margin-left: var(--size-0-375);
-    --dropdown-menu-min-width: var(--size-11-25);
-    --dropdown-menu-transform: var(--size-0-5);
-    --header-action-btn-width: var(--size-2-5);
-    --header-action-btn-height: var(--size-2-5);
-    --site-nav-gap: var(--size-0-5);
-    --logotheme-toggle-width: var(--size-1);
-    --logotheme-toggle-height: var(--size-1);
-    --svg-width-alt1: var(--size-1);
-    --svg-height-alt1: var(--size-1);
-    --site-header-group-backdrop-filter-alt1: var(--size-0-75);
-    --site-header-group--webkit-backdrop-filter-alt1: var(--size-0-75);
     --tag-link-backdrop-filter: var(--size-0-75);
     --tag-link--webkit-backdrop-filter: var(--size-0-75);
-    --immersive-audio-container-max-width: var(--size-37-5);
-    --immersive-audio-container-backdrop-filter: var(--size-0-75);
-    --immersive-audio-container--webkit-backdrop-filter: var(--size-0-75);
-    --immersive-overlay-container-padding-y: var(--size-5);
-    --immersive-overlay-container-padding-x: var(--size-2-5);
-    --post-info-card-backdrop-filter: var(--size-1);
-    --post-info-card--webkit-backdrop-filter: var(--size-1);
-    --post-info-card-max-width: var(--size-43-75);
-    --post-info-card-box-shadow-1: var(--size-1-25);
-    --post-info-card-box-shadow-2: var(--size-3-125);
-    --post-nav-icon-width: var(--size-3);
-    --post-nav-icon-height: var(--size-3);
-    --post-excerpt-card-top: var(--size-4-375);
-    --post-excerpt-card-max-width: var(--size-23-75);
-    --post-excerpt-card-backdrop-filter: var(--size-0-625);
-    --post-excerpt-card--webkit-backdrop-filter: var(--size-0-625);
-    --post-excerpt-card-transform: var(--size-0-5);
-    --breadcrumbs-gap: var(--size-0-5);
-    --map-container-height: var(--size-16-25);
-    --map-container-min-height: var(--size-31-25);
-    --map-container-margin-top: var(--size-2);
-    --map-container-box-shadow-1: var(--size-0-25);
-    --map-container-box-shadow-2: var(--size-1-25);
-    --map-header-margin-bottom: var(--size-1-5);
-    --map-title-font-size: var(--size-2-5);
-    --map-title-margin-bottom: var(--size-0-5);
-    --map-subtitle-font-size: var(--size-1-1);
-    --custom-marker-border: var(--size-0-125);
-    --custom-marker-box-shadow-1: var(--size-0-125);
-    --custom-marker-box-shadow-2: var(--size-0-3125);
-    --marker-label-padding-y: var(--size-0-125);
-    --marker-label-padding-x: var(--size-0-375);
-    --marker-label-font-size: var(--size-0-75);
-    --marker-label-box-shadow-1: var(--size-0-0625);
-    --marker-label-box-shadow-2: var(--size-0-1875);
-    --custom-marker-box-shadow-1-alt1: var(--size-0-25);
-    --custom-marker-box-shadow-2-alt1: var(--size-0-625);
-    --leaflet-popup-content-wrapper-padding: var(--size-0-3125);
-    --map-popup-tag-padding-y: var(--size-0-25);
-    --map-popup-tag-padding-x: var(--size-0-625);
-    --map-popup-tag-margin-bottom: var(--size-0-375);
-    --map-popup-tag-font-size: var(--size-0-875);
-    --map-popup-tag-border-radius: var(--size-624-938);
-    --tag-popup-title-font-size: var(--size-1);
-    --tag-popup-count-font-size: var(--size-0-85);
-    --map-year-link-height: var(--size-1-625);
-    --map-year-link-padding: var(--size-0-5);
-    --map-year-link-font-size: var(--size-0-75);
-    --map-year-link-border-radius: var(--size-624-938);
-    --tag-tooltip-padding: var(--size-0-125);
-    --posts-grid-grid-template-columns: var(--size-20);
-    --post-card-transform: var(--size-0-125);
-    --post-cardhas-image-min-height: var(--size-13-75);
-    --video-play-indicator-filter: var(--size-0-625);
-    --post-card-edit-btn-width: var(--size-2-5);
-    --post-card-edit-btn-height: var(--size-2-5);
-    --post-card-edit-btn-backdrop-filter: var(--size-0-5);
-    --post-card-edit-btn--webkit-backdrop-filter: var(--size-0-5);
-    --post-hidden-indicator-width: var(--size-2);
-    --post-hidden-indicator-height: var(--size-2);
-    --post-hidden-indicator-backdrop-filter: var(--size-0-25);
-    --post-hidden-indicator--webkit-backdrop-filter: var(--size-0-25);
-    --post-card-tag-flyout-backdrop-filter: var(--size-0-5);
-    --post-card-tag-flyout--webkit-backdrop-filter: var(--size-0-5);
     --from-transform: var(--size-0-25);
-    --post-cardhas-image-min-height-alt1: var(--size-31-25);
-    --post-card-slot-min-height: var(--size-20);
     --base---header-height: var(--size-4);
-    --widget-title-border-bottom: var(--size-0-125);
-    --count-min-width: var(--size-1-25);
-    --count-height: var(--size-1-25);
-    --count-padding: var(--size-0-3);
-    --count-font-size: var(--size-0-65);
-    --count-border-radius: var(--size-624-938);
-    --count-margin-left: var(--size-0-1);
-    --tag-link-border-radius-alt1: var(--size-624-938);
-    --flyout-indicator-margin-left: var(--size-0-125);
     --svg-width-alt2: var(--size-0-75);
     --svg-height-alt2: var(--size-0-75);
-    --post-meta-divider-width: var(--size-0-25);
-    --post-meta-divider-height: var(--size-0-25);
-    --code-padding-y: var(--size-0-125);
-    --code-padding-x: var(--size-0-375);
-    --a-text-underline-offset: var(--size-0-125);
     --tag-link-backdrop-filter-alt1: var(--size-0-5);
     --tag-link--webkit-backdrop-filter-alt1: var(--size-0-5);
-    --post-side-nav-btn-width: var(--size-3-125);
-    --post-side-nav-btn-height: var(--size-3-125);
-    --post-side-nav-btn-backdrop-filter: var(--size-0-25);
-    --post-side-nav-btn--webkit-backdrop-filter: var(--size-0-25);
-    --post-side-nav-btnprev-left: var(--size-1);
-    --post-side-nav-btnnext-right: var(--size-1);
-    --tag-description-max-width: var(--size-37-5);
-    --tags-filters-margin-top: var(--size-0-3125);
-    --tag-group-border-radius: var(--size-1);
-    --tag-link-margin-right: var(--size-0-0625);
-    --toggle-children-width: var(--size-2);
-    --toggle-children-height: var(--size-2);
-    --tags-tree-desc-margin: var(--size-0-125);
-    --tags-tree-children-border-left: var(--size-0-125);
-    --tag-strip-scroll-padding-block: var(--size-0-1875);
-    --tags-scroll-btn-width: var(--size-1-5);
-    --tags-scroll-btn-height: var(--size-1-5);
     --svg-width-alt3: var(--size-0-875);
     --svg-height-alt3: var(--size-0-875);
-    --media-query-1: var(--size-37-5);
-    --media-query-1-alt1: var(--size-65-9375);
-    --media-query-1-alt2: var(--size-66);
 }

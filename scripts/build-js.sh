@@ -10,10 +10,29 @@
 #                       mount/unmount, the manifest and chunk loads are logged
 #                       to the console (see core/pluginHost.js).
 #
-# Each set contains its own core bundle (app.js), plugin chunks (p/<id>-<hash>.js)
-# and plugin-manifest.json. `__DEBUG__` is a compile-time constant: there is no
-# runtime flag, so a visitor can never enable debug logging — the operator picks
-# the build via the backend env.
+# Each set is ONE esbuild pass with --splitting over the core entry (app.js)
+# plus every plugin entry (frontend/src/plugins/<id>/index.js):
+#
+#   app.js              stable, unhashed core entry — referenced from
+#                       index.html (?v=__BUILD_VERSION__) and sw.js SHELL_URLS.
+#   p/<id>.js           plugin entries; gated per-plugin by the server
+#                       (/assets/js/p/* only serves enabled plugins).
+#   chunks/*-[hash].js  code-split chunks: lazily imported pages and code
+#                       shared between the core and plugin entries.
+#
+# The single module graph means dynamic import() in app.js produces real lazy
+# chunks (pages parse on first navigation, not up front) and shared modules
+# (store, Component, api/client) exist exactly once — no duplication between
+# app.js and plugin chunks, and no globalThis singleton anchors needed.
+#
+# Entry names are deliberately unhashed: the server sends
+# `Cache-Control: no-cache` for everything under /assets/js (see main.go), so
+# entries revalidate on every load; hashed chunk names keep cross-chunk import
+# graphs consistent within a build.
+#
+# `__DEBUG__` is a compile-time constant: there is no runtime flag, so a
+# visitor can never enable debug logging — the operator picks the build via
+# the backend env.
 #
 # Set BUILD_DEBUG_FRONTEND=0 to skip the debug set (e.g. lean production images),
 # or BUILD_RELEASE_FRONTEND=0 to skip the release set (e.g. a debug-only run).
@@ -39,8 +58,9 @@ fi
 # esbuild default (esnext) across toolchain upgrades.
 ES_TARGET="es2022"
 
-# Collect "<id>=<entry>" args for every frontend/src/plugins/<id>/index.js once;
-# both bundle sets share the same plugin entries.
+# Collect "p/<id>=<entry>" args for every frontend/src/plugins/<id>/index.js
+# once; both bundle sets share the same plugin entries. The p/ alias prefix
+# routes each plugin entry's output to <js_dir>/p/<id>.js.
 # ponytail: space-separated string + word-splitting instead of a bash array so
 # this runs under POSIX sh. Plugin ids/paths never contain spaces.
 PLUGIN_ARGS=""
@@ -50,7 +70,7 @@ if [ -d "$PLUGIN_SRC" ]; then
     entry="${dir}index.js"
     [ -f "$entry" ] || continue
     id="$(basename "$dir")"
-    PLUGIN_ARGS="$PLUGIN_ARGS ${id}=${entry}"
+    PLUGIN_ARGS="$PLUGIN_ARGS p/${id}=${entry}"
     PLUGIN_COUNT=$((PLUGIN_COUNT + 1))
   done
 fi
@@ -62,50 +82,35 @@ build_set() {
   debug_val="$1"; shift
   # remaining "$@" = extra esbuild flags (e.g. --minify)
 
-  plugin_out="$js_dir/p"
   manifest="$js_dir/plugin-manifest.json"
-  meta="$js_dir/plugin-meta.json"
+  meta="$js_dir/build-meta.json"
 
+  # Clean rebuild: hashed chunk names would otherwise accumulate stale files.
+  rm -rf "$js_dir"
   mkdir -p "$js_dir"
 
-  # ── Core bundle (single file, unchanged contract) ─────────────────────────
-  "$ESBUILD" "$APP_ENTRY" \
+  # One esbuild pass with --splitting over the core entry (app.js) plus every
+  # plugin entry. Pinned binary (see $ESBUILD above) for reproducible bundles.
+  # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
+  "$ESBUILD" "app=$APP_ENTRY" $PLUGIN_ARGS \
       --bundle \
+      --splitting \
       --format=esm \
       --target="$ES_TARGET" \
       "--define:__DEBUG__=${debug_val}" \
       "--external:/assets/vendor/*" \
+      --chunk-names="chunks/chunk-[hash]" \
+      --metafile="$meta" \
       "$@" \
-      --outfile="$js_dir/app.js"
-  echo "Built $js_dir/app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val})"
+      --outdir="$js_dir"
 
-  # ── Plugin chunks + manifest ──────────────────────────────────────────────
   if [ "$PLUGIN_COUNT" -gt 0 ]; then
-    rm -rf "$plugin_out"
-    mkdir -p "$plugin_out"
-    # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
-    "$ESBUILD" $PLUGIN_ARGS \
-        --bundle \
-        --splitting \
-        --format=esm \
-        --target="$ES_TARGET" \
-        "--define:__DEBUG__=${debug_val}" \
-        "--external:/assets/vendor/*" \
-        --entry-names="[name]-[hash]" \
-        --chunk-names="chunk-[hash]" \
-        --metafile="$meta" \
-        "$@" \
-        --outdir="$plugin_out"
     node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
-    # The metafile is only an intermediate for the manifest builder. It lands
-    # in the served js dir and enumerates every source path (including
-    # disabled plugins'), so drop it rather than expose it via /assets/js.
-    rm -f "$meta"
-    echo "Built ${PLUGIN_COUNT} plugin chunk(s) → $plugin_out (see $manifest)"
   else
     echo '{}' > "$manifest"
     echo "No plugin entries — wrote empty $manifest"
   fi
+  echo "Built $js_dir: app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val}), ${PLUGIN_COUNT} plugin entrie(s), $(ls "$js_dir/chunks" 2>/dev/null | wc -l | tr -d ' ') shared/page chunk(s)"
 }
 
 # Release set — minified, debug logging stripped.

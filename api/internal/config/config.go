@@ -24,6 +24,7 @@ type Config struct {
 	ThumbnailWidth  int `mapstructure:"THUMBNAIL_WIDTH"`
 	ThumbnailHeight int `mapstructure:"THUMBNAIL_HEIGHT"`
 	AvatarSize      int `mapstructure:"AVATAR_SIZE"`
+	MaxUploadSizeMB int `mapstructure:"MAX_UPLOAD_SIZE_MB"`
 
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
@@ -75,6 +76,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("THUMBNAIL_WIDTH", 400)
 	v.SetDefault("THUMBNAIL_HEIGHT", 300)
 	v.SetDefault("JPEG_QUALITY", 85)
+	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")
 	v.SetDefault("SMTP_HOST", "")

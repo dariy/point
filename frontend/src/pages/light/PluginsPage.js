@@ -9,6 +9,12 @@
  * Presets (Minimalistic / Standalone / Fully featured) apply a whole set of
  * toggles at once; their membership is editable and persisted server-side.
  *
+ * The "Site map" card renders schematic wireframes of the key pages (home,
+ * post, tags, media viewer, admin) with each plugin's spot marked; map regions
+ * and catalog rows cross-highlight on hover, and clicking a region jumps to
+ * the row. The geometry is frontend-owned (see _renderMap) — the backend
+ * registry knows slots, not where a slot sits on a page.
+ *
  * Core areas (e.g. the admin pages, and the immersive viewer pair) must keep at
  * least one enabled plugin: the backend marks the sole survivor `locked` and
  * rejects disabling it; this page renders that toggle read-only.
@@ -105,6 +111,17 @@ const PLUGIN_SETTINGS = {
 
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 
+// Titles for the site-map panels, keyed by panel id (see _renderMap). The map
+// itself is frontend-owned: the backend registry knows slot names, not where a
+// slot sits on a page, so the schematic geometry lives here.
+const MAP_PANELS = [
+  { id: "home", title: "Home", path: "/" },
+  { id: "post", title: "Post page", path: "/:slug" },
+  { id: "tags", title: "Tags page", path: "/tags" },
+  { id: "viewer", title: "Media viewer", path: "photo opened" },
+  { id: "admin", title: "Admin area", path: "/light" },
+];
+
 // Display name: the registry's tuned `title` when set, else title-cased id.
 function humanize(id, title) {
   if (title) return title;
@@ -148,7 +165,113 @@ export default class PluginsPage extends Component {
         site entirely — their code is never served and their routes return 404.
       </p>
       ${this._renderPresets()}
+      ${this._renderMap()}
       ${TYPE_GROUPS.map((g) => this._renderGroup(g)).join("")}`;
+  }
+
+  /**
+   * Schematic "site map": one mini wireframe per key page showing where each
+   * plugin renders. Regions carry `data-plugins` (space-separated ids) and
+   * cross-highlight with the catalog rows below; disabled plugins render dashed.
+   * Reuses the .plugins-group collapse pattern (data-group="map").
+   */
+  _renderMap() {
+    const collapsed = !!this.state.collapsed.map;
+    // _mr side-effect: collects every plugin id placed on the map so the
+    // leftover (no visual spot) list below can be derived, never hand-kept.
+    this._mappedIds = new Set();
+
+    const headerRow = (extra = "") => `
+      <div class="pmap-row pmap-hdr">
+        ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
+      </div>`;
+
+    const bodies = {
+      home: `
+        ${headerRow(this._mr("distraction-free", "Focus"))}
+        ${this._mr("tag-cloud", "Tag cloud", "pmap-band")}
+        ${this._mr("timeline", "Timeline", "pmap-band")}
+        ${this._ms("Post grid", "pmap-main")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      post: `
+        ${headerRow()}
+        ${this._ms("Post content · photos", "pmap-main")}
+        ${this._mr("custom-css", "Custom CSS", "pmap-band")}
+        ${this._mr("post-navigation", "Prev / Next", "pmap-band")}
+        ${this._mr("comments", "Comments", "pmap-band")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      tags: `
+        ${headerRow()}
+        <div class="pmap-main pmap-choice" aria-label="One tag visualization owns /tags">
+          ${this._mr("tags-atlas", "Atlas")}${this._mr("tags-map", "Map")}${this._mr("tags-graph", "Graph")}
+        </div>
+        ${this._mr("timeline", "Timeline", "pmap-band")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      viewer: `
+        <div class="pmap-row">
+          ${this._mr("slideshow", "Slideshow")}${this._mr("immersive-share", "Share")}
+        </div>
+        <div class="pmap-main pmap-choice" aria-label="One immersive viewer is active">
+          ${this._mr("immersive", "Standard")}${this._mr("immersive-sheet", "Sheet")}
+        </div>`,
+      admin: `
+        ${this._mr("admin-home", "/light — Dashboard", "pmap-band")}
+        ${this._mr("admin-posts-list", "/light/posts", "pmap-band")}
+        ${this._mr("media-library", "/light/media", "pmap-band")}
+        ${this._mr("nav-menu", "/light/menu", "pmap-band")}
+        ${this._mr("comments", "/light/comments", "pmap-band")}`,
+    };
+
+    const panels = MAP_PANELS.map(
+      (p) => `
+        <div class="pmap-page">
+          <div class="pmap-page-title">${escapeHtml(p.title)} <code>${escapeHtml(p.path)}</code></div>
+          <div class="pmap-frame${p.id === "viewer" ? " pmap-overlay" : ""}">${bodies[p.id]}</div>
+        </div>`,
+    ).join("");
+
+    // Everything not placed above has no spot on the public pages (services).
+    const offMap = this.state.plugins
+      .filter((p) => !this._mappedIds.has(p.id))
+      .map((p) => this._mr(p.id))
+      .join("");
+
+    return `
+      <section class="card plugins-group pmap-card${collapsed ? " collapsed" : ""}" data-group="map">
+        <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
+          <div class="plugins-group-heading">
+            <h2 class="plugins-group-title">Site map</h2>
+            <p class="plugins-group-hint">Where each plugin sits. Hover to match it with the list below; click to jump to it.</p>
+          </div>
+          ${CHEVRON}
+        </div>
+        <div class="card-body">
+          <div class="pmap-grid">${panels}</div>
+          ${offMap ? `<div class="pmap-offmap"><span class="pmap-offmap-label">Server-side, no visual spot:</span>${offMap}</div>` : ""}
+        </div>
+      </section>`;
+  }
+
+  /** Map region for one or more plugin ids (space-joined into data-plugins). */
+  _mr(ids, label = "", cls = "") {
+    const list = Array.isArray(ids) ? ids : [ids];
+    const known = list
+      .map((id) => this.state.plugins.find((p) => p.id === id))
+      .filter(Boolean);
+    if (!known.length) return ""; // id missing from the catalog — drop the region
+    known.forEach((p) => this._mappedIds.add(p.id));
+    const on = known.some((p) => p.enabled);
+    const text = label || humanize(known[0].id, known[0].title);
+    const tip = known
+      .map((p) => `${humanize(p.id, p.title)} — ${p.enabled ? "enabled" : "disabled"}`)
+      .join("\n");
+    return `<button type="button" class="pmap-region${cls ? " " + cls : ""}${on ? "" : " is-off"}"
+      data-plugins="${escapeHtml(list.join(" "))}" title="${escapeHtml(tip)}">${escapeHtml(text)}</button>`;
+  }
+
+  /** Static (non-plugin) wireframe block, for context only. */
+  _ms(label, cls = "") {
+    return `<span class="pmap-static${cls ? " " + cls : ""}">${escapeHtml(label)}</span>`;
   }
 
   _renderPresets() {
@@ -321,6 +444,51 @@ export default class PluginsPage extends Component {
     this.container.querySelectorAll(".plugin-include-toggle").forEach((input) => {
       input.addEventListener("change", () => this._handleInclude(input.dataset.id, input.checked));
     });
+
+    this._wireMap();
+  }
+
+  /**
+   * Site map ↔ catalog cross-highlight. Hovering a map region highlights the
+   * matching plugin rows (and vice versa); clicking a region expands the row's
+   * group, scrolls to it and flashes it. Pure class toggling — no re-render.
+   */
+  _wireMap() {
+    const cards = new Map();
+    this.container.querySelectorAll(".plugin-card").forEach((c) => cards.set(c.dataset.id, c));
+
+    this.container.querySelectorAll(".pmap-region").forEach((region) => {
+      const ids = (region.dataset.plugins || "").split(" ").filter(Boolean);
+      const mark = (onOff) => ids.forEach((id) => cards.get(id)?.classList.toggle("map-hit", onOff));
+      region.addEventListener("mouseenter", () => mark(true));
+      region.addEventListener("mouseleave", () => mark(false));
+      region.addEventListener("focus", () => mark(true));
+      region.addEventListener("blur", () => mark(false));
+      region.addEventListener("click", () => this._revealPlugin(ids[0], cards));
+    });
+
+    this.container.querySelectorAll(".plugin-card").forEach((card) => {
+      // ~= matches the id inside the space-separated data-plugins list.
+      const regions = this.container.querySelectorAll(`.pmap-region[data-plugins~="${CSS.escape(card.dataset.id)}"]`);
+      card.addEventListener("mouseenter", () => regions.forEach((r) => r.classList.add("map-hit")));
+      card.addEventListener("mouseleave", () => regions.forEach((r) => r.classList.remove("map-hit")));
+    });
+  }
+
+  /** Expand the group holding `id`'s row, scroll to it and flash it. */
+  _revealPlugin(id, cards) {
+    const card = cards.get(id);
+    if (!card) return;
+    const group = card.closest(".plugins-group");
+    if (group?.classList.contains("collapsed")) {
+      group.classList.remove("collapsed");
+      group.querySelector(".plugins-group-header")?.setAttribute("aria-expanded", "true");
+      this.state.collapsed[group.dataset.group] = false;
+    }
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.remove("map-flash"); // restart the animation on repeat clicks
+    void card.offsetWidth;
+    card.classList.add("map-flash");
   }
 
   beforeUnmount() {

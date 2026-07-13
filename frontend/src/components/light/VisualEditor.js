@@ -59,7 +59,7 @@ export class VisualEditor extends Component {
             <img class="ve-thumb" src="${escapeHtml(thumb)}"
                  alt="${escapeHtml(filename)}"
                  data-full="${escapeHtml(node.path)}"
-                 loading="lazy" draggable="false">
+                 loading="lazy" decoding="async" draggable="false">
             <div class="ve-card-row">
               <span class="ve-path">${escapeHtml(node.path)}</span>
               ${exifBtn}

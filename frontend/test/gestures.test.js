@@ -1,7 +1,6 @@
 /* global globalThis */
 import { test, describe, before } from "node:test";
 import assert from "node:assert";
-import "../src/utils/PointBus.js";
 
 describe("GestureController", () => {
   let GestureController;
