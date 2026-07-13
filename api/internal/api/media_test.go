@@ -23,6 +23,16 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// makeTinyMP3 returns bytes that the server-side sniffer recognizes as MP3
+// audio (an ID3v2 tag header). Enough to pass upload MIME validation; not a
+// playable stream, which the audio path does not require.
+func makeTinyMP3(t *testing.T) []byte {
+	t.Helper()
+	// "ID3", version 3.0, no flags, size 0 (syncsafe), then padding to clear
+	// the 12-byte minimum the sniffer needs.
+	return append([]byte("ID3\x03\x00\x00\x00\x00\x00\x00"), make([]byte, 16)...)
+}
+
 // makeJPEGWithEXIF creates a minimal JPEG with Make embedded so that
 // UploadFile will extract EXIF and populate original_metadata.
 func makeJPEGWithEXIF(t *testing.T) []byte {
@@ -76,11 +86,11 @@ func TestMediaHandler_Upload(t *testing.T) {
 
 	e := echo.New()
 
-	// Prepare multipart form
+	// Prepare multipart form with a real JPEG (the handler validates magic bytes).
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, _ := writer.CreateFormFile("file", "test.txt")
-	_, _ = part.Write([]byte("hello api"))
+	part, _ := writer.CreateFormFile("file", "test.jpg")
+	_, _ = part.Write(makeJPEGWithEXIF(t))
 	_ = writer.WriteField("alt_text", "some alt")
 	_ = writer.Close()
 
@@ -99,8 +109,46 @@ func TestMediaHandler_Upload(t *testing.T) {
 
 	var m map[string]interface{}
 	_ = json.Unmarshal(rec.Body.Bytes(), &m)
-	if m["filename"] != "test.txt" {
-		t.Errorf("expected test.txt, got %v", m["filename"])
+	if m["filename"] != "test.jpg" {
+		t.Errorf("expected test.jpg, got %v", m["filename"])
+	}
+	if m["mime_type"] != "image/jpeg" {
+		t.Errorf("expected server-detected mime_type image/jpeg, got %v", m["mime_type"])
+	}
+}
+
+// TestMediaHandler_Upload_RejectsNonMedia verifies the server-side allowlist:
+// a file whose content is not media (here, HTML) is rejected with 415 even if
+// the filename and client Content-Type claim it is an image.
+func TestMediaHandler_Upload_RejectsNonMedia(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsService := services.NewSettingsService(repo)
+	tagService := services.NewTagService(repo)
+	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
+	handler := NewMediaHandler(mediaService, settingsService)
+	e := echo.New()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "evil.jpg")
+	_, _ = part.Write([]byte("<!doctype html><script>alert(1)</script>"))
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.UploadFile(c)
+	if err == nil {
+		t.Fatal("expected error for non-media upload")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("expected 415, got %v", err)
 	}
 }
 
@@ -132,12 +180,14 @@ func TestMediaHandler_List(t *testing.T) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, _ := writer.CreateFormFile("file", "rename.jpg")
-	_, _ = part.Write([]byte("rename me"))
+	_, _ = part.Write(makeJPEGWithEXIF(t))
 	_ = writer.Close()
 	req = httptest.NewRequest(http.MethodPost, "/upload", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 	rec = httptest.NewRecorder()
-	_ = handler.UploadFile(e.NewContext(req, rec))
+	if err := handler.UploadFile(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("UploadFile failed: %v", err)
+	}
 	var m map[string]interface{}
 	_ = json.Unmarshal(rec.Body.Bytes(), &m)
 	mediaID := int64(m["id"].(float64))
@@ -469,8 +519,8 @@ func TestMediaHandler_UploadMultiple(t *testing.T) {
 	// With a file
 	body = &bytes.Buffer{}
 	w = multipart.NewWriter(body)
-	part, _ := w.CreateFormFile("files", "multi.txt")
-	_, _ = part.Write([]byte("multi content"))
+	part, _ := w.CreateFormFile("files", "multi.jpg")
+	_, _ = part.Write(makeJPEGWithEXIF(t))
 	_ = w.Close()
 	req = httptest.NewRequest(http.MethodPost, "/media/upload-multiple", body)
 	req.Header.Set(echo.HeaderContentType, w.FormDataContentType())
