@@ -114,3 +114,65 @@ func TestSanitizePostCSS_BypassNormalization(t *testing.T) {
 		t.Errorf("legit CSS reported strips: %v", stripped)
 	}
 }
+
+// TestSanitizePostCSS_ParserAccuracy verifies the tokenizer-based sanitizer
+// keeps properties that merely contain a dangerous substring (the regex
+// denylist mangled these — see point-9wxc) while still dropping the real ones.
+func TestSanitizePostCSS_ParserAccuracy(t *testing.T) {
+	t.Run("justify/align/place-content survive", func(t *testing.T) {
+		css := `.row { display: flex; justify-content: center; align-content: start; place-content: end; }`
+		out, stripped := SanitizePostCSS(css)
+		if len(stripped) != 0 {
+			t.Errorf("expected nothing stripped, got %v", stripped)
+		}
+		for _, want := range []string{"justify-content: center", "align-content: start", "place-content: end"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("expected %q preserved, got %q", want, out)
+			}
+		}
+	})
+
+	t.Run("standalone content dropped, siblings kept", func(t *testing.T) {
+		out, stripped := SanitizePostCSS(`.x::before { content: "hi"; color: red; }`)
+		if !containsStr(stripped, "content") {
+			t.Errorf("expected content stripped, got %v", stripped)
+		}
+		if strings.Contains(out, `"hi"`) {
+			t.Errorf("expected content value gone, got %q", out)
+		}
+		if !strings.Contains(out, "color: red") {
+			t.Errorf("expected sibling declaration kept, got %q", out)
+		}
+	})
+
+	t.Run("position absolute/relative kept", func(t *testing.T) {
+		out, stripped := SanitizePostCSS(`.a { position: absolute; } .b { position: relative; }`)
+		if len(stripped) != 0 {
+			t.Errorf("expected nothing stripped, got %v", stripped)
+		}
+		if !strings.Contains(out, "position: absolute") || !strings.Contains(out, "position: relative") {
+			t.Errorf("expected non-fixed positions kept, got %q", out)
+		}
+	})
+
+	t.Run("internal url and data uri kept", func(t *testing.T) {
+		css := `.a { background: url(/2026/02/p.jpg); } .b { background: url('data:image/png;base64,AAAA'); }`
+		out, stripped := SanitizePostCSS(css)
+		if len(stripped) != 0 {
+			t.Errorf("expected nothing stripped for internal/data urls, got %v", stripped)
+		}
+		if !strings.Contains(out, "/2026/02/p.jpg") || !strings.Contains(out, "data:image/png") {
+			t.Errorf("expected internal/data urls kept, got %q", out)
+		}
+	})
+
+	t.Run("style breakout via < dropped", func(t *testing.T) {
+		out, stripped := SanitizePostCSS(`.a { color: red; } </style><script>alert(1)</script>`)
+		if !containsStr(stripped, "<script>") {
+			t.Errorf("expected <script> recorded, got %v", stripped)
+		}
+		if strings.Contains(out, "<") {
+			t.Errorf("expected all '<' removed, got %q", out)
+		}
+	})
+}

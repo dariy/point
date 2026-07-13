@@ -18,6 +18,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/utils"
 
+	"github.com/gorilla/css/scanner"
 	attributes "github.com/mdigger/goldmark-attributes"
 	"github.com/microcosm-cc/bluemonday"
 	fences "github.com/stefanfritsch/goldmark-fences"
@@ -197,27 +198,26 @@ func normalizeContent(content string) string {
 	return markdownImageRe.ReplaceAllString(content, "$1")
 }
 
-// dangerousCSSRe matches CSS patterns that are unsafe to allow in per-post CSS blocks.
+// CSS sanitization for per-post CSS blocks works in two layers:
+//
+//  1. Normalization (regex): strip comments and decode escape sequences, so
+//     evasion tricks like url(/**/https://…) or \40 import can't hide a
+//     dangerous construct from step 2. This is the anti-bypass layer.
+//  2. Tokenized walk (gorilla/css scanner): parse the normalized CSS into
+//     declarations and reject dangerous ones by their *actual* property name
+//     and value — not a substring match. This is the accuracy layer: it can't
+//     mangle justify-content the way a `\bcontent` regex did, because the
+//     property token is matched whole.
 var (
-	cssImportRe      = regexp.MustCompile(`(?i)@import\b[^;]*;?`)
-	cssExternalURLRe = regexp.MustCompile(`(?i)url\s*\(\s*['"]?https?://[^)]*['"]?\s*\)`)
-	cssPosFixedRe    = regexp.MustCompile(`(?i)\bposition\s*:\s*fixed\b`)
-	cssPosStickyRe   = regexp.MustCompile(`(?i)\bposition\s*:\s*sticky\b`)
-	cssZIndexRe      = regexp.MustCompile(`(?i)\bz-index\s*:[^;}]*`)
-	cssDangerContent = regexp.MustCompile(`(?i)\bcontent\s*:[^;}]*`)
-	cssScriptRe      = regexp.MustCompile(`(?i)<\s*script`)
-
-	// Normalization regexes to defeat trivial denylist bypasses.
 	cssCommentRe     = regexp.MustCompile(`/\*[\s\S]*?\*/`)                   // url(/**/https://…) comment splitting
 	cssHexEscapeRe   = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?`) // \40 import → @import
 	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)            // \@import → @import
+	cssExternalURLRe = regexp.MustCompile(`(?i)url\(\s*['"]?\s*https?:`)      // external resource in a declaration value
 )
 
 // normalizeCSSForSanitizing strips CSS comments and decodes CSS escape
-// sequences so the denylist in SanitizePostCSS can't be evaded via
-// comment-splitting or escaped characters.
-// TODO(follow-up): replace the regex denylist with a real CSS parser; escape
-// decoding here is a stopgap, not a complete CSS tokenizer.
+// sequences so SanitizePostCSS can't be evaded via comment-splitting or
+// escaped characters (e.g. `\40 import`, `url(/**/https://…)`).
 func normalizeCSSForSanitizing(css string) string {
 	css = cssCommentRe.ReplaceAllString(css, "")
 	css = cssHexEscapeRe.ReplaceAllStringFunc(css, func(m string) string {
@@ -231,38 +231,135 @@ func normalizeCSSForSanitizing(css string) string {
 	return cssOtherEscapeRe.ReplaceAllString(css, "$1")
 }
 
-// SanitizePostCSS strips dangerous CSS declarations from per-post CSS blocks.
-// Returns the sanitized CSS and a list of property names that were removed.
+// SanitizePostCSS removes dangerous constructs from per-post CSS blocks:
+// @import at-rules, external url() resources, position:fixed/sticky, z-index,
+// the content property, and any stray '<' (a style/script breakout). Returns
+// the sanitized CSS and the list of removed construct names (deduplicated).
 func SanitizePostCSS(css string) (string, []string) {
 	if css == "" {
 		return "", nil
 	}
 
+	norm := normalizeCSSForSanitizing(css)
+	sc := scanner.New(norm)
+
+	var out strings.Builder
+	var seg []*scanner.Token // tokens of the current declaration / at-rule / prelude
+	depth := 0
+
+	seen := map[string]bool{}
 	var stripped []string
-
-	type rule struct {
-		re   *regexp.Regexp
-		name string
-	}
-	rules := []rule{
-		{cssImportRe, "@import"},
-		{cssExternalURLRe, "url() with external resource"},
-		{cssPosFixedRe, "position: fixed"},
-		{cssPosStickyRe, "position: sticky"},
-		{cssZIndexRe, "z-index"},
-		{cssDangerContent, "content"},
-		{cssScriptRe, "<script>"},
-	}
-
-	result := normalizeCSSForSanitizing(css)
-	for _, r := range rules {
-		if r.re.MatchString(result) {
-			stripped = append(stripped, r.name)
-			result = r.re.ReplaceAllString(result, "")
+	record := func(name string) {
+		if !seen[name] {
+			seen[name] = true
+			stripped = append(stripped, name)
 		}
 	}
 
-	return strings.TrimSpace(result), stripped
+	emit := func(tokens []*scanner.Token) {
+		for _, t := range tokens {
+			out.WriteString(t.Value)
+		}
+	}
+	// flushDecl evaluates a buffered declaration (inside a rule block) or a
+	// top-level at-rule (e.g. @import) and emits it unless it's dangerous.
+	flushDecl := func(terminator string) {
+		if drop, reason := classifyCSSSegment(seg); drop {
+			record(reason)
+		} else if len(seg) > 0 {
+			emit(seg)
+			out.WriteString(terminator)
+		}
+		seg = nil
+	}
+
+	for {
+		tok := sc.Next()
+		if tok.Type == scanner.TokenEOF || tok.Type == scanner.TokenError {
+			break
+		}
+		if tok.Type == scanner.TokenComment {
+			continue // normalization already removed these; belt-and-suspenders
+		}
+		if tok.Type == scanner.TokenChar {
+			switch tok.Value {
+			case "{":
+				// seg is a selector or at-rule prelude — emit verbatim.
+				emit(seg)
+				out.WriteString("{")
+				seg = nil
+				depth++
+				continue
+			case "}":
+				flushDecl("") // flush a trailing declaration missing its ';'
+				out.WriteString("}")
+				if depth > 0 {
+					depth--
+				}
+				continue
+			case ";":
+				flushDecl(";")
+				continue
+			case "<":
+				// '<' is never valid CSS — drop it (style/script breakout).
+				record("<script>")
+				continue
+			}
+		}
+		seg = append(seg, tok)
+	}
+	// Any trailing prelude/selector with no block (malformed) is emitted as-is.
+	emit(seg)
+
+	return strings.TrimSpace(out.String()), stripped
+}
+
+// classifyCSSSegment decides whether a buffered CSS segment (a declaration or a
+// top-level at-rule) must be dropped, returning the removal reason.
+func classifyCSSSegment(seg []*scanner.Token) (bool, string) {
+	// Property name: the first ident (at-rules surface as an at-keyword).
+	var prop string
+	for _, t := range seg {
+		switch t.Type {
+		case scanner.TokenS:
+			continue
+		case scanner.TokenAtKeyword:
+			if strings.EqualFold(t.Value, "@import") {
+				return true, "@import"
+			}
+			// Other at-rules (e.g. a stray @media prelude) pass through.
+			prop = ""
+		case scanner.TokenIdent:
+			prop = strings.ToLower(t.Value)
+		}
+		break
+	}
+
+	// Reconstruct the value (everything is fine to lowercase for matching).
+	var val strings.Builder
+	for _, t := range seg {
+		val.WriteString(t.Value)
+	}
+	lower := strings.ToLower(val.String())
+
+	switch prop {
+	case "z-index":
+		return true, "z-index"
+	case "content":
+		return true, "content"
+	case "position":
+		if strings.Contains(lower, "fixed") {
+			return true, "position: fixed"
+		}
+		if strings.Contains(lower, "sticky") {
+			return true, "position: sticky"
+		}
+	}
+
+	if cssExternalURLRe.MatchString(lower) {
+		return true, "url() with external resource"
+	}
+	return false, ""
 }
 
 func normalizeImmersiveMode(mode string) string {
