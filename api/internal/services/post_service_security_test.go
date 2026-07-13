@@ -5,6 +5,17 @@ import (
 	"testing"
 )
 
+// containsStr reports whether slice contains s exactly. Defined here (untagged)
+// so both the default and `integration` builds see a single definition.
+func containsStr(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 // TestRenderContent_URLSchemes verifies the sanitizer strips dangerous URL
 // schemes on anchors while preserving legitimate http(s), mailto, and relative
 // (bare media) links.
