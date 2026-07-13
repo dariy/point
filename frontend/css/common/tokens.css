@@ -4,13 +4,11 @@
 :root {
     /* Base Colors */
     --color-white: #ffffff;
-    --color-black: #000000;
 
     /* Brand Colors (constant across themes) */
     --color-primary: #2563eb;
     --color-primary-hover: #1d4ed8;
     --color-primary-light: #dbeafe;
-    --color-secondary: #64748b;
     --color-accent: #0ea5e9;
     --color-success: #10b981;
     --color-success-light: #d1fae5;
@@ -33,8 +31,6 @@
     /* Extended Palette */
     --color-purple-500: #8b5cf6;
     --color-purple-50: #f5f3ff;
-    --color-teal-500: #14b8a6;
-    --color-teal-50: #f0fdfa;
     --color-amber-500: #f59e0b;
     --color-amber-300: #fed7aa;
     --color-amber-700: #b45309;
@@ -43,11 +39,7 @@
     --color-emerald-500: #10b981;
     --color-emerald-600: #059669;
     --color-emerald-50: #ecfdf5;
-    --color-rose-500: #f43f5e;
     --color-rose-600: #e11d48;
-    --color-rose-50: #fff1f2;
-    --color-indigo-500: #6366f1;
-    --color-indigo-50: #eef2ff;
 
     /* Grays (Tailwind-like palette for primitives) */
     --color-gray-50: #f8fafc;
@@ -57,7 +49,6 @@
     --color-gray-400: #94a3b8;
     --color-gray-500: #64748b;
     --color-gray-600: #475569;
-    --color-gray-700: #334155;
     --color-gray-800: #1e293b;
     --color-gray-900: #0f172a;
 
@@ -123,15 +114,11 @@
     --size-12: 12rem;
     --size-12-5: 12.5rem;
     --size-13-75: 13.75rem;
-    --size-15: 15rem;
-    --size-15-625: 15.625rem;
     --size-16-25: 16.25rem;
     --size-18-75: 18.75rem;
     --size-20: 20rem;
-    --size-22-5: 22.5rem;
     --size-23-75: 23.75rem;
     --size-25: 25rem;
-    --size-26-25: 26.25rem;
     --size-30: 30rem;
     --size-31-25: 31.25rem;
     --size-37-5: 37.5rem;
@@ -144,7 +131,6 @@
     --size-87-5: 87.5rem;
     --size-600: 600rem;
     --size-624-938: 624.938rem;
-    --size-999-9: 999.9rem;
 
     /* Spacing */
     --spacing-xs: var(--size-0-25);
@@ -175,14 +161,9 @@
     --border-radius: var(--size-0-375);
     --border-radius-lg: var(--size-0-5);
     --border-radius-xl: var(--size-0-75);
-    --border-radius-pill: var(--size-999-9);
     --border-width: var(--size-0-0625);
 
     /* Blurs */
-    --blur-sm: var(--size-0-25);
-    --blur: var(--size-0-5);
-    --blur-md: var(--size-0-75);
-    --blur-lg: var(--size-1);
 
     /* Shadows */
     --shadow-sm: 0 var(--size-0-0625) var(--size-0-125) 0 rgba(0, 0, 0, 0.05);
@@ -208,11 +189,9 @@
 
     /* Extracted Alpha Colors */
     --color-black-alpha-0: rgba(0, 0, 0, 0);
-    --color-black-alpha-05: rgba(0, 0, 0, 0.05);
     --color-black-alpha-08: rgba(0, 0, 0, 0.08);
     --color-black-alpha-10: rgba(0, 0, 0, 0.1);
     --color-black-alpha-15: rgba(0, 0, 0, 0.15);
-    --color-black-alpha-18: rgba(0, 0, 0, 0.18);
     --color-black-alpha-20: rgba(0, 0, 0, 0.2);
     --color-black-alpha-25: rgba(0, 0, 0, 0.25);
     --color-black-alpha-30: rgba(0, 0, 0, 0.3);
@@ -221,11 +200,9 @@
     --color-black-alpha-48: rgba(0, 0, 0, 0.48);
     --color-black-alpha-50: rgba(0, 0, 0, 0.5);
     --color-black-alpha-60: rgba(0, 0, 0, 0.6);
-    --color-black-alpha-65: rgba(0, 0, 0, 0.65);
     --color-black-alpha-70: rgba(0, 0, 0, 0.7);
     --color-black-alpha-72: rgba(0, 0, 0, 0.72);
     --color-black-alpha-75: rgba(0, 0, 0, 0.75);
-    --color-black-alpha-80: rgba(0, 0, 0, 0.8);
     --color-black-alpha-82: rgba(0, 0, 0, 0.82);
     --color-black-alpha-85: rgba(0, 0, 0, 0.85);
     --color-black-alpha-88: rgba(0, 0, 0, 0.88);
@@ -233,13 +210,11 @@
     --color-black-alpha-95: rgba(0, 0, 0, 0.95);
     --color-danger-alpha-08: rgba(239, 68, 68, 0.08);
     --color-danger-alpha-10: rgba(239, 68, 68, 0.1);
-    --color-danger-alpha-20: rgba(239, 68, 68, 0.2);
     --color-danger-alpha-25: rgba(239, 68, 68, 0.25);
     --color-danger-alpha-30: rgba(239, 68, 68, 0.3);
     --color-primary-alpha-06: rgba(37, 99, 235, 0.06);
     --color-primary-alpha-08: rgba(37, 99, 235, 0.08);
     --color-primary-alpha-15: rgba(37, 99, 235, 0.15);
-    --color-primary-alpha-70: rgba(37, 99, 235, 0.7);
     --color-primary-alpha-95: rgba(37, 99, 235, 0.95);
     --color-primary-alpha-98: rgba(37, 99, 235, 0.98);
     --color-primary-light-alpha-10: rgba(59, 130, 246, 0.1);
@@ -248,18 +223,11 @@
     --color-primary-light-alpha-30: rgba(59, 130, 246, 0.3);
     --color-primary-light-alpha-95: rgba(59, 130, 246, 0.95);
     --color-primary-light-alpha-98: rgba(59, 130, 246, 0.98);
-    --color-rgb-209-250-229-alpha-80: rgba(209, 250, 229, 0.8);
-    --color-rgb-219-234-254-alpha-80: rgba(219, 234, 254, 0.8);
-    --color-rgb-254-226-226-alpha-80: rgba(254, 226, 226, 0.8);
-    --color-rgb-254-243-199-alpha-80: rgba(254, 243, 199, 0.8);
-    --color-rgb-30-30-30-alpha-80: rgba(30, 30, 30, 0.8);
     --color-rgb-30-30-30-alpha-85: rgba(30, 30, 30, 0.85);
     --color-success-alpha-10: rgba(16, 185, 129, 0.1);
-    --color-success-alpha-20: rgba(16, 185, 129, 0.2);
     --color-success-alpha-30: rgba(16, 185, 129, 0.3);
     --color-warning-alpha-07: rgba(245, 158, 11, 0.07);
     --color-warning-alpha-14: rgba(245, 158, 11, 0.14);
-    --color-warning-alpha-20: rgba(245, 158, 11, 0.2);
     --color-warning-alpha-30: rgba(245, 158, 11, 0.3);
     --color-warning-dark-alpha-35: rgba(180, 120, 0, 0.35);
     --color-white-alpha-10: rgba(255, 255, 255, 0.1);
@@ -288,21 +256,6 @@
     --status-select-box-shadow: var(--size-0-125);
     --btn-transform: var(--size-0-0625);
     --empty-state-icon-font-size: var(--size-4);
-    --flash-messages-container-max-width: var(--size-25);
-    --flash-message-backdrop-filter: var(--size-0-5);
-    --flash-message--webkit-backdrop-filter: var(--size-0-5);
-    --toasts-bottom: var(--size-4-5);
-    --toasts-max-width: var(--size-22-5);
-    --toast-backdrop-filter: var(--size-0-5);
-    --toast--webkit-backdrop-filter: var(--size-0-5);
-    --toast-close-font-size: var(--size-1-125);
-    --toast-close-padding: var(--size-0-125);
-    --notification-log-btn-width: var(--size-2-75);
-    --notification-log-btn-height: var(--size-2-75);
-    --notification-log-btn-box-shadow-1: var(--size-0-375);
-    --notification-log-btn-box-shadow-2: var(--size-1-25);
-    --notification-log-list-max-height: var(--size-26-25);
-    --notification-log-icon-min-width: var(--size-1);
     --form-select-background-size: var(--size-1);
     --form-select-transform: var(--size-0-0625);
     --form-input-box-shadow: var(--size-0-1875);
@@ -356,83 +309,10 @@
     --loading-spinner-sm-height: var(--size-1-25);
     --loading-spinner-sm-border-width: var(--size-0-125);
     --error-message-max-width: var(--size-37-5);
-    --base---spacing-xs: var(--size-0-25);
-    --base---spacing-sm: var(--size-0-5);
-    --base---spacing-md: var(--size-1);
-    --base---spacing-lg: var(--size-1-5);
-    --base---spacing-xl: var(--size-2);
-    --base---spacing-2xl: var(--size-3);
-    --base---spacing-3xl: var(--size-4);
-    --base---font-size-xs: var(--size-0-75);
-    --base---font-size-sm: var(--size-0-875);
-    --base---font-size-base: var(--size-1);
-    --base---font-size-lg: var(--size-1-125);
-    --base---font-size-xl: var(--size-1-25);
-    --base---font-size-2xl: var(--size-1-5);
-    --base---font-size-3xl: var(--size-1-875);
-    --base---font-size-4xl: var(--size-2-25);
-    --base---border-radius-sm: var(--size-0-25);
-    --base---border-radius: var(--size-0-375);
-    --base---border-radius-lg: var(--size-0-5);
-    --base---border-radius-xl: var(--size-0-75);
-    --base---border-radius-pill: var(--size-999-9);
-    --base---border-width: var(--size-0-0625);
-    --base---blur-sm: var(--size-0-25);
-    --base---blur: var(--size-0-5);
-    --base---blur-md: var(--size-0-75);
-    --base---blur-lg: var(--size-1);
-    --base---shadow-sm-1: var(--size-0-0625);
-    --base---shadow-sm-2: var(--size-0-125);
-    --base---shadow-1: var(--size-0-0625);
-    --base---shadow-2: var(--size-0-1875);
-    --base---shadow-3: var(--size-0-0625);
-    --base---shadow-4: var(--size-0-125);
-    --base---shadow-5: var(--size-0-0625);
-    --base---shadow-md-1: var(--size-0-25);
-    --base---shadow-md-2: var(--size-0-375);
-    --base---shadow-md-3: var(--size-0-0625);
-    --base---shadow-md-4: var(--size-0-125);
-    --base---shadow-md-5: var(--size-0-25);
-    --base---shadow-md-6: var(--size-0-125);
-    --base---shadow-lg-1: var(--size-0-625);
-    --base---shadow-lg-2: var(--size-0-9375);
-    --base---shadow-lg-3: var(--size-0-1875);
-    --base---shadow-lg-4: var(--size-0-25);
-    --base---shadow-lg-5: var(--size-0-375);
-    --base---shadow-lg-6: var(--size-0-25);
-    --base---shadow-xl-1: var(--size-1-25);
-    --base---shadow-xl-2: var(--size-1-5625);
-    --base---shadow-xl-3: var(--size-0-3125);
-    --base---shadow-xl-4: var(--size-0-5);
-    --base---shadow-xl-5: var(--size-0-625);
-    --base---shadow-xl-6: var(--size-0-375);
-    --base---pt-spacing-base: var(--size-1);
-    --base---content-max-width: var(--size-75);
-    --base---content-narrow: var(--size-50);
     --base---header-height: var(--size-4-5);
-    ---data-theme--dark-----shadow-sm-1: var(--size-0-0625);
-    ---data-theme--dark-----shadow-sm-2: var(--size-0-125);
-    ---data-theme--dark-----shadow-1: var(--size-0-0625);
-    ---data-theme--dark-----shadow-2: var(--size-0-1875);
-    ---data-theme--dark-----shadow-3: var(--size-0-0625);
-    ---data-theme--dark-----shadow-4: var(--size-0-125);
-    ---data-theme--dark-----shadow-5: var(--size-0-0625);
-    ---data-theme--dark-----shadow-md-1: var(--size-0-25);
-    ---data-theme--dark-----shadow-md-2: var(--size-0-375);
-    ---data-theme--dark-----shadow-md-3: var(--size-0-0625);
-    ---data-theme--dark-----shadow-md-4: var(--size-0-125);
-    ---data-theme--dark-----shadow-md-5: var(--size-0-25);
-    ---data-theme--dark-----shadow-md-6: var(--size-0-125);
-    ---data-theme--dark-----shadow-lg-1: var(--size-0-625);
-    ---data-theme--dark-----shadow-lg-2: var(--size-0-9375);
-    ---data-theme--dark-----shadow-lg-3: var(--size-0-1875);
-    ---data-theme--dark-----shadow-lg-4: var(--size-0-25);
-    ---data-theme--dark-----shadow-lg-5: var(--size-0-375);
-    ---data-theme--dark-----shadow-lg-6: var(--size-0-25);
     --breadcrumbs-gap: var(--size-0-5);
     --site-header-group-backdrop-filter: var(--size-0-5);
     --site-header-group--webkit-backdrop-filter: var(--size-0-5);
-    ----height: var(--size-2);
     --site-breadcrumb-gap: var(--size-0-4);
     --app-logo-width: var(--size-1);
     --app-logo-height: var(--size-1);
@@ -455,15 +335,6 @@
     --svg-height-alt1: var(--size-1);
     --tag-link-border-radius: var(--size-600);
     --tag-link-height: var(--size-2);
-    --tag-group-header-border-radius: var(--size-600);
-    --tag-group-header-height: var(--size-2);
-    --tag-link-padding: var(--size-0-25);
-    --toggle-children-padding-y: var(--size-0-5);
-    --toggle-children-padding-x: var(--size-0-25);
-    --tag-children--backdrop-filter: var(--size-0-75);
-    --tag-children--top: var(--size-0-5);
-    --tag-children--height: var(--size-0-5);
-    --from-margin-top: var(--size-0-625);
     --footer-action-btn-width: var(--size-2-5);
     --footer-action-btn-height: var(--size-2-5);
     --tag-strip-scroll-padding-block: var(--size-0-1875);
@@ -539,11 +410,6 @@
     --post-excerpt-card-backdrop-filter: var(--size-0-625);
     --post-excerpt-card--webkit-backdrop-filter: var(--size-0-625);
     --post-excerpt-card-transform: var(--size-0-5);
-    --carousel-prev-width: var(--size-3-125);
-    --carousel-prev-height: var(--size-3-125);
-    --carousel-prev-backdrop-filter: var(--size-0-25);
-    --carousel-prev-left: var(--size-1-25);
-    --carousel-next-right: var(--size-1-25);
     --carousel-indicators-bottom: var(--size-4);
     --carousel-indicators-gap: var(--size-0-625);
     --carousel-indicators-padding: var(--size-0-75);
@@ -590,7 +456,6 @@
     --drop-zone-icon-height: var(--size-5);
     --50--transform: var(--size-0-625);
     --bodydrag-over--border: var(--size-0-25);
-    --base---header-height-alt1: var(--size-4);
     --exif-info-btn-top: var(--size-0-5);
     --exif-info-btn-right: var(--size-0-5);
     --exif-info-btn-width: var(--size-1-75);
@@ -611,12 +476,6 @@
     --td-padding-right: var(--size-0-625);
     --td-min-width: var(--size-6);
     --td-font-size: var(--size-0-68);
-    --exif-flyout-max-width-1: var(--size-20);
-    --exif-flyout-max-width-2: var(--size-1);
-    --exif-flyout-box-shadow-1: var(--size-0-25);
-    --exif-flyout-box-shadow-2: var(--size-1);
-    --exif-flyout-table-font-size: var(--size-0-72);
-    --td-padding-right-alt1: var(--size-0-5);
     --td-width: var(--size-1-25);
     --media-query-1: var(--size-37-5);
     --media-query-1-alt1: var(--size-65-9375);

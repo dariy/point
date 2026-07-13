@@ -74,7 +74,7 @@ fi
     -e AUTH_CUSTOM_INFO_URL="$REMARK_URL" \
     -e TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}" \
     -e NOTIFY_TELEGRAM_CHAN="${NOTIFY_TELEGRAM_CHAN:-}" \
-    -e NOTIFY_ADMINS="${NOTIFY_ADMINS:-}" \
+    -e NOTIFY_ADMINS="${NOTIFY_ADMINS:-none}" \
     "${EMAIL_ARGS[@]}" \
     ghcr.io/umputun/remark42:latest
 
