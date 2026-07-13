@@ -1,7 +1,7 @@
 /**
  * PreviewPage — draft post preview via shareable token.
  *
- * Fetches: GET /preview/:token  (no auth required)
+ * Fetches: GET /api/posts/preview/:token  (no auth required)
  * Props (from router): { params: { token }, query }
  *
  * Renders the post in preview mode with a notice banner.
@@ -10,7 +10,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
 
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
-import { api } from '../../api/client.js';
+import { previewPost } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
@@ -103,7 +103,7 @@ export default class PreviewPage extends Component {
       return;
     }
     try {
-      const post = await api.get(`/posts/preview/${encodeURIComponent(token)}`);
+      const post = await previewPost(token);
       document.title = `Preview: ${post.title}`;
 
       // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
