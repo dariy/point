@@ -897,11 +897,17 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read file")
 	}
 
+	// Validate against the file's own magic bytes and require an audio format.
+	mimeType, err := services.DetectMediaType(content, file.Header.Get("Content-Type"))
+	if err != nil || services.MediaTypeCategory(mimeType) != "audio" {
+		return echo.NewHTTPError(http.StatusUnsupportedMediaType, "an audio file is required")
+	}
+
 	// Upload the audio media
 	media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
 		Content:  content,
 		Filename: file.Filename,
-		MimeType: file.Header.Get("Content-Type"),
+		MimeType: mimeType,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

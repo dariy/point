@@ -94,7 +94,7 @@ export default class PostsListPage extends Component {
 
     let thumbInner = "";
     if (isImage && p.media_url) {
-      thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy">`;
+      thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
     } else if (isVideo) {
       thumbInner = PLAY_SVG;
     } else if (isAudio) {
@@ -230,7 +230,7 @@ export default class PostsListPage extends Component {
 
                 let previewHtml = "";
                 if (isImage && p.media_url) {
-                  previewHtml = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy">`;
+                  previewHtml = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
                 } else if (isVideo) {
                   previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
                 } else if (isAudio) {

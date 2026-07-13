@@ -1,0 +1,14 @@
+# Explicit lint configuration (golangci-lint v2) so CI and local runs agree
+# on rules instead of drifting with upstream defaults. Version pinned in
+# .github/workflows/test.yml and installed locally at the same version.
+version: "2"
+
+run:
+  # The test suite (and check.sh) builds with the integration tag; lint the
+  # same code CI tests.
+  build-tags:
+    - integration
+
+linters:
+  # The standard set: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard

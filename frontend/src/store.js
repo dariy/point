@@ -64,15 +64,12 @@ class Store {
 /**
  * Singleton store instance shared across the application.
  *
- * Anchored on `globalThis` rather than a plain module constant because the
- * build emits the core bundle (`app.js`) and the plugin chunks in two separate
- * esbuild passes (see scripts/build-js.sh). A module-level `new Store()` would
- * instantiate once per bundle graph, giving the core and the plugin chunks
- * *different* stores — so e.g. a footer-plugin theme toggle would write to a
- * store the core never observes. The shared global guarantees one instance.
+ * A plain module constant is safe here because the core and all plugin
+ * entries are bundled in ONE esbuild pass with --splitting (see
+ * scripts/build-js.sh): this module lands in a single shared chunk, so every
+ * importer — app.js and plugin chunks alike — gets the same instance.
  */
-export const store =
-  globalThis.__pointStore || (globalThis.__pointStore = new Store());
+export const store = new Store();
 
 // ── Well-known store keys (documented here for discoverability) ────────────
 //

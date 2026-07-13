@@ -113,3 +113,12 @@ export function getVersion() {
 export function getDiskInfo() {
   return api.get('/api/system/disk');
 }
+
+/**
+ * Audit internal post links: reports links on publicly reachable posts whose
+ * target anonymous visitors cannot open (missing, unpublished, hidden by tag).
+ * @returns {Promise<{issues: Array<{source_id:number, source_slug:string, source_title:string, target_slug:string, reason:string}>, scanned: number}>}
+ */
+export function auditPostLinks() {
+  return api.get('/api/system/audit/post-links');
+}

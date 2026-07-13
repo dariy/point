@@ -370,46 +370,56 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 	return h.renderTagResponseWithStatus(c, g, tag, http.StatusCreated)
 }
 
+// UpdateTag handles PUT /api/tags/:id with partial-update semantics: only
+// fields present in the JSON body are changed; absent fields keep their
+// current values (parent_ids/child_ids included — an explicit empty array
+// removes all relationships, an omitted key leaves them untouched).
 func (h *TagHandler) UpdateTag(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
-	var req CreateTagRequest
-	if err := c.Bind(&req); err != nil {
+	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	current, ok := g.ByID[id]
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.NewDecoder(c.Request().Body).Decode(&fields); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	tag, err := h.tagService.UpdateTag(c.Request().Context(), services.UpdateTagParams{
-		ID:               id,
-		Name:             req.Name,
-		Slug:             req.Slug,
-		Description:      req.Description,
-		Kind:             req.Kind,
-		Hidden:           req.Hidden,
-		HidesPosts:       req.HidesPosts,
-		NavOrder:         req.NavOrder,
-		InBreadcrumbs:    req.InBreadcrumbs,
-		ShowRelated:      req.ShowRelated,
-		InAncestorFlyout: req.InAncestorFlyout,
-		Latitude:         req.Latitude,
-		Longitude:        req.Longitude,
-	})
+	tag, err := h.tagService.UpdateTag(c.Request().Context(), tagPatchParams(current, fields))
 	if err != nil {
 		return err
 	}
 
-	// Always update parent, child, and location data (empty slice = remove all).
-	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
-	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
-
-	// Update location if provided
-	if len(req.Locations) > 0 {
-		_ = h.tagService.UpsertTagLocation(c.Request().Context(), tag.ID, req.Locations[0].Latitude, req.Locations[0].Longitude)
+	if raw, ok := fields["parent_ids"]; ok && string(raw) != "null" {
+		var ids []int64
+		if json.Unmarshal(raw, &ids) == nil {
+			_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, ids)
+		}
+	}
+	if raw, ok := fields["child_ids"]; ok && string(raw) != "null" {
+		var ids []int64
+		if json.Unmarshal(raw, &ids) == nil {
+			_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, ids)
+		}
 	}
 
-	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
+	if raw, ok := fields["locations"]; ok && string(raw) != "null" {
+		var locs []TagLocationInput
+		if json.Unmarshal(raw, &locs) == nil && len(locs) > 0 {
+			_ = h.tagService.UpsertTagLocation(c.Request().Context(), tag.ID, locs[0].Latitude, locs[0].Longitude)
+		}
+	}
+
+	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
 	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
 	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
 }
@@ -570,7 +580,19 @@ func (h *TagHandler) PatchTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	// Seed from current values.
+	tag, err := h.tagService.UpdateTag(c.Request().Context(), tagPatchParams(current, fields))
+	if err != nil {
+		return err
+	}
+
+	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
+	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
+	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+}
+
+// tagPatchParams seeds UpdateTagParams from the tag's current values, then
+// overrides only the fields present in the JSON body.
+func tagPatchParams(current models.Tag, fields map[string]json.RawMessage) services.UpdateTagParams {
 	p := services.UpdateTagParams{
 		ID:               current.ID,
 		Name:             current.Name,
@@ -661,14 +683,7 @@ func (h *TagHandler) PatchTag(c echo.Context) error {
 		}
 	}
 
-	tag, err := h.tagService.UpdateTag(c.Request().Context(), p)
-	if err != nil {
-		return err
-	}
-
-	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
-	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
-	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+	return p
 }
 
 // SetTagParents replaces all parent relationships for a tag.

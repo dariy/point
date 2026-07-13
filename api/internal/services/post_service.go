@@ -7,8 +7,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"path"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -279,7 +281,30 @@ func (s *PostService) RenderContent(content string) (string, error) {
 	if err := s.md.Convert([]byte(preprocessContent(content)), &buf); err != nil {
 		return "", err
 	}
-	return s.policy.Sanitize(buf.String()), nil
+	return addImgLoadingHints(s.policy.Sanitize(buf.String())), nil
+}
+
+// imgTagRe matches an <img …> tag, capturing its attributes in group 1 and
+// tolerating the self-closing XHTML form (…/>) goldmark emits.
+var imgTagRe = regexp.MustCompile(`(?i)<img\b([^>]*?)\s*/?>`)
+
+// addImgLoadingHints adds loading="lazy" and decoding="async" to post-body
+// <img> tags that don't already set them, so image-heavy posts don't fetch and
+// decode every photo up front. Runs after sanitization, so bluemonday never
+// strips the added attributes. Native lazy-loading still fetches images already
+// in (or near) the viewport, so the first image isn't needlessly deferred.
+func addImgLoadingHints(html string) string {
+	return imgTagRe.ReplaceAllStringFunc(html, func(tag string) string {
+		attrs := imgTagRe.FindStringSubmatch(tag)[1]
+		lower := strings.ToLower(attrs)
+		if !strings.Contains(lower, "loading=") {
+			attrs += ` loading="lazy"`
+		}
+		if !strings.Contains(lower, "decoding=") {
+			attrs += ` decoding="async"`
+		}
+		return "<img" + attrs + ">"
+	})
 }
 
 type ListPostsParams struct {
@@ -532,7 +557,7 @@ func (s *PostService) FlushViewCounts(ctx context.Context) error {
 		}); err != nil {
 			// On error, we might lose these counts or we could try to re-add them to the buffer
 			// For now, just log the error.
-			fmt.Printf("failed to flush view count for post %d: %v\n", id, err)
+			slog.Error("failed to flush view count", "post_id", id, "error", err)
 		}
 	}
 	return nil
@@ -762,14 +787,29 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
-			go func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-				defer cancel()
-				_ = s.CrossPostToInstagram(ctx2, id)
-			}()
+			go s.crossPostToInstagramAsync(id)
 		}
 	}
 	return post, nil
+}
+
+// crossPostToInstagramAsync runs a cross-post in the background with its own
+// timeout, logging failures and recovering panics (a panic in a raw goroutine
+// would otherwise kill the server). CrossPostToInstagram also records the
+// failure on the post itself via updateInstagramStatus, so the admin UI shows
+// it too.
+func (s *PostService) crossPostToInstagramAsync(postID int64) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("instagram cross-post panicked",
+				"post_id", postID, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	if err := s.CrossPostToInstagram(ctx, postID); err != nil {
+		slog.Error("instagram cross-post failed", "post_id", postID, "error", err)
+	}
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
@@ -829,18 +869,13 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
 		if s.tagService != nil { s.tagService.Invalidate() }
-		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 			if enabledStr == "true" || enabledStr == "1" {
 				for _, p := range published {
 					if p.InstagramShare {
-						id := p.ID
-						go func() {
-							ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-							defer cancel()
-							_ = s.CrossPostToInstagram(ctx2, id)
-						}()
+						go s.crossPostToInstagramAsync(p.ID)
 					}
 				}
 			}
@@ -980,4 +1015,99 @@ func toNullTime(t *time.Time) sql.NullTime {
 		return sql.NullTime{}
 	}
 	return sql.NullTime{Time: t.UTC(), Valid: true}
+}
+
+// postLinkRe matches internal post links (/posts/<slug>) in raw post content —
+// markdown targets, href attributes, or bare paths alike.
+var postLinkRe = regexp.MustCompile(`/posts/([A-Za-z0-9._-]+)`)
+
+// PostLinkIssue describes an internal link on a publicly reachable post whose
+// target an anonymous visitor cannot open.
+type PostLinkIssue struct {
+	SourceID    int64  `json:"source_id"`
+	SourceSlug  string `json:"source_slug"`
+	SourceTitle string `json:"source_title"`
+	TargetSlug  string `json:"target_slug"`
+	Reason      string `json:"reason"`
+}
+
+// AuditPublicPostLinks scans every publicly reachable post (published and not
+// hidden directly or via a hides-posts tag) for internal /posts/<slug> links
+// whose target is missing, unpublished, or hidden — the failure mode where an
+// index post looks fine to a logged-in admin while every link 404s for
+// visitors. Returns the issues and the number of posts scanned.
+func (s *PostService) AuditPublicPostLinks(ctx context.Context) ([]PostLinkIssue, int, error) {
+	rows, err := s.repo.ListPostLinkAuditRows(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var effectiveHides map[int64]bool
+	tagName := map[int64]string{}
+	if s.tagService != nil {
+		if snap, err := s.tagService.GetTagSnapshot(ctx); err == nil && snap != nil {
+			effectiveHides = snap.EffectiveHidesPosts
+			for id, t := range snap.ByID {
+				tagName[id] = t.Name
+			}
+		}
+	}
+
+	type target struct {
+		status    string
+		hiddenVia []string // names of tags that effectively hide the post
+	}
+	bySlug := make(map[string]target, len(rows))
+	for _, r := range rows {
+		t := target{status: r.Status}
+		for _, tid := range r.TagIDs {
+			if effectiveHides[tid] {
+				t.hiddenVia = append(t.hiddenVia, tagName[tid])
+			}
+		}
+		bySlug[strings.ToLower(r.Slug)] = t
+	}
+
+	issues := []PostLinkIssue{}
+	scanned := 0
+	seen := map[string]bool{} // "<sourceID>:<targetSlug>" dedupe
+	for _, r := range rows {
+		src := bySlug[strings.ToLower(r.Slug)]
+		if src.status != "published" || len(src.hiddenVia) > 0 {
+			continue // only links on publicly reachable posts matter
+		}
+		scanned++
+		for _, m := range postLinkRe.FindAllStringSubmatch(r.Content, -1) {
+			slug := strings.ToLower(m[1])
+			if slug == strings.ToLower(r.Slug) {
+				continue
+			}
+			key := strconv.FormatInt(r.ID, 10) + ":" + slug
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			tgt, ok := bySlug[slug]
+			var reason string
+			switch {
+			case !ok:
+				reason = "target not found (deleted or slug typo)"
+			case len(tgt.hiddenVia) > 0:
+				reason = "target hidden by tag '" + strings.Join(tgt.hiddenVia, "', '") + "'"
+			case tgt.status != "published":
+				reason = "target not published (status: " + tgt.status + ")"
+			default:
+				continue // reachable — no issue
+			}
+			issues = append(issues, PostLinkIssue{
+				SourceID:    r.ID,
+				SourceSlug:  r.Slug,
+				SourceTitle: r.Title,
+				TargetSlug:  slug,
+				Reason:      reason,
+			})
+		}
+	}
+	return issues, scanned, nil
 }

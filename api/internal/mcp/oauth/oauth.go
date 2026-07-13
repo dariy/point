@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
@@ -295,7 +295,7 @@ func (p *Provider) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:           time.Now().Add(2 * time.Minute),
 	}
 	p.mu.Unlock()
-	log.Printf("[mcp-oauth] Password accepted — issuing code for client %s", clientID)
+	slog.Info("mcp-oauth: password accepted, issuing code", "client_id", clientID)
 
 	dest, _ := url.Parse(redirectURI)
 	qs := dest.Query()
@@ -354,7 +354,7 @@ func (p *Provider) tokenFromCode(w http.ResponseWriter, r *http.Request) {
 	access, refresh := randHex(32), randHex(32)
 	p.tokens[access] = &tokenRecord{ClientID: clientID, ExpiresAt: time.Now().Add(p.cfg.AccessTokenTTL)}
 	p.tokens[refresh] = &tokenRecord{ClientID: clientID, ExpiresAt: p.refreshExpiry()}
-	log.Printf("[mcp-oauth] Issued token pair for client %s", clientID)
+	slog.Info("mcp-oauth: issued token pair", "client_id", clientID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token":  access,

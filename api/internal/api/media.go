@@ -46,6 +46,14 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 		return err
 	}
 
+	// Resolve the MIME type from the file's own magic bytes, ignoring the
+	// client-supplied Content-Type. Rejects anything that isn't an allowlisted
+	// image/video/audio format (e.g. an HTML page renamed to .jpg).
+	mimeType, err := services.DetectMediaType(content, file.Header.Get("Content-Type"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnsupportedMediaType, "unsupported file type")
+	}
+
 	altText := c.FormValue("alt_text")
 	caption := c.FormValue("caption")
 	postIDStr := c.FormValue("post_id")
@@ -60,7 +68,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 	media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
 		Content:  content,
 		Filename: file.Filename,
-		MimeType: file.Header.Get("Content-Type"),
+		MimeType: mimeType,
 		AltText:  altText,
 		Caption:  caption,
 		PostID:   postID,
@@ -333,10 +341,16 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 			continue
 		}
 
+		mimeType, err := services.DetectMediaType(content, fh.Header.Get("Content-Type"))
+		if err != nil {
+			failed = append(failed, map[string]string{"filename": fh.Filename, "error": "unsupported file type"})
+			continue
+		}
+
 		media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
 			Content:  content,
 			Filename: fh.Filename,
-			MimeType: fh.Header.Get("Content-Type"),
+			MimeType: mimeType,
 			PostID:   postID,
 		})
 		if err != nil {
