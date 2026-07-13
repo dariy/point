@@ -112,7 +112,7 @@ export class MediaViewer extends Component {
     if (item.type === 'audio') {
       return `<div class="immersive-audio-container"><audio src="${url}" class="immersive-audio-player" controls></audio></div>`;
     }
-    return `<img src="${url}" alt="${escapeHtml(item.alt || '')}" class="immersive-bg-image" loading="lazy">`;
+    return `<img src="${url}" alt="${escapeHtml(item.alt || '')}" class="immersive-bg-image" loading="lazy" decoding="async">`;
   }
 
   _renderPostNav(prev, next) {
