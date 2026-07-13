@@ -255,8 +255,16 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		}
 	})
 
-	// Resolve index.html path once — used by the SPA fallback and the media shortcut.
+	// Load index.html once and substitute the build version here, at serve
+	// time, instead of mutating the file on disk (the old sed/skip-worktree
+	// dance in run.sh + Dockerfile). indexHTML stays on disk pristine with the
+	// literal __BUILD_VERSION__ placeholder and is a normally tracked file.
+	// Empty when the frontend isn't built — the SPA routes fall back to a 503.
 	indexHTML := filepath.Join(cfg.FrontendDir, "index.html")
+	indexHTMLContent := ""
+	if b, err := os.ReadFile(indexHTML); err == nil {
+		indexHTMLContent = strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+	}
 
 	// ── Public health check ────────────────────────────────────────────────────
 	e.GET("/health", func(c echo.Context) error {
@@ -525,7 +533,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTMLContent, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
 		imagesDir := filepath.Join(frontendDir, "images")
@@ -591,14 +599,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// ── SPA fallback — must be last ────────────────────────────────────────────
 	e.GET("/*", func(c echo.Context) error {
-		if _, err := os.Stat(indexHTML); err == nil {
+		if indexHTMLContent != "" {
 			path := c.Request().URL.Path
 			if slug, ok := strings.CutPrefix(path, "/posts/"); ok {
 				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
 				if err == nil && strings.EqualFold(post.Status, "published") {
-					b, err := os.ReadFile(indexHTML)
-					if err == nil {
-						htmlStr := string(b)
+					{
+						htmlStr := indexHTMLContent
 						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
 
 						var sb strings.Builder
@@ -651,9 +658,9 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			}
 			// Generic SPA route: serve index.html with the enabled-only plugin
 			// manifest injected so the client bootstrap always sees __PLUGINS__.
-			if b, err := os.ReadFile(indexHTML); err == nil {
+			{
 				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
-				htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")
 				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
@@ -661,7 +668,6 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 				return c.HTML(http.StatusOK, htmlStr)
 			}
-			return c.File(indexHTML)
 		}
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"detail": "Frontend not available — build the frontend first",
@@ -1120,7 +1126,7 @@ var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 //   - No query param serves the original (media/originals/…).
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository, mediaSvc *services.MediaService, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
+func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.Repository, mediaSvc *services.MediaService, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -1130,18 +1136,15 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 		yearInt, yearErr := strconv.Atoi(year)
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
-			if _, err := os.Stat(indexHTML); err == nil {
-				if b, err := os.ReadFile(indexHTML); err == nil {
-					script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
-					htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+			if indexHTMLContent != "" {
+				script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
+				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
 
-					csp := c.Response().Header().Get("Content-Security-Policy")
-					csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
-					c.Response().Header().Set("Content-Security-Policy", csp)
+				csp := c.Response().Header().Get("Content-Security-Policy")
+				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+				c.Response().Header().Set("Content-Security-Policy", csp)
 
-					return c.HTML(http.StatusOK, htmlStr)
-				}
-				return c.File(indexHTML)
+				return c.HTML(http.StatusOK, htmlStr)
 			}
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{
 				"detail": "Frontend not available — build the frontend first",
