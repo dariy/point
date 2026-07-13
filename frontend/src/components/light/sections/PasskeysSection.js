@@ -30,7 +30,7 @@ export class PasskeysSection extends Component {
       body = '<div class="loading-spinner btn-sm"></div>';
     } else if (!status?.configured) {
       body = '<p class="text-muted">Passkeys are not configured on this server.</p>';
-    } else if (status?.registered) {
+    } else if (status?.has_passkey) {
       body = `
         <div class="passkey-status success">
           <p>Passkey is registered.</p>
