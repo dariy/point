@@ -308,6 +308,20 @@ func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
 	})
 }
 
+// AuditPostLinks reports internal /posts/<slug> links on publicly reachable
+// posts whose target an anonymous visitor cannot open (missing, unpublished,
+// or hidden by a hides-posts tag).
+func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
+	issues, scanned, err := h.postService.AuditPublicPostLinks(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"issues":  issues,
+		"scanned": scanned,
+	})
+}
+
 func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
 	result, err := h.tagService.UpdateMissingCoords(c.Request().Context())
 	if err != nil {

@@ -1016,3 +1016,98 @@ func toNullTime(t *time.Time) sql.NullTime {
 	}
 	return sql.NullTime{Time: t.UTC(), Valid: true}
 }
+
+// postLinkRe matches internal post links (/posts/<slug>) in raw post content —
+// markdown targets, href attributes, or bare paths alike.
+var postLinkRe = regexp.MustCompile(`/posts/([A-Za-z0-9._-]+)`)
+
+// PostLinkIssue describes an internal link on a publicly reachable post whose
+// target an anonymous visitor cannot open.
+type PostLinkIssue struct {
+	SourceID    int64  `json:"source_id"`
+	SourceSlug  string `json:"source_slug"`
+	SourceTitle string `json:"source_title"`
+	TargetSlug  string `json:"target_slug"`
+	Reason      string `json:"reason"`
+}
+
+// AuditPublicPostLinks scans every publicly reachable post (published and not
+// hidden directly or via a hides-posts tag) for internal /posts/<slug> links
+// whose target is missing, unpublished, or hidden — the failure mode where an
+// index post looks fine to a logged-in admin while every link 404s for
+// visitors. Returns the issues and the number of posts scanned.
+func (s *PostService) AuditPublicPostLinks(ctx context.Context) ([]PostLinkIssue, int, error) {
+	rows, err := s.repo.ListPostLinkAuditRows(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var effectiveHides map[int64]bool
+	tagName := map[int64]string{}
+	if s.tagService != nil {
+		if snap, err := s.tagService.GetTagSnapshot(ctx); err == nil && snap != nil {
+			effectiveHides = snap.EffectiveHidesPosts
+			for id, t := range snap.ByID {
+				tagName[id] = t.Name
+			}
+		}
+	}
+
+	type target struct {
+		status    string
+		hiddenVia []string // names of tags that effectively hide the post
+	}
+	bySlug := make(map[string]target, len(rows))
+	for _, r := range rows {
+		t := target{status: r.Status}
+		for _, tid := range r.TagIDs {
+			if effectiveHides[tid] {
+				t.hiddenVia = append(t.hiddenVia, tagName[tid])
+			}
+		}
+		bySlug[strings.ToLower(r.Slug)] = t
+	}
+
+	issues := []PostLinkIssue{}
+	scanned := 0
+	seen := map[string]bool{} // "<sourceID>:<targetSlug>" dedupe
+	for _, r := range rows {
+		src := bySlug[strings.ToLower(r.Slug)]
+		if src.status != "published" || len(src.hiddenVia) > 0 {
+			continue // only links on publicly reachable posts matter
+		}
+		scanned++
+		for _, m := range postLinkRe.FindAllStringSubmatch(r.Content, -1) {
+			slug := strings.ToLower(m[1])
+			if slug == strings.ToLower(r.Slug) {
+				continue
+			}
+			key := strconv.FormatInt(r.ID, 10) + ":" + slug
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			tgt, ok := bySlug[slug]
+			var reason string
+			switch {
+			case !ok:
+				reason = "target not found (deleted or slug typo)"
+			case len(tgt.hiddenVia) > 0:
+				reason = "target hidden by tag '" + strings.Join(tgt.hiddenVia, "', '") + "'"
+			case tgt.status != "published":
+				reason = "target not published (status: " + tgt.status + ")"
+			default:
+				continue // reachable — no issue
+			}
+			issues = append(issues, PostLinkIssue{
+				SourceID:    r.ID,
+				SourceSlug:  r.Slug,
+				SourceTitle: r.Title,
+				TargetSlug:  slug,
+				Reason:      reason,
+			})
+		}
+	}
+	return issues, scanned, nil
+}
