@@ -127,6 +127,7 @@ export default [
         AbortController: "readonly",
         getComputedStyle: "readonly",
         MouseEvent: "readonly",
+        CSS: "readonly",
         // ES2021 globals
         Promise: "readonly",
         Map: "readonly",
