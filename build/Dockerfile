@@ -1,5 +1,6 @@
-# Remark42 comment engine (build with --pull so :latest refreshes; pin via arg if a release breaks)
-ARG REMARK42_VERSION=latest
+# Remark42 comment engine — pinned so releases are reproducible and upgrades
+# are deliberate (override with --build-arg REMARK42_VERSION=… to test newer).
+ARG REMARK42_VERSION=v1.16.4
 FROM ghcr.io/umputun/remark42:${REMARK42_VERSION} AS remark42
 
 # Build stage
