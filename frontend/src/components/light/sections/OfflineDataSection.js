@@ -77,7 +77,7 @@ export class OfflineDataSection extends Component {
     try {
       const [stats, meta] = await Promise.all([getOfflineStats(), getMeta("last_sync")]);
       this.setState({ loading: false, stats, lastSync: meta || null });
-    } catch (err) {
+    } catch (_err) {
       this.setState({ loading: false, stats: null });
     }
   }

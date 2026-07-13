@@ -45,6 +45,19 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_ENTRY="$ROOT_DIR/frontend/src/app.js"
 PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
 
+# Use the lockfile-pinned esbuild from node_modules — NOT `npx --yes esbuild`,
+# which ignores package.json and downloads whatever is latest on the registry
+# at build time (non-reproducible bundles). Install it first if missing.
+ESBUILD="$ROOT_DIR/node_modules/.bin/esbuild"
+if [ ! -x "$ESBUILD" ]; then
+  echo "esbuild not installed — running npm ci..."
+  (cd "$ROOT_DIR" && npm ci --no-audit --no-fund)
+fi
+
+# Pin the emitted syntax level so output doesn't silently float with the
+# esbuild default (esnext) across toolchain upgrades.
+ES_TARGET="es2022"
+
 # Collect "p/<id>=<entry>" args for every frontend/src/plugins/<id>/index.js
 # once; both bundle sets share the same plugin entries. The p/ alias prefix
 # routes each plugin entry's output to <js_dir>/p/<id>.js.
@@ -76,11 +89,14 @@ build_set() {
   rm -rf "$js_dir"
   mkdir -p "$js_dir"
 
+  # One esbuild pass with --splitting over the core entry (app.js) plus every
+  # plugin entry. Pinned binary (see $ESBUILD above) for reproducible bundles.
   # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
-  npx --yes esbuild "app=$APP_ENTRY" $PLUGIN_ARGS \
+  "$ESBUILD" "app=$APP_ENTRY" $PLUGIN_ARGS \
       --bundle \
       --splitting \
       --format=esm \
+      --target="$ES_TARGET" \
       "--define:__DEBUG__=${debug_val}" \
       "--external:/assets/vendor/*" \
       --chunk-names="chunks/chunk-[hash]" \
