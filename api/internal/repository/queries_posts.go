@@ -1088,6 +1088,76 @@ WHERE LOWER(p.status) = 'published' AND p.deleted_at IS NULL`
 	return items, tagRows.Err()
 }
 
+// PostLinkAuditRow is a lightweight post row for the internal-link audit:
+// enough to decide public reachability (status + tags) and to extract
+// outgoing /posts/<slug> links from content.
+type PostLinkAuditRow struct {
+	ID      int64
+	Slug    string
+	Title   string
+	Status  string
+	Content string
+	TagIDs  []int64
+}
+
+// ListPostLinkAuditRows returns id, slug, title, status, content, and tag IDs
+// for every non-deleted post (all statuses, pages included).
+func (r *sqliteRepository) ListPostLinkAuditRows(ctx context.Context) ([]PostLinkAuditRow, error) {
+	const q = `
+SELECT p.id, p.slug, p.title, LOWER(p.status), p.content
+FROM posts p
+WHERE p.deleted_at IS NULL`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []PostLinkAuditRow
+	idIndex := make(map[int64]int)
+	for rows.Next() {
+		var row PostLinkAuditRow
+		if err := rows.Scan(&row.ID, &row.Slug, &row.Title, &row.Status, &row.Content); err != nil {
+			return nil, err
+		}
+		idIndex[row.ID] = len(items)
+		items = append(items, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return items, nil
+	}
+
+	postIDs := make([]interface{}, len(items))
+	placeholders := ""
+	for i, item := range items {
+		postIDs[i] = item.ID
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+	}
+	tagRows, err := r.db.QueryContext(ctx,
+		`SELECT post_id, tag_id FROM post_tags WHERE post_id IN (`+placeholders+`)`, postIDs...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tagRows.Close() }()
+	for tagRows.Next() {
+		var postID, tagID int64
+		if err := tagRows.Scan(&postID, &tagID); err != nil {
+			return nil, err
+		}
+		if idx, ok := idIndex[postID]; ok {
+			items[idx].TagIDs = append(items[idx].TagIDs, tagID)
+		}
+	}
+	return items, tagRows.Err()
+}
+
 // GetHierarchicalPostCounts returns a map of tagID → effective post count,
 // where the count includes posts from all descendant tags (not just the tag itself).
 // If publishedOnly is true, only published posts are counted (public context).

@@ -1,9 +1,10 @@
-# Remark42 comment engine (build with --pull so :latest refreshes; pin via arg if a release breaks)
-ARG REMARK42_VERSION=latest
+# Remark42 comment engine — pinned so releases are reproducible and upgrades
+# are deliberate (override with --build-arg REMARK42_VERSION=… to test newer).
+ARG REMARK42_VERSION=v1.16.4
 FROM ghcr.io/umputun/remark42:${REMARK42_VERSION} AS remark42
 
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.4-alpine3.23 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.5-alpine3.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
@@ -73,9 +74,10 @@ COPY --chown=appuser:appuser --from=builder /app/frontend/ /app/frontend/
 # Remark42 binary + web assets (started by entrypoint.sh when REMARK_SECRET/REMARK_URL are set)
 COPY --chown=appuser:appuser --from=remark42 /srv /app/remark42
 
-# Accept build version as argument and stamp it into index.html for cache-busting
+# Accept build version as argument. index.html keeps the literal
+# __BUILD_VERSION__ placeholder; the server substitutes APP_VERSION into it at
+# serve time (see cmd/api/main.go), so the shipped file is never mutated.
 ARG BUILD_VERSION=dev
-RUN sed -i "s/__BUILD_VERSION__/${BUILD_VERSION}/g" /app/frontend/index.html
 ENV APP_VERSION=${BUILD_VERSION}
 ENV DATABASE_URL=/data/point.db
 ENV STORAGE_PATH=/data

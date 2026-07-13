@@ -715,7 +715,7 @@ export default class AtlasPage extends Component {
       const thumbUrl = node.thumb && safeUrl(node.thumb);
       const thumbHtml =
         thumbUrl && thumbUrl !== "#"
-          ? `<img class="atlas-node__thumb" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" />`
+          ? `<img class="atlas-node__thumb" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" decoding="async" />`
           : "";
       const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
       const icon = L.divIcon({

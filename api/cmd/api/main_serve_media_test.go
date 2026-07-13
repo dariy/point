@@ -12,11 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 // testMediaSvc builds a MediaService backed by the test repo and temp storage,
@@ -80,9 +81,9 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 	return p
 }
 
-func serveMediaRequest(t *testing.T, storagePath, indexHTML string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
+func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, indexHTML, repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
@@ -106,7 +107,8 @@ func serveMediaRequest(t *testing.T, storagePath, indexHTML string, repo reposit
 
 func TestServeSimplifiedMedia_SPAFallback_NoIndex(t *testing.T) {
 	repo, storage := newMediaRepo(t)
-	rec := serveMediaRequest(t, storage, "/nonexistent/index.html", repo, "posts", "jan", "photo.jpg", false)
+	// Empty index content = frontend not built → SPA fallback returns 503.
+	rec := serveMediaRequest(t, storage, "", repo, "posts", "jan", "photo.jpg", false)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("expected 503 (no index.html), got %d", rec.Code)
 	}
@@ -114,9 +116,7 @@ func TestServeSimplifiedMedia_SPAFallback_NoIndex(t *testing.T) {
 
 func TestServeSimplifiedMedia_SPAFallback_WithIndex(t *testing.T) {
 	repo, storage := newMediaRepo(t)
-	indexFile := filepath.Join(t.TempDir(), "index.html")
-	_ = os.WriteFile(indexFile, []byte("<html>SPA</html>"), 0644)
-	rec := serveMediaRequest(t, storage, indexFile, repo, "not-a-year", "01", "photo.jpg", false)
+	rec := serveMediaRequest(t, storage, "<html><head></head><body>SPA</body></html>", repo, "not-a-year", "01", "photo.jpg", false)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200 (serve index.html), got %d", rec.Code)
 	}

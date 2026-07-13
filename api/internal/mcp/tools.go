@@ -449,17 +449,19 @@ type tagLocation struct {
 }
 
 type tagInput struct {
-	Name          string        `json:"name,omitempty" jsonschema:"tag display name"`
-	Slug          string        `json:"slug,omitempty" jsonschema:"URL slug; auto-generated from name if omitted"`
-	Description   string        `json:"description,omitempty" jsonschema:"tag description"`
-	Kind          string        `json:"kind,omitempty" jsonschema:"tag kind, e.g. topic or place"`
-	Hidden        bool          `json:"hidden,omitempty" jsonschema:"hide the tag itself from listings"`
-	HidesPosts    bool          `json:"hides_posts,omitempty" jsonschema:"hide posts carrying this tag"`
-	NavOrder      *int64        `json:"nav_order,omitempty" jsonschema:"manual sort order"`
-	InBreadcrumbs bool          `json:"in_breadcrumbs,omitempty" jsonschema:"show in breadcrumbs"`
-	ParentIDs     []int64       `json:"parent_ids,omitempty" jsonschema:"parent tag IDs (replaces existing)"`
-	ChildIDs      []int64       `json:"child_ids,omitempty" jsonschema:"child tag IDs (replaces existing)"`
-	Locations     []tagLocation `json:"locations,omitempty" jsonschema:"map coordinates"`
+	Name             string        `json:"name,omitempty" jsonschema:"tag display name"`
+	Slug             string        `json:"slug,omitempty" jsonschema:"URL slug; auto-generated from name if omitted"`
+	Description      string        `json:"description,omitempty" jsonschema:"tag description"`
+	Kind             string        `json:"kind,omitempty" jsonschema:"tag kind, e.g. topic or place"`
+	Hidden           bool          `json:"hidden,omitempty" jsonschema:"hide the tag itself from listings"`
+	HidesPosts       bool          `json:"hides_posts,omitempty" jsonschema:"hide posts carrying this tag"`
+	NavOrder         *int64        `json:"nav_order,omitempty" jsonschema:"manual sort order"`
+	InBreadcrumbs    bool          `json:"in_breadcrumbs,omitempty" jsonschema:"show in breadcrumbs"`
+	ShowRelated      bool          `json:"show_related,omitempty" jsonschema:"show the related-posts section on the tag page"`
+	InAncestorFlyout bool          `json:"in_ancestor_flyout,omitempty" jsonschema:"list in ancestor tags' flyout menus"`
+	ParentIDs        []int64       `json:"parent_ids,omitempty" jsonschema:"parent tag IDs (replaces existing)"`
+	ChildIDs         []int64       `json:"child_ids,omitempty" jsonschema:"child tag IDs (replaces existing)"`
+	Locations        []tagLocation `json:"locations,omitempty" jsonschema:"map coordinates"`
 }
 
 type getTagInput struct {
@@ -467,9 +469,23 @@ type getTagInput struct {
 	Slug string `json:"slug,omitempty" jsonschema:"tag slug (used if id is 0)"`
 }
 
+// updateTagInput uses pointer types so that omitted fields are left out of the
+// PUT body entirely — the handler keeps the tag's current values for them.
 type updateTagInput struct {
-	ID int64 `json:"id" jsonschema:"tag ID to update"`
-	tagInput
+	ID               int64         `json:"id" jsonschema:"tag ID to update"`
+	Name             *string       `json:"name,omitempty" jsonschema:"tag display name"`
+	Slug             *string       `json:"slug,omitempty" jsonschema:"URL slug"`
+	Description      *string       `json:"description,omitempty" jsonschema:"tag description"`
+	Kind             *string       `json:"kind,omitempty" jsonschema:"tag kind, e.g. topic or place"`
+	Hidden           *bool         `json:"hidden,omitempty" jsonschema:"hide the tag itself from listings"`
+	HidesPosts       *bool         `json:"hides_posts,omitempty" jsonschema:"hide posts carrying this tag"`
+	NavOrder         *int64        `json:"nav_order,omitempty" jsonschema:"manual sort order"`
+	InBreadcrumbs    *bool         `json:"in_breadcrumbs,omitempty" jsonschema:"show in breadcrumbs"`
+	ShowRelated      *bool         `json:"show_related,omitempty" jsonschema:"show the related-posts section on the tag page"`
+	InAncestorFlyout *bool         `json:"in_ancestor_flyout,omitempty" jsonschema:"list in ancestor tags' flyout menus"`
+	ParentIDs        []int64       `json:"parent_ids,omitempty" jsonschema:"parent tag IDs (replaces existing set when provided)"`
+	ChildIDs         []int64       `json:"child_ids,omitempty" jsonschema:"child tag IDs (replaces existing set when provided)"`
+	Locations        []tagLocation `json:"locations,omitempty" jsonschema:"map coordinates"`
 }
 
 type tagIDInput struct {
@@ -509,9 +525,9 @@ func registerTagTools(s *sdk.Server, inv *invoker) {
 
 	addTool(s, &sdk.Tool{
 		Name:        "point_update_tag",
-		Description: "Update tag properties. parent_ids and child_ids replace the existing hierarchy; locations set map coordinates.",
+		Description: "Update tag properties. Only provided fields are changed; omitted fields keep their current values. parent_ids and child_ids replace the existing hierarchy when provided; locations set map coordinates.",
 	}, func(in updateTagInput) (json.RawMessage, error) {
-		body, _ := json.Marshal(in.tagInput)
+		body, _ := json.Marshal(in)
 		return inv.call(inv.h.tag.UpdateTag, "PUT", "/api/tags/"+itoa(in.ID), body, idParam(in.ID))
 	})
 

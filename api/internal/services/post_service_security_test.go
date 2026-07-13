@@ -187,3 +187,32 @@ func TestSanitizePostCSS_ParserAccuracy(t *testing.T) {
 		}
 	})
 }
+
+// TestRenderContent_ImgLoadingHints verifies post-body <img> tags get
+// loading="lazy" and decoding="async" added (and existing loading is kept).
+func TestRenderContent_ImgLoadingHints(t *testing.T) {
+	svc := NewPostService(nil, nil, nil, nil, "")
+
+	out, err := svc.RenderContent("/2026/02/photo.jpg")
+	if err != nil {
+		t.Fatalf("RenderContent: %v", err)
+	}
+	if !strings.Contains(out, `loading="lazy"`) {
+		t.Errorf("expected loading=lazy added, got: %s", out)
+	}
+	if !strings.Contains(out, `decoding="async"`) {
+		t.Errorf("expected decoding=async added, got: %s", out)
+	}
+
+	// An author-supplied loading value must be preserved (not doubled).
+	out2, err := svc.RenderContent(`<img src="originals/2026/02/p.jpg" loading="eager">`)
+	if err != nil {
+		t.Fatalf("RenderContent: %v", err)
+	}
+	if strings.Count(out2, "loading=") != 1 || !strings.Contains(out2, `loading="eager"`) {
+		t.Errorf("expected author loading kept, got: %s", out2)
+	}
+	if !strings.Contains(out2, `decoding="async"`) {
+		t.Errorf("expected decoding=async added to author img, got: %s", out2)
+	}
+}

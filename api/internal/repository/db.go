@@ -81,6 +81,7 @@ type Repository interface {
 	GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
 	CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
 	GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error)
+	ListPostLinkAuditRows(ctx context.Context) ([]PostLinkAuditRow, error)
 	GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
 	GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error)
 	SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error

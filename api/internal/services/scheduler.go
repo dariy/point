@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"strconv"
 	"time"
 )
@@ -30,7 +32,7 @@ func NewSchedulerService(authService *AuthService, postService *PostService, sys
 }
 
 func (s *SchedulerService) Start(ctx context.Context) {
-	fmt.Println("Starting background scheduler...")
+	slog.Info("starting background scheduler")
 
 	// Hourly task: Session cleanup
 	go s.runHourly(ctx, "session cleanup", s.authService.CleanupExpiredSessions)
@@ -53,7 +55,8 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		}
 		if len(allPaths) > 0 {
 			if err := s.mediaService.UpdateMediaVisibilityForPaths(ctx, allPaths); err != nil {
-				fmt.Printf("Scheduler: failed to update media visibility for %d scheduled post(s): %v\n", len(published), err)
+				slog.Error("scheduler: media visibility update for scheduled posts failed",
+					"posts", len(published), "error", err)
 			}
 		}
 		return nil
@@ -94,32 +97,28 @@ func (s *SchedulerService) settingInt(ctx context.Context, key string, def int) 
 	return n
 }
 
-func (s *SchedulerService) runHourly(ctx context.Context, name string, task func(context.Context) error) {
-	// Run once at start
-	if err := task(ctx); err != nil {
-		fmt.Printf("Scheduler task %s (initial) failed: %v\n", name, err)
-	}
-
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := task(ctx); err != nil {
-				fmt.Printf("Scheduler task %s failed: %v\n", name, err)
-			}
+// runTask invokes one scheduled task, logging failures and recovering panics.
+// The recover matters: task goroutines have no middleware.Recover like HTTP
+// handlers do, so without it a panic in any background task kills the server.
+func (s *SchedulerService) runTask(ctx context.Context, name string, task func(context.Context) error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("scheduler task panicked",
+				"task", name, "panic", r, "stack", string(debug.Stack()))
 		}
+	}()
+	if err := task(ctx); err != nil {
+		slog.Error("scheduler task failed", "task", name, "error", err)
 	}
+}
+
+func (s *SchedulerService) runHourly(ctx context.Context, name string, task func(context.Context) error) {
+	s.runPeriodic(ctx, name, 1*time.Hour, task)
 }
 
 func (s *SchedulerService) runPeriodic(ctx context.Context, name string, interval time.Duration, task func(context.Context) error) {
 	// Run once at start
-	if err := task(ctx); err != nil {
-		fmt.Printf("Scheduler task %s (initial) failed: %v\n", name, err)
-	}
+	s.runTask(ctx, name, task)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -129,9 +128,7 @@ func (s *SchedulerService) runPeriodic(ctx context.Context, name string, interva
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := task(ctx); err != nil {
-				fmt.Printf("Scheduler task %s failed: %v\n", name, err)
-			}
+			s.runTask(ctx, name, task)
 		}
 	}
 }
@@ -159,7 +156,7 @@ func (s *SchedulerService) refreshInstagramTokenIfNeeded(ctx context.Context) er
 	if err := s.settingsService.SetSecret(ctx, "instagram_token_expires_at", newExpiresAt); err != nil {
 		return fmt.Errorf("instagram token refresh: save expiry: %w", err)
 	}
-	fmt.Printf("Scheduler: Instagram token refreshed, expires at %s\n", newExpiresAt)
+	slog.Info("scheduler: instagram token refreshed", "expires_at", newExpiresAt)
 	return nil
 }
 
@@ -175,9 +172,7 @@ func (s *SchedulerService) runDaily(ctx context.Context, name string, hour int, 
 		case <-ctx.Done():
 			return
 		case <-time.After(next.Sub(now)):
-			if err := task(ctx); err != nil {
-				fmt.Printf("Scheduler task %s failed: %v\n", name, err)
-			}
+			s.runTask(ctx, name, task)
 		}
 	}
 }

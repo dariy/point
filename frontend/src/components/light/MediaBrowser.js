@@ -252,7 +252,7 @@ export class MediaBrowser extends Component {
 
     const preview =
       isImage && thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" draggable="false">`
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">`
         : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${
             fileType === "video" ? "▶" : fileType === "audio" ? "♫" : "📄"
           }</div>`;
