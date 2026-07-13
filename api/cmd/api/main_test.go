@@ -347,6 +347,48 @@ func TestSetupEcho_ManifestAndSW(t *testing.T) {
 	}
 }
 
+func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	_ = os.WriteFile(filepath.Join(cfg.FrontendDir, "manifest.webmanifest"),
+		[]byte(`{"name":"Point","short_name":"Point","display":"fullscreen"}`), 0644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	req := httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil)
+	req.Host = "www.Point.Photos"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	var m map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+	if m["name"] != "point.photos" || m["short_name"] != "point.photos" {
+		t.Errorf("expected name/short_name point.photos, got %v/%v", m["name"], m["short_name"])
+	}
+	if m["display"] != "fullscreen" {
+		t.Errorf("other manifest keys should survive, got display=%v", m["display"])
+	}
+}
+
+func TestSiteNameFromHost(t *testing.T) {
+	cases := map[string]string{
+		"darii.net":         "darii.net",
+		"point.photos:8001": "point.photos",
+		"www.point.photos":  "point.photos",
+		"POINT.photos":      "point.photos",
+		"localhost:8001":    "localhost",
+		"":                  "",
+		"  ":                "",
+	}
+	for host, want := range cases {
+		if got := siteNameFromHost(host); got != want {
+			t.Errorf("siteNameFromHost(%q) = %q, want %q", host, got, want)
+		}
+	}
+}
+
 func TestSetupEcho_CSSCacheControlHeader(t *testing.T) {
 	repo, cfg := newEchoWithRepo(t)
 	// Create css dir so static middleware is registered.
