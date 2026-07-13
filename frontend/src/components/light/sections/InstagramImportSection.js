@@ -108,7 +108,7 @@ export class InstagramImportSection extends Component {
       if (connected) importStatus = await getInstagramImportStatus().catch(() => null);
       this.setState({ loading: false, connected, importStatus, importing: !!importStatus?.running });
       if (importStatus?.running) this._startPoll();
-    } catch (err) {
+    } catch (_err) {
       this.setState({ loading: false });
     }
   }
@@ -140,7 +140,7 @@ export class InstagramImportSection extends Component {
             });
           }
         }
-      } catch (e) {
+      } catch (_e) {
         /* silently ignore poll errors */
       }
     }, 2500);

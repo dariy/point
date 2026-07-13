@@ -251,7 +251,7 @@ func TestFullWorkflow(t *testing.T) {
 	body = &bytes.Buffer{}
 	writer = multipart.NewWriter(body)
 	p, _ = writer.CreateFormFile("file", "test.mp3")
-	_, _ = p.Write([]byte("fake audio content"))
+	_, _ = p.Write(makeTinyMP3(t))
 	_ = writer.WriteField("title", "Audio Post")
 	_ = writer.Close()
 	req = httptest.NewRequest(http.MethodPost, "/posts/audio", body)

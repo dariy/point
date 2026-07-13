@@ -983,15 +983,6 @@ func TestSanitizePostCSS(t *testing.T) {
 	})
 }
 
-func containsStr(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
 func TestMediaService_GetMediaByPostID(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()

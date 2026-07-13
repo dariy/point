@@ -101,7 +101,9 @@ var Registry = []Descriptor{
 	// the pair must stay enabled.
 	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
 	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
-	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
+	// custom-css has no frontend chunk: the CSS injection lives in core and the
+	// plugin only gates the /api/themes/custom-css endpoints via RequirePlugin.
+	{ID: "custom-css", Type: TypeEnhancer, DefaultEnabled: true},
 
 	// Remark42 comments: widget embedded after post content (post-comments
 	// slot), served by the remark42 sidecar through the gated /comments reverse

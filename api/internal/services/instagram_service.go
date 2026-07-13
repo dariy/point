@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -76,14 +77,27 @@ func (s *InstagramService) secret(ctx context.Context, key string) (string, erro
 	return val, nil
 }
 
+// redactTransportErr strips the request URL from a transport error before it
+// can be logged or stored: Graph API URLs carry access_token in the query
+// string, and url.Error embeds the full URL. The path (no query) is kept for
+// diagnosability.
+func redactTransportErr(op string, req *http.Request, err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		err = ue.Err
+	}
+	return fmt.Errorf("instagram API %s %s: %w", op, req.URL.Path, err)
+}
+
 func (s *InstagramService) get(ctx context.Context, rawURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		// The parse error may embed the raw URL (token included) — drop it.
+		return nil, fmt.Errorf("instagram API: invalid request URL")
 	}
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, redactTransportErr("GET", req, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
@@ -107,12 +121,13 @@ func (s *InstagramService) get(ctx context.Context, rawURL string) ([]byte, erro
 func (s *InstagramService) post(ctx context.Context, rawURL string, params url.Values) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, strings.NewReader(params.Encode()))
 	if err != nil {
-		return nil, err
+		// The parse error may embed the raw URL (token included) — drop it.
+		return nil, fmt.Errorf("instagram API: invalid request URL")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, redactTransportErr("POST", req, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)

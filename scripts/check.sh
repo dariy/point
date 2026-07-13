@@ -41,9 +41,12 @@ run_step "Go lint" bash -c "
 "
 
 # ── JS lint ───────────────────────────────────────────────────────────────────
+# Use the lockfile-pinned eslint (flat config, eslint.config.js) — the system
+# eslint may be a different major version reading a different config format.
 run_step "JS lint" bash -c "
     cd '$ROOT_DIR'
-    eslint frontend/src
+    [ -x node_modules/.bin/eslint ] || npm ci --no-audit --no-fund
+    node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
 "
 
 # ── Go vet ────────────────────────────────────────────────────────────────────

@@ -7,7 +7,11 @@
  *  3. Offline API and Image serving.
  */
 
-const CACHE_VERSION = "v8";
+// Stamped by the server when /sw.js is served (main.go replaces
+// __BUILD_VERSION__ with the running build's version), so every deploy gets a
+// fresh shell cache and the activate handler below prunes the previous
+// build's — old hashed plugin chunks don't accumulate across deploys.
+const CACHE_VERSION = "__BUILD_VERSION__";
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -16,6 +20,7 @@ const SHELL_URLS = [
   "/assets/js/app.js",
   "/assets/css/main.css",
   "/assets/css/light.css",
+  "/assets/css/viewer.css",
   "/assets/images/favicon.svg",
   "/assets/images/favicon-128.png",
   "/assets/images/favicon-512.png",
@@ -130,7 +135,12 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)),
+          keys
+            // Drop stale shell caches only. The point-images-* caches are
+            // written by the offline-sync plugin from the page context and
+            // must survive SW updates.
+            .filter((k) => k !== CACHE_NAME && !k.startsWith("point-images-"))
+            .map((k) => caches.delete(k)),
         ),
       )
       .then(() => self.clients.claim()),
@@ -579,18 +589,26 @@ async function serveFromOfflineStore(request) {
 
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cacheKey = new URL(request.url);
-  cacheKey.search = "";
-  const keyStr = cacheKey.toString();
 
-  const cached = await cache.match(keyStr);
+  // Match on the FULL URL including the query string: index.html references
+  // app.js/css with a ?v=<build> stamp precisely so a redeploy busts caches.
+  // Stripping the search here would turn the new version into a cache hit on
+  // the old bundle — stale app.js paired with a freshly injected __PLUGINS__
+  // manifest. An exact miss falls through to the network instead.
+  const cached = await cache.match(request);
   const fetchPromise = fetch(request)
     .then((response) => {
       if (response.status === 200)
-        cache.put(keyStr, response.clone()).catch(() => {});
+        cache.put(request, response.clone()).catch(() => {});
       return response;
     })
-    .catch(() => cached);
+    .catch(async () => {
+      // Offline: accept a different-version copy (e.g. the unversioned
+      // pre-cached shell asset) rather than failing the request outright.
+      const fallback =
+        cached || (await cache.match(request, { ignoreSearch: true }));
+      return fallback || new Response("Offline", { status: 503 });
+    });
 
   return cached || fetchPromise;
 }

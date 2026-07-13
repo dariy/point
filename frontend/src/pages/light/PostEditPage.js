@@ -577,9 +577,9 @@ export default class PostEditPage extends Component {
     this._onKeyDown = onKeyDown;
 
     // Retry autosave listener
-    if (window.Point) {
-      this._unsubscribeRetry = window.Point.on('autosave:retry', () => this._save());
-    }
+    if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
+    this._onAutosaveRetry = () => this._save();
+    window.addEventListener("autosave:retry", this._onAutosaveRetry);
 
     const featuredToggle = this.container.querySelector("#featured-toggle");
     const featuredCheck = this.container.querySelector("#featured-check");
@@ -645,7 +645,7 @@ export default class PostEditPage extends Component {
           const titleHtml = data.title ? `<h1 class="post-title">${escapeHtml(data.title)}</h1>` : "";
           mount.innerHTML = titleHtml + html;
         }
-      } catch (err) { /* ignore */ }
+      } catch (_err) { /* ignore */ }
     }, 1000);
 
     // Re-render the preview when the viewport grows into ultrawide range.
@@ -792,7 +792,7 @@ export default class PostEditPage extends Component {
   beforeUnmount() {
     this._cleanupAdminLayout?.();
     this._unmounted = true;
-    if (this._unsubscribeRetry && window.Point) window.Point.off('autosave:retry', this._unsubscribeRetry);
+    if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
     clearTimeout(this._idleTimer);
     clearTimeout(this._maxWaitTimer);
     clearInterval(this._chipInterval);
@@ -964,7 +964,7 @@ export default class PostEditPage extends Component {
         await updatePost(post.id, { content: content.trim() });
       } catch (err) { store.set("toast", { message: `Failed to save offline share: ${err.message}`, type: "error" }); }
     }
-    try { await clearShareEntries(); } catch (e) { /* ignore */ }
+    try { await clearShareEntries(); } catch (_e) { /* ignore */ }
     if (backlog.length > 0) store.set("toast", { message: `${backlog.length} offline shares saved as draft.`, type: "success" });
   }
 
@@ -979,9 +979,9 @@ export default class PostEditPage extends Component {
         const { listMedia } = await import('../../api/media.js');
         const result = await listMedia({ post_id: post.id, per_page: 200 });
         for (const m of result.media || []) if (m.path) this._mediaByPath[m.path] = m;
-      } catch (e) { /* ignore */ }
+      } catch (_e) { /* ignore */ }
       this.setState({ loading: false, post, error: null, editorMode: "visual", igStatus });
-    } catch (err) { store.set("toast", { message: "Could not load post.", type: "error" }); navigate("/light/posts", { replace: true }); }
+    } catch (_err) { store.set("toast", { message: "Could not load post.", type: "error" }); navigate("/light/posts", { replace: true }); }
   }
 
   _collectFormData() {

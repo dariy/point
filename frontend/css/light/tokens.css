@@ -1,6 +1,21 @@
 /* ===========================
    Admin Semantic Tokens
-   =========================== */
+   ===========================
+
+   Section-specific token set for the admin (light/) bundle. Tokens that
+   duplicated common/tokens.css name+value were consolidated into common
+   (2026-07-11); what remains here is admin-specific.
+
+   Incompatibility surface with public/tokens.css — these names are defined
+   in BOTH section files with DIFFERENT values, which is what forces the
+   dual-bundle (light.css vs main.css) architecture. Renaming any of them
+   is off the table (themes and per-post CSS may reference them):
+     --header-height --content-max-width --bg-primary --text-primary
+     --text-secondary --text-muted --text-inverted --border-primary
+     --border-focus --surface-input --surface-hover --surface-card
+     --header-bg --color-primary --color-primary-hover
+     --svg-width-alt2 --svg-height-alt2 --from-transform
+*/
 :root,
 [data-theme="light"] {
     /* Admin Layout */
@@ -35,7 +50,6 @@
     --shadow-md: var(--shadow-md);
     --shadow-lg: var(--shadow-lg);
 
-    --logo-fill: var(--color-black);
 
     color-scheme: light;
 }
@@ -82,7 +96,6 @@
     --shadow-md: 0 var(--size-0-25) var(--size-0-375) -var(--size-0-0625) rgba(0, 0, 0, 0.4), 0 var(--size-0-125) var(--size-0-25) -var(--size-0-125) rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 var(--size-0-625) var(--size-0-9375) -var(--size-0-1875) rgba(0, 0, 0, 0.4), 0 var(--size-0-25) var(--size-0-375) -var(--size-0-25) rgba(0, 0, 0, 0.4);
 
-    --logo-fill: var(--pt-colors-text-primary);
 
     color-scheme: dark;
 }
@@ -152,16 +165,11 @@
     --filter-select-background-size: var(--size-0-75);
     --filter-select-transform: var(--size-0-0625);
     --filter-search-min-width: var(--size-12);
-    --app-logo-width: var(--size-1);
-    --homepage-link-width: var(--size-1-25);
-    --homepage-link-height: var(--size-1-25);
     --theme-toggle-font-size: var(--size-0-875);
     --a-border-left: var(--size-0-1875);
     --a-padding-left: var(--size-0-1875);
     --logout-btn-height: var(--size-2-25);
     --light-header-backdrop-filter: var(--size-0-25);
-    --homepage-link-width-alt1: var(--size-2-25);
-    --homepage-link-height-alt1: var(--size-2-25);
     --svg-width: var(--size-1-125);
     --svg-height: var(--size-1-125);
     --theme-toggle-width: var(--size-2-25);
@@ -208,15 +216,9 @@
     --svg-width-alt1: var(--size-0-875);
     --svg-height-alt1: var(--size-0-875);
     --media-picker-modal-max-width: var(--size-60);
-    --dropped-media-preview-max-height: var(--size-18-75);
-    --img-max-height: var(--size-18-75);
-    --sidebar-toggle-btn-width: var(--size-2-25);
-    --sidebar-toggle-btn-height: var(--size-2-25);
-    --light-sidebar-width: var(--size-15);
     --modal-content-margin: var(--size-1-25);
     --tag-editor-modal-width-1: var(--size-43-75);
     --tag-editor-modal-width-2: var(--size-2-5);
-    --light-header-row-gap: var(--size-0-375);
     --tm-row-padding: var(--size-0-375);
     --tm-treelevel-1-padding-left: 0.625rem;
     --tm-treelevel-1-margin-left: 1.3125rem;
@@ -235,15 +237,6 @@
     --connection-test-result-margin-top: var(--size-0-625);
     --connection-test-result-padding: var(--size-0-625);
     --prompt-part-min-width: var(--size-10);
-    --ops-list-gap: var(--size-1-25);
-    --op-item-gap: var(--size-1-25);
-    --h4-margin: var(--size-0-3125);
-    --backups-list-max-height: var(--size-25);
-    --backup-item-margin-bottom: var(--size-0-75);
-    --backup-item-box-shadow-1: var(--size-0-125);
-    --backup-item-box-shadow-2: var(--size-0-5);
-    --backup-info-min-width: var(--size-15-625);
-    --backup-filename-margin-bottom: var(--size-0-375);
     --offline-progress-container-margin-top: var(--size-1);
     --progress-bar-bg-height: var(--size-0-5);
     --progress-bar-bg-margin-bottom: var(--size-0-5);
@@ -256,7 +249,6 @@
     --p-margin: var(--size-0-25);
     --code-font-size: var(--size-0-8);
     --code-border-radius-alt1: var(--size-0-125);
-    --btn-transform: var(--size-0-0625);
     --svg-width-alt2: var(--size-1);
     --svg-height-alt2: var(--size-1);
     --preview-col-width: var(--size-3);
@@ -378,156 +370,7 @@
     --tree-children-margin-left: 1.5rem;
     --tabs-margin-bottom: var(--size-1);
     --tab-link-border-bottom: var(--size-0-125);
-    --base---spacing-xs: var(--size-0-25);
-    --base---spacing-sm: var(--size-0-5);
-    --base---spacing-md: var(--size-1);
-    --base---spacing-lg: var(--size-1-5);
-    --base---spacing-xl: var(--size-2);
-    --base---spacing-2xl: var(--size-3);
-    --base---spacing-3xl: var(--size-4);
-    --base---font-size-xs: var(--size-0-75);
-    --base---font-size-sm: var(--size-0-875);
-    --base---font-size-base: var(--size-1);
-    --base---font-size-lg: var(--size-1-125);
-    --base---font-size-xl: var(--size-1-25);
-    --base---font-size-2xl: var(--size-1-5);
-    --base---font-size-3xl: var(--size-1-875);
-    --base---font-size-4xl: var(--size-2-25);
-    --base---border-radius-sm: var(--size-0-25);
-    --base---border-radius: var(--size-0-375);
-    --base---border-radius-lg: var(--size-0-5);
-    --base---border-radius-xl: var(--size-0-75);
-    --base---border-radius-pill: var(--size-999-9);
-    --base---border-width: var(--size-0-0625);
-    --base---blur-sm: var(--size-0-25);
-    --base---blur: var(--size-0-5);
-    --base---blur-md: var(--size-0-75);
-    --base---blur-lg: var(--size-1);
-    --base---shadow-sm-1: var(--size-0-0625);
-    --base---shadow-sm-2: var(--size-0-125);
-    --base---shadow-1: var(--size-0-0625);
-    --base---shadow-2: var(--size-0-1875);
-    --base---shadow-3: var(--size-0-0625);
-    --base---shadow-4: var(--size-0-125);
-    --base---shadow-5: var(--size-0-0625);
-    --base---shadow-md-1: var(--size-0-25);
-    --base---shadow-md-2: var(--size-0-375);
-    --base---shadow-md-3: var(--size-0-0625);
-    --base---shadow-md-4: var(--size-0-125);
-    --base---shadow-md-5: var(--size-0-25);
-    --base---shadow-md-6: var(--size-0-125);
-    --base---shadow-lg-1: var(--size-0-625);
-    --base---shadow-lg-2: var(--size-0-9375);
-    --base---shadow-lg-3: var(--size-0-1875);
-    --base---shadow-lg-4: var(--size-0-25);
-    --base---shadow-lg-5: var(--size-0-375);
-    --base---shadow-lg-6: var(--size-0-25);
-    --base---shadow-xl-1: var(--size-1-25);
-    --base---shadow-xl-2: var(--size-1-5625);
-    --base---shadow-xl-3: var(--size-0-3125);
-    --base---shadow-xl-4: var(--size-0-5);
-    --base---shadow-xl-5: var(--size-0-625);
-    --base---shadow-xl-6: var(--size-0-375);
-    --base---pt-spacing-base: var(--size-1);
-    --base---sidebar-width: var(--size-10);
     --base---header-height: var(--size-4);
-    --base---content-max-width: var(--size-87-5);
-    ---data-theme--dark-----shadow-sm-1: var(--size-0-0625);
-    ---data-theme--dark-----shadow-sm-2: var(--size-0-125);
-    ---data-theme--dark-----shadow-1: var(--size-0-0625);
-    ---data-theme--dark-----shadow-2: var(--size-0-1875);
-    ---data-theme--dark-----shadow-3: var(--size-0-0625);
-    ---data-theme--dark-----shadow-4: var(--size-0-125);
-    ---data-theme--dark-----shadow-5: var(--size-0-0625);
-    ---data-theme--dark-----shadow-md-1: var(--size-0-25);
-    ---data-theme--dark-----shadow-md-2: var(--size-0-375);
-    ---data-theme--dark-----shadow-md-3: var(--size-0-0625);
-    ---data-theme--dark-----shadow-md-4: var(--size-0-125);
-    ---data-theme--dark-----shadow-md-5: var(--size-0-25);
-    ---data-theme--dark-----shadow-md-6: var(--size-0-125);
-    ---data-theme--dark-----shadow-lg-1: var(--size-0-625);
-    ---data-theme--dark-----shadow-lg-2: var(--size-0-9375);
-    ---data-theme--dark-----shadow-lg-3: var(--size-0-1875);
-    ---data-theme--dark-----shadow-lg-4: var(--size-0-25);
-    ---data-theme--dark-----shadow-lg-5: var(--size-0-375);
-    ---data-theme--dark-----shadow-lg-6: var(--size-0-25);
-    --form-select-background-size: var(--size-1);
-    --form-select-transform: var(--size-0-0625);
-    --form-input-box-shadow: var(--size-0-1875);
-    --form-textarea-min-height: var(--size-7-5);
-    --form-checkbox-input-width: var(--size-1-125);
-    --form-checkbox-input-height: var(--size-1-125);
-    --badge-gap: var(--size-0-25);
-    --badge-height: var(--size-1-5);
-    --span-transform: var(--size-0-0625);
-    --status-select-height: var(--size-1-5);
-    --status-select-box-shadow: var(--size-0-125);
-    --modal-overlay-backdrop-filter: var(--size-0-125);
-    --modal-box-shadow-1: var(--size-1-25);
-    --modal-box-shadow-2: var(--size-3-75);
-    --modal-min-width: var(--size-25);
-    --modal-width: var(--size-37-5);
-    --modal-content-box-shadow-1: var(--size-1-25);
-    --modal-content-box-shadow-2: var(--size-3-75);
-    --modal-content-min-width: var(--size-25);
-    --modal-header-padding: var(--size-1-25);
-    --prompt-message-margin-bottom: var(--size-1);
-    --modal-footer-gap: var(--size-0-75);
     --from-transform: var(--size-1-25);
-    --to-transform: var(--size-1-25);
-    --progress-modal-border-radius: var(--size-1);
-    --progress-modal-box-shadow-1: var(--size-1-25);
-    --progress-modal-box-shadow-2: var(--size-3-75);
-    --progress-modal-min-width: var(--size-18-75);
-    --progress-spinner-width: var(--size-4);
-    --progress-spinner-height: var(--size-4);
-    --progress-spinner-border: var(--size-0-25);
-    --flash-messages-container-max-width: var(--size-25);
-    --flash-message-backdrop-filter: var(--size-0-5);
-    --flash-message--webkit-backdrop-filter: var(--size-0-5);
-    --toasts-bottom: var(--size-4-5);
-    --toasts-max-width: var(--size-22-5);
-    --toast-backdrop-filter: var(--size-0-5);
-    --toast--webkit-backdrop-filter: var(--size-0-5);
-    --toast-close-font-size: var(--size-1-125);
-    --toast-close-padding: var(--size-0-125);
-    --notification-log-btn-width: var(--size-2-75);
-    --notification-log-btn-height: var(--size-2-75);
-    --notification-log-btn-box-shadow-1: var(--size-0-375);
-    --notification-log-btn-box-shadow-2: var(--size-1-25);
-    --notification-log-list-max-height: var(--size-26-25);
-    --notification-log-icon-min-width: var(--size-1);
-    --empty-state-icon-font-size: var(--size-4);
-    --page-btn-min-width: var(--size-2-25);
-    --page-btn-height: var(--size-2-25);
-    --page-ellipsis-min-width: var(--size-2-25);
-    --page-ellipsis-height: var(--size-2-25);
-    --chip-label-padding-y: var(--size-0-4);
-    --chip-label-padding-x: var(--size-0-8);
-    --chip-label-border-radius: var(--size-2);
-    --chip-label-box-shadow: var(--size-0-125);
-    --chip-labelsub-tag-margin-left: var(--size-1);
-    --translate-x-20-transform: var(--size-1-25);
-    --loading-spinner-width: var(--size-2-5);
-    --loading-spinner-height: var(--size-2-5);
-    --loading-spinner-border: var(--size-0-1875);
-    --loading-spinner-sm-width: var(--size-1-25);
-    --loading-spinner-sm-height: var(--size-1-25);
-    --loading-spinner-sm-border-width: var(--size-0-125);
-    --error-message-max-width: var(--size-37-5);
-    --applogin-blur-filter: var(--size-0-375);
-    --login-modal-box-box-shadow-1: var(--size-1-5);
-    --login-modal-box-box-shadow-2: var(--size-4);
-    --login-modal-box-max-width: var(--size-20);
-    --login-modal-error-padding-y: var(--size-0-75);
-    --login-modal-error-padding-x: var(--size-1-25);
-    --login-modal-error-font-size: var(--size-0-875);
-    --login-modal-form-gap: var(--size-0-75);
-    --login-modal-form-padding: var(--size-1-5);
-    --login-input-padding-y: var(--size-0-75);
-    --login-input-padding-x: var(--size-1);
-    --login-input-font-size: var(--size-1);
-    --login-input-box-shadow: var(--size-0-1875);
     --from-transform-alt1: var(--size-0-875);
-    --lightbox-close-font-size: var(--size-2);
 }

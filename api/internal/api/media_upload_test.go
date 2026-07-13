@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"image"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -37,10 +39,10 @@ func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	p1, _ := writer.CreateFormFile("files", "f1.txt")
-	_, _ = p1.Write([]byte("f1 content"))
-	p2, _ := writer.CreateFormFile("files", "f2.txt")
-	_, _ = p2.Write([]byte("f2 content"))
+	p1, _ := writer.CreateFormFile("files", "f1.jpg")
+	_, _ = p1.Write(makeJPEGWithEXIF(t))
+	p2, _ := writer.CreateFormFile("files", "f2.jpg")
+	_, _ = p2.Write(makeTinyPNG(t))
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload/multiple", body)
@@ -55,6 +57,25 @@ func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Errorf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
+	var resp struct {
+		TotalUploaded int `json:"total_uploaded"`
+		TotalFailed   int `json:"total_failed"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.TotalUploaded != 2 || resp.TotalFailed != 0 {
+		t.Errorf("expected 2 uploaded / 0 failed, got %d / %d", resp.TotalUploaded, resp.TotalFailed)
+	}
+}
+
+// makeTinyPNG returns a valid 1x1 PNG for upload tests.
+func makeTinyPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("png.Encode: %v", err)
+	}
+	return buf.Bytes()
 }
 
 func TestMediaHandler_Rename_Error(t *testing.T) {
@@ -198,7 +219,7 @@ func TestUploadMultiple_WithPostID(t *testing.T) {
 	writer := multipart.NewWriter(body)
 	_ = writer.WriteField("post_id", "42")
 	p, _ := writer.CreateFormFile("files", "img.jpg")
-	_, _ = p.Write([]byte("fake jpg data"))
+	_, _ = p.Write(makeJPEGWithEXIF(t))
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", body)

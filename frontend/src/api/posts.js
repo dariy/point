@@ -115,7 +115,7 @@ export function permanentlyDeletePost(id) {
  * @returns {Promise<object>}
  */
 export function previewPost(token) {
-  return api.get(`/posts/preview/${token}`);
+  return api.get(`/api/posts/preview/${encodeURIComponent(token)}`);
 }
 
 /**

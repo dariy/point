@@ -8,36 +8,6 @@
     align-items: center;
 }
 
-.ops-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--ops-list-gap);
-    padding: var(--spacing-lg);
-}
-
-.op-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--op-item-gap);
-}
-
-.op-item .btn {
-    min-width: 10rem;
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.op-info h4 {
-    margin: 0 0 var(--h4-margin) 0;
-}
-
-.op-info p {
-    margin: 0;
-    font-size: 0.85em;
-    color: var(--text-secondary);
-}
-
 /* ===========================
    Backups list — swipe-to-reveal rows
    Two lines per item (name, then date · size) inside the narrow plugin-settings
@@ -168,73 +138,6 @@
     }
 }
 
-/* Backup Management Styles */
-.backups-list,
-.migrations-list {
-    padding: var(--spacing-md) var(--spacing-lg);
-    max-height: var(--backups-list-max-height);
-    overflow-y: auto;
-}
-
-.backup-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md);
-    margin-bottom: var(--backup-item-margin-bottom);
-    background: var(--surface-input);
-    border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--border-radius);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.backup-item:hover {
-    border-color: var(--color-primary);
-    box-shadow: 0 var(--backup-item-box-shadow-1) var(--backup-item-box-shadow-2) var(--color-black-alpha-10);
-}
-
-.backup-item:last-child {
-    margin-bottom: 0;
-}
-
-.backup-info {
-    flex: 1;
-    min-width: var(--backup-info-min-width);
-}
-
-.backup-filename {
-    font-family: monospace;
-    font-weight: 600;
-    font-size: 0.95em;
-    color: var(--text-primary);
-    margin-bottom: var(--backup-filename-margin-bottom);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.backup-meta {
-    display: flex;
-    gap: var(--spacing-md);
-    font-size: 0.85em;
-    color: var(--text-secondary);
-}
-
-.backup-date::before {
-    content: '\1F4C5 ';
-}
-
-.backup-size::before {
-    content: '\1F4BE ';
-}
-
-.backup-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-}
-
 /* Offline & Sync Styles */
 .offline-progress-container {
     width: 100%;
@@ -335,12 +238,6 @@
 .sync-error-msg {
     color: var(--color-amber-800) !important;
     font-style: italic;
-}
-
-.disk-info {
-  margin-bottom: var(--spacing-sm);
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
 }
 
 .backup-warning {

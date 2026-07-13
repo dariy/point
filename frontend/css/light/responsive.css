@@ -125,18 +125,6 @@
         grid-template-columns: 1fr;
     }
 
-    .backup-item {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .backup-info {
-        min-width: 0;
-    }
-
-    .backup-actions {
-        justify-content: flex-end;
-    }
 
     .modal-content {
         min-width: auto;

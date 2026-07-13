@@ -7,8 +7,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"path"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +20,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/utils"
 
+	"github.com/gorilla/css/scanner"
 	attributes "github.com/mdigger/goldmark-attributes"
 	"github.com/microcosm-cc/bluemonday"
 	fences "github.com/stefanfritsch/goldmark-fences"
@@ -197,27 +200,26 @@ func normalizeContent(content string) string {
 	return markdownImageRe.ReplaceAllString(content, "$1")
 }
 
-// dangerousCSSRe matches CSS patterns that are unsafe to allow in per-post CSS blocks.
+// CSS sanitization for per-post CSS blocks works in two layers:
+//
+//  1. Normalization (regex): strip comments and decode escape sequences, so
+//     evasion tricks like url(/**/https://…) or \40 import can't hide a
+//     dangerous construct from step 2. This is the anti-bypass layer.
+//  2. Tokenized walk (gorilla/css scanner): parse the normalized CSS into
+//     declarations and reject dangerous ones by their *actual* property name
+//     and value — not a substring match. This is the accuracy layer: it can't
+//     mangle justify-content the way a `\bcontent` regex did, because the
+//     property token is matched whole.
 var (
-	cssImportRe      = regexp.MustCompile(`(?i)@import\b[^;]*;?`)
-	cssExternalURLRe = regexp.MustCompile(`(?i)url\s*\(\s*['"]?https?://[^)]*['"]?\s*\)`)
-	cssPosFixedRe    = regexp.MustCompile(`(?i)\bposition\s*:\s*fixed\b`)
-	cssPosStickyRe   = regexp.MustCompile(`(?i)\bposition\s*:\s*sticky\b`)
-	cssZIndexRe      = regexp.MustCompile(`(?i)\bz-index\s*:[^;}]*`)
-	cssDangerContent = regexp.MustCompile(`(?i)\bcontent\s*:[^;}]*`)
-	cssScriptRe      = regexp.MustCompile(`(?i)<\s*script`)
-
-	// Normalization regexes to defeat trivial denylist bypasses.
 	cssCommentRe     = regexp.MustCompile(`/\*[\s\S]*?\*/`)                   // url(/**/https://…) comment splitting
 	cssHexEscapeRe   = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?`) // \40 import → @import
 	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)            // \@import → @import
+	cssExternalURLRe = regexp.MustCompile(`(?i)url\(\s*['"]?\s*https?:`)      // external resource in a declaration value
 )
 
 // normalizeCSSForSanitizing strips CSS comments and decodes CSS escape
-// sequences so the denylist in SanitizePostCSS can't be evaded via
-// comment-splitting or escaped characters.
-// TODO(follow-up): replace the regex denylist with a real CSS parser; escape
-// decoding here is a stopgap, not a complete CSS tokenizer.
+// sequences so SanitizePostCSS can't be evaded via comment-splitting or
+// escaped characters (e.g. `\40 import`, `url(/**/https://…)`).
 func normalizeCSSForSanitizing(css string) string {
 	css = cssCommentRe.ReplaceAllString(css, "")
 	css = cssHexEscapeRe.ReplaceAllStringFunc(css, func(m string) string {
@@ -231,38 +233,135 @@ func normalizeCSSForSanitizing(css string) string {
 	return cssOtherEscapeRe.ReplaceAllString(css, "$1")
 }
 
-// SanitizePostCSS strips dangerous CSS declarations from per-post CSS blocks.
-// Returns the sanitized CSS and a list of property names that were removed.
+// SanitizePostCSS removes dangerous constructs from per-post CSS blocks:
+// @import at-rules, external url() resources, position:fixed/sticky, z-index,
+// the content property, and any stray '<' (a style/script breakout). Returns
+// the sanitized CSS and the list of removed construct names (deduplicated).
 func SanitizePostCSS(css string) (string, []string) {
 	if css == "" {
 		return "", nil
 	}
 
+	norm := normalizeCSSForSanitizing(css)
+	sc := scanner.New(norm)
+
+	var out strings.Builder
+	var seg []*scanner.Token // tokens of the current declaration / at-rule / prelude
+	depth := 0
+
+	seen := map[string]bool{}
 	var stripped []string
-
-	type rule struct {
-		re   *regexp.Regexp
-		name string
-	}
-	rules := []rule{
-		{cssImportRe, "@import"},
-		{cssExternalURLRe, "url() with external resource"},
-		{cssPosFixedRe, "position: fixed"},
-		{cssPosStickyRe, "position: sticky"},
-		{cssZIndexRe, "z-index"},
-		{cssDangerContent, "content"},
-		{cssScriptRe, "<script>"},
-	}
-
-	result := normalizeCSSForSanitizing(css)
-	for _, r := range rules {
-		if r.re.MatchString(result) {
-			stripped = append(stripped, r.name)
-			result = r.re.ReplaceAllString(result, "")
+	record := func(name string) {
+		if !seen[name] {
+			seen[name] = true
+			stripped = append(stripped, name)
 		}
 	}
 
-	return strings.TrimSpace(result), stripped
+	emit := func(tokens []*scanner.Token) {
+		for _, t := range tokens {
+			out.WriteString(t.Value)
+		}
+	}
+	// flushDecl evaluates a buffered declaration (inside a rule block) or a
+	// top-level at-rule (e.g. @import) and emits it unless it's dangerous.
+	flushDecl := func(terminator string) {
+		if drop, reason := classifyCSSSegment(seg); drop {
+			record(reason)
+		} else if len(seg) > 0 {
+			emit(seg)
+			out.WriteString(terminator)
+		}
+		seg = nil
+	}
+
+	for {
+		tok := sc.Next()
+		if tok.Type == scanner.TokenEOF || tok.Type == scanner.TokenError {
+			break
+		}
+		if tok.Type == scanner.TokenComment {
+			continue // normalization already removed these; belt-and-suspenders
+		}
+		if tok.Type == scanner.TokenChar {
+			switch tok.Value {
+			case "{":
+				// seg is a selector or at-rule prelude — emit verbatim.
+				emit(seg)
+				out.WriteString("{")
+				seg = nil
+				depth++
+				continue
+			case "}":
+				flushDecl("") // flush a trailing declaration missing its ';'
+				out.WriteString("}")
+				if depth > 0 {
+					depth--
+				}
+				continue
+			case ";":
+				flushDecl(";")
+				continue
+			case "<":
+				// '<' is never valid CSS — drop it (style/script breakout).
+				record("<script>")
+				continue
+			}
+		}
+		seg = append(seg, tok)
+	}
+	// Any trailing prelude/selector with no block (malformed) is emitted as-is.
+	emit(seg)
+
+	return strings.TrimSpace(out.String()), stripped
+}
+
+// classifyCSSSegment decides whether a buffered CSS segment (a declaration or a
+// top-level at-rule) must be dropped, returning the removal reason.
+func classifyCSSSegment(seg []*scanner.Token) (bool, string) {
+	// Property name: the first ident (at-rules surface as an at-keyword).
+	var prop string
+	for _, t := range seg {
+		switch t.Type {
+		case scanner.TokenS:
+			continue
+		case scanner.TokenAtKeyword:
+			if strings.EqualFold(t.Value, "@import") {
+				return true, "@import"
+			}
+			// Other at-rules (e.g. a stray @media prelude) pass through.
+			prop = ""
+		case scanner.TokenIdent:
+			prop = strings.ToLower(t.Value)
+		}
+		break
+	}
+
+	// Reconstruct the value (everything is fine to lowercase for matching).
+	var val strings.Builder
+	for _, t := range seg {
+		val.WriteString(t.Value)
+	}
+	lower := strings.ToLower(val.String())
+
+	switch prop {
+	case "z-index":
+		return true, "z-index"
+	case "content":
+		return true, "content"
+	case "position":
+		if strings.Contains(lower, "fixed") {
+			return true, "position: fixed"
+		}
+		if strings.Contains(lower, "sticky") {
+			return true, "position: sticky"
+		}
+	}
+
+	if cssExternalURLRe.MatchString(lower) {
+		return true, "url() with external resource"
+	}
+	return false, ""
 }
 
 func normalizeImmersiveMode(mode string) string {
@@ -279,7 +378,30 @@ func (s *PostService) RenderContent(content string) (string, error) {
 	if err := s.md.Convert([]byte(preprocessContent(content)), &buf); err != nil {
 		return "", err
 	}
-	return s.policy.Sanitize(buf.String()), nil
+	return addImgLoadingHints(s.policy.Sanitize(buf.String())), nil
+}
+
+// imgTagRe matches an <img …> tag, capturing its attributes in group 1 and
+// tolerating the self-closing XHTML form (…/>) goldmark emits.
+var imgTagRe = regexp.MustCompile(`(?i)<img\b([^>]*?)\s*/?>`)
+
+// addImgLoadingHints adds loading="lazy" and decoding="async" to post-body
+// <img> tags that don't already set them, so image-heavy posts don't fetch and
+// decode every photo up front. Runs after sanitization, so bluemonday never
+// strips the added attributes. Native lazy-loading still fetches images already
+// in (or near) the viewport, so the first image isn't needlessly deferred.
+func addImgLoadingHints(html string) string {
+	return imgTagRe.ReplaceAllStringFunc(html, func(tag string) string {
+		attrs := imgTagRe.FindStringSubmatch(tag)[1]
+		lower := strings.ToLower(attrs)
+		if !strings.Contains(lower, "loading=") {
+			attrs += ` loading="lazy"`
+		}
+		if !strings.Contains(lower, "decoding=") {
+			attrs += ` decoding="async"`
+		}
+		return "<img" + attrs + ">"
+	})
 }
 
 type ListPostsParams struct {
@@ -532,7 +654,7 @@ func (s *PostService) FlushViewCounts(ctx context.Context) error {
 		}); err != nil {
 			// On error, we might lose these counts or we could try to re-add them to the buffer
 			// For now, just log the error.
-			fmt.Printf("failed to flush view count for post %d: %v\n", id, err)
+			slog.Error("failed to flush view count", "post_id", id, "error", err)
 		}
 	}
 	return nil
@@ -762,14 +884,29 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
-			go func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-				defer cancel()
-				_ = s.CrossPostToInstagram(ctx2, id)
-			}()
+			go s.crossPostToInstagramAsync(id)
 		}
 	}
 	return post, nil
+}
+
+// crossPostToInstagramAsync runs a cross-post in the background with its own
+// timeout, logging failures and recovering panics (a panic in a raw goroutine
+// would otherwise kill the server). CrossPostToInstagram also records the
+// failure on the post itself via updateInstagramStatus, so the admin UI shows
+// it too.
+func (s *PostService) crossPostToInstagramAsync(postID int64) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("instagram cross-post panicked",
+				"post_id", postID, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	if err := s.CrossPostToInstagram(ctx, postID); err != nil {
+		slog.Error("instagram cross-post failed", "post_id", postID, "error", err)
+	}
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
@@ -829,18 +966,13 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
 		if s.tagService != nil { s.tagService.Invalidate() }
-		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 			if enabledStr == "true" || enabledStr == "1" {
 				for _, p := range published {
 					if p.InstagramShare {
-						id := p.ID
-						go func() {
-							ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-							defer cancel()
-							_ = s.CrossPostToInstagram(ctx2, id)
-						}()
+						go s.crossPostToInstagramAsync(p.ID)
 					}
 				}
 			}
@@ -980,4 +1112,99 @@ func toNullTime(t *time.Time) sql.NullTime {
 		return sql.NullTime{}
 	}
 	return sql.NullTime{Time: t.UTC(), Valid: true}
+}
+
+// postLinkRe matches internal post links (/posts/<slug>) in raw post content —
+// markdown targets, href attributes, or bare paths alike.
+var postLinkRe = regexp.MustCompile(`/posts/([A-Za-z0-9._-]+)`)
+
+// PostLinkIssue describes an internal link on a publicly reachable post whose
+// target an anonymous visitor cannot open.
+type PostLinkIssue struct {
+	SourceID    int64  `json:"source_id"`
+	SourceSlug  string `json:"source_slug"`
+	SourceTitle string `json:"source_title"`
+	TargetSlug  string `json:"target_slug"`
+	Reason      string `json:"reason"`
+}
+
+// AuditPublicPostLinks scans every publicly reachable post (published and not
+// hidden directly or via a hides-posts tag) for internal /posts/<slug> links
+// whose target is missing, unpublished, or hidden — the failure mode where an
+// index post looks fine to a logged-in admin while every link 404s for
+// visitors. Returns the issues and the number of posts scanned.
+func (s *PostService) AuditPublicPostLinks(ctx context.Context) ([]PostLinkIssue, int, error) {
+	rows, err := s.repo.ListPostLinkAuditRows(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var effectiveHides map[int64]bool
+	tagName := map[int64]string{}
+	if s.tagService != nil {
+		if snap, err := s.tagService.GetTagSnapshot(ctx); err == nil && snap != nil {
+			effectiveHides = snap.EffectiveHidesPosts
+			for id, t := range snap.ByID {
+				tagName[id] = t.Name
+			}
+		}
+	}
+
+	type target struct {
+		status    string
+		hiddenVia []string // names of tags that effectively hide the post
+	}
+	bySlug := make(map[string]target, len(rows))
+	for _, r := range rows {
+		t := target{status: r.Status}
+		for _, tid := range r.TagIDs {
+			if effectiveHides[tid] {
+				t.hiddenVia = append(t.hiddenVia, tagName[tid])
+			}
+		}
+		bySlug[strings.ToLower(r.Slug)] = t
+	}
+
+	issues := []PostLinkIssue{}
+	scanned := 0
+	seen := map[string]bool{} // "<sourceID>:<targetSlug>" dedupe
+	for _, r := range rows {
+		src := bySlug[strings.ToLower(r.Slug)]
+		if src.status != "published" || len(src.hiddenVia) > 0 {
+			continue // only links on publicly reachable posts matter
+		}
+		scanned++
+		for _, m := range postLinkRe.FindAllStringSubmatch(r.Content, -1) {
+			slug := strings.ToLower(m[1])
+			if slug == strings.ToLower(r.Slug) {
+				continue
+			}
+			key := strconv.FormatInt(r.ID, 10) + ":" + slug
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			tgt, ok := bySlug[slug]
+			var reason string
+			switch {
+			case !ok:
+				reason = "target not found (deleted or slug typo)"
+			case len(tgt.hiddenVia) > 0:
+				reason = "target hidden by tag '" + strings.Join(tgt.hiddenVia, "', '") + "'"
+			case tgt.status != "published":
+				reason = "target not published (status: " + tgt.status + ")"
+			default:
+				continue // reachable — no issue
+			}
+			issues = append(issues, PostLinkIssue{
+				SourceID:    r.ID,
+				SourceSlug:  r.Slug,
+				SourceTitle: r.Title,
+				TargetSlug:  slug,
+				Reason:      reason,
+			})
+		}
+	}
+	return issues, scanned, nil
 }

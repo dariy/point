@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -115,6 +118,17 @@ func TestSecurityHeaders(t *testing.T) {
 		AppVersion:  "1.0.0",
 		FrontendDir: t.TempDir(),
 	}
+	// The script-src policy is computed at startup from index.html's inline
+	// <script> blocks (see inlineScriptHashes); give setupEcho a shell with a
+	// known inline script and expect its hash in the header.
+	inline := "console.log('csp probe');"
+	shell := "<html><head><script>" + inline + "</script></head><body></body></html>"
+	if err := os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"), []byte(shell), 0o644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+	sum := sha256.Sum256([]byte(inline))
+	inlineHash := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {
 		t.Fatalf("failed to create repo: %v", err)
@@ -140,7 +154,7 @@ func TestSecurityHeaders(t *testing.T) {
 		{"X-Content-Type-Options", "nosniff"},
 		{"X-Frame-Options", "DENY"},
 		{"X-Xss-Protection", "1; mode=block"},
-		{"Content-Security-Policy", "default-src 'self'; script-src 'self' 'sha256-h5MCsXkmw9HW4cD8PyxqPx6lksihxngF3WC4UFUG1kM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'"},
+		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'"},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
 		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
 	}
@@ -149,6 +163,34 @@ func TestSecurityHeaders(t *testing.T) {
 		if got := headers.Get(tt.key); got != tt.value {
 			t.Errorf("header %s: expected %q, got %q", tt.key, tt.value, got)
 		}
+	}
+}
+
+func TestBodyLimitEnforced(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:      "1.0.0",
+		FrontendDir:     t.TempDir(),
+		MaxUploadSizeMB: 1,
+	}
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// A body over the 1MB limit must be rejected at the middleware layer with
+	// 413 before reaching any handler.
+	oversized := bytes.Repeat([]byte("a"), 2*1024*1024)
+	req := httptest.NewRequest(http.MethodPost, "/api/media/upload", bytes.NewReader(oversized))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413 for oversized body, got %d", rec.Code)
 	}
 }
 
@@ -301,6 +343,48 @@ func TestSetupEcho_ManifestAndSW(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Errorf("%s: expected 200, got %d", route, rec.Code)
+		}
+	}
+}
+
+func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	_ = os.WriteFile(filepath.Join(cfg.FrontendDir, "manifest.webmanifest"),
+		[]byte(`{"name":"Point","short_name":"Point","display":"fullscreen"}`), 0644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	req := httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil)
+	req.Host = "www.Point.Photos"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	var m map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+	if m["name"] != "point.photos" || m["short_name"] != "point.photos" {
+		t.Errorf("expected name/short_name point.photos, got %v/%v", m["name"], m["short_name"])
+	}
+	if m["display"] != "fullscreen" {
+		t.Errorf("other manifest keys should survive, got display=%v", m["display"])
+	}
+}
+
+func TestSiteNameFromHost(t *testing.T) {
+	cases := map[string]string{
+		"darii.net":         "darii.net",
+		"point.photos:8001": "point.photos",
+		"www.point.photos":  "point.photos",
+		"POINT.photos":      "point.photos",
+		"localhost:8001":    "localhost",
+		"":                  "",
+		"  ":                "",
+	}
+	for host, want := range cases {
+		if got := siteNameFromHost(host); got != want {
+			t.Errorf("siteNameFromHost(%q) = %q, want %q", host, got, want)
 		}
 	}
 }

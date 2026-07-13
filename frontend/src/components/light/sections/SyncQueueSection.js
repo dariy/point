@@ -81,7 +81,7 @@ export class SyncQueueSection extends Component {
       await resetFailedOps();
       this._load();
       updateStatus();
-    } catch (err) {
+    } catch (_err) {
       store.set("toast", { message: "Failed to reset queue.", type: "error" });
     }
   }
@@ -90,7 +90,7 @@ export class SyncQueueSection extends Component {
     try {
       await syncQueue();
       this._load();
-    } catch (err) {
+    } catch (_err) {
       /* already handled in syncQueue */
     }
   }
