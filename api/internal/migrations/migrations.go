@@ -252,6 +252,12 @@ var schema = []struct{ name, sql string }{
 		"create_tag_relationships_child_id_index",
 		`CREATE INDEX IF NOT EXISTS idx_tag_relationships_child_id ON tag_relationships(child_id)`,
 	},
+	{
+		// Every media byte-serve looks a row up by original_path
+		// (GetMediaByPath), which was a full table scan.
+		"create_media_original_path_index",
+		`CREATE INDEX IF NOT EXISTS idx_media_original_path ON media(original_path)`,
+	},
 }
 
 // Run applies all pending schema migrations, then the special multi-step tag
