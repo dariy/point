@@ -69,6 +69,9 @@ export default class LoginPage extends Component {
                    required placeholder="${loading ? 'Signing in…' : 'Password'}"
                    ${loading ? 'disabled' : ''}>
           </form>
+          <p class="login-forgot">
+            <a id="forgot-password-link" href="/light/pss">Forgot / Restore password?</a>
+          </p>
         </div>
       </div>`;
   }
@@ -118,6 +121,14 @@ export default class LoginPage extends Component {
           error: err.message || 'Login failed. Check your credentials.',
         });
       }
+    });
+
+    // Forgot / restore password → the public reset-request page. Uses in-app
+    // navigate (consistent with _finish/_dismiss) rather than a full document
+    // load, so the anchor's href is only a fallback for middle-click / crawlers.
+    this.$('#forgot-password-link')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      navigate('/light/pss');
     });
 
     // Backdrop click cancels.

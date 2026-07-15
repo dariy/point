@@ -114,6 +114,24 @@
     background: var(--border-primary);
 }
 
+/* Forgot / restore password link below the form */
+.login-forgot {
+    padding: 0 var(--login-modal-form-padding, 1.25rem) var(--login-modal-form-padding, 1.25rem);
+    text-align: center;
+    font-size: 0.8125rem;
+}
+
+.login-forgot a {
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.login-forgot a:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+
 /* Animations */
 @keyframes loginBackdropIn {
     from { opacity: 0; }

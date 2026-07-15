@@ -750,6 +750,24 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Offline operator password recovery: `point reset-password ...`. Runs against
+	// /data/point.db with no SMTP and no manual SQL (see resetpassword.go).
+	if isResetPasswordCmd(os.Args) {
+		slog.Info("CLI reset-password command detected. Initializing...")
+		cfg, err := config.LoadConfig(".")
+		if err != nil {
+			slog.Error("reset-password: failed to load config", "error", err)
+			os.Exit(1)
+		}
+		repo, err := repository.NewRepository(cfg.DatabaseURL)
+		if err != nil {
+			slog.Error("reset-password: failed to initialize repository", "error", err)
+			os.Exit(1)
+		}
+		runResetPasswordCLI(repo)
+		os.Exit(0)
+	}
+
 	for _, arg := range os.Args[1:] {
 		if arg == "-v" || arg == "--version" || arg == "-version" {
 			fmt.Println(Version)
@@ -849,6 +867,20 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("graceful shutdown complete")
+}
+
+// isResetPasswordCmd reports whether the args invoke the reset-password
+// subcommand, tolerating merged args like "point reset-password" the same way
+// setup detection does.
+func isResetPasswordCmd(args []string) bool {
+	for _, arg := range args {
+		trimmed := strings.Trim(arg, " \t\n\r\"'")
+		if trimmed == "reset-password" || strings.HasPrefix(trimmed, "reset-password ") ||
+			strings.Contains(trimmed, " reset-password ") || strings.HasSuffix(trimmed, " reset-password") {
+			return true
+		}
+	}
+	return false
 }
 
 // parseCreateAPIKeyName scans args for --create-api-key=<name> or
