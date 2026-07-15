@@ -166,6 +166,118 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+// TestDeploymentHeadInjection verifies the deployment-driven head/CSP knobs:
+// HEAD_HTML is substituted into the served shell, and CSP_SCRIPT_SRC /
+// CSP_CONNECT_SRC extend those directives so an injected external script is
+// allowed. All three are empty in the shipped engine.
+func TestDeploymentHeadInjection(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:    "1.0.0",
+		FrontendDir:   t.TempDir(),
+		HeadHTML:      `<script defer src="https://analytics.example/s.js" data-website-id="abc"></script>`,
+		CSPScriptSrc:  "https://analytics.example",
+		CSPConnectSrc: "https://analytics.example",
+	}
+	shell := "<html><head>\n<!-- __HEAD_HTML__ -->\n</head><body></body></html>"
+	if err := os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"), []byte(shell), 0o644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	req := httptest.NewRequest(http.MethodGet, "/some-spa-route", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, cfg.HeadHTML) {
+		t.Errorf("served shell missing injected HEAD_HTML; body:\n%s", body)
+	}
+	if strings.Contains(rec.Body.String(), "__HEAD_HTML__") {
+		t.Errorf("HEAD_HTML placeholder was not substituted")
+	}
+	csp := rec.Header().Get("Content-Security-Policy")
+	// The per-request handler prepends the plugin-manifest hash after
+	// "script-src", so assert on the directive's tail rather than "script-src 'self'".
+	if !strings.Contains(csp, "https://analytics.example; style-src") {
+		t.Errorf("script-src missing extra origin; CSP: %q", csp)
+	}
+	if !strings.Contains(csp, "connect-src 'self' https://*.basemaps.cartocdn.com https://analytics.example") {
+		t.Errorf("connect-src missing extra origin; CSP: %q", csp)
+	}
+
+	// Admin ("light") routes must NOT carry the injected third-party markup —
+	// it never runs in the authenticated context.
+	adminReq := httptest.NewRequest(http.MethodGet, "/light/dashboard", nil)
+	adminRec := httptest.NewRecorder()
+	e.ServeHTTP(adminRec, adminReq)
+	if adminRec.Code != http.StatusOK {
+		t.Fatalf("admin route: expected 200, got %d", adminRec.Code)
+	}
+	if strings.Contains(adminRec.Body.String(), "analytics.example") {
+		t.Errorf("admin shell must not contain injected HEAD_HTML; body:\n%s", adminRec.Body.String())
+	}
+	if strings.Contains(adminRec.Body.String(), "__HEAD_HTML__") {
+		t.Errorf("admin shell leaked the HEAD_HTML placeholder")
+	}
+	// The CSP header is global, so admin routes still allow-list the origin
+	// (harmless when nothing loads it) — the defense is the absent markup.
+
+	// A logged-in admin viewing a PUBLIC page (admin controls are present there
+	// too) must also get the injection-free shell — the session cookie is the
+	// signal, so the third-party script never runs in an authenticated DOM.
+	authReq := httptest.NewRequest(http.MethodGet, "/some-spa-route", nil)
+	authReq.AddCookie(&http.Cookie{Name: "session", Value: "tok"})
+	authRec := httptest.NewRecorder()
+	e.ServeHTTP(authRec, authReq)
+	if authRec.Code != http.StatusOK {
+		t.Fatalf("authed public route: expected 200, got %d", authRec.Code)
+	}
+	if strings.Contains(authRec.Body.String(), "analytics.example") {
+		t.Errorf("authenticated viewer must not receive injected HEAD_HTML on a public page")
+	}
+}
+
+func TestSanitizeCSPSources(t *testing.T) {
+	// Normal inputs pass through, whitespace-normalized.
+	exact := []struct{ in, want string }{
+		{"", ""},
+		{"   ", ""},
+		{"https://a.example", "https://a.example"},
+		{"https://a.example https://b.example", "https://a.example https://b.example"},
+		{"  https://a.example   https://b.example  ", "https://a.example https://b.example"},
+		{"https://*.cdn.example", "https://*.cdn.example"},
+		{"https://a.example;object-src", ""},   // ';'-fused token dropped whole
+		{"https://a.example,https://evil", ""}, // ','-fused token dropped whole
+	}
+	for _, c := range exact {
+		if got := sanitizeCSPSources(c.in); got != c.want {
+			t.Errorf("sanitizeCSPSources(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	// A breakout character (new directive ';', new policy ',', header split
+	// CR/LF) must never survive into the output, whatever the arrangement.
+	for _, in := range []string{
+		"https://a; object-src *",
+		"https://a, default-src *",
+		"https://a.example\r\nX-Injected: 1",
+		"a;b,c\r\nd",
+	} {
+		if got := sanitizeCSPSources(in); strings.ContainsAny(got, ";,\r\n") {
+			t.Errorf("sanitizeCSPSources(%q) = %q still contains a breakout char", in, got)
+		}
+	}
+}
+
 func TestBodyLimitEnforced(t *testing.T) {
 	cfg := config.Config{
 		AppVersion:      "1.0.0",
@@ -465,20 +577,20 @@ func TestSetupEcho_SPAFallback_WithFullPost(t *testing.T) {
 
 	// Create media for the post
 	_, _ = repo.CreateMedia(ctx, models.CreateMediaParams{
-		Filename: "test.jpg",
+		Filename:     "test.jpg",
 		OriginalPath: "originals/2024/01/test.jpg",
-		Checksum: "abc",
-		UploadedAt: time.Now(),
+		Checksum:     "abc",
+		UploadedAt:   time.Now(),
 	})
 
 	_, _ = repo.CreatePost(ctx, models.CreatePostParams{
-		Title:    "My Post 2",
-		Slug:     "my-post-2",
-		AuthorID: u.ID,
-		Status:   "published",
+		Title:           "My Post 2",
+		Slug:            "my-post-2",
+		AuthorID:        u.ID,
+		Status:          "published",
 		MetaDescription: sql.NullString{String: "My Meta Desc", Valid: true},
-		ThumbnailPath: sql.NullString{String: "thumbnails/2024/01/test_thumb.jpg", Valid: true},
-		Content: "Some content here! /originals/2024/01/test.jpg",
+		ThumbnailPath:   sql.NullString{String: "thumbnails/2024/01/test_thumb.jpg", Valid: true},
+		Content:         "Some content here! /originals/2024/01/test.jpg",
 	})
 
 	svcs := initServices(&cfg, repo)
@@ -540,7 +652,6 @@ func TestMain_FullRun(t *testing.T) {
 	// Should start up, block, receive interrupt, and gracefully shut down
 	main()
 }
-
 
 func min(a, b int) int {
 	if a < b {

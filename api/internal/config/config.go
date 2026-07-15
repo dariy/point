@@ -48,6 +48,16 @@ type Config struct {
 
 	// MCP server (the "mcp" plugin, served at /mcp). OAuth login uses the admin password.
 	MCPBaseURL string `mapstructure:"MCP_BASE_URL"` // public HTTPS base URL for OAuth discovery; falls back to APP_URL
+
+	// Deployment-injected head markup and the CSP origins it needs. Empty by
+	// default so the open-source engine embeds no third-party domain; a hosting
+	// pipeline sets these per instance to add analytics/verification scripts.
+	// HeadHTML is substituted into index.html's <!-- __HEAD_HTML__ --> slot;
+	// CSPScriptSrc/CSPConnectSrc are appended to those CSP directives so an
+	// injected external script can load and send data. See cmd/api/main.go.
+	HeadHTML      string `mapstructure:"HEAD_HTML"`
+	CSPScriptSrc  string `mapstructure:"CSP_SCRIPT_SRC"`
+	CSPConnectSrc string `mapstructure:"CSP_CONNECT_SRC"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -86,6 +96,9 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("SMTP_FROM", "")
 	v.SetDefault("APP_URL", "")
 	v.SetDefault("MCP_BASE_URL", "")
+	v.SetDefault("HEAD_HTML", "")
+	v.SetDefault("CSP_SCRIPT_SRC", "")
+	v.SetDefault("CSP_CONNECT_SRC", "")
 
 	err = v.ReadInConfig()
 	if err != nil {

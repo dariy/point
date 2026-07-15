@@ -144,6 +144,10 @@ class Router {
       return;
     }
 
+    // The login page is intentionally reached by a full document load (see the
+    // auth guard), so links to it are not intercepted for SPA navigation.
+    if (anchor.pathname === this._loginPath) return;
+
     // Use the resolved pathname, search and hash from the anchor element
     // instead of the raw href attribute. This ensures that relative links are
     // correctly resolved against the current base URL before we attempt to match.
@@ -209,15 +213,6 @@ class Router {
     const search = qIndex === -1 ? "" : pathWithoutHash.slice(qIndex);
     const query = this._parseSearch(search);
 
-    // Login path: delegate entirely to the overlay system, never unmount current page.
-    if (pathname === this._loginPath) {
-      const next = query.next ? decodeURIComponent(query.next) : null;
-      window.dispatchEvent(
-        new CustomEvent("app:login-required", { detail: { next } }),
-      );
-      return;
-    }
-
     let matchedRoute = null;
     let params = {};
     for (const route of this._routes) {
@@ -262,15 +257,13 @@ class Router {
       }
     }
 
-    // Auth guard: show login overlay without unmounting the current page.
+    // Auth guard: send unauthenticated visitors to the standalone login page
+    // via a hard navigation, so the credential form loads in its own document —
+    // isolated from any third-party markup injected into the guest UI, and
+    // tearing that guest document down before a password is entered.
     if (!matchedRoute.public && this._authGuard && !this._authGuard()) {
-      history.replaceState(
-        null,
-        "",
+      window.location.assign(
         `${this._loginPath}?next=${encodeURIComponent(fullPath)}`,
-      );
-      window.dispatchEvent(
-        new CustomEvent("app:login-required", { detail: { next: fullPath } }),
       );
       return;
     }
