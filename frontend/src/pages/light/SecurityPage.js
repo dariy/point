@@ -9,7 +9,7 @@ import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/Ad
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
-  changePassword
+  changePassword, changeEmail, getMe
 } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -23,6 +23,8 @@ export default class SecurityPage extends Component {
       sessions: [],
       error: null,
       changingPassword: false,
+      changingEmail: false,
+      email: '',
     };
   }
 
@@ -34,7 +36,7 @@ export default class SecurityPage extends Component {
   }
 
   _renderContent() {
-    const { loading, error, sessions, changingPassword } = this.state;
+    const { loading, error, sessions, changingPassword, changingEmail, email } = this.state;
 
     if (loading) return '<div class="loading-spinner" aria-label="Loading security info…"></div>';
     if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
@@ -55,6 +57,27 @@ export default class SecurityPage extends Component {
               </div>
               <button type="submit" class="btn btn-primary" ${changingPassword ? 'disabled' : ''}>
                 ${changingPassword ? 'Updating…' : 'Update Password'}
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Change Email</h2></div>
+          <div class="card-body">
+            <p class="form-hint">Password reset links are sent to this address.</p>
+            <form id="change-email-form">
+              <div class="form-group">
+                <label class="form-label" for="account-email">Email</label>
+                <input type="email" id="account-email" class="form-input" required autocomplete="email"
+                       value="${escapeHtml(email)}">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="email-password">Current Password</label>
+                <input type="password" id="email-password" class="form-input" required autocomplete="current-password">
+              </div>
+              <button type="submit" class="btn btn-primary" ${changingEmail ? 'disabled' : ''}>
+                ${changingEmail ? 'Updating…' : 'Update Email'}
               </button>
             </form>
           </div>
@@ -108,6 +131,11 @@ export default class SecurityPage extends Component {
       this._handleChangePassword();
     });
 
+    this.container.querySelector('#change-email-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this._handleChangeEmail();
+    });
+
     this.container.querySelector('#logout-others-btn')?.addEventListener('click', () => {
       this._showConfirm('Logout others', 'Logout all other active sessions?', 'Logout Others', 'danger', () => {
         this._handleLogoutOthers();
@@ -132,10 +160,11 @@ export default class SecurityPage extends Component {
 
   async _load() {
     try {
-      const sessions = await getSessions();
+      const [sessions, me] = await Promise.all([getSessions(), getMe()]);
       this.setState({
         loading: false,
         sessions: sessions.sessions || [],
+        email: me?.email || '',
         error: null
       });
     } catch (err) {
@@ -160,6 +189,23 @@ export default class SecurityPage extends Component {
       store.set('toast', { message: err.message || 'Failed to update password.', type: 'error' });
     } finally {
       this.setState({ changingPassword: false });
+    }
+  }
+
+  async _handleChangeEmail() {
+    const emailEl = this.container.querySelector('#account-email');
+    const passEl = this.container.querySelector('#email-password');
+    const email = emailEl.value.trim();
+    const password = passEl.value;
+
+    this.setState({ changingEmail: true });
+    try {
+      await changeEmail(password, email);
+      store.set('toast', { message: 'Email updated successfully.', type: 'success' });
+      this.setState({ changingEmail: false, email });
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to update email.', type: 'error' });
+      this.setState({ changingEmail: false });
     }
   }
 
