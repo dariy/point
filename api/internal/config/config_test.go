@@ -8,6 +8,31 @@ import (
 	"github.com/spf13/viper"
 )
 
+// TestDeploymentInjectionEnv verifies the deployment-driven head/CSP knobs load
+// from the container environment (how the hosting pipeline supplies them).
+func TestDeploymentInjectionEnv(t *testing.T) {
+	viper.Reset()
+	tmpDir := t.TempDir()
+	head := `<script defer src="https://stats.example/s.js" data-website-id="abc"></script>`
+	t.Setenv("HEAD_HTML", head)
+	t.Setenv("CSP_SCRIPT_SRC", "https://stats.example")
+	t.Setenv("CSP_CONNECT_SRC", "https://stats.example")
+
+	config, err := LoadConfig(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if config.HeadHTML != head {
+		t.Errorf("HeadHTML = %q, want %q", config.HeadHTML, head)
+	}
+	if config.CSPScriptSrc != "https://stats.example" {
+		t.Errorf("CSPScriptSrc = %q", config.CSPScriptSrc)
+	}
+	if config.CSPConnectSrc != "https://stats.example" {
+		t.Errorf("CSPConnectSrc = %q", config.CSPConnectSrc)
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	viper.Reset()
 	tmpDir, err := os.MkdirTemp("", "config-test")

@@ -83,6 +83,13 @@
             title="RSS Feed"
             href="/feed.xml"
         />
+
+        <!-- Deployment-injected head markup (analytics, verification tags, …).
+       Substituted at serve time from the HEAD_HTML env var; empty by default so
+       the open-source engine embeds no third-party origin of its own. External
+       scripts injected here also need their origin in CSP_SCRIPT_SRC /
+       CSP_CONNECT_SRC. See api/cmd/api/main.go. -->
+        <!-- __HEAD_HTML__ -->
     </head>
     <body>
         <!-- SPA mount point — all content rendered here by JavaScript -->
