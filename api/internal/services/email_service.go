@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strings"
 )
@@ -20,6 +21,16 @@ func sanitizeHeader(v string) string {
 	v = strings.ReplaceAll(v, "\r", "")
 	v = strings.ReplaceAll(v, "\n", "")
 	return v
+}
+
+// envelopeAddr reduces a From value like `Name <user@host>` to the bare
+// address the SMTP envelope requires — smtp.Client.Mail wraps its argument
+// in MAIL FROM:<...> verbatim, so a display name there is a syntax error.
+func envelopeAddr(from string) string {
+	if a, err := mail.ParseAddress(from); err == nil {
+		return a.Address
+	}
+	return from
 }
 
 // SendEmail sends a plain-text email via SMTP.
@@ -46,10 +57,11 @@ func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 		auth = smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 	}
 
+	from := envelopeAddr(cfg.From)
 	if cfg.Port == 465 {
-		return sendImplicitTLS(cfg.Host, addr, auth, cfg.From, to, msg)
+		return sendImplicitTLS(cfg.Host, addr, auth, from, to, msg)
 	}
-	return sendSTARTTLS(cfg.Host, addr, auth, cfg.From, to, msg)
+	return sendSTARTTLS(cfg.Host, addr, auth, from, to, msg)
 }
 
 func sendImplicitTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte) error {

@@ -88,6 +88,7 @@ type mockRepository struct {
 	MockUpdateSetting             func(ctx context.Context, arg models.UpdateSettingParams) (models.BlogSetting, error)
 	MockUpdateTag                 func(ctx context.Context, arg models.UpdateTagParams) (models.Tag, error)
 	MockUpdateTagPostCount        func(ctx context.Context, id int64) error
+	MockUpdateUserEmail           func(ctx context.Context, arg models.UpdateUserEmailParams) error
 	MockUpdateUserLogin           func(ctx context.Context, id int64) error
 	MockUpdateUserPassword        func(ctx context.Context, arg models.UpdateUserPasswordParams) error
 	MockUpsertSecret              func(ctx context.Context, arg models.UpsertSecretParams) error
@@ -717,6 +718,13 @@ func (m *mockRepository) UpdateUserLogin(ctx context.Context, id int64) error {
 		return m.MockUpdateUserLogin(ctx, id)
 	}
 	return fmt.Errorf("UpdateUserLogin not implemented")
+}
+
+func (m *mockRepository) UpdateUserEmail(ctx context.Context, arg models.UpdateUserEmailParams) error {
+	if m.MockUpdateUserEmail != nil {
+		return m.MockUpdateUserEmail(ctx, arg)
+	}
+	return fmt.Errorf("UpdateUserEmail not implemented")
 }
 
 func (m *mockRepository) UpdateUserPassword(ctx context.Context, arg models.UpdateUserPasswordParams) error {
