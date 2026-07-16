@@ -1,19 +1,19 @@
 /**
- * LoginPage — minimal login overlay.
+ * LoginPage — standalone login page mounted at /light/login.
  *
- * Renders into a dedicated overlay container (outside #app) so the current
- * public page remains visible and blurred behind it.
+ * Reached by a full document load (never an in-app modal), so the credential
+ * form is isolated from the guest UI and any third-party markup injected into
+ * it. On success it navigates to `next` (or /light); dismissing returns home.
  *
- * Props:
- *   next       {string|null}   URL to navigate to on success
- *   onSuccess  {Function}      Called with the user object after login
- *   onCancel   {Function}      Called when the backdrop or Escape is pressed
+ * Props (from the router): { query } — `query.next` is the post-login target.
+ * The legacy overlay props `next`/`onSuccess`/`onCancel` are still honoured if
+ * present.
  */
 
 import { Component } from '../../components/Component.js';
 import { login, loginWithPasskey } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { escapeHtml, navigate } from '../../utils/helpers.js';
 
 export default class LoginPage extends Component {
   constructor(container, props = {}) {
@@ -23,6 +23,26 @@ export default class LoginPage extends Component {
       error: null,
       passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
     };
+  }
+
+  // Post-login target: explicit prop, else ?next from the query, else /light.
+  _next() {
+    return this.props.next || this.props.query?.next || '/light';
+  }
+
+  // Called after a successful login. Honours a legacy onSuccess prop; otherwise
+  // navigates into the app. Staying in this (freshly loaded, third-party-free)
+  // document is fine — the authenticated session never shares it with injected
+  // markup.
+  _finish(user) {
+    if (this.props.onSuccess) return this.props.onSuccess(user);
+    navigate(this._next(), { replace: true });
+  }
+
+  // Dismiss (backdrop / Escape) — return to the public home.
+  _dismiss() {
+    if (this.props.onCancel) return this.props.onCancel();
+    navigate('/', { replace: true });
   }
 
   render() {
@@ -49,6 +69,9 @@ export default class LoginPage extends Component {
                    required placeholder="${loading ? 'Signing in…' : 'Password'}"
                    ${loading ? 'disabled' : ''}>
           </form>
+          <p class="login-forgot">
+            <a id="forgot-password-link" href="/light/pss">Forgot / Restore password?</a>
+          </p>
         </div>
       </div>`;
   }
@@ -64,7 +87,7 @@ export default class LoginPage extends Component {
       try {
         const result = await loginWithPasskey();
         store.set('user', result.user);
-        this.props.onSuccess?.(result.user);
+        this._finish(result.user);
       } catch (err) {
         if (err?.name !== 'NotAllowedError') {
           this.setState({ loading: false, error: err?.message || 'Passkey login failed.' });
@@ -91,7 +114,7 @@ export default class LoginPage extends Component {
       try {
         const result = await login(username, password, true);
         store.set('user', result.user);
-        this.props.onSuccess?.(result.user);
+        this._finish(result.user);
       } catch (err) {
         this.setState({
           loading: false,
@@ -100,15 +123,23 @@ export default class LoginPage extends Component {
       }
     });
 
+    // Forgot / restore password → the public reset-request page. Uses in-app
+    // navigate (consistent with _finish/_dismiss) rather than a full document
+    // load, so the anchor's href is only a fallback for middle-click / crawlers.
+    this.$('#forgot-password-link')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      navigate('/light/pss');
+    });
+
     // Backdrop click cancels.
     const backdrop = this.$('#login-backdrop');
     backdrop?.addEventListener('click', (e) => {
-      if (e.target === backdrop) this.props.onCancel?.();
+      if (e.target === backdrop) this._dismiss();
     });
 
     // Escape key cancels.
     this._onKeyDown = (e) => {
-      if (e.key === 'Escape') this.props.onCancel?.();
+      if (e.key === 'Escape') this._dismiss();
     };
     window.addEventListener('keydown', this._onKeyDown);
 
@@ -118,7 +149,7 @@ export default class LoginPage extends Component {
     setTimeout(() => (usrField || pwField)?.focus(), 80);
 
     // Auto-redirect if already logged in.
-    if (store.get('user')) this.props.onSuccess?.(store.get('user'));
+    if (store.get('user')) this._finish(store.get('user'));
   }
 
   beforeUnmount() {

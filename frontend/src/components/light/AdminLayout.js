@@ -77,7 +77,10 @@ export function setupAdminLayout(component, { currentPath, publicUrl }) {
       /* ignore */
     }
     store.set("user", null);
-    navigate("/", { replace: true });
+    // Hard navigation: drop all in-memory admin state and load a fresh public
+    // document (with analytics restored for the now-guest), mirroring the
+    // public-footer logout.
+    window.location.assign("/");
   };
 
   component.mountChild(LightSidebar, "#sidebar-mount", {

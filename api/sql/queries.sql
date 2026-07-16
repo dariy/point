@@ -36,7 +36,7 @@ INSERT INTO sessions (
 RETURNING *;
 
 -- name: GetSessionByToken :one
-SELECT s.*, u.username, u.display_name
+SELECT s.*, u.username, u.display_name, u.email
 FROM sessions s
 JOIN users u ON s.user_id = u.id
 WHERE s.token = ? LIMIT 1;
@@ -66,6 +66,11 @@ WHERE expires_at < CURRENT_TIMESTAMP;
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = ?
+WHERE id = ?;
+
+-- name: UpdateUserEmail :exec
+UPDATE users
+SET email = ?
 WHERE id = ?;
 
 -- SETTINGS

@@ -66,6 +66,41 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 	return "\n  <script>" + scriptContent + "</script>", hashBase64
 }
 
+// isAdminPath reports whether p is served by the admin ("light") SPA section.
+// Mirrors the section switch in index.html's inline bootstrap so the two agree
+// on what counts as admin.
+func isAdminPath(p string) bool {
+	return strings.HasPrefix(p, "/light") || p == "/setup"
+}
+
+// hasSession reports whether the request carries a non-empty session cookie —
+// i.e. the viewer is (or claims to be) logged in. Used to keep deployment-
+// injected third-party markup out of any authenticated DOM. It only checks for
+// the cookie's presence, not validity: a stale cookie merely costs one visitor
+// their analytics ping, never a security regression, and it avoids a DB lookup
+// on every HTML page load.
+func hasSession(c echo.Context) bool {
+	ck, err := c.Cookie("session")
+	return err == nil && ck.Value != ""
+}
+
+// sanitizeCSPSources normalizes an operator-supplied CSP source list (the
+// CSP_SCRIPT_SRC / CSP_CONNECT_SRC deploy config) into a safe space-separated
+// token list before it is appended to a directive. It splits on whitespace and
+// drops any token carrying a character that could break out of the directive:
+// ';' would start a new directive, ',' a second policy, and CR/LF could split
+// the header. Trusted config, but validated as defense-in-depth.
+func sanitizeCSPSources(s string) string {
+	var out []string
+	for _, tok := range strings.Fields(s) {
+		if strings.ContainsAny(tok, ";,\r\n") {
+			continue
+		}
+		out = append(out, tok)
+	}
+	return strings.Join(out, " ")
+}
+
 // inlineScriptRe matches attribute-less inline <script> blocks in index.html.
 // Scripts with attributes (src=, type=module) load external files and are
 // covered by CSP 'self'.
@@ -276,11 +311,22 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// inline bootstrap script can never silently break CSP. The per-request
 	// __PLUGINS__ manifest hash is appended where index.html is served.
 	scriptSrc := strings.Join(append([]string{"'self'"}, inlineScriptHashes(filepath.Join(cfg.FrontendDir, "index.html"))...), " ")
+	connectSrc := "'self' https://*.basemaps.cartocdn.com"
+	// Deployment-supplied extra CSP origins. They let an operator allow-list a
+	// script injected via HEAD_HTML (analytics, verification, …) without the
+	// open-source engine hardcoding any third-party domain. Empty by default, so
+	// the shipped policy is unchanged unless a deployment opts in.
+	if extra := sanitizeCSPSources(cfg.CSPScriptSrc); extra != "" {
+		scriptSrc += " " + extra
+	}
+	if extra := sanitizeCSPSources(cfg.CSPConnectSrc); extra != "" {
+		connectSrc += " " + extra
+	}
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure
@@ -307,9 +353,21 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// literal __BUILD_VERSION__ placeholder and is a normally tracked file.
 	// Empty when the frontend isn't built — the SPA routes fall back to a 503.
 	indexHTML := filepath.Join(cfg.FrontendDir, "index.html")
+	// Two shells are built: the public one carries the deployment-supplied
+	// <head> markup (analytics/verification tags); the admin one omits it, so the
+	// injected third-party script never loads in the authenticated /light context
+	// — a smaller XSS blast radius, and it keeps admin traffic out of analytics.
 	indexHTMLContent := ""
+	indexHTMLAdmin := ""
 	if b, err := os.ReadFile(indexHTML); err == nil {
-		indexHTMLContent = strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+		base := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+		// Public shell. Note: an inline <script> injected via HEAD_HTML is NOT
+		// covered by the CSP script-src hashes (those are computed from the
+		// on-disk shell), so deployments should inject external scripts and
+		// allow-list their origin via CSP_SCRIPT_SRC.
+		indexHTMLContent = strings.Replace(base, "<!-- __HEAD_HTML__ -->", cfg.HeadHTML, 1)
+		// Admin shell — placeholder dropped, no third-party markup.
+		indexHTMLAdmin = strings.Replace(base, "<!-- __HEAD_HTML__ -->", "", 1)
 	}
 
 	// ── Public health check ────────────────────────────────────────────────────
@@ -349,6 +407,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	authGroup.POST("/logout", authHandler.Logout)
 	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.POST("/change-email", authHandler.ChangeEmail, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
@@ -562,11 +621,21 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.GET("/*", func(c echo.Context) error {
 		if indexHTMLContent != "" {
 			path := c.Request().URL.Path
+			// Pick the shell: the admin one (no deployment-injected third-party
+			// markup) whenever the viewer is privileged — an admin route, or any
+			// request carrying a session. A logged-in admin shows admin controls
+			// on public pages too, so the injected script must not run there
+			// either; keeping it out of every authenticated DOM shrinks the blast
+			// radius if that origin is compromised (it can't ride the session).
+			shell := indexHTMLContent
+			if isAdminPath(path) || hasSession(c) {
+				shell = indexHTMLAdmin
+			}
 			if slug, ok := strings.CutPrefix(path, "/posts/"); ok {
 				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
 				if err == nil && strings.EqualFold(post.Status, "published") {
 					{
-						htmlStr := indexHTMLContent
+						htmlStr := shell
 						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
 
 						var sb strings.Builder
@@ -619,9 +688,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			}
 			// Generic SPA route: serve index.html with the enabled-only plugin
 			// manifest injected so the client bootstrap always sees __PLUGINS__.
+			// shell (chosen above) already omits third-party markup for admin
+			// routes and authenticated viewers.
 			{
 				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
-				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
+				htmlStr := strings.Replace(shell, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")
 				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
@@ -677,6 +748,24 @@ func main() {
 		svcs := initServices(&cfg, repo)
 		slog.Info("Running CLI setup...")
 		runSetupCLI(repo, svcs)
+		os.Exit(0)
+	}
+
+	// Offline operator password recovery: `point reset-password ...`. Runs against
+	// /data/point.db with no SMTP and no manual SQL (see resetpassword.go).
+	if isResetPasswordCmd(os.Args) {
+		slog.Info("CLI reset-password command detected. Initializing...")
+		cfg, err := config.LoadConfig(".")
+		if err != nil {
+			slog.Error("reset-password: failed to load config", "error", err)
+			os.Exit(1)
+		}
+		repo, err := repository.NewRepository(cfg.DatabaseURL)
+		if err != nil {
+			slog.Error("reset-password: failed to initialize repository", "error", err)
+			os.Exit(1)
+		}
+		runResetPasswordCLI(repo)
 		os.Exit(0)
 	}
 
@@ -779,6 +868,20 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("graceful shutdown complete")
+}
+
+// isResetPasswordCmd reports whether the args invoke the reset-password
+// subcommand, tolerating merged args like "point reset-password" the same way
+// setup detection does.
+func isResetPasswordCmd(args []string) bool {
+	for _, arg := range args {
+		trimmed := strings.Trim(arg, " \t\n\r\"'")
+		if trimmed == "reset-password" || strings.HasPrefix(trimmed, "reset-password ") ||
+			strings.Contains(trimmed, " reset-password ") || strings.HasSuffix(trimmed, " reset-password") {
+			return true
+		}
+	}
+	return false
 }
 
 // parseCreateAPIKeyName scans args for --create-api-key=<name> or

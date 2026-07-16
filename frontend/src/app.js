@@ -35,66 +35,21 @@ loadThemeCss();
 // can consult it synchronously. Inert when no manifest is present.
 pluginHost.init();
 
-// ── Login overlay ─────────────────────────────────────────────────────────
-
-const _loginOverlayEl = document.createElement("div");
-_loginOverlayEl.id = "login-overlay";
-document.body.appendChild(_loginOverlayEl);
-
-let _loginModalInstance = null;
-
-async function _showLoginOverlay(next) {
-  if (_loginModalInstance) return;
-
-  const appEl = document.getElementById("app");
-
-  // If #app has no content yet (e.g. direct navigation to /light/login),
-  // render the home page as the blurred background.
-  if (!appEl || appEl.children.length === 0) {
-    const homeRoute = routes.find((r) => r.path === "/");
-    if (homeRoute) {
-      try {
-        const mod = await homeRoute.load();
-        const PageClass = mod.default;
-        const bgPage = new PageClass(appEl, { params: {}, query: {} });
-        bgPage.mount();
-        _applySection("/");
-        store.set("route", { pathname: "/", params: {}, query: {} });
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  if (appEl) appEl.classList.add("login-blur");
-
-  const { default: LoginPage } = await import("./pages/light/LoginPage.js");
-  _loginModalInstance = new LoginPage(_loginOverlayEl, {
-    next,
-    onSuccess: () => {
-      _hideLoginOverlay(false);
-      router.navigate(next || "/light", { replace: true });
-    },
-    onCancel: _hideLoginOverlay,
-  });
-  _loginModalInstance.mount();
-}
-
-function _hideLoginOverlay(restoreUrl = true) {
-  const appEl = document.getElementById("app");
-  if (appEl) appEl.classList.remove("login-blur");
-
-  _loginModalInstance?.unmount();
-  _loginModalInstance = null;
-
-  if (restoreUrl && location.pathname.startsWith("/light/login")) {
-    const route = store.get("route");
-    history.replaceState(null, "", route?.pathname || "/");
-  }
-}
-
+// ── Login trigger ─────────────────────────────────────────────────────────
+//
+// Login is a standalone, hard-loaded page (/light/login), not an in-document
+// modal. Any "login required" signal performs a full-page navigation to it, so
+// the credential form always loads in a fresh document served without the
+// deployment-injected third-party markup (analytics, etc.). This tears down the
+// guest UI — and anything running in it — before a password is ever typed, and
+// keeps that markup out of the authenticated session that follows.
 window.addEventListener("app:login-required", ({ detail }) => {
-  _showLoginOverlay(detail?.next || null);
+  const next = detail?.next || null;
+  const target =
+    "/light/login" + (next ? `?next=${encodeURIComponent(next)}` : "");
+  // Already on the login document? Do nothing — avoid a reload loop.
+  if (location.pathname === "/light/login") return;
+  window.location.assign(target);
 });
 
 // ── CSS section switching ─────────────────────────────────────────────────
@@ -277,6 +232,15 @@ async function resolveTagsModule() {
 }
 
 const routes = [
+  // Standalone login page (public — no auth required). Reached via a hard
+  // navigation so it loads in its own document, isolated from the guest UI and
+  // any third-party markup injected into it.
+  {
+    path: "/light/login",
+    load: () => import("./pages/light/LoginPage.js"),
+    public: true,
+  },
+
   // First-run setup wizard (public — no auth required)
   {
     path: "/setup",
