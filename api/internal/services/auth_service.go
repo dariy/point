@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strconv"
 	"time"
 
@@ -267,4 +268,28 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, currentSession
 
 	_ = s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: currentSessionID})
 	return nil
+}
+
+// ChangeEmail updates the account email after re-verifying the current
+// password. The email is where password-reset links go, so it gets the same
+// protection as a password change; sessions stay intact.
+func (s *AuthService) ChangeEmail(ctx context.Context, userID int64, currentPassword, newEmail string) error {
+	user, err := s.repo.GetUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if !VerifyPassword(currentPassword, user.PasswordHash) {
+		return errors.New("current password incorrect")
+	}
+
+	addr, err := mail.ParseAddress(newEmail)
+	if err != nil || addr.Address != newEmail {
+		return errors.New("invalid email address")
+	}
+
+	return s.repo.UpdateUserEmail(ctx, models.UpdateUserEmailParams{
+		Email: newEmail,
+		ID:    userID,
+	})
 }

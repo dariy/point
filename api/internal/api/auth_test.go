@@ -234,6 +234,72 @@ func TestAuthHandler_ChangePassword(t *testing.T) {
 	_ = handler.ChangePassword(c) // may or may not error depending on binding
 }
 
+func TestAuthHandler_ChangeEmail(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	password := "pass123"
+	hash, _ := services.HashPassword(password)
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "emailuser", Email: "old@test.com", PasswordHash: hash, DisplayName: "EM",
+	})
+
+	authSvc := services.NewAuthService(repo)
+	handler := NewAuthHandler(authSvc, &config.Config{}, repo)
+	e := echo.New()
+	session := models.GetSessionByTokenRow{UserID: user.ID}
+
+	post := func(body []byte) (*httptest.ResponseRecorder, error) {
+		req := httptest.NewRequest(http.MethodPost, "/auth/email", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set("user", session)
+		return rec, handler.ChangeEmail(c)
+	}
+
+	// Missing email
+	body, _ := json.Marshal(ChangeEmailRequest{CurrentPassword: password, Email: ""})
+	if _, err := post(body); err == nil {
+		t.Error("expected error for empty email")
+	}
+
+	// Wrong current password
+	body, _ = json.Marshal(ChangeEmailRequest{CurrentPassword: "wrongpass", Email: "new@test.com"})
+	if _, err := post(body); err == nil {
+		t.Error("expected error for wrong current password")
+	}
+
+	// Invalid email format
+	body, _ = json.Marshal(ChangeEmailRequest{CurrentPassword: password, Email: "not an email"})
+	if _, err := post(body); err == nil {
+		t.Error("expected error for invalid email")
+	}
+
+	// Display-name form is rejected (bare address only)
+	body, _ = json.Marshal(ChangeEmailRequest{CurrentPassword: password, Email: "New <new@test.com>"})
+	if _, err := post(body); err == nil {
+		t.Error("expected error for display-name email")
+	}
+
+	// Success
+	body, _ = json.Marshal(ChangeEmailRequest{CurrentPassword: password, Email: "new@test.com"})
+	rec, err := post(body)
+	if err != nil {
+		t.Fatalf("ChangeEmail failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	updated, _ := repo.GetUser(context.Background(), user.ID)
+	if updated.Email != "new@test.com" {
+		t.Errorf("email not updated: got %q", updated.Email)
+	}
+}
+
 func TestAuthHandler_LogoutWithSession(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {

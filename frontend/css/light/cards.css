@@ -58,3 +58,15 @@
 .card.collapsed .toggle-icon {
     transform: rotate(-90deg);
 }
+
+/* Security page: form cards side by side, sessions table full width */
+.security-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--spacing-lg);
+    align-items: start;
+}
+
+.security-grid .security-full-width {
+    grid-column: 1 / -1;
+}

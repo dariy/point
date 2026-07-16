@@ -1082,7 +1082,7 @@ func (q *Queries) GetSecret(ctx context.Context, key string) (BlogSecret, error)
 }
 
 const getSessionByToken = `-- name: GetSessionByToken :one
-SELECT s.id, s.user_id, s.token, s.ip_address, s.user_agent, s.location, s.created_at, s.expires_at, s.last_activity, u.username, u.display_name
+SELECT s.id, s.user_id, s.token, s.ip_address, s.user_agent, s.location, s.created_at, s.expires_at, s.last_activity, u.username, u.display_name, u.email
 FROM sessions s
 JOIN users u ON s.user_id = u.id
 WHERE s.token = ? LIMIT 1
@@ -1100,6 +1100,7 @@ type GetSessionByTokenRow struct {
 	LastActivity time.Time      `json:"last_activity"`
 	Username     string         `json:"username"`
 	DisplayName  string         `json:"display_name"`
+	Email        string         `json:"email"`
 }
 
 func (q *Queries) GetSessionByToken(ctx context.Context, token string) (GetSessionByTokenRow, error) {
@@ -1117,6 +1118,7 @@ func (q *Queries) GetSessionByToken(ctx context.Context, token string) (GetSessi
 		&i.LastActivity,
 		&i.Username,
 		&i.DisplayName,
+		&i.Email,
 	)
 	return i, err
 }
@@ -2505,6 +2507,22 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const updateUserEmail = `-- name: UpdateUserEmail :exec
+UPDATE users
+SET email = ?
+WHERE id = ?
+`
+
+type UpdateUserEmailParams struct {
+	Email string `json:"email"`
+	ID    int64  `json:"id"`
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserEmail, arg.Email, arg.ID)
 	return err
 }
 
