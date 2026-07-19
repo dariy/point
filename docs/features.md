@@ -1,6 +1,9 @@
 # Point Engine — Feature Reference
 
 A complete feature listing for the Point self-hosted photo blog engine.
+For in-depth technical documentation per feature (implementation, architecture
+decisions, future-development notes) see [`features/`](./features/) — index in
+[README.md](./README.md).
 
 ---
 

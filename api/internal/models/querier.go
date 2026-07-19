@@ -93,6 +93,7 @@ type Querier interface {
 	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (BlogSetting, error)
 	UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error)
 	UpdateTagPostCount(ctx context.Context, id int64) error
+	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertSecret(ctx context.Context, arg UpsertSecretParams) error

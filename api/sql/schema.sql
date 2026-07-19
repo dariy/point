@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS media (
 CREATE INDEX IF NOT EXISTS idx_media_post_id ON media(post_id);
 CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_media_checksum ON media(checksum);
+CREATE INDEX IF NOT EXISTS idx_media_original_path ON media(original_path);
 
 -- Sessions
 CREATE TABLE IF NOT EXISTS sessions (

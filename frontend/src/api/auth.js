@@ -115,6 +115,19 @@ export async function changePassword(currentPassword, newPassword) {
 }
 
 /**
+ * Change the current user's email (where password-reset links go).
+ * @param {string} currentPassword
+ * @param {string} email
+ * @returns {Promise<{ message: string }>}
+ */
+export async function changeEmail(currentPassword, email) {
+  return api.post('/api/auth/change-email', {
+    current_name: await sha256(currentPassword),
+    email,
+  });
+}
+
+/**
  * List active sessions.
  * @returns {Promise<{ sessions: object[], total: number }>}
  */

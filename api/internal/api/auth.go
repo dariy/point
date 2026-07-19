@@ -138,10 +138,11 @@ func (h *AuthHandler) Me(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "not authenticated")
 	}
 
-	var username, displayName string
+	var username, displayName, email string
 	if s, ok := user.(models.GetSessionByTokenRow); ok {
 		username = s.Username
 		displayName = s.DisplayName
+		email = s.Email
 	} else if k, ok := user.(models.GetAPIKeyByHashRow); ok {
 		username = k.Username
 		displayName = k.DisplayName
@@ -151,6 +152,7 @@ func (h *AuthHandler) Me(c echo.Context) error {
 		"id":           userID,
 		"username":     username,
 		"display_name": displayName,
+		"email":        email,
 	})
 }
 
@@ -177,6 +179,30 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Password changed successfully"})
+}
+
+type ChangeEmailRequest struct {
+	CurrentPassword string `json:"current_name"`
+	Email           string `json:"email"`
+}
+
+func (h *AuthHandler) ChangeEmail(c echo.Context) error {
+	userID := extractUserID(c.Get("user"))
+
+	var req ChangeEmailRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if strings.TrimSpace(req.Email) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "email is required")
+	}
+
+	if err := h.authService.ChangeEmail(c.Request().Context(), userID, req.CurrentPassword, strings.TrimSpace(req.Email)); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Email changed successfully"})
 }
 
 func (h *AuthHandler) ListSessions(c echo.Context) error {
