@@ -11,10 +11,10 @@ Built with Go + Echo v4 backend and a Vanilla JS SPA frontend.
 ## Quick start
 
 ```bash
-curl -fsSL https://short.darii.net/point-install | bash
+curl -fsSL https://short.point.photos/install | bash
 ```
 
-The wizard asks a few questions (sensible defaults — just hit Enter) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
+The wizard asks a few questions (sensible defaults — just hit Enter should be fine) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
 
 For manual steps, environment variables, and update instructions see [QUICKSTART.md](QUICKSTART.md).
 
@@ -26,7 +26,7 @@ For manual steps, environment variables, and update instructions see [QUICKSTART
 - **Timeline navigation**: interactive timeline with tag-based filtering and year/location drill-down
 - **Tag hierarchy**: many-to many relationship.
 - **Geo-tags**: each tag can be bound to world coordinates.
-- **Map**: highlights all geo-tags on a world map. Thanks to leaflet.
+- **Map**: highlights all geo-tags on a world map. Thanks to [leaflet](https://leafletjs.com).
 - **Comments**: optional built-in [remark42](https://remark42.com) engine — widget under every post, moderation inside the Point admin, anonymous or OAuth commenting
 - **Post scheduling**: publish posts at a future date/time
 - **Drag-and-drop creation**: drop an image on any page to instantly create a post
