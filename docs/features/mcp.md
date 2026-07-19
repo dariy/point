@@ -26,13 +26,12 @@ surface admins must consciously enable from `/light/plugins`).
 ## Key architectural decisions
 
 1. **In-process dispatch to REST handlers, not a service-client layer.** The original
-   plan (see git history of `mcp_proposal.md`) was to vendor the standalone `point-mcp`
-   project and adapt its HTTP client into a `point.API` interface over the services.
-   The final implementation went further: `invoke.go` builds a synthetic `echo.Context`
-   carrying the request context and authenticated principal and calls the existing REST
-   handlers directly. MCP therefore behaves *exactly* like the REST API — same
-   validation, same response mappers, same business rules — with no second process, no
-   network hop, no DTO layer to keep in sync.
+   plan was to vendor the standalone `point-mcp` project and adapt its HTTP client into 
+   a `point.API` interface over the services. The final implementation went further: 
+   `invoke.go` builds a synthetic `echo.Context` carrying the request context and 
+   authenticated principal and calls the existing REST handlers directly. MCP therefore 
+   behaves *exactly* like the REST API — same validation, same response mappers, same 
+   business rules — with no second process, no network hop, no DTO layer to keep in sync.
 2. **Layering**: `mcp` imports `api` (for handler types); `api` never imports `mcp`.
    Wiring happens in `cmd/api/main.go` via `mcp.Register(e, mcp.Deps{...})`. No import
    cycle, no interface seam needed.
@@ -51,8 +50,7 @@ surface admins must consciously enable from `/light/plugins`).
 
 ## Notes for future development
 
-- The OAuth provider (`internal/mcp/oauth`, ~478 LOC) has **zero test coverage** —
-  tracked as `point-test-mcp-oauth-coverage-2ng7` / `point-mcp-oauth-tests-ebxr`.
+- The OAuth provider (`internal/mcp/oauth`, ~478 LOC) has **zero test coverage**.
 - Destructive tool semantics: `point_update_tag` (like the REST PUT it wraps) replaces
   the whole tag — omitted fields are wiped; clients must resend the full object.
 - When adding a REST endpoint that should be MCP-visible, add a tool entry in

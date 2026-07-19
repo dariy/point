@@ -4,9 +4,9 @@ Two directions, both implemented and gated behind the `instagram` plugin:
 
 - **Cross-posting (outbound)** — publish a Point post's photos to an Instagram
   Business/Creator account (single image or ≤10-image carousel) automatically on
-  publish or on demand. Beads epic **point-xq28**.
+  publish or on demand.
 - **Import (inbound)** — pull the connected account's existing posts into Point as
-  drafts, re-runnable as an idempotent sync. Beads epic **point-g34b**.
+  drafts, re-runnable as an idempotent sync.
 
 Both stay true to Point's self-hosted ethos: the admin brings their **own** Meta app
 credentials (like the bring-your-own-Gemini-key pattern); Point operates no shared
@@ -50,8 +50,7 @@ containers + a `CAROUSEL` parent for multi-image), then publish it
 
 Cross-posting is **best-effort**: failure records `instagram_status=failed` +
 `instagram_error` and never blocks the Point publish; the editor surfaces the error
-with a retry. (Known gap: some failures are too silent —
-`point-fix-instagram-silent-fail-a71e`.)
+with a retry. (Known gap: some failures are too silent.)
 
 ## Import
 

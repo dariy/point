@@ -16,6 +16,18 @@ Small, boring-on-purpose features that make the blog a good web citizen.
   snippets, verification tags) — deployment-controlled, not stored in the DB, and
   composed with the other serve-time injections (plugin manifest, per-post meta) in the
   single `</head>` rewrite in `api/cmd/api/main.go`.
+- **Auth-isolated injection**: two HTML shells are built at serve time — the public
+  shell carries `HEAD_HTML`, the admin shell omits it entirely. Admin routes and any
+  authenticated request always get the admin shell, so third-party script from
+  `HEAD_HTML` never reaches an authenticated document, shrinking the XSS blast
+  radius. `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` let the operator extend the
+  Content-Security-Policy to match whatever origin `HEAD_HTML` loads from
+  (sanitized before being appended to the directives).
+- Because of this isolation, login lives at a standalone, hard-loaded `/light/login`
+  page rather than an in-SPA overlay: reaching it (`window.location.assign`, not a
+  soft route change) guarantees the credential form always renders in a fresh
+  document that never inherited injected markup from a prior guest page, and logout
+  hard-navigates for the same reason.
 
 ## Key decisions
 

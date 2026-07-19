@@ -115,8 +115,7 @@ per-post visibility instead of `hides_posts` (the real use case is subtree hidin
 
 ## Notes for future development
 
-- `tag_service.go` is still large; decomposition tracked in
-  `point-tag-service-decompose-6sys` / `point-refactor-tag-domain-clan`.
+- `tag_service.go` is still large; decomposition is planned.
 - Any new tag behavior should be a typed column + (if it must inherit) a second BFS in
   the snapshot builder — never a reserved tag or string convention.
 - `min_tag_posts_to_show` applies to effective (rolled-up) counts at read time.

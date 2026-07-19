@@ -1,6 +1,6 @@
 # Admin UX (`/light`)
 
-Design system for the admin SPA. The 2026 redesign (beads **point-krcu**) restructured
+Design system for the admin SPA. The 2026 redesign restructured
 a flat ten-item admin into **two layers by frequency** — a compose-first daily layer
 (Home, editor essentials, primary nav) over a full Manage layer — via progressive
 disclosure in one app, deliberately *not* a "simple/advanced" mode switch (two UIs to

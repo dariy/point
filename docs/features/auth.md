@@ -7,8 +7,8 @@ Single-admin authentication with several credential surfaces. Services:
 ## What is implemented
 
 - **Password auth** with modern hashing: passwords hash with Argon2id (legacy bcrypt
-  hashes are transparently rehashed on successful login — see
-  `point-fix-rehash-silent-error-flu3` for the logging gap).
+  hashes are transparently rehashed on successful login — there's a known logging gap
+  on rehash failures).
 - **Sessions**: HTTP-only cookies, TTL via `SESSION_EXPIRY_HOURS` (default 30 days).
   The Security page (`/light/security`) lists active sessions with device/IP, revokes
   individual sessions, logs out all other devices, changes password.
@@ -41,11 +41,9 @@ Single-admin authentication with several credential surfaces. Services:
 
 ## Known open items
 
-- Session cookies lack the `Secure` flag and there's no HSTS
-  (`point-sec-cookie-secure-hsts-jmbr`).
-- Login rate limiting is bypassable via `X-Forwarded-For`
-  (`point-sec-ratelimit-xff-bypass-5dp1`); no rate limit on the public API surface
-  (`point-sec-public-ratelimit-i83d`).
-- `SECRET_KEY` is currently dead code (`point-sec-secret-key-dead-i7fr`).
+- Session cookies lack the `Secure` flag and there's no HSTS.
+- Login rate limiting is bypassable via `X-Forwarded-For`; no rate limit on the
+  public API surface.
+- `SECRET_KEY` is currently dead code.
 - Email service review findings: envelope parsing, SMTP injection, STARTTLS downgrade,
-  timeouts (`point-email-service-review-findings-bcxk`).
+  timeouts.

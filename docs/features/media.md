@@ -32,13 +32,12 @@ server-enforced (guests can't fetch media belonging to hidden/draft posts).
 
 Gotchas from production:
 
-- The sync has failed silently in several places historically
-  (`point-fix-media-visibility-silent-2yvr`) — treat visibility-sync errors as
-  privacy bugs, never best-effort.
+- The sync has failed silently in several places historically — treat
+  visibility-sync errors as privacy bugs, never best-effort.
 - A post being "visible" includes tag-driven hiding (see
   [hidden-visibility.md](hidden-visibility.md)): a hidden feature-tag once made public
   feature pages lose their media.
-- Batch recalcs have a known N+1 (`point-perf-media-visibility-n1-yp10`).
+- Batch recalcs have a known N+1.
 
 ## Key decisions
 
@@ -47,4 +46,4 @@ Gotchas from production:
   `IMAGE_PATH_RE` in the editor) — renames go through the service so references update.
 - **Originals are immutable-ish**: EXIF edits keep the original values recoverable.
 - SVG uploads are currently allowlisted but served unsanitized same-origin — open
-  security item (`point-sec-svg-upload-xss-kfku`).
+  security item.

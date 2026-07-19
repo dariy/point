@@ -177,6 +177,9 @@ func (s *RemarkSupervisor) startLocked() {
 					adminIDs = append(adminIDs, fmt.Sprintf("point_%d", id))
 				}
 			}
+			if err := rows.Err(); err != nil {
+				slog.Warn("RemarkSupervisor: error iterating users rows", "error", err)
+			}
 			if len(adminIDs) > 0 {
 				env = append(env, "ADMIN_SHARED_ID="+strings.Join(adminIDs, ","))
 			}

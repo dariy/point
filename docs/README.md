@@ -34,9 +34,15 @@ decisions, out-of-scope notes, and gotchas for future development.
 Design proposals graduate into these docs once implemented (or are recorded in their
 "considered and rejected" sections); proposals are not kept as separate files.
 
+## Plugin catalog
+
+One page per plugin in the registry — [plugins/](./plugins/) (index:
+[plugins/README.md](./plugins/README.md)).
+
 ## Guides
 
 - [Feature Reference](./features.md) — one-line listing of all engine features
+- [Vendors](./vendors.md) — third-party libraries and services in use
 - [Testing](./testing.md) — test layout and how to run
 - [Usages](./usages.md) — operational recipes
 - [Troubleshooting](./troubleshooting.md) — common issues and solutions

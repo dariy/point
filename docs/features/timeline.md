@@ -15,8 +15,7 @@ Mechanics: collision clustering, snap-to-center with eased ~320 ms animations,
 throttled live filtering, pinch/swipe gestures, decade ticks, momentum, double-click /
 double-tap zoom, chevron nav buttons, keyboard navigation.
 
-From the 2026 UX pass (beads **point-krcu**; the proposal graduated into
-implementation):
+From the 2026 UX pass (the proposal graduated into implementation):
 
 - **Density histogram** along the axis (height ∝ `post_count` per year) — the timeline
   reads as a picture of the archive; every cluster's histogram tracks the pill above it.

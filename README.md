@@ -55,6 +55,8 @@ The app is configured via environment variables (or a `.env` file in the working
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
 | `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
+| `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` at serve time (analytics, verification tags) — public shell only, never served to admin/authenticated pages |
+| `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy `script-src`/`connect-src` directives, for use with `HEAD_HTML` |
 
 ## Development
 

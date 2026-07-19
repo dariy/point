@@ -24,6 +24,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 
 ## Media Management
 
+*Full details: [Media Pipeline](./features/media.md)*
+
 | Feature | Description |
 |---|---|
 | Multi-format upload | Accepts photos (JPEG, PNG, WebP, etc.), videos, and audio files in a single unified media library. |
@@ -41,6 +43,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 
 ## AI-Powered Assistance
 
+*Full details: [AI Analysis](./features/ai-analysis.md)*
+
 | Feature | Description |
 |---|---|
 | Gemini image analysis | Integrates with Google Gemini to analyze uploaded images and suggest a title, tags, and excerpt. |
@@ -52,6 +56,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 ---
 
 ## Content & Publishing
+
+*Full details: [Content & Publishing](./features/publishing.md)*
 
 | Feature | Description |
 |---|---|
@@ -70,6 +76,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 
 ## Tagging & Organization
 
+*Full details: [Tag System](./features/tag-system.md), [Hidden Posts & Tags](./features/hidden-visibility.md)*
+
 | Feature | Description |
 |---|---|
 | Hierarchical tag system | Tags form a directed acyclic graph (DAG): a tag can have multiple parents and multiple children. |
@@ -83,6 +91,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 ---
 
 ## Public Blog Frontend
+
+*Full details: [Public UX](./features/public-ux.md), [Tags Visualization](./features/tags-visualization.md), [Timeline](./features/timeline.md), [Immersive Mode & Slideshow](./features/immersive.md)*
 
 | Feature | Description |
 |---|---|
@@ -100,6 +110,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 
 ## Themes & Customization
 
+*Full details: [Themes](./features/themes.md)*
+
 | Feature | Description |
 |---|---|
 | Light / dark / auto modes | Three built-in theme modes; auto follows the OS preference via `prefers-color-scheme`. |
@@ -111,6 +123,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 ---
 
 ## Syndication & SEO
+
+*Full details: [Syndication & SEO](./features/syndication.md)*
 
 | Feature | Description |
 |---|---|
@@ -134,6 +148,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 
 ## Admin Panel
 
+*Full details: [Admin UX](./features/admin-ux.md); Security page: [Auth & Account Security](./features/auth.md)*
+
 | Feature | Description |
 |---|---|
 | Dashboard | At-a-glance stats: total posts, media count, tag count, server uptime, and new-version notification. |
@@ -148,6 +164,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 ---
 
 ## Security
+
+*Full details: [Auth & Account Security](./features/auth.md)*
 
 | Feature | Description |
 |---|---|

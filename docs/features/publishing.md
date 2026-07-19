@@ -18,8 +18,7 @@ Backend core is `PostService` (`api/internal/services/post_service.go`); the edi
   `z-index`, `background-image`, `content`, `transform`, `animation`, `transition`),
   and sanitizer warnings surface as `css_warnings` in the API response.
   `CreatePost`/`UpdatePost` return `(post, warnings, error)`.
-  Known gap: **global** custom CSS bypasses the sanitizer
-  (`point-sec-custom-css-unsanitized-xrxf`).
+  Known gap: **global** custom CSS bypasses the sanitizer.
 - **AI fill** per field when Gemini is configured (see
   [ai-analysis.md](ai-analysis.md)).
 

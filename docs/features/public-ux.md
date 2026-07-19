@@ -3,7 +3,7 @@
 Design system for the visitor-facing SPA (routes: `/`, `/posts/:slug`, `/tags`,
 `/tags/:slug`, `/search`, `/preview/:token`; pages in `frontend/src/pages/public/`,
 shell components in `frontend/src/components/public/` and plugins). The 2026 redesign
-(beads **point-krcu**) targeted consistency and legibility.
+targeted consistency and legibility.
 
 ## Design principles
 

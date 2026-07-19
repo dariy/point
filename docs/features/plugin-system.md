@@ -8,7 +8,7 @@ source of truth.
 
 ## What is implemented
 
-All five phases of the original refactor (beads epic `point-plugin-system-tdgw`) are done.
+All five phases of the original refactor are done.
 
 ### Backend (`api/internal/plugins/registry.go`)
 
@@ -85,10 +85,8 @@ All five phases of the original refactor (beads epic `point-plugin-system-tdgw`)
   wiring is automatic.
 - The settings deep-link mapping on the Plugins page lives in the frontend
   (`SETTINGS_PATHS` in `PluginsPage.js`), keeping the Go package free of admin routing.
-- Known open items: per-request `GetAllSettings` on every SPA fallback is uncached
-  (`point-perf-settings-cache-fxyf`); the esbuild metafile is publicly served
-  (`point-ops-buildmeta-served-id0u`); CSS pipeline should gain esbuild parity
-  (`point-css-esbuild-pipeline-ggxd`).
+- Known open items: per-request `GetAllSettings` on every SPA fallback is uncached;
+  the esbuild metafile is publicly served; CSS pipeline should gain esbuild parity.
 - `scripts/run.sh` mutates `frontend/index.html` (dev build version) — never commit it;
   the manifest is injected at serve time so it survives the dev rewrite, but builds must
   keep a literal `</head>` in `index.html`.

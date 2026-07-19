@@ -6,7 +6,7 @@ Point is a self-hosted personal photo blog designed for simplicity and privacy. 
 
 ```bash
 # shortened
-curl -fsSL https://short.darii.net/point-install | bash
+curl -fsSL https://short.point.photos/install | bash
 ```
 
 ```bash
@@ -93,6 +93,8 @@ You can customize Point by editing the `.env` file.
 | `JPEG_QUALITY` | `85` | Compression quality for JPEG images (1-100) |
 | `SESSION_EXPIRY_HOURS` | `720` | How long an admin session remains valid |
 | `SESSION_EXPIRY_PUBLIC_HOURS` | `24` | How long a public session remains valid |
+| `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` on public pages only (analytics, verification tags) — never sent to `/light` or authenticated requests |
+| `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy, for use with `HEAD_HTML` |
 
 ## Data and Backups
 
@@ -204,7 +206,11 @@ For full details, including carousel publishing and caption templates, see
 
 1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
 2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `DEPLOY_PORT`.
-3. **Forgot your password:** There is currently no self-service reset. To reset manually, run `docker exec -it point /bin/sh` and use the internal CLI tool, or check [GitHub Issues](https://github.com/dariy/point/issues) for guidance.
+3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container:
+   ```bash
+   docker exec -it point ./point reset-password --user="youruser" --password="newpassword"
+   ```
+   This resets the password directly in the database and logs out all existing sessions.
 4. **Container will not start:** Check the application logs for errors by running `docker logs point`.
 
 ## Getting Help

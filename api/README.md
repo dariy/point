@@ -32,7 +32,7 @@ go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 sqlc generate
 
 # Run dev server (reads .env or uses defaults; serves on :8000)
-go run cmd/api/main.go
+go run ./cmd/api
 ```
 
 ## Testing
