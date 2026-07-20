@@ -113,11 +113,16 @@ Point supports long-lived, revocable API keys for programmatic access. These key
 
 ### Creating an API Key
 - **Via UI:** API key management is available in the admin panel under **Settings > Security > API Keys** (Coming soon).
-- **Via CLI (Bootstrap):** If you need an API key before accessing the UI, you can generate one using the CLI:
+- **Via CLI (Bootstrap):** If you need an API key before accessing the UI, download
+  [`create-api-key.sh`](quickstart/cli/create-api-key.sh) into your install directory
+  (next to `docker-compose.yml`) and run:
   ```bash
-  docker exec -it point ./point --create-api-key="My Key Name"
+  curl -fsSLO https://raw.githubusercontent.com/dariy/point/main/quickstart/cli/create-api-key.sh
+  chmod +x create-api-key.sh
+  ./create-api-key.sh "My Key Name"
   ```
   This will print a raw key (starting with `point_pat_`) exactly once. Save it securely.
+  (Equivalent to `docker exec -it point ./point --create-api-key="My Key Name"`.)
 
 ### Using an API Key
 Send the key in the `Authorization` header of your requests:
@@ -206,11 +211,16 @@ For full details, including carousel publishing and caption templates, see
 
 1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
 2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `DEPLOY_PORT`.
-3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container:
+3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container: download
+   [`change-password.sh`](quickstart/cli/change-password.sh) into your install directory
+   (next to `docker-compose.yml`) and run:
    ```bash
-   docker exec -it point ./point reset-password --user="youruser" --password="newpassword"
+   curl -fsSLO https://raw.githubusercontent.com/dariy/point/main/quickstart/cli/change-password.sh
+   chmod +x change-password.sh
+   ./change-password.sh --user="youruser" --password="newpassword"
    ```
    This resets the password directly in the database and logs out all existing sessions.
+   (Equivalent to `docker exec -it point ./point reset-password --user="youruser" --password="newpassword"`.)
 4. **Container will not start:** Check the application logs for errors by running `docker logs point`.
 
 ## Getting Help
