@@ -116,7 +116,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 |---|---|
 | Light / dark / auto modes | Three built-in theme modes; auto follows the OS preference via `prefers-color-scheme`. |
 | Theme toggle | Visitors can override the auto mode with a persistent toggle saved to localStorage. |
-| JSON theme system | Custom themes are defined as JSON files with `light` and `dark` token maps — no CSS knowledge required. |
+| CSS theme system | Custom themes are defined as CSS files. |
 | CSS custom property overrides | Every color and spacing value is exposed as a CSS custom property for surgical per-site tweaks. |
 | Blog metadata settings | Blog title and description are configurable from the admin Settings page and reflected in the public UI and RSS feed. |
 

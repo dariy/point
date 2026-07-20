@@ -183,7 +183,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileExists(t *testing.T) {
 	}
 }
 
-func TestServeSimplifiedMedia_NoCacheHeader(t *testing.T) {
+func TestServeSimplifiedMedia_PublicMedia_CacheControl(t *testing.T) {
 	repo, storage := newMediaRepo(t)
 	createPublicMedia(t, repo, "2024", "01", "photo.jpg")
 	makeMediaFile(t, storage, "2024", "01", "photo.jpg")
@@ -191,8 +191,21 @@ func TestServeSimplifiedMedia_NoCacheHeader(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
-		t.Errorf("expected Cache-Control: no-cache, got %q", cc)
+	if cc := rec.Header().Get("Cache-Control"); cc != "s-maxage=86400, no-cache" {
+		t.Errorf("expected Cache-Control: s-maxage=86400, no-cache, got %q", cc)
+	}
+}
+
+func TestServeSimplifiedMedia_PrivateMedia_CacheControl(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPrivateMedia(t, repo, "2024", "01", "private.jpg")
+	makeMediaFile(t, storage, "2024", "01", "private.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "private.jpg", true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("expected Cache-Control: private, no-store, got %q", cc)
 	}
 }
 

@@ -980,11 +980,17 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		}
 
 		// Media files can be renamed or replaced at the same URL (e.g. rename to
-		// name.png, delete, re-upload a different image, rename again to name.png).
-		// Without this header browsers use heuristic caching and serve the stale
-		// version. no-cache still allows local caching but requires revalidation,
-		// so a 304 is returned on repeated loads when nothing changed.
-		c.Response().Header().Set("Cache-Control", "no-cache")
+		// name.png, delete, re-upload a different image, rename again to name.png),
+		// so browser/edge caches must always revalidate rather than serve stale
+		// bytes. Public media additionally sets s-maxage so a CDN can cache it at
+		// the edge; private media must never be cached by a shared cache, or an
+		// authenticated preview response could leak hidden media to the edge for
+		// unauthenticated requests to reuse.
+		if media.IsPublic != 0 {
+			c.Response().Header().Set("Cache-Control", "s-maxage=86400, no-cache")
+		} else {
+			c.Response().Header().Set("Cache-Control", "private, no-store")
+		}
 
 		// Determine which file to serve.
 		thumbVals, wantThumb := c.Request().URL.Query()["thumb"]
