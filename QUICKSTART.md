@@ -6,7 +6,7 @@ Point is a self-hosted personal photo blog designed for simplicity and privacy. 
 
 ```bash
 # shortened
-curl -fsSL https://short.darii.net/point-install | bash
+curl -fsSL https://short.point.photos/install | bash
 ```
 
 ```bash
@@ -93,6 +93,8 @@ You can customize Point by editing the `.env` file.
 | `JPEG_QUALITY` | `85` | Compression quality for JPEG images (1-100) |
 | `SESSION_EXPIRY_HOURS` | `720` | How long an admin session remains valid |
 | `SESSION_EXPIRY_PUBLIC_HOURS` | `24` | How long a public session remains valid |
+| `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` on public pages only (analytics, verification tags) — never sent to `/light` or authenticated requests |
+| `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy, for use with `HEAD_HTML` |
 
 ## Data and Backups
 
@@ -111,11 +113,16 @@ Point supports long-lived, revocable API keys for programmatic access. These key
 
 ### Creating an API Key
 - **Via UI:** API key management is available in the admin panel under **Settings > Security > API Keys** (Coming soon).
-- **Via CLI (Bootstrap):** If you need an API key before accessing the UI, you can generate one using the CLI:
+- **Via CLI (Bootstrap):** If you need an API key before accessing the UI, download
+  [`create-api-key.sh`](quickstart/cli/create-api-key.sh) into your install directory
+  (next to `docker-compose.yml`) and run:
   ```bash
-  docker exec -it point ./point --create-api-key="My Key Name"
+  curl -fsSLO https://raw.githubusercontent.com/dariy/point/main/quickstart/cli/create-api-key.sh
+  chmod +x create-api-key.sh
+  ./create-api-key.sh "My Key Name"
   ```
   This will print a raw key (starting with `point_pat_`) exactly once. Save it securely.
+  (Equivalent to `docker exec -it point ./point --create-api-key="My Key Name"`.)
 
 ### Using an API Key
 Send the key in the `Authorization` header of your requests:
@@ -204,7 +211,16 @@ For full details, including carousel publishing and caption templates, see
 
 1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
 2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `DEPLOY_PORT`.
-3. **Forgot your password:** There is currently no self-service reset. To reset manually, run `docker exec -it point /bin/sh` and use the internal CLI tool, or check [GitHub Issues](https://github.com/dariy/point/issues) for guidance.
+3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container: download
+   [`change-password.sh`](quickstart/cli/change-password.sh) into your install directory
+   (next to `docker-compose.yml`) and run:
+   ```bash
+   curl -fsSLO https://raw.githubusercontent.com/dariy/point/main/quickstart/cli/change-password.sh
+   chmod +x change-password.sh
+   ./change-password.sh --user="youruser" --password="newpassword"
+   ```
+   This resets the password directly in the database and logs out all existing sessions.
+   (Equivalent to `docker exec -it point ./point reset-password --user="youruser" --password="newpassword"`.)
 4. **Container will not start:** Check the application logs for errors by running `docker logs point`.
 
 ## Getting Help

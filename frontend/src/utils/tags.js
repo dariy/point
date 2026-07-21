@@ -158,14 +158,16 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     _hotZone = createHotZone(() => [_activeCard, anchorEl, _flyoutEl], () => _hideFlyout());
   }
 
-  if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss);
+  if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
   _flyoutDismiss = (e) => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
     if (_flyoutEl.contains(e.target)) return;
     if (excludeEl && excludeEl.contains(e.target)) return;
     _hideFlyout();
   };
-  document.addEventListener('click', _flyoutDismiss);
+  // Capture phase — a photo card's first tap stops propagation to reveal its
+  // overlay, and the flyout must still dismiss when the tap lands there.
+  document.addEventListener('click', _flyoutDismiss, true);
 }
 
 function _hideFlyout() {
@@ -186,12 +188,24 @@ function _hideFlyout() {
   _hotZone?.stop();
   _hotZone = null;
   if (_flyoutDismiss) {
-    document.removeEventListener('click', _flyoutDismiss);
+    document.removeEventListener('click', _flyoutDismiss, true);
     _flyoutDismiss = null;
   }
 }
 
 export function hideFlyout() { _hideFlyout(); }
+
+/**
+ * Hide the shared flyout only when its trigger lives inside `root`.
+ *
+ * The flyout is a singleton, so a surface that closes its own menu (e.g. the
+ * nav "More" panel on an outside click) must not blow away a dropdown another
+ * surface just opened — on touch both happen in the same click dispatch, which
+ * made every breadcrumb/nav tap open a panel and immediately close it again.
+ */
+export function hideFlyoutWithin(root) {
+  if (root && _activeLink && root.contains(_activeLink)) _hideFlyout();
+}
 
 /**
  * Anchor the shared flyout singleton directly beneath a trigger element and
@@ -315,14 +329,14 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }
 
-  if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss);
+  if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
   _flyoutDismiss = (e) => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
     if (_flyoutEl.contains(e.target)) return;
     if (excludeEl && excludeEl.contains(e.target)) return;
     _hideFlyout();
   };
-  document.addEventListener('click', _flyoutDismiss);
+  document.addEventListener('click', _flyoutDismiss, true);
 }
 
 export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
@@ -402,12 +416,17 @@ export function setupScrollableStrip(trackEl, scrollEl) {
   };
 }
 
-export function renderTagStrip(postTags, tagIndex) {
-  const visibleTags = (postTags || []).filter((t) => {
-    if (!tagIndex) return true;
-    const entry = tagIndex.get(t.slug);
-    return entry && entry.isLeaf;
-  });
+/**
+ * The post's own tags, as a horizontally scrollable strip.
+ *
+ * Page endpoints expand each post's tags with their ancestors so a post can be
+ * matched against a whole subtree (see expandPostTagsWithAncestors), and mark
+ * those extras `inherited`. A card must show what the post is tagged with, not
+ * that closure — otherwise one photo of a fern lists location/country/city/…
+ * while the post page lists three tags.
+ */
+export function renderTagStrip(postTags) {
+  const visibleTags = (postTags || []).filter((t) => !t.inherited);
   const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
   if (!tagsHtml) return '';
   return `

@@ -11,6 +11,6 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "eslint": "^9.39.5"
+    "eslint": "^10.7.0"
   }
 }

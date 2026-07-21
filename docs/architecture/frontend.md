@@ -454,11 +454,14 @@ export class Router {
     const isAdminRoute = path.startsWith('/light');
     const isPublicRoute = route.public === true;
 
-    // Auth guard for admin routes
+    // Auth guard for admin routes. This is a HARD navigation
+    // (window.location.assign), not this.navigate() — the login form must load in
+    // its own fresh document, isolated from any third-party markup injected into
+    // the guest shell via HEAD_HTML (see features/syndication.md).
     if (isAdminRoute && !isPublicRoute) {
       const user = store.get('user');
       if (!user) {
-        this.navigate('/light/login', { replace: true });
+        window.location.assign(`/light/login?next=${encodeURIComponent(path)}`);
         return;
       }
     }
@@ -1088,7 +1091,8 @@ async _loadData() {
     this.setState({ loading: false, data });
   } catch (err) {
     if (err.status === 401) {
-      router.navigate('/light/login');
+      // Hard navigation, not router.navigate() — see the auth-guard note in 3.2.
+      window.location.assign('/light/login');
       return;
     }
     this.setState({ loading: false, error: err.message });

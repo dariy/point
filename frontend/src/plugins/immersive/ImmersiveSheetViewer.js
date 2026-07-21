@@ -68,13 +68,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
       ? `<p class="immersive-sheet-excerpt">${linkify(post.excerpt)}</p>`
       : '';
 
-    const navTags = store.get('navTags') || [];
-    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    const tags = (post.tags || []).filter((t) => {
-      if (!tagIndex) return true;
-      const entry = tagIndex.get(t.slug);
-      return !entry || entry.isLeaf;
-    });
+    // The post's own tags — ancestors the page endpoints add for subtree
+    // matching are marked `inherited` and belong to the breadcrumb, not here.
+    const tags = (post.tags || []).filter((t) => !t.inherited);
     const tagsHtml = tags.length
       ? `<div class="immersive-sheet-tags">${tags.map((t) => renderTagLink(t)).join('')}</div>`
       : '';

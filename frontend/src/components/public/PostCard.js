@@ -65,11 +65,7 @@ export class PostCard extends Component {
       </div>`
       : "";
 
-    const settings = store.get("settings") || {};
-    const isCustomMenu = settings.nav_menu_mode === 'custom';
-    const navTags = store.get("navTags") || [];
-    const tagIndex = (navTags.length && !isCustomMenu) ? buildTagIndex(navTags) : null;
-    const tags = renderTagStrip(post.tags, tagIndex);
+    const tags = renderTagStrip(post.tags);
 
     const viewCount =
       showViewCount && post.view_count != null

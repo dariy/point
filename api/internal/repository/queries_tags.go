@@ -325,6 +325,10 @@ type PostTagInfo struct {
 	Kind      string          `json:"kind"`
 	Latitude  sql.NullFloat64 `json:"-"`
 	Longitude sql.NullFloat64 `json:"-"`
+	// Inherited marks a tag the post does not carry itself — an ancestor added
+	// by page endpoints so the client can match a post against a whole subtree.
+	// Never set by the repository; see expandPostTagsWithAncestors.
+	Inherited bool `json:"inherited,omitempty"`
 }
 
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
