@@ -83,6 +83,12 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 			"slug": t.Slug,
 			"kind": t.Kind,
 		}
+		// Ancestors added by expandPostTagsWithAncestors: the post is matched by
+		// them, but it isn't tagged with them, so surfaces that show "this post's
+		// tags" (the card / post tag strip) leave them out.
+		if t.Inherited {
+			tagObj["inherited"] = true
+		}
 		// Geo coords (when set) let the frontend classify a tag as a "place" and
 		// colour its pill accordingly, matching the Atlas / tags graph.
 		if t.Latitude.Valid && t.Longitude.Valid {

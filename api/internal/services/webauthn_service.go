@@ -249,7 +249,7 @@ func (s *WebAuthnService) DeleteCredential(ctx context.Context, userID int64) er
 // GenerateSessionKey creates a unique key for storing session data.
 // It's a simple SHA256 hash of the user's IP and a nonce.
 func GenerateSessionKey(userIP, nonce string) string {
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%s-%s", userIP, nonce)))
+	hash := sha256.Sum256(fmt.Appendf(nil, "%s-%s", userIP, nonce))
 	return fmt.Sprintf("%x", hash)
 }
 

@@ -6,36 +6,36 @@
 
 A self-hosted personal photo blog engine. Single container, SQLite storage, no external services required.
 
-Built with Go + Echo v4 backend and a Vanilla JS SPA frontend.
+Built with Go + Echo v4 backend and a plain JS SPA frontend.
 
 ## Quick start
 
 ```bash
-curl -fsSL https://short.darii.net/point-install | bash
+curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
+```
+or with the shortcut:
+
+```bash
+curl -fsSL https://short.point.photos/install | bash
 ```
 
-The wizard asks a few questions (sensible defaults — just hit Enter) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
+The wizard asks a few questions (sensible defaults — just hit Enter should be fine) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
 
 For manual steps, environment variables, and update instructions see [QUICKSTART.md](QUICKSTART.md).
 
 ## Key features
 
+- **Single container**: multi-stage Dockerfile, runs as non-root, multi-arch (amd64 + arm64) GHCR images
 - **Media-centric**: automatic thumbnail generation, image resizing, video support, EXIF extraction
-- **AI analysis**: Google Gemini integration for automatic title, tags, and excerpt suggestions
 - **Instagram cross-posting**: publish photos to Instagram Business/Creator accounts automatically on publish or on demand (BYO Meta app credentials)
 - **Timeline navigation**: interactive timeline with tag-based filtering and year/location drill-down
-- **Tag hierarchy**: many-to many relationship.
 - **Geo-tags**: each tag can be bound to world coordinates.
-- **Map**: highlights all geo-tags on a world map. Thanks to leaflet.
+- **Map**: highlights all geo-tags on a world map. Thanks to [leaflet](https://leafletjs.com).
 - **Comments**: optional built-in [remark42](https://remark42.com) engine — widget under every post, moderation inside the Point admin, anonymous or OAuth commenting
 - **Post scheduling**: publish posts at a future date/time
-- **Drag-and-drop creation**: drop an image on any page to instantly create a post
 - **Immersive mode**: full-screen, distraction-free viewing
-- **Themes**: several built-in css themes. Support for custom themes.
-- **Theme modes**: built-in dark/light/auto theme modes with CSS custom property overrides
-- **Single container**: multi-stage Dockerfile, runs as non-root, multi-arch (amd64 + arm64) GHCR images
-- **Self-hosted**: no external databases, no cloud services required (Gemini is optional).
-- **API Key authentication**: long-lived, revocable keys for programmatic access via Bearer tokens
+
+[Full feature list](docs/features.md)
 
 ## Configuration
 
@@ -55,6 +55,8 @@ The app is configured via environment variables (or a `.env` file in the working
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
 | `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
+| `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` at serve time (analytics, verification tags) — public shell only, never served to admin/authenticated pages |
+| `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy `script-src`/`connect-src` directives, for use with `HEAD_HTML` |
 
 ## Development
 

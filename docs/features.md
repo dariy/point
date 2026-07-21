@@ -1,6 +1,9 @@
 # Point Engine — Feature Reference
 
 A complete feature listing for the Point self-hosted photo blog engine.
+For in-depth technical documentation per feature (implementation, architecture
+decisions, future-development notes) see [`features/`](./features/) — index in
+[README.md](./README.md).
 
 ---
 
@@ -21,6 +24,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 
 ## Media Management
 
+*Full details: [Media Pipeline](./features/media.md)*
+
 | Feature | Description |
 |---|---|
 | Multi-format upload | Accepts photos (JPEG, PNG, WebP, etc.), videos, and audio files in a single unified media library. |
@@ -38,6 +43,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 
 ## AI-Powered Assistance
 
+*Full details: [AI Analysis](./features/ai-analysis.md)*
+
 | Feature | Description |
 |---|---|
 | Gemini image analysis | Integrates with Google Gemini to analyze uploaded images and suggest a title, tags, and excerpt. |
@@ -49,6 +56,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 ---
 
 ## Content & Publishing
+
+*Full details: [Content & Publishing](./features/publishing.md)*
 
 | Feature | Description |
 |---|---|
@@ -67,6 +76,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 
 ## Tagging & Organization
 
+*Full details: [Tag System](./features/tag-system.md), [Hidden Posts & Tags](./features/hidden-visibility.md)*
+
 | Feature | Description |
 |---|---|
 | Hierarchical tag system | Tags form a directed acyclic graph (DAG): a tag can have multiple parents and multiple children. |
@@ -80,6 +91,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 ---
 
 ## Public Blog Frontend
+
+*Full details: [Public UX](./features/public-ux.md), [Tags Visualization](./features/tags-visualization.md), [Timeline](./features/timeline.md), [Immersive Mode & Slideshow](./features/immersive.md)*
 
 | Feature | Description |
 |---|---|
@@ -97,17 +110,21 @@ A complete feature listing for the Point self-hosted photo blog engine.
 
 ## Themes & Customization
 
+*Full details: [Themes](./features/themes.md)*
+
 | Feature | Description |
 |---|---|
 | Light / dark / auto modes | Three built-in theme modes; auto follows the OS preference via `prefers-color-scheme`. |
 | Theme toggle | Visitors can override the auto mode with a persistent toggle saved to localStorage. |
-| JSON theme system | Custom themes are defined as JSON files with `light` and `dark` token maps — no CSS knowledge required. |
+| CSS theme system | Custom themes are defined as CSS files. |
 | CSS custom property overrides | Every color and spacing value is exposed as a CSS custom property for surgical per-site tweaks. |
 | Blog metadata settings | Blog title and description are configurable from the admin Settings page and reflected in the public UI and RSS feed. |
 
 ---
 
 ## Syndication & SEO
+
+*Full details: [Syndication & SEO](./features/syndication.md)*
 
 | Feature | Description |
 |---|---|
@@ -131,6 +148,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 
 ## Admin Panel
 
+*Full details: [Admin UX](./features/admin-ux.md); Security page: [Auth & Account Security](./features/auth.md)*
+
 | Feature | Description |
 |---|---|
 | Dashboard | At-a-glance stats: total posts, media count, tag count, server uptime, and new-version notification. |
@@ -145,6 +164,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 ---
 
 ## Security
+
+*Full details: [Auth & Account Security](./features/auth.md)*
 
 | Feature | Description |
 |---|---|

@@ -1072,18 +1072,28 @@ func (h *PagesHandler) expandPostTagsWithAncestors(
 	for postID, tags := range postTagsMap {
 		seen := make(map[int64]bool, len(tags)*3)
 		expanded := make([]repository.PostTagInfo, 0, len(tags)*2)
+		roots := make([]int64, 0, len(tags))
+
+		// Pass 1 — the post's own tags, claimed before any ancestor walk runs.
+		// A post tagged with both "botany" and its parent "nature" carries both,
+		// and walking up from "botany" first would otherwise reach "nature" and
+		// file it as inherited, hiding it from the post's tag strip.
 		for _, t := range tags {
 			if seen[t.ID] {
 				continue
 			}
 			seen[t.ID] = true
+			// A hidden tag contributes nothing — not even its ancestors.
 			if publicOnly && g.EffectiveHidden[t.ID] {
 				continue
 			}
 			expanded = append(expanded, t)
+			roots = append(roots, t.ID)
+		}
 
-			// BFS from this tag in-memory
-			queue := []int64{t.ID}
+		// Pass 2 — ancestors of those tags, BFS in-memory, marked inherited.
+		for _, id := range roots {
+			queue := []int64{id}
 			for len(queue) > 0 {
 				cur := queue[0]
 				queue = queue[1:]
@@ -1098,9 +1108,10 @@ func (h *PagesHandler) expandPostTagsWithAncestors(
 					}
 					p := g.ByID[pid]
 					expanded = append(expanded, repository.PostTagInfo{
-						ID:   p.ID,
-						Name: p.Name,
-						Slug: p.Slug,
+						ID:        p.ID,
+						Name:      p.Name,
+						Slug:      p.Slug,
+						Inherited: true,
 					})
 					queue = append(queue, pid)
 				}
