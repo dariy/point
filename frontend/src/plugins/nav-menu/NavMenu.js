@@ -84,8 +84,16 @@ export class NavMenu {
 
     const items = this._items();
     const inlineMax = parseInt(settings.nav_inline_max, 10) || DEFAULT_INLINE_MAX;
-    this._inline = items.slice(0, inlineMax);
-    this._configOverflow = items.slice(inlineMax);
+    // nav_inline_max caps the number of *visible* nav slots, and the "More ▾"
+    // button takes one of those slots whenever it's shown. So if every item
+    // fits (items <= max) show them all with no More; otherwise reserve a slot
+    // for More and show max-1 links inline, folding the rest into the panel.
+    // This avoids burying a single link under a More button that costs the same
+    // room. (The fold controller still collapses more links into More when the
+    // header actually runs out of horizontal space.)
+    const cap = items.length <= inlineMax ? items.length : inlineMax - 1;
+    this._inline = items.slice(0, cap);
+    this._configOverflow = items.slice(cap);
 
     // Tags button — the active viz is the enabled tags-viz plugin (at most
     // one). None enabled → no tags link. Rendered as one more nav item.
@@ -109,7 +117,7 @@ export class NavMenu {
            data-nav-i="${i}">${escapeHtml(it.name)}</a>`).join('')}
       <span class="nav-more is-empty">
         <button type="button" class="nav-menu-link nav-more-btn"
-                aria-haspopup="true" aria-expanded="false">More<span class="nav-more-caret" aria-hidden="true">▾</span></button>
+                aria-haspopup="true" aria-expanded="false">${escapeHtml(settings.nav_more_title || 'More')}<span class="nav-more-caret" aria-hidden="true">▾</span></button>
         <div class="nav-more-panel"></div>
       </span>
       ${tagsVisible
