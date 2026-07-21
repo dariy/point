@@ -185,6 +185,12 @@ export class PublicHeader extends Component {
     this._group = this.$('.site-header-group');
     this._inner = this.$('.site-header-inner');
 
+    // Render generation: slot fills are async, so a fill that resolves after a
+    // re-render belongs to a dead header and is unmounted on arrival.
+    this._slotMounts = [];
+    this._docListeners = [];
+    const gen = (this._renderGen = (this._renderGen || 0) + 1);
+
     // One fold controller owns the header's space; components and plugins
     // contribute ordered fold ops (see utils/headerFold.js for the order map).
     this._fold = new HeaderFold({
@@ -197,13 +203,18 @@ export class PublicHeader extends Component {
     // each fill is followed by a relayout. The nav-menu plugin receives the
     // whole inner row: it renders into `.site-nav-items` and the burger slots,
     // and registers its own links → More fold stage (order 30) via `fold`.
+    //
+    // The mounts are kept so `_teardownRender` can unmount them: these plugins
+    // hold store subscriptions and document-level listeners, and a stale one
+    // acts on the *previous* render's detached DOM — which is how a leaked
+    // nav-menu ended up closing every header dropdown the moment it opened.
     if (pluginHost.hasSlot('breadcrumbs')) {
       pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group })
-        .then(() => this._fold?.relayout());
+        .then((comps) => { this._keepSlotMounts(gen, comps); this._fold?.relayout(); });
     }
     if (pluginHost.hasSlot('nav-menu')) {
       pluginHost.fill('nav-menu', this._inner, { ...this.props, fold: this._fold })
-        .then(() => this._fold?.relayout());
+        .then((comps) => { this._keepSlotMounts(gen, comps); this._fold?.relayout(); });
     }
 
     // Distraction-free toggle: the post list asks for it (distractionToggle);
@@ -293,7 +304,7 @@ export class PublicHeader extends Component {
 
       searchForm.addEventListener('submit', (e) => { e.preventDefault(); submitSearch(); });
       input.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
-      document.addEventListener('click', (e) => {
+      this._onDocument('click', (e) => {
         if (searchForm.classList.contains('is-active') && !searchForm.contains(e.target)) closeSearch();
       });
     }
@@ -325,7 +336,7 @@ export class PublicHeader extends Component {
         }
       });
 
-      document.addEventListener('click', (e) => {
+      this._onDocument('click', (e) => {
         if (!navBurger.contains(e.target)) this._closeBurger();
       });
     }
@@ -333,6 +344,39 @@ export class PublicHeader extends Component {
 
     // Initial fold pass (HeaderFold's own ResizeObserver keeps it current).
     this._fold.relayout();
+  }
+
+  /**
+   * A document-level listener owned by this render, removed by `_teardownRender`.
+   * Header listeners that outlive their DOM keep firing against detached nodes.
+   *
+   * Capture phase: these are dismiss handlers, and content below the header
+   * stops propagation on some taps (a photo card's first tap reveals its
+   * overlay), which would otherwise leave the burger or search stuck open.
+   */
+  _onDocument(type, handler) {
+    document.addEventListener(type, handler, true);
+    this._docListeners.push([type, handler]);
+  }
+
+  /** Keep a slot fill's mounts, or unmount them if their render is already gone. */
+  _keepSlotMounts(gen, comps) {
+    const mounts = [].concat(comps || []).filter(Boolean);
+    if (gen !== this._renderGen || this._unmounted) {
+      mounts.forEach((m) => m.unmount?.());
+      return;
+    }
+    this._slotMounts.push(...mounts);
+  }
+
+  /** Release everything this render attached outside its own container. */
+  _teardownRender() {
+    this._slotMounts?.forEach((m) => m.unmount?.());
+    this._slotMounts = [];
+    this._docListeners?.forEach(([type, handler]) => document.removeEventListener(type, handler, true));
+    this._docListeners = [];
+    this._fold?.destroy();
+    this._fold = null;
   }
 
   /**
@@ -527,13 +571,11 @@ export class PublicHeader extends Component {
   }
 
   beforeRender() {
-    this._fold?.destroy();
-    this._fold = null;
+    this._teardownRender();
   }
 
   beforeUnmount() {
-    this._fold?.destroy();
-    this._fold = null;
+    this._teardownRender();
     hideFlyout();
     // Clears body.distraction-free and removes the button portalled to body.
     this._dfPlugin?.unmount?.();

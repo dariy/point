@@ -72,6 +72,28 @@ func TestPostByTagToResponse(t *testing.T) {
 	}
 }
 
+// Ancestors added by expandPostTagsWithAncestors are marked so the client can
+// tell "this post is tagged X" from "this post lives under X" — the tag strip
+// shows only the former.
+func TestPostToResponse_MarksInheritedTags(t *testing.T) {
+	p := models.Post{ID: 1, Title: "Fern", Slug: "fern", Status: "published"}
+	tags := []repository.PostTagInfo{
+		{ID: 2, Name: "fern", Slug: "fern"},
+		{ID: 3, Name: "nature", Slug: "nature", Inherited: true},
+	}
+
+	tagList := postToResponse(p, tags, nil)["tags"].([]map[string]interface{})
+	if len(tagList) != 2 {
+		t.Fatalf("expected both tags in the payload, got %d", len(tagList))
+	}
+	if _, ok := tagList[0]["inherited"]; ok {
+		t.Errorf("direct tag must not carry the inherited flag: %v", tagList[0])
+	}
+	if tagList[1]["inherited"] != true {
+		t.Errorf("expanded ancestor must be marked inherited: %v", tagList[1])
+	}
+}
+
 func TestTagToListItem(t *testing.T) {
 	tag := models.Tag{
 		ID:   10,

@@ -1,7 +1,7 @@
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
-import { showCrumbDropdown, hideFlyout } from '../../utils/tags.js';
+import { showCrumbDropdown, hideFlyout, hideFlyoutWithin } from '../../utils/tags.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 
 const DEFAULT_INLINE_MAX = 4;
@@ -45,11 +45,18 @@ export class NavMenu {
     }
 
     // One document-level listener closes the More panel on outside clicks.
+    // It must be inert unless the panel is actually open: on touch, opening any
+    // header dropdown *is* a document click, and an unconditional close here
+    // would shut the panel the same tap just opened.
+    // Capture phase, because content below stops propagation on its own taps
+    // (a photo card's first tap reveals its overlay) — the panel must still
+    // close when the tap lands there.
     this._onDocClick = (e) => {
-      const more = this.navItemsEl.querySelector('.nav-more');
+      if (!this.navItemsEl.isConnected) return;
+      const more = this.navItemsEl.querySelector('.nav-more.open');
       if (more && !more.contains(e.target)) this._closeMore();
     };
-    document.addEventListener('click', this._onDocClick);
+    document.addEventListener('click', this._onDocClick, true);
 
     this.render();
   }
@@ -58,7 +65,7 @@ export class NavMenu {
     if (this._unsubscribeNav) this._unsubscribeNav();
     if (this._unsubscribeSettings) this._unsubscribeSettings();
     if (this._unregisterFold) this._unregisterFold();
-    if (this._onDocClick) document.removeEventListener('click', this._onDocClick);
+    if (this._onDocClick) document.removeEventListener('click', this._onDocClick, true);
     hideFlyout();
   }
 
@@ -209,8 +216,8 @@ export class NavMenu {
       const more = moreBtn.closest('.nav-more');
       const open = more.classList.toggle('open');
       moreBtn.setAttribute('aria-expanded', String(open));
-      // Closing the panel also dismisses any open child dropdown.
-      if (!open) hideFlyout();
+      // Closing the panel also dismisses the child dropdown it opened.
+      if (!open) hideFlyoutWithin(more);
     });
   }
 
@@ -219,7 +226,9 @@ export class NavMenu {
     if (!more) return;
     more.classList.remove('open');
     more.querySelector('.nav-more-btn')?.setAttribute('aria-expanded', 'false');
-    hideFlyout();
+    // Only the child dropdown this panel owns — the flyout is a singleton, and
+    // a breadcrumb may have just opened its own in the same click.
+    hideFlyoutWithin(more);
   }
 
   /** Inline links currently visible (not folded into More), left to right. */
