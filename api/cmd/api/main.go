@@ -970,24 +970,31 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 				}
 			}
 			if err != nil {
+				// no-store so the edge never caches a 404 keyed on the .jpg
+				// extension and then serves it stale after the file appears.
+				c.Response().Header().Set("Cache-Control", "no-store")
 				return echo.NewHTTPError(http.StatusNotFound, "media not found")
 			}
 		}
 
 		// Enforce visibility: unauthenticated clients cannot access private media.
 		if media.IsPublic == 0 && !isAuthenticated {
+			// no-store so publishing a previously-hidden post is not masked by
+			// a cached 404 at the edge (see the DB-miss branch above).
+			c.Response().Header().Set("Cache-Control", "no-store")
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
-		// Media files can be renamed or replaced at the same URL (e.g. rename to
-		// name.png, delete, re-upload a different image, rename again to name.png),
-		// so browser/edge caches must always revalidate rather than serve stale
-		// bytes. Public media additionally sets s-maxage so a CDN can cache it at
-		// the edge; private media must never be cached by a shared cache, or an
-		// authenticated preview response could leak hidden media to the edge for
-		// unauthenticated requests to reuse.
+		// Public media is edge-cacheable so a CDN absorbs traffic without
+		// hitting the origin: s-maxage lets a shared cache serve it for a day,
+		// while a short browser max-age bounds client staleness. Media can be
+		// renamed/replaced/unpublished at the same URL, so a change requires a
+		// manual edge purge (rare, operator-driven) — we deliberately trade
+		// no-cache revalidation for full offload. Private media must never be
+		// cached by a shared cache, or an authenticated preview response could
+		// leak hidden media to the edge for unauthenticated requests to reuse.
 		if media.IsPublic != 0 {
-			c.Response().Header().Set("Cache-Control", "s-maxage=86400, no-cache")
+			c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
 		} else {
 			c.Response().Header().Set("Cache-Control", "private, no-store")
 		}
