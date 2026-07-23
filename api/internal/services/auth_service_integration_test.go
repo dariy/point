@@ -220,6 +220,44 @@ func TestAuthService_ChangePassword(t *testing.T) {
 	}
 }
 
+// TestAuthService_ChangeEmail covers the re-verify-then-update flow and its
+// guard rails: a wrong current password and a malformed new address are both
+// rejected before the email is touched.
+func TestAuthService_ChangeEmail(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	hash, _ := HashPassword("correct")
+	if _, err := repo.DB().Exec(
+		`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','old@example.com',?,'U')`, hash,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wrong current password → rejected, email unchanged.
+	if err := svc.ChangeEmail(ctx, 1, "wrong", "new@example.com"); err == nil {
+		t.Fatal("ChangeEmail with wrong password should fail")
+	}
+
+	// Malformed new address → rejected.
+	if err := svc.ChangeEmail(ctx, 1, "correct", "not-an-email"); err == nil {
+		t.Fatal("ChangeEmail with an invalid address should fail")
+	}
+
+	// Correct password + valid address → email updated.
+	if err := svc.ChangeEmail(ctx, 1, "correct", "new@example.com"); err != nil {
+		t.Fatalf("ChangeEmail: %v", err)
+	}
+	var email string
+	if err := repo.DB().QueryRow(`SELECT email FROM users WHERE id=1`).Scan(&email); err != nil {
+		t.Fatal(err)
+	}
+	if email != "new@example.com" {
+		t.Fatalf("email = %q, want new@example.com", email)
+	}
+}
+
 // TestAuthService_ChangePassword_Error covers the ChangePassword error paths.
 func TestAuthService_ChangePassword_Error(t *testing.T) {
 	svc, repo := setupAuthService(t)
