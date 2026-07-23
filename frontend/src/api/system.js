@@ -41,11 +41,16 @@ export function listBackups() {
 }
 
 /**
+ * Schedule a restore (applied on the next restart). Gated by the account
+ * password — replacing all data, including the login password, is destructive.
  * @param {string} filename
+ * @param {string} sha256pw - sha256-hex of the account password
  * @returns {Promise<object>}
  */
-export function restoreBackup(filename) {
-  return api.post(`/api/system/backups/${encodeURIComponent(filename)}/restore`);
+export function restoreBackup(filename, sha256pw) {
+  return api.post(`/api/system/backups/${encodeURIComponent(filename)}/restore`, {
+    current_name: sha256pw,
+  });
 }
 
 /**
@@ -56,9 +61,71 @@ export function deleteBackup(filename) {
   return api.delete(`/api/system/backups/${encodeURIComponent(filename)}`);
 }
 
+/**
+ * Move out — step 1: re-verify the password and get a one-time download token.
+ * @param {string} filename
+ * @param {string} sha256pw - sha256-hex of the account password
+ * @returns {Promise<{token: string}>}
+ */
+export function authorizeBackupDownload(filename, sha256pw) {
+  return api.post(`/api/system/backups/${encodeURIComponent(filename)}/authorize-download`, {
+    current_name: sha256pw,
+  });
+}
+
+/**
+ * Move out — step 2: the URL a browser navigates to in order to stream the
+ * archive (supports HTTP range/resume; not fetched through the JSON client).
+ * @param {string} filename
+ * @param {string} token - one-time token from authorizeBackupDownload
+ * @returns {string}
+ */
+export function backupDownloadUrl(filename, token) {
+  return `/api/system/backups/${encodeURIComponent(filename)}/download?token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Move in — upload a local .tar.gz into the backups folder (staging only; it is
+ * NOT applied — the user restores it afterward if they choose). Uses XHR (not the
+ * JSON client) so the File streams as the raw body and we get upload progress.
+ * @param {File} file
+ * @param {(fraction:number)=>void} [onProgress] - 0..1 upload progress
+ * @param {string} [expectedChecksum] - optional sha256-hex to verify the upload
+ * @returns {Promise<object>}
+ */
+export function uploadBackupArchive(file, onProgress, expectedChecksum) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/system/backups/upload');
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', 'application/gzip');
+    if (expectedChecksum) xhr.setRequestHeader('X-Archive-SHA256', expectedChecksum);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
+    });
+    xhr.addEventListener('load', () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText || '{}'); } catch { /* non-JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+      else reject(new Error(body.message || `Upload failed (${xhr.status})`));
+    });
+    xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+    xhr.send(file);
+  });
+}
+
 /** @returns {Promise<object[]>} */
 export function getMigrations() {
   return api.get('/api/system/migrations');
+}
+
+/**
+ * Restart the server process in place (re-exec). Used to apply a scheduled
+ * restore, and for general restarts. The server is briefly unavailable.
+ * @returns {Promise<object>}
+ */
+export function restartServer() {
+  return api.post('/api/system/restart');
 }
 
 /**

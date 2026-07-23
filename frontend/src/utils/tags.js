@@ -23,6 +23,23 @@ export function tagHref(slug, pathSlugs = []) {
     : `/tags/${slug}`;
 }
 
+/**
+ * Inverse of {@link tagHref}: split a `/tags/<slug>?path=<trail>` href into its
+ * decoded tag slug and navigation trail. Used by flyout navigateFns so the
+ * `path` query survives instead of being swept into the tag slug (which would
+ * then get percent-encoded into a broken `/tags/slug%3Fpath%3D…` URL).
+ *
+ * @param {string} url
+ * @returns {{ tag: string, navPath: string|null }}
+ */
+export function parseTagUrl(url) {
+  const u = new URL(url, window.location.origin);
+  return {
+    tag: decodeURIComponent(u.pathname.replace('/tags/', '')),
+    navPath: u.searchParams.get('path') || null,
+  };
+}
+
 // ── Hot-zone tracker ─────────────────────────────────────────────────────────
 
 /**

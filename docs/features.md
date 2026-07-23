@@ -159,7 +159,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 | Media library | Browse, filter, rename, and bulk-delete media; view storage stats and clean up orphaned files. |
 | Settings page | Configure blog metadata, Gemini AI key, photo library import path, active theme, and thumbnail dimensions. |
 | Security page | View all active sessions with device/IP info; revoke individual sessions or log out all other devices; change password; trigger a password reset link. |
-| System page | Create and restore tar.gz backups; stream live application logs; view disk usage; trigger photo library import; rebuild thumbnails. |
+| System page | Create, download (move out, re-verifies the account password), upload (move in — stages an archive into the backups list), and restore tar.gz backups; stream live application logs; view disk usage; trigger photo library import; rebuild thumbnails. |
 
 ---
 

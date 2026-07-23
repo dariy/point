@@ -415,6 +415,55 @@
     margin: 0;
 }
 
+/* Single-section drawers (backups, passkeys, api keys) render flush — the drawer
+   header already titles them, so they drop the inner card and stack their content
+   in a column, matching the form-based panes. */
+.plugin-section-mount {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Toolbar row of actions at the top of a section. */
+.section-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.section-actions-spacer {
+    flex: 1 1 auto;
+}
+
+/* De-emphasized action (e.g. Restart) sitting apart from the primary actions. */
+.section-action-muted {
+    background: transparent;
+    color: var(--text-secondary);
+    box-shadow: none;
+}
+
+.section-action-muted:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+/* A titled block within a flush section. */
+.section-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.section-subhead {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+
 .plugin-settings-footer {
     display: flex;
     justify-content: flex-end;

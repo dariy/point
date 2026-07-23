@@ -114,10 +114,41 @@ func visibilityCache(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if c.Request().Method == http.MethodGet && isGuestRequest(c) {
 			c.Response().Header().Set("Cache-Control", "public, s-maxage=60, max-age=0")
+			// Cloudflare treats any response whose Vary lists a value other than
+			// Accept-Encoding as uncacheable. The global CORS middleware adds
+			// `Vary: Origin`, but a guest public read does not vary by Origin
+			// (ACAO is a constant `*`, no credentialed CORS), so Origin in Vary
+			// only defeats edge caching — strip it while keeping Accept-Encoding.
+			stripVaryOrigin(c.Response().Header())
 		} else {
 			c.Response().Header().Set("Cache-Control", "private, no-store")
 		}
 		return next(c)
+	}
+}
+
+// stripVaryOrigin removes the Origin token from the Vary header, preserving any
+// other tokens (notably Accept-Encoding). CORS (main.go's global middleware)
+// runs outside this route-level middleware, so `Vary: Origin` is already set by
+// the time visibilityCache runs and can be rewritten here.
+func stripVaryOrigin(h http.Header) {
+	vals := h.Values("Vary")
+	if len(vals) == 0 {
+		return
+	}
+	var kept []string
+	for _, v := range vals {
+		for _, tok := range strings.Split(v, ",") {
+			t := strings.TrimSpace(tok)
+			if t == "" || strings.EqualFold(t, "Origin") {
+				continue
+			}
+			kept = append(kept, t)
+		}
+	}
+	h.Del("Vary")
+	for _, k := range kept {
+		h.Add("Vary", k)
 	}
 }
 
@@ -221,7 +252,9 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	instagramService := services.NewInstagramService(settingsService)
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
-	systemService := services.NewSystemService(repo, cfg.StoragePath)
+	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
+	// Drop any half-written backup left by a process that was interrupted mid-backup.
+	systemService.CleanupPartialBackups()
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
@@ -268,7 +301,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
@@ -332,7 +365,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	if uploadLimitMB <= 0 {
 		uploadLimitMB = 50
 	}
-	e.Use(middleware.BodyLimit(fmt.Sprintf("%dM", uploadLimitMB)))
+	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		// The "move in" archive upload streams a multi-GB body straight to a temp
+		// file; the global limit would abort it. It's gated by a session cookie
+		// plus password re-entry instead of a size ceiling.
+		Skipper: func(c echo.Context) bool {
+			return c.Request().Method == http.MethodPost && c.Path() == "/api/system/backups/upload"
+		},
+		Limit: fmt.Sprintf("%dM", uploadLimitMB),
+	}))
 	// Wildcard origin for the public read API. AllowCredentials is deliberately
 	// omitted: browsers reject `Access-Control-Allow-Origin: *` together with
 	// credentials, and the admin SPA is same-origin (served by this server), so
@@ -829,6 +870,15 @@ func main() {
 		cfg.AppVersion = Version
 	}
 
+	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
+	// the database is opened: extracting a backup over an open SQLite file corrupts
+	// it, so the restore is deferred to here.
+	if applied, err := services.NewSystemService(nil, cfg.StoragePath, cfg.DatabaseURL).ApplyPendingRestore(); err != nil {
+		slog.Error("failed to apply pending backup restore", "error", err)
+	} else if applied {
+		slog.Info("applied pending backup restore before opening database")
+	}
+
 	// Initialize repository
 	repo, err := repository.NewRepository(cfg.DatabaseURL)
 	if err != nil {
@@ -911,6 +961,22 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("graceful shutdown complete")
+
+	// A UI-triggered restart re-execs this binary in place: same PID and container,
+	// a fresh program that re-runs initialization (including applying any pending
+	// backup restore before the DB opens). No external supervisor is required. The
+	// DB/listener fds are O_CLOEXEC, so they close automatically across the exec.
+	if api.RestartRequested.Load() {
+		exe, err := os.Executable()
+		if err != nil {
+			exe = os.Args[0]
+		}
+		slog.Info("restart requested: re-executing in place", "exe", exe)
+		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil {
+			slog.Error("re-exec failed; exiting so a supervisor can restart instead", "error", err)
+			os.Exit(1)
+		}
+	}
 }
 
 // isResetPasswordCmd reports whether the args invoke the reset-password

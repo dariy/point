@@ -9,7 +9,7 @@
 import { Component } from "../../components/Component.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { store } from "../../store.js";
-import { buildTagIndex, setupTagFlyout } from "../../utils/tags.js";
+import { buildTagIndex, parseTagUrl, setupTagFlyout } from "../../utils/tags.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
 export class ExploreBlock extends Component {
@@ -48,8 +48,8 @@ export class ExploreBlock extends Component {
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this._cleanupFlyout = setupTagFlyout(container, tagIndex, (url) => {
-      const slug = url.replace('/tags/', '');
-      ViewContext.update({ tag: slug, postSlug: null, query: null });
+      const { tag, navPath } = parseTagUrl(url);
+      ViewContext.update({ tag, navPath, postSlug: null, query: null });
     });
   }
 

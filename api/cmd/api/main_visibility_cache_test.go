@@ -6,7 +6,37 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
+
+// TestVisibilityCache_LiveCORSChain wires echo exactly as main.go does — global
+// CORS (which adds `Vary: Origin`) with route-level visibilityCache inside it —
+// and confirms the real chain leaves an anonymous GET edge-cacheable: Origin is
+// gone from Vary. This is the empirical proof of the middleware ordering the
+// strip depends on (global runs outside route middleware).
+func TestVisibilityCache_LiveCORSChain(t *testing.T) {
+	e := echo.New()
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"*"},
+	}))
+	e.GET("/api/posts", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, visibilityCache)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if cc := rec.Header().Get("Cache-Control"); cc != guestCC {
+		t.Fatalf("Cache-Control: expected %q, got %q", guestCC, cc)
+	}
+	for _, v := range rec.Header().Values("Vary") {
+		if v == "Origin" {
+			t.Errorf("Vary still contains Origin (uncacheable at CF): %v", rec.Header().Values("Vary"))
+		}
+	}
+}
 
 // runVisibilityCache drives the visibilityCache middleware for a request built
 // from the given method/path/mutators and returns the Cache-Control it set. The
@@ -115,6 +145,64 @@ func TestVisibilityCache_NonGetMethods_NoStore(t *testing.T) {
 		if cc := runVisibilityCache(t, m, "/api/posts", nil); cc != authedCC {
 			t.Errorf("%s: expected %q, got %q", m, authedCC, cc)
 		}
+	}
+}
+
+// runVisibilityCacheVary drives the middleware with a pre-set Vary header
+// (simulating the global CORS middleware having already run) and returns the
+// resulting Vary values on the response.
+func runVisibilityCacheVary(t *testing.T, mutate func(*http.Request), presetVary []string) []string {
+	t.Helper()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
+	if mutate != nil {
+		mutate(req)
+	}
+	rec := httptest.NewRecorder()
+	for _, v := range presetVary {
+		rec.Header().Add("Vary", v)
+	}
+	c := e.NewContext(req, rec)
+	h := visibilityCache(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	if err := h(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	return rec.Header().Values("Vary")
+}
+
+func TestVisibilityCache_Guest_StripsVaryOrigin(t *testing.T) {
+	// CORS sets `Vary: Origin`; Cloudflare will not cache a response whose Vary
+	// lists anything but Accept-Encoding, so the guest branch must drop Origin
+	// while preserving Accept-Encoding.
+	got := runVisibilityCacheVary(t, nil, []string{"Origin", "Accept-Encoding"})
+	if len(got) != 1 || got[0] != "Accept-Encoding" {
+		t.Errorf("guest Vary: expected [Accept-Encoding], got %v", got)
+	}
+}
+
+func TestVisibilityCache_Guest_StripsVaryOrigin_Combined(t *testing.T) {
+	// A single combined header value must also be split and filtered.
+	got := runVisibilityCacheVary(t, nil, []string{"Origin, Accept-Encoding"})
+	if len(got) != 1 || got[0] != "Accept-Encoding" {
+		t.Errorf("guest combined Vary: expected [Accept-Encoding], got %v", got)
+	}
+}
+
+func TestVisibilityCache_Guest_OriginOnlyVary_Removed(t *testing.T) {
+	// If Origin is the only value, Vary is removed entirely (an empty Vary would
+	// itself keep the response uncacheable on some caches).
+	got := runVisibilityCacheVary(t, nil, []string{"Origin"})
+	if len(got) != 0 {
+		t.Errorf("guest Origin-only Vary: expected none, got %v", got)
+	}
+}
+
+func TestVisibilityCache_Authed_VaryUntouched(t *testing.T) {
+	// The strip is guest-only; an authed (no-store) response is left as-is. It is
+	// never cached regardless, so there is no need to rewrite its Vary.
+	got := runVisibilityCacheVary(t, withSessionCookie, []string{"Origin"})
+	if len(got) != 1 || got[0] != "Origin" {
+		t.Errorf("authed Vary: expected [Origin] untouched, got %v", got)
 	}
 }
 

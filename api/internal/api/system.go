@@ -2,16 +2,20 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"point-api/internal/repository"
@@ -19,6 +23,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 )
+
+// RestartRequested is set by the restart endpoint so main() re-execs the binary
+// (a fresh process in the same container/PID) instead of exiting after the
+// graceful shutdown. On the fresh start, any scheduled backup restore is applied
+// before the database is opened.
+var RestartRequested atomic.Bool
 
 type SystemHandler struct {
 	repo            repository.Repository
@@ -28,6 +38,8 @@ type SystemHandler struct {
 	tagService      *services.TagService
 	systemService   *services.SystemService
 	cacheService    *services.CacheService
+	authService     *services.AuthService
+	downloadTokens  *services.DownloadTokenStore
 	dataPath        string
 	logPath         string
 	appVersion      string
@@ -35,7 +47,7 @@ type SystemHandler struct {
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
+func NewSystemHandler(repo repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, authService *services.AuthService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
@@ -44,6 +56,8 @@ func NewSystemHandler(repo repository.Repository, mediaService *services.MediaSe
 		tagService:      tagService,
 		systemService:   systemService,
 		cacheService:    cacheService,
+		authService:     authService,
+		downloadTokens:  services.NewDownloadTokenStore(),
 		dataPath:        dataPath,
 		logPath:         filepath.Join(dataPath, "logs", "app.log"),
 		appVersion:      appVersion,
@@ -202,26 +216,43 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 }
 
 func (h *SystemHandler) CreateBackup(c echo.Context) error {
-	ctx := c.Request().Context()
-	backupName, size, err := h.systemService.CreateBackup(ctx)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	if h.systemService.BackupRunning() {
+		return c.JSON(http.StatusConflict, map[string]string{
+			"status":  "already_running",
+			"message": "a backup is already in progress",
+		})
 	}
 
-	// Enforce retention so manual backups also can't overflow the drive.
+	// Warn synchronously if the archive wouldn't fit, so the user finds out now
+	// rather than via a silent background failure.
+	if err := h.systemService.CheckBackupSpace(); err != nil {
+		return echo.NewHTTPError(http.StatusInsufficientStorage, err.Error())
+	}
+
+	// Read retention before detaching from the request context.
 	keep := 7
-	if v, _ := h.settingsService.GetSetting(ctx, "backup_keep", ""); v != "" {
+	if v, _ := h.settingsService.GetSetting(c.Request().Context(), "backup_keep", ""); v != "" {
 		if n, e := strconv.Atoi(v); e == nil {
 			keep = n
 		}
 	}
-	_, _ = h.systemService.RotateBackups(keep)
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":   "success",
-		"filename": backupName,
-		"size":     size,
-	})
+	// Run in the background: a multi-GB archive can take minutes — far longer than
+	// a request should stay open. Progress is observable via ListBackups (the
+	// in-progress .partial entry) and survives page reloads. A detached context is
+	// used so the work isn't cancelled when this request returns.
+	go func() {
+		bgCtx := context.Background()
+		if _, _, err := h.systemService.CreateBackup(bgCtx); err != nil {
+			slog.Error("backup failed", "err", err)
+			return
+		}
+		if _, err := h.systemService.RotateBackups(keep); err != nil {
+			slog.Error("backup rotation failed", "err", err)
+		}
+	}()
+
+	return c.JSON(http.StatusAccepted, map[string]string{"status": "started"})
 }
 
 func (h *SystemHandler) ListBackups(c echo.Context) error {
@@ -236,39 +267,95 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 	}
 
 	type backupInfo struct {
-		Filename  string    `json:"filename"`
-		Size      int64     `json:"size"`
-		CreatedAt time.Time `json:"created_at"`
+		Filename   string    `json:"filename"`
+		Size       int64     `json:"size"`
+		CreatedAt  time.Time `json:"created_at"`
+		Sha256     string    `json:"sha256,omitempty"`
+		InProgress bool      `json:"in_progress,omitempty"`
 	}
 
+	var inProgress []backupInfo
 	result := make([]backupInfo, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+		if e.IsDir() {
 			continue
 		}
+		name := e.Name()
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
-		result = append(result, backupInfo{
-			Filename:  e.Name(),
-			Size:      info.Size(),
-			CreatedAt: info.ModTime(),
-		})
+		switch {
+		case strings.HasSuffix(name, ".tar.gz"+backupPartialSuffix):
+			// A backup currently being written — show it as in-progress (its size
+			// grows until the rename publishes the final .tar.gz).
+			inProgress = append(inProgress, backupInfo{
+				Filename:   strings.TrimSuffix(name, backupPartialSuffix),
+				Size:       info.Size(),
+				CreatedAt:  info.ModTime(),
+				InProgress: true,
+			})
+		case strings.HasSuffix(name, ".tar.gz"):
+			result = append(result, backupInfo{
+				Filename:  name,
+				Size:      info.Size(),
+				CreatedAt: info.ModTime(),
+				Sha256:    readChecksumSidecar(filepath.Join(backupDir, name)),
+			})
+		}
 	}
+	// Surface any running backup at the top of the list.
+	result = append(inProgress, result...)
 
 	return c.JSON(http.StatusOK, result)
 }
 
 func (h *SystemHandler) RestoreBackup(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := extractUserID(c.Get("user"))
 	filename := c.Param("filename")
-	if err := h.systemService.RestoreBackup(c.Request().Context(), filename); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+
+	// Restore wipes and replaces all data (including the login password), so it is
+	// gated by re-entering the account password (sha256-hex, as at login).
+	var req struct {
+		CurrentPassword string `json:"current_name"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
+		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+	}
+
+	// Restoring overwrites the live SQLite file, which can't be done safely while
+	// the server holds it open, so we schedule it and apply it at the next startup.
+	if err := h.systemService.ScheduleRestore(filename); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "success",
-		"message": "Backup restored successfully. Please restart the server.",
+		"message": "Restore scheduled. Restart the server to apply it; you will be logged out.",
+	})
+}
+
+// RestartServer restarts the process in place: it flags a restart and triggers
+// the normal graceful shutdown, after which main() re-execs the binary (same PID
+// and container, a fresh program). No external supervisor is needed. Any pending
+// backup restore is applied by the fresh process before it opens the database.
+func (h *SystemHandler) RestartServer(c echo.Context) error {
+	// Respond first, then trigger shutdown from a goroutine — a short delay lets
+	// this response flush before the HTTP server stops accepting connections.
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		RestartRequested.Store(true)
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			slog.Error("restart: failed to signal shutdown", "error", err)
+		}
+	}()
+	return c.JSON(http.StatusOK, map[string]string{
+		"status":  "restarting",
+		"message": "Server is restarting…",
 	})
 }
 
@@ -343,8 +430,157 @@ func (h *SystemHandler) DeleteBackup(c echo.Context) error {
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	_ = os.Remove(backupPath + ".sha256") // drop the orphaned checksum sidecar
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "success", "message": "Backup deleted"})
+}
+
+// backupPartialSuffix marks an archive still being written (see SystemService).
+const backupPartialSuffix = ".partial"
+
+// validBackupName rejects empty names and any path-traversal attempt, matching
+// the guard used by DeleteBackup/RestoreBackup.
+func validBackupName(filename string) bool {
+	return filename != "" && !strings.Contains(filename, "/") && !strings.Contains(filename, "..")
+}
+
+// readChecksumSidecar returns the recorded SHA-256 hex for a backup by reading
+// its `.sha256` sidecar (sha256sum format), or "" when there is none.
+func readChecksumSidecar(backupPath string) string {
+	data, err := os.ReadFile(backupPath + ".sha256")
+	if err != nil {
+		return ""
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+// AuthorizeDownloadRequest carries the re-entered password. The field is named
+// `current_name` to match the existing credential-change DTOs (see auth.go).
+type AuthorizeDownloadRequest struct {
+	CurrentPassword string `json:"current_name"`
+}
+
+// AuthorizeBackupDownload re-verifies the account password and, on success,
+// issues a short-lived single-use token the client exchanges for the actual
+// download (which is a plain GET that can't carry a password body).
+func (h *SystemHandler) AuthorizeBackupDownload(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := extractUserID(c.Get("user"))
+
+	filename := c.Param("filename")
+	if !validBackupName(filename) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid filename")
+	}
+
+	var req AuthorizeDownloadRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
+		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+	}
+
+	backupPath := filepath.Join(h.dataPath, "backups", filename)
+	if _, err := os.Stat(backupPath); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "backup not found")
+	}
+
+	token, err := h.downloadTokens.Issue(userID, filename)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not authorize download")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"token": token})
+}
+
+// DownloadBackup streams a backup archive as an attachment after validating the
+// one-time token from AuthorizeBackupDownload. c.Attachment serves via
+// http.ServeContent, so Range/resume works for multi-GB files without buffering.
+func (h *SystemHandler) DownloadBackup(c echo.Context) error {
+	userID := extractUserID(c.Get("user"))
+	filename := c.Param("filename")
+
+	tokUserID, tokFile, ok := h.downloadTokens.Consume(c.QueryParam("token"))
+	if !ok || tokUserID != userID || tokFile != filename {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired download token")
+	}
+	if !validBackupName(filename) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid filename")
+	}
+
+	backupPath := filepath.Join(h.dataPath, "backups", filename)
+	if _, err := os.Stat(backupPath); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "backup not found")
+	}
+	// Advertise the archive checksum so CLI/API clients can verify the download.
+	if sum := readChecksumSidecar(backupPath); sum != "" {
+		c.Response().Header().Set("X-Archive-SHA256", sum)
+	}
+	return c.Attachment(backupPath, filename)
+}
+
+// UploadBackupArchive is the "move in" step: it streams an uploaded .tar.gz into
+// the backups folder (like a locally created backup) after validating it. It does
+// NOT apply the archive — the operator decides whether to Restore it afterward.
+// The archive is staged to a .partial and only published under its final name
+// once validated, so a half-uploaded file never appears as a usable backup. This
+// route is excluded from the global body-size limit so multi-GB archives fit.
+func (h *SystemHandler) UploadBackupArchive(c echo.Context) error {
+	backupDir := filepath.Join(h.dataPath, "backups")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot prepare backups directory")
+	}
+
+	filename := fmt.Sprintf("imported_%s.tar.gz", time.Now().Format("20060102_150405"))
+	finalPath := filepath.Join(backupDir, filename)
+	partialPath := finalPath + backupPartialSuffix
+
+	tmp, err := os.Create(partialPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot stage upload")
+	}
+	// Hash the upload in the same pass that stages it to disk (no extra read).
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tmp, hasher), c.Request().Body); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(partialPath)
+		return echo.NewHTTPError(http.StatusInternalServerError, "upload failed")
+	}
+	_ = tmp.Close()
+	sum := hex.EncodeToString(hasher.Sum(nil))
+
+	// Verify before publishing. If the client sent the expected checksum, a
+	// mismatch means the bytes were corrupted or it's the wrong file. Otherwise,
+	// read the archive end-to-end to catch truncation and confirm it's actually a
+	// Point backup, so an unusable file never lands in the list.
+	if expected := strings.TrimSpace(c.Request().Header.Get("X-Archive-SHA256")); expected != "" {
+		if !strings.EqualFold(expected, sum) {
+			_ = os.Remove(partialPath)
+			return echo.NewHTTPError(http.StatusBadRequest, "checksum mismatch: the upload is corrupted or not the expected archive")
+		}
+	} else if err := h.systemService.ValidateArchive(partialPath); err != nil {
+		_ = os.Remove(partialPath)
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid archive: "+err.Error())
+	}
+
+	// Publish: write the checksum sidecar, then rename into place so the archive
+	// only ever appears in the list once complete and validated.
+	_ = os.WriteFile(finalPath+".sha256", []byte(sum+"  "+filename+"\n"), 0o644)
+	if err := os.Rename(partialPath, finalPath); err != nil {
+		_ = os.Remove(partialPath)
+		_ = os.Remove(finalPath + ".sha256")
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not save uploaded archive")
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"status":   "success",
+		"filename": filename,
+		"sha256":   sum,
+		"message":  "Archive uploaded to backups. Use Restore to apply it.",
+	})
 }
 
 var importableExtensions = map[string]bool{

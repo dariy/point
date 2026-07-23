@@ -22,7 +22,7 @@ func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
 	tmpDir := t.TempDir()
 	defer func() { _ = repo.Close() }()
 
-	svc := services.NewSystemService(repo, tmpDir)
+	svc := services.NewSystemService(repo, tmpDir, "")
 
 	// Get actual free space
 	info, err := svc.GetDiskInfo()
@@ -30,11 +30,10 @@ func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
 		t.Fatalf("GetDiskInfo: %v", err)
 	}
 
-	// Create a fake "previous backup" whose size > free/1.5 (1.5x would exceed free)
-	backupDir := filepath.Join(tmpDir, "backups")
-	_ = os.MkdirAll(backupDir, 0755)
-	fakeSize := info.Free + 1 // larger than free space itself
-	fakeFile := filepath.Join(backupDir, "backup_20200101_000000.tar.gz")
+	// A sparse file in the data dir larger than free space makes the estimated
+	// backup size (≈ data-dir size) exceed what the filesystem can hold.
+	fakeSize := info.Free + 1
+	fakeFile := filepath.Join(tmpDir, "huge.bin")
 	f, _ := os.Create(fakeFile)
 	_ = f.Truncate(fakeSize)
 	_ = f.Close()
@@ -43,8 +42,8 @@ func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for insufficient disk space, got nil")
 	}
-	if !strings.Contains(err.Error(), "insufficient disk space") {
-		t.Errorf("expected 'insufficient disk space' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "not enough disk space") {
+		t.Errorf("expected 'not enough disk space' in error, got: %v", err)
 	}
 }
 
@@ -60,9 +59,9 @@ func TestSystemHandler_Stats(t *testing.T) {
 	tagService := services.NewTagService(repo)
 	postService := services.NewPostService(repo, nil, nil, nil, "")
 	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
-	systemService := services.NewSystemService(repo, tmpDir)
+	systemService := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/stats", nil)
@@ -97,9 +96,9 @@ line3`), 0644)
 	tagService := services.NewTagService(repo)
 	postService := services.NewPostService(repo, nil, nil, nil, "")
 	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
-	systemService := services.NewSystemService(repo, tmpDir)
+	systemService := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/logs", nil)
@@ -128,9 +127,9 @@ func TestSystemHandler_GetMigrations(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/migrations", nil)
@@ -157,9 +156,9 @@ func TestSystemHandler_RecalculateMediaVisibility(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/system/media/recalculate", nil)
@@ -186,9 +185,9 @@ func TestSystemHandler_UpdateMapCoords(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/system/tags/update-coords", nil)
@@ -215,9 +214,9 @@ func TestSystemHandler_ClearCache(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/system/cache/clear", nil)
@@ -254,9 +253,9 @@ func TestSystemHandler_GetStats_Success(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: tmpDir}, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.2.3")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -315,9 +314,9 @@ func TestSystemHandler_GetDiskInfo(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/api/system/disk", nil)
@@ -350,9 +349,9 @@ func newSystemHandler(t *testing.T) (*SystemHandler, string) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
 	return h, tmpDir
 }
 
@@ -640,9 +639,9 @@ func TestSystemHandler_GetStats_DBError(t *testing.T) {
 		ThumbnailHeight: 300,
 	}, settingsSvc, tagSvc)
 	tmpDir2 := t.TempDir()
-	systemSvc2 := services.NewSystemService(repo, tmpDir2)
+	systemSvc2 := services.NewSystemService(repo, tmpDir2, "")
 	cacheSvc2 := services.NewCacheService(tmpDir2)
-	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, tmpDir2, "1.0")
+	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, nil, tmpDir2, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -720,9 +719,9 @@ func TestSystemHandler_GetMigrations_OK(t *testing.T) {
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -744,9 +743,9 @@ func TestSystemHandler_ClearCache_DBError(t *testing.T) {
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -765,9 +764,9 @@ func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -786,9 +785,9 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
-	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -807,9 +806,9 @@ func TestSystemHandler_GetLogs_ManyLines(t *testing.T) {
 	logLines := strings.Repeat("log line entry\n", 150)
 	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte(logLines), 0644)
 
-	systemSvc := services.NewSystemService(h.repo, dataDir)
+	systemSvc := services.NewSystemService(h.repo, dataDir, "")
 	cacheSvc := services.NewCacheService(dataDir)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, dataDir, "1.0")
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, nil, dataDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/?lines=50", nil)
 	rec := httptest.NewRecorder()

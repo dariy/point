@@ -28,6 +28,9 @@ export class ViewContext {
     this.perPage = parseInt(query.per_page, 10) || null;
     /** @type {string|null} Post slug */
     this.postSlug = null;
+    /** @type {string|null} Navigation trail (ancestor slug chain, `/`-joined)
+     *  carried so the server can build breadcrumbs for the drilled branch. */
+    this.navPath = query.path || null;
 
     // 1. Extract post slug: /posts/:slug
     if (pathname.startsWith('/posts/')) {
@@ -74,7 +77,7 @@ export class ViewContext {
 
   /**
    * Navigate to a new context by merging changes into the current one.
-   * @param {Partial<{tag: string|null, years: [number, number]|null, query: string|null, page: number, postSlug: string|null}>} changes
+   * @param {Partial<{tag: string|null, navPath: string|null, years: [number, number]|null, query: string|null, page: number, postSlug: string|null}>} changes
    * @param {{ replace?: boolean }} [opts]
    */
   static update(changes, { replace = false } = {}) {
@@ -82,6 +85,10 @@ export class ViewContext {
 
     // Apply changes
     if ('tag' in changes) next.tag = changes.tag;
+    // The navigation trail belongs to a specific tag: honour an explicit value,
+    // otherwise drop any stale trail when the tag itself changes.
+    if ('navPath' in changes) next.navPath = changes.navPath;
+    else if ('tag' in changes) next.navPath = null;
     if ('years' in changes) next.years = changes.years;
     if ('query' in changes) next.query = changes.query;
     if ('page' in changes) next.page = changes.page;
@@ -125,6 +132,7 @@ export class ViewContext {
     // Tag view or Home view
     else if (this.tag) {
       path = `/tags/${encodeURIComponent(this.tag)}`;
+      if (this.navPath) params.set('path', this.navPath);
     }
 
     // Single post view (may be in context of a tag)
