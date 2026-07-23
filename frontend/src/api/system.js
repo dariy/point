@@ -80,21 +80,19 @@ export function backupDownloadUrl(filename, token) {
 }
 
 /**
- * Move in — upload a local .tar.gz to overwrite the whole site. Uses XHR (not the
+ * Move in — upload a local .tar.gz into the backups folder (staging only; it is
+ * NOT applied — the user restores it afterward if they choose). Uses XHR (not the
  * JSON client) so the File streams as the raw body and we get upload progress.
- * The password rides in a header, sha256-hex like login.
  * @param {File} file
- * @param {string} sha256pw - sha256-hex of the account password
  * @param {(fraction:number)=>void} [onProgress] - 0..1 upload progress
- * @param {string} [expectedChecksum] - optional sha256-hex to verify before restoring
+ * @param {string} [expectedChecksum] - optional sha256-hex to verify the upload
  * @returns {Promise<object>}
  */
-export function uploadBackupArchive(file, sha256pw, onProgress, expectedChecksum) {
+export function uploadBackupArchive(file, onProgress, expectedChecksum) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/system/backups/upload');
     xhr.withCredentials = true;
-    xhr.setRequestHeader('X-Confirm-Password', sha256pw);
     xhr.setRequestHeader('Content-Type', 'application/gzip');
     if (expectedChecksum) xhr.setRequestHeader('X-Archive-SHA256', expectedChecksum);
     xhr.upload.addEventListener('progress', (e) => {

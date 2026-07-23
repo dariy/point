@@ -37,27 +37,37 @@ password re-entry and tar-traversal hardening cover that.
 
 ## Move out / move in
 
-The backups list also supports getting an archive off the box and seeding a site
-from one. Both actions re-verify the account password (sent SHA-256-hashed, as at
-login) and require a session cookie — API keys are rejected.
+The backups list also supports getting an archive off the box and bringing one in.
+Uploading and restoring are **decoupled**: an upload only *stages* the archive in
+the backups folder; nothing is applied until the operator explicitly Restores it.
 
-- **Move out (download)** — a two-step flow so multi-GB archives stream from disk
-  with HTTP range/resume and are never buffered in memory:
+- **Move out (download)** — re-verifies the account password (sent SHA-256-hashed,
+  as at login), requires a session cookie (API keys rejected), and streams from
+  disk so multi-GB archives use HTTP range/resume and are never buffered in memory:
   1. `POST /api/system/backups/:filename/authorize-download` (`current_name` =
      hashed password) → a short-lived (5 min), single-use token.
   2. `GET /api/system/backups/:filename/download?token=…` → serves the archive as
-     an attachment via `http.ServeContent`.
-- **Move in (upload)** — `POST /api/system/backups/upload` streams a local
-  `.tar.gz` as the raw request body (password in the `X-Confirm-Password` header)
-  to a temp file, hashing it in the same pass, then extracts it over the data
-  directory, **overwriting everything, including the login password**. This route
-  is excluded from the global request body-size limit. The server must be restarted
-  afterward (the live SQLite handle still points at the pre-restore file) and the
-  operator is logged out. The UI gates this behind a danger confirmation before the
-  password prompt.
+     an attachment via `http.ServeContent` (with the `X-Archive-SHA256` header).
+- **Move in (upload → then restore)**:
+  - `POST /api/system/backups/upload` streams a local `.tar.gz` as the raw request
+    body into the backups folder — the same staging (`.partial` → rename) and
+    checksum sidecar as a locally created backup, so a half-uploaded or invalid file
+    never appears as a usable backup. It is **not applied**: the uploaded archive
+    simply joins the list. The route requires a session cookie and is excluded from
+    the global request body-size limit so multi-GB archives fit. Verification runs
+    before publishing — an optional `X-Archive-SHA256` is compared, otherwise the
+    archive is read end-to-end (`ValidateArchive`) to catch truncation and confirm
+    it contains the database. The computed `sha256` is returned.
+  - **Restore** (`POST /api/system/backups/:filename/restore`) is the destructive
+    apply step for *any* backup, uploaded or created: it extracts the archive over
+    the data directory, **overwriting everything, including the login password**.
 
-  Before any destructive write, the upload is verified: if the client sends the
-  expected checksum in `X-Archive-SHA256`, a mismatch is rejected (`400`);
-  otherwise the archive is read end-to-end (`ValidateArchive`) to catch truncation
-  and confirm it actually contains the database, so a corrupt or stray tarball
-  can't half-overwrite live data. The computed `sha256` is returned in the response.
+    Restoring is **deferred to the next startup**: the endpoint validates the
+    archive (`ScheduleRestore`) and writes a `backups/pending_restore` marker, but
+    does not extract anything while the server is live. On boot, before the
+    database is opened, `ApplyPendingRestore` extracts the archive and deletes the
+    DB's `-wal`/`-shm` sidecars. This is essential — extracting a backup over the
+    SQLite file while the server holds it open, and leaving a stale WAL for SQLite
+    to replay against the restored snapshot, corrupts the database (*"disk image is
+    malformed"*). The UI gates the action behind a danger confirmation and tells the
+    operator to restart the server to apply it.

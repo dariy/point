@@ -870,6 +870,15 @@ func main() {
 		cfg.AppVersion = Version
 	}
 
+	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
+	// the database is opened: extracting a backup over an open SQLite file corrupts
+	// it, so the restore is deferred to here.
+	if applied, err := services.NewSystemService(nil, cfg.StoragePath, cfg.DatabaseURL).ApplyPendingRestore(); err != nil {
+		slog.Error("failed to apply pending backup restore", "error", err)
+	} else if applied {
+		slog.Info("applied pending backup restore before opening database")
+	}
+
 	// Initialize repository
 	repo, err := repository.NewRepository(cfg.DatabaseURL)
 	if err != nil {

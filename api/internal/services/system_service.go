@@ -429,26 +429,72 @@ func addFileToTar(tw *tar.Writer, srcPath, tarName string) error {
 	return err
 }
 
-func (s *SystemService) RestoreBackup(ctx context.Context, filename string) error {
-	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
+// pendingRestoreMarker is the file (inside the backups dir, so it's never itself
+// archived) that records a backup to restore on the next startup.
+const pendingRestoreMarker = "pending_restore"
+
+func isSafeBackupName(filename string) bool {
+	return filename != "" && !strings.Contains(filename, "/") && !strings.Contains(filename, "..")
+}
+
+// ScheduleRestore validates a backup and records it to be applied at the next
+// startup, BEFORE the database is opened. A restore can't be done safely while
+// the server holds the SQLite file open — overwriting point.db under a live
+// connection (and a stale WAL the connection may still checkpoint) corrupts the
+// database ("disk image is malformed") — so the extraction is deferred to boot.
+func (s *SystemService) ScheduleRestore(filename string) error {
+	if !isSafeBackupName(filename) {
 		return fmt.Errorf("invalid filename")
 	}
-
 	backupPath := filepath.Join(s.dataPath, "backups", filename)
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		return fmt.Errorf("backup not found")
 	}
-
-	return s.extractTarGz(backupPath, s.dataPath)
+	// Refuse to schedule a restore we already know would fail at boot.
+	if err := s.ValidateArchive(backupPath); err != nil {
+		return fmt.Errorf("cannot restore this archive: %w", err)
+	}
+	marker := filepath.Join(s.dataPath, "backups", pendingRestoreMarker)
+	return os.WriteFile(marker, []byte(filename), 0o644)
 }
 
-// RestoreFromArchive extracts an uploaded .tar.gz over the data directory,
-// overwriting everything it contains (DB, media, settings, credentials). This is
-// the "move in" counterpart to a downloaded backup: the caller must have
-// re-verified the account password first, and the server should be restarted
-// afterward because the live SQLite handle still points at the pre-restore file.
-func (s *SystemService) RestoreFromArchive(archivePath string) error {
-	return s.extractTarGz(archivePath, s.dataPath)
+// ApplyPendingRestore extracts a restore scheduled by ScheduleRestore. It MUST be
+// called at startup before the database is opened. It reports whether a restore
+// was applied. The marker is consumed unconditionally, so a failing restore can
+// never loop the boot.
+func (s *SystemService) ApplyPendingRestore() (bool, error) {
+	marker := filepath.Join(s.dataPath, "backups", pendingRestoreMarker)
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		return false, nil // nothing scheduled
+	}
+	_ = os.Remove(marker)
+
+	filename := strings.TrimSpace(string(data))
+	if !isSafeBackupName(filename) {
+		return true, fmt.Errorf("pending restore has invalid filename %q", filename)
+	}
+	backupPath := filepath.Join(s.dataPath, "backups", filename)
+	if err := s.extractTarGz(backupPath, s.dataPath); err != nil {
+		return true, fmt.Errorf("apply pending restore %q: %w", filename, err)
+	}
+
+	// The archive holds a self-contained VACUUM INTO snapshot as point.db and no
+	// -wal/-shm. Any -wal/-shm still on disk belong to the pre-restore database;
+	// left in place, SQLite would replay that stale WAL against the restored
+	// snapshot and report "database disk image is malformed". Drop them so the DB
+	// opens clean.
+	s.removeDBSidecars()
+	return true, nil
+}
+
+// removeDBSidecars deletes the SQLite WAL/SHM sidecars next to the database file.
+func (s *SystemService) removeDBSidecars() {
+	if s.dbPath == "" {
+		return
+	}
+	_ = os.Remove(s.dbPath + "-wal")
+	_ = os.Remove(s.dbPath + "-shm")
 }
 
 // ValidateArchive reads a .tar.gz end-to-end without writing anything, so a

@@ -60,21 +60,21 @@ func TestSystemService_CreateBackup(t *testing.T) {
 	}
 }
 
-func TestSystemService_RestoreBackup_InvalidFilename(t *testing.T) {
+func TestSystemService_ScheduleRestore_InvalidFilename(t *testing.T) {
 	svc, _ := setupSystemService(t)
 
 	// Empty filename
-	if err := svc.RestoreBackup(context.Background(), ""); err == nil {
+	if err := svc.ScheduleRestore(""); err == nil {
 		t.Error("expected error for empty filename")
 	}
 
 	// Path traversal
-	if err := svc.RestoreBackup(context.Background(), "../etc/passwd"); err == nil {
+	if err := svc.ScheduleRestore("../etc/passwd"); err == nil {
 		t.Error("expected error for path traversal filename")
 	}
 
 	// Non-existent backup
-	if err := svc.RestoreBackup(context.Background(), "no_such_backup.tar.gz"); err == nil {
+	if err := svc.ScheduleRestore("no_such_backup.tar.gz"); err == nil {
 		t.Error("expected error for non-existent backup")
 	}
 }

@@ -127,7 +127,7 @@ export class BackupsSection extends Component {
           <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creating || uploading ? "disabled" : ""}>
             ${creating ? "Creating…" : "Create New Backup"}
           </button>
-          <button id="upload-backup-btn" class="btn btn-sm" ${creating || uploading ? "disabled" : ""} title="Restore the site from a local archive">
+          <button id="upload-backup-btn" class="btn btn-sm" ${creating || uploading ? "disabled" : ""} title="Add a local archive to your backups (apply it later with Restore)">
             ${UPLOAD_SVG} Upload archive
           </button>
           <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
@@ -169,7 +169,9 @@ export class BackupsSection extends Component {
         const file = btn.dataset.filename;
         showConfirm({
           title: "Restore backup",
-          message: `Restore from "${file}"? This will overwrite the current database.`,
+          message:
+            `Apply "${file}"? This replaces ALL current data — posts, media, settings, ` +
+            `and your login password — with the contents of the archive. This cannot be undone.`,
           confirmText: "Restore",
           variant: "danger",
           onConfirm: () => this._handleRestore(file),
@@ -405,11 +407,15 @@ export class BackupsSection extends Component {
   }
 
   async _handleRestore(filename) {
-    store.set("toast", { message: "Restoring backup…", type: "info" });
     try {
-      await restoreBackup(filename);
-      store.set("toast", { message: "Backup restored. Reloading…", type: "success" });
-      setTimeout(() => location.reload(), 1500);
+      const res = await restoreBackup(filename);
+      // The restore is applied at the next startup (it can't overwrite the live
+      // database safely), so there's nothing to reload here — the server must
+      // be restarted.
+      store.set("toast", {
+        message: res.message || "Restore scheduled. Restart the server to apply it.",
+        type: "success",
+      });
     } catch (err) {
       store.set("toast", { message: err.message || "Restore failed.", type: "error" });
     }
@@ -451,42 +457,29 @@ export class BackupsSection extends Component {
     });
   }
 
-  // Move in: strong warning → password confirm → streamed upload that overwrites
-  // everything (including the login password). The server needs a restart after.
+  // Move in: upload the archive into the backups folder (staging only — it is not
+  // applied). The user reviews it in the list and Restores it if they choose to.
   _handleUpload(file) {
     showConfirm({
-      title: "Restore from uploaded archive",
-      message:
-        `Replace ALL current data with "${file.name}"? This overwrites your posts, media, ` +
-        `settings, and your login password with the contents of the archive. This cannot be undone.`,
-      confirmText: "Continue",
-      variant: "danger",
-      onConfirm: () => {
-        showPrompt({
-          title: "Confirm restore",
-          message: "Enter your current password to authorize this overwrite.",
-          inputType: "password",
-          confirmText: "Upload & restore",
-          onConfirm: async (password) => {
-            if (!password) return;
-            this.setState({ uploading: true, uploadPct: 0 });
-            try {
-              const hashed = await sha256(password);
-              const res = await uploadBackupArchive(file, hashed, (frac) => {
-                this.setState({ uploading: true, uploadPct: Math.round(frac * 100) });
-              });
-              const shaNote = res.sha256 ? ` (sha256 ${res.sha256.slice(0, 10)}…)` : "";
-              store.set("toast", {
-                message: (res.message || "Archive restored. Restart the server; you will be logged out.") + shaNote,
-                type: "success",
-              });
-            } catch (err) {
-              store.set("toast", { message: err.message || "Upload failed.", type: "error" });
-            } finally {
-              this.setState({ uploading: false, uploadPct: 0 });
-            }
-          },
-        });
+      title: "Upload archive",
+      message: `Add "${file.name}" to your backups? It won't be applied — you can Restore it afterward if you want to.`,
+      confirmText: "Upload",
+      onConfirm: async () => {
+        this.setState({ uploading: true, uploadPct: 0 });
+        try {
+          const res = await uploadBackupArchive(file, (frac) => {
+            this.setState({ uploading: true, uploadPct: Math.round(frac * 100) });
+          });
+          store.set("toast", {
+            message: res.message || "Archive uploaded to backups. Use Restore to apply it.",
+            type: "success",
+          });
+          await this._load();
+        } catch (err) {
+          store.set("toast", { message: err.message || "Upload failed.", type: "error" });
+        } finally {
+          this.setState({ uploading: false, uploadPct: 0 });
+        }
       },
     });
   }

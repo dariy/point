@@ -91,7 +91,7 @@ func writeTarGz(t *testing.T, path string, entries map[string]string) {
 	}
 }
 
-func TestRestoreFromArchive_RejectsTraversal(t *testing.T) {
+func TestExtractTarGz_RejectsTraversal(t *testing.T) {
 	root := t.TempDir()
 	dataPath := filepath.Join(root, "data")
 	if err := os.MkdirAll(dataPath, 0o755); err != nil {
@@ -103,7 +103,7 @@ func TestRestoreFromArchive_RejectsTraversal(t *testing.T) {
 	archive := filepath.Join(root, "evil.tar.gz")
 	writeTarGz(t, archive, map[string]string{"../escape.txt": "pwned"})
 
-	if err := s.RestoreFromArchive(archive); err == nil {
+	if err := s.extractTarGz(archive, dataPath); err == nil {
 		t.Fatal("expected traversal entry to be rejected")
 	}
 	// The escaped file must not have been written outside dataPath.
@@ -112,7 +112,7 @@ func TestRestoreFromArchive_RejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestRestoreFromArchive_RejectsAbsolutePath(t *testing.T) {
+func TestExtractTarGz_RejectsAbsolutePath(t *testing.T) {
 	root := t.TempDir()
 	dataPath := filepath.Join(root, "data")
 	if err := os.MkdirAll(dataPath, 0o755); err != nil {
@@ -124,11 +124,57 @@ func TestRestoreFromArchive_RejectsAbsolutePath(t *testing.T) {
 	archive := filepath.Join(root, "abs.tar.gz")
 	writeTarGz(t, archive, map[string]string{absTarget: "pwned"})
 
-	if err := s.RestoreFromArchive(archive); err == nil {
+	if err := s.extractTarGz(archive, dataPath); err == nil {
 		t.Fatal("expected absolute-path entry to be rejected")
 	}
 	if _, err := os.Stat(absTarget); !os.IsNotExist(err) {
 		t.Fatal("absolute-path entry wrote outside the data dir")
+	}
+}
+
+// TestScheduleAndApplyRestore covers the deferred-restore flow: ScheduleRestore
+// only records the request (nothing is extracted while the server is live), and
+// ApplyPendingRestore extracts it and clears stale WAL/SHM sidecars.
+func TestScheduleAndApplyRestore(t *testing.T) {
+	dataPath := t.TempDir()
+	dbPath := filepath.Join(dataPath, "point.db")
+	backupDir := filepath.Join(dataPath, "backups")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTarGz(t, filepath.Join(backupDir, "backup_x.tar.gz"), map[string]string{
+		"point.db":    "snapshot",
+		"media/a.txt": "hi",
+	})
+	// Stale sidecars from the pre-restore database.
+	_ = os.WriteFile(dbPath+"-wal", []byte("stale"), 0o644)
+	_ = os.WriteFile(dbPath+"-shm", []byte("stale"), 0o644)
+
+	s := NewSystemService(nil, dataPath, dbPath)
+
+	if err := s.ScheduleRestore("backup_x.tar.gz"); err != nil {
+		t.Fatalf("ScheduleRestore: %v", err)
+	}
+	// Scheduling must not extract anything yet.
+	if _, err := os.Stat(filepath.Join(dataPath, "media", "a.txt")); !os.IsNotExist(err) {
+		t.Fatal("ScheduleRestore should not extract while the server is live")
+	}
+
+	applied, err := s.ApplyPendingRestore()
+	if err != nil || !applied {
+		t.Fatalf("ApplyPendingRestore: applied=%v err=%v", applied, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dataPath, "media", "a.txt")); err != nil || string(b) != "hi" {
+		t.Fatalf("archive not extracted: %q err=%v", b, err)
+	}
+	for _, sfx := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(dbPath + sfx); !os.IsNotExist(err) {
+			t.Fatalf("stale %s sidecar was not removed", sfx)
+		}
+	}
+	// The marker is consumed: a second apply is a no-op.
+	if applied, err := s.ApplyPendingRestore(); err != nil || applied {
+		t.Fatalf("second ApplyPendingRestore should be a no-op: applied=%v err=%v", applied, err)
 	}
 }
 
@@ -190,7 +236,7 @@ func TestValidateArchive_RejectsNonGzip(t *testing.T) {
 	}
 }
 
-func TestRestoreFromArchive_ExtractsSafeEntries(t *testing.T) {
+func TestExtractTarGz_ExtractsSafeEntries(t *testing.T) {
 	root := t.TempDir()
 	dataPath := filepath.Join(root, "data")
 	if err := os.MkdirAll(dataPath, 0o755); err != nil {
@@ -201,8 +247,8 @@ func TestRestoreFromArchive_ExtractsSafeEntries(t *testing.T) {
 	archive := filepath.Join(root, "ok.tar.gz")
 	writeTarGz(t, archive, map[string]string{"media/a.txt": "hello"})
 
-	if err := s.RestoreFromArchive(archive); err != nil {
-		t.Fatalf("RestoreFromArchive: %v", err)
+	if err := s.extractTarGz(archive, dataPath); err != nil {
+		t.Fatalf("extractTarGz: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dataPath, "media", "a.txt"))
 	if err != nil {

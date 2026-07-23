@@ -304,13 +304,15 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 
 func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 	filename := c.Param("filename")
-	if err := h.systemService.RestoreBackup(c.Request().Context(), filename); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	// Restoring overwrites the live SQLite file, which can't be done safely while
+	// the server holds it open, so we schedule it and apply it at the next startup.
+	if err := h.systemService.ScheduleRestore(filename); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "success",
-		"message": "Backup restored successfully. Please restart the server.",
+		"message": "Restore scheduled. Restart the server to apply it; you will be logged out.",
 	})
 }
 
@@ -477,55 +479,64 @@ func (h *SystemHandler) DownloadBackup(c echo.Context) error {
 	return c.Attachment(backupPath, filename)
 }
 
-// UploadBackupArchive is the "move in" counterpart: it re-verifies the password
-// (sent in the X-Confirm-Password header, sha256-hex like login), streams the
-// uploaded .tar.gz to a temp file, and restores it over the data directory —
-// overwriting everything, including the login password. This route is excluded
-// from the global body-size limit so multi-GB archives can be uploaded.
+// UploadBackupArchive is the "move in" step: it streams an uploaded .tar.gz into
+// the backups folder (like a locally created backup) after validating it. It does
+// NOT apply the archive — the operator decides whether to Restore it afterward.
+// The archive is staged to a .partial and only published under its final name
+// once validated, so a half-uploaded file never appears as a usable backup. This
+// route is excluded from the global body-size limit so multi-GB archives fit.
 func (h *SystemHandler) UploadBackupArchive(c echo.Context) error {
-	ctx := c.Request().Context()
-	userID := extractUserID(c.Get("user"))
-
-	if err := h.authService.VerifyUserPassword(ctx, userID, c.Request().Header.Get("X-Confirm-Password")); err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+	backupDir := filepath.Join(h.dataPath, "backups")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot prepare backups directory")
 	}
 
-	tmp, err := os.CreateTemp("", "point-restore-*.tar.gz")
+	filename := fmt.Sprintf("imported_%s.tar.gz", time.Now().Format("20060102_150405"))
+	finalPath := filepath.Join(backupDir, filename)
+	partialPath := finalPath + backupPartialSuffix
+
+	tmp, err := os.Create(partialPath)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "cannot stage upload")
 	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
 	// Hash the upload in the same pass that stages it to disk (no extra read).
 	hasher := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(tmp, hasher), c.Request().Body); err != nil {
 		_ = tmp.Close()
+		_ = os.Remove(partialPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, "upload failed")
 	}
 	_ = tmp.Close()
 	sum := hex.EncodeToString(hasher.Sum(nil))
 
-	// Verify integrity before any destructive write. If the client sent the
-	// expected checksum, a mismatch means the bytes were corrupted or it's the
-	// wrong file. Otherwise, read the archive end-to-end to catch truncation and
-	// confirm it's actually a Point backup.
+	// Verify before publishing. If the client sent the expected checksum, a
+	// mismatch means the bytes were corrupted or it's the wrong file. Otherwise,
+	// read the archive end-to-end to catch truncation and confirm it's actually a
+	// Point backup, so an unusable file never lands in the list.
 	if expected := strings.TrimSpace(c.Request().Header.Get("X-Archive-SHA256")); expected != "" {
 		if !strings.EqualFold(expected, sum) {
+			_ = os.Remove(partialPath)
 			return echo.NewHTTPError(http.StatusBadRequest, "checksum mismatch: the upload is corrupted or not the expected archive")
 		}
-	} else if err := h.systemService.ValidateArchive(tmpPath); err != nil {
+	} else if err := h.systemService.ValidateArchive(partialPath); err != nil {
+		_ = os.Remove(partialPath)
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid archive: "+err.Error())
 	}
 
-	if err := h.systemService.RestoreFromArchive(tmpPath); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "restore failed: "+err.Error())
+	// Publish: write the checksum sidecar, then rename into place so the archive
+	// only ever appears in the list once complete and validated.
+	_ = os.WriteFile(finalPath+".sha256", []byte(sum+"  "+filename+"\n"), 0o644)
+	if err := os.Rename(partialPath, finalPath); err != nil {
+		_ = os.Remove(partialPath)
+		_ = os.Remove(finalPath + ".sha256")
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not save uploaded archive")
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
-		"status":  "success",
-		"sha256":  sum,
-		"message": "Archive restored. Restart the server to load the new data; you will be logged out.",
+		"status":   "success",
+		"filename": filename,
+		"sha256":   sum,
+		"message":  "Archive uploaded to backups. Use Restore to apply it.",
 	})
 }
 
