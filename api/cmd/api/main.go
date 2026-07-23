@@ -114,10 +114,41 @@ func visibilityCache(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if c.Request().Method == http.MethodGet && isGuestRequest(c) {
 			c.Response().Header().Set("Cache-Control", "public, s-maxage=60, max-age=0")
+			// Cloudflare treats any response whose Vary lists a value other than
+			// Accept-Encoding as uncacheable. The global CORS middleware adds
+			// `Vary: Origin`, but a guest public read does not vary by Origin
+			// (ACAO is a constant `*`, no credentialed CORS), so Origin in Vary
+			// only defeats edge caching — strip it while keeping Accept-Encoding.
+			stripVaryOrigin(c.Response().Header())
 		} else {
 			c.Response().Header().Set("Cache-Control", "private, no-store")
 		}
 		return next(c)
+	}
+}
+
+// stripVaryOrigin removes the Origin token from the Vary header, preserving any
+// other tokens (notably Accept-Encoding). CORS (main.go's global middleware)
+// runs outside this route-level middleware, so `Vary: Origin` is already set by
+// the time visibilityCache runs and can be rewritten here.
+func stripVaryOrigin(h http.Header) {
+	vals := h.Values("Vary")
+	if len(vals) == 0 {
+		return
+	}
+	var kept []string
+	for _, v := range vals {
+		for _, tok := range strings.Split(v, ",") {
+			t := strings.TrimSpace(tok)
+			if t == "" || strings.EqualFold(t, "Origin") {
+				continue
+			}
+			kept = append(kept, t)
+		}
+	}
+	h.Del("Vary")
+	for _, k := range kept {
+		h.Add("Vary", k)
 	}
 }
 
@@ -222,6 +253,8 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
+	// Drop any half-written backup left by a process that was interrupted mid-backup.
+	systemService.CleanupPartialBackups()
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
