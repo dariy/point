@@ -11,21 +11,25 @@ import (
 )
 
 func registerPostRoutes(e *echo.Echo, h *api.PostHandler, svcs *AppServices) {
+	// Public read endpoints carry visibilityCache so an anonymous GET is
+	// edge-cacheable (see main.go). Applied per-route rather than group-wide
+	// because this group also holds an admin GET (/analytics) and the secret
+	// GET /preview/:token, neither of which should be cached.
 	postsGroup := e.Group("/api/posts")
-	postsGroup.GET("", h.ListPosts, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("", h.ListPosts, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 	postsGroup.GET("/analytics", h.GetPostAnalytics, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("", h.CreatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/preview-render", h.PreviewRender, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	postsGroup.GET("/slug/:slug", h.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	postsGroup.GET("/:slug/page", h.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	postsGroup.GET("/:id", h.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/slug/:slug", h.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
+	postsGroup.GET("/:slug/page", h.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
+	postsGroup.GET("/:id", h.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 	postsGroup.PUT("/:id", h.UpdatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.PATCH("/:id/status", h.UpdatePostStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.PATCH("/:id/tags", h.UpdatePostTags, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.DELETE("/:id", h.DeletePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/:id/restore", h.RestorePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.DELETE("/:id/permanent", h.PermanentlyDeletePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	postsGroup.GET("/:id/navigation", h.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/:id/navigation", h.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 	postsGroup.POST("/:id/publish", h.PublishPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/:id/withdraw", h.WithdrawPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/preview/:token", h.GetPostByPreviewToken)
@@ -34,7 +38,10 @@ func registerPostRoutes(e *echo.Echo, h *api.PostHandler, svcs *AppServices) {
 }
 
 func registerTagRoutes(e *echo.Echo, h *api.TagHandler, svcs *AppServices) {
-	tagsGroup := e.Group("/api/tags")
+	// Every GET in this group is an OptionalAuth public read, so group-level
+	// visibilityCache edge-caches anonymous reads; writes (POST/PUT/…) fall to
+	// private,no-store via the method check.
+	tagsGroup := e.Group("/api/tags", visibilityCache)
 	tagsGroup.GET("", h.ListTags, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.GET("/cloud", h.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.POST("", h.CreateTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -79,7 +86,7 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 
 func registerSettingsRoutes(e *echo.Echo, h *api.SettingsHandler, svcs *AppServices) {
 	settingsGroup := e.Group("/api/settings")
-	settingsGroup.GET("/public", h.GetPublicSettings)
+	settingsGroup.GET("/public", h.GetPublicSettings, visibilityCache)
 	settingsGroup.GET("", h.GetSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.GET("/:key", h.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PUT("", h.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -108,8 +115,8 @@ func registerInstagramRoutes(e *echo.Echo, h *api.InstagramHandler, svcs *AppSer
 
 func registerThemeRoutes(e *echo.Echo, h *api.ThemeHandler, svcs *AppServices) {
 	themesGroup := e.Group("/api/themes")
-	themesGroup.GET("", h.ListThemes)
-	themesGroup.GET("/active", h.GetActiveTheme)
+	themesGroup.GET("", h.ListThemes, visibilityCache)
+	themesGroup.GET("/active", h.GetActiveTheme, visibilityCache)
 	themesGroup.PUT("/active", h.SetActiveTheme, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	themesGroup.GET("/custom-css", h.GetCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
 	themesGroup.PUT("/custom-css", h.UpdateCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
