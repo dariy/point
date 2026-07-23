@@ -85,7 +85,7 @@ func setupSystemService(t *testing.T) (*SystemService, string) {
 		_ = repo.Close()
 		_ = os.RemoveAll(dir)
 	})
-	return NewSystemService(repo, dir), dir
+	return NewSystemService(repo, dir, ""), dir
 }
 
 func insertTestUser(t *testing.T, svc *PostService) int64 {

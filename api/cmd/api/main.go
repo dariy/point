@@ -221,7 +221,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	instagramService := services.NewInstagramService(settingsService)
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
-	systemService := services.NewSystemService(repo, cfg.StoragePath)
+	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
@@ -268,7 +268,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
@@ -332,7 +332,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	if uploadLimitMB <= 0 {
 		uploadLimitMB = 50
 	}
-	e.Use(middleware.BodyLimit(fmt.Sprintf("%dM", uploadLimitMB)))
+	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		// The "move in" archive upload streams a multi-GB body straight to a temp
+		// file; the global limit would abort it. It's gated by a session cookie
+		// plus password re-entry instead of a size ceiling.
+		Skipper: func(c echo.Context) bool {
+			return c.Request().Method == http.MethodPost && c.Path() == "/api/system/backups/upload"
+		},
+		Limit: fmt.Sprintf("%dM", uploadLimitMB),
+	}))
 	// Wildcard origin for the public read API. AllowCredentials is deliberately
 	// omitted: browsers reject `Access-Control-Allow-Origin: *` together with
 	// credentials, and the admin SPA is same-origin (served by this server), so

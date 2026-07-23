@@ -9,13 +9,22 @@
  */
 
 import { Component } from "../../Component.js";
-import { listBackups, createBackup, restoreBackup, deleteBackup } from "../../../api/system.js";
+import {
+  listBackups,
+  createBackup,
+  restoreBackup,
+  deleteBackup,
+  authorizeBackupDownload,
+  backupDownloadUrl,
+  uploadBackupArchive,
+} from "../../../api/system.js";
+import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
 import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/helpers.js";
 import { formatFileSize } from "../../../utils/formatters.js";
-import { RESTORE_SVG, X_SVG } from "../../../utils/icons.js";
-import { showConfirm } from "../../../utils/dialogs.js";
+import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG } from "../../../utils/icons.js";
+import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 import { GestureController } from "../../../core/gestures.js";
 
 export class BackupsSection extends Component {
@@ -25,6 +34,9 @@ export class BackupsSection extends Component {
       loading: true,
       backups: [],
       creatingBackup: false,
+      // Move-in upload progress (0..100); uploading gates the controls.
+      uploading: false,
+      uploadPct: 0,
       // Backup automation settings (loaded alongside the list).
       enableBackup: true,
       intervalDays: 1,
@@ -62,39 +74,71 @@ export class BackupsSection extends Component {
       </div>`;
   }
 
+  // A single backup row: a live "Creating…" placeholder while the archive is
+  // still being written, otherwise the normal swipe row with actions.
+  _renderItem(b) {
+    if (b.in_progress) {
+      return `
+        <li class="backup-item backup-in-progress">
+          <span class="backup-spinner" aria-hidden="true"></span>
+          <div class="backup-progress-content">
+            <div class="backup-name font-mono">${escapeHtml(b.filename)}</div>
+            <div class="backup-sub">
+              <span class="backup-sub-status">Creating… ${escapeHtml(formatFileSize(b.size))} so far</span>
+            </div>
+          </div>
+        </li>`;
+    }
+    return `
+      <li class="backup-swipe-item">
+        <div class="backup-swipe-actions">
+          <button class="btn download-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Download" aria-label="Download">${DOWNLOAD_SVG}</button>
+          <button class="btn restore-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Restore" aria-label="Restore">${RESTORE_SVG}</button>
+          <button class="btn btn-danger delete-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Delete" aria-label="Delete">${X_SVG}</button>
+        </div>
+        <div class="backup-swipe-content">
+          <div class="backup-name font-mono">${escapeHtml(b.filename)}</div>
+          <div class="backup-sub">
+            <span class="backup-sub-date">${escapeHtml(new Date(b.created_at).toLocaleString())}</span>
+            <span class="backup-sub-size">${escapeHtml(formatFileSize(b.size))}</span>
+            ${
+              b.sha256
+                ? `<span class="backup-sub-sha font-mono" title="SHA-256: ${escapeHtml(b.sha256)}">sha256 ${escapeHtml(b.sha256.slice(0, 10))}…</span>`
+                : ""
+            }
+          </div>
+        </div>
+      </li>`;
+  }
+
   render() {
-    const { loading, backups, creatingBackup } = this.state;
+    const { loading, backups, creatingBackup, uploading, uploadPct } = this.state;
+    const backupInProgress = backups.some((b) => b.in_progress);
     const items = loading
       ? '<li class="backup-empty">Loading…</li>'
       : backups.length
-        ? backups
-            .map(
-              (b) => `
-              <li class="backup-swipe-item">
-                <div class="backup-swipe-actions">
-                  <button class="btn restore-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Restore" aria-label="Restore">${RESTORE_SVG}</button>
-                  <button class="btn btn-danger delete-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Delete" aria-label="Delete">${X_SVG}</button>
-                </div>
-                <div class="backup-swipe-content">
-                  <div class="backup-name font-mono">${escapeHtml(b.filename)}</div>
-                  <div class="backup-sub">
-                    <span class="backup-sub-date">${escapeHtml(new Date(b.created_at).toLocaleString())}</span>
-                    <span class="backup-sub-size">${escapeHtml(formatFileSize(b.size))}</span>
-                  </div>
-                </div>
-              </li>`,
-            )
-            .join("")
+        ? backups.map((b) => this._renderItem(b)).join("")
         : '<li class="backup-empty">No backups found.</li>';
 
+    const creating = creatingBackup || backupInProgress;
     return `
       <section class="card">
         <div class="card-header">
-          <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creatingBackup ? "disabled" : ""}>
-            ${creatingBackup ? "Creating…" : "Create New Backup"}
+          <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creating || uploading ? "disabled" : ""}>
+            ${creating ? "Creating…" : "Create New Backup"}
           </button>
+          <button id="upload-backup-btn" class="btn btn-sm" ${creating || uploading ? "disabled" : ""} title="Restore the site from a local archive">
+            ${UPLOAD_SVG} Upload archive
+          </button>
+          <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
         </div>
         <div class="card-body">
+          ${
+            uploading
+              ? `<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
+                 <p class="progress-text">Uploading archive… ${uploadPct}%</p>`
+              : ""
+          }
           ${this._renderSettings()}
           <ul class="backup-list">${items}</ul>
         </div>
@@ -104,9 +148,21 @@ export class BackupsSection extends Component {
   afterRender() {
     this.$("#create-backup-btn")?.addEventListener("click", () => this._handleCreate());
 
+    const uploadInput = this.$("#upload-backup-input");
+    this.$("#upload-backup-btn")?.addEventListener("click", () => uploadInput?.click());
+    uploadInput?.addEventListener("change", () => {
+      const file = uploadInput.files?.[0];
+      uploadInput.value = ""; // allow re-picking the same file later
+      if (file) this._handleUpload(file);
+    });
+
     this._bindSettings();
 
     this._bindSwipe();
+
+    this.$$(".download-backup-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this._handleDownload(btn.dataset.filename));
+    });
 
     this.$$(".restore-backup-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -261,6 +317,7 @@ export class BackupsSection extends Component {
 
   beforeUnmount() {
     this._destroySwipe();
+    this._stopPoll();
   }
 
   mount() {
@@ -281,9 +338,48 @@ export class BackupsSection extends Component {
         intervalDays: parseInt(settings.backup_interval_days, 10) || 1,
         keep: settings.backup_keep != null ? parseInt(settings.backup_keep, 10) || 0 : 7,
       });
+      this._syncPoll();
     } catch (err) {
       this.setState({ loading: false });
       store.set("toast", { message: err.message || "Could not load backups.", type: "error" });
+    }
+  }
+
+  // Refresh only the backup list (used while polling, so it doesn't disturb the
+  // settings inputs' loaded values).
+  async _refreshBackups() {
+    try {
+      const backups = await listBackups();
+      this.setState({ backups: Array.isArray(backups) ? backups : this.state.backups });
+    } catch {
+      /* keep the last list; try again on the next tick */
+    }
+    this._syncPoll();
+  }
+
+  // Poll while a backup is being created so the in-progress row (and its growing
+  // size) update live and the list flips to "done" without a manual refresh.
+  // We poll while a backup is in progress AND, right after clicking Create, during
+  // a grace window — the background job writes the .partial file a moment after the
+  // request returns, so a single immediate refresh can miss it.
+  _syncPoll() {
+    const active = this.state.backups.some((b) => b.in_progress);
+    if (active) this._awaitingBackupStart = false; // now tracked by its in-progress row
+    const awaitingStart =
+      this._awaitingBackupStart && Date.now() - this._backupInitiatedAt < 30000;
+    const shouldPoll = active || awaitingStart;
+    if (shouldPoll && !this._pollTimer) {
+      this._pollTimer = setInterval(() => this._refreshBackups(), 2000);
+    } else if (!shouldPoll) {
+      this._awaitingBackupStart = false;
+      this._stopPoll();
+    }
+  }
+
+  _stopPoll() {
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = null;
     }
   }
 
@@ -291,10 +387,18 @@ export class BackupsSection extends Component {
     this.setState({ creatingBackup: true });
     try {
       await createBackup();
-      store.set("toast", { message: "Backup created.", type: "success" });
-      this._load();
+      store.set("toast", { message: "Backup started…", type: "info" });
+      // The background job creates the .partial a moment later; poll until it
+      // appears (then until it completes) instead of relying on one refresh.
+      this._backupInitiatedAt = Date.now();
+      this._awaitingBackupStart = true;
+      await this._refreshBackups();
     } catch (err) {
-      store.set("toast", { message: err.message || "Backup failed.", type: "error" });
+      const msg =
+        err?.status === 409
+          ? "A backup is already in progress."
+          : err.message || "Backup failed.";
+      store.set("toast", { message: msg, type: "error" });
     } finally {
       this.setState({ creatingBackup: false });
     }
@@ -319,5 +423,71 @@ export class BackupsSection extends Component {
     } catch (err) {
       store.set("toast", { message: err.message || "Delete failed.", type: "error" });
     }
+  }
+
+  // Move out: re-enter the password, exchange it for a one-time token, then let
+  // the browser stream the archive to disk (supports resume; never buffered in JS).
+  _handleDownload(filename) {
+    showPrompt({
+      title: "Download backup",
+      message: `Confirm your password to download "${filename}".`,
+      inputType: "password",
+      confirmText: "Download",
+      onConfirm: async (password) => {
+        if (!password) return;
+        try {
+          const hashed = await sha256(password);
+          const { token } = await authorizeBackupDownload(filename, hashed);
+          const a = document.createElement("a");
+          a.href = backupDownloadUrl(filename, token);
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (err) {
+          store.set("toast", { message: err.message || "Download failed.", type: "error" });
+        }
+      },
+    });
+  }
+
+  // Move in: strong warning → password confirm → streamed upload that overwrites
+  // everything (including the login password). The server needs a restart after.
+  _handleUpload(file) {
+    showConfirm({
+      title: "Restore from uploaded archive",
+      message:
+        `Replace ALL current data with "${file.name}"? This overwrites your posts, media, ` +
+        `settings, and your login password with the contents of the archive. This cannot be undone.`,
+      confirmText: "Continue",
+      variant: "danger",
+      onConfirm: () => {
+        showPrompt({
+          title: "Confirm restore",
+          message: "Enter your current password to authorize this overwrite.",
+          inputType: "password",
+          confirmText: "Upload & restore",
+          onConfirm: async (password) => {
+            if (!password) return;
+            this.setState({ uploading: true, uploadPct: 0 });
+            try {
+              const hashed = await sha256(password);
+              const res = await uploadBackupArchive(file, hashed, (frac) => {
+                this.setState({ uploading: true, uploadPct: Math.round(frac * 100) });
+              });
+              const shaNote = res.sha256 ? ` (sha256 ${res.sha256.slice(0, 10)}…)` : "";
+              store.set("toast", {
+                message: (res.message || "Archive restored. Restart the server; you will be logged out.") + shaNote,
+                type: "success",
+              });
+            } catch (err) {
+              store.set("toast", { message: err.message || "Upload failed.", type: "error" });
+            } finally {
+              this.setState({ uploading: false, uploadPct: 0 });
+            }
+          },
+        });
+      },
+    });
   }
 }

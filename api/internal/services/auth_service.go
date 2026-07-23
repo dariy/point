@@ -241,17 +241,27 @@ func (s *AuthService) GetUserByID(ctx context.Context, userID int64) (models.Use
 	return s.repo.GetUser(ctx, userID)
 }
 
-// ChangePassword updates the password and terminates all of the user's other
-// sessions (keeping currentSessionID), so a stale or stolen session elsewhere is
-// invalidated. Pass currentSessionID 0 to terminate every session.
-func (s *AuthService) ChangePassword(ctx context.Context, userID, currentSessionID int64, currentPassword, newPassword string) error {
+// VerifyUserPassword re-verifies a user's current password, the guard used to
+// gate sensitive actions (changing credentials, exporting/importing a full
+// backup). currentPassword is the SHA-256-hex the frontend sends, exactly as at
+// login — never plaintext. Returns nil when it matches.
+func (s *AuthService) VerifyUserPassword(ctx context.Context, userID int64, currentPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
 		return err
 	}
-
 	if !VerifyPassword(currentPassword, user.PasswordHash) {
 		return errors.New("current password incorrect")
+	}
+	return nil
+}
+
+// ChangePassword updates the password and terminates all of the user's other
+// sessions (keeping currentSessionID), so a stale or stolen session elsewhere is
+// invalidated. Pass currentSessionID 0 to terminate every session.
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentSessionID int64, currentPassword, newPassword string) error {
+	if err := s.VerifyUserPassword(ctx, userID, currentPassword); err != nil {
+		return err
 	}
 
 	hashed, err := HashPassword(newPassword)
@@ -274,13 +284,8 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, currentSession
 // password. The email is where password-reset links go, so it gets the same
 // protection as a password change; sessions stay intact.
 func (s *AuthService) ChangeEmail(ctx context.Context, userID int64, currentPassword, newEmail string) error {
-	user, err := s.repo.GetUser(ctx, userID)
-	if err != nil {
+	if err := s.VerifyUserPassword(ctx, userID, currentPassword); err != nil {
 		return err
-	}
-
-	if !VerifyPassword(currentPassword, user.PasswordHash) {
-		return errors.New("current password incorrect")
 	}
 
 	addr, err := mail.ParseAddress(newEmail)

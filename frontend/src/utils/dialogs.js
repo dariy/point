@@ -30,15 +30,17 @@ export function showConfirm({ title, message, confirmText, variant = "primary", 
 
 /**
  * @param {{title:string, message:string, defaultValue?:string,
- *   confirmText?:string, onConfirm?:(value:string)=>void}} opts
+ *   inputType?:'text'|'password', confirmText?:string,
+ *   onConfirm?:(value:string)=>void}} opts
  */
-export function showPrompt({ title, message, defaultValue = "", confirmText, onConfirm }) {
+export function showPrompt({ title, message, defaultValue = "", inputType = "text", confirmText, onConfirm }) {
   const mount = document.createElement("div");
   document.body.appendChild(mount);
   const dialog = new PromptDialog(mount, {
     title,
     message,
     defaultValue,
+    inputType,
     confirmText,
     onConfirm: (val) => { dialog.unmount(); mount.remove(); onConfirm?.(val); },
     onCancel: () => { dialog.unmount(); mount.remove(); },

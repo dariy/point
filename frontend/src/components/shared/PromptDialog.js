@@ -5,6 +5,7 @@
  *   title        {string}    Heading
  *   message      {string}    Body text
  *   defaultValue {string}    Initial value for input
+ *   inputType    {string}    Input type, e.g. 'text' (default) or 'password'
  *   confirmText  {string}    Label for primary button
  *   onConfirm    {Function}  Called when confirmed with value
  *   onCancel     {Function}  Called when cancelled
@@ -22,7 +23,7 @@ export class PromptDialog extends Component {
   }
 
   afterRender() {
-    const { title, message, defaultValue = '', onCancel } = this.props;
+    const { title, message, defaultValue = '', inputType = 'text', onCancel } = this.props;
 
     const modal = this.mountChild(Modal, '#modal-wrapper', {
       title,
@@ -40,7 +41,7 @@ export class PromptDialog extends Component {
       }
 
       const input = document.createElement('input');
-      input.type = 'text';
+      input.type = inputType;
       input.className = 'form-input';
       input.value = defaultValue;
       input.id = 'prompt-input';
