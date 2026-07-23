@@ -85,6 +85,7 @@ export default [
         sessionStorage: "readonly",
         location: "readonly",
         fetch: "readonly",
+        XMLHttpRequest: "readonly",
         URL: "readonly",
         URLSearchParams: "readonly",
         CustomEvent: "readonly",

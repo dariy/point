@@ -153,6 +153,15 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // 0. Cross-origin requests (analytics beacons, map tiles, third-party
+  // scripts) are the browser's to handle natively — governed directly by the
+  // document's CSP (script-src / img-src / connect-src). Routing them through
+  // the SW turns a native script/image load into a SW `fetch()`, which counts
+  // against connect-src and gets blocked (e.g. the Cloudflare Web Analytics
+  // beacon on static.cloudflareinsights.com), then returns a bogus 503. Let
+  // them pass through untouched.
+  if (url.origin !== self.location.origin) return;
+
   // 1. Share target: intercept POST entirely
   if (url.pathname === "/share-target" && request.method === "POST") {
     event.respondWith(handleShareTarget(request));

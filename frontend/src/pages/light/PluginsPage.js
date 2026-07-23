@@ -115,7 +115,7 @@ const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24
 // itself is frontend-owned: the backend registry knows slot names, not where a
 // slot sits on a page, so the schematic geometry lives here.
 const MAP_PANELS = [
-  { id: "home", title: "Home", path: "/" },
+  { id: "home", title: "Post list", path: "/" },
   { id: "post", title: "Post page", path: "/:slug" },
   { id: "tags", title: "Tags page", path: "/tags" },
   { id: "viewer", title: "Media viewer", path: "photo opened" },
@@ -577,7 +577,7 @@ export default class PluginsPage extends Component {
       delete pending[id];
       // An individual toggle diverges from any preset (backend does the same).
       this.setState({ plugins: this._withLocks(plugins), pending, activePreset: "custom" });
-      
+
       // Mutate pluginHost directly so navigation menus can immediately appear/disappear without a hard refresh.
       if (enabled) {
         pluginHost._byId.set(id, updated);

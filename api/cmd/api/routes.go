@@ -134,8 +134,13 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup.GET("/audit/post-links", h.AuditPostLinks, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/backup", h.CreateBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.GET("/backups", h.ListBackups, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
-	systemGroup.POST("/backups/:filename/restore", h.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.POST("/backups/:filename/restore", h.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.DELETE("/backups/:filename", h.DeleteBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	// Move out: re-enter password to authorize, then a one-time-token GET streams the archive.
+	systemGroup.POST("/backups/:filename/authorize-download", h.AuthorizeBackupDownload, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.GET("/backups/:filename/download", h.DownloadBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	// Move in: upload a local archive (password in X-Confirm-Password header) to overwrite everything.
+	systemGroup.POST("/backups/upload", h.UploadBackupArchive, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.GET("/offline/stats", h.GetOfflineStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/offline/snapshot", h.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/media/scan", h.ScanMediaImport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -143,4 +148,6 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup.POST("/photo-library/import", h.ImportSelectedPhotos, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/photo-library/file", h.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/version", h.GetVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	// Restart the process in place (re-exec). Session-only: not an API-key action.
+	systemGroup.POST("/restart", h.RestartServer, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 }

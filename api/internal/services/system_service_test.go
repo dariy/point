@@ -35,7 +35,7 @@ func countBackups(t *testing.T, dataPath string) int {
 
 func TestRotateBackups(t *testing.T) {
 	dp := t.TempDir()
-	s := NewSystemService(nil, dp)
+	s := NewSystemService(nil, dp, "")
 
 	// No backups dir yet → nothing to do.
 	if n, err := s.RotateBackups(3); err != nil || n != 0 {
@@ -73,7 +73,7 @@ func TestRotateBackups(t *testing.T) {
 
 func TestBackupDue(t *testing.T) {
 	dp := t.TempDir()
-	s := NewSystemService(nil, dp)
+	s := NewSystemService(nil, dp, "")
 
 	// Daily is always due regardless of history.
 	if !s.BackupDue(1) {

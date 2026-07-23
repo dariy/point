@@ -46,6 +46,7 @@ export default class SecurityPage extends Component {
         <section class="card">
           <div class="card-header"><h2>Change Password</h2></div>
           <div class="card-body">
+            <p class="form-hint">Change your password here.</p>
             <form id="change-password-form">
               <div class="form-group">
                 <label class="form-label" for="old-password">Current Password</label>
