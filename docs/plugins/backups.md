@@ -69,5 +69,12 @@ the backups folder; nothing is applied until the operator explicitly Restores it
     DB's `-wal`/`-shm` sidecars. This is essential — extracting a backup over the
     SQLite file while the server holds it open, and leaving a stale WAL for SQLite
     to replay against the restored snapshot, corrupts the database (*"disk image is
-    malformed"*). The UI gates the action behind a danger confirmation and tells the
-    operator to restart the server to apply it.
+    malformed"*).
+
+    The restart that applies it can be done from the UI: `POST /api/system/restart`
+    (session-only) flags a restart and triggers the normal graceful shutdown, after
+    which `main` **re-execs the binary in place** (`syscall.Exec` — same PID and
+    container, a fresh program that runs `ApplyPendingRestore` before opening the
+    DB). No external supervisor is required, so it also works under bare
+    `scripts/run.sh`. The UI offers "Restart now" right after scheduling a restore,
+    plus a standalone "Restart server" button.

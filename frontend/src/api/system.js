@@ -115,6 +115,15 @@ export function getMigrations() {
 }
 
 /**
+ * Restart the server process in place (re-exec). Used to apply a scheduled
+ * restore, and for general restarts. The server is briefly unavailable.
+ * @returns {Promise<object>}
+ */
+export function restartServer() {
+  return api.post('/api/system/restart');
+}
+
+/**
  * Geocode city/country descendant tags that have no coordinates yet.
  * Uses Nominatim (OpenStreetMap). This can be slow — rate-limited to 1 req/sec.
  * @returns {Promise<{status: string, updated_count: number, message: string, errors?: string[]}>}

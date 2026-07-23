@@ -17,13 +17,14 @@ import {
   authorizeBackupDownload,
   backupDownloadUrl,
   uploadBackupArchive,
+  restartServer,
 } from "../../../api/system.js";
 import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
 import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/helpers.js";
 import { formatFileSize } from "../../../utils/formatters.js";
-import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG } from "../../../utils/icons.js";
+import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 import { GestureController } from "../../../core/gestures.js";
 
@@ -130,6 +131,9 @@ export class BackupsSection extends Component {
           <button id="upload-backup-btn" class="btn btn-sm" ${creating || uploading ? "disabled" : ""} title="Add a local archive to your backups (apply it later with Restore)">
             ${UPLOAD_SVG} Upload archive
           </button>
+          <button id="restart-server-btn" class="btn btn-sm" title="Restart the server (applies a scheduled restore)">
+            ${REFRESH_SVG} Restart server
+          </button>
           <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
         </div>
         <div class="card-body">
@@ -155,6 +159,8 @@ export class BackupsSection extends Component {
       uploadInput.value = ""; // allow re-picking the same file later
       if (file) this._handleUpload(file);
     });
+
+    this.$("#restart-server-btn")?.addEventListener("click", () => this._handleRestartServer());
 
     this._bindSettings();
 
@@ -409,15 +415,38 @@ export class BackupsSection extends Component {
   async _handleRestore(filename) {
     try {
       const res = await restoreBackup(filename);
-      // The restore is applied at the next startup (it can't overwrite the live
-      // database safely), so there's nothing to reload here — the server must
-      // be restarted.
-      store.set("toast", {
-        message: res.message || "Restore scheduled. Restart the server to apply it.",
-        type: "success",
+      // The restore is applied on the next startup (it can't overwrite the live
+      // database safely), so offer to restart now. If declined, it still applies
+      // whenever the server is next restarted.
+      showConfirm({
+        title: "Restart to apply restore",
+        message: `${res.message || "Restore scheduled."} Restart the server now to apply it?`,
+        confirmText: "Restart now",
+        onConfirm: () => this._restartNow(),
       });
     } catch (err) {
       store.set("toast", { message: err.message || "Restore failed.", type: "error" });
+    }
+  }
+
+  _handleRestartServer() {
+    showConfirm({
+      title: "Restart server",
+      message: "Restart the server now? It will be unavailable for a few seconds.",
+      confirmText: "Restart",
+      variant: "danger",
+      onConfirm: () => this._restartNow(),
+    });
+  }
+
+  // Ask the server to restart in place, then reload once it's likely back up.
+  async _restartNow() {
+    try {
+      await restartServer();
+      store.set("toast", { message: "Server is restarting… reloading shortly.", type: "info" });
+      setTimeout(() => location.reload(), 5000);
+    } catch (err) {
+      store.set("toast", { message: err.message || "Restart failed.", type: "error" });
     }
   }
 

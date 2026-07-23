@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"point-api/internal/repository"
@@ -21,6 +23,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 )
+
+// RestartRequested is set by the restart endpoint so main() re-execs the binary
+// (a fresh process in the same container/PID) instead of exiting after the
+// graceful shutdown. On the fresh start, any scheduled backup restore is applied
+// before the database is opened.
+var RestartRequested atomic.Bool
 
 type SystemHandler struct {
 	repo            repository.Repository
@@ -313,6 +321,26 @@ func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "success",
 		"message": "Restore scheduled. Restart the server to apply it; you will be logged out.",
+	})
+}
+
+// RestartServer restarts the process in place: it flags a restart and triggers
+// the normal graceful shutdown, after which main() re-execs the binary (same PID
+// and container, a fresh program). No external supervisor is needed. Any pending
+// backup restore is applied by the fresh process before it opens the database.
+func (h *SystemHandler) RestartServer(c echo.Context) error {
+	// Respond first, then trigger shutdown from a goroutine — a short delay lets
+	// this response flush before the HTTP server stops accepting connections.
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		RestartRequested.Store(true)
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			slog.Error("restart: failed to signal shutdown", "error", err)
+		}
+	}()
+	return c.JSON(http.StatusOK, map[string]string{
+		"status":  "restarting",
+		"message": "Server is restarting…",
 	})
 }
 

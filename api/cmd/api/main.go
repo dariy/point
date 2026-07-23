@@ -961,6 +961,22 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("graceful shutdown complete")
+
+	// A UI-triggered restart re-execs this binary in place: same PID and container,
+	// a fresh program that re-runs initialization (including applying any pending
+	// backup restore before the DB opens). No external supervisor is required. The
+	// DB/listener fds are O_CLOEXEC, so they close automatically across the exec.
+	if api.RestartRequested.Load() {
+		exe, err := os.Executable()
+		if err != nil {
+			exe = os.Args[0]
+		}
+		slog.Info("restart requested: re-executing in place", "exe", exe)
+		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil {
+			slog.Error("re-exec failed; exiting so a supervisor can restart instead", "error", err)
+			os.Exit(1)
+		}
+	}
 }
 
 // isResetPasswordCmd reports whether the args invoke the reset-password
