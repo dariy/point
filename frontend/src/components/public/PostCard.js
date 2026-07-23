@@ -17,6 +17,7 @@ import { LOCK_SVG } from "../../utils/icons.js";
 import { store } from "../../store.js";
 import {
   buildTagIndex,
+  parseTagUrl,
   renderTagStrip,
   setupTagStrip,
 } from "../../utils/tags.js";
@@ -183,8 +184,8 @@ export class PostCard extends Component {
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this._cleanupStrip = setupTagStrip(card, tagIndex, (url) => {
-      const slug = url.replace('/tags/', '');
-      ViewContext.update({ tag: slug, postSlug: null, query: null });
+      const { tag, navPath } = parseTagUrl(url);
+      ViewContext.update({ tag, navPath, postSlug: null, query: null });
     }, card);
   }
 

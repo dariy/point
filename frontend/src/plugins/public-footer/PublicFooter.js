@@ -12,6 +12,7 @@ import { escapeHtml } from "../../utils/helpers.js";
 import {
   renderTagLink,
   buildTagIndex,
+  parseTagUrl,
   setupTagFlyout,
 } from "../../utils/tags.js";
 import {
@@ -209,8 +210,8 @@ export class PublicFooter extends Component {
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, (url) => {
-      const slug = url.replace("/tags/", "");
-      ViewContext.update({ tag: slug, postSlug: null, query: null });
+      const { tag, navPath } = parseTagUrl(url);
+      ViewContext.update({ tag, navPath, postSlug: null, query: null });
     });
   }
 
