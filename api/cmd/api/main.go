@@ -84,6 +84,43 @@ func hasSession(c echo.Context) bool {
 	return err == nil && ck.Value != ""
 }
 
+// isGuestRequest reports whether a request is an anonymous public reader: no
+// session cookie, no Bearer API key, and not an admin path. Such a response is
+// identical for every anonymous visitor, so it is safe to share at a CDN edge.
+// It mirrors the guest test serveSimplifiedMedia already uses for media
+// (isAuthenticated := c.Get("user") != nil), but reads the request directly so
+// it does not depend on auth middleware having run first.
+func isGuestRequest(c echo.Context) bool {
+	if hasSession(c) {
+		return false
+	}
+	if h := c.Request().Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		return false
+	}
+	return !isAdminPath(c.Request().URL.Path)
+}
+
+// visibilityCache emits a visibility-aware Cache-Control on a public read route
+// so a Cloudflare Cache Rule can edge-cache the anonymous response while never
+// storing an authenticated one — the HTML/API analogue of serveSimplifiedMedia's
+// media caching (see point-hosting docs/08-reddit-flood-prep.md). A guest GET
+// gets a short shared-cache TTL (s-maxage lets the edge serve it; max-age=0 keeps
+// the browser revalidating so a login transition is instant); everything else
+// (authenticated reads, any write) gets private,no-store so a per-user response
+// is never stored at the edge even if the CF rule misfires. The header is set
+// before the handler runs because Echo flushes headers on first write; handlers
+// that set their own Cache-Control (media) still win by overwriting it.
+func visibilityCache(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if c.Request().Method == http.MethodGet && isGuestRequest(c) {
+			c.Response().Header().Set("Cache-Control", "public, s-maxage=60, max-age=0")
+		} else {
+			c.Response().Header().Set("Cache-Control", "private, no-store")
+		}
+		return next(c)
+	}
+}
+
 // sanitizeCSPSources normalizes an operator-supplied CSP source list (the
 // CSP_SCRIPT_SRC / CSP_CONNECT_SRC deploy config) into a safe space-separated
 // token list before it is appended to a directive. It splits on whitespace and
@@ -492,7 +529,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
-	pagesGroup := e.Group("/api/pages")
+	// visibilityCache is group-level: every route here is an OptionalAuth public
+	// read, so an anonymous GET is edge-cacheable (authenticated reads and any
+	// write get private,no-store). These are the compound payloads the public SPA
+	// fetches to render a page, so caching them offloads the flood's follow-on
+	// /api traffic alongside the HTML shell.
+	pagesGroup := e.Group("/api/pages", visibilityCache)
 	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -502,7 +544,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
 
 	// ── Timeline Routes ────────────────────────────────────────────────────────
-	timelineGroup := e.Group("/api/timeline")
+	// Both routes are OptionalAuth public reads — group-level visibilityCache.
+	timelineGroup := e.Group("/api/timeline", visibilityCache)
 	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
@@ -526,7 +569,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTMLContent, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTMLContent, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
 		imagesDir := filepath.Join(frontendDir, "images")
@@ -704,7 +747,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"detail": "Frontend not available — build the frontend first",
 		})
-	})
+	}, visibilityCache)
 
 	return e
 }
