@@ -104,16 +104,25 @@ func isGuestRequest(c echo.Context) bool {
 // so a Cloudflare Cache Rule can edge-cache the anonymous response while never
 // storing an authenticated one — the HTML/API analogue of serveSimplifiedMedia's
 // media caching (see point-hosting docs/08-reddit-flood-prep.md). A guest GET
-// gets a short shared-cache TTL (s-maxage lets the edge serve it; max-age=0 keeps
-// the browser revalidating so a login transition is instant); everything else
-// (authenticated reads, any write) gets private,no-store so a per-user response
-// is never stored at the edge even if the CF rule misfires. The header is set
-// before the handler runs because Echo flushes headers on first write; handlers
-// that set their own Cache-Control (media) still win by overwriting it.
+// gets `public, max-age=60`; everything else (authenticated reads, any write)
+// gets private,no-store so a per-user response is never stored at the edge even
+// if the CF rule misfires. The header is set before the handler runs because
+// Echo flushes headers on first write; handlers that set their own Cache-Control
+// (media) still win by overwriting it.
+//
+// Why plain max-age=60 and not `s-maxage=60, max-age=0` (edge caches, browser
+// revalidates): Cloudflare Cache Rules treat max-age=0 as non-cacheable even
+// when s-maxage is also present (Origin Cache Control is always on for
+// Free/Pro/Business and cannot be disabled), so that header yields
+// CF-Cache-Status: DYNAMIC and never caches — verified empirically against both
+// bypass_by_default and respect_origin. The browser-revalidation half is instead
+// handled at the edge: the CF Cache Rule sets Browser TTL = 0 (override_origin),
+// which also stops the zone's 4 h default Browser Cache TTL from leaking a long
+// max-age downstream. So the origin just advertises the 60 s edge TTL here.
 func visibilityCache(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if c.Request().Method == http.MethodGet && isGuestRequest(c) {
-			c.Response().Header().Set("Cache-Control", "public, s-maxage=60, max-age=0")
+			c.Response().Header().Set("Cache-Control", "public, max-age=60")
 			// Cloudflare treats any response whose Vary lists a value other than
 			// Accept-Encoding as uncacheable. The global CORS middleware adds
 			// `Vary: Origin`, but a guest public read does not vary by Origin
