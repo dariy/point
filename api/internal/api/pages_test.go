@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"point-api/internal/repository"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -605,5 +606,79 @@ func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
 	}
 	if rec3.Code != http.StatusOK {
 		t.Errorf("expected status 200 for admin, got %d", rec3.Code)
+	}
+}
+
+// TestPagesHandler_ExpandPostTagsWithAncestors covers the ancestor walk that
+// adds inherited tags to a post's tag list: a parent tag surfaces marked
+// Inherited, a tag the post carries itself is never inherited even when it is
+// also an ancestor of another of the post's tags, and a hidden ancestor is
+// dropped (along with its own ancestors) under publicOnly.
+func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+
+	// Hierarchy: nature → botany. Plus a hidden branch hush → visible.
+	nature, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Nature", Slug: "nature"})
+	botany, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Botany", Slug: "botany", ParentIDs: []int64{nature.ID}})
+	hush, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Hush", Slug: "hush", Hidden: true})
+	visible, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Visible", Slug: "visible", ParentIDs: []int64{hush.ID}})
+
+	byID := func(tags []repository.PostTagInfo) map[int64]repository.PostTagInfo {
+		m := make(map[int64]repository.PostTagInfo, len(tags))
+		for _, tg := range tags {
+			m[tg.ID] = tg
+		}
+		return m
+	}
+
+	// Case 1: post carries only botany → nature is added as an inherited ancestor.
+	got := ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+		1: {{ID: botany.ID, Name: botany.Name, Slug: botany.Slug}},
+	}, true)
+	m := byID(got[1])
+	if bt, ok := m[botany.ID]; !ok || bt.Inherited {
+		t.Errorf("botany should be present and not inherited, got %+v (ok=%v)", bt, ok)
+	}
+	if nt, ok := m[nature.ID]; !ok || !nt.Inherited {
+		t.Errorf("nature should be present and inherited, got %+v (ok=%v)", nt, ok)
+	}
+
+	// Case 2: post carries BOTH botany and its parent nature → nature is the
+	// post's own tag, so it must stay non-inherited even though the walk from
+	// botany also reaches it (Pass 1 claims it before Pass 2 runs).
+	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+		1: {
+			{ID: botany.ID, Name: botany.Name, Slug: botany.Slug},
+			{ID: nature.ID, Name: nature.Name, Slug: nature.Slug},
+		},
+	}, true)
+	m = byID(got[1])
+	if nt, ok := m[nature.ID]; !ok || nt.Inherited {
+		t.Errorf("nature carried by the post must not be inherited, got %+v (ok=%v)", nt, ok)
+	}
+
+	// Case 3: publicOnly drops a hidden ancestor. Post carries visible, whose
+	// only parent hush is hidden → hush is not surfaced.
+	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+		1: {{ID: visible.ID, Name: visible.Name, Slug: visible.Slug}},
+	}, true)
+	m = byID(got[1])
+	if _, ok := m[visible.ID]; !ok {
+		t.Error("visible should be present")
+	}
+	if _, ok := m[hush.ID]; ok {
+		t.Error("hidden ancestor hush must be dropped under publicOnly")
+	}
+
+	// Case 4: with publicOnly=false the hidden ancestor is included and inherited.
+	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+		1: {{ID: visible.ID, Name: visible.Name, Slug: visible.Slug}},
+	}, false)
+	m = byID(got[1])
+	if ht, ok := m[hush.ID]; !ok || !ht.Inherited {
+		t.Errorf("hidden ancestor should be included and inherited when publicOnly=false, got %+v (ok=%v)", ht, ok)
 	}
 }

@@ -60,3 +60,27 @@ func TestBeginRegistration_RequestsDiscoverableCredential(t *testing.T) {
 		t.Errorf("serialized options missing residentKey=required: %s", encoded)
 	}
 }
+
+func TestGenerateSessionKey(t *testing.T) {
+	// Deterministic: identical inputs must produce the same key so a session can
+	// be looked up again on the finish call.
+	if a, b := GenerateSessionKey("1.2.3.4", "nonce"), GenerateSessionKey("1.2.3.4", "nonce"); a != b {
+		t.Errorf("same inputs should yield same key: %q != %q", a, b)
+	}
+
+	// SHA-256 rendered as hex is always 64 characters.
+	if key := GenerateSessionKey("1.2.3.4", "nonce"); len(key) != 64 {
+		t.Errorf("expected 64-char hex hash, got %d chars: %q", len(key), key)
+	}
+
+	// Different IPs (same nonce) must not collide.
+	if GenerateSessionKey("1.2.3.4", "nonce") == GenerateSessionKey("1.2.3.5", "nonce") {
+		t.Error("different IPs should yield different keys")
+	}
+
+	// The "-" separator keeps the field boundary unambiguous, so ("ab","c") and
+	// ("a","bc") — which would concatenate to the same string without it — differ.
+	if GenerateSessionKey("ab", "c") == GenerateSessionKey("a", "bc") {
+		t.Error("separator should prevent field-boundary collisions")
+	}
+}
