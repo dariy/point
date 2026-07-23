@@ -122,31 +122,35 @@ export class BackupsSection extends Component {
         : '<li class="backup-empty">No backups found.</li>';
 
     const creating = creatingBackup || backupInProgress;
+    // Rendered flush inside the plugin drawer, which supplies the "Backups" title.
     return `
-      <section class="card">
-        <div class="card-header">
-          <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creating || uploading ? "disabled" : ""}>
-            ${creating ? "Creating…" : "Create New Backup"}
-          </button>
-          <button id="upload-backup-btn" class="btn btn-sm" ${creating || uploading ? "disabled" : ""} title="Add a local archive to your backups (apply it later with Restore)">
-            ${UPLOAD_SVG} Upload archive
-          </button>
-          <button id="restart-server-btn" class="btn btn-sm" title="Restart the server (applies a scheduled restore)">
-            ${REFRESH_SVG} Restart server
-          </button>
-          <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
-        </div>
-        <div class="card-body">
-          ${
-            uploading
-              ? `<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
-                 <p class="progress-text">Uploading archive… ${uploadPct}%</p>`
-              : ""
-          }
-          ${this._renderSettings()}
-          <ul class="backup-list">${items}</ul>
-        </div>
-      </section>`;
+      <div class="section-actions">
+        <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creating || uploading ? "disabled" : ""}>
+          ${creating ? "Creating…" : "Create backup"}
+        </button>
+        <button id="upload-backup-btn" class="btn btn-sm btn-secondary" ${creating || uploading ? "disabled" : ""} title="Add a local archive to your backups (apply it later with Restore)">
+          ${UPLOAD_SVG}<span>Upload archive</span>
+        </button>
+        <span class="section-actions-spacer"></span>
+        <button id="restart-server-btn" class="btn btn-sm section-action-muted" title="Restart the server (applies a scheduled restore)">
+          ${REFRESH_SVG}<span>Restart</span>
+        </button>
+        <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
+      </div>
+      ${
+        uploading
+          ? `<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
+             <p class="progress-text">Uploading archive… ${uploadPct}%</p>`
+          : ""
+      }
+      <div class="section-block">
+        <h3 class="section-subhead">Schedule</h3>
+        ${this._renderSettings()}
+      </div>
+      <div class="section-block">
+        <h3 class="section-subhead">Backups</h3>
+        <ul class="backup-list">${items}</ul>
+      </div>`;
   }
 
   afterRender() {
@@ -173,14 +177,19 @@ export class BackupsSection extends Component {
     this.$$(".restore-backup-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const file = btn.dataset.filename;
-        showConfirm({
+        showPrompt({
           title: "Restore backup",
           message:
             `Apply "${file}"? This replaces ALL current data — posts, media, settings, ` +
-            `and your login password — with the contents of the archive. This cannot be undone.`,
-          confirmText: "Restore",
+            `and your login password — with the contents of the archive, then restarts the ` +
+            `server to take effect. This cannot be undone.\n` +
+            `Enter your password to confirm:`,
+          inputType: "password",
           variant: "danger",
-          onConfirm: () => this._handleRestore(file),
+          confirmText: "Restore & restart",
+          onConfirm: (password) => {
+            if (password) this._handleRestore(file, password);
+          },
         });
       });
     });
@@ -412,21 +421,23 @@ export class BackupsSection extends Component {
     }
   }
 
-  async _handleRestore(filename) {
+  // Restore is applied on the next startup (it can't overwrite the live DB
+  // safely), so it's a single "restore & restart" action. The blocking overlay
+  // goes up immediately and covers the whole flow — scheduling the restore
+  // (validating the archive can take a moment) and the restart — so there's no
+  // confusing gap or intermediate dialog.
+  async _handleRestore(filename, password) {
+    this._mountRestartOverlay("Restoring backup…");
     try {
-      const res = await restoreBackup(filename);
-      // The restore is applied on the next startup (it can't overwrite the live
-      // database safely), so offer to restart now. If declined, it still applies
-      // whenever the server is next restarted.
-      showConfirm({
-        title: "Restart to apply restore",
-        message: `${res.message || "Restore scheduled."} Restart the server now to apply it?`,
-        confirmText: "Restart now",
-        onConfirm: () => this._restartNow(),
-      });
+      const hashed = await sha256(password);
+      await restoreBackup(filename, hashed);
     } catch (err) {
-      store.set("toast", { message: err.message || "Restore failed.", type: "error" });
+      this._unmountRestartOverlay();
+      const msg = err?.status === 403 ? "Incorrect password." : err.message || "Restore failed.";
+      store.set("toast", { message: msg, type: "error" });
+      return;
     }
+    await this._restartAndReload("Restarting server…");
   }
 
   _handleRestartServer() {
@@ -435,19 +446,81 @@ export class BackupsSection extends Component {
       message: "Restart the server now? It will be unavailable for a few seconds.",
       confirmText: "Restart",
       variant: "danger",
-      onConfirm: () => this._restartNow(),
+      onConfirm: () => {
+        this._mountRestartOverlay("Restarting server…");
+        this._restartAndReload("Restarting server…");
+      },
     });
   }
 
-  // Ask the server to restart in place, then reload once it's likely back up.
-  async _restartNow() {
+  // Trigger the in-place restart, then hold the (already-mounted) blocking overlay
+  // until the server is reachable again before reloading — so the operator never
+  // sees a raw "connection refused" during the restart window.
+  async _restartAndReload(text) {
     try {
       await restartServer();
-      store.set("toast", { message: "Server is restarting… reloading shortly.", type: "info" });
-      setTimeout(() => location.reload(), 5000);
     } catch (err) {
+      this._unmountRestartOverlay();
       store.set("toast", { message: err.message || "Restart failed.", type: "error" });
+      return;
     }
+    this._mountRestartOverlay(text); // update the label if it was showing something else
+    await this._awaitServerBack();
+    location.reload();
+  }
+
+  _mountRestartOverlay(text = "Restarting server…") {
+    if (this._restartOverlay) {
+      const label = this._restartOverlay.querySelector(".restart-overlay-text");
+      if (label) label.textContent = text;
+      return;
+    }
+    const el = document.createElement("div");
+    el.className = "restart-overlay";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    const card = document.createElement("div");
+    card.className = "restart-overlay-card";
+    card.innerHTML =
+      '<span class="restart-overlay-spinner" aria-hidden="true"></span>' +
+      '<p class="restart-overlay-text"></p>' +
+      '<p class="restart-overlay-sub">This will only take a moment.</p>';
+    card.querySelector(".restart-overlay-text").textContent = text;
+    el.appendChild(card);
+    document.body.appendChild(el);
+    this._restartOverlay = el;
+  }
+
+  _unmountRestartOverlay() {
+    this._restartOverlay?.remove();
+    this._restartOverlay = null;
+  }
+
+  // Resolve once the server has gone down and come back up (a resolved fetch —
+  // even a 401 after a restore invalidates the session — means it's serving).
+  // Falls back to resolving on a timeout so we never hang forever.
+  _awaitServerBack() {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      let sawDown = false;
+      const ping = () =>
+        fetch("/api/system/version", { cache: "no-store" })
+          .then(() => true)
+          .catch(() => false);
+      const tick = async () => {
+        const up = await ping();
+        if (!up) sawDown = true;
+        const elapsed = Date.now() - start;
+        // Reload when it has cycled down→up, or it's clearly up and we never caught
+        // the (very brief) down window, or after a hard 60s cap.
+        if ((sawDown && up) || (up && elapsed > 8000) || elapsed > 60000) {
+          resolve();
+          return;
+        }
+        setTimeout(tick, 400);
+      };
+      tick();
+    });
   }
 
   async _handleDelete(filename) {

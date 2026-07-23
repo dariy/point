@@ -177,6 +177,46 @@
     }
 }
 
+/* Full-screen blocking overlay shown while the server restarts in place. Sits
+   above the plugin settings drawer (z-index 10001) so it covers the whole page. */
+.restart-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10010;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-overlay, rgba(0, 0, 0, 0.8));
+    backdrop-filter: blur(2px);
+}
+
+.restart-overlay-card {
+    text-align: center;
+    color: var(--color-white, #fff);
+    padding: var(--spacing-lg);
+}
+
+.restart-overlay-spinner {
+    display: inline-block;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: backup-spin 0.8s linear infinite;
+}
+
+.restart-overlay-text {
+    margin-top: var(--spacing-md);
+    font-weight: 600;
+}
+
+.restart-overlay-sub {
+    margin-top: var(--size-0-25);
+    opacity: 0.8;
+    font-size: var(--font-size-sm);
+}
+
 /* Pointer devices have no swipe; reveal the actions on hover instead. */
 @media (hover: hover) {
     .backup-swipe-item:hover .backup-swipe-content {

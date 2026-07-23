@@ -23,30 +23,26 @@ export class PasskeysSection extends Component {
   render() {
     const { loading, supported, status, working } = this.state;
 
-    let body;
+    // Rendered flush inside the plugin drawer, which supplies the "Passkeys" title.
     if (!supported) {
-      body = '<p class="text-muted">Passkeys are not supported by this browser.</p>';
-    } else if (loading) {
-      body = '<div class="loading-spinner btn-sm"></div>';
-    } else if (!status?.configured) {
-      body = '<p class="text-muted">Passkeys are not configured on this server.</p>';
-    } else if (status?.has_passkey) {
-      body = `
+      return '<p class="text-muted">Passkeys are not supported by this browser.</p>';
+    }
+    if (loading) {
+      return '<div class="loading-spinner btn-sm"></div>';
+    }
+    if (!status?.configured) {
+      return '<p class="text-muted">Passkeys are not configured on this server.</p>';
+    }
+    if (status?.has_passkey) {
+      return `
         <div class="passkey-status success">
           <p>Passkey is registered.</p>
           <button id="delete-passkey-btn" class="btn btn-sm btn-danger" ${working ? "disabled" : ""}>Remove Passkey</button>
         </div>`;
-    } else {
-      body = `
-        <p>Register a passkey for faster, more secure login.</p>
-        <button id="register-passkey-btn" class="btn btn-primary" ${working ? "disabled" : ""}>Register Passkey</button>`;
     }
-
     return `
-      <section class="card">
-        <div class="card-header"><h2>Passkeys (WebAuthn)</h2></div>
-        <div class="card-body">${body}</div>
-      </section>`;
+      <p>Register a passkey for faster, more secure login.</p>
+      <button id="register-passkey-btn" class="btn btn-primary" ${working ? "disabled" : ""}>Register Passkey</button>`;
   }
 
   afterRender() {

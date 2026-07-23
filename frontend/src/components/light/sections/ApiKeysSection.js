@@ -53,14 +53,13 @@ export class ApiKeysSection extends Component {
             </table>
           </div>`;
 
+    // Rendered flush inside the plugin drawer, which supplies the "Api Keys" title.
     return `
-      <section class="card">
-        <div class="card-header">
-          <h2>API Keys</h2>
-          <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create New API Key</button>
-        </div>
-        <div class="card-body">${list}</div>
-      </section>`;
+      <div class="section-actions">
+        <span class="section-actions-spacer"></span>
+        <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create API Key</button>
+      </div>
+      ${list}`;
   }
 
   afterRender() {

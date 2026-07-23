@@ -311,7 +311,22 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 }
 
 func (h *SystemHandler) RestoreBackup(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := extractUserID(c.Get("user"))
 	filename := c.Param("filename")
+
+	// Restore wipes and replaces all data (including the login password), so it is
+	// gated by re-entering the account password (sha256-hex, as at login).
+	var req struct {
+		CurrentPassword string `json:"current_name"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
+		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+	}
+
 	// Restoring overwrites the live SQLite file, which can't be done safely while
 	// the server holds it open, so we schedule it and apply it at the next startup.
 	if err := h.systemService.ScheduleRestore(filename); err != nil {

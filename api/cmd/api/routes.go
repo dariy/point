@@ -134,7 +134,7 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup.GET("/audit/post-links", h.AuditPostLinks, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/backup", h.CreateBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.GET("/backups", h.ListBackups, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
-	systemGroup.POST("/backups/:filename/restore", h.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.POST("/backups/:filename/restore", h.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.DELETE("/backups/:filename", h.DeleteBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
 	// Move out: re-enter password to authorize, then a one-time-token GET streams the archive.
 	systemGroup.POST("/backups/:filename/authorize-download", h.AuthorizeBackupDownload, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))

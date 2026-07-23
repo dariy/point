@@ -6,6 +6,7 @@
  *   message      {string}    Body text
  *   defaultValue {string}    Initial value for input
  *   inputType    {string}    Input type, e.g. 'text' (default) or 'password'
+ *   variant      {string}    Confirm button style: 'primary' (default) or 'danger'
  *   confirmText  {string}    Label for primary button
  *   onConfirm    {Function}  Called when confirmed with value
  *   onCancel     {Function}  Called when cancelled
@@ -34,10 +35,16 @@ export class PromptDialog extends Component {
     const body = modal.getBodyMount();
     if (body) {
       if (message) {
-        const p = document.createElement('p');
-        p.className = 'prompt-message';
-        p.textContent = message;
-        body.appendChild(p);
+        // Render each newline-separated line as its own paragraph so a message can
+        // put, e.g., an "Enter your password to confirm." line below a warning.
+        message.split('\n').forEach((line) => {
+          const text = line.trim();
+          if (!text) return;
+          const p = document.createElement('p');
+          p.className = 'prompt-message';
+          p.textContent = text;
+          body.appendChild(p);
+        });
       }
 
       const input = document.createElement('input');
@@ -71,10 +78,11 @@ export class PromptDialog extends Component {
   }
 
   _getFooterHtml() {
-    const { confirmText = 'Confirm' } = this.props;
+    const { confirmText = 'Confirm', variant = 'primary' } = this.props;
+    const okClass = variant === 'danger' ? 'btn-danger' : 'btn-primary';
     return `
       <button class="btn btn-secondary" id="prompt-cancel-btn">Cancel</button>
-      <button class="btn btn-primary" id="prompt-ok-btn">${escapeHtml(confirmText)}</button>
+      <button class="btn ${okClass}" id="prompt-ok-btn">${escapeHtml(confirmText)}</button>
     `;
   }
 }

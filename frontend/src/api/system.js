@@ -41,11 +41,16 @@ export function listBackups() {
 }
 
 /**
+ * Schedule a restore (applied on the next restart). Gated by the account
+ * password — replacing all data, including the login password, is destructive.
  * @param {string} filename
+ * @param {string} sha256pw - sha256-hex of the account password
  * @returns {Promise<object>}
  */
-export function restoreBackup(filename) {
-  return api.post(`/api/system/backups/${encodeURIComponent(filename)}/restore`);
+export function restoreBackup(filename, sha256pw) {
+  return api.post(`/api/system/backups/${encodeURIComponent(filename)}/restore`, {
+    current_name: sha256pw,
+  });
 }
 
 /**

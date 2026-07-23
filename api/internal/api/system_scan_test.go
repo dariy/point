@@ -34,7 +34,7 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.0.0")
 	e := echo.New()
 
 	// Restore non-existent backup
@@ -80,7 +80,7 @@ func TestSystemHandler_StatsExtended(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
@@ -110,7 +110,7 @@ func TestSystemHandler_UpdateMapCoordsExtended(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.0.0")
 	e := echo.New()
 
 	reqBody, _ := json.Marshal(map[string]interface{}{})
@@ -138,7 +138,7 @@ func setupSystemHandler(t *testing.T) (*SystemHandler, func()) {
 	}, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.2.3")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.2.3")
 	return h, func() { _ = repo.Close() }
 }
 
@@ -207,7 +207,7 @@ func TestScanMediaImport_WithFiles(t *testing.T) {
 	cacheSvc := services.NewCacheService(tmpDir)
 	ctx := context.Background()
 	_ = settingsSvc.SetSecret(ctx, "photo_library_path", importDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.2.3")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.2.3")
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
