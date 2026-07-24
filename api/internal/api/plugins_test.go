@@ -128,12 +128,9 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 		return rec.Code
 	}
 
-	// Sole core plugin (admin home) cannot be disabled.
-	if code := toggle("admin-home", `{"enabled":false}`); code != http.StatusConflict {
-		t.Fatalf("disabling sole core plugin should 409, got %d", code)
-	}
-
-	// Immersive area: Standard is the only enabled viewer by default → locked.
+	// Immersive area: Standard is the only enabled viewer by default → locked,
+	// and it is now the only core area left (the admin routes that used to be
+	// single-member core areas are ordinary routes in app.js).
 	if code := toggle("immersive", `{"enabled":false}`); code != http.StatusConflict {
 		t.Fatalf("disabling sole immersive viewer should 409, got %d", code)
 	}
@@ -225,11 +222,9 @@ func TestApplyPreset_SetsStateAndKeepsCoreAreas(t *testing.T) {
 	if !plugins.IsEnabled("immersive-sheet", all) || plugins.IsEnabled("immersive", all) {
 		t.Error("minimalistic should enable Sheet and disable Standard")
 	}
-	// …but keeps the single-member core admin areas alive.
-	for _, id := range []string{"admin-home", "admin-posts-list", "media-library"} {
-		if !plugins.IsEnabled(id, all) {
-			t.Errorf("core plugin %q must stay enabled after applying a preset", id)
-		}
+	// …and never empties a core area: some viewer stays enabled.
+	if !plugins.IsEnabled("immersive-sheet", all) && !plugins.IsEnabled("immersive", all) {
+		t.Error("a preset must not leave the immersive core area empty")
 	}
 	// The active preset is recorded.
 	if all[activePresetKey] != "minimalistic" {

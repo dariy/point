@@ -292,6 +292,12 @@ const routes = [
   },
 
   // Admin (Light) — protected
+  { path: "/light", load: () => import("./pages/light/DashboardPage.js") },
+  {
+    path: "/light/posts",
+    load: () => import("./pages/light/PostsListPage.js"),
+  },
+  { path: "/light/media", load: () => import("./pages/light/MediaPage.js") },
   {
     path: "/light/posts/new",
     load: () => import("./pages/light/PostEditPage.js"),

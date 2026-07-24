@@ -215,9 +215,9 @@ export default class PluginsPage extends Component {
           ${this._mr("immersive", "Standard")}${this._mr("immersive-sheet", "Sheet")}
         </div>`,
       admin: `
-        ${this._mr("admin-home", "/light — Dashboard", "pmap-band")}
-        ${this._mr("admin-posts-list", "/light/posts", "pmap-band")}
-        ${this._mr("media-library", "/light/media", "pmap-band")}
+        ${this._ms("/light — Dashboard", "pmap-band")}
+        ${this._ms("/light/posts", "pmap-band")}
+        ${this._ms("/light/media", "pmap-band")}
         ${this._mr("nav-menu", "/light/menu", "pmap-band")}
         ${this._mr("comments", "/light/comments", "pmap-band")}`,
     };
