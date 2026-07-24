@@ -470,11 +470,18 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			return next(c)
 		}
 	})
-	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy.
+	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy — except
+	// for the esbuild code-split chunks under /assets/js/chunks/, whose names
+	// embed a content hash and so can never change meaning at a fixed URL.
+	// Those get the immutable treatment; the unhashed entry points (app.js, the
+	// p/* plugin bundles, the CSS bundles) keep revalidating.
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			p := c.Request().URL.Path
-			if strings.HasPrefix(p, "/assets/js/") || strings.HasPrefix(p, "/assets/css/") {
+			switch {
+			case strings.HasPrefix(p, "/assets/js/chunks/"):
+				c.Response().Header().Set("Cache-Control", immutableCacheControl)
+			case strings.HasPrefix(p, "/assets/js/"), strings.HasPrefix(p, "/assets/css/"):
 				c.Response().Header().Set("Cache-Control", "no-cache")
 			}
 			return next(c)
@@ -1067,6 +1074,12 @@ func parseCreateAPIKeyName(args []string) string {
 // e.g. "video_89017c29.mp4" → "89017c29".
 var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 
+// immutableCacheControl is the header for content-addressed URLs: the name
+// embeds a hash of the bytes, so the bytes at that URL can never change and a
+// revalidation round-trip is pure waste. A year is the practical maximum
+// browsers honour.
+const immutableCacheControl = "public, max-age=31536000, immutable"
+
 // serveSimplifiedMedia handles /YYYY/MM/filename for media files.
 //
 // Access rules:
@@ -1159,7 +1172,17 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		// cached by a shared cache, or an authenticated preview response could
 		// leak hidden media to the edge for unauthenticated requests to reuse.
 		if media.IsPublic != 0 {
-			c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
+			if checksumRe.MatchString(filename) {
+				// Content-addressed: the filename carries a checksum of the bytes,
+				// so replacing the image produces a different URL and this one can
+				// be cached forever. The trade-off is unpublishing — a client that
+				// already fetched the file keeps its copy until the year is up, so
+				// visibility changes are not retroactive for cached bytes. That is
+				// the same bargain the existing s-maxage=86400 edge cache makes.
+				c.Response().Header().Set("Cache-Control", immutableCacheControl)
+			} else {
+				c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
+			}
 		} else {
 			c.Response().Header().Set("Cache-Control", "private, no-store")
 		}

@@ -470,3 +470,30 @@ func TestServeSimplifiedMedia_ChecksumGlobDBLookupFail(t *testing.T) {
 		t.Errorf("expected 404 because file not in DB, got %d", rec.Code)
 	}
 }
+
+// Checksum-named media is content-addressed, so it is cacheable forever;
+// non-checksum names keep the short revalidating TTL (asserted above).
+// See point-perf-immutable-cache-headers.
+func TestServeSimplifiedMedia_ChecksumNamed_ImmutableCacheControl(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "photo_89017c29.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo_89017c29.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo_89017c29.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("expected Cache-Control: %q, got %q", immutableCacheControl, cc)
+	}
+}
+
+// Private media never gets the immutable treatment, even when checksum-named.
+func TestServeSimplifiedMedia_ChecksumNamedPrivate_StaysNoStore(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPrivateMedia(t, repo, "2024", "01", "photo_89017c29.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo_89017c29.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo_89017c29.jpg", true)
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("expected Cache-Control: private, no-store, got %q", cc)
+	}
+}

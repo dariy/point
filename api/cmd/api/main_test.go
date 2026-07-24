@@ -814,3 +814,28 @@ func TestSkipGzip(t *testing.T) {
 		}
 	}
 }
+
+// Content-hashed esbuild chunks are immutable by construction; the unhashed
+// entry points must keep revalidating. See point-perf-immutable-cache-headers.
+func TestSetupEcho_AssetCacheControl(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	jsDir := filepath.Join(cfg.FrontendDir, "js")
+	_ = os.MkdirAll(filepath.Join(jsDir, "chunks"), 0o755)
+	_ = os.WriteFile(filepath.Join(jsDir, "app.js"), []byte("//app"), 0o644)
+	_ = os.WriteFile(filepath.Join(jsDir, "chunks", "chunk-26AYO3DK.js"), []byte("//chunk"), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	for path, want := range map[string]string{
+		"/assets/js/chunks/chunk-26AYO3DK.js": immutableCacheControl,
+		"/assets/js/app.js":                   "no-cache",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if cc := rec.Header().Get("Cache-Control"); cc != want {
+			t.Errorf("%s: expected Cache-Control %q, got %q", path, want, cc)
+		}
+	}
+}
