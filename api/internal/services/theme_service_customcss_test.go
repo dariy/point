@@ -43,7 +43,7 @@ func TestThemeService_UpdateCustomCSS(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("stores css and syncs theme file", func(t *testing.T) {
-		err := ts.UpdateCustomCSS(ctx, "body { color: red; }")
+		_, err := ts.UpdateCustomCSS(ctx, "body { color: red; }")
 		assert.NoError(t, err)
 
 		css, err := ts.GetCustomCSS(ctx)
@@ -60,7 +60,7 @@ func TestThemeService_UpdateCustomCSS(t *testing.T) {
 		badCfg := &config.Config{ThemesPath: emptyDir, FrontendDir: t.TempDir()}
 		badTS := NewThemeService(badCfg, settingsSvc)
 
-		err := badTS.UpdateCustomCSS(ctx, "body {}")
+		_, err := badTS.UpdateCustomCSS(ctx, "body {}")
 		assert.Error(t, err)
 	})
 
@@ -74,7 +74,7 @@ func TestThemeService_UpdateCustomCSS(t *testing.T) {
 		cfg := &config.Config{ThemesPath: themesDir, FrontendDir: frontendDir}
 		ts := NewThemeService(cfg, mockSettingsSvc)
 
-		err := ts.UpdateCustomCSS(ctx, "body {}")
+		_, err := ts.UpdateCustomCSS(ctx, "body {}")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to save custom css setting")
 	})
@@ -139,4 +139,67 @@ func TestThemeService_SetActiveTheme_Normalization(t *testing.T) {
 		_, err := ts.SetActiveTheme(ctx, "nonexistent")
 		assert.Error(t, err)
 	})
+}
+
+// Global custom CSS used to be written straight to disk with no sanitizing at
+// all, while per-post CSS was sanitized. It is now sanitized under the global
+// policy: escapes out, admin theming intact.
+// See point-sec-custom-css-unsanitized.
+func TestThemeService_UpdateCustomCSS_Sanitizes(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	settingsSvc := NewSettingsService(repo)
+	themesDir := t.TempDir()
+	frontendDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(themesDir, "default.css"), []byte(":root{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ts := NewThemeService(&config.Config{ThemesPath: themesDir, FrontendDir: frontendDir}, settingsSvc)
+	ctx := context.Background()
+
+	warnings, err := ts.UpdateCustomCSS(ctx, `@import url("https://evil.example/x.css");
+.header { position: fixed; z-index: 99; }
+.hero { background: url(https://evil.example/track.png); }
+.badge::after { content: "hi"; }`)
+	assert.NoError(t, err)
+
+	stored, err := ts.GetCustomCSS(ctx)
+	assert.NoError(t, err)
+
+	// Escapes are gone.
+	assert.NotContains(t, stored, "@import")
+	assert.NotContains(t, stored, "evil.example")
+	assert.Contains(t, warnings, "@import")
+	assert.Contains(t, warnings, "url() with external resource")
+
+	// Admin theming of their own site survives — these are exactly what the
+	// per-post policy strips, and exactly what a site-wide stylesheet needs.
+	assert.Contains(t, stored, "position: fixed")
+	assert.Contains(t, stored, "z-index: 99")
+	assert.Contains(t, stored, `content: "hi"`)
+	assert.NotContains(t, warnings, "z-index")
+	assert.NotContains(t, warnings, "position: fixed")
+
+	// The sanitized text, not the original, is what reaches the served file.
+	data, _ := os.ReadFile(filepath.Join(frontendDir, "css", "common", "theme.css"))
+	assert.NotContains(t, string(data), "evil.example")
+}
+
+// The per-post policy must stay strict — the global scope is additive, not a
+// relaxation of the existing one.
+func TestSanitizePostCSS_StillStrictAfterScoping(t *testing.T) {
+	clean, warnings := SanitizePostCSS(`.a { position: fixed; z-index: 5; content: "x"; }`)
+	assert.NotContains(t, clean, "position: fixed")
+	assert.NotContains(t, clean, "z-index")
+	assert.NotContains(t, clean, "content")
+	assert.Contains(t, warnings, "position: fixed")
+	assert.Contains(t, warnings, "z-index")
+	assert.Contains(t, warnings, "content")
+}
+
+// A '<' is never valid CSS in either scope; it is a style/script breakout.
+func TestSanitizeGlobalCSS_DropsBreakout(t *testing.T) {
+	clean, warnings := SanitizeGlobalCSS(`.a { color: red; } < /style><script>alert(1)</script>`)
+	assert.NotContains(t, clean, "<")
+	assert.Contains(t, warnings, "<script>")
 }

@@ -240,14 +240,26 @@ func (s *ThemeService) GetCustomCSS(ctx context.Context) (string, error) {
 	return s.settingsService.GetSetting(ctx, "system_custom_css", "")
 }
 
-func (s *ThemeService) UpdateCustomCSS(ctx context.Context, css string) error {
-	err := s.settingsService.SetSetting(ctx, "system_custom_css", css, "string")
-	if err != nil {
-		return fmt.Errorf("failed to save custom css setting: %w", err)
+// UpdateCustomCSS stores the site-wide custom CSS and republishes theme.css.
+// The CSS is sanitized first — per-post CSS always was, while this path wrote
+// straight to disk. It uses the global policy, not the per-post one: an admin
+// theming their own site legitimately needs position, z-index and content,
+// which SanitizePostCSS strips because a post is a fragment of a page it does
+// not own. What is removed either way are the escapes — @import, url() pointing
+// off-origin, and a stray '<'. Returns the names of any removed constructs so
+// the caller can tell the admin rather than silently dropping their CSS.
+func (s *ThemeService) UpdateCustomCSS(ctx context.Context, css string) ([]string, error) {
+	clean, warnings := SanitizeGlobalCSS(css)
+
+	if err := s.settingsService.SetSetting(ctx, "system_custom_css", clean, "string"); err != nil {
+		return nil, fmt.Errorf("failed to save custom css setting: %w", err)
 	}
 
 	// Update the public theme.css with the new custom CSS
-	return s.SyncActiveTheme(ctx)
+	if err := s.SyncActiveTheme(ctx); err != nil {
+		return nil, err
+	}
+	return warnings, nil
 }
 
 func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {

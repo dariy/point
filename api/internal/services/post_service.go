@@ -213,7 +213,7 @@ func normalizeContent(content string) string {
 var (
 	cssCommentRe     = regexp.MustCompile(`/\*[\s\S]*?\*/`)                   // url(/**/https://…) comment splitting
 	cssHexEscapeRe   = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?`) // \40 import → @import
-	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)            // \@import → @import
+	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)             // \@import → @import
 	cssExternalURLRe = regexp.MustCompile(`(?i)url\(\s*['"]?\s*https?:`)      // external resource in a declaration value
 )
 
@@ -233,11 +233,37 @@ func normalizeCSSForSanitizing(css string) string {
 	return cssOtherEscapeRe.ReplaceAllString(css, "$1")
 }
 
+// cssScope selects how strictly a CSS blob is sanitized.
+type cssScope int
+
+const (
+	// cssScopePost is per-post CSS. A post is a page fragment, so on top of the
+	// escapes it must not reposition itself out of its own box or paint over
+	// the rest of the page.
+	cssScopePost cssScope = iota
+	// cssScopeGlobal is the site-wide custom CSS an admin writes to theme their
+	// own site. Fixed positioning, stacking order and generated content are all
+	// legitimate there, so only the escapes are removed: @import, external
+	// url() resources and a '<' breakout.
+	cssScopeGlobal
+)
+
 // SanitizePostCSS removes dangerous constructs from per-post CSS blocks:
 // @import at-rules, external url() resources, position:fixed/sticky, z-index,
 // the content property, and any stray '<' (a style/script breakout). Returns
 // the sanitized CSS and the list of removed construct names (deduplicated).
 func SanitizePostCSS(css string) (string, []string) {
+	return sanitizeCSS(css, cssScopePost)
+}
+
+// SanitizeGlobalCSS removes the escapes from the site-wide custom CSS: @import
+// at-rules, external url() resources and any stray '<'. It deliberately allows
+// the layout properties SanitizePostCSS strips — see cssScopeGlobal.
+func SanitizeGlobalCSS(css string) (string, []string) {
+	return sanitizeCSS(css, cssScopeGlobal)
+}
+
+func sanitizeCSS(css string, scope cssScope) (string, []string) {
 	if css == "" {
 		return "", nil
 	}
@@ -266,7 +292,7 @@ func SanitizePostCSS(css string) (string, []string) {
 	// flushDecl evaluates a buffered declaration (inside a rule block) or a
 	// top-level at-rule (e.g. @import) and emits it unless it's dangerous.
 	flushDecl := func(terminator string) {
-		if drop, reason := classifyCSSSegment(seg); drop {
+		if drop, reason := classifyCSSSegment(seg, scope); drop {
 			record(reason)
 		} else if len(seg) > 0 {
 			emit(seg)
@@ -318,7 +344,7 @@ func SanitizePostCSS(css string) (string, []string) {
 
 // classifyCSSSegment decides whether a buffered CSS segment (a declaration or a
 // top-level at-rule) must be dropped, returning the removal reason.
-func classifyCSSSegment(seg []*scanner.Token) (bool, string) {
+func classifyCSSSegment(seg []*scanner.Token, scope cssScope) (bool, string) {
 	// Property name: the first ident (at-rules surface as an at-keyword).
 	var prop string
 	for _, t := range seg {
@@ -344,17 +370,22 @@ func classifyCSSSegment(seg []*scanner.Token) (bool, string) {
 	}
 	lower := strings.ToLower(val.String())
 
-	switch prop {
-	case "z-index":
-		return true, "z-index"
-	case "content":
-		return true, "content"
-	case "position":
-		if strings.Contains(lower, "fixed") {
-			return true, "position: fixed"
-		}
-		if strings.Contains(lower, "sticky") {
-			return true, "position: sticky"
+	// Layout containment only applies to per-post CSS: a post is a fragment of
+	// a page it does not own. Site-wide CSS is the admin styling their own
+	// site, where all of these are ordinary.
+	if scope == cssScopePost {
+		switch prop {
+		case "z-index":
+			return true, "z-index"
+		case "content":
+			return true, "content"
+		case "position":
+			if strings.Contains(lower, "fixed") {
+				return true, "position: fixed"
+			}
+			if strings.Contains(lower, "sticky") {
+				return true, "position: sticky"
+			}
 		}
 	}
 
@@ -405,18 +436,18 @@ func addImgLoadingHints(html string) string {
 }
 
 type ListPostsParams struct {
-        Page          int32
-        PerPage       int32
-        Status        string
-        FeaturedOnly  bool
-        IncludeDrafts bool
-        IncludeHidden bool
-        IncludePages  bool
-        Search        string
-        Tag           string
-        YearFrom      int
-        YearTo        int
-        SortBy        string
+	Page          int32
+	PerPage       int32
+	Status        string
+	FeaturedOnly  bool
+	IncludeDrafts bool
+	IncludeHidden bool
+	IncludePages  bool
+	Search        string
+	Tag           string
+	YearFrom      int
+	YearTo        int
+	SortBy        string
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -471,11 +502,11 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		}
 		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
 	} else if p.Search != "" || p.Tag != "" {
-	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false, int64(p.PerPage), int64(offset))
-	        if err != nil {
-	                return nil, 0, err
-	        }
-	        total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false)
+		posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false, int64(p.PerPage), int64(offset))
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false)
 	} else {
 		if p.SortBy == "views" {
 			posts, err = s.repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
@@ -827,7 +858,9 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 	post, err = s.repo.UpdatePost(ctx, params)
 	if err == nil {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil { s.tagService.Invalidate() }
+		if s.tagService != nil {
+			s.tagService.Invalidate()
+		}
 	}
 	return post, err
 }
@@ -890,7 +923,9 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 		return post, err
 	}
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil { s.tagService.Invalidate() }
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
@@ -923,7 +958,9 @@ func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, 
 	post, err := s.repo.WithdrawPost(ctx, id)
 	if err == nil {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil { s.tagService.Invalidate() }
+		if s.tagService != nil {
+			s.tagService.Invalidate()
+		}
 	}
 	return post, err
 }
@@ -975,7 +1012,9 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	}
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil { s.tagService.Invalidate() }
+		if s.tagService != nil {
+			s.tagService.Invalidate()
+		}
 		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
