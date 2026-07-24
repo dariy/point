@@ -49,6 +49,24 @@ func GenerateToken() string {
 	return hex.EncodeToString(b)
 }
 
+// secureCookie reports whether auth cookies should carry the Secure flag.
+// It keys off the deployment's public scheme rather than APP_ENV: the canonical
+// self-hosted install runs with APP_ENV=development behind HTTPS, so gating on
+// the environment name shipped session cookies without Secure over TLS. APP_URL
+// is the authoritative operator-set signal; we fall back to the request's own
+// scheme (direct TLS, or X-Forwarded-Proto from our trusted reverse proxy) when
+// it is unset. Erring toward Secure only ever tightens the cookie, never loosens
+// it, so a spoofed X-Forwarded-Proto can't strip the flag on an HTTPS deployment.
+func (h *AuthHandler) secureCookie(c echo.Context) bool {
+	if strings.HasPrefix(h.cfg.AppURL, "https://") {
+		return true
+	}
+	if c.IsTLS() {
+		return true
+	}
+	return c.Request().Header.Get(echo.HeaderXForwardedProto) == "https"
+}
+
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
@@ -87,10 +105,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-	}
-
-	if h.cfg.AppEnv == "production" {
-		cookie.Secure = true
+		Secure:   h.secureCookie(c),
 	}
 
 	c.SetCookie(cookie)
@@ -123,7 +138,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
+		Secure:   h.secureCookie(c),
 	}
 	c.SetCookie(newCookie)
 	h.clearRemark42Cookies(c)
@@ -427,7 +442,7 @@ func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expir
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
+		Secure:   h.secureCookie(c),
 	})
 	c.SetCookie(&http.Cookie{
 		Name:     "XSRF-TOKEN",
@@ -435,7 +450,7 @@ func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expir
 		Expires:  expiresAt,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
+		Secure:   h.secureCookie(c),
 	})
 }
 
@@ -448,7 +463,7 @@ func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
+		Secure:   h.secureCookie(c),
 	})
 	c.SetCookie(&http.Cookie{
 		Name:     "XSRF-TOKEN",
@@ -456,6 +471,6 @@ func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
 		Expires:  past,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
+		Secure:   h.secureCookie(c),
 	})
 }

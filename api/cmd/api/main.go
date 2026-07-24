@@ -426,6 +426,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		XFrameOptions:         "DENY",
 		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
+		// HSTS: instruct browsers to only reach this origin over HTTPS for a year,
+		// including subdomains. Echo only emits the header when the request is
+		// actually over TLS (direct or via X-Forwarded-Proto: https), so a plain
+		// HTTP dev server never sends it. Preload is deliberately left off — it's
+		// an effectively irreversible browser-baked commitment that an operator
+		// should opt into for their own domain, not a shipped default.
+		HSTSMaxAge: 31536000,
 	}))
 	// Extra security headers not covered by middleware.Secure
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {

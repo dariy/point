@@ -168,6 +168,41 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+// TestHSTS verifies Strict-Transport-Security is emitted for HTTPS requests
+// (here signalled via X-Forwarded-Proto from the reverse proxy) but withheld
+// from plain-HTTP requests, so a dev server over http never advertises HSTS.
+func TestHSTS(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:  "1.0.0",
+		FrontendDir: t.TempDir(),
+	}
+	if err := os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"), []byte("<html></html>"), 0o644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	e := setupEcho(cfg, repo, initServices(&cfg, repo))
+
+	const want = "max-age=31536000; includeSubdomains"
+
+	httpsReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	httpsReq.Header.Set("X-Forwarded-Proto", "https")
+	httpsRec := httptest.NewRecorder()
+	e.ServeHTTP(httpsRec, httpsReq)
+	if got := httpsRec.Header().Get("Strict-Transport-Security"); got != want {
+		t.Errorf("https request HSTS: expected %q, got %q", want, got)
+	}
+
+	httpRec := httptest.NewRecorder()
+	e.ServeHTTP(httpRec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if got := httpRec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("http request should not carry HSTS, got %q", got)
+	}
+}
+
 // TestDeploymentHeadInjection verifies the deployment-driven head/CSP knobs:
 // HEAD_HTML is substituted into the served shell, and CSP_SCRIPT_SRC /
 // CSP_CONNECT_SRC extend those directives so an injected external script is
