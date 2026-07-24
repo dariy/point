@@ -1082,6 +1082,27 @@ func parseCreateAPIKeyName(args []string) string {
 // e.g. "video_89017c29.mp4" → "89017c29".
 var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 
+// neutralizeSVG locks down the response when the file being served is an SVG.
+//
+// SVG is the only allowlisted upload format a browser will execute script from:
+// navigating straight to /2026/07/x.svg renders it as a document, in this
+// origin. Uploads are scanned for active content (services.ScanSVG) and
+// admin-only, but neither is a reason to let the served bytes rely on the
+// site-wide CSP staying exactly as it is today — one regression there would
+// turn a stored file into stored XSS.
+//
+// The per-response policy denies everything and sandboxes the document, so
+// nothing in the SVG runs regardless of the global policy. Embedding via <img>
+// is unaffected: that context never executes script and ignores this header.
+func neutralizeSVG(c echo.Context, path string) {
+	if !strings.EqualFold(filepath.Ext(path), ".svg") {
+		return
+	}
+	c.Response().Header().Set("Content-Security-Policy",
+		"default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
+}
+
 // immutableCacheControl is the header for content-addressed URLs: the name
 // embeds a hash of the bytes, so the bytes at that URL can never change and a
 // revalidation round-trip is pure waste. A year is the practical maximum
@@ -1236,6 +1257,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		}
 
 		if _, err := os.Stat(origFile); err == nil {
+			neutralizeSVG(c, origFile)
 			return c.File(origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
@@ -1244,6 +1266,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 				matchFile := filepath.Clean(filepath.Join(origDir, filepath.Base(matches[0])))
 				// Security: double-check the globbed file prefix.
 				if strings.HasPrefix(matchFile, filepath.Join(storagePath, "media", "originals")) {
+					neutralizeSVG(c, matchFile)
 					return c.File(matchFile)
 				}
 			}

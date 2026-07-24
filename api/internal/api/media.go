@@ -51,7 +51,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 	// image/video/audio format (e.g. an HTML page renamed to .jpg).
 	mimeType, err := services.DetectMediaType(content, file.Header.Get("Content-Type"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnsupportedMediaType, "unsupported file type")
+		return echo.NewHTTPError(http.StatusUnsupportedMediaType, uploadRejectionMessage(err))
 	}
 
 	altText := c.FormValue("alt_text")
@@ -343,7 +343,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 
 		mimeType, err := services.DetectMediaType(content, fh.Header.Get("Content-Type"))
 		if err != nil {
-			failed = append(failed, map[string]string{"filename": fh.Filename, "error": "unsupported file type"})
+			failed = append(failed, map[string]string{"filename": fh.Filename, "error": uploadRejectionMessage(err)})
 			continue
 		}
 
@@ -497,4 +497,15 @@ func (h *MediaHandler) AnalyzeImageByID(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, analysis)
+}
+
+// uploadRejectionMessage turns a DetectMediaType failure into something an
+// admin can act on. An SVG rejected for carrying a script is a different
+// problem from a .exe renamed to .jpg, and "unsupported file type" describes
+// only the second.
+func uploadRejectionMessage(err error) string {
+	if errors.Is(err, services.ErrActiveSVGContent) {
+		return err.Error()
+	}
+	return "unsupported file type"
 }

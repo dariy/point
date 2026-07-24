@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -119,6 +120,45 @@ func TestMediaTypeCategory(t *testing.T) {
 	for mime, want := range cases {
 		if got := MediaTypeCategory(mime); got != want {
 			t.Errorf("MediaTypeCategory(%q) = %q, want %q", mime, got, want)
+		}
+	}
+}
+
+// SVG is the one allowlisted format a browser executes script from when
+// navigated to directly, so its bytes are scanned rather than only sniffed.
+// See point-sec-svg-upload-xss.
+func TestDetectMediaType_RejectsActiveSVG(t *testing.T) {
+	hostile := []string{
+		`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`,
+		`<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><rect/></svg>`,
+		`<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect/></a></svg>`,
+		`<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><body xmlns="http://www.w3.org/1999/xhtml">x</body></foreignObject></svg>`,
+		// Case and whitespace must not be an escape hatch.
+		`<svg xmlns="http://www.w3.org/2000/svg">< SCRIPT >alert(1)</ SCRIPT ></svg>`,
+		`<svg xmlns="http://www.w3.org/2000/svg" ONLOAD = "alert(1)"><rect/></svg>`,
+	}
+	for _, src := range hostile {
+		if _, err := DetectMediaType([]byte(src), "image/svg+xml"); !errors.Is(err, ErrActiveSVGContent) {
+			t.Errorf("accepted an SVG with active content (err=%v): %s", err, src)
+		}
+	}
+}
+
+func TestDetectMediaType_AcceptsInertSVG(t *testing.T) {
+	inert := []string{
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>`,
+		`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="4" fill="#333"/></svg>`,
+		// A plain fill/stroke document must not trip the event-handler pattern.
+		`<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" stroke-linejoin="round"/></svg>`,
+	}
+	for _, src := range inert {
+		got, err := DetectMediaType([]byte(src), "image/svg+xml")
+		if err != nil {
+			t.Errorf("rejected an inert SVG (%v): %s", err, src)
+			continue
+		}
+		if got != "image/svg+xml" {
+			t.Errorf("DetectMediaType = %q, want image/svg+xml", got)
 		}
 	}
 }

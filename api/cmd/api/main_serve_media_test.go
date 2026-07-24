@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -495,5 +496,38 @@ func TestServeSimplifiedMedia_ChecksumNamedPrivate_StaysNoStore(t *testing.T) {
 	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo_89017c29.jpg", true)
 	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-store" {
 		t.Errorf("expected Cache-Control: private, no-store, got %q", cc)
+	}
+}
+
+// Serving an SVG must lock the response down independently of the site-wide
+// CSP, so a regression in the global policy cannot turn a stored file into
+// stored XSS. See point-sec-svg-upload-xss.
+func TestServeSimplifiedMedia_SVGIsNeutralized(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "logo.svg")
+	makeMediaFile(t, storage, "2024", "01", "logo.svg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "logo.svg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	csp := rec.Header().Get("Content-Security-Policy")
+	for _, want := range []string{"default-src 'none'", "sandbox"} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("SVG response CSP missing %q; got %q", want, csp)
+		}
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("SVG response is missing nosniff")
+	}
+}
+
+// Non-SVG media must not pick up the sandbox policy.
+func TestServeSimplifiedMedia_NonSVGKeepsGlobalCSP(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "photo.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo.jpg", false)
+	if csp := rec.Header().Get("Content-Security-Policy"); csp != "" {
+		t.Errorf("non-SVG media should not set its own CSP, got %q", csp)
 	}
 }
