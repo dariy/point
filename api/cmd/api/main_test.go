@@ -839,3 +839,59 @@ func TestSetupEcho_AssetCacheControl(t *testing.T) {
 		}
 	}
 }
+
+// The public read surface had no rate limit at all — only the auth endpoints
+// were throttled. See point-sec-public-ratelimit.
+func TestSetupEcho_PublicRateLimit(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// The burst is 200, so a run well past it must start getting 429s.
+	var limited bool
+	for i := 0; i < 260; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/pages/home", nil)
+		req.RemoteAddr = "203.0.113.9:5555"
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("public API is not rate limited")
+	}
+
+	// A different client IP has its own bucket — one scraper must not lock
+	// everyone else out.
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/home", nil)
+	req.RemoteAddr = "203.0.113.10:5555"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code == http.StatusTooManyRequests {
+		t.Error("rate limiter is not keyed per client IP")
+	}
+}
+
+// Static assets are skipped: a first page load pulls dozens of them and would
+// otherwise spend the budget the API calls need.
+func TestSetupEcho_RateLimitSkipsAssets(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	_ = os.WriteFile(filepath.Join(cssDir, "app.css"), []byte("body{}"), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	for i := 0; i < 300; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/assets/css/app.css", nil)
+		req.RemoteAddr = "203.0.113.11:5555"
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("static assets got rate limited at request %d", i)
+		}
+	}
+}

@@ -545,6 +545,45 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		}),
 	})
 
+	// Blanket throttle for everything else, keyed by client IP like authLimiter.
+	// Nothing bounded the public read surface: /api/posts, /api/pages/*,
+	// /api/timeline and media byte-serving were all unlimited.
+	//
+	// Sized to be invisible to a real visitor and a real admin — a page load
+	// costs a handful of API calls plus its images, so 200 burst refilling at
+	// 10/s (600/min) is far above human use while still bounding a scraper.
+	// It applies to authenticated requests too: the alternative is keying the
+	// exemption off a session cookie, which any client can simply present,
+	// turning the limiter into a formality.
+	//
+	// Static assets are skipped: they are plain file serves behind long cache
+	// headers, and a first page load pulls dozens of them, which would otherwise
+	// consume the budget the API calls need.
+	publicLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Skipper: func(c echo.Context) bool {
+			p := c.Request().URL.Path
+			return strings.HasPrefix(p, "/assets/") || p == "/health"
+		},
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(100 * time.Millisecond),
+			Burst:     200,
+			ExpiresIn: 3 * time.Minute,
+		}),
+	})
+	e.Use(publicLimiter)
+
+	// The tag graph walks the whole tag/post relation set to build its payload,
+	// so it is the one public read where a modest request rate is still a real
+	// load. ~1/s sustained, 20 burst — well above what rendering the graph page
+	// needs, far below what makes it a cheap way to pin a CPU.
+	graphLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(time.Second),
+			Burst:     20,
+			ExpiresIn: 3 * time.Minute,
+		}),
+	})
+
 	authGroup := e.Group("/api/auth")
 	authGroup.POST("/login", authHandler.Login, authLimiter)
 	authGroup.POST("/logout", authHandler.Logout)
@@ -644,8 +683,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	pagesGroup.GET("/graph/tag/:id", pagesHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), graphLimiter)
+	pagesGroup.GET("/graph/tag/:id", pagesHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), graphLimiter)
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
 
