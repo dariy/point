@@ -661,11 +661,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		})
 	}
 
-	// Update tag counts
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 
 	return post, strippedProps, nil
 }
@@ -778,10 +774,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: tag.ID})
 	}
 
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 
 	return post, strippedProps, nil
 }
@@ -801,10 +794,7 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID})
 	}
 
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -857,10 +847,7 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 	// published_at logic handled in repository.UpdatePost based on status
 	post, err = s.repo.UpdatePost(ctx, params)
 	if err == nil {
-		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil {
-			s.tagService.Invalidate()
-		}
+		s.refreshTagCounts(ctx)
 	}
 	return post, err
 }
@@ -869,10 +856,7 @@ func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) er
 	if err := s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -880,10 +864,7 @@ func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error
 	if err := s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -891,10 +872,7 @@ func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID in
 	if err := s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -922,10 +900,7 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	if err != nil {
 		return post, err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
@@ -957,10 +932,7 @@ func (s *PostService) crossPostToInstagramAsync(postID int64) {
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
 	post, err := s.repo.WithdrawPost(ctx, id)
 	if err == nil {
-		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil {
-			s.tagService.Invalidate()
-		}
+		s.refreshTagCounts(ctx)
 	}
 	return post, err
 }
@@ -1011,10 +983,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 		return nil, err
 	}
 	if len(published) > 0 {
-		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil {
-			s.tagService.Invalidate()
-		}
+		s.refreshTagCounts(ctx)
 		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
@@ -1256,4 +1225,17 @@ func (s *PostService) AuditPublicPostLinks(ctx context.Context) ([]PostLinkIssue
 		}
 	}
 	return issues, scanned, nil
+}
+
+// refreshTagCounts recomputes the denormalized per-tag post counts and drops the
+// tag-graph cache, which caches hierarchical counts derived from them.
+//
+// Every post mutation has to do both, and doing only one leaves the tag pages
+// showing stale numbers. Collapsing the pair into one call is what keeps that
+// from being ten independent chances to forget the second half.
+func (s *PostService) refreshTagCounts(ctx context.Context) {
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
 }
