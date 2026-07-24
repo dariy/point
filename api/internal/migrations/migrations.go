@@ -8,6 +8,8 @@ package migrations
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 
 	"point-api/internal/repository"
@@ -261,46 +263,52 @@ var schema = []struct{ name, sql string }{
 }
 
 // Run applies all pending schema migrations, then the special multi-step tag
-// migrations, in order. Failures are logged (not fatal): a failed idempotent
-// migration must not stop the server from booting.
-func Run(ctx context.Context, repo repository.Repository) {
-	for _, m := range schema {
-		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
-			slog.Warn("migration failed", "name", m.name, "error", err)
+// migrations, in order.
+//
+// A returned error is fatal to the caller by design: it means the database is
+// not at the schema this build expects, and a server that boots anyway will
+// fail later, further from the cause, with whatever the mismatched schema
+// happens to break. ApplyMigration already treats "already exists" and
+// "duplicate column" as no-ops, so an error here is never merely a
+// re-application of something idempotent.
+//
+// Every step is attempted even after one fails, so the logs name every problem
+// rather than only the first; the errors are then joined and returned together.
+func Run(ctx context.Context, repo repository.Repository) error {
+	var errs []error
+	// step runs one named migration, logging and collecting any failure.
+	step := func(name string, err error) {
+		if err != nil {
+			slog.Error("migration failed", "name", name, "error", err)
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
 		}
 	}
 
-	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
-	if err := repo.MigrateFlagsToSystemTags(ctx); err != nil {
-		slog.Warn("system_tags_phase_a failed", "error", err)
-	}
-	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
-	if err := repo.RebuildTagsTableDropBooleans(ctx); err != nil {
-		slog.Warn("system_tags_phase_b failed", "error", err)
+	for _, m := range schema {
+		step(m.name, repo.ApplyMigration(ctx, m.name, m.sql))
 	}
 
+	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
+	step("system_tags_phase_a", repo.MigrateFlagsToSystemTags(ctx))
+	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
+	step("system_tags_phase_b", repo.RebuildTagsTableDropBooleans(ctx))
+
 	// Ensure all required system tags exist.
-	if err := repo.EnsureSystemTags(ctx); err != nil {
-		slog.Warn("ensure_system_tags failed", "error", err)
-	}
+	step("ensure_system_tags", repo.EnsureSystemTags(ctx))
 
 	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
 	// This was the first pass — kept so the migration_history entry is preserved.
-	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
-		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
-		slog.Warn("migration failed", "name", "rename_system_tags_to_slug", "error", err)
-	}
+	step("rename_system_tags_to_slug", repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
+		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`))
 
 	// Strip the leading '_' from system tag display names so the UI shows
 	// "root", "pending", "hidden", etc. instead of "_root", "_pending".
-	if err := repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
-		`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
-		slog.Warn("migration failed", "name", "rename_system_tags_names_no_underscore", "error", err)
-	}
+	step("rename_system_tags_names_no_underscore", repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
+		`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`))
 
 	// Migrate tag system: translate system-tag graph edges to typed columns, fold
 	// tag_locations into tags, drop old columns, delete system tags.
-	if err := repo.MigrateTagFlagsFromSystemTags(ctx); err != nil {
-		slog.Warn("tag_flags_from_system_tags failed", "error", err)
-	}
+	step("tag_flags_from_system_tags", repo.MigrateTagFlagsFromSystemTags(ctx))
+
+	return errors.Join(errs...)
 }

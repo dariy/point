@@ -251,31 +251,12 @@ func NewRepository(dbURL string) (Repository, error) {
 	} else {
 		// Run migrations for existing databases.
 		// SQLite returns an error if the column already exists — that's safe to ignore.
-		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN css TEXT NOT NULL DEFAULT ''`); err != nil {
-			if !isDuplicateColumnError(err) {
-				return nil, fmt.Errorf("migration failed (add posts.css): %w", err)
-			}
-		}
-		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN immersive_mode TEXT NOT NULL DEFAULT 'auto'`); err != nil {
-			if !isDuplicateColumnError(err) {
-				return nil, fmt.Errorf("migration failed (add posts.immersive_mode): %w", err)
-			}
-		}
-		// Instagram cross-posting columns (point-xq28).
-		for _, m := range []struct {
-			name string
-			stmt string
-		}{
-			{"instagram_share", `ALTER TABLE posts ADD COLUMN instagram_share BOOLEAN NOT NULL DEFAULT 0`},
-			{"instagram_status", `ALTER TABLE posts ADD COLUMN instagram_status TEXT NOT NULL DEFAULT 'none'`},
-			{"instagram_media_id", `ALTER TABLE posts ADD COLUMN instagram_media_id TEXT`},
-			{"instagram_published_at", `ALTER TABLE posts ADD COLUMN instagram_published_at DATETIME`},
-			{"instagram_error", `ALTER TABLE posts ADD COLUMN instagram_error TEXT`},
-			{"instagram_id", `ALTER TABLE posts ADD COLUMN instagram_id TEXT`},
-		} {
-			if _, err := db.Exec(m.stmt); err != nil {
+		for _, m := range bootstrapColumns {
+			if _, err := db.Exec(m.sql); err != nil {
+				// SQLite has no ADD COLUMN IF NOT EXISTS; re-running one on a
+				// database that already has the column is the expected no-op.
 				if !isDuplicateColumnError(err) {
-					return nil, fmt.Errorf("migration failed (add posts.%s): %w", m.name, err)
+					return nil, fmt.Errorf("migration failed (%s): %w", m.name, err)
 				}
 			}
 		}
@@ -288,35 +269,13 @@ func NewRepository(dbURL string) (Repository, error) {
 	}
 
 	if count >= 4 {
-		// Run migrations for existing databases.
-		if err := repo.ApplyMigration(context.Background(), "add_api_keys", `
-CREATE TABLE IF NOT EXISTS api_keys (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name        VARCHAR(100) NOT NULL,
-    key_hash    VARCHAR(64) NOT NULL UNIQUE,
-    prefix      VARCHAR(16) NOT NULL,
-    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_used_at DATETIME,
-    expires_at  DATETIME,
-    revoked_at  DATETIME
-);
-CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
-`); err != nil {
-			return nil, fmt.Errorf("migration failed (add_api_keys): %w", err)
+		for _, m := range bootstrapMigrations {
+			if err := repo.ApplyMigration(context.Background(), m.name, m.sql); err != nil {
+				return nil, fmt.Errorf("migration failed (%s): %w", m.name, err)
+			}
 		}
-
-		if err := repo.ApplyMigration(context.Background(), "posts_instagram_id_unique_idx",
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_instagram_id ON posts(instagram_id) WHERE instagram_id IS NOT NULL`); err != nil {
-			return nil, fmt.Errorf("migration failed (posts_instagram_id_unique_idx): %w", err)
-		}
-
-		// Denormalized list-preview URL so list/grid queries no longer read the
-		// full content body. Add the column, then backfill existing rows.
-		if err := repo.ApplyMigration(context.Background(), "posts_media_url",
-			`ALTER TABLE posts ADD COLUMN media_url VARCHAR(500)`); err != nil {
-			return nil, fmt.Errorf("migration failed (posts_media_url): %w", err)
-		}
+		// posts.media_url is the one bootstrap step with a Go body: the column
+		// is added above, and existing rows are then filled in from content.
 		if err := repo.BackfillPostMediaURLs(context.Background()); err != nil {
 			return nil, fmt.Errorf("migration failed (backfill posts.media_url): %w", err)
 		}

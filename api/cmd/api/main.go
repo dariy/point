@@ -974,8 +974,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Apply DB schema + data migrations (see internal/migrations).
-	migrations.Run(ctx, repo)
+	// Apply DB schema + data migrations (see internal/migrations). A failure
+	// here means the database is not at the schema this build expects, so we
+	// stop rather than serve against it — the alternative is failing later,
+	// somewhere unrelated, on whatever the mismatch happens to break.
+	if err := migrations.Run(ctx, repo); err != nil {
+		slog.Error("database migrations failed — refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	// Ensure a secret key is available for session signing.
 	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
