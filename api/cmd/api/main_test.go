@@ -19,6 +19,8 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 // mkdirs creates subdirectories inside base and returns their paths.
@@ -410,6 +412,38 @@ func newEchoWithRepo(t *testing.T) (repository.Repository, config.Config) {
 		FrontendDir: t.TempDir(),
 	}
 	return repo, cfg
+}
+
+// The credential rate limiter and session audit trail key off c.RealIP().
+// setupEcho must install an IPExtractor that only trusts X-Forwarded-For hops
+// from our own proxy (loopback/private), so an attacker can't mint a fresh
+// bucket per request by rotating the header. See point-sec-ratelimit-xff-bypass.
+func TestSetupEcho_RealIPIgnoresSpoofedXFF(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	if e.IPExtractor == nil {
+		t.Fatal("setupEcho left IPExtractor nil: RealIP() trusts X-Forwarded-For verbatim")
+	}
+
+	// Peer is an untrusted public address: XFF is attacker-controlled and must
+	// be ignored entirely — RealIP falls back to the socket remote address.
+	directReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	directReq.RemoteAddr = "203.0.113.7:5555"
+	directReq.Header.Set(echo.HeaderXForwardedFor, "1.2.3.4")
+	if got := e.IPExtractor(directReq); got != "203.0.113.7" {
+		t.Errorf("untrusted peer: got RealIP %q, want socket address 203.0.113.7", got)
+	}
+
+	// Peer is our trusted proxy (loopback): the real client is the rightmost
+	// untrusted XFF entry; a spoofed value prepended by the client is skipped.
+	proxiedReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	proxiedReq.RemoteAddr = "127.0.0.1:5555"
+	proxiedReq.Header.Set(echo.HeaderXForwardedFor, "9.9.9.9, 203.0.113.7")
+	if got := e.IPExtractor(proxiedReq); got != "203.0.113.7" {
+		t.Errorf("proxied request: got RealIP %q, want real client 203.0.113.7", got)
+	}
 }
 
 func TestSetupEcho_FeedRoutes(t *testing.T) {

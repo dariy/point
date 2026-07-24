@@ -291,6 +291,17 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e := echo.New()
 	e.HideBanner = true
 
+	// Derive the client IP by walking X-Forwarded-For from the right and
+	// skipping only trusted hops (loopback + private networks — i.e. our own
+	// reverse proxy). This returns the real client address and ignores any
+	// XFF entries an attacker prepends, so c.RealIP() can't be spoofed to
+	// dodge the credential rate limiter or poison the session audit trail.
+	// Direct (no-proxy) connections fall back to the socket remote address.
+	e.IPExtractor = echo.ExtractIPFromXFFHeader(
+		echo.TrustLoopback(true),
+		echo.TrustPrivateNet(true),
+	)
+
 	// Redirect HTTP to HTTPS if AppURL is configured as HTTPS.
 	if strings.HasPrefix(cfg.AppURL, "https://") {
 		e.Pre(middleware.HTTPSRedirect())
