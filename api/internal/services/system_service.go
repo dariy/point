@@ -530,7 +530,8 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 		if err != nil {
 			return fmt.Errorf("corrupt or truncated archive: %w", err)
 		}
-		if _, err := io.Copy(io.Discard, tr); err != nil {
+		// Same reasoning as extractTarGz: validating an operator's own archive.
+		if _, err := io.Copy(io.Discard, tr); err != nil { //nolint:gosec // G110: operator-supplied archive, bounded by their own disk
 			return fmt.Errorf("corrupt archive entry %q: %w", header.Name, err)
 		}
 		if filepath.Base(header.Name) == wantDB {
@@ -544,6 +545,9 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 }
 
 func (s *SystemService) extractTarGz(srcPath, destDir string) error {
+	// srcPath is resolved against the backups directory by the caller, which
+	// rejects any name that is not a bare filename in it.
+	//nolint:gosec // G703: caller-validated path under the backups directory
 	f, err := os.Open(srcPath)
 	if err != nil {
 		return err
@@ -576,7 +580,7 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 		// it, a sibling like "<dest>EVIL" would pass a bare prefix check, and
 		// filepath.Join collapses "../" so "../destEVIL/x" would escape.
 		cleanDest := filepath.Clean(destDir)
-		target := filepath.Join(cleanDest, header.Name)
+		target := filepath.Join(cleanDest, header.Name) //nolint:gosec // G305: guarded by the check immediately below — do not "fix" by removing it
 		if filepath.IsAbs(header.Name) ||
 			(target != cleanDest && !strings.HasPrefix(target, cleanDest+string(os.PathSeparator))) {
 			return fmt.Errorf("restore: unsafe path in archive: %q", header.Name)
@@ -584,19 +588,29 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
+			//nolint:gosec // G703: target passed the traversal check above
 			if mkErr := os.MkdirAll(target, 0755); mkErr != nil {
 				_ = os.Chmod(target, 0755)
 			}
 		case tar.TypeReg:
+			// Every path below derives from target, which passed the traversal
+			// check above.
 			parentDir := filepath.Dir(target)
+			//nolint:gosec // G703: derived from the checked target
 			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
 				_ = os.Chmod(parentDir, 0755)
 			}
+			//nolint:gosec // G703: derived from the checked target
 			out, err := os.Create(target)
 			if err != nil {
 				return fmt.Errorf("restore: cannot write %s: %w", header.Name, err)
 			}
-			if _, copyErr := io.Copy(out, tr); copyErr != nil {
+			// Unbounded by design: a restore is an operator replacing their own
+			// data directory from their own archive, gated behind a session plus
+			// password re-entry, and legitimate archives run to multiple GB — a
+			// size cap would break the feature to defend the operator from
+			// themselves. The bound is their own disk.
+			if _, copyErr := io.Copy(out, tr); copyErr != nil { //nolint:gosec // G110: see above
 				_ = out.Close()
 				return fmt.Errorf("restore: cannot write %s: %w", header.Name, copyErr)
 			}

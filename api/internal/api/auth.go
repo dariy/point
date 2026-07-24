@@ -444,6 +444,10 @@ func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expir
 		SameSite: http.SameSiteLaxMode,
 		Secure:   h.secureCookie(c),
 	})
+	// Deliberately not HttpOnly: this is the readable half of the double-submit
+	// CSRF pattern — the SPA has to read it to echo the value back in a header.
+	// Its secrecy is not what protects anything; matching it is.
+	//nolint:gosec // G124: HttpOnly is intentionally off, see above
 	c.SetCookie(&http.Cookie{
 		Name:     "XSRF-TOKEN",
 		Value:    xsrf,
@@ -465,6 +469,9 @@ func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   h.secureCookie(c),
 	})
+	// Cleared counterpart of the readable double-submit cookie set above; it
+	// carries no value and is likewise not HttpOnly.
+	//nolint:gosec // G124: HttpOnly intentionally off, see setXSRFCookie
 	c.SetCookie(&http.Cookie{
 		Name:     "XSRF-TOKEN",
 		Value:    "",

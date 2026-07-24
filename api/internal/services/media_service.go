@@ -382,6 +382,9 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		}
 	}
 
+	// originalFullPath is built from the storage root plus a sanitized filename
+	// this function generated; the uploaded name never reaches the path.
+	//nolint:gosec // G703: path is composed from the storage root, not from input
 	if err := os.WriteFile(originalFullPath, content, 0644); err != nil {
 		return models.Medium{}, err
 	}

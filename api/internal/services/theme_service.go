@@ -287,6 +287,8 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 		data = append(data, []byte(customCSS)...)
 	}
 
+	// publicThemePath is a fixed location under the configured frontend dir.
+	//nolint:gosec // G703: path is composed from config, not from input
 	err = os.WriteFile(publicThemePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to update public theme.css: %w", err)

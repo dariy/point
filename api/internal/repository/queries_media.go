@@ -308,6 +308,8 @@ func (r *sqliteRepository) GetMediaByPaths(ctx context.Context, paths []string) 
 	}
 	placeholders := strings.Repeat("?,", len(paths))
 	placeholders = placeholders[:len(placeholders)-1]
+	// placeholders is a generated "?,?,?" list; every path is bound below.
+	//nolint:gosec // G202: placeholders only, values are bound
 	q := `SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
 		file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption,
 		is_public, metadata FROM media WHERE original_path IN (` + placeholders + `)`

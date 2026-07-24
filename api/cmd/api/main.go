@@ -1076,7 +1076,8 @@ func main() {
 			exe = os.Args[0]
 		}
 		slog.Info("restart requested: re-executing in place", "exe", exe)
-		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil {
+		// Re-executing this very binary (os.Executable), not a caller-named one.
+		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil { //nolint:gosec // G204: exec of self
 			slog.Error("re-exec failed; exiting so a supervisor can restart instead", "error", err)
 			os.Exit(1)
 		}

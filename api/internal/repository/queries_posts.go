@@ -137,12 +137,12 @@ func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsPa
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p`, contentCol)
-	
+
 	pType := "post"
 	if arg.IncludePages {
 		pType = "all"
 	}
-	
+
 	statusBool, _ := arg.StatusFilter.(bool)
 	featuredBool, _ := arg.FeaturedFilter.(bool)
 	draftsBool, _ := arg.IncludeDrafts.(bool)
@@ -178,7 +178,7 @@ func (r *sqliteRepository) ListPostsByViews(ctx context.Context, arg models.List
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p`
-	
+
 	statusBool, _ := arg.StatusFilter.(bool)
 	featuredBool, _ := arg.FeaturedFilter.(bool)
 	draftsBool, _ := arg.IncludeDrafts.(bool)
@@ -221,7 +221,7 @@ func (r *sqliteRepository) CountPosts(ctx context.Context, arg models.CountPosts
 	hiddenBool, _ := arg.IncludeHidden.(bool)
 
 	q, args := buildPostsQuery("SELECT COUNT(*) FROM posts p", "", "", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", 0, 0)
-	
+
 	var count int64
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
@@ -310,7 +310,6 @@ func (r *sqliteRepository) postsHasColumn(ctx context.Context, col string) bool 
 	return false
 }
 
-
 // ListPostsInYearRange returns posts that carry a year tag (kind='year') whose
 // parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
 func (r *sqliteRepository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
@@ -318,7 +317,7 @@ func (r *sqliteRepository) ListPostsInYearRange(ctx context.Context, fromYear, t
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p`
-	
+
 	pType := "post"
 	if arg.IncludePages {
 		pType = "all"
@@ -365,7 +364,7 @@ func (r *sqliteRepository) CountPostsInYearRange(ctx context.Context, fromYear, 
 	hiddenBool, _ := arg.IncludeHidden.(bool)
 
 	q, args := buildPostsQuery("SELECT COUNT(*) FROM posts p", "", "", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", fromYear, toYear)
-	
+
 	var count int64
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
@@ -376,7 +375,7 @@ func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p`
-	
+
 	pType := "post"
 	if onlyPages {
 		pType = "page"
@@ -734,6 +733,9 @@ func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64,
 	}
 
 	bypassEHP := includeDrafts || includeHidden
+	// The interpolated fragments are the constant clauses built above; every
+	// caller-supplied value is a bound argument.
+	//nolint:gosec // G202: constant clause fragments only, values are bound
 	q := `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
@@ -890,6 +892,8 @@ func (r *sqliteRepository) GetPostsByTagIDsInYearRange(ctx context.Context, tagI
 	}
 
 	bypassEHP := includeDrafts || includeHidden
+	// As above: constant clause fragments, bound values.
+	//nolint:gosec // G202: constant clause fragments only, values are bound
 	q := `
 WITH _ytags AS (
     SELECT id FROM tags
@@ -1237,6 +1241,8 @@ func (r *sqliteRepository) GetExistingInstagramIDs(ctx context.Context, ids []st
 	}
 	inList := strings.Join(placeholders, ",")
 
+	// inList is a generated "?,?,?" list; every id is bound.
+	//nolint:gosec // G201: placeholders only, values are bound
 	q := fmt.Sprintf(`
 SELECT COALESCE(instagram_id, instagram_media_id)
 FROM posts

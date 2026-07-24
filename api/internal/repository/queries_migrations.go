@@ -151,6 +151,9 @@ func (r *sqliteRepository) MigrateFlagsToSystemTags(ctx context.Context) error {
 			{"_with_related", "show_related_tags_as_children = 1 AND 1=1"},
 		}
 		for _, fm := range flagMigrations {
+			// Both substitutions come from the hardcoded flagMigrations table
+			// above; nothing here is caller- or user-supplied.
+			//nolint:gosec // G201: both values are compile-time constants
 			q := fmt.Sprintf(`
 				INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 				SELECT (SELECT id FROM tags WHERE slug = '%s'), id FROM tags WHERE %s`,

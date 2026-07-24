@@ -67,7 +67,9 @@ func (s *RemarkSupervisor) startLocked() {
 				b, err := os.ReadFile(path)
 				if err == nil && bytes.Contains(b, []byte("{% REMARK_URL %}")) {
 					b = bytes.ReplaceAll(b, []byte("{% REMARK_URL %}"), []byte(remarkURL))
-					_ = os.WriteFile(path, b, info.Mode())
+					// path comes from walking the hardcoded webDir constant, not
+					// from any request; the write preserves the original mode.
+					_ = os.WriteFile(path, b, info.Mode()) //nolint:gosec // G703: path is from a fixed-root filepath.Walk
 				}
 			}
 			return nil

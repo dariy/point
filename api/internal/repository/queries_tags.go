@@ -145,6 +145,9 @@ func (r *sqliteRepository) GetTopCoOccurringTagsForTagIDs(ctx context.Context, t
 	}
 	args = append(args, rootID, limit)
 
+	// Interpolates the constant status clauses and a generated placeholder
+	// list; every value is bound.
+	//nolint:gosec // G201: constant fragments + placeholders, values are bound
 	q := fmt.Sprintf(`
 SELECT t.id, t.name, t.slug, t.kind, t.latitude, t.longitude
 FROM tags t
@@ -287,6 +290,7 @@ func (r *sqliteRepository) FindTagsBySlugs(ctx context.Context, slugs []string) 
 			args[i] = s
 		}
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+		//nolint:gosec // G202: placeholders only, slugs are bound
 		q := `
 SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at
 FROM tags WHERE slug IN (` + placeholders + `)`
@@ -406,6 +410,7 @@ func (r *sqliteRepository) GetTagsByPostIDs(ctx context.Context, postIDs []int64
 		}
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
 
+		//nolint:gosec // G202: placeholders only, post ids are bound
 		q := `
 SELECT pt.post_id, t.id, t.name, t.slug, t.kind, t.latitude, t.longitude
 FROM post_tags pt
