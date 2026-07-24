@@ -123,46 +123,91 @@ type sqliteRepository struct {
 	db *sql.DB
 }
 
+// maxOpenConns is the pool size for a file-backed database. WAL lets readers
+// run concurrently with each other and with the single writer, which is the
+// whole point of enabling it; capping the pool at one connection throws that
+// away and serializes every request, the scheduler and feed generation behind
+// one queue. Writes still serialize — SQLite allows one writer at a time — but
+// they now do so at the SQLite lock (with busy_timeout to wait it out) instead
+// of blocking readers.
+const maxOpenConns = 8
+
+// totalCacheSizeKB is the page-cache budget for the whole pool, in KB. SQLite's
+// cache_size is per connection, so it is divided by the pool size — otherwise
+// raising the connection count would multiply memory use by the same factor.
+const totalCacheSizeKB = 200000
+
+// isMemoryDSN reports whether dbURL names an in-memory database. Each
+// connection to a private in-memory DSN gets its OWN empty database, so such a
+// pool must stay at one connection or callers would see a missing schema at
+// random. Used by tests (":memory:") and never in production.
+func isMemoryDSN(dbURL string) bool {
+	return strings.Contains(dbURL, ":memory:") || strings.Contains(dbURL, "mode=memory")
+}
+
+// pragmaDSN appends the connection PRAGMAs to dbURL as modernc `_pragma` query
+// parameters. This is the mechanism that makes a multi-connection pool safe:
+// PRAGMAs are per-connection state, so applying them with db.Exec only
+// configures whichever connection happened to serve that call. Anything the
+// pool opens later would otherwise run without foreign keys, without the busy
+// timeout, and outside WAL.
+func pragmaDSN(dbURL string, conns int) string {
+	params := []string{
+		"_pragma=busy_timeout(5000)",
+		"_pragma=journal_mode(WAL)",
+		// WAL's usual companion: fsync at checkpoints rather than at every
+		// commit. A crash can lose the last transactions but never corrupts
+		// the database, which is the right trade for a blog engine.
+		"_pragma=synchronous(NORMAL)",
+		"_pragma=foreign_keys(ON)",
+		fmt.Sprintf("_pragma=cache_size(-%d)", totalCacheSizeKB/conns),
+		"_pragma=mmap_size(30000000000)",
+		// Take the write lock at BEGIN rather than at the first write
+		// statement. Without this a transaction that reads before it writes
+		// can fail to upgrade its lock and gets SQLITE_BUSY immediately —
+		// busy_timeout does not apply to that case.
+		"_txlock=immediate",
+	}
+	sep := "?"
+	if strings.Contains(dbURL, "?") {
+		sep = "&"
+	}
+	return dbURL + sep + strings.Join(params, "&")
+}
+
 func NewRepository(dbURL string) (Repository, error) {
-	db, err := sql.Open("sqlite", dbURL)
+	conns := maxOpenConns
+	if isMemoryDSN(dbURL) {
+		conns = 1
+	}
+
+	db, err := sql.Open("sqlite", pragmaDSN(dbURL, conns))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Limit to a single connection so PRAGMAs apply to every query and
-	// concurrent writers serialize at the Go level instead of racing at SQLite.
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	db.SetMaxOpenConns(conns)
+	// Keep every connection warm: re-opening one means paying for the mmap and
+	// page cache again, and SQLite connections are cheap to hold.
+	db.SetMaxIdleConns(conns)
+	db.SetConnMaxLifetime(0)
 
-	// Set busy timeout to handle concurrent access
-	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
-		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
-	}
-
-	// Optimize read performance
-	if _, err := db.Exec("PRAGMA mmap_size = 30000000000;"); err != nil {
-		return nil, fmt.Errorf("failed to set mmap_size: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA cache_size = -200000;"); err != nil {
-		return nil, fmt.Errorf("failed to set cache_size: %w", err)
-	}
-
+	// The PRAGMAs run when a connection is actually opened, so this is where a
+	// wrong-permissions data directory surfaces. Failing here rather than
+	// letting the server start is deliberate: a half-open database reads fine
+	// and silently fails every write (e.g. first-run setup).
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("database is not usable — check permissions on the data directory: %w", err)
 	}
 
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
-	}
-
-	// Enable WAL mode and verify the database is writable.
-	// If either fails, the data directory has wrong permissions and we
-	// must exit now rather than letting the server start in a broken state
-	// where reads succeed but every write (e.g. first-run setup) silently fails.
+	// Verify WAL actually engaged rather than trusting the DSN. A read-only
+	// directory is the usual reason it does not.
 	var journalMode string
-	if err := db.QueryRow("PRAGMA journal_mode = WAL;").Scan(&journalMode); err != nil {
+	if err := db.QueryRow("PRAGMA journal_mode;").Scan(&journalMode); err != nil {
 		return nil, fmt.Errorf("database is not writable — check permissions on the data directory: %w", err)
+	}
+	if !isMemoryDSN(dbURL) && !strings.EqualFold(journalMode, "wal") {
+		return nil, fmt.Errorf("database is not in WAL mode (got %q) — check permissions on the data directory", journalMode)
 	}
 
 	// Check if the database needs initialization.
