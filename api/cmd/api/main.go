@@ -201,6 +201,27 @@ func inlineScriptHashes(path string) []string {
 	return out
 }
 
+// precompressedExt lists the file extensions whose payloads are already
+// compressed (photos, video, audio, modern web fonts, archives). Running them
+// through gzip burns CPU on every byte served for a saving of roughly nothing,
+// so the Gzip middleware skips them. Keyed by lowercase extension with the dot.
+var precompressedExt = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true,
+	".avif": true, ".heic": true, ".heif": true, ".ico": true,
+	".mp4": true, ".mov": true, ".webm": true, ".m4v": true,
+	".mp3": true, ".m4a": true, ".ogg": true,
+	".woff": true, ".woff2": true,
+	".zip": true, ".gz": true, ".tgz": true, ".br": true, ".7z": true,
+}
+
+// skipGzip reports whether the response for this request should be left
+// uncompressed. Decided from the request path's extension because it is known
+// before the handler runs: media is served from /:year/:month/:filename and
+// backups from archive-named routes, both of which keep their real extension.
+func skipGzip(c echo.Context) bool {
+	return precompressedExt[strings.ToLower(filepath.Ext(c.Request().URL.Path))]
+}
+
 func resolveJSDir(frontendDir string, debug bool) string {
 	// When FRONTEND_DEBUG is on, prefer the debug bundle (frontend/js-debug) if
 	// it was built — it carries plugin/console debug logging. Falls through to
@@ -376,6 +397,14 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		},
 	}))
 	e.Use(middleware.Recover())
+	// Compress text payloads: the CSS/JS bundles and every JSON API response
+	// gzip to roughly a quarter of their size. Sits high in the chain so it
+	// wraps the static file routes as well as the handlers. Responses under
+	// 1KB are left alone — the gzip framing overhead can exceed the saving.
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Skipper:   skipGzip,
+		MinLength: 1024,
+	}))
 	// Cap request bodies at the configured upload limit (default 50MB). This is
 	// the ceiling for the largest legitimate request (a media upload); every
 	// other endpoint is smaller. Echo enforces it both via Content-Length and

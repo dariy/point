@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -752,5 +754,63 @@ func TestParseCreateAPIKeyName(t *testing.T) {
 				t.Errorf("parseCreateAPIKeyName(%v) = %q, want %q", tt.args, got, tt.want)
 			}
 		})
+	}
+}
+
+// Gzip must be installed for text payloads (the CSS/JS bundles and JSON API
+// responses are the bulk of the transfer) and must NOT be applied to already-
+// compressed binaries like photos. See point-perf-enable-gzip.
+func TestSetupEcho_GzipCompressesCSS(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	// Comfortably over the 1KB MinLength threshold, and highly compressible.
+	_ = os.WriteFile(filepath.Join(cssDir, "app.css"), []byte(strings.Repeat("body{color:red}\n", 500)), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/css/app.css", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if enc := rec.Header().Get("Content-Encoding"); enc != "gzip" {
+		t.Fatalf("expected gzip Content-Encoding on CSS, got %q", enc)
+	}
+	zr, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatalf("gzip.NewReader: %v", err)
+	}
+	body, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("read gzip body: %v", err)
+	}
+	if !strings.HasPrefix(string(body), "body{color:red}") {
+		t.Errorf("decompressed body does not match source: %.40q", body)
+	}
+	if rec.Body.Len() >= len(body) {
+		t.Errorf("gzip did not shrink the payload: %d compressed vs %d raw", rec.Body.Len(), len(body))
+	}
+}
+
+func TestSkipGzip(t *testing.T) {
+	cases := map[string]bool{
+		"/assets/css/light.css":     false,
+		"/assets/js/app.js":         false,
+		"/api/posts":                false,
+		"/2026/07/photo.jpg":        true,
+		"/2026/07/photo.JPG":        true,
+		"/2026/07/clip.mp4":         true,
+		"/assets/vendor/font.woff2": true,
+		"/backups/backup.tar.gz":    true,
+	}
+	e := echo.New()
+	for path, want := range cases {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		c := e.NewContext(req, httptest.NewRecorder())
+		if got := skipGzip(c); got != want {
+			t.Errorf("skipGzip(%q) = %v, want %v", path, got, want)
+		}
 	}
 }
