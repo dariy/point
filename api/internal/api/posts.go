@@ -1024,8 +1024,13 @@ func (h *PostHandler) PublishToInstagram(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
 
-	// CrossPostToInstagram handles status updates in the database.
-	_ = h.postService.CrossPostToInstagram(ctx, id)
+	// CrossPostToInstagram records the failure on the post itself
+	// (instagram_status / instagram_error), which is what the response below
+	// carries back to the editor — but it was otherwise discarded, so a failed
+	// cross-post left no trace in the logs either.
+	if err := h.postService.CrossPostToInstagram(ctx, id); err != nil {
+		slog.Error("instagram cross-post failed", "post_id", id, "error", err)
+	}
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {

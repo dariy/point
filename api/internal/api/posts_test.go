@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -1372,4 +1373,37 @@ func fetchAncestorsMap(ctx context.Context, repo repository.Repository, postTags
 		ancestorsMap[tagID] = infos
 	}
 	return ancestorsMap
+}
+
+// A manual "publish to Instagram" that fails must leave a trace in the logs.
+// The status was already recorded on the post, but the returned error was
+// discarded outright. See point-fix-instagram-silent-fail.
+func TestPostHandler_PublishToInstagram_FailureIsLogged(t *testing.T) {
+	ph, h := setupPostHandlerFull(t)
+	defer h.close()
+	_ = h.settingsSvc.SetSetting(nil_ctx(), "app_url", "https://example.com", "url")
+	userID := insertUser(h.repo)
+	post, _, _ := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "IG Logged", Slug: "ig-logged", Status: "published",
+		Formatter: "markdown", AuthorID: userID, InstagramShare: true,
+	})
+
+	var logBuf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelError})))
+	defer slog.SetDefault(prev)
+
+	c, rec := echoCtx(http.MethodPost, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+	if err := ph.PublishToInstagram(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := logBuf.String(); !strings.Contains(got, "instagram cross-post failed") {
+		t.Errorf("cross-post failure was not logged; log output: %q", got)
+	}
 }

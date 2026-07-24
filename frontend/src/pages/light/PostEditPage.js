@@ -365,7 +365,7 @@ export default class PostEditPage extends Component {
     const igShare = isNew ? (igStatus.default_share ?? false) : (post.instagram_share ?? false);
     const igSt = post.instagram_status || "none";
     const igError = post.instagram_error || "";
-    const igStatusBadgeClass = { published: "badge-success", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
+    const igStatusBadgeClass = { published: "badge-success", error: "badge-danger", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
     const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
     const igSummary = igShare ? "on" : "off";
 
@@ -1086,8 +1086,11 @@ export default class PostEditPage extends Component {
       const result = await publishPostToInstagram(this.state.postId);
       this.setState({ publishingToInstagram: false, post: result });
       const st = result.instagram_status;
+      // The backend writes "error"; "failed" is accepted too so older rows and
+      // any future rename both still surface as a failure rather than as the
+      // neutral "triggered" fallback.
       if (st === "published") store.set("toast", { message: "Published to Instagram.", type: "success" });
-      else if (st === "failed") store.set("toast", { message: result.instagram_error || "Instagram publish failed.", type: "error" });
+      else if (st === "error" || st === "failed") store.set("toast", { message: result.instagram_error || "Instagram publish failed.", type: "error" });
       else store.set("toast", { message: "Instagram publish triggered.", type: "info" });
     } catch (err) { this.setState({ publishingToInstagram: false }); store.set("toast", { message: err.message || "Instagram publish failed.", type: "error" }); }
   }
