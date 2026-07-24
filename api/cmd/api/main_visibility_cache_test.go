@@ -70,7 +70,7 @@ func withBearer(r *http.Request) {
 	r.Header.Set("Authorization", "Bearer sometoken")
 }
 
-const guestCC = "public, s-maxage=60, max-age=0"
+const guestCC = "public, max-age=60"
 const authedCC = "private, no-store"
 
 func TestVisibilityCache_GuestGet_Public(t *testing.T) {

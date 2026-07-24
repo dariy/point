@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"path/filepath"
@@ -31,6 +32,21 @@ func NewPostHandler(postService *services.PostService, settingsService *services
 		settingsService: settingsService,
 		mediaService:    mediaService,
 		tagService:      tagService,
+	}
+}
+
+// syncMediaVisibility keeps media ACLs in step with a post's visibility. This
+// is a privacy control: on failure, media can drift public-when-it-should-be-
+// private. It does not fail the request — the post mutation has already
+// succeeded — but the error must not be swallowed silently, so it is logged
+// for monitoring and follow-up (mirroring the scheduler's handling of the same
+// call). op names the mutation for log context.
+func (h *PostHandler) syncMediaVisibility(ctx context.Context, op string, paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+	if err := h.mediaService.UpdateMediaVisibilityForPaths(ctx, paths); err != nil {
+		slog.Error("media visibility sync failed", "op", op, "paths", len(paths), "error", err)
 	}
 }
 
@@ -538,7 +554,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 
 	if strings.EqualFold(post.Status, "published") {
 		paths := services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
-		_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+		h.syncMediaVisibility(c.Request().Context(), "create_post", paths)
 	}
 
 	resp, err := h.getFullPostResponse(c, post.ID)
@@ -655,7 +671,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	}
 
 	newPaths := services.ExtractMediaPaths(updated.Content, updated.ThumbnailPath.String)
-	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), append(oldPaths, newPaths...))
+	h.syncMediaVisibility(c.Request().Context(), "update_post", append(oldPaths, newPaths...))
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
@@ -692,7 +708,7 @@ func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
 
 	// Status changes affect media visibility (e.g. going from draft to published)
 	paths := services.ExtractMediaPaths(updated.Content, updated.ThumbnailPath.String)
-	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+	h.syncMediaVisibility(c.Request().Context(), "update_post_status", paths)
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
@@ -722,7 +738,7 @@ func (h *PostHandler) UpdatePostTags(c echo.Context) error {
 	// Tag changes may affect hidden_posts inheritance — refresh visibility.
 	if post, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
 		paths := services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
-		_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+		h.syncMediaVisibility(c.Request().Context(), "update_post_tags", paths)
 	}
 
 	resp, err := h.getFullPostResponse(c, id)
@@ -750,7 +766,7 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
 	}
 
-	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), mediaPaths)
+	h.syncMediaVisibility(c.Request().Context(), "delete_post", mediaPaths)
 
 	return c.NoContent(http.StatusNoContent)
 }
@@ -770,7 +786,7 @@ func (h *PostHandler) RestorePost(c echo.Context) error {
 	// Recalculate media visibility after restore.
 	if post, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
 		mediaPaths := services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
-		_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), mediaPaths)
+		h.syncMediaVisibility(c.Request().Context(), "restore_post", mediaPaths)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -804,7 +820,7 @@ func (h *PostHandler) PublishPost(c echo.Context) error {
 	}
 
 	paths := services.ExtractMediaPaths(published.Content, published.ThumbnailPath.String)
-	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+	h.syncMediaVisibility(c.Request().Context(), "publish_post", paths)
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
@@ -973,7 +989,7 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 	}
 
 	paths := services.ExtractMediaPaths(withdrawn.Content, withdrawn.ThumbnailPath.String)
-	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+	h.syncMediaVisibility(c.Request().Context(), "withdraw_post", paths)
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
