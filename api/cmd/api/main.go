@@ -52,7 +52,9 @@ func init() {
 // json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
 // embed inline. Disabled plugins are absent from the result entirely.
 func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
-	all, err := settings.GetAllSettings(ctx)
+	// Snapshot, not GetAllSettings: this runs on every HTML serve and
+	// BuildManifest only reads the map.
+	all, err := settings.Snapshot(ctx)
 	if err != nil {
 		all = map[string]string{}
 	}

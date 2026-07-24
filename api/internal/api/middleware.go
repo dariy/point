@@ -126,7 +126,9 @@ func SessionOnlyMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 func RequirePlugin(settingsService *services.SettingsService, id string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			all, err := settingsService.GetAllSettings(c.Request().Context())
+			// Snapshot, not GetAllSettings: this runs on every request to a
+			// plugin-gated route and only reads.
+			all, err := settingsService.Snapshot(c.Request().Context())
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
 			}
