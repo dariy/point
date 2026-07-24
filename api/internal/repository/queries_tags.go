@@ -268,6 +268,55 @@ WHERE t.id IN (` + placeholders + `) AND t.latitude IS NULL`
 	return items, rows.Err()
 }
 
+// FindTagsBySlugs returns tags whose slug is in the given list, keyed by slug.
+// The batch form of GetTagBySlug: saving a post resolves every tag it carries,
+// which was one query per tag. Slug (not lowercased name) is the key, matching
+// GetTagBySlug exactly — the two disagree whenever slugification is not just a
+// lowercase, e.g. "New York" → "new-york".
+func (r *sqliteRepository) FindTagsBySlugs(ctx context.Context, slugs []string) (map[string]models.Tag, error) {
+	out := make(map[string]models.Tag, len(slugs))
+	if len(slugs) == 0 {
+		return out, nil
+	}
+	for start := 0; start < len(slugs); start += maxInClauseParams {
+		end := min(start+maxInClauseParams, len(slugs))
+		batch := slugs[start:end]
+
+		args := make([]interface{}, len(batch))
+		for i, s := range batch {
+			args[i] = s
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+		q := `
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at
+FROM tags WHERE slug IN (` + placeholders + `)`
+
+		rows, err := r.db.QueryContext(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var t models.Tag
+			if err := rows.Scan(
+				&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+				&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+				&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+				&t.PostCount, &t.CreatedAt,
+			); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			out[t.Slug] = t
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		_ = rows.Close()
+	}
+	return out, nil
+}
+
 // FindTagsByNames returns tags whose lowercased name is in the given list.
 func (r *sqliteRepository) FindTagsByNames(ctx context.Context, names []string) ([]models.Tag, error) {
 	if len(names) == 0 {

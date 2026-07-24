@@ -829,3 +829,50 @@ func TestSquareThumbnail(t *testing.T) {
 		t.Errorf("non-image SquareThumbnail err = %v, want ErrNotAnImage", err)
 	}
 }
+
+// The batch form must produce the same visibility outcome the per-path loop
+// did, for both directions of the flip, and must ignore paths with no media
+// row rather than failing. See point-perf-media-visibility-n1.
+func TestUpdateMediaVisibilityForPaths_BatchResolvesEveryPath(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
+	}()
+	ctx := context.Background()
+	repo := svc.repo
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`CREATE TABLE IF NOT EXISTS media_visibility_log (id INTEGER PRIMARY KEY, media_id INTEGER, is_public INTEGER, post_id INTEGER)`)
+
+	// A published post referencing two of the three media files.
+	_, _ = repo.DB().Exec(`INSERT INTO posts (id,title,slug,content,author_id,status,published_at) VALUES (1,'V','v','[a](/media/originals/2024/02/a.jpg) [b](/media/originals/2024/02/b.jpg)',1,'published',datetime('now'))`)
+
+	// a: not yet public, referenced      → must become public
+	// b: not yet public, referenced      → must become public
+	// c: currently public, not referenced → must become private
+	_, _ = repo.DB().Exec(`INSERT INTO media (id,filename,original_path,file_type,mime_type,file_size,checksum,is_public) VALUES
+		(1,'a.jpg','originals/2024/02/a.jpg','image','image/jpeg',1,'c1',0),
+		(2,'b.jpg','originals/2024/02/b.jpg','image','image/jpeg',1,'c2',0),
+		(3,'c.jpg','originals/2024/02/c.jpg','image','image/jpeg',1,'c3',1)`)
+
+	paths := []string{
+		"originals/2024/02/a.jpg",
+		"originals/2024/02/b.jpg",
+		"originals/2024/02/c.jpg",
+		"originals/2024/02/no-such-row.jpg", // no media record: skipped, not an error
+	}
+	if err := svc.UpdateMediaVisibilityForPaths(ctx, paths); err != nil {
+		t.Fatalf("UpdateMediaVisibilityForPaths: %v", err)
+	}
+
+	for id, want := range map[int]int{1: 1, 2: 1, 3: 0} {
+		var got int
+		if err := repo.DB().QueryRow(`SELECT is_public FROM media WHERE id=?`, id).Scan(&got); err != nil {
+			t.Fatalf("read media %d: %v", id, err)
+		}
+		if got != want {
+			t.Errorf("media %d is_public = %d, want %d", id, got, want)
+		}
+	}
+}

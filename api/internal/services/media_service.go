@@ -1236,12 +1236,15 @@ func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths 
 			}
 		}
 	}
-	for _, path := range paths {
-		m, err := s.repo.GetMediaByPath(ctx, path)
-		if err != nil {
-			continue // no DB record for this path, skip
-		}
-		postID, shouldBePublic := visiblePaths[path]
+	// One IN query for the whole set. Doing this per path was a full scan each
+	// (before media.original_path was indexed) and is still a round trip each —
+	// a 30-image post meant 30 of them.
+	records, err := s.repo.GetMediaByPaths(ctx, paths)
+	if err != nil {
+		return err
+	}
+	for _, m := range records {
+		postID, shouldBePublic := visiblePaths[m.OriginalPath]
 		if (m.IsPublic != 0) != shouldBePublic {
 			var pid *int64
 			if shouldBePublic {

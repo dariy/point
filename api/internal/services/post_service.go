@@ -599,19 +599,29 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		post.MediaURL = sql.NullString{String: mediaURL, Valid: true}
 	}
 
-	// Handle tags
+	// Handle tags: resolve them all in one query, then only create the ones
+	// that are genuinely new (normally none).
+	slugs := make([]string, 0, len(p.Tags))
 	for _, tagName := range p.Tags {
-		// This is a bit inefficient, but standard logic: find or create tag
-		tag, err := s.repo.GetTagBySlug(ctx, utils.Slugify(tagName))
-		if err != nil {
-			// Create tag
+		slugs = append(slugs, utils.Slugify(tagName))
+	}
+	existing, err := s.repo.FindTagsBySlugs(ctx, slugs)
+	if err != nil {
+		return models.Post{}, strippedProps, err
+	}
+	for i, tagName := range p.Tags {
+		tag, ok := existing[slugs[i]]
+		if !ok {
 			tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
 				Name: tagName,
-				Slug: utils.Slugify(tagName),
+				Slug: slugs[i],
 			})
 			if err != nil {
 				continue
 			}
+			// Two tag names can slugify to the same slug; remember the created
+			// tag so the duplicate resolves to it instead of failing to insert.
+			existing[slugs[i]] = tag
 		}
 
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{

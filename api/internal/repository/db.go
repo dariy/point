@@ -103,6 +103,7 @@ type Repository interface {
 	ClearTagChildren(ctx context.Context, parentID int64) error
 	GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error)
 	FindTagsByNames(ctx context.Context, names []string) ([]models.Tag, error)
+	FindTagsBySlugs(ctx context.Context, slugs []string) (map[string]models.Tag, error)
 	GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error)
 	GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error)
 	GetRootTags(ctx context.Context) ([]models.Tag, error)
@@ -122,6 +123,12 @@ type sqliteRepository struct {
 	*models.Queries
 	db *sql.DB
 }
+
+// maxInClauseParams bounds how many values a batch query puts in one IN list.
+// SQLite caps bound parameters per statement (999 on older builds), and batch
+// helpers are fed caller-sized slices — every media path in a post, every tag
+// name on a save — so they chunk rather than trusting the input to be small.
+const maxInClauseParams = 500
 
 // maxOpenConns is the pool size for a file-backed database. WAL lets readers
 // run concurrently with each other and with the single writer, which is the
