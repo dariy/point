@@ -7,7 +7,12 @@ import (
 	"net/mail"
 	"net/smtp"
 	"strings"
+	"time"
 )
+
+// smtpTimeout bounds the whole SMTP exchange so a blackholed host can never
+// block a request handler indefinitely.
+const smtpTimeout = 30 * time.Second
 
 type SMTPConfig struct {
 	Host     string
@@ -33,11 +38,40 @@ func envelopeAddr(from string) string {
 	return from
 }
 
+// isLocalHost reports whether host is a loopback address that we trust to
+// carry mail in cleartext (e.g. a local relay or test server).
+func isLocalHost(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// toCRLF normalizes bare LF line endings to CRLF, which strict SMTP servers
+// require in message data.
+func toCRLF(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\n", "\r\n")
+}
+
 // SendEmail sends a plain-text email via SMTP.
 // Port 465 uses implicit TLS; port 587 uses STARTTLS; others use plain SMTP.
 func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("SMTP not configured: set SMTP_HOST in your .env file")
+	}
+
+	// Parse the recipient up front: the bare .Address goes into the RCPT TO
+	// envelope command (Go does not strip CRLF from commands, so a raw string
+	// here is an SMTP injection vector), while the header keeps its display
+	// form. A malformed address is rejected before we dial.
+	rcpt, err := mail.ParseAddress(to)
+	if err != nil {
+		return fmt.Errorf("invalid recipient address %q: %w", to, err)
 	}
 
 	header := strings.Join([]string{
@@ -48,7 +82,7 @@ func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 		"",
 		"",
 	}, "\r\n")
-	msg := []byte(header + body)
+	msg := []byte(header + toCRLF(body))
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
@@ -59,17 +93,19 @@ func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 
 	from := envelopeAddr(cfg.From)
 	if cfg.Port == 465 {
-		return sendImplicitTLS(cfg.Host, addr, auth, from, to, msg)
+		return sendImplicitTLS(cfg.Host, addr, auth, from, rcpt.Address, msg)
 	}
-	return sendSTARTTLS(cfg.Host, addr, auth, from, to, msg)
+	return sendSTARTTLS(cfg.Host, addr, auth, from, rcpt.Address, msg)
 }
 
 func sendImplicitTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte) error {
-	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: host})
+	dialer := &net.Dialer{Timeout: smtpTimeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: host})
 	if err != nil {
 		return fmt.Errorf("SMTP TLS dial: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
 
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -86,18 +122,28 @@ func sendImplicitTLS(host, addr string, auth smtp.Auth, from, to string, msg []b
 }
 
 func sendSTARTTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte) error {
-	c, err := smtp.Dial(addr)
+	dialer := &net.Dialer{Timeout: smtpTimeout}
+	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("SMTP dial: %w", err)
 	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("SMTP client: %w", err)
+	}
 	defer func() { _ = c.Close() }()
 
-	// Use STARTTLS when connecting to a non-local host.
-	if h, _, _ := net.SplitHostPort(addr); h != "localhost" && h != "127.0.0.1" {
-		if ok, _ := c.Extension("STARTTLS"); ok {
-			if err = c.StartTLS(&tls.Config{ServerName: host}); err != nil {
-				return fmt.Errorf("SMTP STARTTLS: %w", err)
-			}
+	// For non-local hosts require STARTTLS: a MITM can strip the advertisement,
+	// so a missing extension must be a hard error rather than a cleartext send.
+	if !isLocalHost(host) {
+		if ok, _ := c.Extension("STARTTLS"); !ok {
+			return fmt.Errorf("SMTP server %q does not advertise STARTTLS; refusing to send in cleartext", host)
+		}
+		if err = c.StartTLS(&tls.Config{ServerName: host}); err != nil {
+			return fmt.Errorf("SMTP STARTTLS: %w", err)
 		}
 	}
 
@@ -123,5 +169,10 @@ func sendData(c *smtp.Client, from, to string, msg []byte) error {
 	if _, err = w.Write(msg); err != nil {
 		return err
 	}
-	return w.Close()
+	if err = w.Close(); err != nil {
+		return err
+	}
+	// Graceful QUIT surfaces a final server-side rejection that a bare Close
+	// would drop.
+	return c.Quit()
 }
