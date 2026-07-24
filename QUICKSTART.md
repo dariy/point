@@ -81,7 +81,6 @@ You can customize Point by editing the `.env` file.
 | `APP_URL` | (None) | The external URL of your blog (e.g., https://blog.example.com) |
 | `DATA_PATH` | `./data` | Directory where the database, photos, and backups are stored |
 | `PHOTO_LIBRARY_PATH` | (None) | Path to your existing photo library (mounted read-only) |
-| `SECRET_KEY` | (Auto) | Secret key for signing sessions (generated automatically if blank) |
 | `GEMINI_API_KEY` | (Empty) | Your Google Gemini API key for AI-powered photo analysis |
 | `LOG_LEVEL` | `INFO` | Logging detail level: DEBUG, INFO, WARN, or ERROR |
 | `APP_NAME` | `Point` | The name of your blog displayed in the UI |

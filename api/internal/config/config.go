@@ -13,7 +13,6 @@ type Config struct {
 	AppVersion  string `mapstructure:"APP_VERSION"`
 	AppEnv      string `mapstructure:"APP_ENV"`
 	Debug       bool   `mapstructure:"DEBUG"`
-	SecretKey   string `mapstructure:"SECRET_KEY"`
 	Host        string `mapstructure:"HOST"`
 	Port        int    `mapstructure:"PORT"`
 	DatabaseURL string `mapstructure:"DATABASE_URL"`

@@ -43,7 +43,6 @@ The app is configured via environment variables (or a `.env` file in the working
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | *(auto-generated)* | Session signing key — generated and persisted automatically |
 | `PORT` | `8000` | API listen port |
 | `APP_URL` | *(empty)* | Public URL of your blog (e.g. `https://blog.example.com`) — required for Instagram cross-posting and OAuth callbacks |
 | `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |

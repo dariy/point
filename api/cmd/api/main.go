@@ -1022,12 +1022,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Ensure a secret key is available for session signing.
-	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
-		slog.Error("failed to ensure secret key", "error", err)
-		os.Exit(1)
-	}
-
 	// Sync env-var secrets into blog_secrets so they're available at runtime.
 	if cfg.GeminiAPIKey != "" {
 		if err := svcs.Settings.SetSecret(ctx, "gemini_api_key", cfg.GeminiAPIKey); err != nil {

@@ -50,17 +50,9 @@ check_env() {
     source "$ENV_FILE"
     set +a
 
-    # Check required variables
-    if [ -z "${SECRET_KEY:-}" ] || [ "$SECRET_KEY" = "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY_64_CHARACTERS_OR_MORE" ]; then
-        log_error "SECRET_KEY not configured!"
-        log_info "Generate with: openssl rand -base64 48"
-        exit 1
-    fi
-
-    if [ -z "${SESSION_SECRET:-}" ] || [ "$SESSION_SECRET" = "CHANGE_THIS_TO_A_DIFFERENT_RANDOM_SECRET_KEY" ]; then
-        log_error "SESSION_SECRET not configured!"
-        exit 1
-    fi
+    # Sessions are opaque random tokens stored in the database, so there is no
+    # signing key to configure. SECRET_KEY/SESSION_SECRET used to be checked
+    # here; neither was ever read by the server.
 
     log_success "Environment configuration valid"
 }

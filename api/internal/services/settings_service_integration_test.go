@@ -5,8 +5,6 @@ package services
 import (
 	"context"
 	"testing"
-
-	"point-api/internal/config"
 )
 
 func TestSettingsService_CRUD(t *testing.T) {
@@ -138,65 +136,6 @@ func TestSettingsService_Secrets(t *testing.T) {
 		t.Errorf("expected new_val after upsert, got %q", v2)
 	}
 }
-
-func TestSettingsService_EnsureSecretKey_Generate(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	svc := NewSettingsService(repo)
-	ctx := context.Background()
-
-	cfg := &config.Config{} // SecretKey is empty
-	if err := svc.EnsureSecretKey(ctx, cfg); err != nil {
-		t.Fatalf("EnsureSecretKey: %v", err)
-	}
-	if cfg.SecretKey == "" {
-		t.Error("expected cfg.SecretKey to be populated")
-	}
-	if len(cfg.SecretKey) != 64 { // 32 bytes → 64 hex chars
-		t.Errorf("expected 64-char key, got %d", len(cfg.SecretKey))
-	}
-	// Persisted in blog_secrets.
-	stored, _ := svc.GetSecret(ctx, "_secret_key")
-	if stored != cfg.SecretKey {
-		t.Error("stored key does not match cfg.SecretKey")
-	}
-}
-
-func TestSettingsService_EnsureSecretKey_LoadExisting(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	svc := NewSettingsService(repo)
-	ctx := context.Background()
-
-	_ = svc.SetSecret(ctx, "_secret_key", "existing_key_value")
-
-	cfg := &config.Config{}
-	if err := svc.EnsureSecretKey(ctx, cfg); err != nil {
-		t.Fatalf("EnsureSecretKey: %v", err)
-	}
-	if cfg.SecretKey != "existing_key_value" {
-		t.Errorf("expected existing_key_value, got %q", cfg.SecretKey)
-	}
-}
-
-func TestSettingsService_EnsureSecretKey_EnvWins(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	svc := NewSettingsService(repo)
-	ctx := context.Background()
-
-	cfg := &config.Config{SecretKey: "env_key"}
-	if err := svc.EnsureSecretKey(ctx, cfg); err != nil {
-		t.Fatalf("EnsureSecretKey: %v", err)
-	}
-	if cfg.SecretKey != "env_key" {
-		t.Errorf("env key should win, got %q", cfg.SecretKey)
-	}
-}
-
-// The settings table is read several times per request, so the service caches
-// it whole. These cover the properties the cache has to hold.
-// See point-perf-settings-cache.
 
 func TestSettingsService_GetSettingWarmsCache(t *testing.T) {
 	repo := setupTestDB(t)
