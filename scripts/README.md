@@ -48,9 +48,9 @@ Point.
 
 ## Stress Testing
 
-- **run-stress.sh**, **stress-http.sh**, **stress-measure.sh**: Boot the app
-  against a dedicated stress-test database and measure query plans/timings for
-  heavy endpoints.
+- **stress-http.sh**, **stress-measure.sh**: Boot the app against a dedicated
+  stress-test database and measure query plans/timings for heavy endpoints.
+  Both expect the stress DB path baked into them; adjust for your machine.
 
 ## Misc
 
