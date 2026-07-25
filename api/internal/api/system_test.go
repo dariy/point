@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -897,4 +899,95 @@ func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"tasks":[]`) {
 		t.Errorf("expected an empty task list, got %s", rec.Body.String())
 	}
+}
+
+// Bulk import now runs on a worker pool. Results must still be complete and
+// attributed to the right file, and a batch containing the same photo twice
+// must import it once — the sequential loop's DB-only duplicate check could
+// not catch a within-batch duplicate, and concurrency makes that reachable.
+// See point-media-worker-pool.
+func TestSystemHandler_ImportSelectedPhotos_ParallelBatch(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+	libDir := t.TempDir()
+
+	// Ten distinct images (distinct bytes → distinct checksums), plus a copy
+	// of the first under another name, plus a path that does not exist.
+	const distinct = 10
+	var paths []string
+	for i := range distinct {
+		data := makeMinimalJPEGWithComment(t, fmt.Sprintf("photo-%d", i))
+		name := fmt.Sprintf("p%d.jpg", i)
+		if err := os.WriteFile(filepath.Join(libDir, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, name)
+	}
+	first, err := os.ReadFile(filepath.Join(libDir, "p0.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(libDir, "copy-of-p0.jpg"), first, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	paths = append(paths, "copy-of-p0.jpg", "missing.jpg")
+
+	settingsSvc := services.NewSettingsService(h.repo)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+
+	body, _ := json.Marshal(map[string][]string{"paths": paths})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ImportSelectedPhotos(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	var resp struct {
+		Imported int                      `json:"imported"`
+		Skipped  int                      `json:"skipped"`
+		Errors   []string                 `json:"errors"`
+		Items    []map[string]interface{} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if resp.Imported != distinct {
+		t.Errorf("imported = %d, want %d", resp.Imported, distinct)
+	}
+	if resp.Skipped != 1 {
+		t.Errorf("skipped = %d, want 1 (the within-batch duplicate)", resp.Skipped)
+	}
+	if len(resp.Items) != distinct {
+		t.Errorf("returned %d items, want %d", len(resp.Items), distinct)
+	}
+	// The one failure must name the file it belongs to, not another one.
+	if len(resp.Errors) != 1 {
+		t.Fatalf("errors = %v, want exactly one", resp.Errors)
+	}
+	if !strings.Contains(resp.Errors[0], "missing.jpg") {
+		t.Errorf("error attributed to the wrong file: %q", resp.Errors[0])
+	}
+}
+
+// makeMinimalJPEGWithComment returns a valid JPEG whose bytes differ per
+// comment, so a batch can contain genuinely distinct images (distinct
+// checksums) without needing distinct pixel data.
+func makeMinimalJPEGWithComment(t *testing.T, comment string) []byte {
+	t.Helper()
+	base := makeMinimalJPEG(t)
+	// Insert a COM segment (0xFFFE, big-endian length including the length
+	// bytes) straight after the SOI marker.
+	seg := []byte{0xff, 0xfe}
+	n := len(comment) + 2
+	seg = append(seg, byte(n>>8), byte(n))
+	seg = append(seg, comment...)
+
+	out := make([]byte, 0, len(base)+len(seg))
+	out = append(out, base[:2]...) // SOI
+	out = append(out, seg...)
+	out = append(out, base[2:]...)
+	return out
 }

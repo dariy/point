@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
@@ -673,6 +674,13 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	var imported, skipped int
 	errors := []string{}
 
+	// The walk collects and de-duplicates; the import runs on a pool. Same
+	// two-phase split as ImportSelectedPhotos, and for the same reasons:
+	// thumbnailing is the CPU-bound part, and settling duplicates up front
+	// keeps two identical files in one scan from both being imported.
+	var toImport []string
+	seen := map[string]bool{}
+
 	_ = filepath.WalkDir(importPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -699,18 +707,25 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 		checksum := hex.EncodeToString(h256.Sum(nil))
 
 		// Skip duplicates
-		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil {
+		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil || seen[checksum] {
 			skipped++
 			return nil
 		}
-
-		if _, importErr := h.mediaService.ImportFromPath(ctx, path); importErr != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), importErr))
-			return nil
-		}
-		imported++
+		seen[checksum] = true
+		toImport = append(toImport, path)
 		return nil
 	})
+
+	outcomes := services.ParallelImport(ctx, toImport, func(ctx context.Context, path string) (models.Medium, error) {
+		return h.mediaService.ImportFromPath(ctx, path)
+	})
+	for i, o := range outcomes {
+		if o.Err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(toImport[i]), o.Err))
+			continue
+		}
+		imported++
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"imported": imported,
@@ -819,6 +834,18 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 	errors := []string{}
 	importedItems := []map[string]interface{}{}
 
+	// Two phases. Resolving and checksumming is I/O-bound and settles which
+	// files are duplicates; importing is CPU-bound (thumbnailing) and is what
+	// benefits from a pool. Doing the duplicate check up front also closes a
+	// race the sequential loop never had: two identical files in one batch
+	// would otherwise both miss the DB lookup and both be imported.
+	type candidate struct {
+		absPath string
+		relPath string
+	}
+	var candidates []candidate
+	seen := map[string]bool{}
+
 	for _, relPath := range req.Paths {
 		absPath, joinErr := safeJoin(libraryRoot, relPath)
 		if joinErr != nil {
@@ -836,17 +863,23 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 		_ = f.Close()
 		checksum := hex.EncodeToString(h256.Sum(nil))
 
-		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil {
+		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil || seen[checksum] {
 			skipped++
 			continue
 		}
+		seen[checksum] = true
+		candidates = append(candidates, candidate{absPath: absPath, relPath: relPath})
+	}
 
-		m, importErr := h.mediaService.ImportFromPath(ctx, absPath)
-		if importErr != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(relPath), importErr))
+	outcomes := services.ParallelImport(ctx, candidates, func(ctx context.Context, cnd candidate) (models.Medium, error) {
+		return h.mediaService.ImportFromPath(ctx, cnd.absPath)
+	})
+	for i, o := range outcomes {
+		if o.Err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(candidates[i].relPath), o.Err))
 			continue
 		}
-		importedItems = append(importedItems, mediaToResponse(m))
+		importedItems = append(importedItems, mediaToResponse(o.Value))
 		imported++
 	}
 
