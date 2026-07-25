@@ -26,7 +26,6 @@ import (
 	"point-api/internal/repository"
 
 	"github.com/disintegration/imaging"
-	"github.com/rwcarlsen/goexif/exif"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
@@ -100,43 +99,6 @@ Return only valid JSON, no markdown or extra text.`
 func CalculateChecksum(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
-}
-
-func (s *MediaService) extractEXIF(r io.Reader) map[string]interface{} {
-	metadata := make(map[string]interface{})
-	x, err := exif.Decode(r)
-	if err != nil {
-		return metadata
-	}
-
-	// Helper to extract string tags
-	getString := func(tag exif.FieldName) {
-		val, err := x.Get(tag)
-		if err == nil {
-			// val.String() often includes quotes for strings, or is a rational/int.
-			// For a generic metadata map, we just take the string representation.
-			metadata[string(tag)] = sanitizeEXIFValue(strings.Trim(val.String(), "\""))
-		}
-	}
-
-	getString(exif.Make)
-	getString(exif.Model)
-	getString(exif.Software)
-	getString(exif.DateTimeOriginal)
-	getString(exif.Orientation)
-	getString(exif.ExposureTime)
-	getString(exif.FNumber)
-	getString(exif.ISOSpeedRatings)
-	getString(exif.FocalLength)
-
-	// Lat/Long
-	lat, long, err := x.LatLong()
-	if err == nil {
-		metadata["GPSLatitude"] = lat
-		metadata["GPSLongitude"] = long
-	}
-
-	return metadata
 }
 
 // thumbnailWidth returns the effective thumbnail width, preferring env config
@@ -528,11 +490,14 @@ func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (mode
 		return models.Medium{}, fmt.Errorf("get media: %w", err)
 	}
 
-	// Validate: all values must already be clean alphanumeric+space
+	// Validate: reject rather than silently rewrite, so an admin sees that
+	// their input was not stored verbatim. The accepted set is what
+	// sanitizeEXIFValue keeps — alphanumerics, space and the punctuation EXIF
+	// values legitimately carry.
 	sanitized := make(map[string]interface{}, len(p.Fields))
 	for k, v := range p.Fields {
 		if sanitizeEXIFValue(v) != v {
-			return models.Medium{}, fmt.Errorf("field %q contains disallowed characters: only alphanumeric and space allowed", k)
+			return models.Medium{}, fmt.Errorf("field %q contains disallowed characters", k)
 		}
 		sanitized[k] = v
 	}

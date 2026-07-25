@@ -232,6 +232,7 @@ EOF
     echo "PHOTO_LIBRARY_PATH=${PHOTO_LIB_PATH}" >> "$env_path"
     if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
       sed -i 's|# - PHOTO_LIBRARY_PATH=/photos|- PHOTO_LIBRARY_PATH=/photos|' "$INSTALL_DIR/docker-compose.yml"
+      # shellcheck disable=SC2016  # ${PHOTO_LIBRARY_PATH} must stay literal — compose expands it, not us
       sed -i 's|# - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro,z|- ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro,z|' "$INSTALL_DIR/docker-compose.yml"
     fi
   fi
@@ -271,12 +272,16 @@ install_via_docker() {
   chmod +x "${INSTALL_DIR}/update.sh"
   ok "Files saved to ${INSTALL_DIR}"
 
-  if [ "$TEST_MODE" = "true" ]; then
-    say "Test mode: configuring docker-compose to use localhost/point:dev"
-    sed -i 's|image: ghcr.io/dariy/point:latest|image: localhost/point:dev|' "${INSTALL_DIR}/docker-compose.yml"
-  fi
-
   write_env_file "${INSTALL_DIR}/.env"
+
+  if [ "$TEST_MODE" = "true" ]; then
+    say "Test mode: pointing docker-compose at localhost/point:dev"
+    # Via the IMAGE variable the compose file already honours
+    # (`image: ${IMAGE:-ghcr.io/dariy/point:latest}`), not a sed over the
+    # image line: that pattern never matched the ${IMAGE:-…} form, so --test
+    # silently ran the published release instead of the local build.
+    echo "IMAGE=localhost/point:dev" >> "${INSTALL_DIR}/.env"
+  fi
 
   say "Starting Point..."
   (cd "$INSTALL_DIR" && $COMPOSE up -d)
@@ -367,7 +372,8 @@ install_native() {
 
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local project_root="$(cd "$script_dir/.." && pwd)"
+  local project_root
+  project_root="$(cd "$script_dir/.." && pwd)"
 
   say "Installing to ${INSTALL_DIR}..."
   mkdir -p "$INSTALL_DIR" "$DATA_DIR"
@@ -458,10 +464,10 @@ prompt_account_setup() {
 
   local pass; local pass_confirm
   while true; do
-    printf "${BOLD}Password: ${NC}" >&2
+    printf '%sPassword: %s' "$BOLD" "$NC" >&2
     read -rs pass </dev/tty
     echo "" >&2
-    printf "${BOLD}Confirm Password: ${NC}" >&2
+    printf '%sConfirm Password: %s' "$BOLD" "$NC" >&2
     read -rs pass_confirm </dev/tty
     echo "" >&2
     if [ "$pass" = "$pass_confirm" ] && [ -n "$pass" ]; then
@@ -491,9 +497,11 @@ prompt_account_setup() {
       -d "{\"name\":\"${pass_hash}\",\"blog_title\":\"${title_j}\",\"author_name\":\"${name_j}\",\"email\":\"${email_j}\"}" \
       >/dev/null
   else
-    local email_arg=""
-    [ -n "$email" ] && email_arg="--email=$email"
-    (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
+    # An array, not an unquoted string: an empty email must contribute no
+    # argument at all, and quoting a plain "" would pass an empty one.
+    local email_args=()
+    [ -n "$email" ] && email_args=("--email=$email")
+    (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup "--title=$title" "--user=$name" "${email_args[@]}" "--password=$pass_hash")
     chown point:point "$DATA_DIR/point.db"* 2>/dev/null || true
   fi
   ok "Admin account created!"

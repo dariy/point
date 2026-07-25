@@ -942,7 +942,9 @@ func TestMediaHandler_UpdateEXIF_InvalidChars(t *testing.T) {
 		Content: []byte("data"), Filename: "doc.txt", MimeType: "text/plain",
 	})
 
-	body, _ := json.Marshal(map[string]string{"Make": "Canon/EOS"})
+	// Angle brackets are refused; "/" is not — it is legitimate in EXIF values
+	// (lens names, rationals). See point-quickstart-ci-exif-dedup.
+	body, _ := json.Marshal(map[string]string{"Make": "Canon<script>"})
 	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()

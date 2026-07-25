@@ -17,7 +17,6 @@ import (
 
 	"point-api/internal/config"
 
-	goexif "github.com/rwcarlsen/goexif/exif"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -600,9 +599,11 @@ func TestUploadFile_StoresOriginalMetadata(t *testing.T) {
 }
 
 func TestExtractEXIF_Sanitized(t *testing.T) {
+	// Angle brackets go; the parentheses and digits an EXIF value could
+	// legitimately contain stay. See point-quickstart-ci-exif-dedup.
 	dirty := "Canon <script>alert(1)</script>"
 	got := sanitizeEXIFValue(dirty)
-	want := "Canon scriptalert1script"
+	want := "Canon scriptalert(1)/script"
 	if got != want {
 		t.Errorf("sanitizeEXIFValue(%q) = %q; want %q", dirty, got, want)
 	}
@@ -662,12 +663,23 @@ func TestUpdateEXIF_ValidatesInput(t *testing.T) {
 		t.Errorf("valid value rejected: %v", err)
 	}
 
+	// "/" is legitimate in EXIF values (lens names, rationals) and is now
+	// accepted; the characters that could escape a JPEG header or a JSON
+	// context are still refused.
 	_, err = svc.UpdateEXIF(ctx, UpdateEXIFParams{
 		ID:     m.ID,
-		Fields: map[string]string{"Make": "Canon/EOS"},
+		Fields: map[string]string{"Make": "EF24-70mm f/2.8L"},
+	})
+	if err != nil {
+		t.Errorf("value with '/' rejected: %v", err)
+	}
+
+	_, err = svc.UpdateEXIF(ctx, UpdateEXIFParams{
+		ID:     m.ID,
+		Fields: map[string]string{"Make": "Canon<script>"},
 	})
 	if err == nil {
-		t.Error("expected error for value with '/'")
+		t.Error("expected error for value with angle brackets")
 	}
 }
 
@@ -702,17 +714,7 @@ func TestUpdateEXIF_UpdatesDBAndFile(t *testing.T) {
 	}
 
 	fullPath := filepath.Join(tmpDir, "media", m.OriginalPath)
-	f, err := os.Open(fullPath)
-	if err != nil {
-		t.Fatalf("open file: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	x, err := goexif.Decode(f)
-	if err != nil {
-		t.Fatalf("goexif decode: %v", err)
-	}
-	makeVal, _ := x.Get(goexif.Make)
-	if got := strings.Trim(makeVal.String(), "\""); got != "Sony" {
+	if got := readEXIFTags(t, fullPath)["Make"]; got != "Sony" {
 		t.Errorf("file Make = %q; want Sony", got)
 	}
 }

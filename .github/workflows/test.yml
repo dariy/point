@@ -147,3 +147,69 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f point-smoke || true
+
+  # The quickstart wizard is the largest bespoke-shell surface in the repo and
+  # has to keep working against every release, but nothing exercised it — a
+  # broken installer would only show up as a user report. This drives its
+  # non-interactive Docker path end to end against a locally built image.
+  quickstart-smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Shellcheck the wizard
+        run: shellcheck quickstart/install.sh quickstart/uninstall.sh quickstart/update.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --test rewrites the compose file to this exact tag, so the wizard runs
+      # against the code in this checkout rather than the published release.
+      - name: Build image as localhost/point:dev
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile
+          push: false
+          load: true
+          tags: localhost/point:dev
+
+      - name: Run the installer non-interactively
+        working-directory: quickstart
+        # install.sh's own wait_for_health polls /health for 60s and exits
+        # non-zero on timeout, so a wizard that starts nothing fails here.
+        run: bash install.sh --method=docker --non-interactive --test
+
+      - name: Verify --test used the locally built image
+        working-directory: quickstart
+        # Guards the bug this job was written against: --test used to sed the
+        # image line, which never matched the ${IMAGE:-…} form, so the smoke
+        # test would have silently exercised the published release.
+        run: |
+          set -euo pipefail
+          grep -q '^IMAGE=localhost/point:dev$' .env
+          docker compose config | grep -q 'image: localhost/point:dev' 
+
+      - name: Verify the installed instance serves
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:8001/health | tee /dev/stderr | grep -q '"status":"ok"'
+          # The setup wizard must be reachable on a fresh install — a container
+          # that boots but cannot be set up is not a working install.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/api/setup/status)" = "200"
+
+      - name: Container logs on failure
+        if: failure()
+        working-directory: quickstart
+        run: docker compose logs || true
+
+      - name: Uninstall cleanly
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          docker compose down -v
+          # The uninstaller ships alongside and is equally untested; at minimum
+          # it must parse and its --help must succeed.
+          bash uninstall.sh --help >/dev/null
