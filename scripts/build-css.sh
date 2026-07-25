@@ -123,3 +123,30 @@ if [ -d "$PLUGIN_SRC" ]; then
     bundle "$PLUGIN_CSS_OUT/$id.css" "$@"
   done
 fi
+
+# ── Content-hash manifest ───────────────────────────────────────────────────
+# Parity with the JS pipeline: record a content hash per bundle so the server
+# can serve each one under a hash-bearing URL and mark it immutable, instead of
+# the `?v=<build version>` query that invalidates every bundle on every deploy
+# even when its bytes are identical.
+#
+# No hashed copies are written — the hash lives only in the URL, and the server
+# maps `<name>.<hash>.css` back to `<name>.css` when serving. That keeps one
+# artifact per bundle on disk and leaves the "never edit generated CSS" rule
+# pointing at the same files as before.
+MANIFEST="$CSS_DIR/asset-manifest.json"
+{
+  echo "{"
+  first=1
+  for f in "$CSS_DIR"/light.css "$CSS_DIR"/main.css "$CSS_DIR"/viewer.css; do
+    [ -f "$f" ] || continue
+    name="$(basename "$f")"
+    hash="$(sha256sum "$f" | cut -c1-8)"
+    [ $first -eq 1 ] || echo ","
+    first=0
+    printf '  "%s": "%s"' "$name" "$hash"
+  done
+  echo ""
+  echo "}"
+} > "$MANIFEST"
+echo "Wrote $(basename "$MANIFEST")"

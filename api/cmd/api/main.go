@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -475,15 +476,30 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy — except
 	// for the esbuild code-split chunks under /assets/js/chunks/, whose names
 	// embed a content hash and so can never change meaning at a fixed URL.
-	// Those get the immutable treatment; the unhashed entry points (app.js, the
-	// p/* plugin bundles, the CSS bundles) keep revalidating.
+	// Those get the immutable treatment, as do content-addressed CSS bundle
+	// URLs whose hash matches what is currently on disk. The unhashed entry
+	// points — app.js, the p/* plugin bundles, and a CSS bundle requested under
+	// its plain name — keep revalidating.
+	//
+	// A hash that does NOT match (a client on a cached HTML shell from before a
+	// deploy) is still served the current bundle, because 404ing it would leave
+	// that page with no stylesheet at all — but it is served no-cache, so the
+	// client never pins today's bytes under yesterday's URL for a year.
+	cssManifest := loadCSSManifest(filepath.Join(cfg.FrontendDir, "css"))
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			p := c.Request().URL.Path
 			switch {
 			case strings.HasPrefix(p, "/assets/js/chunks/"):
 				c.Response().Header().Set("Cache-Control", immutableCacheControl)
-			case strings.HasPrefix(p, "/assets/js/"), strings.HasPrefix(p, "/assets/css/"):
+			case strings.HasPrefix(p, "/assets/css/"):
+				name := path.Base(p)
+				if base, hashed := stripCSSBundleHash(name); hashed && cssManifest[base] == name {
+					c.Response().Header().Set("Cache-Control", immutableCacheControl)
+				} else {
+					c.Response().Header().Set("Cache-Control", "no-cache")
+				}
+			case strings.HasPrefix(p, "/assets/js/"):
 				c.Response().Header().Set("Cache-Control", "no-cache")
 			}
 			return next(c)
@@ -504,6 +520,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	indexHTMLAdmin := ""
 	if b, err := os.ReadFile(indexHTML); err == nil {
 		base := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+		// Rewrite the CSS bundle links to their content-addressed URLs so an
+		// unchanged bundle keeps the same URL across deploys and can be cached
+		// forever. Without a manifest the ?v=<build version> links stay, which
+		// still busts correctly on deploy — just on every deploy.
+		for name, hashed := range cssManifest {
+			base = strings.ReplaceAll(base,
+				"/assets/css/"+name+"?v="+cfg.AppVersion,
+				"/assets/css/"+hashed)
+		}
 		// Public shell. Note: an inline <script> injected via HEAD_HTML is NOT
 		// covered by the CSP script-src hashes (those are computed from the
 		// on-disk shell), so deployments should inject external scripts and
@@ -721,6 +746,23 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		vendorDir := filepath.Join(frontendDir, "vendor")
 
 		if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
+			// Content-addressed bundle URLs (light.<hash>.css) resolve back to
+			// the single on-disk bundle. Registered before the static route so
+			// the more specific pattern wins. See cssBundleRe.
+			e.GET("/assets/css/:name", func(c echo.Context) error {
+				name := c.Param("name")
+				if base, ok := stripCSSBundleHash(name); ok {
+					name = base
+				}
+				p := filepath.Clean(filepath.Join(cssDir, filepath.Base(name)))
+				if !strings.HasPrefix(p, cssDir+string(filepath.Separator)) {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+				if _, err := os.Stat(p); err != nil {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+				return c.File(p)
+			})
 			e.Static("/assets/css", cssDir)
 		}
 		if jsDir != "" {
@@ -1135,6 +1177,46 @@ func neutralizeSVG(c echo.Context, path string) {
 	c.Response().Header().Set("Content-Security-Policy",
 		"default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
+}
+
+// cssBundleRe matches a content-addressed CSS bundle URL — "light.81e2e81c.css"
+// → base "light.css", hash "81e2e81c". The hash exists only in the URL; one
+// bundle is written to disk under its plain name, and the server maps back.
+var cssBundleRe = regexp.MustCompile(`^([a-zA-Z0-9_-]+)\.([0-9a-f]{8})\.css$`)
+
+// stripCSSBundleHash turns a hashed bundle filename back into the on-disk name,
+// reporting whether the name was hashed at all.
+func stripCSSBundleHash(name string) (string, bool) {
+	m := cssBundleRe.FindStringSubmatch(name)
+	if m == nil {
+		return name, false
+	}
+	return m[1] + ".css", true
+}
+
+// loadCSSManifest reads the content hashes scripts/build-css.sh records for the
+// CSS bundles, mapping "light.css" → "light.81e2e81c.css". An absent or
+// unreadable manifest yields nil, and the shell falls back to the plain
+// ?v=<build version> URLs — a missing manifest must never mean no stylesheet.
+func loadCSSManifest(cssDir string) map[string]string {
+	b, err := os.ReadFile(filepath.Join(cssDir, "asset-manifest.json"))
+	if err != nil {
+		return nil
+	}
+	var hashes map[string]string
+	if err := json.Unmarshal(b, &hashes); err != nil {
+		slog.Warn("css asset manifest is unreadable; falling back to versioned URLs", "error", err)
+		return nil
+	}
+	out := make(map[string]string, len(hashes))
+	for name, hash := range hashes {
+		base, ok := strings.CutSuffix(name, ".css")
+		if !ok || !regexp.MustCompile(`^[0-9a-f]{8}$`).MatchString(hash) {
+			continue
+		}
+		out[name] = base + "." + hash + ".css"
+	}
+	return out
 }
 
 // immutableCacheControl is the header for content-addressed URLs: the name

@@ -895,3 +895,93 @@ func TestSetupEcho_RateLimitSkipsAssets(t *testing.T) {
 		}
 	}
 }
+
+func TestStripCSSBundleHash(t *testing.T) {
+	for name, want := range map[string]struct {
+		base   string
+		hashed bool
+	}{
+		"light.81e2e81c.css":  {"light.css", true},
+		"main.14ed7c52.css":   {"main.css", true},
+		"light.css":           {"light.css", false},
+		"light.81E2E81C.css":  {"light.81E2E81C.css", false}, // uppercase is not our format
+		"light.81e2e81.css":   {"light.81e2e81.css", false},  // 7 chars
+		"light.81e2e81cc.css": {"light.81e2e81cc.css", false},
+		"asset-manifest.json": {"asset-manifest.json", false},
+	} {
+		base, hashed := stripCSSBundleHash(name)
+		if base != want.base || hashed != want.hashed {
+			t.Errorf("stripCSSBundleHash(%q) = %q, %v; want %q, %v", name, base, hashed, want.base, want.hashed)
+		}
+	}
+}
+
+// A content-addressed CSS URL is cacheable forever, but only when its hash
+// matches what is on disk — otherwise a client on a stale HTML shell would pin
+// today's bytes under yesterday's URL for a year.
+// See point-css-esbuild-pipeline.
+func TestSetupEcho_HashedCSSBundle(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	body := []byte("body{color:red}")
+	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), body, 0o644)
+	_ = os.WriteFile(filepath.Join(cssDir, "asset-manifest.json"),
+		[]byte(`{"light.css":"81e2e81c"}`), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	// Matching hash: served, immutable.
+	rec := get("/assets/css/light.81e2e81c.css")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hashed URL status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != string(body) {
+		t.Errorf("hashed URL served %q, want %q", rec.Body.String(), body)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("hashed URL Cache-Control = %q, want %q", cc, immutableCacheControl)
+	}
+
+	// Stale hash: still served (a page with no stylesheet is worse), but must
+	// not be cached under that URL.
+	rec = get("/assets/css/light.deadbeef.css")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stale-hash URL status = %d, want 200", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("stale-hash URL Cache-Control = %q, want no-cache", cc)
+	}
+
+	// Plain name keeps revalidating.
+	rec = get("/assets/css/light.css")
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("plain URL Cache-Control = %q, want no-cache", cc)
+	}
+}
+
+// Without a manifest the shell must still ship working stylesheet links.
+func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), []byte("body{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"),
+		[]byte(`<html><head><link href="/assets/css/light.css?v=__BUILD_VERSION__"></head><body></body></html>`), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !strings.Contains(rec.Body.String(), "/assets/css/light.css?v="+cfg.AppVersion) {
+		t.Errorf("shell lost its stylesheet link without a manifest:\n%s", rec.Body.String())
+	}
+}
