@@ -18,6 +18,9 @@ type SchedulerService struct {
 	mediaService     *MediaService
 	settingsService  *SettingsService
 	instagramService *InstagramService
+	// health records every task outcome for the admin health view. Nil is
+	// valid and simply records nothing.
+	health *HealthRegistry
 }
 
 func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService, instagramService *InstagramService) *SchedulerService {
@@ -29,6 +32,13 @@ func NewSchedulerService(authService *AuthService, postService *PostService, sys
 		settingsService:  settingsService,
 		instagramService: instagramService,
 	}
+}
+
+// WithHealth attaches a health registry so task outcomes are visible to the
+// admin health endpoint. Returns the receiver for chaining at construction.
+func (s *SchedulerService) WithHealth(h *HealthRegistry) *SchedulerService {
+	s.health = h
+	return s
 }
 
 func (s *SchedulerService) Start(ctx context.Context) {
@@ -105,9 +115,15 @@ func (s *SchedulerService) runTask(ctx context.Context, name string, task func(c
 		if r := recover(); r != nil {
 			slog.Error("scheduler task panicked",
 				"task", name, "panic", r, "stack", string(debug.Stack()))
+			// A panic is a failure like any other as far as the admin view is
+			// concerned — recording it here is why the health data cannot
+			// silently miss the worst kind of outcome.
+			s.health.Record(name, fmt.Errorf("panic: %v", r))
 		}
 	}()
-	if err := task(ctx); err != nil {
+	err := task(ctx)
+	s.health.Record(name, err)
+	if err != nil {
 		slog.Error("scheduler task failed", "task", name, "error", err)
 	}
 }
@@ -175,4 +191,10 @@ func (s *SchedulerService) runDaily(ctx context.Context, name string, hour int, 
 			s.runTask(ctx, name, task)
 		}
 	}
+}
+
+// RunTaskForTest exposes the task choke point so wiring tests in another
+// package can verify that outcomes reach the shared health registry.
+func (s *SchedulerService) RunTaskForTest(ctx context.Context, name string, task func(context.Context) error) {
+	s.runTask(ctx, name, task)
 }

@@ -272,6 +272,7 @@ type AppServices struct {
 	System    *services.SystemService
 	Cache     *services.CacheService
 	Scheduler *services.SchedulerService
+	Health    *services.HealthRegistry
 	Theme     *services.ThemeService
 	Timeline  *services.TimelineService
 	Instagram *services.InstagramService
@@ -283,7 +284,10 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
 	instagramService := services.NewInstagramService(settingsService)
-	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL)
+	// One registry, shared by everything that runs work outside a request, so
+	// the admin health view has a single source rather than one per service.
+	healthRegistry := services.NewHealthRegistry()
+	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).WithHealth(healthRegistry)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
@@ -291,7 +295,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -303,6 +307,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		System:    systemService,
 		Cache:     cacheService,
 		Scheduler: schedulerService,
+		Health:    healthRegistry,
 		Theme:     themeService,
 		Timeline:  timelineService,
 		Instagram: instagramService,
@@ -339,13 +344,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
-	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo)
+	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo).WithHealth(svcs.Health)
 	go remarkSupervisor.Start()
 
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)

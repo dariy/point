@@ -985,3 +985,35 @@ func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
 		t.Errorf("shell lost its stylesheet link without a manifest:\n%s", rec.Body.String())
 	}
 }
+
+// The health endpoint must be registered and behind auth — it reports internal
+// job state and error strings. See point-system-health-admin.
+func TestSetupEcho_HealthEndpointIsAuthed(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+	if svcs.Health == nil {
+		t.Fatal("initServices did not create a health registry")
+	}
+	e := setupEcho(cfg, repo, svcs)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/system/health", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated /api/system/health = %d, want 401", rec.Code)
+	}
+}
+
+// The registry initServices builds must be the one the scheduler and the post
+// service record into — otherwise the endpoint reports an empty list forever.
+func TestInitServices_HealthRegistryIsShared(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+
+	// Drive a task through the scheduler's choke point and confirm it lands in
+	// the registry the handler was given.
+	svcs.Scheduler.RunTaskForTest(context.Background(), "probe", func(context.Context) error { return nil })
+	snap := svcs.Health.Snapshot()
+	if len(snap) != 1 || snap[0].Name != "probe" {
+		t.Fatalf("scheduler outcomes did not reach the shared registry: %+v", snap)
+	}
+}

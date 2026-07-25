@@ -43,6 +43,62 @@ type SystemHandler struct {
 	dataPath        string
 	logPath         string
 	appVersion      string
+	// health is the background-job outcome registry surfaced by GetHealth.
+	// Nil is valid: the endpoint then reports no jobs.
+	health *services.HealthRegistry
+}
+
+// WithHealth attaches the background-job health registry. A setter rather than
+// another constructor parameter — NewSystemHandler already takes ten.
+func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
+	h.health = r
+	return h
+}
+
+// GetHealth reports the last outcome of every background job: the scheduled
+// tasks, Instagram cross-posts and the comments sidecar.
+//
+// This is the whole of Point's runtime observability, and deliberately so —
+// a self-hosted single binary does not want a Prometheus. The question it
+// answers is "is anything quietly broken", which nothing short of reading the
+// request log could answer before.
+//
+// The data is per process: a restart clears it, and jobs that have not run yet
+// in this process are absent rather than reported as failing.
+func (h *SystemHandler) GetHealth(c echo.Context) error {
+	tasks := h.health.Snapshot()
+	out := make([]map[string]any, 0, len(tasks))
+	degraded := 0
+	for _, t := range tasks {
+		healthy := t.Healthy()
+		if !healthy {
+			degraded++
+		}
+		entry := map[string]any{
+			"name":     t.Name,
+			"healthy":  healthy,
+			"runs":     t.Runs,
+			"failures": t.Failures,
+		}
+		// Zero times are omitted rather than serialized as year 1 — "never"
+		// and "at the epoch" must not look the same in the UI.
+		if !t.LastRun.IsZero() {
+			entry["last_run"] = t.LastRun
+		}
+		if !t.LastSuccess.IsZero() {
+			entry["last_success"] = t.LastSuccess
+		}
+		if t.LastError != "" {
+			entry["last_error"] = t.LastError
+			entry["last_error_at"] = t.LastErrorAt
+		}
+		out = append(out, entry)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"tasks":    out,
+		"degraded": degraded,
+		"uptime":   int64(time.Since(startTime).Seconds()),
+	})
 }
 
 var startTime = time.Now()

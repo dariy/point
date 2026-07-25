@@ -41,6 +41,16 @@ type PostService struct {
 	policy           *bluemonday.Policy
 	viewBuffer       map[int64]int
 	viewMu           sync.Mutex
+	// health records background cross-post outcomes for the admin health
+	// view. Nil is valid and records nothing.
+	health *HealthRegistry
+}
+
+// WithHealth attaches a health registry so background cross-post outcomes are
+// visible to the admin health endpoint.
+func (s *PostService) WithHealth(h *HealthRegistry) *PostService {
+	s.health = h
+	return s
 }
 
 func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, tagService *TagService, appURL string) *PostService {
@@ -920,11 +930,14 @@ func (s *PostService) crossPostToInstagramAsync(postID int64) {
 		if r := recover(); r != nil {
 			slog.Error("instagram cross-post panicked",
 				"post_id", postID, "panic", r, "stack", string(debug.Stack()))
+			s.health.Record(healthTaskInstagramCrossPost, fmt.Errorf("panic: %v", r))
 		}
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
-	if err := s.CrossPostToInstagram(ctx, postID); err != nil {
+	err := s.CrossPostToInstagram(ctx, postID)
+	s.health.Record(healthTaskInstagramCrossPost, err)
+	if err != nil {
 		slog.Error("instagram cross-post failed", "post_id", postID, "error", err)
 	}
 }

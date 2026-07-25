@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -815,5 +816,85 @@ func TestSystemHandler_GetLogs_ManyLines(t *testing.T) {
 	err := sh.GetLogs(e.NewContext(req, rec))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// The health endpoint is Point's whole runtime observability surface.
+// See point-system-health-admin.
+func TestSystemHandler_GetHealth(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+
+	registry := services.NewHealthRegistry()
+	registry.Record("daily backup", nil)
+	registry.Record("session cleanup", errors.New("db is gone"))
+	h = h.WithHealth(registry)
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/health", nil), rec)
+	if err := h.GetHealth(c); err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp struct {
+		Degraded int `json:"degraded"`
+		Uptime   int `json:"uptime"`
+		Tasks    []struct {
+			Name        string `json:"name"`
+			Healthy     bool   `json:"healthy"`
+			Runs        int64  `json:"runs"`
+			Failures    int64  `json:"failures"`
+			LastError   string `json:"last_error"`
+			LastRun     string `json:"last_run"`
+			LastSuccess string `json:"last_success"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Tasks) != 2 {
+		t.Fatalf("got %d tasks, want 2", len(resp.Tasks))
+	}
+	if resp.Degraded != 1 {
+		t.Errorf("degraded = %d, want 1", resp.Degraded)
+	}
+	// Name-ordered.
+	if resp.Tasks[0].Name != "daily backup" || !resp.Tasks[0].Healthy {
+		t.Errorf("first task = %+v, want a healthy \"daily backup\"", resp.Tasks[0])
+	}
+	if resp.Tasks[1].Healthy || resp.Tasks[1].LastError != "db is gone" {
+		t.Errorf("second task = %+v, want unhealthy with the recorded error", resp.Tasks[1])
+	}
+	// A job that has never succeeded must not report a zero-time success —
+	// "never" and "at the epoch" must not look the same.
+	if resp.Tasks[1].LastSuccess != "" {
+		t.Errorf("never-successful task reported last_success = %q", resp.Tasks[1].LastSuccess)
+	}
+	if resp.Tasks[1].LastRun == "" {
+		t.Error("failed task should still report last_run")
+	}
+}
+
+// No registry attached (or nothing has run yet) must be an empty report, not
+// an error and not a crash.
+func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/health", nil), rec)
+	if err := h.GetHealth(c); err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"tasks":[]`) {
+		t.Errorf("expected an empty task list, got %s", rec.Body.String())
 	}
 }

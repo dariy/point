@@ -22,6 +22,19 @@ type RemarkSupervisor struct {
 	mu       sync.Mutex
 	cancel   context.CancelFunc
 	done     chan struct{} // closed when the current process has fully exited
+	// health reports the sidecar's state to the admin health view. Nil is
+	// valid and records nothing.
+	health *HealthRegistry
+}
+
+// healthTaskRemark42 is the registry key for the comments sidecar.
+const healthTaskRemark42 = "remark42 supervisor"
+
+// WithHealth attaches a health registry so sidecar starts, crashes and restarts
+// are visible to the admin health endpoint.
+func (s *RemarkSupervisor) WithHealth(h *HealthRegistry) *RemarkSupervisor {
+	s.health = h
+	return s
 }
 
 func NewRemarkSupervisor(settings *SettingsService, repo repository.Repository) *RemarkSupervisor {
@@ -194,12 +207,14 @@ func (s *RemarkSupervisor) startLocked() {
 
 	if err := cmd.Start(); err != nil {
 		slog.Error("RemarkSupervisor: failed to start remark42", "err", err)
+		s.health.Record(healthTaskRemark42, fmt.Errorf("failed to start: %w", err))
 		return
 	}
 	s.cmd = cmd
 	done := make(chan struct{})
 	s.done = done
 	slog.Info("RemarkSupervisor: started remark42", "pid", cmd.Process.Pid)
+	s.health.Record(healthTaskRemark42, nil)
 
 	go func() {
 		err := cmd.Wait()
@@ -208,6 +223,9 @@ func (s *RemarkSupervisor) startLocked() {
 		if ctx.Err() != nil {
 			return // intentional stop (Restart cancelled the context)
 		}
+		// An unexpected exit is the failure an operator most wants to see:
+		// comments quietly stop working and nothing else says so.
+		s.health.Record(healthTaskRemark42, fmt.Errorf("exited unexpectedly: %v", err))
 		// Crash: relaunch so comments come back without a container restart.
 		// ponytail: fixed 5s backoff; make it exponential if it ever flaps hard.
 		time.Sleep(5 * time.Second)
