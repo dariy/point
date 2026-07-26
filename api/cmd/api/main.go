@@ -490,19 +490,32 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// deploy) is still served the current bundle, because 404ing it would leave
 	// that page with no stylesheet at all — but it is served no-cache, so the
 	// client never pins today's bytes under yesterday's URL for a year.
+	//
+	// This also rewrites a content-addressed bundle URL back to the plain
+	// on-disk name, and so runs as Pre — before routing — rather than as a
+	// route of its own. A `/assets/css/:name` route would claim the whole
+	// /assets/css/ subtree from e.Static and take the files in it down with
+	// it, including the runtime-generated common/theme.css.
 	cssManifest := loadCSSManifest(filepath.Join(cfg.FrontendDir, "css"))
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			p := c.Request().URL.Path
+			r := c.Request()
+			p := r.URL.Path
 			switch {
 			case strings.HasPrefix(p, "/assets/js/chunks/"):
 				c.Response().Header().Set("Cache-Control", immutableCacheControl)
 			case strings.HasPrefix(p, "/assets/css/"):
-				name := path.Base(p)
-				if base, hashed := stripCSSBundleHash(name); hashed && cssManifest[base] == name {
-					c.Response().Header().Set("Cache-Control", immutableCacheControl)
-				} else {
-					c.Response().Header().Set("Cache-Control", "no-cache")
+				c.Response().Header().Set("Cache-Control", "no-cache")
+				// Only bundles sit directly in /assets/css; a hash anywhere
+				// deeper is part of some partial's real filename, not ours.
+				if path.Dir(p) != "/assets/css" {
+					break
+				}
+				if base, hashed := stripCSSBundleHash(path.Base(p)); hashed {
+					if cssManifest[base] == path.Base(p) {
+						c.Response().Header().Set("Cache-Control", immutableCacheControl)
+					}
+					r.URL.Path = "/assets/css/" + base
 				}
 			case strings.HasPrefix(p, "/assets/js/"):
 				c.Response().Header().Set("Cache-Control", "no-cache")
@@ -751,23 +764,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		vendorDir := filepath.Join(frontendDir, "vendor")
 
 		if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
-			// Content-addressed bundle URLs (light.<hash>.css) resolve back to
-			// the single on-disk bundle. Registered before the static route so
-			// the more specific pattern wins. See cssBundleRe.
-			e.GET("/assets/css/:name", func(c echo.Context) error {
-				name := c.Param("name")
-				if base, ok := stripCSSBundleHash(name); ok {
-					name = base
-				}
-				p := filepath.Clean(filepath.Join(cssDir, filepath.Base(name)))
-				if !strings.HasPrefix(p, cssDir+string(filepath.Separator)) {
-					return echo.NewHTTPError(http.StatusNotFound, "not found")
-				}
-				if _, err := os.Stat(p); err != nil {
-					return echo.NewHTTPError(http.StatusNotFound, "not found")
-				}
-				return c.File(p)
-			})
+			// Serves the whole tree: the bundles at the top level plus the
+			// subdirectories under it, notably common/theme.css, which the
+			// theme service rewrites at runtime. Content-addressed bundle URLs
+			// (light.<hash>.css) have already been rewritten to the plain
+			// on-disk name by the Pre middleware above.
 			e.Static("/assets/css", cssDir)
 		}
 		if jsDir != "" {

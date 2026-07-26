@@ -967,6 +967,59 @@ func TestSetupEcho_HashedCSSBundle(t *testing.T) {
 	}
 }
 
+// Hashed-bundle resolution must not cost us the rest of the /assets/css tree.
+// A `/assets/css/:name` route claimed the whole subtree from e.Static and
+// flattened multi-segment paths through filepath.Base, which 404'd every
+// partial under a subdirectory — including common/theme.css, the file the
+// theme service rewrites at runtime, so every light/dark theme lost its
+// tokens — while happily serving a bundle under any made-up prefix.
+func TestSetupEcho_CSSSubdirectoriesStillServed(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(filepath.Join(cssDir, "common"), 0o755)
+	theme := []byte(":root{--bg-primary:#fff}")
+	_ = os.WriteFile(filepath.Join(cssDir, "common", "theme.css"), theme, 0o644)
+	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), []byte("body{color:red}"), 0o644)
+	_ = os.WriteFile(filepath.Join(cssDir, "asset-manifest.json"),
+		[]byte(`{"light.css":"81e2e81c"}`), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	// The active theme is the whole point: it must be served, with its bytes.
+	rec := get("/assets/css/common/theme.css")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("common/theme.css status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != string(theme) {
+		t.Errorf("common/theme.css served %q, want %q", rec.Body.String(), theme)
+	}
+	// It changes at runtime under a fixed URL, so it must never go immutable.
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("common/theme.css Cache-Control = %q, want no-cache", cc)
+	}
+
+	// A subdirectory path must resolve within that subdirectory, not collapse
+	// to its last segment and pick up a same-named bundle from the top level.
+	if rec := get("/assets/css/common/light.css"); rec.Code != http.StatusNotFound {
+		t.Errorf("common/light.css status = %d, want 404 (must not alias the bundle)", rec.Code)
+	}
+	if rec := get("/assets/css/does/not/exist/light.css"); rec.Code != http.StatusNotFound {
+		t.Errorf("bogus-prefix light.css status = %d, want 404", rec.Code)
+	}
+
+	// A hash is only ours at the top level; deeper it is part of a real name.
+	if rec := get("/assets/css/common/theme.81e2e81c.css"); rec.Code != http.StatusNotFound {
+		t.Errorf("hashed subdirectory path status = %d, want 404", rec.Code)
+	}
+}
+
 // Without a manifest the shell must still ship working stylesheet links.
 func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
 	repo, cfg := newEchoWithRepo(t)
