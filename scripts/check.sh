@@ -1,8 +1,9 @@
 #!/bin/bash
 # Full quality gate: lint, tests, vulnerability scan.
-# Usage: ./scripts/check.sh [--fix] [--short]
+# Usage: ./scripts/check.sh [--fix] [--short] [--lint]
 #   --fix    Pass --fix to golangci-lint (auto-fixes where possible)
 #   --short  Skip long-running integration tests
+#   --lint   Lint only — skip vet, tests and the vuln scan (`npm run lint`)
 
 set -eo pipefail
 
@@ -11,10 +12,12 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 FIX_FLAG=""
 SHORT_FLAG=""
+LINT_ONLY=""
 for arg in "$@"; do
     case $arg in
         --fix)   FIX_FLAG="--fix" ;;
         --short) SHORT_FLAG="--short" ;;
+        --lint)  LINT_ONLY=1 ;;
     esac
 done
 
@@ -48,6 +51,17 @@ run_step "JS lint" bash -c "
     [ -x node_modules/.bin/eslint ] || npm ci --no-audit --no-fund
     node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
 "
+
+if [ -n "$LINT_ONLY" ]; then
+    if [ ${#FAIL[@]} -gt 0 ]; then
+        echo ""
+        for s in "${FAIL[@]}"; do echo "  FAIL  $s"; done
+        exit 1
+    fi
+    echo ""
+    echo "  Linting passed."
+    exit 0
+fi
 
 # ── Go vet ────────────────────────────────────────────────────────────────────
 run_step "Go vet" bash -c "

@@ -4,7 +4,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "lint": "./scripts/lint.sh",
+    "lint": "./scripts/check.sh --lint",
     "build": "./scripts/rebuild.sh",
     "test": "./scripts/run-tests.sh",
     "test:frontend": "node --test frontend/test/*.test.js"

@@ -539,7 +539,7 @@ func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
 	e := setupEcho(cfg, repo, svcs)
 
 	req := httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil)
-	req.Host = "www.Point.Photos"
+	req.Host = "www.Example.Com"
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -547,8 +547,8 @@ func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
 		t.Fatalf("manifest is not valid JSON: %v", err)
 	}
-	if m["name"] != "point.photos" || m["short_name"] != "point.photos" {
-		t.Errorf("expected name/short_name point.photos, got %v/%v", m["name"], m["short_name"])
+	if m["name"] != "example.com" || m["short_name"] != "example.com" {
+		t.Errorf("expected name/short_name example.com, got %v/%v", m["name"], m["short_name"])
 	}
 	if m["display"] != "fullscreen" {
 		t.Errorf("other manifest keys should survive, got display=%v", m["display"])
@@ -557,13 +557,13 @@ func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
 
 func TestSiteNameFromHost(t *testing.T) {
 	cases := map[string]string{
-		"darii.net":         "darii.net",
-		"point.photos:8001": "point.photos",
-		"www.point.photos":  "point.photos",
-		"POINT.photos":      "point.photos",
-		"localhost:8001":    "localhost",
-		"":                  "",
-		"  ":                "",
+		"example.org":      "example.org",
+		"example.com:8001": "example.com",
+		"www.example.com":  "example.com",
+		"EXAMPLE.com":      "example.com",
+		"localhost:8001":   "localhost",
+		"":                 "",
+		"  ":               "",
 	}
 	for host, want := range cases {
 		if got := siteNameFromHost(host); got != want {

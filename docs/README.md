@@ -51,4 +51,3 @@ One page per plugin in the registry — [plugins/](./plugins/) (index:
 
 - [GitHub Repository](https://github.com/dariy/point)
 - [Quickstart Guide](../QUICKSTART.md)
-- [Production Setup](../scripts/SETUP-PRODUCTION.md)

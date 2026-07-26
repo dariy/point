@@ -106,7 +106,7 @@ func isGuestRequest(c echo.Context) bool {
 // visibilityCache emits a visibility-aware Cache-Control on a public read route
 // so a Cloudflare Cache Rule can edge-cache the anonymous response while never
 // storing an authenticated one — the HTML/API analogue of serveSimplifiedMedia's
-// media caching (see point-hosting docs/08-reddit-flood-prep.md). A guest GET
+// media caching, for surviving a traffic spike behind a CDN. A guest GET
 // gets `public, max-age=60`; everything else (authenticated reads, any write)
 // gets private,no-store so a per-user response is never stored at the edge even
 // if the CF rule misfires. The header is set before the handler runs because
@@ -247,7 +247,7 @@ func resolveJSDir(frontendDir string, debug bool) string {
 }
 
 // siteNameFromHost turns a request Host into the name an installed PWA shows
-// under its icon: "www.Point.Photos:8001" → "point.photos". Returns "" when the
+// under its icon: "www.Example.Com:8001" → "example.com". Returns "" when the
 // host is unusable, in which case the manifest's own name is kept.
 func siteNameFromHost(host string) string {
 	h := strings.ToLower(strings.TrimSpace(host))
@@ -815,9 +815,9 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		manifestPath := filepath.Join(cfg.FrontendDir, "manifest.webmanifest")
 		e.GET("/manifest.webmanifest", func(c echo.Context) error {
 			c.Response().Header().Set("Content-Type", "application/manifest+json")
-			// The same image serves several sites (darii.net, point.photos), so
-			// the installed-app name comes from the host the manifest was
-			// fetched from rather than the file's placeholder name.
+			// One image can serve several sites, so the installed-app name comes
+			// from the host the manifest was fetched from rather than the file's
+			// placeholder name.
 			raw, err := os.ReadFile(manifestPath)
 			if err != nil {
 				return c.File(manifestPath)
