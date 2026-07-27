@@ -251,7 +251,6 @@
 .site-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
-    padding-left: var(--spacing-sm);
     margin: 0;
     transition: color var(--transition-theme);
 }
