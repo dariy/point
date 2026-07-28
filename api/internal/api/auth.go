@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -16,8 +15,6 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/go-pkgz/auth/v2/token"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
@@ -57,14 +54,18 @@ func GenerateToken() string {
 // scheme (direct TLS, or X-Forwarded-Proto from our trusted reverse proxy) when
 // it is unset. Erring toward Secure only ever tightens the cookie, never loosens
 // it, so a spoofed X-Forwarded-Proto can't strip the flag on an HTTPS deployment.
-func (h *AuthHandler) secureCookie(c echo.Context) bool {
-	if strings.HasPrefix(h.cfg.AppURL, "https://") {
+func secureCookieFor(cfg *config.Config, c echo.Context) bool {
+	if strings.HasPrefix(cfg.AppURL, "https://") {
 		return true
 	}
 	if c.IsTLS() {
 		return true
 	}
 	return c.Request().Header.Get(echo.HeaderXForwardedProto) == "https"
+}
+
+func (h *AuthHandler) secureCookie(c echo.Context) bool {
+	return secureCookieFor(h.cfg, c)
 }
 
 func (h *AuthHandler) Login(c echo.Context) error {
@@ -158,6 +159,18 @@ func (h *AuthHandler) Me(c echo.Context) error {
 		username = s.Username
 		displayName = s.DisplayName
 		email = s.Email
+
+		// Reissue the remark42 bridge cookie when it has gone missing or stale.
+		// Login is not a reliable enough hook on its own: sessions predating the
+		// bridge, and passkey logins from before they issued it, leave the owner
+		// authenticated to Point but anonymous in the comments widget — with no
+		// login button that could fix it, since remark42 has no Point provider.
+		// The admin SPA calls this endpoint on every load, so the session heals
+		// itself without a logout/login round trip. API-key principals are
+		// skipped: there is no browser session to bridge.
+		if remark42CookieStale(c) {
+			IssueRemark42Cookies(c, h.repo, s.UserID, s.DisplayName, s.Username, s.ExpiresAt, h.secureCookie(c))
+		}
 	} else if k, ok := user.(models.GetAPIKeyByHashRow); ok {
 		username = k.Username
 		displayName = k.DisplayName
@@ -386,98 +399,9 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 }
 
 func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expiresAt time.Time) {
-	secret := os.Getenv("REMARK_SECRET")
-	if secret == "" {
-		return
-	}
-	svc := token.NewService(token.Opts{
-		SecretReader: token.SecretFunc(func(id string) (string, error) {
-			return secret, nil
-		}),
-		CookieDuration: time.Until(expiresAt),
-		Issuer:         "remark42",
-	})
-
-	name := user.DisplayName
-	if name == "" {
-		name = user.Username
-	}
-
-	var authorName string
-	err := h.repo.DB().QueryRowContext(c.Request().Context(), "SELECT value FROM blog_settings WHERE key = 'author_name'").Scan(&authorName)
-	if err == nil && authorName != "" {
-		name = authorName
-	}
-
-	var logoURL string
-	_ = h.repo.DB().QueryRowContext(c.Request().Context(), "SELECT value FROM blog_settings WHERE key = 'logo_url'").Scan(&logoURL)
-
-	u := &token.User{
-		ID:      fmt.Sprintf("point_%d", user.ID),
-		Name:    name,
-		Picture: logoURL,
-	}
-	u.SetAdmin(true)
-
-	xsrf := GenerateToken()[:20]
-
-	claims := token.Claims{
-		User: u,
-	}
-	claims.Audience = jwt.ClaimStrings{"remark"}
-	claims.Issuer = "remark42"
-	claims.ExpiresAt = jwt.NewNumericDate(expiresAt)
-	claims.ID = xsrf
-
-	tokenStr, err := svc.Token(claims)
-	if err != nil {
-		slog.Error("Failed to generate remark42 token", "err", err)
-		return
-	}
-
-	c.SetCookie(&http.Cookie{
-		Name:     "JWT",
-		Value:    tokenStr,
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.secureCookie(c),
-	})
-	// Deliberately not HttpOnly: this is the readable half of the double-submit
-	// CSRF pattern — the SPA has to read it to echo the value back in a header.
-	// Its secrecy is not what protects anything; matching it is.
-	//nolint:gosec // G124: HttpOnly is intentionally off, see above
-	c.SetCookie(&http.Cookie{
-		Name:     "XSRF-TOKEN",
-		Value:    xsrf,
-		Expires:  expiresAt,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.secureCookie(c),
-	})
+	IssueRemark42Cookies(c, h.repo, user.ID, user.DisplayName, user.Username, expiresAt, h.secureCookie(c))
 }
 
 func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
-	past := time.Now().Add(-1 * time.Hour).UTC().Round(0)
-	c.SetCookie(&http.Cookie{
-		Name:     "JWT",
-		Value:    "",
-		Expires:  past,
-		HttpOnly: true,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.secureCookie(c),
-	})
-	// Cleared counterpart of the readable double-submit cookie set above; it
-	// carries no value and is likewise not HttpOnly.
-	//nolint:gosec // G124: HttpOnly intentionally off, see setXSRFCookie
-	c.SetCookie(&http.Cookie{
-		Name:     "XSRF-TOKEN",
-		Value:    "",
-		Expires:  past,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.secureCookie(c),
-	})
+	ClearRemark42Cookies(c, h.secureCookie(c))
 }

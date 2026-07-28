@@ -372,7 +372,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			}
 		}
 	}
-	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg)
+	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg, repo)
 
 	// Global middleware
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{

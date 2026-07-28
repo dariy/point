@@ -116,6 +116,17 @@ func (s *RemarkSupervisor) startLocked() {
 	anon, _ := s.settings.GetSetting(bgCtx, "remark_auth_anon", "true")
 	env = append(env, "AUTH_ANON="+anon)
 
+	// Registers a provider named "point" — load-bearing, and not for its OAuth
+	// URLs, which are deliberately inert. go-pkgz/auth's middleware rejects any
+	// token whose provider (the "point" in a point_<id> subject) is not a
+	// registered provider: "user X/point_1 provider is not allowed". So this
+	// declaration is what makes the JWT cookie bridge in api.IssueRemark42Cookies
+	// work at all. Drop it and the owner is anonymous in the widget.
+	//
+	// The URLs point back at REMARK_URL — i.e. into remark42 itself through the
+	// /comments proxy — because Point serves no authorize/token/userinfo. Nothing
+	// should ever send a browser there; the comments proxy strips this provider
+	// out of the config the widget reads so no login button is rendered for it.
 	env = append(env,
 		"AUTH_CUSTOM_NAME=point",
 		"AUTH_CUSTOM_CID=point",
