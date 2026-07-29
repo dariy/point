@@ -24,8 +24,9 @@
     cursor: grab;
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
 @media (pointer: coarse) {
-    .timeline-track-wrapper {
+    :where(html:not(.pointer-fine)) .timeline-track-wrapper {
         height: 64px;
     }
 }
@@ -261,13 +262,27 @@
     pointer-events: auto;
 }
 
-/* Mobile: always visible when overflowing, smaller size */
-@media (max-width: 48em), (pointer: coarse) {
+/* Mobile: always visible when overflowing, smaller size.
+   Split from one `(max-width: 48em), (pointer: coarse)` list because only the
+   coarse half is a guess about the input device — see utils/pointerMode.js. A
+   narrow window still gets this whatever is plugged in. */
+@media (max-width: 48em) {
     .timeline-nav-btn {
         width: 28px;
         height: 28px;
     }
     .timeline-nav-btn.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+@media (pointer: coarse) {
+    :where(html:not(.pointer-fine)) .timeline-nav-btn {
+        width: 28px;
+        height: 28px;
+    }
+    :where(html:not(.pointer-fine)) .timeline-nav-btn.visible {
         opacity: 1;
         pointer-events: auto;
     }

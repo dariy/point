@@ -43,7 +43,11 @@
     color: var(--text-inverted);
 }
 
-.lightbox-close,
+/* .lightbox-close is not styled here: it's part of the viewer's top-right
+   chrome cluster, positioned and themed alongside the share and slideshow
+   buttons in public/immersive.css. Keeping a second set of geometry here would
+   silently win — this file bundles after immersive.css at equal specificity —
+   and put the cross back on top of the share button. */
 .lightbox-prev,
 .lightbox-next {
     position: absolute;
@@ -56,16 +60,9 @@
     transition: background-color var(--transition-fast);
 }
 
-.lightbox-close:hover,
 .lightbox-prev:hover,
 .lightbox-next:hover {
     background: var(--color-black-alpha-70);
-}
-
-.lightbox-close {
-    top: var(--spacing-md);
-    right: var(--spacing-md);
-    z-index: 30;
 }
 
 .lightbox-prev {

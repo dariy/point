@@ -8,6 +8,10 @@
 
 import { escapeHtml, setupLongPress } from './helpers.js';
 import { CHEVRON_SVG, LOCK_SVG } from './icons.js';
+import { hasFinePointer } from './pointerMode.js';
+
+/** Hover-intent delay before a header dropdown opens, in ms. */
+export const HOVER_OPEN_MS = 180;
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user
@@ -212,6 +216,9 @@ function _hideFlyout() {
 
 export function hideFlyout() { _hideFlyout(); }
 
+/** The shared flyout element, or null before anything has ever opened one. */
+export function flyoutEl() { return _flyoutEl; }
+
 /**
  * Hide the shared flyout only when its trigger lives inside `root`.
  *
@@ -340,8 +347,7 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
   _activeLink = anchorEl;
   _activeCard = null;
 
-  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  if (canHover) {
+  if (hasFinePointer()) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }
@@ -354,6 +360,54 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
     _hideFlyout();
   };
   document.addEventListener('click', _flyoutDismiss, true);
+}
+
+/**
+ * Wire a trigger (breadcrumb crumb, nav link, "More" panel row) so its dropdown
+ * opens on mouse hover *and* on tap — one interaction model for every header
+ * dropdown.
+ *
+ * Hover is gated on `pointerenter` with `pointerType === 'mouse'` rather than
+ * `mouseenter`: a tap emits compatibility mouse events, but pointer events
+ * always report the real device, so a finger can never trip the hover path.
+ *
+ * @param {HTMLElement} el          the trigger
+ * @param {Function}    getSpec     () => flyout spec, evaluated at open time
+ * @param {Function}    navigateFn  navigate(url)
+ * @param {HTMLElement} [excludeEl] clicks inside this element won't dismiss it
+ */
+export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
+  let timer = null;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+
+  el.addEventListener('pointerenter', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    cancel();
+    timer = setTimeout(
+      () => showCrumbDropdown(el, getSpec(), navigateFn, excludeEl),
+      HOVER_OPEN_MS,
+    );
+  });
+  el.addEventListener('pointerleave', cancel);
+
+  el.addEventListener('click', (e) => {
+    cancel();
+    // With a mouse the dropdown is already showing from hover, so a click means
+    // "go to this item" — let the link navigate.
+    if (hasFinePointer()) { _hideFlyout(); return; }
+    // Coarse pointer: first tap opens the dropdown, second tap follows the link.
+    if (el.classList.contains('is-flyout-open')) {
+      const href = el.getAttribute('href');
+      if (href && href !== '#') {
+        _hideFlyout();
+        navigateFn(href);
+        e.preventDefault();
+        return;
+      }
+    }
+    e.preventDefault();
+    showCrumbDropdown(el, getSpec(), navigateFn, excludeEl);
+  });
 }
 
 export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
