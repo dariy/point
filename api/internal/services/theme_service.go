@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -99,13 +100,13 @@ func (s *ThemeService) scanThemesDir(dir string) ([]Theme, error) {
 func (s *ThemeService) normalizeAndValidateThemeName(name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {
-		return "", fmt.Errorf("theme name is required")
+		return "", wrapKind(ErrInvalidInput, errors.New("theme name is required"))
 	}
 	if strings.Contains(normalized, "/") || strings.Contains(normalized, "\\") || strings.Contains(normalized, "..") {
-		return "", fmt.Errorf("invalid theme name")
+		return "", wrapKind(ErrInvalidInput, errors.New("invalid theme name"))
 	}
 	if !themeNameSafeRe.MatchString(normalized) {
-		return "", fmt.Errorf("invalid theme name")
+		return "", wrapKind(ErrInvalidInput, errors.New("invalid theme name"))
 	}
 	return normalized, nil
 }
@@ -119,7 +120,7 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 	content := string(data)
 
 	if !strings.Contains(content, ":root {") && !strings.Contains(content, ":root{") {
-		return Theme{}, fmt.Errorf("theme file missing :root { block")
+		return Theme{}, wrapKind(ErrInvalidInput, errors.New("theme file missing :root { block"))
 	}
 
 	hasDark, cached := s.darkModeCache[path]
@@ -176,7 +177,7 @@ func pathWithinDir(path, dir string) error {
 func (s *ThemeService) findTheme(name string) (Theme, error) {
 	name = strings.ToLower(name)
 	if !themeNameSafeRe.MatchString(name) {
-		return Theme{}, fmt.Errorf("invalid theme name")
+		return Theme{}, wrapKind(ErrInvalidInput, errors.New("invalid theme name"))
 	}
 	if s.cfg.UserThemesPath != "" {
 		userPath := filepath.Join(s.cfg.UserThemesPath, name+".css")

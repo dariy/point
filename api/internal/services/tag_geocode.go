@@ -56,7 +56,7 @@ func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64
 		Lon string `json:"lon"`
 	}
 	if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
-		return 0, 0, fmt.Errorf("no geocoding results for %q", tag.Name)
+		return 0, 0, wrapKind(ErrUpstream, fmt.Errorf("no geocoding results for %q", tag.Name))
 	}
 
 	var lat, lon float64
@@ -115,7 +115,7 @@ func (s *TagService) reverseGeocode(ctx context.Context, lat, lon float64) (stri
 		} `json:"address"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("parse reverse geocode response: %w", err)
+		return "", wrapKind(ErrUpstream, fmt.Errorf("parse reverse geocode response: %w", err))
 	}
 
 	a := result.Address
@@ -127,7 +127,7 @@ func (s *TagService) reverseGeocode(ctx context.Context, lat, lon float64) (stri
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("no place name for coordinates %f,%f", lat, lon)
+	return "", wrapKind(ErrUpstream, fmt.Errorf("no place name for coordinates %f,%f", lat, lon))
 }
 
 // TagPostWithLocation reverse-geocodes the given coordinates to a place name,

@@ -371,7 +371,18 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 }
 
 func (s *MediaService) GetMediaByID(ctx context.Context, id int64) (models.Medium, error) {
-	return s.repo.GetMedia(ctx, id)
+	return s.getMedia(ctx, id)
+}
+
+// getMedia fetches one media row, classifying a missing row as ErrNotFound.
+// The message is left as the driver wrote it so callers that still match on
+// text keep working; only the kind is added.
+func (s *MediaService) getMedia(ctx context.Context, id int64) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Medium{}, wrapKind(ErrNotFound, err)
+	}
+	return media, err
 }
 
 type ListMediaParams struct {
@@ -447,7 +458,7 @@ func (s *MediaService) GetMediaByContent(ctx context.Context, content, thumbnail
 // ReextractEXIF re-reads the original file from disk, runs extractEXIF, and
 // overwrites media.metadata. Returns the updated media record.
 func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medium, error) {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return models.Medium{}, err
 	}
@@ -485,7 +496,7 @@ type UpdateEXIFParams struct {
 // disk (no-op for non-JPEG), and replaces media.metadata in the DB.
 // original_metadata is never modified.
 func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (models.Medium, error) {
-	media, err := s.repo.GetMedia(ctx, p.ID)
+	media, err := s.getMedia(ctx, p.ID)
 	if err != nil {
 		return models.Medium{}, fmt.Errorf("get media: %w", err)
 	}
@@ -497,7 +508,7 @@ func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (mode
 	sanitized := make(map[string]interface{}, len(p.Fields))
 	for k, v := range p.Fields {
 		if sanitizeEXIFValue(v) != v {
-			return models.Medium{}, fmt.Errorf("field %q contains disallowed characters", k)
+			return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("field %q contains disallowed characters", k))
 		}
 		sanitized[k] = v
 	}
@@ -527,13 +538,13 @@ func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (mode
 // and writes those values back to the JPEG file on disk. Returns an error if
 // original_metadata is absent (null or empty).
 func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium, error) {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return models.Medium{}, fmt.Errorf("get media: %w", err)
 	}
 
 	if !media.OriginalMetadata.Valid || media.OriginalMetadata.String == "" {
-		return models.Medium{}, fmt.Errorf("no original metadata to revert to")
+		return models.Medium{}, wrapKind(ErrConflict, errors.New("no original metadata to revert to"))
 	}
 
 	var origFields map[string]interface{}
@@ -559,7 +570,7 @@ func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium,
 }
 
 func (s *MediaService) DeleteMedia(ctx context.Context, id int64) error {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -662,7 +673,7 @@ func (s *MediaService) GetStorageStats(ctx context.Context) (StorageStats, error
 
 // RenameMedia renames a media file on disk and updates the database.
 func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename string) (models.Medium, error) {
-	m, err := s.repo.GetMedia(ctx, id)
+	m, err := s.getMedia(ctx, id)
 	if err != nil {
 		return models.Medium{}, err
 	}
@@ -745,7 +756,7 @@ func AllowedSquareThumbSize(size int) bool {
 // regenerated if the original has since changed.
 func (s *MediaService) SquareThumbnail(ctx context.Context, media models.Medium, size int) (string, error) {
 	if !AllowedSquareThumbSize(size) {
-		return "", fmt.Errorf("unsupported thumbnail size %d", size)
+		return "", wrapKind(ErrInvalidInput, fmt.Errorf("unsupported thumbnail size %d", size))
 	}
 	if !strings.EqualFold(media.FileType, "image") {
 		return "", ErrNotAnImage
@@ -871,15 +882,16 @@ type AnalysisResponse struct {
 }
 
 var (
-	ErrMediaNotFound    = errors.New("media not found")
-	ErrNotAnImage       = errors.New("media item is not an image")
-	ErrResponseUnusable = errors.New("the response cannot be used")
+	ErrMediaNotFound = kindSentinel(ErrNotFound, "media not found")
+	ErrNotAnImage    = kindSentinel(ErrInvalidInput, "media item is not an image")
+	// The analysis upstream answered, but not with something we can use.
+	ErrResponseUnusable = kindSentinel(ErrUpstream, "the response cannot be used")
 )
 
 const maxAnalyzeBytes = 20 << 20 // 20 MB
 
 func (s *MediaService) AnalyzeMediaByID(ctx context.Context, id int64) (*AnalysisResponse, error) {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return nil, ErrMediaNotFound
 	}
@@ -892,7 +904,7 @@ func (s *MediaService) AnalyzeMediaByID(ctx context.Context, id int64) (*Analysi
 		return nil, fmt.Errorf("could not stat media file: %w", err)
 	}
 	if info.Size() > maxAnalyzeBytes {
-		return nil, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes)
+		return nil, wrapKind(ErrInvalidInput, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes))
 	}
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -912,10 +924,10 @@ func (s *MediaService) AnalyzeMediaByPath(ctx context.Context, mediaPath string)
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		return nil, fmt.Errorf("media file not found")
+		return nil, wrapKind(ErrNotFound, errors.New("media file not found"))
 	}
 	if info.Size() > maxAnalyzeBytes {
-		return nil, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes)
+		return nil, wrapKind(ErrInvalidInput, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes))
 	}
 
 	content, err := os.ReadFile(fullPath)
@@ -1072,7 +1084,7 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 	}
 
 	if len(genResp.Candidates) == 0 || len(genResp.Candidates[0].Content.Parts) == 0 {
-		return nil, fmt.Errorf("no content generated")
+		return nil, wrapKind(ErrUpstream, errors.New("no content generated"))
 	}
 
 	// Extract text from response

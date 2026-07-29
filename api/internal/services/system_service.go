@@ -27,7 +27,7 @@ const partialSuffix = ".partial"
 
 // ErrBackupInProgress is returned when a backup is requested while one is already
 // running; only one may run at a time.
-var ErrBackupInProgress = errors.New("a backup is already in progress")
+var ErrBackupInProgress = kindSentinel(ErrConflict, "a backup is already in progress")
 
 type SystemService struct {
 	repo     repository.Repository
@@ -273,8 +273,8 @@ func (s *SystemService) CheckBackupSpace() error {
 		return nil // can't determine free space — don't block the backup
 	}
 	if disk.Free < estimate {
-		return fmt.Errorf("not enough disk space for a backup: need about %s (size of the data folder), only %s free",
-			humanizeBytes(estimate), humanizeBytes(disk.Free))
+		return wrapKind(ErrStorageFull, fmt.Errorf("not enough disk space for a backup: need about %s (size of the data folder), only %s free",
+			humanizeBytes(estimate), humanizeBytes(disk.Free)))
 	}
 	return nil
 }
@@ -444,11 +444,11 @@ func isSafeBackupName(filename string) bool {
 // database ("disk image is malformed") — so the extraction is deferred to boot.
 func (s *SystemService) ScheduleRestore(filename string) error {
 	if !isSafeBackupName(filename) {
-		return fmt.Errorf("invalid filename")
+		return wrapKind(ErrInvalidInput, errors.New("invalid filename"))
 	}
 	backupPath := filepath.Join(s.dataPath, "backups", filename)
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		return fmt.Errorf("backup not found")
+		return wrapKind(ErrNotFound, errors.New("backup not found"))
 	}
 	// Refuse to schedule a restore we already know would fail at boot.
 	if err := s.ValidateArchive(backupPath); err != nil {
@@ -511,7 +511,7 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		return fmt.Errorf("not a gzip archive: %w", err)
+		return wrapKind(ErrInvalidInput, fmt.Errorf("not a gzip archive: %w", err))
 	}
 	defer func() { _ = gz.Close() }()
 
@@ -539,7 +539,7 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 		}
 	}
 	if !foundDB {
-		return fmt.Errorf("archive does not contain the database (%s); not a Point backup", wantDB)
+		return wrapKind(ErrInvalidInput, fmt.Errorf("archive does not contain the database (%s); not a Point backup", wantDB))
 	}
 	return nil
 }

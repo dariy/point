@@ -64,11 +64,11 @@ func (s *AuthService) Authenticate(ctx context.Context, username, password strin
 		// Equalize timing with the found-user path to avoid leaking which
 		// usernames exist; the result is discarded.
 		_ = VerifyPassword(password, dummyPasswordHash)
-		return models.User{}, errors.New("invalid username or password")
+		return models.User{}, wrapKind(ErrUnauthenticated, errors.New("invalid username or password"))
 	}
 
 	if !VerifyPassword(password, user.PasswordHash) {
-		return models.User{}, errors.New("invalid username or password")
+		return models.User{}, wrapKind(ErrUnauthenticated, errors.New("invalid username or password"))
 	}
 
 	// Upgrade hash to Argon2id if it's still bcrypt
@@ -113,7 +113,7 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (models
 	// Check expiry
 	if time.Now().After(session.ExpiresAt) {
 		_ = s.repo.DeleteSession(ctx, models.DeleteSessionParams{ID: session.ID, UserID: session.UserID})
-		return models.GetSessionByTokenRow{}, errors.New("session expired")
+		return models.GetSessionByTokenRow{}, wrapKind(ErrUnauthenticated, errors.New("session expired"))
 	}
 
 	// Update activity
@@ -191,18 +191,18 @@ func (s *AuthService) ValidatePasswordResetToken(ctx context.Context, token stri
 	tokenHash := HashToken(token)
 	secret, err := s.repo.GetSecret(ctx, "pw_reset:"+tokenHash)
 	if err != nil {
-		return 0, errors.New("invalid or expired reset token")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("invalid or expired reset token"))
 	}
 
 	var p resetTokenPayload
 	if err := json.Unmarshal([]byte(secret.Value.String), &p); err != nil {
-		return 0, errors.New("invalid reset token")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("invalid reset token"))
 	}
 
 	expiresAt, err := time.Parse(time.RFC3339, p.ExpiresAt)
 	if err != nil || time.Now().After(expiresAt) {
 		_ = s.repo.DeleteSecret(ctx, "pw_reset:"+tokenHash)
-		return 0, errors.New("reset token has expired")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("reset token has expired"))
 	}
 
 	return p.UserID, nil
@@ -290,7 +290,7 @@ func (s *AuthService) ChangeEmail(ctx context.Context, userID int64, currentPass
 
 	addr, err := mail.ParseAddress(newEmail)
 	if err != nil || addr.Address != newEmail {
-		return errors.New("invalid email address")
+		return wrapKind(ErrInvalidInput, errors.New("invalid email address"))
 	}
 
 	return s.repo.UpdateUserEmail(ctx, models.UpdateUserEmailParams{

@@ -601,6 +601,16 @@ type CreatePostParams struct {
 	ScheduledAt     *time.Time
 }
 
+// classifyPostSaveError marks a slug collision as ErrConflict. SQLite reports it
+// only in the driver's message, so the text is matched here — once — instead of
+// in every handler. The message is passed through unchanged.
+func classifyPostSaveError(err error) error {
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
+		return wrapKind(ErrConflict, err)
+	}
+	return err
+}
+
 func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, []string, error) {
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Title)
@@ -630,7 +640,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
-		return models.Post{}, strippedProps, err
+		return models.Post{}, strippedProps, classifyPostSaveError(err)
 	}
 
 	// Store the derived list-preview URL so list/grid queries need not read the
@@ -765,7 +775,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
-		return models.Post{}, strippedProps, err
+		return models.Post{}, strippedProps, classifyPostSaveError(err)
 	}
 
 	// Keep the denormalized list-preview URL in sync with the new content/thumbnail.

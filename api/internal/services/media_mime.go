@@ -2,20 +2,19 @@ package services
 
 import (
 	"bytes"
-	"errors"
 	"regexp"
 	"strings"
 )
 
 // ErrUnsupportedMediaType is returned when an upload's actual content does not
 // match any allowlisted image/video/audio format.
-var ErrUnsupportedMediaType = errors.New("unsupported media type")
+var ErrUnsupportedMediaType = kindSentinel(ErrInvalidInput, "unsupported media type")
 
 // ErrActiveSVGContent is returned when an SVG upload carries executable
 // content. SVG is the one allowlisted format that a browser will run script
 // from when navigated to directly, so it is the one format whose bytes have to
 // be inspected beyond their signature.
-var ErrActiveSVGContent = errors.New("SVG contains active content (script, event handler, or external reference)")
+var ErrActiveSVGContent = kindSentinel(ErrInvalidInput, "SVG contains active content (script, event handler, or external reference)")
 
 // svgActiveContentRe matches the constructs that make an SVG executable:
 //

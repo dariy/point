@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ func NewCacheService(dataPath string) *CacheService {
 
 func (s *CacheService) validateKey(key string) error {
 	if key == "." || strings.Contains(key, "..") || strings.ContainsAny(key, "/\\") {
-		return fmt.Errorf("invalid cache key")
+		return wrapKind(ErrInvalidInput, errors.New("invalid cache key"))
 	}
 	return nil
 }

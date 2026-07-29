@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -495,6 +496,11 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		Longitude:        utils.ToNullFloat64(p.Longitude),
 	})
 	if err != nil {
+		// TODO(point-fix-errorlint-error-mapping-jblz.3): this belongs in the
+		// handler as wrapKind(ErrConflict, ...). It can only move once the tags
+		// handler uses the central mapper: echo's default error handler type-
+		// asserts *echo.HTTPError rather than using errors.As, so classifying
+		// this error here today would turn the 409 into a 500.
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
 			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
 		}
@@ -777,6 +783,11 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		Longitude:        utils.ToNullFloat64(p.Longitude),
 	})
 	if err != nil {
+		// TODO(point-fix-errorlint-error-mapping-jblz.3): this belongs in the
+		// handler as wrapKind(ErrConflict, ...). It can only move once the tags
+		// handler uses the central mapper: echo's default error handler type-
+		// asserts *echo.HTTPError rather than using errors.As, so classifying
+		// this error here today would turn the 409 into a 500.
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
 			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
 		}
@@ -929,12 +940,12 @@ type ReorderTagParams struct {
 // ReorderTag reorders a tag within its sibling group by updating sort_order values.
 func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 	if p.Position != "before" && p.Position != "after" {
-		return fmt.Errorf("position must be 'before' or 'after'")
+		return wrapKind(ErrInvalidInput, errors.New("position must be 'before' or 'after'"))
 	}
 
 	dragged, err := s.repo.GetTag(ctx, p.ID)
 	if err != nil {
-		return fmt.Errorf("tag %d not found", p.ID)
+		return wrapKind(ErrNotFound, fmt.Errorf("tag %d not found", p.ID))
 	}
 
 	var siblings []models.Tag
