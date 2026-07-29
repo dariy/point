@@ -131,6 +131,10 @@ export class PostCard extends Component {
     });
 
     if (hasOverlay) {
+      // Buttons inside the card (the tag strip's scroll arrows) stop the click
+      // themselves when they act on it, so anything still arriving here is the
+      // card's own — including a tap on an arrow that is invisible until the
+      // overlay is revealed, which must count as that reveal tap.
       card.addEventListener("click", (e) => {
         if (e.target.closest("a")) return;
         const needsTwoTap =
@@ -162,7 +166,7 @@ export class PostCard extends Component {
       });
     } else {
       card.addEventListener("click", (e) => {
-        if (e.target.closest("a")) return;
+        if (e.target.closest("a, button")) return;
         go();
       });
     }
@@ -170,7 +174,7 @@ export class PostCard extends Component {
     // Firefox doesn't focus non-interactive elements on click; force it so arrow key
     // navigation in PostGrid works consistently across browsers.
     card.addEventListener("mousedown", (e) => {
-      if (!e.target.closest("a")) card.focus({ preventScroll: true });
+      if (!e.target.closest("a, button")) card.focus({ preventScroll: true });
     });
 
     card.addEventListener("keydown", (e) => {

@@ -469,13 +469,28 @@ export function setupScrollableStrip(trackEl, scrollEl) {
   if (!trackEl || !scrollEl) return () => {};
   const btnLeft  = trackEl.querySelector('.tags-scroll-btn--left');
   const btnRight = trackEl.querySelector('.tags-scroll-btn--right');
+  const overlay = trackEl.closest('.post-card')?.querySelector('.post-card-content.overlay');
+
+  // On a card whose overlay is still transparent — touch, before the reveal tap —
+  // the arrows are invisible but still hit-testable, so a tap meant to reveal the
+  // card would land on one and scroll a strip nobody can see. Decline those and
+  // let the click bubble to the card's own reveal handler.
+  const isRevealed = () => !overlay || getComputedStyle(overlay).opacity !== '0';
   const update = () => {
     const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
     trackEl.classList.toggle('has-scroll-left',  scrollLeft > 1);
     trackEl.classList.toggle('has-scroll-right', scrollLeft < scrollWidth - clientWidth - 1);
   };
-  const onLeft  = () => scrollEl.scrollBy({ left: -200, behavior: 'smooth' });
-  const onRight = () => scrollEl.scrollBy({ left:  200, behavior: 'smooth' });
+  // The strip can live inside a fully clickable post card — once an arrow acts on
+  // a click, stop it reaching the card's "navigate to post" handler.
+  const scrollBy = (dx) => (e) => {
+    if (!isRevealed()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    scrollEl.scrollBy({ left: dx, behavior: 'smooth' });
+  };
+  const onLeft  = scrollBy(-200);
+  const onRight = scrollBy(200);
   btnLeft?.addEventListener('click',  onLeft);
   btnRight?.addEventListener('click', onRight);
   scrollEl.addEventListener('scroll', update, { passive: true });
