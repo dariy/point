@@ -16,6 +16,11 @@ linters:
     # Security-focused static analysis: hardcoded credentials, weak crypto,
     # unsanitized file paths, path traversal, SQL string building.
     - gosec
+    # Errors are wrapped with %w throughout; errorlint catches the comparisons
+    # that then fail to unwrap — == against a sentinel, type assertions on a
+    # wrapped error, and %v where %w was meant. Without it a wrap silently
+    # breaks every downstream errors.Is check.
+    - errorlint
 
   settings:
     gosec:

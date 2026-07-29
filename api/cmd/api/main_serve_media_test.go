@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"image"
 	"image/jpeg"
 	"net/http"
@@ -96,8 +97,8 @@ func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo 
 	}
 	if err := handler(c); err != nil {
 		// Echo error handlers write the response; record the code.
-		he, ok := err.(*echo.HTTPError)
-		if ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			rec.Code = he.Code
 		}
 	}
@@ -257,7 +258,8 @@ func serveThumbRequest(t *testing.T, storagePath string, repo repository.Reposit
 	c.SetParamValues(year, month, filename)
 	c.Set("user", struct{ ID int64 }{ID: 1}) // authenticated
 	if err := handler(c); err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			rec.Code = he.Code
 		}
 	}
@@ -337,7 +339,8 @@ func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Re
 	c.SetParamValues(year, month, filename)
 	c.Set("user", struct{ ID int64 }{ID: 1})
 	if err := handler(c); err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			rec.Code = he.Code
 		}
 	}

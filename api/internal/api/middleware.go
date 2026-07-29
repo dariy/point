@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -147,7 +148,8 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 	var detail interface{}
 	detail = err.Error()
 
-	if he, ok := err.(*echo.HTTPError); ok {
+	var he *echo.HTTPError
+	if errors.As(err, &he) {
 		code = he.Code
 		detail = he.Message
 	}

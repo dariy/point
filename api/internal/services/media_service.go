@@ -1058,7 +1058,8 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 		}
 
 		// Check if this is a 429 error (quota exceeded)
-		if apiErr, ok := genErr.(*googleapi.Error); ok && apiErr.Code == 429 {
+		var apiErr *googleapi.Error
+		if errors.As(genErr, &apiErr) && apiErr.Code == 429 {
 			continue
 		}
 
@@ -1082,7 +1083,7 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(respText.String()), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
+		return nil, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
 	return s.parseAnalysisResult(result, filename)

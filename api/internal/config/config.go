@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,7 +103,8 @@ func LoadConfig(path string) (config Config, err error) {
 	err = v.ReadInConfig()
 	if err != nil {
 		// It's okay if .env is missing, we use defaults and ENV vars
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
 			return
 		}
 	}

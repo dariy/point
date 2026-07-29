@@ -4,6 +4,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -942,7 +943,8 @@ func TestTagService_CycleRejection(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when creating cycle C -> A -> B -> C, but got nil")
 	} else {
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if !ok || he.Code != http.StatusConflict {
 			t.Errorf("expected 409 Conflict, got %v", err)
 		} else {
@@ -956,7 +958,8 @@ func TestTagService_CycleRejection(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when creating cycle A -> C -> B -> A, but got nil")
 	} else {
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if !ok || he.Code != http.StatusConflict {
 			t.Errorf("expected 409 Conflict, got %v", err)
 		} else {
@@ -969,7 +972,8 @@ func TestTagService_CycleRejection(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when creating cycle C -> A -> B -> C via AddTagRelationship, but got nil")
 	} else {
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if !ok || he.Code != http.StatusConflict {
 			t.Errorf("expected 409 Conflict, got %v", err)
 		} else {

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,7 +85,8 @@ func TestUpdatePreset_UnknownPreset404(t *testing.T) {
 	c.SetParamNames("id")
 	c.SetParamValues("nope")
 
-	he, ok := h.UpdatePreset(c).(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(h.UpdatePreset(c), &he)
 	if !ok || he.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %v", he)
 	}
@@ -100,7 +102,8 @@ func TestUpdatePreset_UnknownPlugin400(t *testing.T) {
 	c.SetParamNames("id")
 	c.SetParamValues("standalone")
 
-	he, ok := h.UpdatePreset(c).(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(h.UpdatePreset(c), &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %v", he)
 	}

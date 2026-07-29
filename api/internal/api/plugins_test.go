@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,7 +77,8 @@ func TestTogglePlugin_DisableThenEnable(t *testing.T) {
 		c.SetParamValues(id)
 		err := h.TogglePlugin(c)
 		if err != nil {
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code, pluginView{}
 			}
 			return http.StatusInternalServerError, pluginView{}
@@ -120,7 +122,8 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 		c.SetParamNames("id")
 		c.SetParamValues(id)
 		if err := h.TogglePlugin(c); err != nil {
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code
 			}
 			return http.StatusInternalServerError
@@ -161,7 +164,8 @@ func TestTogglePlugin_ExclusiveAreaKeepsAtMostOne(t *testing.T) {
 		c.SetParamNames("id")
 		c.SetParamValues(id)
 		if err := h.TogglePlugin(c); err != nil {
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code
 			}
 			return http.StatusInternalServerError
@@ -243,7 +247,8 @@ func TestTogglePlugin_UnknownID404(t *testing.T) {
 	c.SetParamValues("nope")
 
 	err := h.TogglePlugin(c)
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 HTTPError for unknown plugin, got %v", err)
 	}

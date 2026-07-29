@@ -396,7 +396,8 @@ func TestSystemHandler_GetPhotoLibraryContents_NotConfigured(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when photo_library_path not configured")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 HTTPError, got %v", err)
 	}
@@ -482,7 +483,8 @@ func TestSystemHandler_GetPhotoLibraryFile_MissingPathParam(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when path param missing")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -504,7 +506,8 @@ func TestSystemHandler_GetPhotoLibraryFile_UnsupportedExt(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unsupported extension")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -818,6 +821,79 @@ func TestSystemHandler_GetLogs_ManyLines(t *testing.T) {
 	err := sh.GetLogs(e.NewContext(req, rec))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// GetLogs must read back across rotations: right after a rotation the active
+// file holds only a few lines, and reading it alone would make the admin Logs
+// page look nearly empty. See point-ops-logs-page-empty-a002.
+func TestSystemHandler_GetLogs_ReadsAcrossRotations(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	dataDir := t.TempDir()
+	logsDir := filepath.Join(dataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
+	// Oldest to newest: app.log.2, app.log.1, then the active app.log.
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log.2"), []byte("oldest\n"), 0644)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log.1"), []byte("middle\n"), 0644)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte("newest\n"), 0644)
+
+	systemSvc := services.NewSystemService(h.repo, dataDir, "")
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, nil, dataDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?lines=10", nil)
+	rec := httptest.NewRecorder()
+	if err := sh.GetLogs(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+
+	var got []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []string{"oldest", "middle", "newest"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// A request smaller than the active file must not pull in older rotations.
+func TestSystemHandler_GetLogs_StopsAtRequestedLines(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	dataDir := t.TempDir()
+	logsDir := filepath.Join(dataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log.1"), []byte("old1\nold2\n"), 0644)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte("new1\nnew2\nnew3\n"), 0644)
+
+	systemSvc := services.NewSystemService(h.repo, dataDir, "")
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, nil, dataDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?lines=2", nil)
+	rec := httptest.NewRecorder()
+	if err := sh.GetLogs(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+
+	var got []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []string{"new2", "new3"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

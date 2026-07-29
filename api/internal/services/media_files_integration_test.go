@@ -48,7 +48,7 @@ func TestMediaService_AnalyzeMediaByID(t *testing.T) {
 
 	// 1. Media not found
 	_, err := service.AnalyzeMediaByID(ctx, 999)
-	if err == nil || err != ErrMediaNotFound {
+	if err == nil || !errors.Is(err, ErrMediaNotFound) {
 		t.Errorf("expected ErrMediaNotFound, got %v", err)
 	}
 
@@ -59,7 +59,7 @@ func TestMediaService_AnalyzeMediaByID(t *testing.T) {
 		MimeType: "text/plain",
 	})
 	_, err = service.AnalyzeMediaByID(ctx, m.ID)
-	if err == nil || err != ErrNotAnImage {
+	if err == nil || !errors.Is(err, ErrNotAnImage) {
 		t.Errorf("expected ErrNotAnImage, got %v", err)
 	}
 

@@ -236,7 +236,7 @@ func (s *RemarkSupervisor) startLocked() {
 		}
 		// An unexpected exit is the failure an operator most wants to see:
 		// comments quietly stop working and nothing else says so.
-		s.health.Record(healthTaskRemark42, fmt.Errorf("exited unexpectedly: %v", err))
+		s.health.Record(healthTaskRemark42, fmt.Errorf("exited unexpectedly: %w", err))
 		// Crash: relaunch so comments come back without a container restart.
 		// ponytail: fixed 5s backoff; make it exponential if it ever flaps hard.
 		time.Sleep(5 * time.Second)

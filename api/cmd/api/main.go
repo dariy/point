@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"log/slog"
 	"net"
@@ -29,6 +31,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+	"point-api/internal/utils"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -945,9 +948,9 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	return e
 }
 
-func main() {
-	// Initialize slog with TextHandler for logfmt output
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+// installLogger points slog (and the legacy log package) at w.
+func installLogger(w io.Writer) {
+	logger := slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
@@ -955,6 +958,12 @@ func main() {
 	// Redirect standard log to slog to handle legacy log.Printf calls
 	log.SetOutput(slog.NewLogLogger(logger.Handler(), slog.LevelInfo).Writer())
 	log.SetFlags(0)
+}
+
+func main() {
+	// Start on stdout alone: the log file lives under the storage path, which
+	// isn't known until the config is loaded below.
+	installLogger(os.Stdout)
 
 	// Check for CLI commands early.
 	isSetup := false
@@ -1021,6 +1030,16 @@ func main() {
 	if cfg.AppVersion == "" || cfg.AppVersion == "dev" {
 		cfg.AppVersion = Version
 	}
+
+	// Now that the storage path is known, tee logging to disk as well. stdout
+	// stays authoritative (docker logs, journald); the file is what the admin
+	// Logs page reads, which is otherwise unreachable inside a container.
+	logFile := utils.NewRotatingFile(
+		filepath.Join(cfg.StoragePath, "logs", "app.log"),
+		utils.LogMaxBytes, utils.LogMaxBackups,
+	)
+	defer func() { _ = logFile.Close() }()
+	installLogger(io.MultiWriter(os.Stdout, logFile))
 
 	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
 	// the database is opened: extracting a backup over an open SQLite file corrupts
@@ -1096,7 +1115,7 @@ func main() {
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	slog.Info("Point API starting", "address", address)
 	go func() {
-		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
+		if err := e.Start(address); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("failed to start server", "error", err)
 			os.Exit(1)
 		}

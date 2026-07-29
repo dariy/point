@@ -21,6 +21,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+	"point-api/internal/utils"
 
 	"github.com/labstack/echo/v4"
 )
@@ -240,33 +241,59 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 	})
 }
 
+// readLogLines returns every line of one log file. A file that vanished since
+// it was listed (rotated out mid-request) reads as empty rather than an error.
+func readLogLines(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	var out []string
+	scanner := bufio.NewScanner(f)
+	// JSON records with a long error string exceed bufio's 64KB default and
+	// would otherwise abort the scan.
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		out = append(out, scanner.Text())
+	}
+	return out, scanner.Err()
+}
+
 func (h *SystemHandler) GetLogs(c echo.Context) error {
 	lines, _ := strconv.Atoi(c.QueryParam("lines"))
 	if lines < 1 || lines > 1000 {
 		lines = 100
 	}
 
-	f, err := os.Open(h.logPath)
-	if err != nil {
-		// Log file doesn't exist yet — return empty list
-		return c.JSON(http.StatusOK, []string{})
-	}
-	defer func() {
-		_ = f.Close()
-	}()
+	// Read the active file plus its rotations, newest first, stopping as soon
+	// as enough lines are in hand. Without this a request for 1000 lines right
+	// after a rotation would return only the handful written since.
+	files := utils.RotatedLogFiles(h.logPath, utils.LogMaxBackups)
 
 	var all []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		all = append(all, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read logs")
+	for _, path := range files {
+		chunk, err := readLogLines(path)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to read logs")
+		}
+		// Older file: its lines precede everything collected so far.
+		all = append(chunk, all...)
+		if len(all) >= lines {
+			break
+		}
 	}
 
 	// Return last N lines
 	if len(all) > lines {
 		all = all[len(all)-lines:]
+	}
+	if all == nil {
+		all = []string{}
 	}
 
 	return c.JSON(http.StatusOK, all)

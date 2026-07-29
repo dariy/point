@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -42,7 +43,8 @@ func TestRequirePlugin(t *testing.T) {
 		err := mw(handler)(e.NewContext(req, rec))
 		if err != nil {
 			e.HTTPErrorHandler(err, e.NewContext(req, rec))
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code
 			}
 			return http.StatusInternalServerError

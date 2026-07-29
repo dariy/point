@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mime/multipart"
@@ -405,7 +406,8 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for unknown slug")
 		}
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if !ok || he.Code != http.StatusNotFound {
 			t.Errorf("expected 404, got %v", err)
 		}
@@ -1123,7 +1125,8 @@ func TestPostHandler_PublishToInstagram_BadID(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for bad id")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}

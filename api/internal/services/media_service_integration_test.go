@@ -1032,7 +1032,7 @@ func TestMediaService_AnalyzeMediaByID_NotAnImage(t *testing.T) {
 		t.Fatalf("UploadFile: %v", err)
 	}
 	_, err = svc.AnalyzeMediaByID(ctx, m.ID)
-	if err != ErrNotAnImage {
+	if !errors.Is(err, ErrNotAnImage) {
 		t.Errorf("expected ErrNotAnImage, got %v", err)
 	}
 }
@@ -1157,12 +1157,12 @@ func TestMediaService_RevertEXIF_Success(t *testing.T) {
 func TestVerifyPasswordArgon2id_ErrorPaths(t *testing.T) {
 
 	_, err := verifyPasswordArgon2id("pass", "$argon2id$v=19$m=65536,t=2,p=1")
-	if err != ErrInvalidHash {
+	if !errors.Is(err, ErrInvalidHash) {
 		t.Errorf("expected ErrInvalidHash for wrong segments, got %v", err)
 	}
 
 	_, err = verifyPasswordArgon2id("pass", "$argon2id$v=0$m=65536,t=2,p=1$abc$def")
-	if err != ErrIncompatibleVersion {
+	if !errors.Is(err, ErrIncompatibleVersion) {
 		t.Errorf("expected ErrIncompatibleVersion, got %v", err)
 	}
 
