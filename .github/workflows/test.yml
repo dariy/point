@@ -204,7 +204,7 @@ jobs:
         working-directory: quickstart
         # install.sh's own wait_for_health polls /health for 60s and exits
         # non-zero on timeout, so a wizard that starts nothing fails here.
-        run: bash install.sh --method=docker --non-interactive --test
+        run: bash install.sh --method=docker --auto --test
 
       - name: Verify --test used the locally built image
         working-directory: quickstart
