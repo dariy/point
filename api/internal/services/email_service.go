@@ -134,13 +134,6 @@ func sendSTARTTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte
 	if err != nil {
 		return wrapKind(ErrUpstream, fmt.Errorf("SMTP client: %w", err))
 	}
-	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
-
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return fmt.Errorf("SMTP client: %w", err)
-	}
 	defer func() { _ = c.Close() }()
 
 	// For non-local hosts require STARTTLS: a MITM can strip the advertisement,
