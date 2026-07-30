@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path"
@@ -560,8 +561,23 @@ func (s *PostService) GetPostAnalytics(ctx context.Context) (models.GetPostAnaly
 	return s.repo.GetPostAnalytics(ctx)
 }
 
+// ErrPostNotFound replaces the driver's sql.ErrNoRows on the post read paths.
+// A named sentinel rather than a wrap of ErrNoRows because this message reaches
+// clients through the central mapper, and "sql: no rows in result set" is not
+// something to answer a request with.
+var ErrPostNotFound = kindSentinel(ErrNotFound, "post not found")
+
 func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.Post, error) {
-	return s.repo.GetPost(ctx, id)
+	return s.getPost(ctx, id)
+}
+
+// getPost fetches one post row, translating a missing row into ErrPostNotFound.
+func (s *PostService) getPost(ctx context.Context, id int64) (models.Post, error) {
+	post, err := s.repo.GetPost(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Post{}, ErrPostNotFound
+	}
+	return post, err
 }
 
 func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Post, error) {
@@ -573,7 +589,10 @@ func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Po
 	// comment-thread key, which must survive slug changes). A real slug that
 	// happens to be all digits wins over an ID of the same value.
 	if id, convErr := strconv.ParseInt(slug, 10, 64); convErr == nil {
-		return s.repo.GetPost(ctx, id)
+		return s.getPost(ctx, id)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Post{}, ErrPostNotFound
 	}
 	return post, err
 }
@@ -601,14 +620,28 @@ type CreatePostParams struct {
 	ScheduledAt     *time.Time
 }
 
-// classifyPostSaveError marks a slug collision as ErrConflict. SQLite reports it
-// only in the driver's message, so the text is matched here — once — instead of
-// in every handler. The message is passed through unchanged.
+// classifyPostSaveError classifies the two foreseeable ways a post save fails.
+//
+// A slug collision is a conflict. SQLite reports it only in the driver's
+// message, so the text is matched here — once — instead of in every handler;
+// the message is passed through unchanged so the handler can still substitute a
+// friendlier one.
+//
+// UpdatePost's statement matches on (id, author_id), so no rows means the post
+// is absent or belongs to someone else. Those are reported identically on
+// purpose: distinguishing them would tell a caller that someone else's post
+// exists.
 func classifyPostSaveError(err error) error {
-	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
+	switch {
+	case err == nil:
+		return nil
+	case strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug"):
 		return wrapKind(ErrConflict, err)
+	case errors.Is(err, sql.ErrNoRows):
+		return ErrPostNotFound
+	default:
+		return err
 	}
-	return err
 }
 
 func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, []string, error) {
@@ -801,7 +834,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 
 func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames []string) error {
 	// Verify the post exists.
-	if _, err := s.repo.GetPost(ctx, postID); err != nil {
+	if _, err := s.getPost(ctx, postID); err != nil {
 		return err
 	}
 
@@ -831,7 +864,7 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 
 func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status string) (models.Post, error) {
 	// Verify the post exists.
-	post, err := s.repo.GetPost(ctx, id)
+	post, err := s.getPost(ctx, id)
 	if err != nil {
 		return models.Post{}, err
 	}
@@ -918,6 +951,9 @@ func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32)
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {
 	post, err := s.repo.PublishPost(ctx, id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return post, ErrPostNotFound
+		}
 		return post, err
 	}
 	s.refreshTagCounts(ctx)
@@ -985,11 +1021,15 @@ func (s *PostService) GeneratePreviewLink(ctx context.Context, postID int64) (st
 func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error) {
 	post, err := s.repo.GetPostByPreviewToken(ctx, token)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Post{}, ErrPostNotFound
+		}
 		return models.Post{}, err
 	}
-	// Check expiry
+	// An expired token is indistinguishable from a bad one to the caller, by
+	// design: neither should confirm that a draft exists.
 	if post.PreviewExpiresAt.Valid && time.Now().After(post.PreviewExpiresAt.Time) {
-		return models.Post{}, sql.ErrNoRows
+		return models.Post{}, ErrPostNotFound
 	}
 	return post, nil
 }
@@ -997,7 +1037,13 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 // GetPostNavigation returns the previous and next published posts adjacent to
 // the given post, ordered by published_at.
 func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error) {
-	return s.repo.GetPostNavigation(ctx, postID, publicOnly, tag)
+	prev, next, err = s.repo.GetPostNavigation(ctx, postID, publicOnly, tag)
+	if errors.Is(err, sql.ErrNoRows) {
+		// The anchor post itself is missing. Having no neighbours is not an
+		// error — it comes back as two nil items.
+		return nil, nil, ErrPostNotFound
+	}
+	return prev, next, err
 }
 
 func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Post, error) {

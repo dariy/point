@@ -496,11 +496,12 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		Longitude:        utils.ToNullFloat64(p.Longitude),
 	})
 	if err != nil {
-		// TODO(point-fix-errorlint-error-mapping-jblz.3): this belongs in the
-		// handler as wrapKind(ErrConflict, ...). It can only move once the tags
-		// handler uses the central mapper: echo's default error handler type-
-		// asserts *echo.HTTPError rather than using errors.As, so classifying
-		// this error here today would turn the 409 into a 500.
+		// TODO(point-fix-errorlint-error-mapping-jblz.3): a service should not
+		// build an HTTP error. Return wrapKind(ErrConflict, ...) instead and let
+		// the tags handler map it. Safe to do whenever .3 reaches this file:
+		// api.MapError and CustomHTTPErrorHandler both find the status via
+		// errors.As, so the 409 survives either way. What has to move with it
+		// are the handler tests that type-assert the returned error.
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
 			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
 		}
@@ -783,11 +784,12 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		Longitude:        utils.ToNullFloat64(p.Longitude),
 	})
 	if err != nil {
-		// TODO(point-fix-errorlint-error-mapping-jblz.3): this belongs in the
-		// handler as wrapKind(ErrConflict, ...). It can only move once the tags
-		// handler uses the central mapper: echo's default error handler type-
-		// asserts *echo.HTTPError rather than using errors.As, so classifying
-		// this error here today would turn the 409 into a 500.
+		// TODO(point-fix-errorlint-error-mapping-jblz.3): a service should not
+		// build an HTTP error. Return wrapKind(ErrConflict, ...) instead and let
+		// the tags handler map it. Safe to do whenever .3 reaches this file:
+		// api.MapError and CustomHTTPErrorHandler both find the status via
+		// errors.As, so the 409 survives either way. What has to move with it
+		// are the handler tests that type-assert the returned error.
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
 			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
 		}
