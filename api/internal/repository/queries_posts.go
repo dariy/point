@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -306,6 +307,14 @@ func (r *sqliteRepository) postsHasColumn(ctx context.Context, col string) bool 
 		if name == col {
 			return true
 		}
+	}
+	// A truncated iteration would report the column as absent, silently
+	// downgrading callers to the legacy-schema path. Still returns false —
+	// there is no error to return through this signature — but says so.
+	if err := rows.Err(); err != nil {
+		slog.Warn("postsHasColumn: table_info iteration failed; assuming column absent",
+			"column", col, "error", err)
+		return false
 	}
 	return false
 }

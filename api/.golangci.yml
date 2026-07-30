@@ -21,6 +21,12 @@ linters:
     # wrapped error, and %v where %w was meant. Without it a wrap silently
     # breaks every downstream errors.Is check.
     - errorlint
+    # An unchecked rows.Err() after a Next() loop TRUNCATES the result set
+    # instead of erroring: the loop just ends and the caller gets a short,
+    # plausible-looking slice. Enabled after an audit found three such sites
+    # (a path migration that would have rewritten only some posts, and two
+    # schema checks where a query failure read as "column already dropped").
+    - rowserrcheck
 
   settings:
     gosec:

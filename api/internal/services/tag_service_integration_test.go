@@ -132,10 +132,24 @@ func TestTagService_TagCloud(t *testing.T) {
 		)
 	}
 	var p1, p2, p3 int64
-	rows, _ := repo.DB().Query(`SELECT id FROM posts ORDER BY id LIMIT 3`)
+	rows, err := repo.DB().Query(`SELECT id FROM posts ORDER BY id LIMIT 3`)
+	if err != nil {
+		t.Fatalf("query post ids: %v", err)
+	}
 	ids := []*int64{&p1, &p2, &p3}
-	for i := 0; rows.Next(); i++ {
-		_ = rows.Scan(ids[i])
+	n := 0
+	for ; rows.Next(); n++ {
+		if err := rows.Scan(ids[n]); err != nil {
+			t.Fatalf("scan post id: %v", err)
+		}
+	}
+	// A short read would leave p2/p3 at zero and the assertions below would
+	// blame GetTagCloud for counts the fixture never actually set up.
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate post ids: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("fixture: expected 3 posts, got %d", n)
 	}
 	_ = rows.Close()
 	// p1, p2 → Tag 1 (count=2); p3 → Tag 2 (count=1)

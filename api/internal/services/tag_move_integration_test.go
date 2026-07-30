@@ -77,11 +77,21 @@ func TestTagService_MoveTagScoping(t *testing.T) {
 		so       int32
 	}
 	var edgesY []edge
-	rows, _ := repo.DB().Query(`SELECT parent_id, child_id, sort_order FROM tag_relationships WHERE parent_id = ? ORDER BY sort_order`, parentY.ID)
+	rows, err := repo.DB().Query(`SELECT parent_id, child_id, sort_order FROM tag_relationships WHERE parent_id = ? ORDER BY sort_order`, parentY.ID)
+	if err != nil {
+		t.Fatalf("query edges under Y: %v", err)
+	}
 	for rows.Next() {
 		var e edge
-		_ = rows.Scan(&e.pid, &e.cid, &e.so)
+		if err := rows.Scan(&e.pid, &e.cid, &e.so); err != nil {
+			t.Fatalf("scan edge: %v", err)
+		}
 		edgesY = append(edgesY, e)
+	}
+	// A truncated read here would surface as a bogus "expected 3 edges" failure
+	// pointing at the code under test rather than at the query.
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate edges under Y: %v", err)
 	}
 	_ = rows.Close()
 
