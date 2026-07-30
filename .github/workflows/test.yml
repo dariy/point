@@ -50,8 +50,27 @@ jobs:
           npm ci --no-audit --no-fund
           node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
 
+      # Coverage rides along on the same run (V8 instrumentation via the
+      # built-in runner — no c8, no extra devDependency).
       - name: JS tests
-        run: node --test frontend/test/*.test.js
+        run: |
+          node --test --experimental-test-coverage \
+            --test-coverage-include='frontend/src/**' \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
+            frontend/test/*.test.js
+
+      - name: Frontend coverage floor
+        run: node scripts/js-coverage-report.mjs coverage-frontend.lcov
+
+      - name: Upload frontend coverage
+        uses: codecov/codecov-action@v7
+        with:
+          file: coverage-frontend.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          flags: frontend
+          name: codecov-frontend
 
   govulncheck:
     runs-on: ubuntu-latest

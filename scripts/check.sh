@@ -87,10 +87,19 @@ else
 fi
 
 # ── JS tests ──────────────────────────────────────────────────────────────────
+# Coverage is collected in the same pass (V8 instrumentation, no extra runner)
+# and written as lcov for the gate below and for codecov in CI.
 run_step "JS tests" bash -c "
     cd '$ROOT_DIR'
-    node --test frontend/test/*.test.js
+    node --test --experimental-test-coverage \
+        --test-coverage-include='frontend/src/**' \
+        --test-reporter=spec --test-reporter-destination=stdout \
+        --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
+        frontend/test/*.test.js
 "
+
+# ── JS coverage floor ────────────────────────────────────────────────────────
+run_step "JS coverage" node "$SCRIPT_DIR/js-coverage-report.mjs" "$ROOT_DIR/coverage-frontend.lcov"
 
 # ── Vulnerability scan ────────────────────────────────────────────────────────
 run_step "govulncheck" bash -c "

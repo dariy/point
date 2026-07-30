@@ -1,23 +1,50 @@
-# Coverage currently measures the Go API only.
+# Two suites are measured: the Go API and the frontend JS.
 #
-# The 70% target below is the project's ONE coverage number. The authoritative,
-# build-failing copy lives in scripts/coverage-gate.sh, which scripts/check.sh
-# and CI both call; the value here drives codecov's PR status checks. Keep the
-# two in sync — this repo previously carried an aspirational 80% in
-# .coverage-thresholds.json against a 40% patch target here, with neither
-# enforcing anything.
+# Each has ONE number, and the authoritative, build-failing copy of each lives
+# in the script CI and scripts/check.sh both call — scripts/coverage-gate.sh
+# for Go, scripts/js-coverage-report.mjs for JS. The targets here drive
+# codecov's PR status checks; keep them in sync with those scripts. This repo
+# previously carried an aspirational 80% in .coverage-thresholds.json against a
+# 40% patch target here, with neither enforcing anything.
 #
-# Measured 74.7% at the time this was set (2026-07-30). Ratchet only.
+# Measured when set (2026-07-30): Go 74.7%, JS 44.57%. Ratchet only.
+#
+# Note the JS number covers only files a test actually imports — V8 does not
+# instrument unimported modules, so 58 of 122 src files are absent from it
+# entirely. js-coverage-report.mjs ratchets that count separately; codecov
+# cannot see it.
 coverage:
   status:
     project:
-      default:
+      backend:
         target: 70%
         threshold: 2%
+        flags:
+          - unittests
+      frontend:
+        target: 44%
+        threshold: 2%
+        flags:
+          - frontend
     patch:
-      default:
+      backend:
         target: 70%
         threshold: 2%
+        flags:
+          - unittests
+      frontend:
+        target: 44%
+        threshold: 2%
+        flags:
+          - frontend
+
+flags:
+  unittests:
+    paths:
+      - api/
+  frontend:
+    paths:
+      - frontend/src/
 
 # cmd/seed is a standalone stress-test data generator, not shipped app code —
 # it has its own main() and writes raw batched INSERTs. Not worth unit tests.

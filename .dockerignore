@@ -33,6 +33,7 @@ backups
 
 # Test and coverage artifacts
 coverage.out
+coverage-frontend.lcov
 .coverage
 .coverage-thresholds.json
 test_output.log
