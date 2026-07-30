@@ -419,9 +419,9 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 }
 
 func (h *PostHandler) GetPostByID(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	post, err := h.postService.GetPostByID(c.Request().Context(), id)
@@ -588,9 +588,9 @@ type UpdatePostRequest struct {
 }
 
 func (h *PostHandler) UpdatePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
@@ -686,9 +686,9 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 }
 
 func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req struct {
@@ -720,9 +720,9 @@ func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
 }
 
 func (h *PostHandler) UpdatePostTags(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req struct {
@@ -751,9 +751,9 @@ func (h *PostHandler) UpdatePostTags(c echo.Context) error {
 }
 
 func (h *PostHandler) DeletePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
@@ -773,9 +773,9 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 }
 
 func (h *PostHandler) RestorePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
@@ -794,9 +794,9 @@ func (h *PostHandler) RestorePost(c echo.Context) error {
 }
 
 func (h *PostHandler) PermanentlyDeletePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
@@ -810,9 +810,9 @@ func (h *PostHandler) PermanentlyDeletePost(c echo.Context) error {
 }
 
 func (h *PostHandler) PublishPost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	published, err := h.postService.PublishPost(c.Request().Context(), id)
@@ -832,9 +832,9 @@ func (h *PostHandler) PublishPost(c echo.Context) error {
 }
 
 func (h *PostHandler) GeneratePreviewLink(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	token, expiresAt, err := h.postService.GeneratePreviewLink(c.Request().Context(), id)
@@ -959,9 +959,9 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 }
 
 func (h *PostHandler) GetPostNavigation(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	publicOnly := c.Get("user") == nil
@@ -984,9 +984,9 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 }
 
 func (h *PostHandler) WithdrawPost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	withdrawn, err := h.postService.WithdrawPost(c.Request().Context(), id)
@@ -1021,9 +1021,9 @@ func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
 // PublishToInstagram manually triggers cross-posting to Instagram for a post.
 // POST /api/posts/:id/instagram/publish
 func (h *PostHandler) PublishToInstagram(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	ctx := c.Request().Context()

@@ -174,9 +174,9 @@ func (h *TagHandler) GetTagCloud(c echo.Context) error {
 }
 
 func (h *TagHandler) GetTagByID(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
@@ -375,9 +375,9 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 // current values (parent_ids/child_ids included — an explicit empty array
 // removes all relationships, an omitted key leaves them untouched).
 func (h *TagHandler) UpdateTag(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
@@ -498,9 +498,9 @@ func (h *TagHandler) renderTagResponseWithStatus(c echo.Context, g *services.Tag
 }
 
 func (h *TagHandler) DeleteTag(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	if err := h.tagService.DeleteTag(c.Request().Context(), id); err != nil {
@@ -517,9 +517,9 @@ type ReorderTagRequest struct {
 }
 
 func (h *TagHandler) ReorderTag(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseNamedIDParam(c, "tag id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+		return err
 	}
 	var req ReorderTagRequest
 	if err := c.Bind(&req); err != nil {
@@ -537,9 +537,9 @@ func (h *TagHandler) ReorderTag(c echo.Context) error {
 }
 
 func (h *TagHandler) GeocodeTag(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseNamedIDParam(c, "tag id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+		return err
 	}
 	lat, lon, err := h.tagService.GeocodeTag(c.Request().Context(), id)
 	if err != nil {
@@ -561,9 +561,9 @@ func (h *TagHandler) RecalculateCounts(c echo.Context) error {
 // PatchTag applies a partial update to a tag's scalar fields.
 // Only fields present in the JSON body are changed; absent fields are untouched.
 func (h *TagHandler) PatchTag(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
@@ -689,9 +689,9 @@ func tagPatchParams(current models.Tag, fields map[string]json.RawMessage) servi
 // SetTagParents replaces all parent relationships for a tag.
 // Accepts {"ids": [1, 2, 3]}. An empty array removes all parents (tag becomes unfiled).
 func (h *TagHandler) SetTagParents(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req struct {
@@ -716,9 +716,9 @@ func (h *TagHandler) SetTagParents(c echo.Context) error {
 // SetTagChildren replaces all child relationships for a tag.
 // Accepts {"ids": [1, 2, 3]}. An empty array removes all children.
 func (h *TagHandler) SetTagChildren(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req struct {
@@ -750,9 +750,9 @@ type MoveTagRequest struct {
 // Only that sibling group's sort_order values are renumbered; all other parents
 // are untouched.
 func (h *TagHandler) MoveTag(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req MoveTagRequest
@@ -860,9 +860,9 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 }
 
 func (h *TagHandler) MergeTags(c echo.Context) error {
-	loserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	loserID, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 	var req struct {
 		WinnerID     int64 `json:"winner_id"`

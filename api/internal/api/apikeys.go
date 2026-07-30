@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"point-api/internal/services"
@@ -66,9 +65,9 @@ func (h *ApiKeyHandler) CreateKey(c echo.Context) error {
 }
 
 func (h *ApiKeyHandler) RevokeKey(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	userID := extractUserID(c.Get("user"))
@@ -80,9 +79,9 @@ func (h *ApiKeyHandler) RevokeKey(c echo.Context) error {
 }
 
 func (h *ApiKeyHandler) DeleteKey(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	userID := extractUserID(c.Get("user"))

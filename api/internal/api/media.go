@@ -131,9 +131,9 @@ func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
 }
 
 func (h *MediaHandler) GetMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	media, err := h.mediaService.GetMediaByID(c.Request().Context(), id)
@@ -152,9 +152,9 @@ type UpdateMediaRequest struct {
 }
 
 func (h *MediaHandler) UpdateMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req UpdateMediaRequest
@@ -177,9 +177,9 @@ func (h *MediaHandler) UpdateMedia(c echo.Context) error {
 }
 
 func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 	media, err := h.mediaService.ReextractEXIF(c.Request().Context(), id)
 	if err != nil {
@@ -193,9 +193,9 @@ func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
 type UpdateEXIFRequest map[string]string
 
 func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req UpdateEXIFRequest
@@ -214,9 +214,9 @@ func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
 }
 
 func (h *MediaHandler) RevertEXIF(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	media, err := h.mediaService.RevertEXIF(c.Request().Context(), id)
@@ -278,9 +278,9 @@ func (h *MediaHandler) BulkDeleteMedia(c echo.Context) error {
 }
 
 func (h *MediaHandler) DeleteMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	err = h.mediaService.DeleteMedia(c.Request().Context(), id)
@@ -365,9 +365,9 @@ type RenameMediaRequest struct {
 }
 
 func (h *MediaHandler) RenameMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req RenameMediaRequest
@@ -461,9 +461,9 @@ func (h *MediaHandler) AnalyzeImageByPath(c echo.Context) error {
 }
 
 func (h *MediaHandler) AnalyzeImageByID(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	analysis, err := h.mediaService.AnalyzeMediaByID(c.Request().Context(), id)

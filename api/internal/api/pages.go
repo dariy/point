@@ -761,9 +761,9 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	tagID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	tagID, err := parseNamedIDParam(c, "tag id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+		return err
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)

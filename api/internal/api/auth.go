@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -277,9 +276,9 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 }
 
 func (h *AuthHandler) DeleteSession(c echo.Context) error {
-	sessionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	sessionID, err := parseNamedIDParam(c, "session id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid session id")
+		return err
 	}
 
 	userID := extractUserID(c.Get("user"))
