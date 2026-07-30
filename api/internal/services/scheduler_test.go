@@ -43,3 +43,61 @@ func TestInstagramTransportErrorRedactsToken(t *testing.T) {
 		t.Errorf("expected path kept for diagnosability, got %q", wrapped)
 	}
 }
+
+// runTask is the single choke point every scheduled job passes through, which
+// is what makes the health record complete rather than per-task opt-in.
+// See point-system-health-admin.
+func TestSchedulerRunTaskRecordsHealth(t *testing.T) {
+	h := NewHealthRegistry()
+	s := (&SchedulerService{}).WithHealth(h)
+	ctx := context.Background()
+
+	s.runTask(ctx, "ok task", func(context.Context) error { return nil })
+	s.runTask(ctx, "bad task", func(context.Context) error { return errors.New("nope") })
+
+	snap := h.Snapshot()
+	if len(snap) != 2 {
+		t.Fatalf("recorded %d tasks, want 2", len(snap))
+	}
+	byName := map[string]TaskHealth{}
+	for _, t := range snap {
+		byName[t.Name] = t
+	}
+	if !byName["ok task"].Healthy() {
+		t.Error("successful task recorded as unhealthy")
+	}
+	if byName["bad task"].Healthy() {
+		t.Error("failed task recorded as healthy")
+	}
+	if byName["bad task"].LastError != "nope" {
+		t.Errorf("bad task LastError = %q, want \"nope\"", byName["bad task"].LastError)
+	}
+}
+
+// A panic is the failure most worth surfacing; recovering it must not also
+// hide it from the health view.
+func TestSchedulerRunTaskRecordsPanicAsFailure(t *testing.T) {
+	h := NewHealthRegistry()
+	s := (&SchedulerService{}).WithHealth(h)
+
+	s.runTask(context.Background(), "panicker", func(context.Context) error {
+		panic("kaboom")
+	})
+
+	snap := h.Snapshot()
+	if len(snap) != 1 {
+		t.Fatalf("recorded %d tasks, want 1", len(snap))
+	}
+	if snap[0].Healthy() {
+		t.Error("a panicking task must be recorded as unhealthy")
+	}
+	if !strings.Contains(snap[0].LastError, "kaboom") {
+		t.Errorf("LastError = %q, want it to mention the panic value", snap[0].LastError)
+	}
+}
+
+// Services built without a registry must still run.
+func TestSchedulerRunTaskWithoutHealthRegistry(t *testing.T) {
+	s := &SchedulerService{}
+	s.runTask(context.Background(), "no registry", func(context.Context) error { return errors.New("x") })
+}

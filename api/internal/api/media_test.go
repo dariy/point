@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/jpeg"
 	"mime/multipart"
@@ -146,7 +147,8 @@ func TestMediaHandler_Upload_RejectsNonMedia(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-media upload")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("expected 415, got %v", err)
 	}
@@ -610,10 +612,11 @@ func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
 	c.SetParamNames("id")
 	c.SetParamValues("9999")
 	err = handler.AnalyzeImageByID(c)
+	var notFoundErr *echo.HTTPError
 	if err == nil {
 		t.Error("expected error for non-existent media")
-	} else if he, ok := err.(*echo.HTTPError); ok && he.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", he.Code)
+	} else if errors.As(err, &notFoundErr) && notFoundErr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", notFoundErr.Code)
 	}
 
 	// Case 3: Not an Image
@@ -623,10 +626,11 @@ func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
 	c.SetParamNames("id")
 	c.SetParamValues(strconv.FormatInt(media.ID, 10))
 	err = handler.AnalyzeImageByID(c)
+	var badRequestErr *echo.HTTPError
 	if err == nil {
 		t.Error("expected error for non-image media")
-	} else if he, ok := err.(*echo.HTTPError); ok && he.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", he.Code)
+	} else if errors.As(err, &badRequestErr) && badRequestErr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", badRequestErr.Code)
 	}
 }
 
@@ -942,7 +946,9 @@ func TestMediaHandler_UpdateEXIF_InvalidChars(t *testing.T) {
 		Content: []byte("data"), Filename: "doc.txt", MimeType: "text/plain",
 	})
 
-	body, _ := json.Marshal(map[string]string{"Make": "Canon/EOS"})
+	// Angle brackets are refused; "/" is not — it is legitimate in EXIF values
+	// (lens names, rationals). See point-quickstart-ci-exif-dedup.
+	body, _ := json.Marshal(map[string]string{"Make": "Canon<script>"})
 	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()

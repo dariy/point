@@ -778,3 +778,86 @@ func TestFullFlow(t *testing.T) {
 		t.Error("issued access token failed ValidateToken")
 	}
 }
+
+// --- janitor / eviction ---
+
+// The in-memory maps only shrink via the janitor; without it a long-running
+// server accumulates every code and expired token it ever issued. The 10-minute
+// tick makes janitor itself untestable, so the policy lives in sweepExpired.
+// See point-mcp-oauth-tests.
+func TestSweepExpired(t *testing.T) {
+	p, _ := newTestProvider(t, Config{})
+	past := time.Now().Add(-time.Minute)
+	future := time.Now().Add(time.Hour)
+
+	p.mu.Lock()
+	p.codes["stale-code"] = &codeRecord{ClientID: "c", ExpiresAt: past}
+	p.codes["live-code"] = &codeRecord{ClientID: "c", ExpiresAt: future}
+	p.tokens["stale-token"] = &tokenRecord{ClientID: "c", ExpiresAt: past}
+	p.tokens["live-token"] = &tokenRecord{ClientID: "c", ExpiresAt: future}
+	// Zero ExpiresAt means "no expiry" — a refresh token issued with no
+	// configured refresh TTL. It must survive.
+	p.tokens["eternal-token"] = &tokenRecord{ClientID: "c"}
+	p.mu.Unlock()
+
+	p.sweepExpired(time.Now())
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, k := range []string{"stale-code"} {
+		if _, ok := p.codes[k]; ok {
+			t.Errorf("expired code %q survived the sweep", k)
+		}
+	}
+	if _, ok := p.codes["live-code"]; !ok {
+		t.Error("unexpired code was evicted")
+	}
+	if _, ok := p.tokens["stale-token"]; ok {
+		t.Error("expired token survived the sweep")
+	}
+	for _, k := range []string{"live-token", "eternal-token"} {
+		if _, ok := p.tokens[k]; !ok {
+			t.Errorf("token %q should not have been evicted", k)
+		}
+	}
+}
+
+// An expired code must be rejected even before the janitor runs — eviction is
+// hygiene, not the security boundary.
+func TestExpiredCodeRejectedBeforeSweep(t *testing.T) {
+	p, srv := newTestProvider(t, Config{})
+	clientID := registerClient(t, srv, "https://client.test/cb")
+	verifier, challenge := pkcePair()
+
+	p.mu.Lock()
+	p.codes["expired-code"] = &codeRecord{
+		ClientID:      clientID,
+		RedirectURI:   "https://client.test/cb",
+		CodeChallenge: challenge,
+		ExpiresAt:     time.Now().Add(-time.Second),
+	}
+	p.mu.Unlock()
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {"expired-code"},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://client.test/cb"},
+		"code_verifier": {verifier},
+	}
+	resp, err := http.PostForm(srv.URL+"/oauth/token", form)
+	if err != nil {
+		t.Fatalf("token: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expired code status = %d, want 400", resp.StatusCode)
+	}
+	// The rejection also drops the record, so it cannot be retried.
+	p.mu.RLock()
+	_, still := p.codes["expired-code"]
+	p.mu.RUnlock()
+	if still {
+		t.Error("expired code was left in the map after rejection")
+	}
+}

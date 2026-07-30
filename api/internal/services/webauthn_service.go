@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -71,7 +72,7 @@ type WebAuthnService struct {
 
 func NewWebAuthnService(repo repository.Repository, rpID, rpDisplayName, rpOrigin string) (*WebAuthnService, error) {
 	if rpID == "" || rpOrigin == "" {
-		return nil, fmt.Errorf("relying party ID and origin cannot be empty")
+		return nil, wrapKind(ErrInvalidInput, errors.New("relying party ID and origin cannot be empty"))
 	}
 
 	// The webauthn library expects the Relying Party ID to be a domain name,
@@ -109,7 +110,7 @@ func NewWebAuthnService(repo repository.Repository, rpID, rpDisplayName, rpOrigi
 func (s *WebAuthnService) BeginRegistration(ctx context.Context, userID int64) (*protocol.CredentialCreation, string, error) {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
-		return nil, "", fmt.Errorf("user not found: %w", err)
+		return nil, "", wrapKind(ErrNotFound, fmt.Errorf("user not found: %w", err))
 	}
 
 	creds, err := s.repo.GetWebAuthnCredentialsByUserID(ctx, userID)
@@ -140,13 +141,13 @@ func (s *WebAuthnService) BeginRegistration(ctx context.Context, userID int64) (
 func (s *WebAuthnService) FinishRegistration(ctx context.Context, userID int64, sessionKey string, r *http.Request) error {
 	sessionData, ok := s.sessionStore.Load(sessionKey)
 	if !ok {
-		return fmt.Errorf("registration session not found or expired")
+		return wrapKind(ErrUnauthenticated, errors.New("registration session not found or expired"))
 	}
 	s.sessionStore.Delete(sessionKey) // Consume the session
 
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return wrapKind(ErrNotFound, fmt.Errorf("user not found: %w", err))
 	}
 
 	creds, err := s.repo.GetWebAuthnCredentialsByUserID(ctx, userID)
@@ -188,7 +189,7 @@ func (s *WebAuthnService) BeginLoginWithoutUser(ctx context.Context) (*protocol.
 func (s *WebAuthnService) FinishLogin(ctx context.Context, sessionKey string, r *http.Request) (int64, error) {
 	sessionData, ok := s.sessionStore.Load(sessionKey)
 	if !ok {
-		return 0, fmt.Errorf("login session not found or expired")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("login session not found or expired"))
 	}
 	s.sessionStore.Delete(sessionKey)
 
@@ -198,12 +199,12 @@ func (s *WebAuthnService) FinishLogin(ctx context.Context, sessionKey string, r 
 	userHandler := func(rawID, userHandle []byte) (webauthn.User, error) {
 		cred, err := s.repo.GetWebAuthnCredentialByCredentialID(ctx, rawID)
 		if err != nil {
-			return nil, fmt.Errorf("credential not found")
+			return nil, wrapKind(ErrNotFound, errors.New("credential not found"))
 		}
 
 		user, err := s.repo.GetUser(ctx, cred.UserID)
 		if err != nil {
-			return nil, fmt.Errorf("user not found for credential")
+			return nil, wrapKind(ErrNotFound, errors.New("user not found for credential"))
 		}
 
 		allCreds, err := s.repo.GetWebAuthnCredentialsByUserID(ctx, user.ID)

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -181,7 +182,8 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 			t.Errorf("FAIL: GetTagByID returned status %d, expected 404", rec.Code)
 		}
 	} else {
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if ok && he.Code == http.StatusNotFound {
 			t.Log("PASS: GetTagByID returned 404 for tag below threshold")
 		} else {
@@ -203,7 +205,8 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 			t.Errorf("FAIL: GetTagBySlug returned status %d, expected 404", rec.Code)
 		}
 	} else {
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if ok && he.Code == http.StatusNotFound {
 			t.Log("PASS: GetTagBySlug returned 404 for tag below threshold")
 		} else {

@@ -101,7 +101,7 @@ func (h *SettingsHandler) addSecretIsSetFlags(ctx context.Context, settings map[
 func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	public := make(map[string]string)
 	for k, v := range all {
@@ -116,7 +116,7 @@ func (h *SettingsHandler) GetSettings(c echo.Context) error {
 	ctx := c.Request().Context()
 	all, err := h.settingsService.GetAllSettings(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	h.addSecretIsSetFlags(ctx, all)
 	return c.JSON(http.StatusOK, all)
@@ -154,12 +154,12 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 				continue
 			}
 			if err := h.settingsService.SetSecret(ctx, key, value); err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+				return MapError(err)
 			}
 			continue
 		}
 		if err := h.settingsService.SetSetting(ctx, key, value, "string"); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 	}
 
@@ -169,7 +169,7 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 
 	all, err := h.settingsService.GetAllSettings(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	h.addSecretIsSetFlags(ctx, all)
 	return c.JSON(http.StatusOK, all)

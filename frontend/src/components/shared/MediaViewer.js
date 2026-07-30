@@ -31,6 +31,7 @@ import { ViewContext } from '../../utils/viewContext.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { mediaFromHtml } from '../../utils/postMedia.js';
 import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.js';
+import { immersiveNavTargets } from '../../utils/immersiveNav.js';
 
 const MIN_SHOW_MS = 2000;
 
@@ -116,10 +117,7 @@ export class MediaViewer extends Component {
   }
 
   _renderPostNav(prev, next) {
-    const settings = store.get('settings') || {};
-    const feedMode = settings.immersive_nav_direction === 'feed';
-    const back = feedMode ? prev : next;
-    const fwd = feedMode ? next : prev;
+    const { back, fwd } = immersiveNavTargets(store.get('settings'), prev, next);
     const prevHtml = back ? `<div class="immersive-nav-panel immersive-nav-prev" data-nav="back"><div class="immersive-nav-gradient"></div></div>` : '';
     const nextHtml = fwd ? `<div class="immersive-nav-panel immersive-nav-next" data-nav="fwd"><div class="immersive-nav-gradient"></div></div>` : '';
     return prevHtml + nextHtml;
@@ -344,22 +342,7 @@ export class MediaViewer extends Component {
     });
 
     // Keyboard
-    this._on(document, 'keydown', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (this._zoomState.scale > 1) {
-        if (e.key === 'Escape') this._resetZoom();
-        return;
-      }
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goTo(this._index - 1); }
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goTo(this._index + 1); }
-      else if (e.key === 'Escape' || e.key === 'ArrowDown') { e.preventDefault(); onClose?.(); }
-      else if (e.key === 'Home') { e.preventDefault(); goTo(0); }
-      else if (e.key === 'End') { e.preventDefault(); goTo(items.length - 1); }
-      else if (e.key === ' ' || e.code === 'Space') {
-        e.preventDefault();
-        document.body.classList.contains('ui-hidden') ? this._showUI() : (Date.now() - this._lastShowTime >= MIN_SHOW_MS && this._hideUI());
-      }
-    });
+    this._on(document, 'keydown', (e) => this._onKeyDown(e));
 
     this._lastShowTime = Date.now();
 
@@ -367,16 +350,34 @@ export class MediaViewer extends Component {
     this._preloadNeighbors();
   }
 
+  /** Keyboard shortcuts. Subclasses override to claim keys before the defaults. */
+  _onKeyDown(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (this._zoomState.scale > 1) {
+      if (e.key === 'Escape') this._resetZoom();
+      return;
+    }
+    const items = this.props.items || [];
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); this._goTo(this._index - 1); }
+    else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); this._goTo(this._index + 1); }
+    else if (e.key === 'Escape' || e.key === 'ArrowDown') { e.preventDefault(); this.props.onClose?.(); }
+    else if (e.key === 'Home') { e.preventDefault(); this._goTo(0); }
+    else if (e.key === 'End') { e.preventDefault(); this._goTo(items.length - 1); }
+    else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      document.body.classList.contains('ui-hidden') ? this._showUI() : (Date.now() - this._lastShowTime >= MIN_SHOW_MS && this._hideUI());
+    }
+  }
+
   /**
    * Resolve the post that lives just beyond a carousel edge.
    * 'back' = stepping below index 0; 'fwd' = stepping past the last index.
-   * The feed-direction setting swaps which adjacent post sits on each side.
+   * The feed-direction setting swaps which adjacent post sits on each side
+   * (see immersiveNavTargets).
    */
   _targetFor(dir) {
-    const settings = store.get('settings') || {};
-    const feedMode = settings.immersive_nav_direction === 'feed';
-    if (dir === 'back') return feedMode ? this.props.navPrev : this.props.navNext;
-    return feedMode ? this.props.navNext : this.props.navPrev;
+    const targets = immersiveNavTargets(store.get('settings'), this.props.navPrev, this.props.navNext);
+    return targets[dir];
   }
 
   /**

@@ -1,6 +1,9 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -15,6 +18,18 @@ import (
 
 // remarkSiteID must match SITE=remark set by entrypoint.sh for the sidecar.
 const remarkSiteID = "remark"
+
+// remarkConfigPath is the engine endpoint (post-rewrite) the widget reads to
+// decide, among other things, which login buttons to render.
+const remarkConfigPath = "/api/v1/config"
+
+// pointProviderName is the auth provider RemarkSupervisor registers purely so
+// go-pkgz/auth accepts Point's bridge tokens — its middleware rejects any token
+// whose provider (the prefix in a point_<id> subject) is not registered. The
+// provider has no working login flow: its OAuth URLs point back into remark42,
+// so its button 404s. Registration is server-side only, so stripping the name
+// from the config the widget reads hides the button without touching auth.
+const pointProviderName = "point"
 
 // RegisterCommentsProxy mounts the reverse proxy to the remark42 sidecar at
 // /comments, gated by the "comments" plugin (disabled ⇒ 404, indistinguishable
@@ -46,6 +61,12 @@ func RegisterCommentsProxy(e *echo.Echo, settingsService *services.SettingsServi
 			h := c.Response().Header()
 			h.Del("Content-Security-Policy")
 			h.Del("X-Frame-Options")
+			// stripPointProvider has to read the config body as JSON; asking the
+			// engine not to compress this one small response keeps it from
+			// having to gunzip/regzip just to drop a list entry.
+			if strings.HasSuffix(c.Request().URL.Path, remarkConfigPath) {
+				c.Request().Header.Del("Accept-Encoding")
+			}
 			return next(c)
 		}
 	})
@@ -55,7 +76,60 @@ func RegisterCommentsProxy(e *echo.Echo, settingsService *services.SettingsServi
 			"/comments":   "/",
 			"/comments/*": "/$1",
 		},
+		ModifyResponse: stripPointProvider,
 	}))
+}
+
+// stripPointProvider removes the internal "point" provider from the engine's
+// config response, so the widget never renders a login button for a provider
+// that cannot complete a login. The engine still accepts point_<id> tokens —
+// that check reads its own registered providers, not this response.
+//
+// Anything unexpected (non-JSON, compressed, no auth_providers) is passed
+// through untouched: hiding a button is never worth breaking the widget.
+func stripPointProvider(res *http.Response) error {
+	if res.Request == nil || res.Request.URL.Path != remarkConfigPath || res.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	body, err := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if err != nil {
+		return err
+	}
+	passThrough := func() error {
+		res.Body = io.NopCloser(bytes.NewReader(body))
+		return nil
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(body, &cfg); err != nil {
+		return passThrough()
+	}
+	providers, ok := cfg["auth_providers"].([]any)
+	if !ok {
+		return passThrough()
+	}
+	kept := make([]any, 0, len(providers))
+	for _, p := range providers {
+		if name, ok := p.(string); ok && name == pointProviderName {
+			continue
+		}
+		kept = append(kept, p)
+	}
+	if len(kept) == len(providers) {
+		return passThrough()
+	}
+
+	cfg["auth_providers"] = kept
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		return passThrough()
+	}
+	res.Body = io.NopCloser(bytes.NewReader(out))
+	res.ContentLength = int64(len(out))
+	res.Header.Set("Content-Length", strconv.Itoa(len(out)))
+	return nil
 }
 
 // CommentsAdminHandler backs the /light/comments moderation page: it translates

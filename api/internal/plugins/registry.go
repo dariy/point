@@ -124,11 +124,10 @@ var Registry = []Descriptor{
 	// sub-slot. Top-right toggle + bottom control bar; toggle off to drop it.
 	{ID: "slideshow", Type: TypeSlot, Slot: "slideshow", EntryName: "slideshow", DefaultEnabled: true},
 
-	// ── Admin routes ─────────────────────────────────────────────────────────
-	// Each admin route is its own single-plugin core area: it cannot be disabled.
-	{ID: "media-library", Type: TypeRoute, Routes: []string{"/light/media"}, EntryName: "media-library", DefaultEnabled: true, Area: "media-library", Core: true},
-	{ID: "admin-posts-list", Type: TypeRoute, Routes: []string{"/light/posts"}, EntryName: "admin-posts-list", DefaultEnabled: true, Area: "admin-posts-list", Core: true},
-	{ID: "admin-home", Type: TypeRoute, Routes: []string{"/light"}, EntryName: "admin-home", DefaultEnabled: true, Area: "admin-home", Core: true},
+	// /light, /light/posts and /light/media used to be registered here as
+	// single-plugin core areas that could never be disabled. They are ordinary
+	// lazy routes in frontend/src/app.js now: the plugin indirection bought
+	// only code-splitting, which esbuild --splitting provides directly.
 
 	// ── Backend-gated services ───────────────────────────────────────────────
 	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: true},

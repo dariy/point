@@ -58,9 +58,8 @@
     .media-item-checkbox, 
     .media-item-name, 
     .media-item-preview--clickable, 
-    .card-header, 
-    .post-card, 
-    .checkbox-label, 
+    .card-header,
+    .checkbox-label,
     .tm-checkbox-label, 
     .sort-link, 
     .slug-link, 
@@ -78,6 +77,15 @@
     .version-update-dismiss,
     .tag-toggle span
 ):active:not(:disabled) {
+    scale: 0.96;
+}
+
+/* A card's press feedback is its navigation cue, so it must only answer presses
+   meant for the card itself. `:active` propagates up to every ancestor, which
+   otherwise shrinks the whole card when the press lands on something inside it
+   that acts on its own — a tag pill, a tag-strip scroll arrow. Only interactive
+   descendants are excluded: a press on the overlay or the title is the card's. */
+.post-card:active:not(:has(:is(a, button):active)) {
     scale: 0.96;
 }
 

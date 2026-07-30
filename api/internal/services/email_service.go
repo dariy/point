@@ -71,7 +71,7 @@ func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 	// form. A malformed address is rejected before we dial.
 	rcpt, err := mail.ParseAddress(to)
 	if err != nil {
-		return fmt.Errorf("invalid recipient address %q: %w", to, err)
+		return wrapKind(ErrInvalidInput, fmt.Errorf("invalid recipient address %q: %w", to, err))
 	}
 
 	header := strings.Join([]string{
@@ -102,20 +102,20 @@ func sendImplicitTLS(host, addr string, auth smtp.Auth, from, to string, msg []b
 	dialer := &net.Dialer{Timeout: smtpTimeout}
 	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: host})
 	if err != nil {
-		return fmt.Errorf("SMTP TLS dial: %w", err)
+		return wrapKind(ErrUpstream, fmt.Errorf("SMTP TLS dial: %w", err))
 	}
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
 
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
-		return fmt.Errorf("SMTP client: %w", err)
+		return wrapKind(ErrUpstream, fmt.Errorf("SMTP client: %w", err))
 	}
 	defer func() { _ = c.Close() }()
 
 	if auth != nil {
 		if err = c.Auth(auth); err != nil {
-			return fmt.Errorf("SMTP auth: %w", err)
+			return wrapKind(ErrUpstream, fmt.Errorf("SMTP auth: %w", err))
 		}
 	}
 	return sendData(c, from, to, msg)
@@ -125,14 +125,14 @@ func sendSTARTTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte
 	dialer := &net.Dialer{Timeout: smtpTimeout}
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("SMTP dial: %w", err)
+		return wrapKind(ErrUpstream, fmt.Errorf("SMTP dial: %w", err))
 	}
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
 
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
-		return fmt.Errorf("SMTP client: %w", err)
+		return wrapKind(ErrUpstream, fmt.Errorf("SMTP client: %w", err))
 	}
 	defer func() { _ = c.Close() }()
 
@@ -140,16 +140,16 @@ func sendSTARTTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte
 	// so a missing extension must be a hard error rather than a cleartext send.
 	if !isLocalHost(host) {
 		if ok, _ := c.Extension("STARTTLS"); !ok {
-			return fmt.Errorf("SMTP server %q does not advertise STARTTLS; refusing to send in cleartext", host)
+			return wrapKind(ErrUpstream, fmt.Errorf("SMTP server %q does not advertise STARTTLS; refusing to send in cleartext", host))
 		}
 		if err = c.StartTLS(&tls.Config{ServerName: host}); err != nil {
-			return fmt.Errorf("SMTP STARTTLS: %w", err)
+			return wrapKind(ErrUpstream, fmt.Errorf("SMTP STARTTLS: %w", err))
 		}
 	}
 
 	if auth != nil {
 		if err = c.Auth(auth); err != nil {
-			return fmt.Errorf("SMTP auth: %w", err)
+			return wrapKind(ErrUpstream, fmt.Errorf("SMTP auth: %w", err))
 		}
 	}
 	return sendData(c, from, to, msg)

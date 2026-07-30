@@ -103,7 +103,6 @@ if [ -f "$DOCKER_INSTALL_DIR/docker-compose.yml" ] || [ -d "$DOCKER_INSTALL_DIR/
 fi
 
 NATIVE_INSTALL_DIR="${INSTALL_DIR_ARG:-/opt/point}"
-NATIVE_DATA_DIR="${DATA_DIR_ARG:-/var/lib/point}"
 if systemctl list-unit-files 2>/dev/null | grep -q "^point.service" || \
    [ -d "$NATIVE_INSTALL_DIR" ] || \
    [ -f "/etc/systemd/system/point.service" ] || \
@@ -156,7 +155,8 @@ uninstall_docker() {
         detect_compose_engine
         if [ -n "$COMPOSE" ] && [ -f "$dir/docker-compose.yml" ]; then
             say "Stopping containers and removing volumes..."
-            (cd "$dir" && $COMPOSE down -v || true)
+            # Best effort: a missing dir or an already-stopped stack is fine.
+            ( cd "$dir" && $COMPOSE down -v ) || true
             ok "Containers stopped"
         else
             warn "Compose engine not found or docker-compose.yml missing. Removing directory directly."

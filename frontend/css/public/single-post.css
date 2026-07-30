@@ -143,8 +143,9 @@
     transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), scale var(--transition-fast);
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
 @media (pointer: coarse) {
-    .code-copy-btn {
+    :where(html:not(.pointer-fine)) .code-copy-btn {
         opacity: 0.5;
     }
 }

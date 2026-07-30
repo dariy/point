@@ -646,9 +646,11 @@
     opacity: 1;
 }
 
-/* Always show on touch devices where hover is unavailable */
+/* Always show on touch devices where hover is unavailable.
+   Scoped to :not(.pointer-fine) — see utils/pointerMode.js — because `hover:
+   none` is a claim about the primary pointer, not proof there's no mouse. */
 @media (hover: none) {
-    .tm-actions {
+    :where(html:not(.pointer-fine)) .tm-actions {
         opacity: 1;
     }
 }

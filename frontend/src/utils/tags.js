@@ -8,6 +8,10 @@
 
 import { escapeHtml, setupLongPress } from './helpers.js';
 import { CHEVRON_SVG, LOCK_SVG } from './icons.js';
+import { hasFinePointer } from './pointerMode.js';
+
+/** Hover-intent delay before a header dropdown opens, in ms. */
+export const HOVER_OPEN_MS = 180;
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user
@@ -212,6 +216,9 @@ function _hideFlyout() {
 
 export function hideFlyout() { _hideFlyout(); }
 
+/** The shared flyout element, or null before anything has ever opened one. */
+export function flyoutEl() { return _flyoutEl; }
+
 /**
  * Hide the shared flyout only when its trigger lives inside `root`.
  *
@@ -340,8 +347,7 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
   _activeLink = anchorEl;
   _activeCard = null;
 
-  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  if (canHover) {
+  if (hasFinePointer()) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }
@@ -354,6 +360,54 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
     _hideFlyout();
   };
   document.addEventListener('click', _flyoutDismiss, true);
+}
+
+/**
+ * Wire a trigger (breadcrumb crumb, nav link, "More" panel row) so its dropdown
+ * opens on mouse hover *and* on tap — one interaction model for every header
+ * dropdown.
+ *
+ * Hover is gated on `pointerenter` with `pointerType === 'mouse'` rather than
+ * `mouseenter`: a tap emits compatibility mouse events, but pointer events
+ * always report the real device, so a finger can never trip the hover path.
+ *
+ * @param {HTMLElement} el          the trigger
+ * @param {Function}    getSpec     () => flyout spec, evaluated at open time
+ * @param {Function}    navigateFn  navigate(url)
+ * @param {HTMLElement} [excludeEl] clicks inside this element won't dismiss it
+ */
+export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
+  let timer = null;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+
+  el.addEventListener('pointerenter', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    cancel();
+    timer = setTimeout(
+      () => showCrumbDropdown(el, getSpec(), navigateFn, excludeEl),
+      HOVER_OPEN_MS,
+    );
+  });
+  el.addEventListener('pointerleave', cancel);
+
+  el.addEventListener('click', (e) => {
+    cancel();
+    // With a mouse the dropdown is already showing from hover, so a click means
+    // "go to this item" — let the link navigate.
+    if (hasFinePointer()) { _hideFlyout(); return; }
+    // Coarse pointer: first tap opens the dropdown, second tap follows the link.
+    if (el.classList.contains('is-flyout-open')) {
+      const href = el.getAttribute('href');
+      if (href && href !== '#') {
+        _hideFlyout();
+        navigateFn(href);
+        e.preventDefault();
+        return;
+      }
+    }
+    e.preventDefault();
+    showCrumbDropdown(el, getSpec(), navigateFn, excludeEl);
+  });
 }
 
 export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
@@ -415,13 +469,28 @@ export function setupScrollableStrip(trackEl, scrollEl) {
   if (!trackEl || !scrollEl) return () => {};
   const btnLeft  = trackEl.querySelector('.tags-scroll-btn--left');
   const btnRight = trackEl.querySelector('.tags-scroll-btn--right');
+  const overlay = trackEl.closest('.post-card')?.querySelector('.post-card-content.overlay');
+
+  // On a card whose overlay is still transparent — touch, before the reveal tap —
+  // the arrows are invisible but still hit-testable, so a tap meant to reveal the
+  // card would land on one and scroll a strip nobody can see. Decline those and
+  // let the click bubble to the card's own reveal handler.
+  const isRevealed = () => !overlay || getComputedStyle(overlay).opacity !== '0';
   const update = () => {
     const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
     trackEl.classList.toggle('has-scroll-left',  scrollLeft > 1);
     trackEl.classList.toggle('has-scroll-right', scrollLeft < scrollWidth - clientWidth - 1);
   };
-  const onLeft  = () => scrollEl.scrollBy({ left: -200, behavior: 'smooth' });
-  const onRight = () => scrollEl.scrollBy({ left:  200, behavior: 'smooth' });
+  // The strip can live inside a fully clickable post card — once an arrow acts on
+  // a click, stop it reaching the card's "navigate to post" handler.
+  const scrollBy = (dx) => (e) => {
+    if (!isRevealed()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    scrollEl.scrollBy({ left: dx, behavior: 'smooth' });
+  };
+  const onLeft  = scrollBy(-200);
+  const onRight = scrollBy(200);
   btnLeft?.addEventListener('click',  onLeft);
   btnRight?.addEventListener('click', onRight);
   scrollEl.addEventListener('scroll', update, { passive: true });

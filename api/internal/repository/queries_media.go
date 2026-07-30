@@ -292,8 +292,24 @@ func (r *sqliteRepository) GetMediaByPaths(ctx context.Context, paths []string) 
 	if len(paths) == 0 {
 		return nil, nil
 	}
+	// Bound the IN list: SQLite caps bound parameters per statement, and a
+	// single post can carry an arbitrary number of images.
+	if len(paths) > maxInClauseParams {
+		var all []models.Medium
+		for start := 0; start < len(paths); start += maxInClauseParams {
+			end := min(start+maxInClauseParams, len(paths))
+			batch, err := r.GetMediaByPaths(ctx, paths[start:end])
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, batch...)
+		}
+		return all, nil
+	}
 	placeholders := strings.Repeat("?,", len(paths))
 	placeholders = placeholders[:len(placeholders)-1]
+	// placeholders is a generated "?,?,?" list; every path is bound below.
+	//nolint:gosec // G202: placeholders only, values are bound
 	q := `SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
 		file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption,
 		is_public, metadata FROM media WHERE original_path IN (` + placeholders + `)`

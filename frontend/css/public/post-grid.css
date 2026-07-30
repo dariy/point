@@ -42,11 +42,13 @@
     cursor: pointer;
 }
 
-@media (hover: hover) {
-    .post-card:hover {
-        box-shadow: var(--shadow-lg);
-        transform: translateY(calc(var(--post-card-transform) * -1));
-    }
+/* Card hover affordances key off `.pointer-fine` rather than `(hover: hover)`
+   — see utils/pointerMode.js. A laptop with a touchscreen answers that media
+   query "no", which left every mouse user on such a machine with a completely
+   inert grid. */
+:where(html.pointer-fine) .post-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(calc(var(--post-card-transform) * -1));
 }
 
 /* --- HAS IMAGE/VISUAL STYLE --- */
@@ -97,11 +99,9 @@
     transition: background-color var(--transition-theme), color var(--transition-theme);
 }
 
-@media (hover: hover) {
-    .post-card:hover .audio-placeholder {
-        background-color: var(--surface-hover);
-        color: var(--color-primary);
-    }
+:where(html.pointer-fine) .post-card:hover .audio-placeholder {
+    background-color: var(--surface-hover);
+    color: var(--color-primary);
 }
 
 .video-play-indicator {
@@ -115,15 +115,13 @@
     transition: opacity var(--transition-normal);
 }
 
-@media (hover: hover) {
-    .post-card:hover .post-card-background img,
-    .post-card:hover .post-card-background video {
-        transform: scale(1.05);
-    }
+:where(html.pointer-fine) .post-card:hover .post-card-background img,
+:where(html.pointer-fine) .post-card:hover .post-card-background video {
+    transform: scale(1.05);
+}
 
-    .post-card:hover .video-play-indicator {
-        opacity: 0.8;
-    }
+:where(html.pointer-fine) .post-card:hover .video-play-indicator {
+    opacity: 0.8;
 }
 
 /* Overlay Content for Image Cards */
@@ -152,13 +150,12 @@
     opacity: 1;
 }
 
-/* Hover-reveal only on devices that truly hover. On touch the overlay is
-   revealed by the JS two-tap (.is-touched); guarding :hover here prevents the
-   browser's sticky-hover from adding a redundant first tap (3-tap regression). */
-@media (hover: hover) {
-    .post-card:hover .post-card-content.overlay {
-        opacity: 1;
-    }
+/* Hover-reveal only where a mouse is actually driving. On touch the overlay is
+   revealed by the JS two-tap (.is-touched); keeping :hover out of play there
+   stops the browser's sticky-hover from leaving a card looking revealed while
+   the JS still wants its first tap (the old 3-tap regression). */
+:where(html.pointer-fine) .post-card:hover .post-card-content.overlay {
+    opacity: 1;
 }
 
 .post-card-edit-btn {
@@ -185,16 +182,16 @@
     cursor: pointer;
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js — so a mouse gets the
+   hover-reveal below instead of a permanently half-visible button. */
 @media (pointer: coarse) {
-    .post-card-edit-btn {
+    :where(html:not(.pointer-fine)) .post-card-edit-btn {
         opacity: 0.5;
     }
 }
 
-@media (hover: hover) {
-    .post-card:hover .post-card-edit-btn {
-        opacity: 1;
-    }
+:where(html.pointer-fine) .post-card:hover .post-card-edit-btn {
+    opacity: 1;
 }
 
 .post-card-edit-btn:hover {

@@ -26,9 +26,14 @@ import { initNotificationLog } from "./utils/notificationLog.js";
 
 // ── Theming Foundation ────────────────────────────────────────────────────
 import { loadThemeCss } from "./utils/themeLoader.js";
+import { initPointerMode } from "./utils/pointerMode.js";
 
 // Load the active theme CSS immediately to prevent FOUC
 loadThemeCss();
+
+// Decide touch-vs-pointer styling before anything renders, for the same reason:
+// the cached verdict has to be on <html> ahead of first paint.
+initPointerMode();
 
 // Initialise the plugin host from the server-injected, enabled-only manifest
 // (window.__PLUGINS__). Done at module load so the route table and shell slots
@@ -292,6 +297,12 @@ const routes = [
   },
 
   // Admin (Light) — protected
+  { path: "/light", load: () => import("./pages/light/DashboardPage.js") },
+  {
+    path: "/light/posts",
+    load: () => import("./pages/light/PostsListPage.js"),
+  },
+  { path: "/light/media", load: () => import("./pages/light/MediaPage.js") },
   {
     path: "/light/posts/new",
     load: () => import("./pages/light/PostEditPage.js"),

@@ -30,7 +30,9 @@ func (r *sqliteRepository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs [
 		placeholders[i] = "?"
 	}
 
-	q := `SELECT id, latitude, longitude FROM tags WHERE id IN (` +
+	// The only interpolated text is a generated list of "?" placeholders; every
+	// tag id is bound as an argument.
+	q := `SELECT id, latitude, longitude FROM tags WHERE id IN (` + //nolint:gosec // G202: placeholders only, values are bound
 		strings.Join(placeholders, ",") + `) AND latitude IS NOT NULL AND longitude IS NOT NULL`
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {

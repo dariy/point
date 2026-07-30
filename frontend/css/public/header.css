@@ -251,7 +251,6 @@
 .site-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
-    padding-left: var(--spacing-sm);
     margin: 0;
     transition: color var(--transition-theme);
 }
@@ -392,11 +391,12 @@
     box-shadow: var(--shadow-sm);
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
 @media (pointer: coarse) {
-    .header-action-btn::after,
-    .theme-toggle::after,
-    .create-post::after,
-    .light-link::after {
+    :where(html:not(.pointer-fine)) .header-action-btn::after,
+    :where(html:not(.pointer-fine)) .theme-toggle::after,
+    :where(html:not(.pointer-fine)) .create-post::after,
+    :where(html:not(.pointer-fine)) .light-link::after {
         content: "";
         position: absolute;
         top: 50%;
@@ -656,9 +656,10 @@
     }
 }
 
-/* Coarse pointer search overlay */
+/* Coarse pointer search overlay. Scoped to :not(.pointer-fine) — see
+   utils/pointerMode.js — so a mouse keeps the inline field. */
 @media (pointer: coarse) {
-    .header-search-form.is-active {
+    :where(html:not(.pointer-fine)) .header-search-form.is-active {
         position: fixed;
         inset: 0;
         width: 100vw !important;
@@ -670,7 +671,7 @@
         align-items: center;
         justify-content: space-between;
     }
-    .header-search-form.is-active input[type="search"] {
+    :where(html:not(.pointer-fine)) .header-search-form.is-active input[type="search"] {
         position: static;
         width: 100% !important;
         opacity: 1;
@@ -680,7 +681,7 @@
         border: none;
         font-size: var(--font-size-lg);
     }
-    .header-search-form.is-active .search-toggle-btn {
+    :where(html:not(.pointer-fine)) .header-search-form.is-active .search-toggle-btn {
         order: 2;
     }
 }

@@ -3,30 +3,23 @@ package services
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
-
-	"github.com/labstack/echo/v4"
 )
 
 type TagService struct {
 	repo                repository.Repository
 	nominatimBaseURL    string
 	nominatimReverseURL string
-	mu                  sync.RWMutex
-	graph               *TagGraph
+	// cache owns the tag graph and its lock; see tag_graph_cache.go.
+	cache *tagGraphCache
 }
 
 // TagGraph is an in-memory snapshot of the tag system, including hierarchy,
@@ -47,37 +40,31 @@ type TagGraph struct {
 }
 
 func NewTagService(repo repository.Repository) *TagService {
-	return &TagService{
+	s := &TagService{
 		repo:                repo,
 		nominatimBaseURL:    "https://nominatim.openstreetmap.org/search",
 		nominatimReverseURL: "https://nominatim.openstreetmap.org/reverse",
 	}
+	s.cache = newTagGraphCache(s.buildGraph)
+	return s
 }
 
 // Invalidate clears the cached tag graph, forcing a rebuild on the next read.
+// Callers outside this package need it because mutating posts changes the
+// hierarchical post counts the graph caches (see PostService.refreshTagCounts).
 func (s *TagService) Invalidate() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.graph = nil
+	s.cache.invalidate()
 }
 
+// getGraph returns the cached tag graph, building it on a cold cache.
 func (s *TagService) getGraph(ctx context.Context) (*TagGraph, error) {
-	s.mu.RLock()
-	if s.graph != nil {
-		g := s.graph
-		s.mu.RUnlock()
-		return g, nil
-	}
-	s.mu.RUnlock()
+	return s.cache.get(ctx)
+}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if s.graph != nil {
-		return s.graph, nil
-	}
-
+// buildGraph reads the tag system and assembles a fresh TagGraph. It is the
+// cache's build function and must not be called directly — go through getGraph
+// so the result is shared rather than rebuilt per caller.
+func (s *TagService) buildGraph(ctx context.Context) (*TagGraph, error) {
 	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
@@ -161,7 +148,6 @@ func (s *TagService) getGraph(ctx context.Context) (*TagGraph, error) {
 	// Let's use a helper that doesn't depend on TagService state.
 	g.NavTree = g.buildNavTree(0)
 
-	s.graph = g
 	return g, nil
 }
 
@@ -416,7 +402,7 @@ func (s *TagService) GetTagBySlug(ctx context.Context, slug string) (models.Tag,
 
 	tag, ok := g.BySlug[strings.ToLower(slug)]
 	if !ok {
-		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
+		return models.Tag{}, ErrTagNotFound
 	}
 	return tag, nil
 }
@@ -429,7 +415,7 @@ func (s *TagService) GetTagByID(ctx context.Context, id int64) (models.Tag, erro
 
 	tag, ok := g.ByID[id]
 	if !ok {
-		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
+		return models.Tag{}, ErrTagNotFound
 	}
 	return tag, nil
 }
@@ -508,7 +494,7 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
-			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+			return models.Tag{}, ErrTagSlugExists
 		}
 		return models.Tag{}, err
 	}
@@ -657,6 +643,15 @@ func (s *TagService) GetTagChildren(ctx context.Context, id int64, publicOnly bo
 	return result, nil
 }
 
+// Tag failures a caller can act on. Previously these were built here as
+// echo.HTTPError values, which put HTTP status decisions in the service layer;
+// the statuses they used are preserved by the kinds they now carry.
+var (
+	ErrTagNotFound   = kindSentinel(ErrNotFound, "tag not found")
+	ErrTagSlugExists = kindSentinel(ErrConflict, "a tag with that slug already exists")
+	ErrTagNotAChild  = kindSentinel(ErrUnprocessable, "tag is not a child of the given parent")
+)
+
 // AddTagRelationship adds a parent-child relationship between two tags with cycle detection.
 func (s *TagService) AddTagRelationship(ctx context.Context, parentID, childID int64) error {
 	// Check for cycles: if parentID is already a descendant of childID, adding parentID -> childID creates a cycle.
@@ -665,7 +660,7 @@ func (s *TagService) AddTagRelationship(ctx context.Context, parentID, childID i
 		return err
 	}
 	if path != nil {
-		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("Cycle detected: %s", strings.Join(path, " -> ")))
+		return wrapKind(ErrConflict, fmt.Errorf("Cycle detected: %s", strings.Join(path, " -> "))) //nolint:staticcheck // ST1005: user-facing message, wording preserved from before the taxonomy
 	}
 
 	if err := s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
@@ -790,7 +785,7 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
-			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+			return models.Tag{}, ErrTagSlugExists
 		}
 		return models.Tag{}, err
 	}
@@ -941,12 +936,12 @@ type ReorderTagParams struct {
 // ReorderTag reorders a tag within its sibling group by updating sort_order values.
 func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 	if p.Position != "before" && p.Position != "after" {
-		return fmt.Errorf("position must be 'before' or 'after'")
+		return wrapKind(ErrInvalidInput, errors.New("position must be 'before' or 'after'"))
 	}
 
 	dragged, err := s.repo.GetTag(ctx, p.ID)
 	if err != nil {
-		return fmt.Errorf("tag %d not found", p.ID)
+		return wrapKind(ErrNotFound, fmt.Errorf("tag %d not found", p.ID))
 	}
 
 	var siblings []models.Tag
@@ -1028,7 +1023,7 @@ func (s *TagService) MoveTag(ctx context.Context, p MoveTagParams) error {
 
 	// Verify tag exists.
 	if _, ok := g.ByID[p.ID]; !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "tag not found")
+		return ErrTagNotFound
 	}
 
 	// Verify tag is a child of the given parent.
@@ -1040,7 +1035,7 @@ func (s *TagService) MoveTag(ctx context.Context, p MoveTagParams) error {
 		}
 	}
 	if !isChild {
-		return echo.NewHTTPError(http.StatusUnprocessableEntity, "tag is not a child of the given parent")
+		return ErrTagNotAChild
 	}
 
 	// Get all siblings under this parent ordered by sort_order (from DB, authoritative).
@@ -1085,280 +1080,6 @@ func (s *TagService) MoveTag(ctx context.Context, p MoveTagParams) error {
 
 	s.Invalidate()
 	return nil
-}
-
-// GeocodeTag looks up coordinates for a tag by name via Nominatim and stores them.
-func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64, error) {
-	tag, err := s.repo.GetTag(ctx, id)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	params := url.Values{
-		"q":      {tag.Name},
-		"format": {"json"},
-		"limit":  {"1"},
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		s.nominatimBaseURL+"?"+params.Encode(), nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	req.Header.Set("User-Agent", "Point/1.0.0")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	body, _ := io.ReadAll(resp.Body)
-
-	var results []struct {
-		Lat string `json:"lat"`
-		Lon string `json:"lon"`
-	}
-	if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
-		return 0, 0, fmt.Errorf("no geocoding results for %q", tag.Name)
-	}
-
-	var lat, lon float64
-	_, _ = fmt.Sscanf(results[0].Lat, "%f", &lat)
-	_, _ = fmt.Sscanf(results[0].Lon, "%f", &lon)
-
-	if err := s.repo.UpsertTagLocation(ctx, id, lat, lon); err != nil {
-		return 0, 0, err
-	}
-	s.Invalidate()
-	return lat, lon, nil
-}
-
-// reverseGeocode resolves the name of the populated place at the given
-// coordinates via the Nominatim reverse API. It returns the most specific
-// place name available (city, then town/village/municipality, then county,
-// state, and finally country). An error is returned when the lookup fails or
-// no usable place name is present.
-func (s *TagService) reverseGeocode(ctx context.Context, lat, lon float64) (string, error) {
-	params := url.Values{
-		"lat":            {strconv.FormatFloat(lat, 'f', -1, 64)},
-		"lon":            {strconv.FormatFloat(lon, 'f', -1, 64)},
-		"format":         {"jsonv2"},
-		"zoom":           {"10"}, // city level
-		"addressdetails": {"1"},
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		s.nominatimReverseURL+"?"+params.Encode(), nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "Point/1.0.0")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	body, _ := io.ReadAll(resp.Body)
-
-	var result struct {
-		Name    string `json:"name"`
-		Address struct {
-			City         string `json:"city"`
-			Town         string `json:"town"`
-			Village      string `json:"village"`
-			Municipality string `json:"municipality"`
-			Hamlet       string `json:"hamlet"`
-			Suburb       string `json:"suburb"`
-			County       string `json:"county"`
-			State        string `json:"state"`
-			Country      string `json:"country"`
-		} `json:"address"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("parse reverse geocode response: %w", err)
-	}
-
-	a := result.Address
-	for _, candidate := range []string{
-		a.City, a.Town, a.Village, a.Municipality, a.Hamlet, a.Suburb,
-		a.County, a.State, result.Name, a.Country,
-	} {
-		if name := strings.TrimSpace(candidate); name != "" {
-			return name, nil
-		}
-	}
-	return "", fmt.Errorf("no place name for coordinates %f,%f", lat, lon)
-}
-
-// TagPostWithLocation reverse-geocodes the given coordinates to a place name,
-// finds or creates a location tag carrying those coordinates, and attaches the
-// tag to the post. It is best-effort: callers may ignore the returned error.
-func (s *TagService) TagPostWithLocation(ctx context.Context, postID int64, lat, lon float64) (models.Tag, error) {
-	name, err := s.reverseGeocode(ctx, lat, lon)
-	if err != nil {
-		return models.Tag{}, err
-	}
-
-	slug := utils.Slugify(name)
-	tag, err := s.repo.GetTagBySlug(ctx, slug)
-	if err != nil {
-		// Tag does not exist yet — create it with the coordinates.
-		tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
-			Name:      name,
-			Slug:      slug,
-			Latitude:  sql.NullFloat64{Float64: lat, Valid: true},
-			Longitude: sql.NullFloat64{Float64: lon, Valid: true},
-		})
-		if err != nil {
-			return models.Tag{}, fmt.Errorf("create location tag %q: %w", name, err)
-		}
-	} else if !tag.Latitude.Valid || !tag.Longitude.Valid {
-		// Existing tag without coordinates — backfill them.
-		if err := s.repo.UpsertTagLocation(ctx, tag.ID, lat, lon); err != nil {
-			return models.Tag{}, fmt.Errorf("set location for tag %q: %w", name, err)
-		}
-	}
-
-	if err := s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID}); err != nil {
-		return models.Tag{}, fmt.Errorf("attach location tag to post: %w", err)
-	}
-
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	s.Invalidate()
-	return tag, nil
-}
-
-// UpdateMissingCoords geocodes city/country descendant tags that have no coordinates.
-// Uses the Nominatim OpenStreetMap API (1 req/sec rate limit).
-func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interface{}, error) {
-	// Find base category tags
-	baseTags, err := s.repo.FindTagsByNames(ctx, []string{"city", "cities", "country", "countries"})
-	if err != nil {
-		return nil, err
-	}
-	if len(baseTags) == 0 {
-		return map[string]interface{}{
-			"status":        "success",
-			"updated_count": 0,
-			"message":       "No base tags (city/country) found.",
-		}, nil
-	}
-
-	// Collect all descendant IDs (excluding the base tags themselves)
-	baseIDs := map[int64]bool{}
-	for _, bt := range baseTags {
-		baseIDs[bt.ID] = true
-	}
-
-	allDescendantIDs := map[int64]bool{}
-	for _, bt := range baseTags {
-		descendants, err := s.repo.GetTagDescendants(ctx, bt.ID)
-		if err != nil {
-			continue
-		}
-		for _, d := range descendants {
-			if !baseIDs[d.ID] {
-				allDescendantIDs[d.ID] = true
-			}
-		}
-	}
-
-	if len(allDescendantIDs) == 0 {
-		return map[string]interface{}{
-			"status":        "success",
-			"updated_count": 0,
-			"message":       "No sub-tags found for city/country.",
-		}, nil
-	}
-
-	ids := make([]int64, 0, len(allDescendantIDs))
-	for id := range allDescendantIDs {
-		ids = append(ids, id)
-	}
-
-	// Filter to those without coordinates
-	tagsToGeocode, err := s.repo.GetTagsWithoutLocation(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	if len(tagsToGeocode) == 0 {
-		return map[string]interface{}{
-			"status":        "success",
-			"updated_count": 0,
-			"message":       "All city/country tags already have coordinates.",
-		}, nil
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	updatedCount := 0
-	var errors []string
-
-	for _, tag := range tagsToGeocode {
-		params := url.Values{
-			"q":      {tag.Name},
-			"format": {"json"},
-			"limit":  {"1"},
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-			s.nominatimBaseURL+"?"+params.Encode(), nil)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("build request for %s: %v", tag.Name, err))
-			continue
-		}
-		req.Header.Set("User-Agent", "Point/1.0.0")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("geocode %s: %v", tag.Name, err))
-			time.Sleep(1100 * time.Millisecond)
-			continue
-		}
-
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-
-		var results []struct {
-			Lat string `json:"lat"`
-			Lon string `json:"lon"`
-		}
-		if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
-			errors = append(errors, fmt.Sprintf("no results for %s", tag.Name))
-			time.Sleep(1100 * time.Millisecond)
-			continue
-		}
-
-		var lat, lon float64
-		_, _ = fmt.Sscanf(results[0].Lat, "%f", &lat)
-		_, _ = fmt.Sscanf(results[0].Lon, "%f", &lon)
-
-		if err := s.repo.UpsertTagLocation(ctx, tag.ID, lat, lon); err != nil {
-			errors = append(errors, fmt.Sprintf("save %s: %v", tag.Name, err))
-		} else {
-			updatedCount++
-		}
-
-		// Respect Nominatim rate limit: max 1 request per second
-		time.Sleep(1100 * time.Millisecond)
-	}
-
-	if updatedCount > 0 {
-		s.Invalidate()
-	}
-
-	result := map[string]interface{}{
-		"status":        "success",
-		"updated_count": updatedCount,
-		"message":       fmt.Sprintf("Updated coordinates for %d tags.", updatedCount),
-	}
-	if len(errors) > 0 {
-		result["errors"] = errors
-	}
-	return result, nil
 }
 
 // NavTagNode is a tag node in the public navigation hierarchy with nested children.

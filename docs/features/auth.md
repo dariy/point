@@ -39,11 +39,16 @@ Single-admin authentication with several credential surfaces. Services:
 - Secrets (API keys, reset tokens, Instagram/Gemini credentials) are never returned by
   any endpoint; `*_is_set` booleans drive the UI.
 
+## Session tokens
+
+Sessions are opaque 32-byte `crypto/rand` tokens stored in the `sessions` table
+and looked up per request. There is no signing key, and deliberately so: a
+DB-backed token is revocable server-side (the Security page's "log out all other
+devices" is a `DELETE`), which a self-validating signed cookie is not. `SECRET_KEY`
+existed as config, was generated and persisted, and was read by nothing — it was
+removed rather than wired up, since there is nothing for it to sign.
+
 ## Known open items
 
-- Session cookies lack the `Secure` flag and there's no HSTS.
-- Login rate limiting is bypassable via `X-Forwarded-For`; no rate limit on the
-  public API surface.
-- `SECRET_KEY` is currently dead code.
 - Email service review findings: envelope parsing, SMTP injection, STARTTLS downgrade,
   timeouts.

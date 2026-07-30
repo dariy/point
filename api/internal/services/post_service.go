@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path"
@@ -41,6 +42,16 @@ type PostService struct {
 	policy           *bluemonday.Policy
 	viewBuffer       map[int64]int
 	viewMu           sync.Mutex
+	// health records background cross-post outcomes for the admin health
+	// view. Nil is valid and records nothing.
+	health *HealthRegistry
+}
+
+// WithHealth attaches a health registry so background cross-post outcomes are
+// visible to the admin health endpoint.
+func (s *PostService) WithHealth(h *HealthRegistry) *PostService {
+	s.health = h
+	return s
 }
 
 func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, tagService *TagService, appURL string) *PostService {
@@ -213,7 +224,7 @@ func normalizeContent(content string) string {
 var (
 	cssCommentRe     = regexp.MustCompile(`/\*[\s\S]*?\*/`)                   // url(/**/https://…) comment splitting
 	cssHexEscapeRe   = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?`) // \40 import → @import
-	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)            // \@import → @import
+	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)             // \@import → @import
 	cssExternalURLRe = regexp.MustCompile(`(?i)url\(\s*['"]?\s*https?:`)      // external resource in a declaration value
 )
 
@@ -233,11 +244,37 @@ func normalizeCSSForSanitizing(css string) string {
 	return cssOtherEscapeRe.ReplaceAllString(css, "$1")
 }
 
+// cssScope selects how strictly a CSS blob is sanitized.
+type cssScope int
+
+const (
+	// cssScopePost is per-post CSS. A post is a page fragment, so on top of the
+	// escapes it must not reposition itself out of its own box or paint over
+	// the rest of the page.
+	cssScopePost cssScope = iota
+	// cssScopeGlobal is the site-wide custom CSS an admin writes to theme their
+	// own site. Fixed positioning, stacking order and generated content are all
+	// legitimate there, so only the escapes are removed: @import, external
+	// url() resources and a '<' breakout.
+	cssScopeGlobal
+)
+
 // SanitizePostCSS removes dangerous constructs from per-post CSS blocks:
 // @import at-rules, external url() resources, position:fixed/sticky, z-index,
 // the content property, and any stray '<' (a style/script breakout). Returns
 // the sanitized CSS and the list of removed construct names (deduplicated).
 func SanitizePostCSS(css string) (string, []string) {
+	return sanitizeCSS(css, cssScopePost)
+}
+
+// SanitizeGlobalCSS removes the escapes from the site-wide custom CSS: @import
+// at-rules, external url() resources and any stray '<'. It deliberately allows
+// the layout properties SanitizePostCSS strips — see cssScopeGlobal.
+func SanitizeGlobalCSS(css string) (string, []string) {
+	return sanitizeCSS(css, cssScopeGlobal)
+}
+
+func sanitizeCSS(css string, scope cssScope) (string, []string) {
 	if css == "" {
 		return "", nil
 	}
@@ -266,7 +303,7 @@ func SanitizePostCSS(css string) (string, []string) {
 	// flushDecl evaluates a buffered declaration (inside a rule block) or a
 	// top-level at-rule (e.g. @import) and emits it unless it's dangerous.
 	flushDecl := func(terminator string) {
-		if drop, reason := classifyCSSSegment(seg); drop {
+		if drop, reason := classifyCSSSegment(seg, scope); drop {
 			record(reason)
 		} else if len(seg) > 0 {
 			emit(seg)
@@ -318,7 +355,7 @@ func SanitizePostCSS(css string) (string, []string) {
 
 // classifyCSSSegment decides whether a buffered CSS segment (a declaration or a
 // top-level at-rule) must be dropped, returning the removal reason.
-func classifyCSSSegment(seg []*scanner.Token) (bool, string) {
+func classifyCSSSegment(seg []*scanner.Token, scope cssScope) (bool, string) {
 	// Property name: the first ident (at-rules surface as an at-keyword).
 	var prop string
 	for _, t := range seg {
@@ -344,17 +381,22 @@ func classifyCSSSegment(seg []*scanner.Token) (bool, string) {
 	}
 	lower := strings.ToLower(val.String())
 
-	switch prop {
-	case "z-index":
-		return true, "z-index"
-	case "content":
-		return true, "content"
-	case "position":
-		if strings.Contains(lower, "fixed") {
-			return true, "position: fixed"
-		}
-		if strings.Contains(lower, "sticky") {
-			return true, "position: sticky"
+	// Layout containment only applies to per-post CSS: a post is a fragment of
+	// a page it does not own. Site-wide CSS is the admin styling their own
+	// site, where all of these are ordinary.
+	if scope == cssScopePost {
+		switch prop {
+		case "z-index":
+			return true, "z-index"
+		case "content":
+			return true, "content"
+		case "position":
+			if strings.Contains(lower, "fixed") {
+				return true, "position: fixed"
+			}
+			if strings.Contains(lower, "sticky") {
+				return true, "position: sticky"
+			}
 		}
 	}
 
@@ -405,18 +447,18 @@ func addImgLoadingHints(html string) string {
 }
 
 type ListPostsParams struct {
-        Page          int32
-        PerPage       int32
-        Status        string
-        FeaturedOnly  bool
-        IncludeDrafts bool
-        IncludeHidden bool
-        IncludePages  bool
-        Search        string
-        Tag           string
-        YearFrom      int
-        YearTo        int
-        SortBy        string
+	Page          int32
+	PerPage       int32
+	Status        string
+	FeaturedOnly  bool
+	IncludeDrafts bool
+	IncludeHidden bool
+	IncludePages  bool
+	Search        string
+	Tag           string
+	YearFrom      int
+	YearTo        int
+	SortBy        string
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -471,11 +513,11 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		}
 		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
 	} else if p.Search != "" || p.Tag != "" {
-	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false, int64(p.PerPage), int64(offset))
-	        if err != nil {
-	                return nil, 0, err
-	        }
-	        total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false)
+		posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false, int64(p.PerPage), int64(offset))
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false)
 	} else {
 		if p.SortBy == "views" {
 			posts, err = s.repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
@@ -519,8 +561,23 @@ func (s *PostService) GetPostAnalytics(ctx context.Context) (models.GetPostAnaly
 	return s.repo.GetPostAnalytics(ctx)
 }
 
+// ErrPostNotFound replaces the driver's sql.ErrNoRows on the post read paths.
+// A named sentinel rather than a wrap of ErrNoRows because this message reaches
+// clients through the central mapper, and "sql: no rows in result set" is not
+// something to answer a request with.
+var ErrPostNotFound = kindSentinel(ErrNotFound, "post not found")
+
 func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.Post, error) {
-	return s.repo.GetPost(ctx, id)
+	return s.getPost(ctx, id)
+}
+
+// getPost fetches one post row, translating a missing row into ErrPostNotFound.
+func (s *PostService) getPost(ctx context.Context, id int64) (models.Post, error) {
+	post, err := s.repo.GetPost(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Post{}, ErrPostNotFound
+	}
+	return post, err
 }
 
 func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Post, error) {
@@ -532,7 +589,10 @@ func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Po
 	// comment-thread key, which must survive slug changes). A real slug that
 	// happens to be all digits wins over an ID of the same value.
 	if id, convErr := strconv.ParseInt(slug, 10, 64); convErr == nil {
-		return s.repo.GetPost(ctx, id)
+		return s.getPost(ctx, id)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Post{}, ErrPostNotFound
 	}
 	return post, err
 }
@@ -558,6 +618,30 @@ type CreatePostParams struct {
 	MetaDescription string
 	Tags            []string
 	ScheduledAt     *time.Time
+}
+
+// classifyPostSaveError classifies the two foreseeable ways a post save fails.
+//
+// A slug collision is a conflict. SQLite reports it only in the driver's
+// message, so the text is matched here — once — instead of in every handler;
+// the message is passed through unchanged so the handler can still substitute a
+// friendlier one.
+//
+// UpdatePost's statement matches on (id, author_id), so no rows means the post
+// is absent or belongs to someone else. Those are reported identically on
+// purpose: distinguishing them would tell a caller that someone else's post
+// exists.
+func classifyPostSaveError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug"):
+		return wrapKind(ErrConflict, err)
+	case errors.Is(err, sql.ErrNoRows):
+		return ErrPostNotFound
+	default:
+		return err
+	}
 }
 
 func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, []string, error) {
@@ -589,7 +673,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
-		return models.Post{}, strippedProps, err
+		return models.Post{}, strippedProps, classifyPostSaveError(err)
 	}
 
 	// Store the derived list-preview URL so list/grid queries need not read the
@@ -599,19 +683,29 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		post.MediaURL = sql.NullString{String: mediaURL, Valid: true}
 	}
 
-	// Handle tags
+	// Handle tags: resolve them all in one query, then only create the ones
+	// that are genuinely new (normally none).
+	slugs := make([]string, 0, len(p.Tags))
 	for _, tagName := range p.Tags {
-		// This is a bit inefficient, but standard logic: find or create tag
-		tag, err := s.repo.GetTagBySlug(ctx, utils.Slugify(tagName))
-		if err != nil {
-			// Create tag
+		slugs = append(slugs, utils.Slugify(tagName))
+	}
+	existing, err := s.repo.FindTagsBySlugs(ctx, slugs)
+	if err != nil {
+		return models.Post{}, strippedProps, err
+	}
+	for i, tagName := range p.Tags {
+		tag, ok := existing[slugs[i]]
+		if !ok {
 			tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
 				Name: tagName,
-				Slug: utils.Slugify(tagName),
+				Slug: slugs[i],
 			})
 			if err != nil {
 				continue
 			}
+			// Two tag names can slugify to the same slug; remember the created
+			// tag so the duplicate resolves to it instead of failing to insert.
+			existing[slugs[i]] = tag
 		}
 
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{
@@ -620,11 +714,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		})
 	}
 
-	// Update tag counts
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 
 	return post, strippedProps, nil
 }
@@ -718,7 +808,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
-		return models.Post{}, strippedProps, err
+		return models.Post{}, strippedProps, classifyPostSaveError(err)
 	}
 
 	// Keep the denormalized list-preview URL in sync with the new content/thumbnail.
@@ -737,17 +827,14 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: tag.ID})
 	}
 
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 
 	return post, strippedProps, nil
 }
 
 func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames []string) error {
 	// Verify the post exists.
-	if _, err := s.repo.GetPost(ctx, postID); err != nil {
+	if _, err := s.getPost(ctx, postID); err != nil {
 		return err
 	}
 
@@ -760,10 +847,7 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID})
 	}
 
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -780,7 +864,7 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 
 func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status string) (models.Post, error) {
 	// Verify the post exists.
-	post, err := s.repo.GetPost(ctx, id)
+	post, err := s.getPost(ctx, id)
 	if err != nil {
 		return models.Post{}, err
 	}
@@ -816,8 +900,7 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 	// published_at logic handled in repository.UpdatePost based on status
 	post, err = s.repo.UpdatePost(ctx, params)
 	if err == nil {
-		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.refreshTagCounts(ctx)
 	}
 	return post, err
 }
@@ -826,10 +909,7 @@ func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) er
 	if err := s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -837,10 +917,7 @@ func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error
 	if err := s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -848,10 +925,7 @@ func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID in
 	if err := s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil {
-		s.tagService.Invalidate()
-	}
+	s.refreshTagCounts(ctx)
 	return nil
 }
 
@@ -877,10 +951,12 @@ func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32)
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {
 	post, err := s.repo.PublishPost(ctx, id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return post, ErrPostNotFound
+		}
 		return post, err
 	}
-	_ = s.repo.UpdateAllTagPostCounts(ctx)
-	if s.tagService != nil { s.tagService.Invalidate() }
+	s.refreshTagCounts(ctx)
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
@@ -900,11 +976,14 @@ func (s *PostService) crossPostToInstagramAsync(postID int64) {
 		if r := recover(); r != nil {
 			slog.Error("instagram cross-post panicked",
 				"post_id", postID, "panic", r, "stack", string(debug.Stack()))
+			s.health.Record(healthTaskInstagramCrossPost, fmt.Errorf("panic: %v", r))
 		}
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
-	if err := s.CrossPostToInstagram(ctx, postID); err != nil {
+	err := s.CrossPostToInstagram(ctx, postID)
+	s.health.Record(healthTaskInstagramCrossPost, err)
+	if err != nil {
 		slog.Error("instagram cross-post failed", "post_id", postID, "error", err)
 	}
 }
@@ -912,8 +991,7 @@ func (s *PostService) crossPostToInstagramAsync(postID int64) {
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
 	post, err := s.repo.WithdrawPost(ctx, id)
 	if err == nil {
-		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.refreshTagCounts(ctx)
 	}
 	return post, err
 }
@@ -943,11 +1021,15 @@ func (s *PostService) GeneratePreviewLink(ctx context.Context, postID int64) (st
 func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error) {
 	post, err := s.repo.GetPostByPreviewToken(ctx, token)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Post{}, ErrPostNotFound
+		}
 		return models.Post{}, err
 	}
-	// Check expiry
+	// An expired token is indistinguishable from a bad one to the caller, by
+	// design: neither should confirm that a draft exists.
 	if post.PreviewExpiresAt.Valid && time.Now().After(post.PreviewExpiresAt.Time) {
-		return models.Post{}, sql.ErrNoRows
+		return models.Post{}, ErrPostNotFound
 	}
 	return post, nil
 }
@@ -955,7 +1037,13 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 // GetPostNavigation returns the previous and next published posts adjacent to
 // the given post, ordered by published_at.
 func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error) {
-	return s.repo.GetPostNavigation(ctx, postID, publicOnly, tag)
+	prev, next, err = s.repo.GetPostNavigation(ctx, postID, publicOnly, tag)
+	if errors.Is(err, sql.ErrNoRows) {
+		// The anchor post itself is missing. Having no neighbours is not an
+		// error — it comes back as two nil items.
+		return nil, nil, ErrPostNotFound
+	}
+	return prev, next, err
 }
 
 func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Post, error) {
@@ -964,8 +1052,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 		return nil, err
 	}
 	if len(published) > 0 {
-		_ = s.repo.UpdateAllTagPostCounts(ctx)
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.refreshTagCounts(ctx)
 		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
@@ -1207,4 +1294,17 @@ func (s *PostService) AuditPublicPostLinks(ctx context.Context) ([]PostLinkIssue
 		}
 	}
 	return issues, scanned, nil
+}
+
+// refreshTagCounts recomputes the denormalized per-tag post counts and drops the
+// tag-graph cache, which caches hierarchical counts derived from them.
+//
+// Every post mutation has to do both, and doing only one leaves the tag pages
+// showing stale numbers. Collapsing the pair into one call is what keeps that
+// from being ten independent chances to forget the second half.
+func (s *PostService) refreshTagCounts(ctx context.Context) {
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
 }

@@ -18,6 +18,7 @@ import {
   updateMapCoords,
   getDiskInfo,
   auditPostLinks,
+  getHealth,
 } from "../../api/system.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
@@ -39,6 +40,7 @@ export default class SystemPage extends Component {
       migrationsCollapsed: true,
       auditingLinks: false,
       linkAudit: null, // { issues, scanned } after a scan
+      health: null, // { tasks, degraded, uptime } from /api/system/health
     };
   }
 
@@ -50,7 +52,7 @@ export default class SystemPage extends Component {
   }
 
   _renderContent() {
-    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit } =
+    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health } =
       this.state;
 
     if (loading)
@@ -59,6 +61,7 @@ export default class SystemPage extends Component {
       return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
 
     const diskSection = diskInfo ? this._renderDiskSection(diskInfo) : "";
+    const healthSection = this._renderHealthSection(health);
 
     return `
       <div class="system-grid">
@@ -82,6 +85,8 @@ export default class SystemPage extends Component {
         </section>
 
         ${diskSection}
+
+        ${healthSection}
 
         <section class="card system-full-width">
           <div class="card-header"><h2>Content Health</h2></div>
@@ -125,6 +130,75 @@ export default class SystemPage extends Component {
           </div>
         </section>
       </div>`;
+  }
+
+  /**
+   * Background-job health. Answers "is anything quietly broken" — before this
+   * a failing scheduled task was only visible by reading the server log.
+   * @param {{tasks: object[], degraded: number, uptime: number}|null} health
+   */
+  _renderHealthSection(health) {
+    if (!health) return "";
+
+    const rows = (health.tasks || [])
+      .map((t) => {
+        const state = t.healthy
+          ? '<span class="badge badge-success">OK</span>'
+          : '<span class="badge badge-danger">Failing</span>';
+        const err = t.last_error
+          ? `<div class="job-health-error">${escapeHtml(t.last_error)}</div>`
+          : "";
+        return `
+          <tr>
+            <td>${escapeHtml(t.name)}${err}</td>
+            <td>${state}</td>
+            <td>${this._ago(t.last_run)}</td>
+            <td>${this._ago(t.last_success)}</td>
+            <td>${t.failures || 0} / ${t.runs || 0}</td>
+          </tr>`;
+      })
+      .join("");
+
+    // No rows is the normal state moments after a restart, not an error.
+    const body = rows
+      ? `<table class="table">
+           <thead>
+             <tr><th>Job</th><th>State</th><th>Last run</th><th>Last success</th><th>Failures</th></tr>
+           </thead>
+           <tbody>${rows}</tbody>
+         </table>`
+      : "<p>No background jobs have reported yet.</p>";
+
+    const summary =
+      health.degraded > 0
+        ? `<p class="error-state" role="alert">${health.degraded} job${health.degraded === 1 ? "" : "s"} failing.</p>`
+        : "";
+
+    return `
+      <section class="card system-full-width">
+        <div class="card-header"><h2>Background Jobs</h2></div>
+        <div class="card-body">
+          <p>Last outcome of each scheduled task, recorded since the server started ${this._ago(new Date(Date.now() - (health.uptime || 0) * 1000).toISOString())}. Restarting clears this.</p>
+          ${summary}
+          ${body}
+        </div>
+      </section>`;
+  }
+
+  /**
+   * Render an ISO timestamp as a coarse relative age. Returns an em dash for a
+   * missing value — "never run" must not render as an epoch date.
+   * @param {string|undefined} iso
+   */
+  _ago(iso) {
+    if (!iso) return "—";
+    const then = Date.parse(iso);
+    if (Number.isNaN(then)) return "—";
+    const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+    if (secs < 60) return `${secs}s ago`;
+    if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
+    if (secs < 86400) return `${Math.round(secs / 3600)}h ago`;
+    return `${Math.round(secs / 86400)}d ago`;
   }
 
   _renderLinkAudit(audit) {
@@ -222,11 +296,18 @@ export default class SystemPage extends Component {
 
   async _load() {
     try {
-      const [migrations, diskInfo] = await Promise.all([getMigrations(), getDiskInfo()]);
+      // Health is best-effort: an older server without the endpoint, or a
+      // transient failure, must not blank the whole page.
+      const [migrations, diskInfo, health] = await Promise.all([
+        getMigrations(),
+        getDiskInfo(),
+        getHealth().catch(() => null),
+      ]);
       this.setState({
         loading: false,
         migrations: Array.isArray(migrations) ? migrations : [],
         diskInfo,
+        health,
         error: null,
       });
     } catch (err) {

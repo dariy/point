@@ -80,8 +80,9 @@
     transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
 @media (pointer: coarse) {
-    .tag-link::after {
+    :where(html:not(.pointer-fine)) .tag-link::after {
         content: '';
         position: absolute;
         top: 50%;

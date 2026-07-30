@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -51,7 +52,8 @@ func TestInstagramHandler_Connect_MissingAppID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when app_id missing")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -68,7 +70,8 @@ func TestInstagramHandler_Connect_MissingAppURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when APP_URL missing")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -118,7 +121,8 @@ func TestInstagramHandler_Callback_OAuthError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for OAuth denial")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -134,7 +138,8 @@ func TestInstagramHandler_Callback_MissingParams(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing state")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -151,7 +156,8 @@ func TestInstagramHandler_Callback_BadState(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for bad CSRF state")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -172,7 +178,8 @@ func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when token exchange fails")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -196,7 +203,8 @@ func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when GetConnectedAccount fails")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %v", err)
 	}

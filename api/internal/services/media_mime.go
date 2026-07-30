@@ -2,13 +2,43 @@ package services
 
 import (
 	"bytes"
-	"errors"
+	"regexp"
 	"strings"
 )
 
 // ErrUnsupportedMediaType is returned when an upload's actual content does not
 // match any allowlisted image/video/audio format.
-var ErrUnsupportedMediaType = errors.New("unsupported media type")
+var ErrUnsupportedMediaType = kindSentinel(ErrInvalidInput, "unsupported media type")
+
+// ErrActiveSVGContent is returned when an SVG upload carries executable
+// content. SVG is the one allowlisted format that a browser will run script
+// from when navigated to directly, so it is the one format whose bytes have to
+// be inspected beyond their signature.
+var ErrActiveSVGContent = kindSentinel(ErrInvalidInput, "SVG contains active content (script, event handler, or external reference)")
+
+// svgActiveContentRe matches the constructs that make an SVG executable:
+//
+//	<script>/<foreignObject> elements, on*= event handler attributes,
+//	javascript: URLs, and <use>/<image> href pointing off-origin.
+//
+// Rejecting rather than rewriting is deliberate: a rewritten SVG that still
+// looks accepted hides the problem from the admin, and an HTML sanitizer run
+// over SVG mangles case-sensitive attributes (viewBox) and namespaces.
+var svgActiveContentRe = regexp.MustCompile(`(?is)<\s*(script|foreignobject|iframe|embed|object|handler|set|animate[a-z]*)\b|\son[a-z]+\s*=|javascript\s*:|data\s*:\s*text/html`)
+
+// ScanSVG reports whether an SVG document is free of active content. It is a
+// rejection check, not a sanitizer.
+//
+// This is the upload-time half of the SVG defence; the serve-time half sets a
+// locked-down Content-Security-Policy on SVG responses so a direct navigation
+// cannot execute anything even if a construct slips past this. Neither half is
+// trusted alone.
+func ScanSVG(content []byte) error {
+	if svgActiveContentRe.Match(content) {
+		return ErrActiveSVGContent
+	}
+	return nil
+}
 
 // allowedMediaTypes is the canonical MIME allowlist for uploads. Keys are the
 // MIME types DetectMediaType may return; the value is the file-type category
@@ -59,11 +89,20 @@ func normalizeMIME(m string) string {
 // mp4/mov/m4a/heic/avif all begin with "ftyp"). Returns ErrUnsupportedMediaType
 // when the content is not a recognized, allowlisted media format — so an HTML
 // page or script renamed to .jpg is rejected rather than stored.
+//
+// SVG additionally has its bytes scanned for active content (see ScanSVG) and
+// is rejected with ErrActiveSVGContent when it carries any — every other
+// allowlisted format is inert by construction, SVG is not.
 func DetectMediaType(content []byte, declared string) (string, error) {
 	declared = normalizeMIME(declared)
 
 	if t := sniffMediaType(content, declared); t != "" {
 		if _, ok := allowedMediaTypes[t]; ok {
+			if t == "image/svg+xml" {
+				if err := ScanSVG(content); err != nil {
+					return "", err
+				}
+			}
 			return t, nil
 		}
 	}

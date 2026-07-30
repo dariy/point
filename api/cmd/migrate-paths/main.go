@@ -224,7 +224,14 @@ func applyContentPaths(tx *sql.Tx, db *sql.DB) error {
 			updates = append(updates, update{id, newC})
 		}
 	}
-	_ = rows.Close()
+	// Without this, an iteration error ends the loop early and the migration
+	// silently rewrites only the posts it managed to read.
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate posts: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close posts rows: %w", err)
+	}
 
 	stmt, err := tx.Prepare(`UPDATE posts SET content = ? WHERE id = ?`)
 	if err != nil {

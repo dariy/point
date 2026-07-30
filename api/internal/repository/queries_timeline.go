@@ -187,6 +187,7 @@ func (r *sqliteRepository) GetYearTagsByLocationTagIDs(ctx context.Context, locT
 		placeholders[i] = "?"
 	}
 
+	//nolint:gosec // G202: placeholders only, tag ids are bound
 	q := `
 SELECT DISTINCT pt1.tag_id as loc_tag_id, year_tag.id, year_tag.name, year_tag.slug
 FROM post_tags AS pt1

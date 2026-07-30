@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -99,13 +100,13 @@ func (s *ThemeService) scanThemesDir(dir string) ([]Theme, error) {
 func (s *ThemeService) normalizeAndValidateThemeName(name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {
-		return "", fmt.Errorf("theme name is required")
+		return "", wrapKind(ErrInvalidInput, errors.New("theme name is required"))
 	}
 	if strings.Contains(normalized, "/") || strings.Contains(normalized, "\\") || strings.Contains(normalized, "..") {
-		return "", fmt.Errorf("invalid theme name")
+		return "", wrapKind(ErrInvalidInput, errors.New("invalid theme name"))
 	}
 	if !themeNameSafeRe.MatchString(normalized) {
-		return "", fmt.Errorf("invalid theme name")
+		return "", wrapKind(ErrInvalidInput, errors.New("invalid theme name"))
 	}
 	return normalized, nil
 }
@@ -119,7 +120,7 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 	content := string(data)
 
 	if !strings.Contains(content, ":root {") && !strings.Contains(content, ":root{") {
-		return Theme{}, fmt.Errorf("theme file missing :root { block")
+		return Theme{}, wrapKind(ErrInvalidInput, errors.New("theme file missing :root { block"))
 	}
 
 	hasDark, cached := s.darkModeCache[path]
@@ -176,7 +177,7 @@ func pathWithinDir(path, dir string) error {
 func (s *ThemeService) findTheme(name string) (Theme, error) {
 	name = strings.ToLower(name)
 	if !themeNameSafeRe.MatchString(name) {
-		return Theme{}, fmt.Errorf("invalid theme name")
+		return Theme{}, wrapKind(ErrInvalidInput, errors.New("invalid theme name"))
 	}
 	if s.cfg.UserThemesPath != "" {
 		userPath := filepath.Join(s.cfg.UserThemesPath, name+".css")
@@ -240,14 +241,26 @@ func (s *ThemeService) GetCustomCSS(ctx context.Context) (string, error) {
 	return s.settingsService.GetSetting(ctx, "system_custom_css", "")
 }
 
-func (s *ThemeService) UpdateCustomCSS(ctx context.Context, css string) error {
-	err := s.settingsService.SetSetting(ctx, "system_custom_css", css, "string")
-	if err != nil {
-		return fmt.Errorf("failed to save custom css setting: %w", err)
+// UpdateCustomCSS stores the site-wide custom CSS and republishes theme.css.
+// The CSS is sanitized first — per-post CSS always was, while this path wrote
+// straight to disk. It uses the global policy, not the per-post one: an admin
+// theming their own site legitimately needs position, z-index and content,
+// which SanitizePostCSS strips because a post is a fragment of a page it does
+// not own. What is removed either way are the escapes — @import, url() pointing
+// off-origin, and a stray '<'. Returns the names of any removed constructs so
+// the caller can tell the admin rather than silently dropping their CSS.
+func (s *ThemeService) UpdateCustomCSS(ctx context.Context, css string) ([]string, error) {
+	clean, warnings := SanitizeGlobalCSS(css)
+
+	if err := s.settingsService.SetSetting(ctx, "system_custom_css", clean, "string"); err != nil {
+		return nil, fmt.Errorf("failed to save custom css setting: %w", err)
 	}
 
 	// Update the public theme.css with the new custom CSS
-	return s.SyncActiveTheme(ctx)
+	if err := s.SyncActiveTheme(ctx); err != nil {
+		return nil, err
+	}
+	return warnings, nil
 }
 
 func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
@@ -275,6 +288,8 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 		data = append(data, []byte(customCSS)...)
 	}
 
+	// publicThemePath is a fixed location under the configured frontend dir.
+	//nolint:gosec // G703: path is composed from config, not from input
 	err = os.WriteFile(publicThemePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to update public theme.css: %w", err)

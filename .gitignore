@@ -18,6 +18,7 @@ credentials.json
 # Deployment & Generated artifacts
 deployment-*.log
 api/coverage.html
+coverage-frontend.lcov
 api/api*
 api/cmd/api/cache/
 *.out
@@ -25,9 +26,12 @@ api/cmd/api/cache/
 # Frontend generated files
 frontend/js/
 frontend/js-debug/
+# esbuild metafiles — build intermediates, kept out of the served frontend/js
+.build-meta/
 frontend/css/main.css
 frontend/css/light.css
 frontend/css/viewer.css
+frontend/css/asset-manifest.json
 frontend/css/common/theme.css
 frontend/css/p/
 

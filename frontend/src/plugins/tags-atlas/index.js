@@ -30,6 +30,8 @@ import { tagKind } from "../../utils/tags.js";
 
 import {
   COUNTRIES_GEOJSON,
+  CA_PROVINCES_GEOJSON,
+  US_STATES_GEOJSON,
   TILE_LIGHT,
   TILE_DARK,
   TILE_ATTR,
@@ -99,6 +101,8 @@ export default class AtlasPage extends Component {
     this._cloudLines = null; // connector lines
     this._themeListener = null;
     this._geojson = null; // cached countries.geojson
+    this._caProvinces = null; // cached canada-provinces.geojson
+    this._usStates = null; // cached us-states.geojson
     this._activeTag = null;
     this._activeAnchor = null; // latlng the current cloud is built around
     this._activeSetActive = null; // toggles the current selection's highlight
@@ -351,9 +355,19 @@ export default class AtlasPage extends Component {
   }
 
   /**
-   * Render country tags as GeoJSON polygon shapes (mirroring /map) and the
-   * remaining geo-tags as proportional circle markers. A geo-tag counts as a
-   * "country shape" when its name matches a feature in countries.geojson.
+   * Render geo-tags that name a region as GeoJSON polygon shapes (mirroring
+   * /map) and the remaining geo-tags as proportional circle markers. A geo-tag
+   * counts as a "shape" when its name matches a feature in one of the boundary
+   * files: countries.geojson (admin-0), plus canada-provinces / us-states
+   * (admin-1).
+   *
+   * Z-order is deliberate (insertion order into the shared overlay pane):
+   *   1. Unmatched subdivisions — beneath the country and non-interactive, so a
+   *      province/state with no tag never intercepts the click meant for its
+   *      country (the whole country is covered by its subdivisions).
+   *   2. Countries.
+   *   3. Matched subdivisions — above the country and clickable, so a tagged
+   *      province/state wins the click within its own borders.
    */
   async _drawLayers(L) {
     const geoTags = (this.state.data.tags || []).filter(
@@ -366,36 +380,51 @@ export default class AtlasPage extends Component {
       geoTagByName[t.name.toLowerCase()] = t;
     });
 
-    if (!this._geojson) {
+    // Fetch + cache the boundary files in parallel. Each is independent and
+    // non-fatal: a missing/failed file just drops that layer's shapes (geo-tags
+    // still fall back to circle markers below).
+    const fetchGeojson = async (cacheKey, url) => {
+      if (this[cacheKey]) return; // already cached (a prior failure retries)
       try {
-        const resp = await fetch(COUNTRIES_GEOJSON);
-        this._geojson = await resp.json();
+        const resp = await fetch(url);
+        this[cacheKey] = await resp.json();
       } catch {
-        this._geojson = null; // non-fatal: fall back to circle markers only
+        this[cacheKey] = null;
       }
-    }
+    };
+    await Promise.all([
+      fetchGeojson("_geojson", COUNTRIES_GEOJSON),
+      fetchGeojson("_caProvinces", CA_PROVINCES_GEOJSON),
+      fetchGeojson("_usStates", US_STATES_GEOJSON),
+    ]);
     if (this._unmounted || !this._map) return;
 
     const shapeTagIds = new Set();
     const bounds = [];
 
-    if (this._geojson) {
-      const baseStyle = (feature) => {
-        const props = feature.properties || {};
-        const rawName = props.name || "";
-        const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
-          .filter(Boolean)
-          .map(n => n.toLowerCase());
-
-        let tag = null;
-        for (const n of names) {
-          if (geoTagByName[n]) {
-            tag = geoTagByName[n];
-            break;
+    // Draw one boundary FeatureCollection, matching each feature to a geo-tag by
+    // any of `nameProps` (lowercased). Matched features get the highlighted,
+    // clickable style; unmatched ones a faint outline. Added to _countryLayer.
+    //
+    // opts.only: null → all features; true → only matched; false → only
+    //   unmatched (used to split subdivisions across the country in z-order).
+    // opts.interactive: false → decorative path that never intercepts clicks.
+    const drawShapeLayer = (geojson, nameProps, opts = {}) => {
+      const { only = null, interactive = true } = opts;
+      const matchTag = (props) => {
+        for (const key of nameProps) {
+          const v = props?.[key];
+          if (v && geoTagByName[String(v).toLowerCase()]) {
+            return geoTagByName[String(v).toLowerCase()];
           }
         }
-        const fill = getCountryColor(rawName);
-        return tag
+        return null;
+      };
+
+      const baseStyle = (feature) => {
+        const props = feature.properties || {};
+        const fill = getCountryColor(props.name || "");
+        return matchTag(props)
           ? {
               color: "#e05c00",
               weight: 1.5,
@@ -412,21 +441,15 @@ export default class AtlasPage extends Component {
             };
       };
 
-      L.geoJSON(this._geojson, {
+      L.geoJSON(geojson, {
+        interactive,
+        filter:
+          only === null
+            ? undefined
+            : (feature) => !!matchTag(feature.properties || {}) === only,
         style: baseStyle,
         onEachFeature: (feature, layer) => {
-          const props = feature.properties || {};
-          const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
-            .filter(Boolean)
-            .map(n => n.toLowerCase());
-
-          let tag = null;
-          for (const n of names) {
-            if (geoTagByName[n]) {
-              tag = geoTagByName[n];
-              break;
-            }
-          }
+          const tag = matchTag(feature.properties || {});
           if (!tag) return;
           shapeTagIds.add(tag.id);
           bounds.push([tag.latitude, tag.longitude]);
@@ -456,6 +479,31 @@ export default class AtlasPage extends Component {
           });
         },
       }).addTo(this._countryLayer);
+    };
+
+    // NB: subdivisions deliberately exclude the `admin` property from matching —
+    // it is "Canada" / "United States of America" for every feature and would
+    // false-match a country tag, lighting up every province/state at once.
+    const SUBDIV_PROPS = ["name", "name_en"];
+    const subdivLayers = [this._caProvinces, this._usStates].filter(Boolean);
+
+    // 1) Untagged subdivisions beneath the country, non-interactive.
+    for (const gj of subdivLayers) {
+      drawShapeLayer(gj, SUBDIV_PROPS, { only: false, interactive: false });
+    }
+    // 2) Countries.
+    if (this._geojson) {
+      drawShapeLayer(this._geojson, [
+        "name",
+        "name_long",
+        "admin",
+        "brk_name",
+        "formal_en",
+      ]);
+    }
+    // 3) Tagged subdivisions above the country, clickable.
+    for (const gj of subdivLayers) {
+      drawShapeLayer(gj, SUBDIV_PROPS, { only: true });
     }
 
     // Circle markers for every geo-tag that isn't drawn as a country shape.

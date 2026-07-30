@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/jpeg"
 	"net/http"
@@ -56,9 +57,10 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	c.SetParamNames("filename")
 	c.SetParamValues("missing.tar.gz")
 	err = handler.DeleteBackup(c)
+	var he *echo.HTTPError
 	if err == nil {
 		t.Error("expected error for non-existent backup delete")
-	} else if he, ok := err.(*echo.HTTPError); ok {
+	} else if errors.As(err, &he) {
 		if he.Code != http.StatusNotFound {
 			t.Errorf("expected 404, got %d", he.Code)
 		}

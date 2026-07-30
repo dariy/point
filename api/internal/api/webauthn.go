@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"point-api/internal/config"
+	"point-api/internal/repository"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -17,13 +18,15 @@ type WebAuthnHandler struct {
 	webauthn *services.WebAuthnService
 	auth     *services.AuthService
 	cfg      *config.Config
+	repo     repository.Repository
 }
 
-func NewWebAuthnHandler(webauthn *services.WebAuthnService, auth *services.AuthService, cfg *config.Config) *WebAuthnHandler {
+func NewWebAuthnHandler(webauthn *services.WebAuthnService, auth *services.AuthService, cfg *config.Config, repo repository.Repository) *WebAuthnHandler {
 	return &WebAuthnHandler{
 		webauthn: webauthn,
 		auth:     auth,
 		cfg:      cfg,
+		repo:     repo,
 	}
 }
 
@@ -46,7 +49,7 @@ func (h *WebAuthnHandler) BeginRegistration(c echo.Context) error {
 	cookie.Name = webauthnSessionCookie
 	cookie.Value = sessionKey
 	cookie.HttpOnly = true
-	cookie.Secure = h.cfg.AppEnv == "production"
+	cookie.Secure = secureCookieFor(h.cfg, c)
 	cookie.SameSite = http.SameSiteStrictMode
 	cookie.Path = "/api/auth/webauthn"
 	cookie.Expires = time.Now().Add(5 * time.Minute)
@@ -95,7 +98,7 @@ func (h *WebAuthnHandler) BeginLogin(c echo.Context) error {
 	cookie.Name = webauthnSessionCookie
 	cookie.Value = sessionKey
 	cookie.HttpOnly = true
-	cookie.Secure = h.cfg.AppEnv == "production"
+	cookie.Secure = secureCookieFor(h.cfg, c)
 	cookie.SameSite = http.SameSiteLaxMode
 	cookie.Path = "/api/auth/webauthn"
 	cookie.Expires = time.Now().Add(5 * time.Minute)
@@ -134,6 +137,7 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not create session")
 	}
 
+	secure := secureCookieFor(h.cfg, c)
 	sessionCookie := &http.Cookie{
 		Name:     "session",
 		Value:    token,
@@ -141,9 +145,7 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-	}
-	if h.cfg.AppEnv == "production" {
-		sessionCookie.Secure = true
+		Secure:   secure,
 	}
 	c.SetCookie(sessionCookie)
 
@@ -151,6 +153,11 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not retrieve user data")
 	}
+
+	// Same bridge the password login issues: without it a passkey session is
+	// authenticated to Point and anonymous to the comments engine, and remark42
+	// offers no Point login to recover with.
+	IssueRemark42Cookies(c, h.repo, user.ID, user.DisplayName, user.Username, expiresAt, secure)
 
 	return c.JSON(http.StatusOK, echo.Map{
 		"message": "Login successful",

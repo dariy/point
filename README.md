@@ -13,11 +13,6 @@ Built with Go + Echo v4 backend and a plain JS SPA frontend.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
 ```
-or with the shortcut:
-
-```bash
-curl -fsSL https://short.point.photos/install | bash
-```
 
 The wizard asks a few questions (sensible defaults — just hit Enter should be fine) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
 
@@ -43,7 +38,6 @@ The app is configured via environment variables (or a `.env` file in the working
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | *(auto-generated)* | Session signing key — generated and persisted automatically |
 | `PORT` | `8000` | API listen port |
 | `APP_URL` | *(empty)* | Public URL of your blog (e.g. `https://blog.example.com`) — required for Instagram cross-posting and OAuth callbacks |
 | `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |
@@ -92,16 +86,16 @@ scripts/rebuild.sh        # build + restart container
 api/          Go backend (Echo v4, sqlc, SQLite)
 frontend/     Vanilla JS SPA (no build step for development)
 build/        Dockerfile, compose file, rebuild script
-scripts/      Operational scripts (deploy, backup, setup, lint, tests, CSS bundling)
+scripts/      Dev scripts (run, checks, tests, CSS/JS bundling)
 quickstart/   Quickstart docker-compose and install script
 data/         Runtime data (DB + media) — gitignored
 ```
 
 ## Production deployment
 
-See [`scripts/SETUP-PRODUCTION.md`](scripts/SETUP-PRODUCTION.md) for systemd + nginx + backup setup.
-
-For Docker-only, [QUICKSTART.md](QUICKSTART.md) covers the full install in a few commands.
+[QUICKSTART.md](QUICKSTART.md) covers the full install in a few commands, using
+[`quickstart/docker-compose.yml`](quickstart/docker-compose.yml) and the published
+image. Pin a version tag rather than `latest` for production.
 
 ## License
 

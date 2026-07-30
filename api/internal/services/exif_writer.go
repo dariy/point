@@ -5,16 +5,31 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	exif "github.com/dsoprea/go-exif/v3"
 	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
 )
 
-var nonAlphaNumSpace = regexp.MustCompile(`[^a-zA-Z0-9 ]`)
+// unsafeEXIFChars matches everything not allowed in a stored EXIF value.
+//
+// The allowed set is alphanumerics, space, and the punctuation EXIF values
+// actually contain: "/" and "." for rationals and decimals, ":" and "-" for
+// timestamps, "+" for signed values, and ",()_'" for camera and lens names
+// ("EF24-70mm f/2.8L II USM", "Nikon D850 (v1.2)").
+//
+// This used to be `[^a-zA-Z0-9 ]`, which silently destroyed every rational
+// value: "1/200" became "1200", so the site rendered a 1/200s exposure as
+// "1200 s", and "2024:01:15 10:30:00" became "20240115 103000". What the
+// stripping is actually for is keeping control characters, quotes, angle
+// brackets and backslashes out of a blob that is written into JPEG headers and
+// served as JSON — none of which the wider set admits.
+var unsafeEXIFChars = regexp.MustCompile(`[^a-zA-Z0-9 /.:+\-,()_']`)
 
-// sanitizeEXIFValue strips every character that is not alphanumeric or space.
+// sanitizeEXIFValue removes characters an EXIF value has no business carrying,
+// and collapses the result's surrounding whitespace.
 func sanitizeEXIFValue(s string) string {
-	return nonAlphaNumSpace.ReplaceAllString(s, "")
+	return strings.TrimSpace(unsafeEXIFChars.ReplaceAllString(s, ""))
 }
 
 // ifd0StringTags are EXIF tags in IFD0 whose values are ASCII strings.

@@ -86,14 +86,14 @@ func redactTransportErr(op string, req *http.Request, err error) error {
 	if errors.As(err, &ue) {
 		err = ue.Err
 	}
-	return fmt.Errorf("instagram API %s %s: %w", op, req.URL.Path, err)
+	return wrapKind(ErrUpstream, fmt.Errorf("instagram API %s %s: %w", op, req.URL.Path, err))
 }
 
 func (s *InstagramService) get(ctx context.Context, rawURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		// The parse error may embed the raw URL (token included) — drop it.
-		return nil, fmt.Errorf("instagram API: invalid request URL")
+		return nil, wrapKind(ErrInvalidInput, errors.New("instagram API: invalid request URL"))
 	}
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -111,9 +111,9 @@ func (s *InstagramService) get(ctx context.Context, rawURL string) ([]byte, erro
 			if apiErr.Error.ErrorUserMsg != "" {
 				msg = apiErr.Error.ErrorUserMsg
 			}
-			return nil, fmt.Errorf("instagram API error %d (subcode %d, fbtrace %s): %s", apiErr.Error.Code, apiErr.Error.ErrorSubcode, apiErr.Error.FbtraceID, msg)
+			return nil, wrapKind(ErrUpstream, fmt.Errorf("instagram API error %d (subcode %d, fbtrace %s): %s", apiErr.Error.Code, apiErr.Error.ErrorSubcode, apiErr.Error.FbtraceID, msg))
 		}
-		return nil, fmt.Errorf("instagram API HTTP %d", resp.StatusCode)
+		return nil, wrapKind(ErrUpstream, fmt.Errorf("instagram API HTTP %d", resp.StatusCode))
 	}
 	return body, nil
 }
@@ -122,7 +122,7 @@ func (s *InstagramService) post(ctx context.Context, rawURL string, params url.V
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, strings.NewReader(params.Encode()))
 	if err != nil {
 		// The parse error may embed the raw URL (token included) — drop it.
-		return nil, fmt.Errorf("instagram API: invalid request URL")
+		return nil, wrapKind(ErrInvalidInput, errors.New("instagram API: invalid request URL"))
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := s.httpClient.Do(req)
@@ -141,9 +141,9 @@ func (s *InstagramService) post(ctx context.Context, rawURL string, params url.V
 			if apiErr.Error.ErrorUserMsg != "" {
 				msg = apiErr.Error.ErrorUserMsg
 			}
-			return nil, fmt.Errorf("instagram API error %d (subcode %d, fbtrace %s): %s", apiErr.Error.Code, apiErr.Error.ErrorSubcode, apiErr.Error.FbtraceID, msg)
+			return nil, wrapKind(ErrUpstream, fmt.Errorf("instagram API error %d (subcode %d, fbtrace %s): %s", apiErr.Error.Code, apiErr.Error.ErrorSubcode, apiErr.Error.FbtraceID, msg))
 		}
-		return nil, fmt.Errorf("instagram API HTTP %d", resp.StatusCode)
+		return nil, wrapKind(ErrUpstream, fmt.Errorf("instagram API HTTP %d", resp.StatusCode))
 	}
 	return body, nil
 }

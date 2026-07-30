@@ -19,7 +19,7 @@ func (h *SystemHandler) GetOfflineStats(c echo.Context) error {
 
 	stats, err := h.repo.GetSystemStats(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	// Calculate image sizes by walking the storage path
@@ -65,7 +65,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 		IncludeContent: true, // Offline reading needs the full body, not just media_url
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	// Filter to include 'published', 'hidden', and 'page'
@@ -113,7 +113,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	// 2. All tags
 	tags, err := h.tagService.ListTags(ctx, false, true)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	// 3. Tag relationships

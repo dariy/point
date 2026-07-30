@@ -61,11 +61,11 @@ func (h *PluginsHandler) savePresets(c echo.Context, m map[string][]string) erro
 func (h *PluginsHandler) GetPresets(c echo.Context) error {
 	presets, err := h.loadPresets(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	active := all[activePresetKey]
 	if active == "" {
@@ -85,7 +85,7 @@ func (h *PluginsHandler) UpdatePreset(c echo.Context) error {
 	id := c.Param("id")
 	presets, err := h.loadPresets(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	if _, ok := presets[id]; !ok {
 		return echo.NewHTTPError(http.StatusNotFound, "unknown preset")
@@ -110,7 +110,7 @@ func (h *PluginsHandler) UpdatePreset(c echo.Context) error {
 
 	presets[id] = clean
 	if err := h.savePresets(c, presets); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, presetsResponse{Presets: presets, Active: presetActive(c, h)})
 }
@@ -125,7 +125,7 @@ func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
 
 	presets, err := h.loadPresets(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	list, ok := presets[id]
 	if !ok {
@@ -179,16 +179,16 @@ func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
 
 	for _, d := range plugins.Registry {
 		if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(d.ID), strconv.FormatBool(want[d.ID]), "string"); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 	}
 	if err := h.settingsService.SetSetting(ctx, activePresetKey, id, "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	all, err := h.settingsService.GetAllSettings(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, listViews(all))
 }

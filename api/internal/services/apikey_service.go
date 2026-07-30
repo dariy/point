@@ -67,14 +67,14 @@ func (s *ApiKeyService) ValidateAPIKey(ctx context.Context, rawKey string) (mode
 	apiKey, err := s.repo.GetAPIKeyByHash(ctx, keyHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.GetAPIKeyByHashRow{}, errors.New("invalid API key")
+			return models.GetAPIKeyByHashRow{}, wrapKind(ErrUnauthenticated, errors.New("invalid API key"))
 		}
 		return models.GetAPIKeyByHashRow{}, err
 	}
 
 	// Check expiry
 	if apiKey.ExpiresAt.Valid && time.Now().After(apiKey.ExpiresAt.Time) {
-		return models.GetAPIKeyByHashRow{}, errors.New("API key expired")
+		return models.GetAPIKeyByHashRow{}, wrapKind(ErrUnauthenticated, errors.New("API key expired"))
 	}
 
 	// Revoked check is handled by the SQL query (revoked_at IS NULL),

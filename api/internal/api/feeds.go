@@ -71,7 +71,7 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 
 	posts, err := h.repo.GetPublishedPostsForFeed(ctx, 20)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	base := baseURL(c)
@@ -139,12 +139,12 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 
 	posts, err := h.repo.GetPublishedPostsForSitemap(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	tags, err := h.repo.GetPublicTagsForSitemap(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	settings, _ := h.settingsService.GetAllSettings(ctx)

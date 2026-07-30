@@ -125,6 +125,7 @@ func registerThemeRoutes(e *echo.Echo, h *api.ThemeHandler, svcs *AppServices) {
 func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices) {
 	systemGroup := e.Group("/api/system")
 	systemGroup.GET("/stats", h.GetStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/health", h.GetHealth, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/disk", h.GetDiskInfo, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/logs", h.GetLogs, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/migrations", h.GetMigrations, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))

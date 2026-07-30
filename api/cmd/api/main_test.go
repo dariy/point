@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +21,8 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 // mkdirs creates subdirectories inside base and returns their paths.
@@ -163,6 +167,41 @@ func TestSecurityHeaders(t *testing.T) {
 		if got := headers.Get(tt.key); got != tt.value {
 			t.Errorf("header %s: expected %q, got %q", tt.key, tt.value, got)
 		}
+	}
+}
+
+// TestHSTS verifies Strict-Transport-Security is emitted for HTTPS requests
+// (here signalled via X-Forwarded-Proto from the reverse proxy) but withheld
+// from plain-HTTP requests, so a dev server over http never advertises HSTS.
+func TestHSTS(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:  "1.0.0",
+		FrontendDir: t.TempDir(),
+	}
+	if err := os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"), []byte("<html></html>"), 0o644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	e := setupEcho(cfg, repo, initServices(&cfg, repo))
+
+	const want = "max-age=31536000; includeSubdomains"
+
+	httpsReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	httpsReq.Header.Set("X-Forwarded-Proto", "https")
+	httpsRec := httptest.NewRecorder()
+	e.ServeHTTP(httpsRec, httpsReq)
+	if got := httpsRec.Header().Get("Strict-Transport-Security"); got != want {
+		t.Errorf("https request HSTS: expected %q, got %q", want, got)
+	}
+
+	httpRec := httptest.NewRecorder()
+	e.ServeHTTP(httpRec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if got := httpRec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("http request should not carry HSTS, got %q", got)
 	}
 }
 
@@ -412,6 +451,38 @@ func newEchoWithRepo(t *testing.T) (repository.Repository, config.Config) {
 	return repo, cfg
 }
 
+// The credential rate limiter and session audit trail key off c.RealIP().
+// setupEcho must install an IPExtractor that only trusts X-Forwarded-For hops
+// from our own proxy (loopback/private), so an attacker can't mint a fresh
+// bucket per request by rotating the header. See point-sec-ratelimit-xff-bypass.
+func TestSetupEcho_RealIPIgnoresSpoofedXFF(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	if e.IPExtractor == nil {
+		t.Fatal("setupEcho left IPExtractor nil: RealIP() trusts X-Forwarded-For verbatim")
+	}
+
+	// Peer is an untrusted public address: XFF is attacker-controlled and must
+	// be ignored entirely — RealIP falls back to the socket remote address.
+	directReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	directReq.RemoteAddr = "203.0.113.7:5555"
+	directReq.Header.Set(echo.HeaderXForwardedFor, "1.2.3.4")
+	if got := e.IPExtractor(directReq); got != "203.0.113.7" {
+		t.Errorf("untrusted peer: got RealIP %q, want socket address 203.0.113.7", got)
+	}
+
+	// Peer is our trusted proxy (loopback): the real client is the rightmost
+	// untrusted XFF entry; a spoofed value prepended by the client is skipped.
+	proxiedReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	proxiedReq.RemoteAddr = "127.0.0.1:5555"
+	proxiedReq.Header.Set(echo.HeaderXForwardedFor, "9.9.9.9, 203.0.113.7")
+	if got := e.IPExtractor(proxiedReq); got != "203.0.113.7" {
+		t.Errorf("proxied request: got RealIP %q, want real client 203.0.113.7", got)
+	}
+}
+
 func TestSetupEcho_FeedRoutes(t *testing.T) {
 	repo, cfg := newEchoWithRepo(t)
 	svcs := initServices(&cfg, repo)
@@ -468,7 +539,7 @@ func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
 	e := setupEcho(cfg, repo, svcs)
 
 	req := httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil)
-	req.Host = "www.Point.Photos"
+	req.Host = "www.Example.Com"
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -476,8 +547,8 @@ func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
 		t.Fatalf("manifest is not valid JSON: %v", err)
 	}
-	if m["name"] != "point.photos" || m["short_name"] != "point.photos" {
-		t.Errorf("expected name/short_name point.photos, got %v/%v", m["name"], m["short_name"])
+	if m["name"] != "example.com" || m["short_name"] != "example.com" {
+		t.Errorf("expected name/short_name example.com, got %v/%v", m["name"], m["short_name"])
 	}
 	if m["display"] != "fullscreen" {
 		t.Errorf("other manifest keys should survive, got display=%v", m["display"])
@@ -486,13 +557,13 @@ func TestSetupEcho_ManifestNamedAfterHost(t *testing.T) {
 
 func TestSiteNameFromHost(t *testing.T) {
 	cases := map[string]string{
-		"darii.net":         "darii.net",
-		"point.photos:8001": "point.photos",
-		"www.point.photos":  "point.photos",
-		"POINT.photos":      "point.photos",
-		"localhost:8001":    "localhost",
-		"":                  "",
-		"  ":                "",
+		"example.org":      "example.org",
+		"example.com:8001": "example.com",
+		"www.example.com":  "example.com",
+		"EXAMPLE.com":      "example.com",
+		"localhost:8001":   "localhost",
+		"":                 "",
+		"  ":               "",
 	}
 	for host, want := range cases {
 		if got := siteNameFromHost(host); got != want {
@@ -683,5 +754,319 @@ func TestParseCreateAPIKeyName(t *testing.T) {
 				t.Errorf("parseCreateAPIKeyName(%v) = %q, want %q", tt.args, got, tt.want)
 			}
 		})
+	}
+}
+
+// Gzip must be installed for text payloads (the CSS/JS bundles and JSON API
+// responses are the bulk of the transfer) and must NOT be applied to already-
+// compressed binaries like photos. See point-perf-enable-gzip.
+func TestSetupEcho_GzipCompressesCSS(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	// Comfortably over the 1KB MinLength threshold, and highly compressible.
+	_ = os.WriteFile(filepath.Join(cssDir, "app.css"), []byte(strings.Repeat("body{color:red}\n", 500)), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/css/app.css", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if enc := rec.Header().Get("Content-Encoding"); enc != "gzip" {
+		t.Fatalf("expected gzip Content-Encoding on CSS, got %q", enc)
+	}
+	zr, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatalf("gzip.NewReader: %v", err)
+	}
+	body, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("read gzip body: %v", err)
+	}
+	if !strings.HasPrefix(string(body), "body{color:red}") {
+		t.Errorf("decompressed body does not match source: %.40q", body)
+	}
+	if rec.Body.Len() >= len(body) {
+		t.Errorf("gzip did not shrink the payload: %d compressed vs %d raw", rec.Body.Len(), len(body))
+	}
+}
+
+func TestSkipGzip(t *testing.T) {
+	cases := map[string]bool{
+		"/assets/css/light.css":     false,
+		"/assets/js/app.js":         false,
+		"/api/posts":                false,
+		"/2026/07/photo.jpg":        true,
+		"/2026/07/photo.JPG":        true,
+		"/2026/07/clip.mp4":         true,
+		"/assets/vendor/font.woff2": true,
+		"/backups/backup.tar.gz":    true,
+	}
+	e := echo.New()
+	for path, want := range cases {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		c := e.NewContext(req, httptest.NewRecorder())
+		if got := skipGzip(c); got != want {
+			t.Errorf("skipGzip(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+// Content-hashed esbuild chunks are immutable by construction; the unhashed
+// entry points must keep revalidating. See point-perf-immutable-cache-headers.
+func TestSetupEcho_AssetCacheControl(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	jsDir := filepath.Join(cfg.FrontendDir, "js")
+	_ = os.MkdirAll(filepath.Join(jsDir, "chunks"), 0o755)
+	_ = os.WriteFile(filepath.Join(jsDir, "app.js"), []byte("//app"), 0o644)
+	_ = os.WriteFile(filepath.Join(jsDir, "chunks", "chunk-26AYO3DK.js"), []byte("//chunk"), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	for path, want := range map[string]string{
+		"/assets/js/chunks/chunk-26AYO3DK.js": immutableCacheControl,
+		"/assets/js/app.js":                   "no-cache",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if cc := rec.Header().Get("Cache-Control"); cc != want {
+			t.Errorf("%s: expected Cache-Control %q, got %q", path, want, cc)
+		}
+	}
+}
+
+// The public read surface had no rate limit at all — only the auth endpoints
+// were throttled. See point-sec-public-ratelimit.
+func TestSetupEcho_PublicRateLimit(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// The burst is 200, so a run well past it must start getting 429s.
+	var limited bool
+	for i := 0; i < 260; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/pages/home", nil)
+		req.RemoteAddr = "203.0.113.9:5555"
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("public API is not rate limited")
+	}
+
+	// A different client IP has its own bucket — one scraper must not lock
+	// everyone else out.
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/home", nil)
+	req.RemoteAddr = "203.0.113.10:5555"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code == http.StatusTooManyRequests {
+		t.Error("rate limiter is not keyed per client IP")
+	}
+}
+
+// Static assets are skipped: a first page load pulls dozens of them and would
+// otherwise spend the budget the API calls need.
+func TestSetupEcho_RateLimitSkipsAssets(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	_ = os.WriteFile(filepath.Join(cssDir, "app.css"), []byte("body{}"), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	for i := 0; i < 300; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/assets/css/app.css", nil)
+		req.RemoteAddr = "203.0.113.11:5555"
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("static assets got rate limited at request %d", i)
+		}
+	}
+}
+
+func TestStripCSSBundleHash(t *testing.T) {
+	for name, want := range map[string]struct {
+		base   string
+		hashed bool
+	}{
+		"light.81e2e81c.css":  {"light.css", true},
+		"main.14ed7c52.css":   {"main.css", true},
+		"light.css":           {"light.css", false},
+		"light.81E2E81C.css":  {"light.81E2E81C.css", false}, // uppercase is not our format
+		"light.81e2e81.css":   {"light.81e2e81.css", false},  // 7 chars
+		"light.81e2e81cc.css": {"light.81e2e81cc.css", false},
+		"asset-manifest.json": {"asset-manifest.json", false},
+	} {
+		base, hashed := stripCSSBundleHash(name)
+		if base != want.base || hashed != want.hashed {
+			t.Errorf("stripCSSBundleHash(%q) = %q, %v; want %q, %v", name, base, hashed, want.base, want.hashed)
+		}
+	}
+}
+
+// A content-addressed CSS URL is cacheable forever, but only when its hash
+// matches what is on disk — otherwise a client on a stale HTML shell would pin
+// today's bytes under yesterday's URL for a year.
+// See point-css-esbuild-pipeline.
+func TestSetupEcho_HashedCSSBundle(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	body := []byte("body{color:red}")
+	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), body, 0o644)
+	_ = os.WriteFile(filepath.Join(cssDir, "asset-manifest.json"),
+		[]byte(`{"light.css":"81e2e81c"}`), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	// Matching hash: served, immutable.
+	rec := get("/assets/css/light.81e2e81c.css")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hashed URL status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != string(body) {
+		t.Errorf("hashed URL served %q, want %q", rec.Body.String(), body)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("hashed URL Cache-Control = %q, want %q", cc, immutableCacheControl)
+	}
+
+	// Stale hash: still served (a page with no stylesheet is worse), but must
+	// not be cached under that URL.
+	rec = get("/assets/css/light.deadbeef.css")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stale-hash URL status = %d, want 200", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("stale-hash URL Cache-Control = %q, want no-cache", cc)
+	}
+
+	// Plain name keeps revalidating.
+	rec = get("/assets/css/light.css")
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("plain URL Cache-Control = %q, want no-cache", cc)
+	}
+}
+
+// Hashed-bundle resolution must not cost us the rest of the /assets/css tree.
+// A `/assets/css/:name` route claimed the whole subtree from e.Static and
+// flattened multi-segment paths through filepath.Base, which 404'd every
+// partial under a subdirectory — including common/theme.css, the file the
+// theme service rewrites at runtime, so every light/dark theme lost its
+// tokens — while happily serving a bundle under any made-up prefix.
+func TestSetupEcho_CSSSubdirectoriesStillServed(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(filepath.Join(cssDir, "common"), 0o755)
+	theme := []byte(":root{--bg-primary:#fff}")
+	_ = os.WriteFile(filepath.Join(cssDir, "common", "theme.css"), theme, 0o644)
+	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), []byte("body{color:red}"), 0o644)
+	_ = os.WriteFile(filepath.Join(cssDir, "asset-manifest.json"),
+		[]byte(`{"light.css":"81e2e81c"}`), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	// The active theme is the whole point: it must be served, with its bytes.
+	rec := get("/assets/css/common/theme.css")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("common/theme.css status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != string(theme) {
+		t.Errorf("common/theme.css served %q, want %q", rec.Body.String(), theme)
+	}
+	// It changes at runtime under a fixed URL, so it must never go immutable.
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("common/theme.css Cache-Control = %q, want no-cache", cc)
+	}
+
+	// A subdirectory path must resolve within that subdirectory, not collapse
+	// to its last segment and pick up a same-named bundle from the top level.
+	if rec := get("/assets/css/common/light.css"); rec.Code != http.StatusNotFound {
+		t.Errorf("common/light.css status = %d, want 404 (must not alias the bundle)", rec.Code)
+	}
+	if rec := get("/assets/css/does/not/exist/light.css"); rec.Code != http.StatusNotFound {
+		t.Errorf("bogus-prefix light.css status = %d, want 404", rec.Code)
+	}
+
+	// A hash is only ours at the top level; deeper it is part of a real name.
+	if rec := get("/assets/css/common/theme.81e2e81c.css"); rec.Code != http.StatusNotFound {
+		t.Errorf("hashed subdirectory path status = %d, want 404", rec.Code)
+	}
+}
+
+// Without a manifest the shell must still ship working stylesheet links.
+func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cssDir := filepath.Join(cfg.FrontendDir, "css")
+	_ = os.MkdirAll(cssDir, 0o755)
+	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), []byte("body{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"),
+		[]byte(`<html><head><link href="/assets/css/light.css?v=__BUILD_VERSION__"></head><body></body></html>`), 0o644)
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !strings.Contains(rec.Body.String(), "/assets/css/light.css?v="+cfg.AppVersion) {
+		t.Errorf("shell lost its stylesheet link without a manifest:\n%s", rec.Body.String())
+	}
+}
+
+// The health endpoint must be registered and behind auth — it reports internal
+// job state and error strings. See point-system-health-admin.
+func TestSetupEcho_HealthEndpointIsAuthed(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+	if svcs.Health == nil {
+		t.Fatal("initServices did not create a health registry")
+	}
+	e := setupEcho(cfg, repo, svcs)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/system/health", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated /api/system/health = %d, want 401", rec.Code)
+	}
+}
+
+// The registry initServices builds must be the one the scheduler and the post
+// service record into — otherwise the endpoint reports an empty list forever.
+func TestInitServices_HealthRegistryIsShared(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	svcs := initServices(&cfg, repo)
+
+	// Drive a task through the scheduler's choke point and confirm it lands in
+	// the registry the handler was given.
+	svcs.Scheduler.RunTaskForTest(context.Background(), "probe", func(context.Context) error { return nil })
+	snap := svcs.Health.Snapshot()
+	if len(snap) != 1 || snap[0].Name != "probe" {
+		t.Fatalf("scheduler outcomes did not reach the shared registry: %+v", snap)
 	}
 }

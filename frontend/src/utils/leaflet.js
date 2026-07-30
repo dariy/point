@@ -1,6 +1,9 @@
 export const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 export const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
 export const COUNTRIES_GEOJSON = "/assets/vendor/leaflet/countries.geojson";
+export const CA_PROVINCES_GEOJSON =
+  "/assets/vendor/leaflet/canada-provinces.geojson";
+export const US_STATES_GEOJSON = "/assets/vendor/leaflet/us-states.geojson";
 
 export const TILE_LIGHT =
   "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";

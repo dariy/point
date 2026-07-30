@@ -27,7 +27,9 @@ jobs:
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 
       - name: golangci-lint
-        run: golangci-lint run --timeout=5m
+        # --build-tags integration matches scripts/check.sh; without it the
+        # integration-tagged test files are not linted at all.
+        run: golangci-lint run --timeout=5m --build-tags integration
         working-directory: api
 
   js:
@@ -40,20 +42,35 @@ jobs:
         with:
           node-version: "22"
 
-      # Prefer the lockfile-pinned eslint when the repo ships one (flat
-      # config); until then, pin the last legacy-config release to match the
-      # local gate (scripts/check.sh runs `eslint frontend/src`).
+      # Uses the lockfile-pinned eslint (flat config). Keep the file list in
+      # sync with scripts/check.sh — the 614-line service worker and the
+      # build scripts are lintable code too.
       - name: JS lint
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-            node_modules/.bin/eslint frontend/src
-          else
-            ESLINT_USE_FLAT_CONFIG=false npx --yes eslint@8.57.1 frontend/src
-          fi
+          npm ci --no-audit --no-fund
+          node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
 
+      # Coverage rides along on the same run (V8 instrumentation via the
+      # built-in runner — no c8, no extra devDependency).
       - name: JS tests
-        run: node --test frontend/test/*.test.js
+        run: |
+          node --test --experimental-test-coverage \
+            --test-coverage-include='frontend/src/**' \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
+            frontend/test/*.test.js
+
+      - name: Frontend coverage floor
+        run: node scripts/js-coverage-report.mjs coverage-frontend.lcov
+
+      - name: Upload frontend coverage
+        uses: codecov/codecov-action@v7
+        with:
+          file: coverage-frontend.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          flags: frontend
+          name: codecov-frontend
 
   govulncheck:
     runs-on: ubuntu-latest
@@ -63,10 +80,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          # Deliberately the newest patch release: govulncheck resolves Go
-          # stdlib symbols from the toolchain in use, so an older patch level
-          # here would re-flag stdlib vulns already fixed upstream.
-          go-version: "1.26.5"
+          # Tracks api/go.mod like every other job, with check-latest so the
+          # newest patch release is resolved rather than the runner's cached
+          # one: govulncheck resolves Go stdlib symbols from the toolchain in
+          # use, so an older patch level here would re-flag stdlib vulns
+          # already fixed upstream.
+          go-version-file: api/go.mod
+          check-latest: true
           cache-dependency-path: api/go.sum
 
       - name: Run govulncheck
@@ -96,6 +116,11 @@ jobs:
         run: |
           cd api
           go test -tags=integration ./... -coverprofile=coverage.txt -covermode=atomic
+
+      # The build-failing half of the coverage gate. codecov's status checks
+      # only report; this is what actually turns the job red.
+      - name: Coverage floor
+        run: ./scripts/coverage-gate.sh api/coverage.txt
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v7
@@ -147,3 +172,69 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f point-smoke || true
+
+  # The quickstart wizard is the largest bespoke-shell surface in the repo and
+  # has to keep working against every release, but nothing exercised it — a
+  # broken installer would only show up as a user report. This drives its
+  # non-interactive Docker path end to end against a locally built image.
+  quickstart-smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Shellcheck the wizard
+        run: shellcheck quickstart/install.sh quickstart/uninstall.sh quickstart/update.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --test rewrites the compose file to this exact tag, so the wizard runs
+      # against the code in this checkout rather than the published release.
+      - name: Build image as localhost/point:dev
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile
+          push: false
+          load: true
+          tags: localhost/point:dev
+
+      - name: Run the installer non-interactively
+        working-directory: quickstart
+        # install.sh's own wait_for_health polls /health for 60s and exits
+        # non-zero on timeout, so a wizard that starts nothing fails here.
+        run: bash install.sh --method=docker --auto --test
+
+      - name: Verify --test used the locally built image
+        working-directory: quickstart
+        # Guards the bug this job was written against: --test used to sed the
+        # image line, which never matched the ${IMAGE:-…} form, so the smoke
+        # test would have silently exercised the published release.
+        run: |
+          set -euo pipefail
+          grep -q '^IMAGE=localhost/point:dev$' .env
+          docker compose config | grep -q 'image: localhost/point:dev' 
+
+      - name: Verify the installed instance serves
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:8001/health | tee /dev/stderr | grep -q '"status":"ok"'
+          # The setup wizard must be reachable on a fresh install — a container
+          # that boots but cannot be set up is not a working install.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/api/setup/status)" = "200"
+
+      - name: Container logs on failure
+        if: failure()
+        working-directory: quickstart
+        run: docker compose logs || true
+
+      - name: Uninstall cleanly
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          docker compose down -v
+          # The uninstaller ships alongside and is equally untested; at minimum
+          # it must parse and its --help must succeed.
+          bash uninstall.sh --help >/dev/null

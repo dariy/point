@@ -3,6 +3,7 @@ package services
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,7 +49,7 @@ func TestCreateBackup_RefusesConcurrentRun(t *testing.T) {
 	s.backupRunning = true
 	s.backupMu.Unlock()
 
-	if _, _, err := s.CreateBackup(context.Background()); err != ErrBackupInProgress {
+	if _, _, err := s.CreateBackup(context.Background()); !errors.Is(err, ErrBackupInProgress) {
 		t.Fatalf("CreateBackup while running: got %v, want ErrBackupInProgress", err)
 	}
 }

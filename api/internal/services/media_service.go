@@ -26,7 +26,6 @@ import (
 	"point-api/internal/repository"
 
 	"github.com/disintegration/imaging"
-	"github.com/rwcarlsen/goexif/exif"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
@@ -100,43 +99,6 @@ Return only valid JSON, no markdown or extra text.`
 func CalculateChecksum(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
-}
-
-func (s *MediaService) extractEXIF(r io.Reader) map[string]interface{} {
-	metadata := make(map[string]interface{})
-	x, err := exif.Decode(r)
-	if err != nil {
-		return metadata
-	}
-
-	// Helper to extract string tags
-	getString := func(tag exif.FieldName) {
-		val, err := x.Get(tag)
-		if err == nil {
-			// val.String() often includes quotes for strings, or is a rational/int.
-			// For a generic metadata map, we just take the string representation.
-			metadata[string(tag)] = sanitizeEXIFValue(strings.Trim(val.String(), "\""))
-		}
-	}
-
-	getString(exif.Make)
-	getString(exif.Model)
-	getString(exif.Software)
-	getString(exif.DateTimeOriginal)
-	getString(exif.Orientation)
-	getString(exif.ExposureTime)
-	getString(exif.FNumber)
-	getString(exif.ISOSpeedRatings)
-	getString(exif.FocalLength)
-
-	// Lat/Long
-	lat, long, err := x.LatLong()
-	if err == nil {
-		metadata["GPSLatitude"] = lat
-		metadata["GPSLongitude"] = long
-	}
-
-	return metadata
 }
 
 // thumbnailWidth returns the effective thumbnail width, preferring env config
@@ -382,6 +344,9 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		}
 	}
 
+	// originalFullPath is built from the storage root plus a sanitized filename
+	// this function generated; the uploaded name never reaches the path.
+	//nolint:gosec // G703: path is composed from the storage root, not from input
 	if err := os.WriteFile(originalFullPath, content, 0644); err != nil {
 		return models.Medium{}, err
 	}
@@ -406,7 +371,19 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 }
 
 func (s *MediaService) GetMediaByID(ctx context.Context, id int64) (models.Medium, error) {
-	return s.repo.GetMedia(ctx, id)
+	return s.getMedia(ctx, id)
+}
+
+// getMedia fetches one media row, translating a missing row into
+// ErrMediaNotFound. The driver's own message is dropped: it now reaches clients
+// through the central mapper, and "sql: no rows in result set" is not an answer
+// to give a request.
+func (s *MediaService) getMedia(ctx context.Context, id int64) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Medium{}, ErrMediaNotFound
+	}
+	return media, err
 }
 
 type ListMediaParams struct {
@@ -482,7 +459,7 @@ func (s *MediaService) GetMediaByContent(ctx context.Context, content, thumbnail
 // ReextractEXIF re-reads the original file from disk, runs extractEXIF, and
 // overwrites media.metadata. Returns the updated media record.
 func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medium, error) {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return models.Medium{}, err
 	}
@@ -520,16 +497,19 @@ type UpdateEXIFParams struct {
 // disk (no-op for non-JPEG), and replaces media.metadata in the DB.
 // original_metadata is never modified.
 func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (models.Medium, error) {
-	media, err := s.repo.GetMedia(ctx, p.ID)
+	media, err := s.getMedia(ctx, p.ID)
 	if err != nil {
-		return models.Medium{}, fmt.Errorf("get media: %w", err)
+		return models.Medium{}, err
 	}
 
-	// Validate: all values must already be clean alphanumeric+space
+	// Validate: reject rather than silently rewrite, so an admin sees that
+	// their input was not stored verbatim. The accepted set is what
+	// sanitizeEXIFValue keeps — alphanumerics, space and the punctuation EXIF
+	// values legitimately carry.
 	sanitized := make(map[string]interface{}, len(p.Fields))
 	for k, v := range p.Fields {
 		if sanitizeEXIFValue(v) != v {
-			return models.Medium{}, fmt.Errorf("field %q contains disallowed characters: only alphanumeric and space allowed", k)
+			return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("field %q contains disallowed characters", k))
 		}
 		sanitized[k] = v
 	}
@@ -559,13 +539,13 @@ func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (mode
 // and writes those values back to the JPEG file on disk. Returns an error if
 // original_metadata is absent (null or empty).
 func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium, error) {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
-		return models.Medium{}, fmt.Errorf("get media: %w", err)
+		return models.Medium{}, err
 	}
 
 	if !media.OriginalMetadata.Valid || media.OriginalMetadata.String == "" {
-		return models.Medium{}, fmt.Errorf("no original metadata to revert to")
+		return models.Medium{}, wrapKind(ErrConflict, errors.New("no original metadata to revert to"))
 	}
 
 	var origFields map[string]interface{}
@@ -591,7 +571,7 @@ func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium,
 }
 
 func (s *MediaService) DeleteMedia(ctx context.Context, id int64) error {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -694,7 +674,7 @@ func (s *MediaService) GetStorageStats(ctx context.Context) (StorageStats, error
 
 // RenameMedia renames a media file on disk and updates the database.
 func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename string) (models.Medium, error) {
-	m, err := s.repo.GetMedia(ctx, id)
+	m, err := s.getMedia(ctx, id)
 	if err != nil {
 		return models.Medium{}, err
 	}
@@ -777,7 +757,7 @@ func AllowedSquareThumbSize(size int) bool {
 // regenerated if the original has since changed.
 func (s *MediaService) SquareThumbnail(ctx context.Context, media models.Medium, size int) (string, error) {
 	if !AllowedSquareThumbSize(size) {
-		return "", fmt.Errorf("unsupported thumbnail size %d", size)
+		return "", wrapKind(ErrInvalidInput, fmt.Errorf("unsupported thumbnail size %d", size))
 	}
 	if !strings.EqualFold(media.FileType, "image") {
 		return "", ErrNotAnImage
@@ -903,15 +883,16 @@ type AnalysisResponse struct {
 }
 
 var (
-	ErrMediaNotFound    = errors.New("media not found")
-	ErrNotAnImage       = errors.New("media item is not an image")
-	ErrResponseUnusable = errors.New("the response cannot be used")
+	ErrMediaNotFound = kindSentinel(ErrNotFound, "media not found")
+	ErrNotAnImage    = kindSentinel(ErrInvalidInput, "media item is not an image")
+	// The analysis upstream answered, but not with something we can use.
+	ErrResponseUnusable = kindSentinel(ErrUpstream, "the response cannot be used")
 )
 
 const maxAnalyzeBytes = 20 << 20 // 20 MB
 
 func (s *MediaService) AnalyzeMediaByID(ctx context.Context, id int64) (*AnalysisResponse, error) {
-	media, err := s.repo.GetMedia(ctx, id)
+	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return nil, ErrMediaNotFound
 	}
@@ -924,7 +905,7 @@ func (s *MediaService) AnalyzeMediaByID(ctx context.Context, id int64) (*Analysi
 		return nil, fmt.Errorf("could not stat media file: %w", err)
 	}
 	if info.Size() > maxAnalyzeBytes {
-		return nil, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes)
+		return nil, wrapKind(ErrInvalidInput, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes))
 	}
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -944,10 +925,10 @@ func (s *MediaService) AnalyzeMediaByPath(ctx context.Context, mediaPath string)
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		return nil, fmt.Errorf("media file not found")
+		return nil, wrapKind(ErrNotFound, errors.New("media file not found"))
 	}
 	if info.Size() > maxAnalyzeBytes {
-		return nil, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes)
+		return nil, wrapKind(ErrInvalidInput, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes))
 	}
 
 	content, err := os.ReadFile(fullPath)
@@ -1090,7 +1071,8 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 		}
 
 		// Check if this is a 429 error (quota exceeded)
-		if apiErr, ok := genErr.(*googleapi.Error); ok && apiErr.Code == 429 {
+		var apiErr *googleapi.Error
+		if errors.As(genErr, &apiErr) && apiErr.Code == 429 {
 			continue
 		}
 
@@ -1103,7 +1085,7 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 	}
 
 	if len(genResp.Candidates) == 0 || len(genResp.Candidates[0].Content.Parts) == 0 {
-		return nil, fmt.Errorf("no content generated")
+		return nil, wrapKind(ErrUpstream, errors.New("no content generated"))
 	}
 
 	// Extract text from response
@@ -1114,7 +1096,7 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(respText.String()), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
+		return nil, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
 	return s.parseAnalysisResult(result, filename)
@@ -1236,12 +1218,15 @@ func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths 
 			}
 		}
 	}
-	for _, path := range paths {
-		m, err := s.repo.GetMediaByPath(ctx, path)
-		if err != nil {
-			continue // no DB record for this path, skip
-		}
-		postID, shouldBePublic := visiblePaths[path]
+	// One IN query for the whole set. Doing this per path was a full scan each
+	// (before media.original_path was indexed) and is still a round trip each —
+	// a 30-image post meant 30 of them.
+	records, err := s.repo.GetMediaByPaths(ctx, paths)
+	if err != nil {
+		return err
+	}
+	for _, m := range records {
+		postID, shouldBePublic := visiblePaths[m.OriginalPath]
 		if (m.IsPublic != 0) != shouldBePublic {
 			var pid *int64
 			if shouldBePublic {

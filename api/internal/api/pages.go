@@ -165,7 +165,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 	posts, total, err := h.postService.ListPosts(ctx, listParams)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	postIDs := make([]int64, len(posts))
@@ -337,7 +337,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	snap, _ := h.tagService.GetTagSnapshot(ctx)
 	tag, err := h.tagService.GetTagBySlug(ctx, slug)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		return MapError(err)
 	}
 
 	minPosts := getMinTagPostsSetting(allSettings)
@@ -411,7 +411,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Posts for this tag (published only)
 	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	tagPostIDs := make([]int64, len(posts))
@@ -518,7 +518,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
@@ -613,7 +613,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	minPosts := getMinTagPostsSetting(allSettings)
@@ -660,7 +660,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 	// Hierarchy edges (skip edges touching an excluded tag for public viewers).
 	rels, err := h.tagService.GetAllTagRelationships(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	hierarchyEdges := make([]map[string]interface{}, 0, len(rels))
 	for _, rel := range rels {
@@ -685,7 +685,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 	if c.QueryParam("posts") != "0" {
 		postNodes, err := h.repo.ListPostNodesForGraph(ctx, publicOnly)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 		postIDs := make([]int64, len(postNodes))
 		for i, p := range postNodes {
@@ -693,7 +693,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		}
 		tagsByPost, err := h.tagService.GetTagsByPostIDs(ctx, postIDs)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 
 		posts := make([]map[string]interface{}, 0, len(postNodes))
@@ -761,9 +761,9 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	tagID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	tagID, err := parseNamedIDParam(c, "tag id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+		return err
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
@@ -773,7 +773,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	if _, ok := g.ByID[tagID]; !ok {
 		return echo.NewHTTPError(http.StatusNotFound, "tag not found")
@@ -813,7 +813,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 		postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, postLimit, 0)
 	}
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	posts := make([]map[string]interface{}, 0, len(postModels))
@@ -835,7 +835,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	}
 	coTags, err := h.repo.GetTopCoOccurringTagsForTagIDs(ctx, subtree, tagID, publicOnly, fetch)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	tags := make([]map[string]interface{}, 0, atlasCloudLimit)
 	tagSet := map[int64]bool{tagID: true} // centre is always part of the wired set
@@ -862,7 +862,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	if len(postIDs) > 0 {
 		tagsByPost, err := h.tagService.GetTagsByPostIDs(ctx, postIDs)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 		for _, pid := range postIDs {
 			for _, pt := range tagsByPost[pid] {
@@ -878,7 +878,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	// chip), so the cloud draws their parent/child links.
 	rels, err := h.tagService.GetAllTagRelationships(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	hierarchyEdges := make([]map[string]interface{}, 0)
 	for _, rel := range rels {
@@ -919,7 +919,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)

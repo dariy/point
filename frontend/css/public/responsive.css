@@ -78,12 +78,18 @@
 }
 
 /* Coarse pointer styles */
+/* Touch affordances are scoped to :not(.pointer-fine) — see utils/pointerMode.js.
+   The media query is only a first guess; a touchscreen laptop misreports itself
+   as touch-only, and the class is removed as soon as a real mouse shows up.
+   :where() keeps the added scope at zero specificity. */
 @media (pointer: coarse) {
-    .header-action-btn, .theme-toggle, .share-btn {
+    :where(html:not(.pointer-fine)) .header-action-btn,
+    :where(html:not(.pointer-fine)) .theme-toggle,
+    :where(html:not(.pointer-fine)) .share-btn {
         min-width: 44px;
         min-height: 44px;
     }
-    .tag-link {
+    :where(html:not(.pointer-fine)) .tag-link {
         padding: 8px 12px; /* larger tap target */
     }
 }

@@ -5,8 +5,6 @@ package services
 import (
 	"context"
 	"testing"
-
-	"point-api/internal/config"
 )
 
 func TestSettingsService_CRUD(t *testing.T) {
@@ -139,57 +137,77 @@ func TestSettingsService_Secrets(t *testing.T) {
 	}
 }
 
-func TestSettingsService_EnsureSecretKey_Generate(t *testing.T) {
+func TestSettingsService_GetSettingWarmsCache(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 	svc := NewSettingsService(repo)
 	ctx := context.Background()
 
-	cfg := &config.Config{} // SecretKey is empty
-	if err := svc.EnsureSecretKey(ctx, cfg); err != nil {
-		t.Fatalf("EnsureSecretKey: %v", err)
+	if err := svc.SetSetting(ctx, "warm_key", "warm_value", "string"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
 	}
-	if cfg.SecretKey == "" {
-		t.Error("expected cfg.SecretKey to be populated")
+	// First single-key read must populate the whole-table cache, not just
+	// query that one row — otherwise every read before the first
+	// GetAllSettings is a separate DB round trip.
+	if _, err := svc.GetSetting(ctx, "warm_key", ""); err != nil {
+		t.Fatalf("GetSetting: %v", err)
 	}
-	if len(cfg.SecretKey) != 64 { // 32 bytes → 64 hex chars
-		t.Errorf("expected 64-char key, got %d", len(cfg.SecretKey))
+
+	// Write behind the service's back; a warm cache must not see it.
+	if _, err := repo.DB().ExecContext(ctx,
+		`INSERT INTO blog_settings (key, value, value_type) VALUES ('behind_back', 'x', 'string')`); err != nil {
+		t.Fatalf("direct insert: %v", err)
 	}
-	// Persisted in blog_secrets.
-	stored, _ := svc.GetSecret(ctx, "_secret_key")
-	if stored != cfg.SecretKey {
-		t.Error("stored key does not match cfg.SecretKey")
+	if val, _ := svc.GetSetting(ctx, "behind_back", "miss"); val != "miss" {
+		t.Errorf("cache was not warm: got %q, want the default", val)
+	}
+
+	svc.InvalidateCache()
+	if val, _ := svc.GetSetting(ctx, "behind_back", "miss"); val != "x" {
+		t.Errorf("InvalidateCache did not force a re-read: got %q, want %q", val, "x")
 	}
 }
 
-func TestSettingsService_EnsureSecretKey_LoadExisting(t *testing.T) {
+func TestSettingsService_SnapshotIsSharedGetAllIsCopied(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 	svc := NewSettingsService(repo)
 	ctx := context.Background()
 
-	_ = svc.SetSecret(ctx, "_secret_key", "existing_key_value")
-
-	cfg := &config.Config{}
-	if err := svc.EnsureSecretKey(ctx, cfg); err != nil {
-		t.Fatalf("EnsureSecretKey: %v", err)
+	if err := svc.SetSetting(ctx, "shared_key", "v1", "string"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
 	}
-	if cfg.SecretKey != "existing_key_value" {
-		t.Errorf("expected existing_key_value, got %q", cfg.SecretKey)
-	}
-}
 
-func TestSettingsService_EnsureSecretKey_EnvWins(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	svc := NewSettingsService(repo)
-	ctx := context.Background()
-
-	cfg := &config.Config{SecretKey: "env_key"}
-	if err := svc.EnsureSecretKey(ctx, cfg); err != nil {
-		t.Fatalf("EnsureSecretKey: %v", err)
+	// GetAllSettings hands out a private copy: the admin API mutates it.
+	all, err := svc.GetAllSettings(ctx)
+	if err != nil {
+		t.Fatalf("GetAllSettings: %v", err)
 	}
-	if cfg.SecretKey != "env_key" {
-		t.Errorf("env key should win, got %q", cfg.SecretKey)
+	all["injected"] = "should not leak"
+	snap, err := svc.Snapshot(ctx)
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if _, leaked := snap["injected"]; leaked {
+		t.Error("mutating the GetAllSettings result corrupted the cache")
+	}
+	if snap["shared_key"] != "v1" {
+		t.Errorf("Snapshot missing cached value: %q", snap["shared_key"])
+	}
+
+	// A write must not mutate a snapshot a caller is already holding —
+	// that would be a data race, not just surprising.
+	if err := svc.SetSetting(ctx, "shared_key", "v2", "string"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	if snap["shared_key"] != "v1" {
+		t.Error("SetSetting mutated a previously handed-out snapshot in place")
+	}
+	fresh, err := svc.Snapshot(ctx)
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if fresh["shared_key"] != "v2" {
+		t.Errorf("write not visible in a new snapshot: %q", fresh["shared_key"])
 	}
 }

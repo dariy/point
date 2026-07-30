@@ -22,6 +22,19 @@ type RemarkSupervisor struct {
 	mu       sync.Mutex
 	cancel   context.CancelFunc
 	done     chan struct{} // closed when the current process has fully exited
+	// health reports the sidecar's state to the admin health view. Nil is
+	// valid and records nothing.
+	health *HealthRegistry
+}
+
+// healthTaskRemark42 is the registry key for the comments sidecar.
+const healthTaskRemark42 = "remark42 supervisor"
+
+// WithHealth attaches a health registry so sidecar starts, crashes and restarts
+// are visible to the admin health endpoint.
+func (s *RemarkSupervisor) WithHealth(h *HealthRegistry) *RemarkSupervisor {
+	s.health = h
+	return s
 }
 
 func NewRemarkSupervisor(settings *SettingsService, repo repository.Repository) *RemarkSupervisor {
@@ -67,7 +80,9 @@ func (s *RemarkSupervisor) startLocked() {
 				b, err := os.ReadFile(path)
 				if err == nil && bytes.Contains(b, []byte("{% REMARK_URL %}")) {
 					b = bytes.ReplaceAll(b, []byte("{% REMARK_URL %}"), []byte(remarkURL))
-					_ = os.WriteFile(path, b, info.Mode())
+					// path comes from walking the hardcoded webDir constant, not
+					// from any request; the write preserves the original mode.
+					_ = os.WriteFile(path, b, info.Mode()) //nolint:gosec // G703: path is from a fixed-root filepath.Walk
 				}
 			}
 			return nil
@@ -101,6 +116,17 @@ func (s *RemarkSupervisor) startLocked() {
 	anon, _ := s.settings.GetSetting(bgCtx, "remark_auth_anon", "true")
 	env = append(env, "AUTH_ANON="+anon)
 
+	// Registers a provider named "point" — load-bearing, and not for its OAuth
+	// URLs, which are deliberately inert. go-pkgz/auth's middleware rejects any
+	// token whose provider (the "point" in a point_<id> subject) is not a
+	// registered provider: "user X/point_1 provider is not allowed". So this
+	// declaration is what makes the JWT cookie bridge in api.IssueRemark42Cookies
+	// work at all. Drop it and the owner is anonymous in the widget.
+	//
+	// The URLs point back at REMARK_URL — i.e. into remark42 itself through the
+	// /comments proxy — because Point serves no authorize/token/userinfo. Nothing
+	// should ever send a browser there; the comments proxy strips this provider
+	// out of the config the widget reads so no login button is rendered for it.
 	env = append(env,
 		"AUTH_CUSTOM_NAME=point",
 		"AUTH_CUSTOM_CID=point",
@@ -192,12 +218,14 @@ func (s *RemarkSupervisor) startLocked() {
 
 	if err := cmd.Start(); err != nil {
 		slog.Error("RemarkSupervisor: failed to start remark42", "err", err)
+		s.health.Record(healthTaskRemark42, fmt.Errorf("failed to start: %w", err))
 		return
 	}
 	s.cmd = cmd
 	done := make(chan struct{})
 	s.done = done
 	slog.Info("RemarkSupervisor: started remark42", "pid", cmd.Process.Pid)
+	s.health.Record(healthTaskRemark42, nil)
 
 	go func() {
 		err := cmd.Wait()
@@ -206,6 +234,9 @@ func (s *RemarkSupervisor) startLocked() {
 		if ctx.Err() != nil {
 			return // intentional stop (Restart cancelled the context)
 		}
+		// An unexpected exit is the failure an operator most wants to see:
+		// comments quietly stop working and nothing else says so.
+		s.health.Record(healthTaskRemark42, fmt.Errorf("exited unexpectedly: %w", err))
 		// Crash: relaunch so comments come back without a container restart.
 		// ponytail: fixed 5s backoff; make it exponential if it ever flaps hard.
 		time.Sleep(5 * time.Second)

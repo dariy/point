@@ -1,7 +1,10 @@
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
-import { showCrumbDropdown, hideFlyout, hideFlyoutWithin } from '../../utils/tags.js';
+import {
+  hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl,
+  HOVER_OPEN_MS,
+} from '../../utils/tags.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 
 const DEFAULT_INLINE_MAX = 4;
@@ -13,6 +16,7 @@ const DEFAULT_INLINE_MAX = 4;
  * as visible inline links in `.site-nav-items`, with two overflow surfaces:
  *   - More ▾ — items past the configured inline cap (nav_inline_max), plus
  *     items folded right-to-left by the header fold controller (order 30).
+ *     Opens on hover with a mouse, on tap with a finger.
  *   - burger — the full list, shown when the whole nav zone folds (order 40).
  *
  * Items with children get a dropdown: hover (with intent delay) on fine
@@ -29,6 +33,8 @@ export class NavMenu {
     this._unsubscribeSettings = null;
     this._unregisterFold = null;
     this._onDocClick = null;
+    this._moreOpenTimer = null;
+    this._moreZone = null;
   }
 
   mount() {
@@ -66,6 +72,9 @@ export class NavMenu {
     if (this._unsubscribeSettings) this._unsubscribeSettings();
     if (this._unregisterFold) this._unregisterFold();
     if (this._onDocClick) document.removeEventListener('click', this._onDocClick, true);
+    clearTimeout(this._moreOpenTimer);
+    this._moreZone?.stop();
+    this._moreZone = null;
     hideFlyout();
   }
 
@@ -175,34 +184,16 @@ export class NavMenu {
    */
   _wireChildFlyout(el, childItems) {
     const group = this.navItemsEl.closest('.site-header-group');
-    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-
-    if (canHover) {
-      el.addEventListener('mouseenter', () => {
-        clearTimeout(this._hoverTimer);
-        this._hoverTimer = setTimeout(() => showCrumbDropdown(el, childItems, navigate, group), 180);
-      });
-      el.addEventListener('mouseleave', () => clearTimeout(this._hoverTimer));
-      el.addEventListener('click', () => { clearTimeout(this._hoverTimer); hideFlyout(); });
-    } else {
-      el.addEventListener('click', (e) => {
-        if (el.classList.contains('is-flyout-open')) {
-          const href = el.getAttribute('href');
-          if (href && href !== '#') {
-            hideFlyout();
-            navigate(href);
-            e.preventDefault();
-            return;
-          }
-        }
-        e.preventDefault();
-        showCrumbDropdown(el, childItems, navigate, group);
-      });
-    }
+    attachFlyoutTrigger(el, () => childItems, navigate, group);
   }
 
   /** Dropdowns for inline items with children (hover-intent / tap-toggle). */
   _wireInline() {
+    // A re-render replaced the elements the old hot zone was watching.
+    clearTimeout(this._moreOpenTimer);
+    this._moreZone?.stop();
+    this._moreZone = null;
+
     this.navItemsEl.querySelectorAll('.nav-menu-link.has-children').forEach((el) => {
       const it = this._inline[Number(el.dataset.navI)];
       if (!it) return;
@@ -211,17 +202,55 @@ export class NavMenu {
     });
 
     const moreBtn = this.navItemsEl.querySelector('.nav-more-btn');
-    moreBtn?.addEventListener('click', (e) => {
+    if (!moreBtn) return;
+    const more = moreBtn.closest('.nav-more');
+
+    moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const more = moreBtn.closest('.nav-more');
-      const open = more.classList.toggle('open');
-      moreBtn.setAttribute('aria-expanded', String(open));
-      // Closing the panel also dismisses the child dropdown it opened.
-      if (!open) hideFlyoutWithin(more);
+      clearTimeout(this._moreOpenTimer);
+      if (more.classList.contains('open')) this._closeMore();
+      else this._openMore();
     });
+
+    // Mouse: hover-intent opens the panel, no click needed. Gated on
+    // `pointerType === 'mouse'` so a tap's compatibility mouse events can't
+    // trip it — touch keeps tap-to-toggle.
+    more.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(this._moreOpenTimer);
+      this._moreOpenTimer = setTimeout(() => this._openMore(true), HOVER_OPEN_MS);
+    });
+    more.addEventListener('pointerleave', () => clearTimeout(this._moreOpenTimer));
+  }
+
+  /**
+   * @param {boolean} [track] arm a hot zone that closes the panel when the
+   *   cursor leaves it — for hover-opened panels only, so a click-opened one
+   *   stays put until it's clicked away.
+   */
+  _openMore(track = false) {
+    const more = this.navItemsEl.querySelector('.nav-more');
+    if (!more) return;
+    more.classList.add('open');
+    more.querySelector('.nav-more-btn')?.setAttribute('aria-expanded', 'true');
+    this._moreZone?.stop();
+    this._moreZone = null;
+    if (!track) return;
+    // The panel is absolutely positioned, so it's outside `.nav-more`'s own box
+    // — track it explicitly or the cursor "leaves" the moment it reaches the
+    // menu it just opened. A row's child dropdown lands outside both, hence the
+    // flyout. The pad bridges the button→panel gap.
+    this._moreZone = createHotZone(
+      () => [more, more.querySelector('.nav-more-panel'), flyoutEl()],
+      () => this._closeMore(),
+      12,
+    );
   }
 
   _closeMore() {
+    clearTimeout(this._moreOpenTimer);
+    this._moreZone?.stop();
+    this._moreZone = null;
     const more = this.navItemsEl.querySelector('.nav-more');
     if (!more) return;
     more.classList.remove('open');

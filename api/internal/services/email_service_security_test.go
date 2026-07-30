@@ -49,18 +49,18 @@ func TestEnvelopeAddr(t *testing.T) {
 	}{
 		{
 			name:     "bare address",
-			input:    "monkey@monkey.point.photos",
-			expected: "monkey@monkey.point.photos",
+			input:    "monkey@monkey.example.com",
+			expected: "monkey@monkey.example.com",
 		},
 		{
 			name:     "display name",
-			input:    "Monkey <monkey@monkey.point.photos>",
-			expected: "monkey@monkey.point.photos",
+			input:    "Monkey <monkey@monkey.example.com>",
+			expected: "monkey@monkey.example.com",
 		},
 		{
 			name:     "quoted display name",
-			input:    `"Point Photos" <no-reply@point.photos>`,
-			expected: "no-reply@point.photos",
+			input:    `"Example Site" <no-reply@example.com>`,
+			expected: "no-reply@example.com",
 		},
 		{
 			name:     "unparseable falls through unchanged",

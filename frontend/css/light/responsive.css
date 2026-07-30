@@ -275,8 +275,11 @@
    Touch / Coarse Pointer
    ≥44px targets; always-visible overlays (no hover available)
    =========================== */
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. The custom-property
+   block keeps real specificity (no :where()) so it still beats the plain :root
+   defaults it is overriding; the rest is zero-specificity scoping. */
 @media (pointer: coarse) {
-    :root {
+    html:not(.pointer-fine) {
         /* Icon action buttons: table rows, media overlays, tree rows */
         --btn-width: var(--size-2-75);
         --btn-height: var(--size-2-75);
@@ -292,22 +295,22 @@
     }
 
     /* Tree rows: restore ≥44px touch target (overrides the min-height:auto at 40em) */
-    .tm-row {
+    :where(html:not(.pointer-fine)) .tm-row {
         min-height: 2.75rem;
     }
 
     /* Media item action buttons: always render at low opacity instead of hover-only */
-    .media-item-actions {
+    :where(html:not(.pointer-fine)) .media-item-actions {
         opacity: 0.7;
     }
 
     /* Copy-path button: always visible */
-    .media-item-info .copy-path-btn {
+    :where(html:not(.pointer-fine)) .media-item-info .copy-path-btn {
         opacity: 0.7;
     }
 
     /* EXIF delete button: always render at low opacity instead of hover-only */
-    .exif-delete-btn {
+    :where(html:not(.pointer-fine)) .exif-delete-btn {
         opacity: 0.7;
     }
 }
