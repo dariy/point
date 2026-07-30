@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/mail"
 	"strconv"
 	"time"
@@ -71,14 +72,25 @@ func (s *AuthService) Authenticate(ctx context.Context, username, password strin
 		return models.User{}, wrapKind(ErrUnauthenticated, errors.New("invalid username or password"))
 	}
 
-	// Upgrade hash to Argon2id if it's still bcrypt
+	// Upgrade hash to Argon2id if it's still bcrypt.
+	//
+	// A failure here is deliberately not fatal: the credential was already
+	// verified, so the login succeeds either way and the stored hash simply
+	// stays bcrypt until the next attempt. It is logged rather than swallowed
+	// because a rehash that fails on every login never self-heals, and the
+	// only symptom otherwise is a hash that silently never migrates.
 	if IsBcryptHash(user.PasswordHash) {
 		newHash, err := HashPassword(password)
-		if err == nil {
-			_ = s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
-				PasswordHash: newHash,
-				ID:           user.ID,
-			})
+		if err != nil {
+			slog.Warn("bcrypt->Argon2id rehash failed to hash; stored hash stays bcrypt",
+				"user_id", user.ID, "error", err)
+		} else if err := s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
+			PasswordHash: newHash,
+			ID:           user.ID,
+		}); err != nil {
+			slog.Warn("bcrypt->Argon2id rehash failed to persist; stored hash stays bcrypt",
+				"user_id", user.ID, "error", err)
+		} else {
 			user.PasswordHash = newHash
 		}
 	}
