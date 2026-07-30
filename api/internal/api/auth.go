@@ -76,7 +76,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	user, err := h.authService.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		return MapError(err)
 	}
 
 	token := GenerateToken()
@@ -203,7 +203,7 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 	}
 
 	if err := h.authService.ChangePassword(c.Request().Context(), userID, sessionID, req.CurrentPassword, req.NewPassword); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Password changed successfully"})
@@ -227,7 +227,7 @@ func (h *AuthHandler) ChangeEmail(c echo.Context) error {
 	}
 
 	if err := h.authService.ChangeEmail(c.Request().Context(), userID, req.CurrentPassword, strings.TrimSpace(req.Email)); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Email changed successfully"})
@@ -239,7 +239,7 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 
 	sessions, err := h.authService.ListSessions(c.Request().Context(), userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	type sessionItem struct {
@@ -285,7 +285,7 @@ func (h *AuthHandler) DeleteSession(c echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 
 	if err := h.authService.TerminateSession(c.Request().Context(), sessionID, userID); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "session not found")
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -296,7 +296,7 @@ func (h *AuthHandler) DeleteOtherSessions(c echo.Context) error {
 	currentSessionID := extractSessionID(c.Get("user"))
 
 	if err := h.authService.TerminateOtherSessions(c.Request().Context(), userID, currentSessionID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Other sessions terminated"})

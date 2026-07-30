@@ -32,7 +32,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	// Fetch locations for all tags.
@@ -167,7 +167,7 @@ func (h *TagHandler) GetTagCloud(c echo.Context) error {
 
 	cloud, err := h.tagService.GetTagCloud(c.Request().Context(), limit, publicOnly, minPosts)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{"tags": cloud})
@@ -181,7 +181,7 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	tag, ok := g.ByID[id]
@@ -196,7 +196,7 @@ func (h *TagHandler) GetTagBySlug(c echo.Context) error {
 	slug := c.Param("slug")
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	tag, ok := g.BySlug[strings.ToLower(slug)]
@@ -356,7 +356,7 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 		ParentIDs:        req.ParentIDs,
 	})
 	if err != nil {
-		return err
+		return MapError(err)
 	}
 
 	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
@@ -382,7 +382,7 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	current, ok := g.ByID[id]
 	if !ok {
@@ -396,7 +396,7 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 
 	tag, err := h.tagService.UpdateTag(c.Request().Context(), tagPatchParams(current, fields))
 	if err != nil {
-		return err
+		return MapError(err)
 	}
 
 	if raw, ok := fields["parent_ids"]; ok && string(raw) != "null" {
@@ -504,7 +504,7 @@ func (h *TagHandler) DeleteTag(c echo.Context) error {
 	}
 
 	if err := h.tagService.DeleteTag(c.Request().Context(), id); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -531,7 +531,7 @@ func (h *TagHandler) ReorderTag(c echo.Context) error {
 		Position: req.Position,
 		ParentID: req.ParentID,
 	}); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -543,7 +543,7 @@ func (h *TagHandler) GeocodeTag(c echo.Context) error {
 	}
 	lat, lon, err := h.tagService.GeocodeTag(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"latitude":  lat,
@@ -553,7 +553,7 @@ func (h *TagHandler) GeocodeTag(c echo.Context) error {
 
 func (h *TagHandler) RecalculateCounts(c echo.Context) error {
 	if err := h.tagService.UpdateAllPostCounts(c.Request().Context()); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "Tag counts recalculated successfully"})
 }
@@ -568,7 +568,7 @@ func (h *TagHandler) PatchTag(c echo.Context) error {
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	current, ok := g.ByID[id]
 	if !ok {
@@ -582,7 +582,7 @@ func (h *TagHandler) PatchTag(c echo.Context) error {
 
 	tag, err := h.tagService.UpdateTag(c.Request().Context(), tagPatchParams(current, fields))
 	if err != nil {
-		return err
+		return MapError(err)
 	}
 
 	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
@@ -702,13 +702,13 @@ func (h *TagHandler) SetTagParents(c echo.Context) error {
 	}
 
 	if err := h.tagService.SetTagParents(c.Request().Context(), id, req.IDs); err != nil {
-		return err
+		return MapError(err)
 	}
 
 	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
 	tag, err := h.tagService.GetTagByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		return MapError(err)
 	}
 	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
 }
@@ -729,13 +729,13 @@ func (h *TagHandler) SetTagChildren(c echo.Context) error {
 	}
 
 	if err := h.tagService.SetTagChildren(c.Request().Context(), id, req.IDs); err != nil {
-		return err
+		return MapError(err)
 	}
 
 	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
 	tag, err := h.tagService.GetTagByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		return MapError(err)
 	}
 	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
 }
@@ -765,7 +765,7 @@ func (h *TagHandler) MoveTag(c echo.Context) error {
 		ParentID: req.ParentID,
 		AfterID:  req.AfterID,
 	}); err != nil {
-		return err
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -775,7 +775,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	slug := c.Param("slug")
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	tag, ok := g.BySlug[strings.ToLower(slug)]
@@ -808,7 +808,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 
 	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, page, perPage, publicOnly, false, 0, 0)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	postIDs := make([]int64, len(posts))
@@ -872,7 +872,7 @@ func (h *TagHandler) MergeTags(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 	if err := h.tagService.MergeTags(c.Request().Context(), req.WinnerID, loserID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

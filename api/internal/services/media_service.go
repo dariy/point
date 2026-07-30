@@ -374,13 +374,14 @@ func (s *MediaService) GetMediaByID(ctx context.Context, id int64) (models.Mediu
 	return s.getMedia(ctx, id)
 }
 
-// getMedia fetches one media row, classifying a missing row as ErrNotFound.
-// The message is left as the driver wrote it so callers that still match on
-// text keep working; only the kind is added.
+// getMedia fetches one media row, translating a missing row into
+// ErrMediaNotFound. The driver's own message is dropped: it now reaches clients
+// through the central mapper, and "sql: no rows in result set" is not an answer
+// to give a request.
 func (s *MediaService) getMedia(ctx context.Context, id int64) (models.Medium, error) {
 	media, err := s.repo.GetMedia(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Medium{}, wrapKind(ErrNotFound, err)
+		return models.Medium{}, ErrMediaNotFound
 	}
 	return media, err
 }
@@ -498,7 +499,7 @@ type UpdateEXIFParams struct {
 func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (models.Medium, error) {
 	media, err := s.getMedia(ctx, p.ID)
 	if err != nil {
-		return models.Medium{}, fmt.Errorf("get media: %w", err)
+		return models.Medium{}, err
 	}
 
 	// Validate: reject rather than silently rewrite, so an admin sees that
@@ -540,7 +541,7 @@ func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (mode
 func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium, error) {
 	media, err := s.getMedia(ctx, id)
 	if err != nil {
-		return models.Medium{}, fmt.Errorf("get media: %w", err)
+		return models.Medium{}, err
 	}
 
 	if !media.OriginalMetadata.Valid || media.OriginalMetadata.String == "" {

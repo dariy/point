@@ -106,8 +106,11 @@ func TestMediaHandler_Rename_Error(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for non-existent media rename")
 	} else if errors.As(err, &he) {
-		if he.Code != http.StatusInternalServerError {
-			t.Errorf("expected 500, got %d", he.Code)
+		// 404, not 500: RenameMedia resolves the row before touching the file,
+		// so a missing id is a missing resource, not a server fault. This
+		// asserted 500 before the handler moved onto the central error mapper.
+		if he.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", he.Code)
 		}
 	}
 }

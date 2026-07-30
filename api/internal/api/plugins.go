@@ -81,7 +81,7 @@ type togglePluginRequest struct {
 func (h *PluginsHandler) ListPlugins(c echo.Context) error {
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, listViews(all))
 }
@@ -105,7 +105,7 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 
 	all, err := h.settingsService.GetAllSettings(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	// Refuse to empty a core area: the sole enabled plugin there can't go off.
@@ -114,7 +114,7 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 	}
 
 	if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(id), strconv.FormatBool(req.Enabled), "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	all[plugins.EnabledKey(id)] = strconv.FormatBool(req.Enabled)
 
@@ -125,14 +125,14 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 				continue
 			}
 			if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(peer), "false", "string"); err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+				return MapError(err)
 			}
 			all[plugins.EnabledKey(peer)] = "false"
 		}
 	}
 	// An individual toggle diverges from any preset.
 	if err := h.settingsService.SetSetting(ctx, activePresetKey, presetCustom, "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, viewFor(d, all))

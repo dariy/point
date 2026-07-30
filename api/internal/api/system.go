@@ -227,7 +227,7 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 
 	stats, err := h.repo.GetSystemStats(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -310,7 +310,7 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 	// Warn synchronously if the archive wouldn't fit, so the user finds out now
 	// rather than via a silent background failure.
 	if err := h.systemService.CheckBackupSpace(); err != nil {
-		return echo.NewHTTPError(http.StatusInsufficientStorage, err.Error())
+		return MapError(err)
 	}
 
 	// Read retention before detaching from the request context.
@@ -347,7 +347,7 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 		if os.IsNotExist(err) {
 			return c.JSON(http.StatusOK, []interface{}{})
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	type backupInfo struct {
@@ -408,13 +408,13 @@ func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+		return MapError(err)
 	}
 
 	// Restoring overwrites the live SQLite file, which can't be done safely while
 	// the server holds it open, so we schedule it and apply it at the next startup.
 	if err := h.systemService.ScheduleRestore(filename); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
@@ -446,7 +446,7 @@ func (h *SystemHandler) RestartServer(c echo.Context) error {
 func (h *SystemHandler) GetMigrations(c echo.Context) error {
 	migrations, err := h.repo.GetMigrations(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, migrations)
 }
@@ -458,7 +458,7 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 	// to ensure all media referenced in public posts is accessible to guests.
 	updated, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -471,7 +471,7 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
 	changed, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status":  "success",
@@ -485,7 +485,7 @@ func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
 func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
 	issues, scanned, err := h.postService.AuditPublicPostLinks(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"issues":  issues,
@@ -496,7 +496,7 @@ func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
 func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
 	result, err := h.tagService.UpdateMissingCoords(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -512,7 +512,7 @@ func (h *SystemHandler) DeleteBackup(c echo.Context) error {
 		if os.IsNotExist(err) {
 			return echo.NewHTTPError(http.StatusNotFound, "backup not found")
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	_ = os.Remove(backupPath + ".sha256") // drop the orphaned checksum sidecar
 
@@ -565,7 +565,7 @@ func (h *SystemHandler) AuthorizeBackupDownload(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+		return MapError(err)
 	}
 
 	backupPath := filepath.Join(h.dataPath, "backups", filename)
@@ -764,7 +764,7 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
 	info, err := h.systemService.GetDiskInfo()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, info)
 }
@@ -811,7 +811,7 @@ func (h *SystemHandler) GetPhotoLibraryContents(c echo.Context) error {
 
 	entries, err := os.ReadDir(targetPath)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	folders := []string{}

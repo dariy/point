@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -13,8 +12,6 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
-
-	"github.com/labstack/echo/v4"
 )
 
 type TagService struct {
@@ -405,7 +402,7 @@ func (s *TagService) GetTagBySlug(ctx context.Context, slug string) (models.Tag,
 
 	tag, ok := g.BySlug[strings.ToLower(slug)]
 	if !ok {
-		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
+		return models.Tag{}, ErrTagNotFound
 	}
 	return tag, nil
 }
@@ -418,7 +415,7 @@ func (s *TagService) GetTagByID(ctx context.Context, id int64) (models.Tag, erro
 
 	tag, ok := g.ByID[id]
 	if !ok {
-		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
+		return models.Tag{}, ErrTagNotFound
 	}
 	return tag, nil
 }
@@ -496,14 +493,8 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		Longitude:        utils.ToNullFloat64(p.Longitude),
 	})
 	if err != nil {
-		// TODO(point-fix-errorlint-error-mapping-jblz.3): a service should not
-		// build an HTTP error. Return wrapKind(ErrConflict, ...) instead and let
-		// the tags handler map it. Safe to do whenever .3 reaches this file:
-		// api.MapError and CustomHTTPErrorHandler both find the status via
-		// errors.As, so the 409 survives either way. What has to move with it
-		// are the handler tests that type-assert the returned error.
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
-			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+			return models.Tag{}, ErrTagSlugExists
 		}
 		return models.Tag{}, err
 	}
@@ -652,6 +643,15 @@ func (s *TagService) GetTagChildren(ctx context.Context, id int64, publicOnly bo
 	return result, nil
 }
 
+// Tag failures a caller can act on. Previously these were built here as
+// echo.HTTPError values, which put HTTP status decisions in the service layer;
+// the statuses they used are preserved by the kinds they now carry.
+var (
+	ErrTagNotFound   = kindSentinel(ErrNotFound, "tag not found")
+	ErrTagSlugExists = kindSentinel(ErrConflict, "a tag with that slug already exists")
+	ErrTagNotAChild  = kindSentinel(ErrUnprocessable, "tag is not a child of the given parent")
+)
+
 // AddTagRelationship adds a parent-child relationship between two tags with cycle detection.
 func (s *TagService) AddTagRelationship(ctx context.Context, parentID, childID int64) error {
 	// Check for cycles: if parentID is already a descendant of childID, adding parentID -> childID creates a cycle.
@@ -660,7 +660,7 @@ func (s *TagService) AddTagRelationship(ctx context.Context, parentID, childID i
 		return err
 	}
 	if path != nil {
-		return echo.NewHTTPError(http.StatusConflict, fmt.Sprintf("Cycle detected: %s", strings.Join(path, " -> ")))
+		return wrapKind(ErrConflict, fmt.Errorf("Cycle detected: %s", strings.Join(path, " -> "))) //nolint:staticcheck // ST1005: user-facing message, wording preserved from before the taxonomy
 	}
 
 	if err := s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
@@ -784,14 +784,8 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		Longitude:        utils.ToNullFloat64(p.Longitude),
 	})
 	if err != nil {
-		// TODO(point-fix-errorlint-error-mapping-jblz.3): a service should not
-		// build an HTTP error. Return wrapKind(ErrConflict, ...) instead and let
-		// the tags handler map it. Safe to do whenever .3 reaches this file:
-		// api.MapError and CustomHTTPErrorHandler both find the status via
-		// errors.As, so the 409 survives either way. What has to move with it
-		// are the handler tests that type-assert the returned error.
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
-			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+			return models.Tag{}, ErrTagSlugExists
 		}
 		return models.Tag{}, err
 	}
@@ -1029,7 +1023,7 @@ func (s *TagService) MoveTag(ctx context.Context, p MoveTagParams) error {
 
 	// Verify tag exists.
 	if _, ok := g.ByID[p.ID]; !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "tag not found")
+		return ErrTagNotFound
 	}
 
 	// Verify tag is a child of the given parent.
@@ -1041,7 +1035,7 @@ func (s *TagService) MoveTag(ctx context.Context, p MoveTagParams) error {
 		}
 	}
 	if !isChild {
-		return echo.NewHTTPError(http.StatusUnprocessableEntity, "tag is not a child of the given parent")
+		return ErrTagNotAChild
 	}
 
 	// Get all siblings under this parent ordered by sort_order (from DB, authoritative).

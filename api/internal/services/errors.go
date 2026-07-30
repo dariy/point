@@ -14,6 +14,7 @@ import "errors"
 //	ErrNotFound        404  the addressed thing does not exist
 //	ErrInvalidInput    400  the caller sent something unusable
 //	ErrConflict        409  valid request, incompatible with current state
+//	ErrUnprocessable   422  well-formed and understood, but semantically wrong
 //	ErrUnauthenticated 401  the caller has not proven who they are
 //	ErrForbidden       403  the caller is known but may not do this
 //	ErrUpstream        502  a service we depend on failed or misbehaved
@@ -30,6 +31,7 @@ var (
 	ErrNotFound        = errors.New("not found")
 	ErrInvalidInput    = errors.New("invalid input")
 	ErrConflict        = errors.New("conflict")
+	ErrUnprocessable   = errors.New("unprocessable")
 	ErrUnauthenticated = errors.New("unauthenticated")
 	ErrForbidden       = errors.New("forbidden")
 	ErrUpstream        = errors.New("upstream failure")
@@ -43,6 +45,7 @@ var ErrorKinds = []error{
 	ErrNotFound,
 	ErrInvalidInput,
 	ErrConflict,
+	ErrUnprocessable,
 	ErrUnauthenticated,
 	ErrForbidden,
 	ErrUpstream,

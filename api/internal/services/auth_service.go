@@ -245,13 +245,19 @@ func (s *AuthService) GetUserByID(ctx context.Context, userID int64) (models.Use
 // gate sensitive actions (changing credentials, exporting/importing a full
 // backup). currentPassword is the SHA-256-hex the frontend sends, exactly as at
 // login — never plaintext. Returns nil when it matches.
+// ErrPasswordIncorrect is a failed re-authentication challenge: the caller is
+// already signed in, so this is ErrForbidden (403) rather than
+// ErrUnauthenticated (401), matching what the handlers answered before the
+// taxonomy existed.
+var ErrPasswordIncorrect = kindSentinel(ErrForbidden, "current password incorrect")
+
 func (s *AuthService) VerifyUserPassword(ctx context.Context, userID int64, currentPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
 		return err
 	}
 	if !VerifyPassword(currentPassword, user.PasswordHash) {
-		return errors.New("current password incorrect")
+		return ErrPasswordIncorrect
 	}
 	return nil
 }

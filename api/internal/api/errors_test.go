@@ -47,6 +47,7 @@ func TestMapErrorKinds(t *testing.T) {
 		{"not found", services.ErrNotFound, http.StatusNotFound},
 		{"invalid input", services.ErrInvalidInput, http.StatusBadRequest},
 		{"conflict", services.ErrConflict, http.StatusConflict},
+		{"unprocessable", services.ErrUnprocessable, http.StatusUnprocessableEntity},
 		{"unauthenticated", services.ErrUnauthenticated, http.StatusUnauthorized},
 		{"forbidden", services.ErrForbidden, http.StatusForbidden},
 		{"upstream", services.ErrUpstream, http.StatusBadGateway},

@@ -24,7 +24,7 @@ func (h *ApiKeyHandler) ListKeys(c echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	keys, err := h.apiKeyService.ListKeys(c.Request().Context(), userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	resp := make([]map[string]interface{}, len(keys))
@@ -56,7 +56,7 @@ func (h *ApiKeyHandler) CreateKey(c echo.Context) error {
 
 	rawKey, apiKey, err := h.apiKeyService.GenerateAPIKey(c.Request().Context(), userID, req.Name, req.ExpiresAt)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
@@ -73,7 +73,7 @@ func (h *ApiKeyHandler) RevokeKey(c echo.Context) error {
 
 	userID := extractUserID(c.Get("user"))
 	if err := h.apiKeyService.RevokeKey(c.Request().Context(), id, userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -87,7 +87,7 @@ func (h *ApiKeyHandler) DeleteKey(c echo.Context) error {
 
 	userID := extractUserID(c.Get("user"))
 	if err := h.apiKeyService.DeleteKey(c.Request().Context(), id, userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)

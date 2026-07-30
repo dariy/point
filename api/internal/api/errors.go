@@ -21,6 +21,7 @@ var statusByKind = map[error]int{
 	services.ErrNotFound:        http.StatusNotFound,
 	services.ErrInvalidInput:    http.StatusBadRequest,
 	services.ErrConflict:        http.StatusConflict,
+	services.ErrUnprocessable:   http.StatusUnprocessableEntity,
 	services.ErrUnauthenticated: http.StatusUnauthorized,
 	services.ErrForbidden:       http.StatusForbidden,
 	services.ErrUpstream:        http.StatusBadGateway,
