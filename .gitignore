@@ -25,6 +25,8 @@ api/cmd/api/cache/
 # Frontend generated files
 frontend/js/
 frontend/js-debug/
+# esbuild metafiles — build intermediates, kept out of the served frontend/js
+.build-meta/
 frontend/css/main.css
 frontend/css/light.css
 frontend/css/viewer.css

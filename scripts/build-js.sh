@@ -83,11 +83,16 @@ build_set() {
   # remaining "$@" = extra esbuild flags (e.g. --minify)
 
   manifest="$js_dir/plugin-manifest.json"
-  meta="$js_dir/build-meta.json"
+  # The esbuild metafile is a build intermediate: build-plugin-manifest.mjs is
+  # its only consumer. It must NOT live in $js_dir — the server exposes that
+  # whole directory at /assets/js (main.go: e.Static), and the metafile spells
+  # out the full module graph. Keep it outside the served tree.
+  meta_dir="$ROOT_DIR/.build-meta"
+  meta="$meta_dir/$(basename "$js_dir").json"
 
   # Clean rebuild: hashed chunk names would otherwise accumulate stale files.
   rm -rf "$js_dir"
-  mkdir -p "$js_dir"
+  mkdir -p "$js_dir" "$meta_dir"
 
   # One esbuild pass with --splitting over the core entry (app.js) plus every
   # plugin entry. Pinned binary (see $ESBUILD above) for reproducible bundles.
