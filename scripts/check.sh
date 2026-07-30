@@ -72,8 +72,19 @@ run_step "Go vet" bash -c "
 # ── Go tests ──────────────────────────────────────────────────────────────────
 run_step "Go tests" bash -c "
     cd '$ROOT_DIR/api'
-    go test -tags=integration $SHORT_FLAG -cover ./...
+    go test -tags=integration $SHORT_FLAG -coverprofile=coverage.out ./...
+    go tool cover -func=coverage.out | tail -1
 "
+
+# ── Go coverage floor ────────────────────────────────────────────────────────
+# Skipped under --short: that flag drops the long-running integration tests,
+# so the profile it produces is not comparable to the floor.
+if [ -n "$SHORT_FLAG" ]; then
+    echo ""
+    echo "==> Go coverage  (skipped — --short profile is not comparable)"
+else
+    run_step "Go coverage" "$SCRIPT_DIR/coverage-gate.sh" "$ROOT_DIR/api/coverage.out"
+fi
 
 # ── JS tests ──────────────────────────────────────────────────────────────────
 run_step "JS tests" bash -c "

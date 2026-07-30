@@ -98,6 +98,11 @@ jobs:
           cd api
           go test -tags=integration ./... -coverprofile=coverage.txt -covermode=atomic
 
+      # The build-failing half of the coverage gate. codecov's status checks
+      # only report; this is what actually turns the job red.
+      - name: Coverage floor
+        run: ./scripts/coverage-gate.sh api/coverage.txt
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v7
         with:

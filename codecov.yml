@@ -1,17 +1,26 @@
-# Coverage only measures the Go API. Patch target is a realistic floor for a
-# repo with no prior coverage gate (project sits ~54%); raise it over time.
+# Coverage currently measures the Go API only.
+#
+# The 70% target below is the project's ONE coverage number. The authoritative,
+# build-failing copy lives in scripts/coverage-gate.sh, which scripts/check.sh
+# and CI both call; the value here drives codecov's PR status checks. Keep the
+# two in sync — this repo previously carried an aspirational 80% in
+# .coverage-thresholds.json against a 40% patch target here, with neither
+# enforcing anything.
+#
+# Measured 74.7% at the time this was set (2026-07-30). Ratchet only.
 coverage:
   status:
     project:
       default:
-        target: auto
+        target: 70%
         threshold: 2%
     patch:
       default:
-        target: 40%
+        target: 70%
         threshold: 2%
 
 # cmd/seed is a standalone stress-test data generator, not shipped app code —
 # it has its own main() and writes raw batched INSERTs. Not worth unit tests.
+# scripts/coverage-gate.sh mirrors this list in IGNORE_RE.
 ignore:
   - "api/cmd/seed"
