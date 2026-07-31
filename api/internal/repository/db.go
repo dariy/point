@@ -103,6 +103,7 @@ type Repository interface {
 	ClearTagChildren(ctx context.Context, parentID int64) error
 	GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error)
 	FindTagsByNames(ctx context.Context, names []string) ([]models.Tag, error)
+	FindTagsBySlugs(ctx context.Context, slugs []string) (map[string]models.Tag, error)
 	GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error)
 	GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error)
 	GetRootTags(ctx context.Context) ([]models.Tag, error)
@@ -123,46 +124,97 @@ type sqliteRepository struct {
 	db *sql.DB
 }
 
+// maxInClauseParams bounds how many values a batch query puts in one IN list.
+// SQLite caps bound parameters per statement (999 on older builds), and batch
+// helpers are fed caller-sized slices — every media path in a post, every tag
+// name on a save — so they chunk rather than trusting the input to be small.
+const maxInClauseParams = 500
+
+// maxOpenConns is the pool size for a file-backed database. WAL lets readers
+// run concurrently with each other and with the single writer, which is the
+// whole point of enabling it; capping the pool at one connection throws that
+// away and serializes every request, the scheduler and feed generation behind
+// one queue. Writes still serialize — SQLite allows one writer at a time — but
+// they now do so at the SQLite lock (with busy_timeout to wait it out) instead
+// of blocking readers.
+const maxOpenConns = 8
+
+// totalCacheSizeKB is the page-cache budget for the whole pool, in KB. SQLite's
+// cache_size is per connection, so it is divided by the pool size — otherwise
+// raising the connection count would multiply memory use by the same factor.
+const totalCacheSizeKB = 200000
+
+// isMemoryDSN reports whether dbURL names an in-memory database. Each
+// connection to a private in-memory DSN gets its OWN empty database, so such a
+// pool must stay at one connection or callers would see a missing schema at
+// random. Used by tests (":memory:") and never in production.
+func isMemoryDSN(dbURL string) bool {
+	return strings.Contains(dbURL, ":memory:") || strings.Contains(dbURL, "mode=memory")
+}
+
+// pragmaDSN appends the connection PRAGMAs to dbURL as modernc `_pragma` query
+// parameters. This is the mechanism that makes a multi-connection pool safe:
+// PRAGMAs are per-connection state, so applying them with db.Exec only
+// configures whichever connection happened to serve that call. Anything the
+// pool opens later would otherwise run without foreign keys, without the busy
+// timeout, and outside WAL.
+func pragmaDSN(dbURL string, conns int) string {
+	params := []string{
+		"_pragma=busy_timeout(5000)",
+		"_pragma=journal_mode(WAL)",
+		// WAL's usual companion: fsync at checkpoints rather than at every
+		// commit. A crash can lose the last transactions but never corrupts
+		// the database, which is the right trade for a blog engine.
+		"_pragma=synchronous(NORMAL)",
+		"_pragma=foreign_keys(ON)",
+		fmt.Sprintf("_pragma=cache_size(-%d)", totalCacheSizeKB/conns),
+		"_pragma=mmap_size(30000000000)",
+		// Take the write lock at BEGIN rather than at the first write
+		// statement. Without this a transaction that reads before it writes
+		// can fail to upgrade its lock and gets SQLITE_BUSY immediately —
+		// busy_timeout does not apply to that case.
+		"_txlock=immediate",
+	}
+	sep := "?"
+	if strings.Contains(dbURL, "?") {
+		sep = "&"
+	}
+	return dbURL + sep + strings.Join(params, "&")
+}
+
 func NewRepository(dbURL string) (Repository, error) {
-	db, err := sql.Open("sqlite", dbURL)
+	conns := maxOpenConns
+	if isMemoryDSN(dbURL) {
+		conns = 1
+	}
+
+	db, err := sql.Open("sqlite", pragmaDSN(dbURL, conns))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Limit to a single connection so PRAGMAs apply to every query and
-	// concurrent writers serialize at the Go level instead of racing at SQLite.
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	db.SetMaxOpenConns(conns)
+	// Keep every connection warm: re-opening one means paying for the mmap and
+	// page cache again, and SQLite connections are cheap to hold.
+	db.SetMaxIdleConns(conns)
+	db.SetConnMaxLifetime(0)
 
-	// Set busy timeout to handle concurrent access
-	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
-		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
-	}
-
-	// Optimize read performance
-	if _, err := db.Exec("PRAGMA mmap_size = 30000000000;"); err != nil {
-		return nil, fmt.Errorf("failed to set mmap_size: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA cache_size = -200000;"); err != nil {
-		return nil, fmt.Errorf("failed to set cache_size: %w", err)
-	}
-
+	// The PRAGMAs run when a connection is actually opened, so this is where a
+	// wrong-permissions data directory surfaces. Failing here rather than
+	// letting the server start is deliberate: a half-open database reads fine
+	// and silently fails every write (e.g. first-run setup).
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("database is not usable — check permissions on the data directory: %w", err)
 	}
 
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
-	}
-
-	// Enable WAL mode and verify the database is writable.
-	// If either fails, the data directory has wrong permissions and we
-	// must exit now rather than letting the server start in a broken state
-	// where reads succeed but every write (e.g. first-run setup) silently fails.
+	// Verify WAL actually engaged rather than trusting the DSN. A read-only
+	// directory is the usual reason it does not.
 	var journalMode string
-	if err := db.QueryRow("PRAGMA journal_mode = WAL;").Scan(&journalMode); err != nil {
+	if err := db.QueryRow("PRAGMA journal_mode;").Scan(&journalMode); err != nil {
 		return nil, fmt.Errorf("database is not writable — check permissions on the data directory: %w", err)
+	}
+	if !isMemoryDSN(dbURL) && !strings.EqualFold(journalMode, "wal") {
+		return nil, fmt.Errorf("database is not in WAL mode (got %q) — check permissions on the data directory", journalMode)
 	}
 
 	// Check if the database needs initialization.
@@ -199,31 +251,12 @@ func NewRepository(dbURL string) (Repository, error) {
 	} else {
 		// Run migrations for existing databases.
 		// SQLite returns an error if the column already exists — that's safe to ignore.
-		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN css TEXT NOT NULL DEFAULT ''`); err != nil {
-			if !isDuplicateColumnError(err) {
-				return nil, fmt.Errorf("migration failed (add posts.css): %w", err)
-			}
-		}
-		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN immersive_mode TEXT NOT NULL DEFAULT 'auto'`); err != nil {
-			if !isDuplicateColumnError(err) {
-				return nil, fmt.Errorf("migration failed (add posts.immersive_mode): %w", err)
-			}
-		}
-		// Instagram cross-posting columns (point-xq28).
-		for _, m := range []struct {
-			name string
-			stmt string
-		}{
-			{"instagram_share", `ALTER TABLE posts ADD COLUMN instagram_share BOOLEAN NOT NULL DEFAULT 0`},
-			{"instagram_status", `ALTER TABLE posts ADD COLUMN instagram_status TEXT NOT NULL DEFAULT 'none'`},
-			{"instagram_media_id", `ALTER TABLE posts ADD COLUMN instagram_media_id TEXT`},
-			{"instagram_published_at", `ALTER TABLE posts ADD COLUMN instagram_published_at DATETIME`},
-			{"instagram_error", `ALTER TABLE posts ADD COLUMN instagram_error TEXT`},
-			{"instagram_id", `ALTER TABLE posts ADD COLUMN instagram_id TEXT`},
-		} {
-			if _, err := db.Exec(m.stmt); err != nil {
+		for _, m := range bootstrapColumns {
+			if _, err := db.Exec(m.sql); err != nil {
+				// SQLite has no ADD COLUMN IF NOT EXISTS; re-running one on a
+				// database that already has the column is the expected no-op.
 				if !isDuplicateColumnError(err) {
-					return nil, fmt.Errorf("migration failed (add posts.%s): %w", m.name, err)
+					return nil, fmt.Errorf("migration failed (%s): %w", m.name, err)
 				}
 			}
 		}
@@ -236,35 +269,13 @@ func NewRepository(dbURL string) (Repository, error) {
 	}
 
 	if count >= 4 {
-		// Run migrations for existing databases.
-		if err := repo.ApplyMigration(context.Background(), "add_api_keys", `
-CREATE TABLE IF NOT EXISTS api_keys (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name        VARCHAR(100) NOT NULL,
-    key_hash    VARCHAR(64) NOT NULL UNIQUE,
-    prefix      VARCHAR(16) NOT NULL,
-    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_used_at DATETIME,
-    expires_at  DATETIME,
-    revoked_at  DATETIME
-);
-CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
-`); err != nil {
-			return nil, fmt.Errorf("migration failed (add_api_keys): %w", err)
+		for _, m := range bootstrapMigrations {
+			if err := repo.ApplyMigration(context.Background(), m.name, m.sql); err != nil {
+				return nil, fmt.Errorf("migration failed (%s): %w", m.name, err)
+			}
 		}
-
-		if err := repo.ApplyMigration(context.Background(), "posts_instagram_id_unique_idx",
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_instagram_id ON posts(instagram_id) WHERE instagram_id IS NOT NULL`); err != nil {
-			return nil, fmt.Errorf("migration failed (posts_instagram_id_unique_idx): %w", err)
-		}
-
-		// Denormalized list-preview URL so list/grid queries no longer read the
-		// full content body. Add the column, then backfill existing rows.
-		if err := repo.ApplyMigration(context.Background(), "posts_media_url",
-			`ALTER TABLE posts ADD COLUMN media_url VARCHAR(500)`); err != nil {
-			return nil, fmt.Errorf("migration failed (posts_media_url): %w", err)
-		}
+		// posts.media_url is the one bootstrap step with a Go body: the column
+		// is added above, and existing rows are then filled in from content.
 		if err := repo.BackfillPostMediaURLs(context.Background()); err != nil {
 			return nil, fmt.Errorf("migration failed (backfill posts.media_url): %w", err)
 		}

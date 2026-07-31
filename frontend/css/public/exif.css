@@ -35,8 +35,9 @@
   line-height: 1;
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
 @media (pointer: coarse) {
-  .exif-info-btn {
+  :where(html:not(.pointer-fine)) .exif-info-btn {
     opacity: 0.5;
     transform: scale(1);
   }

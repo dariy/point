@@ -1,7 +1,7 @@
 # Utility Scripts
 
-This directory contains scripts for development, testing, building, and deploying
-Point.
+Development, build and test scripts for Point. Production deployment lives
+outside this repo — see [Production](#production) below.
 
 ## Local Development
 
@@ -14,20 +14,23 @@ Point.
 - **build-js.sh**: Bundles and minifies frontend JS with esbuild. Produces both a
   debug and a minified bundle set so the backend can serve either without a
   rebuild (`FRONTEND_DEBUG`).
+- **build-plugin-manifest.mjs**: Writes the hashed plugin manifest consumed by the
+  plugin loader. Invoked by `build-js.sh`; not run directly.
 - **run-remark42-local.sh**: Runs the bundled remark42 comments engine locally
   for dev, mirroring what `build/Dockerfile` + `entrypoint.sh` do in the
-  container.
+  container. Started automatically by `run.sh` when comments are enabled.
 
 ## Quality Gate
 
-- **check.sh**: The full quality gate — lint, tests, vulnerability scan. Flags:
-  `--fix` (auto-fix lint issues), `--short` (skip long-running integration
-  tests). Run this before committing.
-- **run-tests.sh**: Go test runner underlying `check.sh`. Runs unit + integration
-  tests (`-tags=integration`) by default; `--unit` for unit-only, `--race` for
-  the race detector, `--html` for a coverage report. See
+- **check.sh**: The full quality gate — lint, vet, tests, vulnerability scan. Run
+  this before committing. Flags:
+  - `--fix` — auto-fix lint issues
+  - `--short` — skip long-running integration tests
+  - `--lint` — lint only, skipping vet/tests/vuln scan (this is `npm run lint`)
+- **run-tests.sh**: Go test runner. Runs unit + integration tests
+  (`-tags=integration`) by default; `--unit` for unit-only, `--race` for the race
+  detector, `--html` for a coverage report. See
   [docs/testing.md](../docs/testing.md).
-- **lint.sh**: Combined lint for the Go backend and JS frontend.
 
 ## Docker / Podman Build
 
@@ -37,21 +40,9 @@ Point.
 - **entrypoint.sh**: Container entrypoint — creates data directories if missing
   before starting the app.
 
-## Production Deployment
+## Production
 
-- **setup-production.sh**: One-shot server bootstrap (Docker/Podman install,
-  `deploy` user, directory structure, Certbot, fail2ban, UFW, systemd unit, log
-  rotation, backup cron). See
-  [SETUP-PRODUCTION.md](SETUP-PRODUCTION.md) for the full guide.
-- **deploy.sh**: Production deployment script — drives
-  `build/docker-compose.prod.yml` with safety checks.
-
-## Stress Testing
-
-- **run-stress.sh**, **stress-http.sh**, **stress-measure.sh**: Boot the app
-  against a dedicated stress-test database and measure query plans/timings for
-  heavy endpoints.
-
-## Misc
-
-- **version.sh**: Prints the running container's build version.
+No deployment scripts live in this repo. To run Point on a server, see
+[QUICKSTART.md](../QUICKSTART.md) — `quickstart/install.sh` and
+`quickstart/docker-compose.yml` deploy the published image. Pin a version tag
+rather than `latest` for production.

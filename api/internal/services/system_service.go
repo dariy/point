@@ -27,7 +27,7 @@ const partialSuffix = ".partial"
 
 // ErrBackupInProgress is returned when a backup is requested while one is already
 // running; only one may run at a time.
-var ErrBackupInProgress = errors.New("a backup is already in progress")
+var ErrBackupInProgress = kindSentinel(ErrConflict, "a backup is already in progress")
 
 type SystemService struct {
 	repo     repository.Repository
@@ -273,8 +273,8 @@ func (s *SystemService) CheckBackupSpace() error {
 		return nil // can't determine free space — don't block the backup
 	}
 	if disk.Free < estimate {
-		return fmt.Errorf("not enough disk space for a backup: need about %s (size of the data folder), only %s free",
-			humanizeBytes(estimate), humanizeBytes(disk.Free))
+		return wrapKind(ErrStorageFull, fmt.Errorf("not enough disk space for a backup: need about %s (size of the data folder), only %s free",
+			humanizeBytes(estimate), humanizeBytes(disk.Free)))
 	}
 	return nil
 }
@@ -444,11 +444,11 @@ func isSafeBackupName(filename string) bool {
 // database ("disk image is malformed") — so the extraction is deferred to boot.
 func (s *SystemService) ScheduleRestore(filename string) error {
 	if !isSafeBackupName(filename) {
-		return fmt.Errorf("invalid filename")
+		return wrapKind(ErrInvalidInput, errors.New("invalid filename"))
 	}
 	backupPath := filepath.Join(s.dataPath, "backups", filename)
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		return fmt.Errorf("backup not found")
+		return wrapKind(ErrNotFound, errors.New("backup not found"))
 	}
 	// Refuse to schedule a restore we already know would fail at boot.
 	if err := s.ValidateArchive(backupPath); err != nil {
@@ -511,7 +511,7 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		return fmt.Errorf("not a gzip archive: %w", err)
+		return wrapKind(ErrInvalidInput, fmt.Errorf("not a gzip archive: %w", err))
 	}
 	defer func() { _ = gz.Close() }()
 
@@ -530,7 +530,8 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 		if err != nil {
 			return fmt.Errorf("corrupt or truncated archive: %w", err)
 		}
-		if _, err := io.Copy(io.Discard, tr); err != nil {
+		// Same reasoning as extractTarGz: validating an operator's own archive.
+		if _, err := io.Copy(io.Discard, tr); err != nil { //nolint:gosec // G110: operator-supplied archive, bounded by their own disk
 			return fmt.Errorf("corrupt archive entry %q: %w", header.Name, err)
 		}
 		if filepath.Base(header.Name) == wantDB {
@@ -538,12 +539,15 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 		}
 	}
 	if !foundDB {
-		return fmt.Errorf("archive does not contain the database (%s); not a Point backup", wantDB)
+		return wrapKind(ErrInvalidInput, fmt.Errorf("archive does not contain the database (%s); not a Point backup", wantDB))
 	}
 	return nil
 }
 
 func (s *SystemService) extractTarGz(srcPath, destDir string) error {
+	// srcPath is resolved against the backups directory by the caller, which
+	// rejects any name that is not a bare filename in it.
+	//nolint:gosec // G703: caller-validated path under the backups directory
 	f, err := os.Open(srcPath)
 	if err != nil {
 		return err
@@ -576,7 +580,7 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 		// it, a sibling like "<dest>EVIL" would pass a bare prefix check, and
 		// filepath.Join collapses "../" so "../destEVIL/x" would escape.
 		cleanDest := filepath.Clean(destDir)
-		target := filepath.Join(cleanDest, header.Name)
+		target := filepath.Join(cleanDest, header.Name) //nolint:gosec // G305: guarded by the check immediately below — do not "fix" by removing it
 		if filepath.IsAbs(header.Name) ||
 			(target != cleanDest && !strings.HasPrefix(target, cleanDest+string(os.PathSeparator))) {
 			return fmt.Errorf("restore: unsafe path in archive: %q", header.Name)
@@ -584,19 +588,29 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
+			//nolint:gosec // G703: target passed the traversal check above
 			if mkErr := os.MkdirAll(target, 0755); mkErr != nil {
 				_ = os.Chmod(target, 0755)
 			}
 		case tar.TypeReg:
+			// Every path below derives from target, which passed the traversal
+			// check above.
 			parentDir := filepath.Dir(target)
+			//nolint:gosec // G703: derived from the checked target
 			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
 				_ = os.Chmod(parentDir, 0755)
 			}
+			//nolint:gosec // G703: derived from the checked target
 			out, err := os.Create(target)
 			if err != nil {
 				return fmt.Errorf("restore: cannot write %s: %w", header.Name, err)
 			}
-			if _, copyErr := io.Copy(out, tr); copyErr != nil {
+			// Unbounded by design: a restore is an operator replacing their own
+			// data directory from their own archive, gated behind a session plus
+			// password re-entry, and legitimate archives run to multiple GB — a
+			// size cap would break the feature to defend the operator from
+			// themselves. The bound is their own disk.
+			if _, copyErr := io.Copy(out, tr); copyErr != nil { //nolint:gosec // G110: see above
 				_ = out.Close()
 				return fmt.Errorf("restore: cannot write %s: %w", header.Name, copyErr)
 			}

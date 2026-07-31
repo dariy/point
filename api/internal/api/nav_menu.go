@@ -93,12 +93,12 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 	}
 
 	if err := h.settingsService.SetSetting(ctx, "nav_menu_mode", body.Mode, "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	if body.InlineMax >= 1 && body.InlineMax <= 10 {
 		if err := h.settingsService.SetSetting(ctx, "nav_inline_max", strconv.Itoa(body.InlineMax), "string"); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 	}
 
@@ -110,18 +110,18 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to encode menu")
 	}
 	if err := h.settingsService.SetSetting(ctx, "custom_nav_menu", string(data), "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	if err := h.settingsService.SetSetting(ctx, "custom_markdown", body.CustomMarkdown, "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	if body.MoreTitle == "" {
 		body.MoreTitle = "More"
 	}
 	if err := h.settingsService.SetSetting(ctx, "nav_more_title", body.MoreTitle, "string"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	inlineMax := body.InlineMax

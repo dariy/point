@@ -416,37 +416,57 @@ func TestGenerateToken_Success(t *testing.T) {
 		t.Fatalf("Login failed: %v", err)
 	}
 }
-func TestAuthHandler_ProductionCookie(t *testing.T) {
+// sessionCookieSecure logs in and reports the Secure flag on the session cookie.
+func sessionCookieSecure(t *testing.T, cfg *config.Config, mutate func(*http.Request)) bool {
+	t.Helper()
 	h := setupHandlers(t)
 	defer h.close()
 	insertUser(h.repo)
 	hash, _ := services.HashPassword("pass1234")
 	_, _ = h.repo.DB().Exec(`UPDATE users SET password_hash=? WHERE id=1`, hash)
 
-	cfg := &config.Config{AppEnv: "production"}
 	authH := NewAuthHandler(h.authSvc, cfg, h.repo)
 	e := echo.New()
 
 	body := `{"username":"u","name":"pass1234","remember_me":false}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	if mutate != nil {
+		mutate(req)
+	}
 	rec := httptest.NewRecorder()
 	if err := authH.Login(e.NewContext(req, rec)); err != nil {
 		t.Fatalf("Login: %v", err)
 	}
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
+		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-
-	cookies := rec.Result().Cookies()
-	found := false
-	for _, c := range cookies {
-		if c.Name == "session" && c.Secure {
-			found = true
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "session" {
+			return c.Secure
 		}
 	}
-	if !found {
-		t.Error("expected Secure=true cookie in production mode")
+	t.Fatal("no session cookie set")
+	return false
+}
+
+// The Secure flag keys off the deployment scheme, not APP_ENV: an HTTPS APP_URL
+// or an https request (direct or via X-Forwarded-Proto) sets it; a plain-HTTP
+// deployment does not — regardless of APP_ENV.
+func TestAuthHandler_SessionCookieSecure(t *testing.T) {
+	// APP_URL https ⇒ Secure, even with the development default APP_ENV.
+	if !sessionCookieSecure(t, &config.Config{AppEnv: "development", AppURL: "https://example.com"}, nil) {
+		t.Error("expected Secure cookie when APP_URL is https")
+	}
+	// X-Forwarded-Proto: https from the reverse proxy ⇒ Secure.
+	if !sessionCookieSecure(t, &config.Config{AppEnv: "development"}, func(r *http.Request) {
+		r.Header.Set(echo.HeaderXForwardedProto, "https")
+	}) {
+		t.Error("expected Secure cookie behind an https-terminating proxy")
+	}
+	// Plain HTTP, no https signal ⇒ not Secure, even in production.
+	if sessionCookieSecure(t, &config.Config{AppEnv: "production"}, nil) {
+		t.Error("expected non-Secure cookie for a plain-HTTP deployment")
 	}
 }
 

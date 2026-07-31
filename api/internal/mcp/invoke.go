@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -75,7 +76,8 @@ func (in *invoker) serve(h echo.HandlerFunc, req *http.Request, params map[strin
 		c.Set("user", in.principal)
 	}
 	if err := h(c); err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			return nil, fmt.Errorf("point API error %d: %v", he.Code, he.Message)
 		}
 		return nil, err

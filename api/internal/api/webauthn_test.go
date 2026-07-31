@@ -13,7 +13,7 @@ import (
 
 func TestWebAuthnHandler_Unconfigured(t *testing.T) {
 	// Without webauthn configured
-	h := NewWebAuthnHandler(nil, nil, &config.Config{})
+	h := NewWebAuthnHandler(nil, nil, &config.Config{}, nil)
 	e := echo.New()
 
 	tests := []struct {

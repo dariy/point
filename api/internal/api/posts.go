@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -167,7 +168,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	if status == "trash" && c.Get("user") != nil {
 		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), page, int32(perPage))
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			return MapError(err)
 		}
 		postResponses := make([]map[string]interface{}, len(posts))
 		for i, p := range posts {
@@ -201,7 +202,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	        SortBy:       c.QueryParam("sort"),
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	postIDs := make([]int64, len(posts))
@@ -264,7 +265,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	slug := c.Param("slug")
 	post, err := h.postService.GetPostBySlug(c.Request().Context(), slug)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+		return MapError(err)
 	}
 
 	ctx := c.Request().Context()
@@ -326,7 +327,7 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	// Verify the post exists and is published
 	post, err := h.postService.GetPostBySlug(ctx, slug)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "post not found")
+		return MapError(err)
 	}
 
 	// Compute effective hidden-posts tag set
@@ -418,14 +419,14 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 }
 
 func (h *PostHandler) GetPostByID(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	post, err := h.postService.GetPostByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+		return MapError(err)
 	}
 
 	ctx := c.Request().Context()
@@ -546,10 +547,10 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		ScheduledAt:     scheduledAt,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
+		if errors.Is(err, services.ErrConflict) {
 			return c.JSON(http.StatusConflict, map[string]string{"detail": "A post with this slug already exists. Please choose a different title or slug."})
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	if strings.EqualFold(post.Status, "published") {
@@ -559,7 +560,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 
 	resp, err := h.getFullPostResponse(c, post.ID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	if len(cssWarnings) > 0 {
 		resp["css_warnings"] = cssWarnings
@@ -587,9 +588,9 @@ type UpdatePostRequest struct {
 }
 
 func (h *PostHandler) UpdatePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
@@ -607,7 +608,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	// Load old post for merging and media path tracking
 	old, err := h.postService.GetPostByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	// Capture pre-update paths so that images removed from the post are also re-evaluated.
@@ -664,10 +665,10 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		ScheduledAt:     scheduledAt,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
+		if errors.Is(err, services.ErrConflict) {
 			return c.JSON(http.StatusConflict, map[string]string{"detail": "A post with this slug already exists. Please choose a different slug."})
 		}
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	newPaths := services.ExtractMediaPaths(updated.Content, updated.ThumbnailPath.String)
@@ -675,7 +676,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	if len(cssWarnings) > 0 {
 		resp["css_warnings"] = cssWarnings
@@ -685,9 +686,9 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 }
 
 func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req struct {
@@ -703,7 +704,7 @@ func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
 
 	updated, err := h.postService.UpdatePostStatus(c.Request().Context(), id, req.Status)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	// Status changes affect media visibility (e.g. going from draft to published)
@@ -712,16 +713,16 @@ func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *PostHandler) UpdatePostTags(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req struct {
@@ -732,7 +733,7 @@ func (h *PostHandler) UpdatePostTags(c echo.Context) error {
 	}
 
 	if err := h.postService.UpdatePostTags(c.Request().Context(), id, req.Tags); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	// Tag changes may affect hidden_posts inheritance — refresh visibility.
@@ -743,16 +744,16 @@ func (h *PostHandler) UpdatePostTags(c echo.Context) error {
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *PostHandler) DeletePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
@@ -763,7 +764,7 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 	}
 
 	if err := h.postService.SoftDeletePost(c.Request().Context(), id, authorID); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	h.syncMediaVisibility(c.Request().Context(), "delete_post", mediaPaths)
@@ -772,15 +773,15 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 }
 
 func (h *PostHandler) RestorePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
 
 	if err := h.postService.RestorePost(c.Request().Context(), id, authorID); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	// Recalculate media visibility after restore.
@@ -793,30 +794,30 @@ func (h *PostHandler) RestorePost(c echo.Context) error {
 }
 
 func (h *PostHandler) PermanentlyDeletePost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	authorID := extractUserID(c.Get("user"))
 
 	// Fetch the trashed post to get media paths (GetPostByID excludes deleted, so query directly).
 	if err := h.postService.PermanentlyDeletePost(c.Request().Context(), id, authorID); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
 func (h *PostHandler) PublishPost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	published, err := h.postService.PublishPost(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+		return MapError(err)
 	}
 
 	paths := services.ExtractMediaPaths(published.Content, published.ThumbnailPath.String)
@@ -824,21 +825,21 @@ func (h *PostHandler) PublishPost(c echo.Context) error {
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *PostHandler) GeneratePreviewLink(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	token, expiresAt, err := h.postService.GeneratePreviewLink(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "post not found")
+		return MapError(err)
 	}
 
 	base := c.Scheme() + "://" + c.Request().Host
@@ -860,8 +861,13 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 	}
 
 	post, err := h.postService.GetPostByPreviewToken(c.Request().Context(), token)
-	if err != nil {
+	if errors.Is(err, services.ErrPostNotFound) {
+		// Deliberately vague, and deliberately identical for a bad token and an
+		// expired one: neither may confirm that a draft exists.
 		return echo.NewHTTPError(http.StatusNotFound, "invalid or expired preview link")
+	}
+	if err != nil {
+		return MapError(err)
 	}
 
 	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
@@ -926,7 +932,7 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 		MimeType: mimeType,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	// Create the post with embedded audio reference
@@ -941,21 +947,21 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 		Tags:      tags,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	resp, err := h.getFullPostResponse(c, post.ID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusCreated, resp)
 }
 
 func (h *PostHandler) GetPostNavigation(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	publicOnly := c.Get("user") == nil
@@ -964,7 +970,7 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 	tag := c.QueryParam("tag")
 	prev, next, err := h.postService.GetPostNavigation(c.Request().Context(), id, publicOnly, tag)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "post not found")
+		return MapError(err)
 	}
 
 	resp := map[string]interface{}{"prev": nil, "next": nil}
@@ -978,9 +984,9 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 }
 
 func (h *PostHandler) WithdrawPost(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	withdrawn, err := h.postService.WithdrawPost(c.Request().Context(), id)
@@ -993,7 +999,7 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -1002,7 +1008,7 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
 	stats, err := h.postService.GetPostAnalytics(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -1015,21 +1021,26 @@ func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
 // PublishToInstagram manually triggers cross-posting to Instagram for a post.
 // POST /api/posts/:id/instagram/publish
 func (h *PostHandler) PublishToInstagram(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	ctx := c.Request().Context()
 	ctx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
 
-	// CrossPostToInstagram handles status updates in the database.
-	_ = h.postService.CrossPostToInstagram(ctx, id)
+	// CrossPostToInstagram records the failure on the post itself
+	// (instagram_status / instagram_error), which is what the response below
+	// carries back to the editor — but it was otherwise discarded, so a failed
+	// cross-post left no trace in the logs either.
+	if err := h.postService.CrossPostToInstagram(ctx, id); err != nil {
+		slog.Error("instagram cross-post failed", "post_id", id, "error", err)
+	}
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -1044,7 +1055,7 @@ func (h *PostHandler) PreviewRender(c echo.Context) error {
 	}
 	html, err := h.postService.RenderContent(req.Content)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"html": html})
 }

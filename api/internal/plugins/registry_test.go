@@ -194,10 +194,6 @@ func TestAreaPlugins_AndEnabledInArea(t *testing.T) {
 }
 
 func TestIsLockedOff(t *testing.T) {
-	// Single-member core area: the sole plugin is always locked.
-	if !IsLockedOff("media-library", map[string]string{}) {
-		t.Errorf("media-library should be locked off (sole core plugin)")
-	}
 	// Non-core plugin is never locked.
 	if IsLockedOff("timeline", map[string]string{}) {
 		t.Errorf("non-core plugin must never be locked")

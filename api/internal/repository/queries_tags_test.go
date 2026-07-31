@@ -167,3 +167,51 @@ func TestRepository_GetCoOccurringTags(t *testing.T) {
 	}
 }
 
+// FindTagsBySlugs replaces a per-tag GetTagBySlug on every post save. It must
+// key on slug, not lowercased name — the two disagree as soon as slugification
+// does more than lowercase. See point-perf-media-visibility-n1.
+func TestRepository_FindTagsBySlugs(t *testing.T) {
+	repo := setupNewSchemaTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	if _, err := repo.DB().Exec(
+		`INSERT INTO tags (name, slug) VALUES ('New York', 'new-york'), ('Paris', 'paris')`); err != nil {
+		t.Fatalf("insert tags: %v", err)
+	}
+
+	got, err := repo.FindTagsBySlugs(ctx, []string{"new-york", "paris", "absent"})
+	if err != nil {
+		t.Fatalf("FindTagsBySlugs: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(got))
+	}
+	if got["new-york"].Name != "New York" {
+		t.Errorf("slug key mismatch: %+v", got)
+	}
+	if _, ok := got["absent"]; ok {
+		t.Error("absent slug should not be in the result")
+	}
+
+	// Empty input is not an error and yields a usable (non-nil) map.
+	empty, err := repo.FindTagsBySlugs(ctx, nil)
+	if err != nil || empty == nil || len(empty) != 0 {
+		t.Errorf("FindTagsBySlugs(nil) = %v, %v", empty, err)
+	}
+
+	// More slugs than SQLite will take as bound parameters in one statement:
+	// the query has to chunk rather than blow up.
+	many := make([]string, 0, maxInClauseParams*2+3)
+	for i := range cap(many) {
+		many = append(many, "missing-"+string(rune('a'+i%26))+string(rune('a'+i/26%26))+string(rune('0'+i/676%10)))
+	}
+	many = append(many, "paris")
+	batched, err := repo.FindTagsBySlugs(ctx, many)
+	if err != nil {
+		t.Fatalf("FindTagsBySlugs (chunked): %v", err)
+	}
+	if _, ok := batched["paris"]; !ok {
+		t.Error("chunked lookup lost a real match")
+	}
+}

@@ -113,6 +113,13 @@ func (r *sqliteRepository) MigrateFlagsToSystemTags(ctx context.Context) error {
 		return fmt.Errorf("pragma table_info: %w", err)
 	}
 	columnExists := rows.Next()
+	// rows.Next() reports false for both "no such column" and a query error.
+	// Without this check a transient failure is indistinguishable from "the
+	// column is already gone", and the migration silently skips its work.
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("pragma table_info: %w", err)
+	}
 	_ = rows.Close()
 
 	if columnExists {
@@ -151,6 +158,9 @@ func (r *sqliteRepository) MigrateFlagsToSystemTags(ctx context.Context) error {
 			{"_with_related", "show_related_tags_as_children = 1 AND 1=1"},
 		}
 		for _, fm := range flagMigrations {
+			// Both substitutions come from the hardcoded flagMigrations table
+			// above; nothing here is caller- or user-supplied.
+			//nolint:gosec // G201: both values are compile-time constants
 			q := fmt.Sprintf(`
 				INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 				SELECT (SELECT id FROM tags WHERE slug = '%s'), id FROM tags WHERE %s`,
@@ -213,6 +223,13 @@ func (r *sqliteRepository) RebuildTagsTableDropBooleans(ctx context.Context) err
 		return fmt.Errorf("pragma table_info: %w", err)
 	}
 	columnExists := rows.Next()
+	// rows.Next() reports false for both "no such column" and a query error.
+	// Without this check a transient failure is indistinguishable from "the
+	// column is already gone", and the migration silently skips its work.
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("pragma table_info: %w", err)
+	}
 	_ = rows.Close()
 
 	if columnExists {
@@ -286,6 +303,11 @@ func (r *sqliteRepository) MigrateTagFlagsFromSystemTags(ctx context.Context) er
 		return fmt.Errorf("detect schema: %w", err)
 	}
 	oldSchema := rows.Next()
+	// As above: a query error would otherwise read as "new schema already".
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("detect schema: %w", err)
+	}
 	_ = rows.Close()
 
 	if oldSchema {

@@ -71,10 +71,16 @@ func (h *ThemeHandler) UpdateCustomCSS(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request format"})
 	}
 
-	err := h.themeService.UpdateCustomCSS(c.Request().Context(), req.CSS)
+	warnings, err := h.themeService.UpdateCustomCSS(c.Request().Context(), req.CSS)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 	}
 
+	// Mirrors css_warnings on the post endpoints: tell the admin what the
+	// sanitizer removed instead of silently dropping it. A clean save keeps
+	// returning 204 so existing clients are unaffected.
+	if len(warnings) > 0 {
+		return c.JSON(http.StatusOK, map[string]any{"css_warnings": warnings})
+	}
 	return c.NoContent(http.StatusNoContent)
 }

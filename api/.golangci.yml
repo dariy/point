@@ -12,3 +12,72 @@ run:
 linters:
   # The standard set: errcheck, govet, ineffassign, staticcheck, unused.
   default: standard
+  enable:
+    # Security-focused static analysis: hardcoded credentials, weak crypto,
+    # unsanitized file paths, path traversal, SQL string building.
+    - gosec
+    # Errors are wrapped with %w throughout; errorlint catches the comparisons
+    # that then fail to unwrap — == against a sentinel, type assertions on a
+    # wrapped error, and %v where %w was meant. Without it a wrap silently
+    # breaks every downstream errors.Is check.
+    - errorlint
+    # An unchecked rows.Err() after a Next() loop TRUNCATES the result set
+    # instead of erroring: the loop just ends and the caller gets a short,
+    # plausible-looking slice. Enabled after an audit found three such sites
+    # (a path migration that would have rewritten only some posts, and two
+    # schema checks where a query failure read as "column already dropped").
+    - rowserrcheck
+
+  settings:
+    gosec:
+      # Rules disabled repo-wide, each because every occurrence here is a false
+      # positive of a kind that recurs. Rules that can catch a *new* mistake are
+      # deliberately NOT in this list — where the current code is fine but gosec
+      # cannot see why, the call site carries a //nolint:gosec with a reason, so
+      # the next occurrence still gets flagged. That includes G201/G202 (SQL
+      # building), G305 (archive traversal) and G703 (path traversal).
+      excludes:
+        # Integer width conversions. Every hit is a benign widening or a length
+        # (statfs block counts, an argon2 hash length, a WebAuthn user id);
+        # the rule flags essentially every conversion in a Go codebase.
+        - G115
+        # "Goroutine uses context.Background while a request context is
+        # available." Deliberate: background work (Instagram cross-post, API-key
+        # last-used write) must outlive the request that started it, and each
+        # site carries its own timeout.
+        - G118
+        # "Potential file inclusion via variable." Fires on every os.ReadFile
+        # with a non-constant path. The paths that come from a request are
+        # explicitly prefix-checked against their storage root at the call site.
+        - G304
+        # Directory/file permission rules. Media, themes and backups are
+        # deliberately group/other-readable: on some deployments a reverse proxy
+        # or the operator's own tooling reads them directly.
+        - G301
+        - G302
+        - G306
+        # Cookie attribute checks. Every session cookie sets HttpOnly, SameSite
+        # and a Secure value computed per request (h.secureCookie), which gosec
+        # cannot evaluate, so it reports them all. The one intentional deviation
+        # — XSRF-TOKEN is readable by design, being the readable half of the
+        # double-submit CSRF pattern — is documented at its call site.
+        - G124
+        # Symlink-TOCTOU in filepath.Walk callbacks. All three walks traverse
+        # fixed directories this process owns (its own backup staging, the
+        # bundled remark42 web assets), not anything a request names.
+        - G122
+
+  exclusions:
+    rules:
+      # Test fixtures trip the credential/cookie heuristics constantly:
+      # throwaway passwords, cookies without Secure, ignored Write errors on a
+      # httptest recorder. None of it ships.
+      - path: _test\.go
+        linters:
+          - gosec
+      # The seed tool generates sample content with math/rand, which is the
+      # correct choice for reproducible fixtures, and writes them with a
+      # hardcoded schema.
+      - path: cmd/seed/
+        linters:
+          - gosec

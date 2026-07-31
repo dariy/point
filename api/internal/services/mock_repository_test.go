@@ -162,6 +162,7 @@ type mockRepository struct {
 	MockClearTagChildren                func(ctx context.Context, parentID int64) error
 	MockGetTagsWithoutLocation          func(ctx context.Context, tagIDs []int64) ([]models.Tag, error)
 	MockFindTagsByNames                 func(ctx context.Context, names []string) ([]models.Tag, error)
+	MockFindTagsBySlugs                 func(ctx context.Context, slugs []string) (map[string]models.Tag, error)
 	MockGetTagsByPostIDs                func(ctx context.Context, postIDs []int64) (map[int64][]repository.PostTagInfo, error)
 	MockGetChildrenOfTag                func(ctx context.Context, parentID int64) ([]models.Tag, error)
 	MockGetRootTags                     func(ctx context.Context) ([]models.Tag, error)
@@ -1192,6 +1193,23 @@ func (m *mockRepository) FindTagsByNames(ctx context.Context, names []string) ([
 		return m.MockFindTagsByNames(ctx, names)
 	}
 	return nil, fmt.Errorf("FindTagsByNames not implemented")
+}
+
+func (m *mockRepository) FindTagsBySlugs(ctx context.Context, slugs []string) (map[string]models.Tag, error) {
+	if m.MockFindTagsBySlugs != nil {
+		return m.MockFindTagsBySlugs(ctx, slugs)
+	}
+	// Default to the per-slug lookup so tests that only stub GetTagBySlug keep
+	// describing the same behaviour as before this became a batch query.
+	out := make(map[string]models.Tag, len(slugs))
+	for _, slug := range slugs {
+		t, err := m.GetTagBySlug(ctx, slug)
+		if err != nil {
+			continue
+		}
+		out[t.Slug] = t
+	}
+	return out, nil
 }
 
 func (m *mockRepository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]repository.PostTagInfo, error) {

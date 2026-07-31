@@ -39,7 +39,7 @@ func (h *TimelineHandler) GetTimeline(c echo.Context) error {
 	context := c.QueryParam("context")
 	payload, err := h.timelineService.Timeline(c.Request().Context(), context)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	if len(payload.Pills) == 0 {
 		return echo.NewHTTPError(http.StatusNotFound, "timeline not found")
@@ -63,7 +63,7 @@ func (h *TimelineHandler) GetTimelineLocations(c echo.Context) error {
 	}
 	locs, err := h.timelineService.LocationsFor(c.Request().Context(), tag, context, limit)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	if locs == nil {
 		locs = []services.LocationLink{}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -263,6 +264,69 @@ func TestParsePaginationParams(t *testing.T) {
 				t.Errorf("got (%v, %v), want (%v, %v)", page, perPage, tt.wantPage, tt.wantPerPage)
 			}
 		})
+	}
+}
+
+func TestParseIDParam(t *testing.T) {
+	e := echo.New()
+	tests := []struct {
+		name    string
+		param   string
+		want    int64
+		wantErr bool
+	}{
+		{name: "positive", param: "42", want: 42},
+		{name: "zero", param: "0", want: 0},
+		{name: "negative", param: "-1", want: -1},
+		{name: "not a number", param: "abc", wantErr: true},
+		{name: "empty", param: "", wantErr: true},
+		{name: "overflow", param: "9223372036854775808", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
+			c.SetParamNames("id")
+			c.SetParamValues(tt.param)
+
+			got, err := parseIDParam(c)
+			if tt.wantErr {
+				var he *echo.HTTPError
+				if !errors.As(err, &he) {
+					t.Fatalf("got err %v, want *echo.HTTPError", err)
+				}
+				if he.Code != http.StatusBadRequest {
+					t.Errorf("got status %d, want %d", he.Code, http.StatusBadRequest)
+				}
+				if he.Message != "invalid id" {
+					t.Errorf("got message %q, want %q", he.Message, "invalid id")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// parseNamedIDParam only changes the noun in the 400 message.
+func TestParseNamedIDParam(t *testing.T) {
+	e := echo.New()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
+	c.SetParamNames("id")
+	c.SetParamValues("nope")
+
+	_, err := parseNamedIDParam(c, "tag id")
+	var he *echo.HTTPError
+	if !errors.As(err, &he) {
+		t.Fatalf("got err %v, want *echo.HTTPError", err)
+	}
+	if he.Message != "invalid tag id" {
+		t.Errorf("got message %q, want %q", he.Message, "invalid tag id")
 	}
 }
 

@@ -86,8 +86,13 @@
     opacity: 1;
 }
 
-/* Grid zoom slider — mouse/trackpad users on zoom-capable grid pages only
-   (body.grid-zoomable is set by the home/tag pages; touch users pinch). */
+/* Grid zoom slider — shown on every device, on zoom-capable grid pages only
+   (body.grid-zoomable is set by the home/tag pages).
+   It used to be gated on `(hover: hover) and (pointer: fine)`, on the theory
+   that touch users pinch instead. That gate is unreliable — a laptop with a
+   touchscreen reports coarse/no-hover and lost the slider entirely — and pinch
+   is a discoverability problem even where it works, so the slider is now a
+   visible second route to the same thing. */
 .footer-zoom {
     display: none;
     width: 110px;
@@ -96,10 +101,8 @@
     cursor: pointer;
 }
 
-@media (hover: hover) and (pointer: fine) {
-    body.grid-zoomable .footer-zoom {
-        display: inline-block;
-    }
+body.grid-zoomable .footer-zoom {
+    display: inline-block;
 }
 
 .footer-action-btn {
@@ -124,8 +127,9 @@
     box-shadow: var(--shadow-sm);
 }
 
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
 @media (pointer: coarse) {
-    .footer-action-btn::after {
+    :where(html:not(.pointer-fine)) .footer-action-btn::after {
         content: "";
         position: absolute;
         top: 50%;

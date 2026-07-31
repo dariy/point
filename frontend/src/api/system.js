@@ -15,6 +15,15 @@ export function getStats() {
  * @param {{ log_type?: string, lines?: number }} [params]
  * @returns {Promise<string[]>}
  */
+/**
+ * Background-job health: last run / last success / last error per job.
+ * Per process — a restart clears it.
+ * @returns {Promise<{tasks: object[], degraded: number, uptime: number}>}
+ */
+export function getHealth() {
+  return api.get('/api/system/health');
+}
+
 export function getLogs(params = {}) {
   return api.get('/api/system/logs', params);
 }

@@ -3,15 +3,17 @@
    Auto-bundled to css/p/slideshow.css by build-css.sh. */
 
 /* Toggle button: sits in the top-right cluster, one slot left of the share
-   button (which is itself left of the close cross). Visible on mobile too,
-   where the close cross is hidden — line it up left of the mobile share spot. */
+   button (which is itself left of the close cross). Slots come from the shared
+   ladder defined in css/public/immersive.css — --viewer-btn-slot-close is 1 or 0
+   depending on whether the cross is showing, so this stays glued to the share
+   button at every width instead of guessing where the cross went. */
 .slideshow-btn {
   position: absolute;
-  top: var(--spacing-lg);
-  right: calc(var(--spacing-lg) + var(--header-action-btn-width, 40px) + var(--spacing-md, 16px));
+  top: var(--viewer-btn-top);
+  right: calc(var(--viewer-btn-inset) + (var(--viewer-btn-slot-close) + 1) * var(--viewer-btn-step));
   z-index: 60;
-  width: var(--header-action-btn-width, 40px);
-  height: var(--header-action-btn-height, 40px);
+  width: var(--viewer-btn-size);
+  height: var(--viewer-btn-size);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,21 +35,14 @@
   background: var(--color-black-alpha-60);
 }
 
-@media (min-width: 768px) {
-  .slideshow-btn {
-    top: var(--spacing-xl);
-    right: calc(var(--spacing-xl) + 2 * (var(--header-action-btn-width, 40px) + var(--spacing-md, 16px)));
-  }
-}
-
 /* Control pill: top-right, one gap left of the play/pause button, same height
    and dark glass so the two read as a single cluster. */
 .slideshow-bar {
   position: absolute;
-  top: var(--spacing-lg);
-  right: calc(var(--spacing-lg) + 2 * (var(--header-action-btn-width, 40px) + var(--spacing-md, 16px)));
+  top: var(--viewer-btn-top);
+  right: calc(var(--viewer-btn-inset) + (var(--viewer-btn-slot-close) + 2) * var(--viewer-btn-step));
   z-index: 60;
-  height: var(--header-action-btn-height, 40px);
+  height: var(--viewer-btn-size);
   display: flex;
   align-items: center;
   gap: var(--spacing-sm, 8px);
@@ -57,13 +52,6 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-@media (min-width: 768px) {
-  .slideshow-bar {
-    top: var(--spacing-xl);
-    right: calc(var(--spacing-xl) + 3 * (var(--header-action-btn-width, 40px) + var(--spacing-md, 16px)));
-  }
 }
 
 .slideshow-stepper {

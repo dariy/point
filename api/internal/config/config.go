@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ type Config struct {
 	AppVersion  string `mapstructure:"APP_VERSION"`
 	AppEnv      string `mapstructure:"APP_ENV"`
 	Debug       bool   `mapstructure:"DEBUG"`
-	SecretKey   string `mapstructure:"SECRET_KEY"`
 	Host        string `mapstructure:"HOST"`
 	Port        int    `mapstructure:"PORT"`
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
@@ -103,7 +103,8 @@ func LoadConfig(path string) (config Config, err error) {
 	err = v.ReadInConfig()
 	if err != nil {
 		// It's okay if .env is missing, we use defaults and ENV vars
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
 			return
 		}
 	}

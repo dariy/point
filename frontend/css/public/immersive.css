@@ -603,77 +603,102 @@ video.immersive-bg-image {
     margin: var(--spacing-md) 0;
 }
 
-/* carousel share button */
+/* ── Viewer chrome cluster (top-right) ───────────────────────────────────────
+   The close cross, the share button and the slideshow plugin's toggle + pill
+   are position:absolute siblings inside .media-viewer-wrapper, injected by
+   three different modules. They share one right-to-left ladder so they can't
+   drift apart or collide: slot n sits at `inset + n * step` from the right.
+
+   The cross owns slot 0. --viewer-btn-slot-close is 1 everywhere today, since
+   the cross is shown on every device and width — it exists so that a viewer
+   which drops the cross can set it to 0 and have the rest close the gap rather
+   than leaving a hole at the right edge. */
+body {
+  --viewer-btn-size: var(--header-action-btn-width, 40px);
+  --viewer-btn-inset: var(--spacing-lg);
+  --viewer-btn-top: var(--viewer-btn-inset);
+  --viewer-btn-step: calc(var(--viewer-btn-size) + var(--spacing-md, 16px));
+  --viewer-btn-slot-close: 1;
+}
+
+/* Standard immersive mode keeps the site header, and the header's wrapper is a
+   sticky z-index:110 stacking context — it outranks the cluster's z-index:60 no
+   matter how high that goes, so a cluster sharing the header's band is buried
+   under it and unclickable. Drop below the header band instead, which also
+   keeps the cross clear of the header's own buttons. Sheet mode hides the
+   header entirely (see immersive-sheet.css) and keeps the plain inset. */
+.immersive-layout:not(.immersive-overlay-sheet) {
+  --viewer-btn-top: calc(var(--header-height, 64px) + var(--viewer-btn-inset));
+}
+
+@media (min-width: 768px) {
+  body {
+    --viewer-btn-inset: var(--spacing-xl);
+  }
+}
+
+/* public/responsive.css enlarges .header-action-btn to a 44px tap target on
+   coarse pointers, and the share button carries that class. Match it across the
+   whole cluster — otherwise the share button alone grows and the ladder, still
+   stepping by the 40px size, packs the buttons together. Same :not(.pointer-fine)
+   scope as that rule (utils/pointerMode.js), and targeted at body because the
+   default above is declared on body: an inherited value from <html> would lose
+   to it. */
+@media (pointer: coarse) {
+  html:not(.pointer-fine) body {
+    --viewer-btn-size: 44px;
+  }
+}
+
+.lightbox-close,
 .carousel-share-btn {
   position: absolute;
-  top: var(--spacing-lg);
-  right: var(--spacing-lg);
+  top: var(--viewer-btn-top);
   z-index: 60;
-  background: var(--color-black-alpha-40);
-  border-radius: 50%;
-  color: white;
-  border: none;
-  box-shadow: none;
+  width: var(--viewer-btn-size);
+  height: var(--viewer-btn-size);
+  min-width: var(--viewer-btn-size);
+  min-height: var(--viewer-btn-size);
+  padding: 0;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--color-black-alpha-40);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: none;
+  border-radius: 50%;
+  box-shadow: none;
+  color: white;
+  cursor: pointer;
   transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
 }
+
+.lightbox-close:hover,
 .carousel-share-btn:hover {
   background: var(--color-black-alpha-60);
   color: white;
   border: none;
   box-shadow: none;
 }
+
+.lightbox-close {
+  right: var(--viewer-btn-inset);
+}
+
+.lightbox-close svg {
+  width: var(--svg-width, 24px);
+  height: var(--svg-height, 24px);
+}
+
+.carousel-share-btn {
+  right: calc(var(--viewer-btn-inset) + var(--viewer-btn-slot-close) * var(--viewer-btn-step));
+}
+
+.ui-hidden .lightbox-close,
 .ui-hidden .carousel-share-btn {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-20px);
-}
-@media (min-width: 768px) {
-  .carousel-share-btn {
-    top: var(--spacing-xl);
-    right: calc(var(--spacing-xl) + var(--header-action-btn-width, 40px) + var(--spacing-md, 16px));
-  }
-}
-
-.immersive-layout .lightbox-close {
-  display: none;
-}
-
-@media (min-width: 768px) {
-  .immersive-layout .lightbox-close {
-    display: flex;
-    position: absolute;
-    top: var(--spacing-xl);
-    right: var(--spacing-xl);
-    z-index: 60;
-    width: var(--header-action-btn-width, 40px);
-    height: var(--header-action-btn-height, 40px);
-    background: var(--color-black-alpha-40);
-    border-radius: 50%;
-    color: white;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    font-size: 24px;
-    padding: 0;
-    line-height: 1;
-    transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
-  }
-  
-  .immersive-layout .lightbox-close:hover {
-    background: var(--color-black-alpha-60);
-  }
-
-  .ui-hidden .lightbox-close {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-20px);
-  }
-
-  .immersive-layout .lightbox-close svg {
-    width: var(--svg-width, 24px);
-    height: var(--svg-height, 24px);
-  }
 }

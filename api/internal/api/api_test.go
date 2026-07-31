@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -287,7 +288,8 @@ func TestAuthMiddleware(t *testing.T) {
 	c := e.NewContext(req, rec)
 	err := middleware(handler)(c)
 	if err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			if he.Code != http.StatusUnauthorized {
 				t.Errorf("expected 401, got %d", he.Code)
 			}
@@ -320,7 +322,8 @@ func TestAuthMiddleware(t *testing.T) {
 	c = e.NewContext(req, rec)
 	err = middleware(handler)(c)
 	if err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			if he.Code != http.StatusUnauthorized {
 				t.Errorf("expected 401 for invalid token, got %d", he.Code)
 			}

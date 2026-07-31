@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -393,7 +396,8 @@ func TestSystemHandler_GetPhotoLibraryContents_NotConfigured(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when photo_library_path not configured")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 HTTPError, got %v", err)
 	}
@@ -479,7 +483,8 @@ func TestSystemHandler_GetPhotoLibraryFile_MissingPathParam(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when path param missing")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -501,7 +506,8 @@ func TestSystemHandler_GetPhotoLibraryFile_UnsupportedExt(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unsupported extension")
 	}
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %v", err)
 	}
@@ -816,4 +822,248 @@ func TestSystemHandler_GetLogs_ManyLines(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+}
+
+// GetLogs must read back across rotations: right after a rotation the active
+// file holds only a few lines, and reading it alone would make the admin Logs
+// page look nearly empty. See point-ops-logs-page-empty-a002.
+func TestSystemHandler_GetLogs_ReadsAcrossRotations(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	dataDir := t.TempDir()
+	logsDir := filepath.Join(dataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
+	// Oldest to newest: app.log.2, app.log.1, then the active app.log.
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log.2"), []byte("oldest\n"), 0644)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log.1"), []byte("middle\n"), 0644)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte("newest\n"), 0644)
+
+	systemSvc := services.NewSystemService(h.repo, dataDir, "")
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, nil, dataDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?lines=10", nil)
+	rec := httptest.NewRecorder()
+	if err := sh.GetLogs(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+
+	var got []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []string{"oldest", "middle", "newest"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// A request smaller than the active file must not pull in older rotations.
+func TestSystemHandler_GetLogs_StopsAtRequestedLines(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	dataDir := t.TempDir()
+	logsDir := filepath.Join(dataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log.1"), []byte("old1\nold2\n"), 0644)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte("new1\nnew2\nnew3\n"), 0644)
+
+	systemSvc := services.NewSystemService(h.repo, dataDir, "")
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, nil, dataDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?lines=2", nil)
+	rec := httptest.NewRecorder()
+	if err := sh.GetLogs(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+
+	var got []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []string{"new2", "new3"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// The health endpoint is Point's whole runtime observability surface.
+// See point-system-health-admin.
+func TestSystemHandler_GetHealth(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+
+	registry := services.NewHealthRegistry()
+	registry.Record("daily backup", nil)
+	registry.Record("session cleanup", errors.New("db is gone"))
+	h = h.WithHealth(registry)
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/health", nil), rec)
+	if err := h.GetHealth(c); err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp struct {
+		Degraded int `json:"degraded"`
+		Uptime   int `json:"uptime"`
+		Tasks    []struct {
+			Name        string `json:"name"`
+			Healthy     bool   `json:"healthy"`
+			Runs        int64  `json:"runs"`
+			Failures    int64  `json:"failures"`
+			LastError   string `json:"last_error"`
+			LastRun     string `json:"last_run"`
+			LastSuccess string `json:"last_success"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Tasks) != 2 {
+		t.Fatalf("got %d tasks, want 2", len(resp.Tasks))
+	}
+	if resp.Degraded != 1 {
+		t.Errorf("degraded = %d, want 1", resp.Degraded)
+	}
+	// Name-ordered.
+	if resp.Tasks[0].Name != "daily backup" || !resp.Tasks[0].Healthy {
+		t.Errorf("first task = %+v, want a healthy \"daily backup\"", resp.Tasks[0])
+	}
+	if resp.Tasks[1].Healthy || resp.Tasks[1].LastError != "db is gone" {
+		t.Errorf("second task = %+v, want unhealthy with the recorded error", resp.Tasks[1])
+	}
+	// A job that has never succeeded must not report a zero-time success —
+	// "never" and "at the epoch" must not look the same.
+	if resp.Tasks[1].LastSuccess != "" {
+		t.Errorf("never-successful task reported last_success = %q", resp.Tasks[1].LastSuccess)
+	}
+	if resp.Tasks[1].LastRun == "" {
+		t.Error("failed task should still report last_run")
+	}
+}
+
+// No registry attached (or nothing has run yet) must be an empty report, not
+// an error and not a crash.
+func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/health", nil), rec)
+	if err := h.GetHealth(c); err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"tasks":[]`) {
+		t.Errorf("expected an empty task list, got %s", rec.Body.String())
+	}
+}
+
+// Bulk import now runs on a worker pool. Results must still be complete and
+// attributed to the right file, and a batch containing the same photo twice
+// must import it once — the sequential loop's DB-only duplicate check could
+// not catch a within-batch duplicate, and concurrency makes that reachable.
+// See point-media-worker-pool.
+func TestSystemHandler_ImportSelectedPhotos_ParallelBatch(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+	libDir := t.TempDir()
+
+	// Ten distinct images (distinct bytes → distinct checksums), plus a copy
+	// of the first under another name, plus a path that does not exist.
+	const distinct = 10
+	var paths []string
+	for i := range distinct {
+		data := makeMinimalJPEGWithComment(t, fmt.Sprintf("photo-%d", i))
+		name := fmt.Sprintf("p%d.jpg", i)
+		if err := os.WriteFile(filepath.Join(libDir, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, name)
+	}
+	first, err := os.ReadFile(filepath.Join(libDir, "p0.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(libDir, "copy-of-p0.jpg"), first, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	paths = append(paths, "copy-of-p0.jpg", "missing.jpg")
+
+	settingsSvc := services.NewSettingsService(h.repo)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+
+	body, _ := json.Marshal(map[string][]string{"paths": paths})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ImportSelectedPhotos(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	var resp struct {
+		Imported int                      `json:"imported"`
+		Skipped  int                      `json:"skipped"`
+		Errors   []string                 `json:"errors"`
+		Items    []map[string]interface{} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if resp.Imported != distinct {
+		t.Errorf("imported = %d, want %d", resp.Imported, distinct)
+	}
+	if resp.Skipped != 1 {
+		t.Errorf("skipped = %d, want 1 (the within-batch duplicate)", resp.Skipped)
+	}
+	if len(resp.Items) != distinct {
+		t.Errorf("returned %d items, want %d", len(resp.Items), distinct)
+	}
+	// The one failure must name the file it belongs to, not another one.
+	if len(resp.Errors) != 1 {
+		t.Fatalf("errors = %v, want exactly one", resp.Errors)
+	}
+	if !strings.Contains(resp.Errors[0], "missing.jpg") {
+		t.Errorf("error attributed to the wrong file: %q", resp.Errors[0])
+	}
+}
+
+// makeMinimalJPEGWithComment returns a valid JPEG whose bytes differ per
+// comment, so a batch can contain genuinely distinct images (distinct
+// checksums) without needing distinct pixel data.
+func makeMinimalJPEGWithComment(t *testing.T, comment string) []byte {
+	t.Helper()
+	base := makeMinimalJPEG(t)
+	// Insert a COM segment (0xFFFE, big-endian length including the length
+	// bytes) straight after the SOI marker.
+	seg := []byte{0xff, 0xfe}
+	n := len(comment) + 2
+	seg = append(seg, byte(n>>8), byte(n))
+	seg = append(seg, comment...)
+
+	out := make([]byte, 0, len(base)+len(seg))
+	out = append(out, base[:2]...) // SOI
+	out = append(out, seg...)
+	out = append(out, base[2:]...)
+	return out
 }

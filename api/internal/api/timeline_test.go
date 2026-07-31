@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -65,7 +66,8 @@ func TestTimelineHandler_Gating(t *testing.T) {
 
 			err := handler.GetTimeline(c)
 			if err != nil {
-				he, ok := err.(*echo.HTTPError)
+				var he *echo.HTTPError
+				ok := errors.As(err, &he)
 				if ok {
 					if he.Code != tt.wantStatus {
 						t.Errorf("expected status %d, got %d", tt.wantStatus, he.Code)

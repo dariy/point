@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**How releases are cut:** `.github/workflows/tag-release.yml` tags a new patch
+version on every merge to `main` and builds a release from it, so the shipped
+tags (`v0.1.x`) advance far faster than the entries below. This file records
+notable changes, not one section per tag — consult `git tag -l` for the exact
+list of published releases.
+
 ## [Unreleased]
 
 ### Added
@@ -30,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Database initialization**: Improved reliability of first-run schema setup by splitting SQL statements and using transactions, fixing an issue where tables could be missing on some environments (e.g. rootless Podman).
 
-## [0.1.0] - TBD
+## [0.1.0] — initial release
 
 ### Added
 - **Core blog engine**: self-hosted personal photo blog with Go + Echo v4 backend and Vanilla JS SPA frontend
@@ -50,5 +56,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Version endpoint**: `GET /api/system/version` reports the running release tag
 - **GHCR release pipeline**: GitHub Actions publishes `ghcr.io/dariy/point:{tag,latest}` on version tags
 
-[Unreleased]: https://github.com/dariy/point/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dariy/point/compare/v0.1.40...HEAD
 [0.1.0]: https://github.com/dariy/point/releases/tag/v0.1.0

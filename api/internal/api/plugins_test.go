@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,7 +77,8 @@ func TestTogglePlugin_DisableThenEnable(t *testing.T) {
 		c.SetParamValues(id)
 		err := h.TogglePlugin(c)
 		if err != nil {
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code, pluginView{}
 			}
 			return http.StatusInternalServerError, pluginView{}
@@ -120,7 +122,8 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 		c.SetParamNames("id")
 		c.SetParamValues(id)
 		if err := h.TogglePlugin(c); err != nil {
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code
 			}
 			return http.StatusInternalServerError
@@ -128,12 +131,9 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 		return rec.Code
 	}
 
-	// Sole core plugin (admin home) cannot be disabled.
-	if code := toggle("admin-home", `{"enabled":false}`); code != http.StatusConflict {
-		t.Fatalf("disabling sole core plugin should 409, got %d", code)
-	}
-
-	// Immersive area: Standard is the only enabled viewer by default → locked.
+	// Immersive area: Standard is the only enabled viewer by default → locked,
+	// and it is now the only core area left (the admin routes that used to be
+	// single-member core areas are ordinary routes in app.js).
 	if code := toggle("immersive", `{"enabled":false}`); code != http.StatusConflict {
 		t.Fatalf("disabling sole immersive viewer should 409, got %d", code)
 	}
@@ -164,7 +164,8 @@ func TestTogglePlugin_ExclusiveAreaKeepsAtMostOne(t *testing.T) {
 		c.SetParamNames("id")
 		c.SetParamValues(id)
 		if err := h.TogglePlugin(c); err != nil {
-			if he, ok := err.(*echo.HTTPError); ok {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
 				return he.Code
 			}
 			return http.StatusInternalServerError
@@ -225,11 +226,9 @@ func TestApplyPreset_SetsStateAndKeepsCoreAreas(t *testing.T) {
 	if !plugins.IsEnabled("immersive-sheet", all) || plugins.IsEnabled("immersive", all) {
 		t.Error("minimalistic should enable Sheet and disable Standard")
 	}
-	// …but keeps the single-member core admin areas alive.
-	for _, id := range []string{"admin-home", "admin-posts-list", "media-library"} {
-		if !plugins.IsEnabled(id, all) {
-			t.Errorf("core plugin %q must stay enabled after applying a preset", id)
-		}
+	// …and never empties a core area: some viewer stays enabled.
+	if !plugins.IsEnabled("immersive-sheet", all) && !plugins.IsEnabled("immersive", all) {
+		t.Error("a preset must not leave the immersive core area empty")
 	}
 	// The active preset is recorded.
 	if all[activePresetKey] != "minimalistic" {
@@ -248,7 +247,8 @@ func TestTogglePlugin_UnknownID404(t *testing.T) {
 	c.SetParamValues("nope")
 
 	err := h.TogglePlugin(c)
-	he, ok := err.(*echo.HTTPError)
+	var he *echo.HTTPError
+	ok := errors.As(err, &he)
 	if !ok || he.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 HTTPError for unknown plugin, got %v", err)
 	}

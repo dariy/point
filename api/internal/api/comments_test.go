@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -107,6 +108,78 @@ func TestCommentsProxy(t *testing.T) {
 	if code := call("/comments/web/embed.mjs", nil); code != http.StatusNotFound || hits != prev {
 		t.Errorf("re-disabled plugin: want 404 and no backend hit, got code=%d hits=%d (was %d)", code, hits, prev)
 	}
+}
+
+// The "point" provider is registered on the engine only so it accepts Point's
+// bridge tokens; it has no working login flow, so the widget must never see it
+// in the provider list it builds login buttons from.
+func TestCommentsProxy_StripsPointProvider(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	svc := services.NewSettingsService(repo)
+
+	var payload string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(payload))
+	}))
+	defer backend.Close()
+	target, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e := echo.New()
+	RegisterCommentsProxy(e, svc, target)
+
+	get := func(path string) (int, string) {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+
+	t.Run("point is removed, others kept", func(t *testing.T) {
+		payload = `{"version":"v1","auth_providers":["github","point","anonymous"],"admins":["point_1"]}`
+		code, body := get("/comments/api/v1/config?site=remark")
+		if code != http.StatusOK {
+			t.Fatalf("want 200, got %d", code)
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal([]byte(body), &cfg); err != nil {
+			t.Fatalf("response is not JSON: %v (%s)", err, body)
+		}
+		got := cfg["auth_providers"].([]any)
+		if len(got) != 2 || got[0] != "github" || got[1] != "anonymous" {
+			t.Errorf("auth_providers: want [github anonymous], got %v", got)
+		}
+		// Everything else must survive, including the admin list that still
+		// carries the point_<id> identity the bridge authenticates as.
+		admins := cfg["admins"].([]any)
+		if len(admins) != 1 || admins[0] != "point_1" {
+			t.Errorf("admins should be untouched, got %v", admins)
+		}
+		if cfg["version"] != "v1" {
+			t.Errorf("version should be untouched, got %v", cfg["version"])
+		}
+	})
+
+	t.Run("other endpoints are untouched", func(t *testing.T) {
+		payload = `{"auth_providers":["point"]}`
+		_, body := get("/comments/api/v1/user?site=remark")
+		if body != payload {
+			t.Errorf("only the config endpoint should be rewritten, got %s", body)
+		}
+	})
+
+	t.Run("unexpected bodies pass through", func(t *testing.T) {
+		payload = `not json at all`
+		code, body := get("/comments/api/v1/config?site=remark")
+		if code != http.StatusOK || body != payload {
+			t.Errorf("non-JSON config must pass through untouched, got %d %q", code, body)
+		}
+	})
 }
 
 func TestCommentsAdminHandler(t *testing.T) {

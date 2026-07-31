@@ -5,13 +5,7 @@ Point is a self-hosted personal photo blog designed for simplicity and privacy. 
 ## One-Command Install
 
 ```bash
-# shortened
-curl -fsSL https://short.point.photos/install | bash
-```
-
-```bash
-# or direct
-https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh
+curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
 ```
 
 The wizard will ask a few questions (all with sensible defaults — just hit Enter) and have Point running in minutes. See below for details and manual options.
@@ -81,7 +75,6 @@ You can customize Point by editing the `.env` file.
 | `APP_URL` | (None) | The external URL of your blog (e.g., https://blog.example.com) |
 | `DATA_PATH` | `./data` | Directory where the database, photos, and backups are stored |
 | `PHOTO_LIBRARY_PATH` | (None) | Path to your existing photo library (mounted read-only) |
-| `SECRET_KEY` | (Auto) | Secret key for signing sessions (generated automatically if blank) |
 | `GEMINI_API_KEY` | (Empty) | Your Google Gemini API key for AI-powered photo analysis |
 | `LOG_LEVEL` | `INFO` | Logging detail level: DEBUG, INFO, WARN, or ERROR |
 | `APP_NAME` | `Point` | The name of your blog displayed in the UI |

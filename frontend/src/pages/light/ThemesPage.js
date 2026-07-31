@@ -173,8 +173,15 @@ export default class ThemesPage extends Component {
     const css = this.state.customCSS;
     this.setState({ savingCSS: true });
     try {
-      await updateCustomCSS(css);
-      store.set("toast", { message: "Custom CSS saved.", type: "success" });
+      const result = await updateCustomCSS(css);
+      // The server sanitizes site-wide CSS (@import, off-origin url(), '<').
+      // Say so rather than letting the removal look like a save that worked.
+      const warnings = result?.css_warnings;
+      if (warnings?.length) {
+        store.set("toast", { message: `Custom CSS saved; removed: ${warnings.join(", ")}.`, type: "warning" });
+      } else {
+        store.set("toast", { message: "Custom CSS saved.", type: "success" });
+      }
       this.setState({ savingCSS: false });
     } catch (err) {
       store.set("toast", { message: err.message || "Failed to save CSS.", type: "error" });

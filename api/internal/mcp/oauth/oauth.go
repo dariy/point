@@ -75,19 +75,26 @@ func New(cfg Config) *Provider {
 // (Expired access tokens are otherwise never removed, only rejected on use.)
 func (p *Provider) janitor() {
 	for range time.Tick(10 * time.Minute) {
-		now := time.Now()
-		p.mu.Lock()
-		for k, c := range p.codes {
-			if now.After(c.ExpiresAt) {
-				delete(p.codes, k)
-			}
+		p.sweepExpired(time.Now())
+	}
+}
+
+// sweepExpired drops every code and token that expired at or before now. Split
+// out of janitor so the eviction policy is testable without waiting on a ticker.
+func (p *Provider) sweepExpired(now time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for k, c := range p.codes {
+		if now.After(c.ExpiresAt) {
+			delete(p.codes, k)
 		}
-		for k, t := range p.tokens {
-			if !t.ExpiresAt.IsZero() && now.After(t.ExpiresAt) {
-				delete(p.tokens, k)
-			}
+	}
+	for k, t := range p.tokens {
+		// A zero ExpiresAt means "never expires" (refresh tokens when no
+		// refresh TTL is configured) and must survive the sweep.
+		if !t.ExpiresAt.IsZero() && now.After(t.ExpiresAt) {
+			delete(p.tokens, k)
 		}
-		p.mu.Unlock()
 	}
 }
 

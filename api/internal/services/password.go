@@ -21,6 +21,9 @@ const (
 	argon2KeyLength   = 32
 )
 
+// Both of these mean the hash *we stored* is unusable, not that the caller
+// sent anything wrong, so they carry no kind from the taxonomy in errors.go
+// and correctly surface as a logged 500.
 var (
 	ErrInvalidHash         = errors.New("the encoded hash is not in the correct format")
 	ErrIncompatibleVersion = errors.New("incompatible version of argon2")

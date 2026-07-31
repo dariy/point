@@ -13,7 +13,7 @@ import { store } from '../../store.js';
 import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
+import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.js';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
 
 export default class PostPage extends Component {
@@ -140,13 +140,12 @@ export default class PostPage extends Component {
    * The slideshow plays immersive posts only. When it crosses into a
    * non-immersive post (which mounts no viewer, so the show would stall), keep
    * moving in the show's forward direction — the same target MediaViewer would
-   * cross to (see _targetFor('fwd')): navNext under feed direction, else navPrev.
+   * cross to (see _targetFor('fwd')).
    * Returns true when it navigated away, so the caller skips rendering this post.
    */
   _skipNonImmersiveDuringShow(post, nav, immersive) {
     if (immersive || !isSlideshowRunning()) return false;
-    const settings = store.get('settings') || {};
-    const fwd = settings.immersive_nav_direction === 'feed' ? nav?.next : nav?.prev;
+    const { fwd } = immersiveNavTargets(store.get('settings'), nav?.prev, nav?.next);
     if (!fwd?.slug) return false; // end of the feed — let the show stop here
     ViewContext.update({ postSlug: fwd.slug });
     return true;

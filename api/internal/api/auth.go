@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,8 +14,6 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/go-pkgz/auth/v2/token"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
@@ -49,6 +45,28 @@ func GenerateToken() string {
 	return hex.EncodeToString(b)
 }
 
+// secureCookie reports whether auth cookies should carry the Secure flag.
+// It keys off the deployment's public scheme rather than APP_ENV: the canonical
+// self-hosted install runs with APP_ENV=development behind HTTPS, so gating on
+// the environment name shipped session cookies without Secure over TLS. APP_URL
+// is the authoritative operator-set signal; we fall back to the request's own
+// scheme (direct TLS, or X-Forwarded-Proto from our trusted reverse proxy) when
+// it is unset. Erring toward Secure only ever tightens the cookie, never loosens
+// it, so a spoofed X-Forwarded-Proto can't strip the flag on an HTTPS deployment.
+func secureCookieFor(cfg *config.Config, c echo.Context) bool {
+	if strings.HasPrefix(cfg.AppURL, "https://") {
+		return true
+	}
+	if c.IsTLS() {
+		return true
+	}
+	return c.Request().Header.Get(echo.HeaderXForwardedProto) == "https"
+}
+
+func (h *AuthHandler) secureCookie(c echo.Context) bool {
+	return secureCookieFor(h.cfg, c)
+}
+
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
@@ -57,7 +75,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	user, err := h.authService.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		return MapError(err)
 	}
 
 	token := GenerateToken()
@@ -87,10 +105,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-	}
-
-	if h.cfg.AppEnv == "production" {
-		cookie.Secure = true
+		Secure:   h.secureCookie(c),
 	}
 
 	c.SetCookie(cookie)
@@ -123,7 +138,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
+		Secure:   h.secureCookie(c),
 	}
 	c.SetCookie(newCookie)
 	h.clearRemark42Cookies(c)
@@ -143,6 +158,18 @@ func (h *AuthHandler) Me(c echo.Context) error {
 		username = s.Username
 		displayName = s.DisplayName
 		email = s.Email
+
+		// Reissue the remark42 bridge cookie when it has gone missing or stale.
+		// Login is not a reliable enough hook on its own: sessions predating the
+		// bridge, and passkey logins from before they issued it, leave the owner
+		// authenticated to Point but anonymous in the comments widget — with no
+		// login button that could fix it, since remark42 has no Point provider.
+		// The admin SPA calls this endpoint on every load, so the session heals
+		// itself without a logout/login round trip. API-key principals are
+		// skipped: there is no browser session to bridge.
+		if remark42CookieStale(c) {
+			IssueRemark42Cookies(c, h.repo, s.UserID, s.DisplayName, s.Username, s.ExpiresAt, h.secureCookie(c))
+		}
 	} else if k, ok := user.(models.GetAPIKeyByHashRow); ok {
 		username = k.Username
 		displayName = k.DisplayName
@@ -175,7 +202,7 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 	}
 
 	if err := h.authService.ChangePassword(c.Request().Context(), userID, sessionID, req.CurrentPassword, req.NewPassword); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Password changed successfully"})
@@ -199,7 +226,7 @@ func (h *AuthHandler) ChangeEmail(c echo.Context) error {
 	}
 
 	if err := h.authService.ChangeEmail(c.Request().Context(), userID, req.CurrentPassword, strings.TrimSpace(req.Email)); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Email changed successfully"})
@@ -211,7 +238,7 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 
 	sessions, err := h.authService.ListSessions(c.Request().Context(), userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	type sessionItem struct {
@@ -249,15 +276,15 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 }
 
 func (h *AuthHandler) DeleteSession(c echo.Context) error {
-	sessionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	sessionID, err := parseNamedIDParam(c, "session id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid session id")
+		return err
 	}
 
 	userID := extractUserID(c.Get("user"))
 
 	if err := h.authService.TerminateSession(c.Request().Context(), sessionID, userID); err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "session not found")
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -268,7 +295,7 @@ func (h *AuthHandler) DeleteOtherSessions(c echo.Context) error {
 	currentSessionID := extractSessionID(c.Get("user"))
 
 	if err := h.authService.TerminateOtherSessions(c.Request().Context(), userID, currentSessionID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Other sessions terminated"})
@@ -371,91 +398,9 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 }
 
 func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expiresAt time.Time) {
-	secret := os.Getenv("REMARK_SECRET")
-	if secret == "" {
-		return
-	}
-	svc := token.NewService(token.Opts{
-		SecretReader: token.SecretFunc(func(id string) (string, error) {
-			return secret, nil
-		}),
-		CookieDuration: time.Until(expiresAt),
-		Issuer:         "remark42",
-	})
-
-	name := user.DisplayName
-	if name == "" {
-		name = user.Username
-	}
-
-	var authorName string
-	err := h.repo.DB().QueryRowContext(c.Request().Context(), "SELECT value FROM blog_settings WHERE key = 'author_name'").Scan(&authorName)
-	if err == nil && authorName != "" {
-		name = authorName
-	}
-
-	var logoURL string
-	_ = h.repo.DB().QueryRowContext(c.Request().Context(), "SELECT value FROM blog_settings WHERE key = 'logo_url'").Scan(&logoURL)
-
-	u := &token.User{
-		ID:      fmt.Sprintf("point_%d", user.ID),
-		Name:    name,
-		Picture: logoURL,
-	}
-	u.SetAdmin(true)
-
-	xsrf := GenerateToken()[:20]
-
-	claims := token.Claims{
-		User: u,
-	}
-	claims.Audience = jwt.ClaimStrings{"remark"}
-	claims.Issuer = "remark42"
-	claims.ExpiresAt = jwt.NewNumericDate(expiresAt)
-	claims.ID = xsrf
-
-	tokenStr, err := svc.Token(claims)
-	if err != nil {
-		slog.Error("Failed to generate remark42 token", "err", err)
-		return
-	}
-
-	c.SetCookie(&http.Cookie{
-		Name:     "JWT",
-		Value:    tokenStr,
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
-	})
-	c.SetCookie(&http.Cookie{
-		Name:     "XSRF-TOKEN",
-		Value:    xsrf,
-		Expires:  expiresAt,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
-	})
+	IssueRemark42Cookies(c, h.repo, user.ID, user.DisplayName, user.Username, expiresAt, h.secureCookie(c))
 }
 
 func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
-	past := time.Now().Add(-1 * time.Hour).UTC().Round(0)
-	c.SetCookie(&http.Cookie{
-		Name:     "JWT",
-		Value:    "",
-		Expires:  past,
-		HttpOnly: true,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
-	})
-	c.SetCookie(&http.Cookie{
-		Name:     "XSRF-TOKEN",
-		Value:    "",
-		Expires:  past,
-		Path:     "/",
-		SameSite: http.SameSiteLaxMode,
-		Secure:   h.cfg.AppEnv == "production",
-	})
+	ClearRemark42Cookies(c, h.secureCookie(c))
 }

@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"log/slog"
 	"net"
@@ -14,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -28,6 +31,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+	"point-api/internal/utils"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -52,7 +56,9 @@ func init() {
 // json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
 // embed inline. Disabled plugins are absent from the result entirely.
 func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
-	all, err := settings.GetAllSettings(ctx)
+	// Snapshot, not GetAllSettings: this runs on every HTML serve and
+	// BuildManifest only reads the map.
+	all, err := settings.Snapshot(ctx)
 	if err != nil {
 		all = map[string]string{}
 	}
@@ -103,7 +109,7 @@ func isGuestRequest(c echo.Context) bool {
 // visibilityCache emits a visibility-aware Cache-Control on a public read route
 // so a Cloudflare Cache Rule can edge-cache the anonymous response while never
 // storing an authenticated one — the HTML/API analogue of serveSimplifiedMedia's
-// media caching (see point-hosting docs/08-reddit-flood-prep.md). A guest GET
+// media caching, for surviving a traffic spike behind a CDN. A guest GET
 // gets `public, max-age=60`; everything else (authenticated reads, any write)
 // gets private,no-store so a per-user response is never stored at the edge even
 // if the CF rule misfires. The header is set before the handler runs because
@@ -201,6 +207,27 @@ func inlineScriptHashes(path string) []string {
 	return out
 }
 
+// precompressedExt lists the file extensions whose payloads are already
+// compressed (photos, video, audio, modern web fonts, archives). Running them
+// through gzip burns CPU on every byte served for a saving of roughly nothing,
+// so the Gzip middleware skips them. Keyed by lowercase extension with the dot.
+var precompressedExt = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true,
+	".avif": true, ".heic": true, ".heif": true, ".ico": true,
+	".mp4": true, ".mov": true, ".webm": true, ".m4v": true,
+	".mp3": true, ".m4a": true, ".ogg": true,
+	".woff": true, ".woff2": true,
+	".zip": true, ".gz": true, ".tgz": true, ".br": true, ".7z": true,
+}
+
+// skipGzip reports whether the response for this request should be left
+// uncompressed. Decided from the request path's extension because it is known
+// before the handler runs: media is served from /:year/:month/:filename and
+// backups from archive-named routes, both of which keep their real extension.
+func skipGzip(c echo.Context) bool {
+	return precompressedExt[strings.ToLower(filepath.Ext(c.Request().URL.Path))]
+}
+
 func resolveJSDir(frontendDir string, debug bool) string {
 	// When FRONTEND_DEBUG is on, prefer the debug bundle (frontend/js-debug) if
 	// it was built — it carries plugin/console debug logging. Falls through to
@@ -223,7 +250,7 @@ func resolveJSDir(frontendDir string, debug bool) string {
 }
 
 // siteNameFromHost turns a request Host into the name an installed PWA shows
-// under its icon: "www.Point.Photos:8001" → "point.photos". Returns "" when the
+// under its icon: "www.Example.Com:8001" → "example.com". Returns "" when the
 // host is unusable, in which case the manifest's own name is kept.
 func siteNameFromHost(host string) string {
 	h := strings.ToLower(strings.TrimSpace(host))
@@ -248,6 +275,7 @@ type AppServices struct {
 	System    *services.SystemService
 	Cache     *services.CacheService
 	Scheduler *services.SchedulerService
+	Health    *services.HealthRegistry
 	Theme     *services.ThemeService
 	Timeline  *services.TimelineService
 	Instagram *services.InstagramService
@@ -259,7 +287,10 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
 	instagramService := services.NewInstagramService(settingsService)
-	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL)
+	// One registry, shared by everything that runs work outside a request, so
+	// the admin health view has a single source rather than one per service.
+	healthRegistry := services.NewHealthRegistry()
+	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).WithHealth(healthRegistry)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
@@ -267,7 +298,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -279,6 +310,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		System:    systemService,
 		Cache:     cacheService,
 		Scheduler: schedulerService,
+		Health:    healthRegistry,
 		Theme:     themeService,
 		Timeline:  timelineService,
 		Instagram: instagramService,
@@ -290,6 +322,17 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	e := echo.New()
 	e.HideBanner = true
+
+	// Derive the client IP by walking X-Forwarded-For from the right and
+	// skipping only trusted hops (loopback + private networks — i.e. our own
+	// reverse proxy). This returns the real client address and ignores any
+	// XFF entries an attacker prepends, so c.RealIP() can't be spoofed to
+	// dodge the credential rate limiter or poison the session audit trail.
+	// Direct (no-proxy) connections fall back to the socket remote address.
+	e.IPExtractor = echo.ExtractIPFromXFFHeader(
+		echo.TrustLoopback(true),
+		echo.TrustPrivateNet(true),
+	)
 
 	// Redirect HTTP to HTTPS if AppURL is configured as HTTPS.
 	if strings.HasPrefix(cfg.AppURL, "https://") {
@@ -304,13 +347,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
-	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo)
+	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo).WithHealth(svcs.Health)
 	go remarkSupervisor.Start()
 
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
@@ -332,7 +375,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			}
 		}
 	}
-	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg)
+	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg, repo)
 
 	// Global middleware
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -365,6 +408,14 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		},
 	}))
 	e.Use(middleware.Recover())
+	// Compress text payloads: the CSS/JS bundles and every JSON API response
+	// gzip to roughly a quarter of their size. Sits high in the chain so it
+	// wraps the static file routes as well as the handlers. Responses under
+	// 1KB are left alone — the gzip framing overhead can exceed the saving.
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Skipper:   skipGzip,
+		MinLength: 1024,
+	}))
 	// Cap request bodies at the configured upload limit (default 50MB). This is
 	// the ceiling for the largest legitimate request (a media upload); every
 	// other endpoint is smaller. Echo enforces it both via Content-Length and
@@ -415,6 +466,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		XFrameOptions:         "DENY",
 		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
+		// HSTS: instruct browsers to only reach this origin over HTTPS for a year,
+		// including subdomains. Echo only emits the header when the request is
+		// actually over TLS (direct or via X-Forwarded-Proto: https), so a plain
+		// HTTP dev server never sends it. Preload is deliberately left off — it's
+		// an effectively irreversible browser-baked commitment that an operator
+		// should opt into for their own domain, not a shipped default.
+		HSTSMaxAge: 31536000,
 	}))
 	// Extra security headers not covered by middleware.Secure
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -423,11 +481,46 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			return next(c)
 		}
 	})
-	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy.
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy — except
+	// for the esbuild code-split chunks under /assets/js/chunks/, whose names
+	// embed a content hash and so can never change meaning at a fixed URL.
+	// Those get the immutable treatment, as do content-addressed CSS bundle
+	// URLs whose hash matches what is currently on disk. The unhashed entry
+	// points — app.js, the p/* plugin bundles, and a CSS bundle requested under
+	// its plain name — keep revalidating.
+	//
+	// A hash that does NOT match (a client on a cached HTML shell from before a
+	// deploy) is still served the current bundle, because 404ing it would leave
+	// that page with no stylesheet at all — but it is served no-cache, so the
+	// client never pins today's bytes under yesterday's URL for a year.
+	//
+	// This also rewrites a content-addressed bundle URL back to the plain
+	// on-disk name, and so runs as Pre — before routing — rather than as a
+	// route of its own. A `/assets/css/:name` route would claim the whole
+	// /assets/css/ subtree from e.Static and take the files in it down with
+	// it, including the runtime-generated common/theme.css.
+	cssManifest := loadCSSManifest(filepath.Join(cfg.FrontendDir, "css"))
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			p := c.Request().URL.Path
-			if strings.HasPrefix(p, "/assets/js/") || strings.HasPrefix(p, "/assets/css/") {
+			r := c.Request()
+			p := r.URL.Path
+			switch {
+			case strings.HasPrefix(p, "/assets/js/chunks/"):
+				c.Response().Header().Set("Cache-Control", immutableCacheControl)
+			case strings.HasPrefix(p, "/assets/css/"):
+				c.Response().Header().Set("Cache-Control", "no-cache")
+				// Only bundles sit directly in /assets/css; a hash anywhere
+				// deeper is part of some partial's real filename, not ours.
+				if path.Dir(p) != "/assets/css" {
+					break
+				}
+				if base, hashed := stripCSSBundleHash(path.Base(p)); hashed {
+					if cssManifest[base] == path.Base(p) {
+						c.Response().Header().Set("Cache-Control", immutableCacheControl)
+					}
+					r.URL.Path = "/assets/css/" + base
+				}
+			case strings.HasPrefix(p, "/assets/js/"):
 				c.Response().Header().Set("Cache-Control", "no-cache")
 			}
 			return next(c)
@@ -448,6 +541,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	indexHTMLAdmin := ""
 	if b, err := os.ReadFile(indexHTML); err == nil {
 		base := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+		// Rewrite the CSS bundle links to their content-addressed URLs so an
+		// unchanged bundle keeps the same URL across deploys and can be cached
+		// forever. Without a manifest the ?v=<build version> links stay, which
+		// still busts correctly on deploy — just on every deploy.
+		for name, hashed := range cssManifest {
+			base = strings.ReplaceAll(base,
+				"/assets/css/"+name+"?v="+cfg.AppVersion,
+				"/assets/css/"+hashed)
+		}
 		// Public shell. Note: an inline <script> injected via HEAD_HTML is NOT
 		// covered by the CSP script-src hashes (those are computed from the
 		// on-disk shell), so deployments should inject external scripts and
@@ -486,6 +588,45 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			Rate:      rate.Every(6 * time.Second),
 			Burst:     10,
 			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+
+	// Blanket throttle for everything else, keyed by client IP like authLimiter.
+	// Nothing bounded the public read surface: /api/posts, /api/pages/*,
+	// /api/timeline and media byte-serving were all unlimited.
+	//
+	// Sized to be invisible to a real visitor and a real admin — a page load
+	// costs a handful of API calls plus its images, so 200 burst refilling at
+	// 10/s (600/min) is far above human use while still bounding a scraper.
+	// It applies to authenticated requests too: the alternative is keying the
+	// exemption off a session cookie, which any client can simply present,
+	// turning the limiter into a formality.
+	//
+	// Static assets are skipped: they are plain file serves behind long cache
+	// headers, and a first page load pulls dozens of them, which would otherwise
+	// consume the budget the API calls need.
+	publicLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Skipper: func(c echo.Context) bool {
+			p := c.Request().URL.Path
+			return strings.HasPrefix(p, "/assets/") || p == "/health"
+		},
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(100 * time.Millisecond),
+			Burst:     200,
+			ExpiresIn: 3 * time.Minute,
+		}),
+	})
+	e.Use(publicLimiter)
+
+	// The tag graph walks the whole tag/post relation set to build its payload,
+	// so it is the one public read where a modest request rate is still a real
+	// load. ~1/s sustained, 20 burst — well above what rendering the graph page
+	// needs, far below what makes it a cheap way to pin a CPU.
+	graphLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(time.Second),
+			Burst:     20,
+			ExpiresIn: 3 * time.Minute,
 		}),
 	})
 
@@ -588,8 +729,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	pagesGroup.GET("/graph/tag/:id", pagesHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), graphLimiter)
+	pagesGroup.GET("/graph/tag/:id", pagesHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), graphLimiter)
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
 
@@ -626,6 +767,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		vendorDir := filepath.Join(frontendDir, "vendor")
 
 		if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
+			// Serves the whole tree: the bundles at the top level plus the
+			// subdirectories under it, notably common/theme.css, which the
+			// theme service rewrites at runtime. Content-addressed bundle URLs
+			// (light.<hash>.css) have already been rewritten to the plain
+			// on-disk name by the Pre middleware above.
 			e.Static("/assets/css", cssDir)
 		}
 		if jsDir != "" {
@@ -672,9 +818,9 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		manifestPath := filepath.Join(cfg.FrontendDir, "manifest.webmanifest")
 		e.GET("/manifest.webmanifest", func(c echo.Context) error {
 			c.Response().Header().Set("Content-Type", "application/manifest+json")
-			// The same image serves several sites (darii.net, point.photos), so
-			// the installed-app name comes from the host the manifest was
-			// fetched from rather than the file's placeholder name.
+			// One image can serve several sites, so the installed-app name comes
+			// from the host the manifest was fetched from rather than the file's
+			// placeholder name.
 			raw, err := os.ReadFile(manifestPath)
 			if err != nil {
 				return c.File(manifestPath)
@@ -802,9 +948,9 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	return e
 }
 
-func main() {
-	// Initialize slog with TextHandler for logfmt output
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+// installLogger points slog (and the legacy log package) at w.
+func installLogger(w io.Writer) {
+	logger := slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
@@ -812,6 +958,12 @@ func main() {
 	// Redirect standard log to slog to handle legacy log.Printf calls
 	log.SetOutput(slog.NewLogLogger(logger.Handler(), slog.LevelInfo).Writer())
 	log.SetFlags(0)
+}
+
+func main() {
+	// Start on stdout alone: the log file lives under the storage path, which
+	// isn't known until the config is loaded below.
+	installLogger(os.Stdout)
 
 	// Check for CLI commands early.
 	isSetup := false
@@ -879,6 +1031,16 @@ func main() {
 		cfg.AppVersion = Version
 	}
 
+	// Now that the storage path is known, tee logging to disk as well. stdout
+	// stays authoritative (docker logs, journald); the file is what the admin
+	// Logs page reads, which is otherwise unreachable inside a container.
+	logFile := utils.NewRotatingFile(
+		filepath.Join(cfg.StoragePath, "logs", "app.log"),
+		utils.LogMaxBytes, utils.LogMaxBackups,
+	)
+	defer func() { _ = logFile.Close() }()
+	installLogger(io.MultiWriter(os.Stdout, logFile))
+
 	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
 	// the database is opened: extracting a backup over an open SQLite file corrupts
 	// it, so the restore is deferred to here.
@@ -918,12 +1080,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Apply DB schema + data migrations (see internal/migrations).
-	migrations.Run(ctx, repo)
-
-	// Ensure a secret key is available for session signing.
-	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
-		slog.Error("failed to ensure secret key", "error", err)
+	// Apply DB schema + data migrations (see internal/migrations). A failure
+	// here means the database is not at the schema this build expects, so we
+	// stop rather than serve against it — the alternative is failing later,
+	// somewhere unrelated, on whatever the mismatch happens to break.
+	if err := migrations.Run(ctx, repo); err != nil {
+		slog.Error("database migrations failed — refusing to start", "error", err)
 		os.Exit(1)
 	}
 
@@ -953,7 +1115,7 @@ func main() {
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	slog.Info("Point API starting", "address", address)
 	go func() {
-		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
+		if err := e.Start(address); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("failed to start server", "error", err)
 			os.Exit(1)
 		}
@@ -981,7 +1143,8 @@ func main() {
 			exe = os.Args[0]
 		}
 		slog.Info("restart requested: re-executing in place", "exe", exe)
-		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil {
+		// Re-executing this very binary (os.Executable), not a caller-named one.
+		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil { //nolint:gosec // G204: exec of self
 			slog.Error("re-exec failed; exiting so a supervisor can restart instead", "error", err)
 			os.Exit(1)
 		}
@@ -1019,6 +1182,73 @@ func parseCreateAPIKeyName(args []string) string {
 // checksumRe matches the 8-char hex checksum embedded in a media filename,
 // e.g. "video_89017c29.mp4" → "89017c29".
 var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
+
+// neutralizeSVG locks down the response when the file being served is an SVG.
+//
+// SVG is the only allowlisted upload format a browser will execute script from:
+// navigating straight to /2026/07/x.svg renders it as a document, in this
+// origin. Uploads are scanned for active content (services.ScanSVG) and
+// admin-only, but neither is a reason to let the served bytes rely on the
+// site-wide CSP staying exactly as it is today — one regression there would
+// turn a stored file into stored XSS.
+//
+// The per-response policy denies everything and sandboxes the document, so
+// nothing in the SVG runs regardless of the global policy. Embedding via <img>
+// is unaffected: that context never executes script and ignores this header.
+func neutralizeSVG(c echo.Context, path string) {
+	if !strings.EqualFold(filepath.Ext(path), ".svg") {
+		return
+	}
+	c.Response().Header().Set("Content-Security-Policy",
+		"default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
+}
+
+// cssBundleRe matches a content-addressed CSS bundle URL — "light.81e2e81c.css"
+// → base "light.css", hash "81e2e81c". The hash exists only in the URL; one
+// bundle is written to disk under its plain name, and the server maps back.
+var cssBundleRe = regexp.MustCompile(`^([a-zA-Z0-9_-]+)\.([0-9a-f]{8})\.css$`)
+
+// stripCSSBundleHash turns a hashed bundle filename back into the on-disk name,
+// reporting whether the name was hashed at all.
+func stripCSSBundleHash(name string) (string, bool) {
+	m := cssBundleRe.FindStringSubmatch(name)
+	if m == nil {
+		return name, false
+	}
+	return m[1] + ".css", true
+}
+
+// loadCSSManifest reads the content hashes scripts/build-css.sh records for the
+// CSS bundles, mapping "light.css" → "light.81e2e81c.css". An absent or
+// unreadable manifest yields nil, and the shell falls back to the plain
+// ?v=<build version> URLs — a missing manifest must never mean no stylesheet.
+func loadCSSManifest(cssDir string) map[string]string {
+	b, err := os.ReadFile(filepath.Join(cssDir, "asset-manifest.json"))
+	if err != nil {
+		return nil
+	}
+	var hashes map[string]string
+	if err := json.Unmarshal(b, &hashes); err != nil {
+		slog.Warn("css asset manifest is unreadable; falling back to versioned URLs", "error", err)
+		return nil
+	}
+	out := make(map[string]string, len(hashes))
+	for name, hash := range hashes {
+		base, ok := strings.CutSuffix(name, ".css")
+		if !ok || !regexp.MustCompile(`^[0-9a-f]{8}$`).MatchString(hash) {
+			continue
+		}
+		out[name] = base + "." + hash + ".css"
+	}
+	return out
+}
+
+// immutableCacheControl is the header for content-addressed URLs: the name
+// embeds a hash of the bytes, so the bytes at that URL can never change and a
+// revalidation round-trip is pure waste. A year is the practical maximum
+// browsers honour.
+const immutableCacheControl = "public, max-age=31536000, immutable"
 
 // serveSimplifiedMedia handles /YYYY/MM/filename for media files.
 //
@@ -1112,7 +1342,17 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		// cached by a shared cache, or an authenticated preview response could
 		// leak hidden media to the edge for unauthenticated requests to reuse.
 		if media.IsPublic != 0 {
-			c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
+			if checksumRe.MatchString(filename) {
+				// Content-addressed: the filename carries a checksum of the bytes,
+				// so replacing the image produces a different URL and this one can
+				// be cached forever. The trade-off is unpublishing — a client that
+				// already fetched the file keeps its copy until the year is up, so
+				// visibility changes are not retroactive for cached bytes. That is
+				// the same bargain the existing s-maxage=86400 edge cache makes.
+				c.Response().Header().Set("Cache-Control", immutableCacheControl)
+			} else {
+				c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
+			}
 		} else {
 			c.Response().Header().Set("Cache-Control", "private, no-store")
 		}
@@ -1158,6 +1398,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		}
 
 		if _, err := os.Stat(origFile); err == nil {
+			neutralizeSVG(c, origFile)
 			return c.File(origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
@@ -1166,6 +1407,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 				matchFile := filepath.Clean(filepath.Join(origDir, filepath.Base(matches[0])))
 				// Security: double-check the globbed file prefix.
 				if strings.HasPrefix(matchFile, filepath.Join(storagePath, "media", "originals")) {
+					neutralizeSVG(c, matchFile)
 					return c.File(matchFile)
 				}
 			}

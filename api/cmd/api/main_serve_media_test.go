@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"image"
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,8 +97,8 @@ func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo 
 	}
 	if err := handler(c); err != nil {
 		// Echo error handlers write the response; record the code.
-		he, ok := err.(*echo.HTTPError)
-		if ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			rec.Code = he.Code
 		}
 	}
@@ -256,7 +258,8 @@ func serveThumbRequest(t *testing.T, storagePath string, repo repository.Reposit
 	c.SetParamValues(year, month, filename)
 	c.Set("user", struct{ ID int64 }{ID: 1}) // authenticated
 	if err := handler(c); err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			rec.Code = he.Code
 		}
 	}
@@ -336,7 +339,8 @@ func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Re
 	c.SetParamValues(year, month, filename)
 	c.Set("user", struct{ ID int64 }{ID: 1})
 	if err := handler(c); err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			rec.Code = he.Code
 		}
 	}
@@ -468,5 +472,65 @@ func TestServeSimplifiedMedia_ChecksumGlobDBLookupFail(t *testing.T) {
 	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "missing_12345678.jpg", false)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404 because file not in DB, got %d", rec.Code)
+	}
+}
+
+// Checksum-named media is content-addressed, so it is cacheable forever;
+// non-checksum names keep the short revalidating TTL (asserted above).
+// See point-perf-immutable-cache-headers.
+func TestServeSimplifiedMedia_ChecksumNamed_ImmutableCacheControl(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "photo_89017c29.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo_89017c29.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo_89017c29.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("expected Cache-Control: %q, got %q", immutableCacheControl, cc)
+	}
+}
+
+// Private media never gets the immutable treatment, even when checksum-named.
+func TestServeSimplifiedMedia_ChecksumNamedPrivate_StaysNoStore(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPrivateMedia(t, repo, "2024", "01", "photo_89017c29.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo_89017c29.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo_89017c29.jpg", true)
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("expected Cache-Control: private, no-store, got %q", cc)
+	}
+}
+
+// Serving an SVG must lock the response down independently of the site-wide
+// CSP, so a regression in the global policy cannot turn a stored file into
+// stored XSS. See point-sec-svg-upload-xss.
+func TestServeSimplifiedMedia_SVGIsNeutralized(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "logo.svg")
+	makeMediaFile(t, storage, "2024", "01", "logo.svg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "logo.svg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	csp := rec.Header().Get("Content-Security-Policy")
+	for _, want := range []string{"default-src 'none'", "sandbox"} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("SVG response CSP missing %q; got %q", want, csp)
+		}
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("SVG response is missing nosniff")
+	}
+}
+
+// Non-SVG media must not pick up the sandbox policy.
+func TestServeSimplifiedMedia_NonSVGKeepsGlobalCSP(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "photo.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo.jpg", false)
+	if csp := rec.Header().Get("Content-Security-Policy"); csp != "" {
+		t.Errorf("non-SVG media should not set its own CSP, got %q", csp)
 	}
 }

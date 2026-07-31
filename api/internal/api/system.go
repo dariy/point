@@ -18,8 +18,10 @@ import (
 	"syscall"
 	"time"
 
+	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+	"point-api/internal/utils"
 
 	"github.com/labstack/echo/v4"
 )
@@ -43,6 +45,62 @@ type SystemHandler struct {
 	dataPath        string
 	logPath         string
 	appVersion      string
+	// health is the background-job outcome registry surfaced by GetHealth.
+	// Nil is valid: the endpoint then reports no jobs.
+	health *services.HealthRegistry
+}
+
+// WithHealth attaches the background-job health registry. A setter rather than
+// another constructor parameter — NewSystemHandler already takes ten.
+func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
+	h.health = r
+	return h
+}
+
+// GetHealth reports the last outcome of every background job: the scheduled
+// tasks, Instagram cross-posts and the comments sidecar.
+//
+// This is the whole of Point's runtime observability, and deliberately so —
+// a self-hosted single binary does not want a Prometheus. The question it
+// answers is "is anything quietly broken", which nothing short of reading the
+// request log could answer before.
+//
+// The data is per process: a restart clears it, and jobs that have not run yet
+// in this process are absent rather than reported as failing.
+func (h *SystemHandler) GetHealth(c echo.Context) error {
+	tasks := h.health.Snapshot()
+	out := make([]map[string]any, 0, len(tasks))
+	degraded := 0
+	for _, t := range tasks {
+		healthy := t.Healthy()
+		if !healthy {
+			degraded++
+		}
+		entry := map[string]any{
+			"name":     t.Name,
+			"healthy":  healthy,
+			"runs":     t.Runs,
+			"failures": t.Failures,
+		}
+		// Zero times are omitted rather than serialized as year 1 — "never"
+		// and "at the epoch" must not look the same in the UI.
+		if !t.LastRun.IsZero() {
+			entry["last_run"] = t.LastRun
+		}
+		if !t.LastSuccess.IsZero() {
+			entry["last_success"] = t.LastSuccess
+		}
+		if t.LastError != "" {
+			entry["last_error"] = t.LastError
+			entry["last_error_at"] = t.LastErrorAt
+		}
+		out = append(out, entry)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"tasks":    out,
+		"degraded": degraded,
+		"uptime":   int64(time.Since(startTime).Seconds()),
+	})
 }
 
 var startTime = time.Now()
@@ -169,7 +227,7 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 
 	stats, err := h.repo.GetSystemStats(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -183,33 +241,59 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 	})
 }
 
+// readLogLines returns every line of one log file. A file that vanished since
+// it was listed (rotated out mid-request) reads as empty rather than an error.
+func readLogLines(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	var out []string
+	scanner := bufio.NewScanner(f)
+	// JSON records with a long error string exceed bufio's 64KB default and
+	// would otherwise abort the scan.
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		out = append(out, scanner.Text())
+	}
+	return out, scanner.Err()
+}
+
 func (h *SystemHandler) GetLogs(c echo.Context) error {
 	lines, _ := strconv.Atoi(c.QueryParam("lines"))
 	if lines < 1 || lines > 1000 {
 		lines = 100
 	}
 
-	f, err := os.Open(h.logPath)
-	if err != nil {
-		// Log file doesn't exist yet — return empty list
-		return c.JSON(http.StatusOK, []string{})
-	}
-	defer func() {
-		_ = f.Close()
-	}()
+	// Read the active file plus its rotations, newest first, stopping as soon
+	// as enough lines are in hand. Without this a request for 1000 lines right
+	// after a rotation would return only the handful written since.
+	files := utils.RotatedLogFiles(h.logPath, utils.LogMaxBackups)
 
 	var all []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		all = append(all, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read logs")
+	for _, path := range files {
+		chunk, err := readLogLines(path)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to read logs")
+		}
+		// Older file: its lines precede everything collected so far.
+		all = append(chunk, all...)
+		if len(all) >= lines {
+			break
+		}
 	}
 
 	// Return last N lines
 	if len(all) > lines {
 		all = all[len(all)-lines:]
+	}
+	if all == nil {
+		all = []string{}
 	}
 
 	return c.JSON(http.StatusOK, all)
@@ -226,7 +310,7 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 	// Warn synchronously if the archive wouldn't fit, so the user finds out now
 	// rather than via a silent background failure.
 	if err := h.systemService.CheckBackupSpace(); err != nil {
-		return echo.NewHTTPError(http.StatusInsufficientStorage, err.Error())
+		return MapError(err)
 	}
 
 	// Read retention before detaching from the request context.
@@ -263,7 +347,7 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 		if os.IsNotExist(err) {
 			return c.JSON(http.StatusOK, []interface{}{})
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	type backupInfo struct {
@@ -324,13 +408,13 @@ func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+		return MapError(err)
 	}
 
 	// Restoring overwrites the live SQLite file, which can't be done safely while
 	// the server holds it open, so we schedule it and apply it at the next startup.
 	if err := h.systemService.ScheduleRestore(filename); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
@@ -362,7 +446,7 @@ func (h *SystemHandler) RestartServer(c echo.Context) error {
 func (h *SystemHandler) GetMigrations(c echo.Context) error {
 	migrations, err := h.repo.GetMigrations(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, migrations)
 }
@@ -374,7 +458,7 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 	// to ensure all media referenced in public posts is accessible to guests.
 	updated, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -387,7 +471,7 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
 	changed, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status":  "success",
@@ -401,7 +485,7 @@ func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
 func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
 	issues, scanned, err := h.postService.AuditPublicPostLinks(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"issues":  issues,
@@ -412,7 +496,7 @@ func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
 func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
 	result, err := h.tagService.UpdateMissingCoords(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -428,7 +512,7 @@ func (h *SystemHandler) DeleteBackup(c echo.Context) error {
 		if os.IsNotExist(err) {
 			return echo.NewHTTPError(http.StatusNotFound, "backup not found")
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	_ = os.Remove(backupPath + ".sha256") // drop the orphaned checksum sidecar
 
@@ -481,7 +565,7 @@ func (h *SystemHandler) AuthorizeBackupDownload(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 	if err := h.authService.VerifyUserPassword(ctx, userID, req.CurrentPassword); err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "current password incorrect")
+		return MapError(err)
 	}
 
 	backupPath := filepath.Join(h.dataPath, "backups", filename)
@@ -617,6 +701,13 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	var imported, skipped int
 	errors := []string{}
 
+	// The walk collects and de-duplicates; the import runs on a pool. Same
+	// two-phase split as ImportSelectedPhotos, and for the same reasons:
+	// thumbnailing is the CPU-bound part, and settling duplicates up front
+	// keeps two identical files in one scan from both being imported.
+	var toImport []string
+	seen := map[string]bool{}
+
 	_ = filepath.WalkDir(importPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -643,18 +734,25 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 		checksum := hex.EncodeToString(h256.Sum(nil))
 
 		// Skip duplicates
-		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil {
+		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil || seen[checksum] {
 			skipped++
 			return nil
 		}
-
-		if _, importErr := h.mediaService.ImportFromPath(ctx, path); importErr != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), importErr))
-			return nil
-		}
-		imported++
+		seen[checksum] = true
+		toImport = append(toImport, path)
 		return nil
 	})
+
+	outcomes := services.ParallelImport(ctx, toImport, func(ctx context.Context, path string) (models.Medium, error) {
+		return h.mediaService.ImportFromPath(ctx, path)
+	})
+	for i, o := range outcomes {
+		if o.Err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(toImport[i]), o.Err))
+			continue
+		}
+		imported++
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"imported": imported,
@@ -666,7 +764,7 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
 	info, err := h.systemService.GetDiskInfo()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, info)
 }
@@ -713,7 +811,7 @@ func (h *SystemHandler) GetPhotoLibraryContents(c echo.Context) error {
 
 	entries, err := os.ReadDir(targetPath)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	folders := []string{}
@@ -763,6 +861,18 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 	errors := []string{}
 	importedItems := []map[string]interface{}{}
 
+	// Two phases. Resolving and checksumming is I/O-bound and settles which
+	// files are duplicates; importing is CPU-bound (thumbnailing) and is what
+	// benefits from a pool. Doing the duplicate check up front also closes a
+	// race the sequential loop never had: two identical files in one batch
+	// would otherwise both miss the DB lookup and both be imported.
+	type candidate struct {
+		absPath string
+		relPath string
+	}
+	var candidates []candidate
+	seen := map[string]bool{}
+
 	for _, relPath := range req.Paths {
 		absPath, joinErr := safeJoin(libraryRoot, relPath)
 		if joinErr != nil {
@@ -780,17 +890,23 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 		_ = f.Close()
 		checksum := hex.EncodeToString(h256.Sum(nil))
 
-		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil {
+		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil || seen[checksum] {
 			skipped++
 			continue
 		}
+		seen[checksum] = true
+		candidates = append(candidates, candidate{absPath: absPath, relPath: relPath})
+	}
 
-		m, importErr := h.mediaService.ImportFromPath(ctx, absPath)
-		if importErr != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(relPath), importErr))
+	outcomes := services.ParallelImport(ctx, candidates, func(ctx context.Context, cnd candidate) (models.Medium, error) {
+		return h.mediaService.ImportFromPath(ctx, cnd.absPath)
+	})
+	for i, o := range outcomes {
+		if o.Err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(candidates[i].relPath), o.Err))
 			continue
 		}
-		importedItems = append(importedItems, mediaToResponse(m))
+		importedItems = append(importedItems, mediaToResponse(o.Value))
 		imported++
 	}
 

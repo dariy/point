@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/mail"
 	"strconv"
 	"time"
@@ -64,21 +65,32 @@ func (s *AuthService) Authenticate(ctx context.Context, username, password strin
 		// Equalize timing with the found-user path to avoid leaking which
 		// usernames exist; the result is discarded.
 		_ = VerifyPassword(password, dummyPasswordHash)
-		return models.User{}, errors.New("invalid username or password")
+		return models.User{}, wrapKind(ErrUnauthenticated, errors.New("invalid username or password"))
 	}
 
 	if !VerifyPassword(password, user.PasswordHash) {
-		return models.User{}, errors.New("invalid username or password")
+		return models.User{}, wrapKind(ErrUnauthenticated, errors.New("invalid username or password"))
 	}
 
-	// Upgrade hash to Argon2id if it's still bcrypt
+	// Upgrade hash to Argon2id if it's still bcrypt.
+	//
+	// A failure here is deliberately not fatal: the credential was already
+	// verified, so the login succeeds either way and the stored hash simply
+	// stays bcrypt until the next attempt. It is logged rather than swallowed
+	// because a rehash that fails on every login never self-heals, and the
+	// only symptom otherwise is a hash that silently never migrates.
 	if IsBcryptHash(user.PasswordHash) {
 		newHash, err := HashPassword(password)
-		if err == nil {
-			_ = s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
-				PasswordHash: newHash,
-				ID:           user.ID,
-			})
+		if err != nil {
+			slog.Warn("bcrypt->Argon2id rehash failed to hash; stored hash stays bcrypt",
+				"user_id", user.ID, "error", err)
+		} else if err := s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
+			PasswordHash: newHash,
+			ID:           user.ID,
+		}); err != nil {
+			slog.Warn("bcrypt->Argon2id rehash failed to persist; stored hash stays bcrypt",
+				"user_id", user.ID, "error", err)
+		} else {
 			user.PasswordHash = newHash
 		}
 	}
@@ -113,7 +125,7 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (models
 	// Check expiry
 	if time.Now().After(session.ExpiresAt) {
 		_ = s.repo.DeleteSession(ctx, models.DeleteSessionParams{ID: session.ID, UserID: session.UserID})
-		return models.GetSessionByTokenRow{}, errors.New("session expired")
+		return models.GetSessionByTokenRow{}, wrapKind(ErrUnauthenticated, errors.New("session expired"))
 	}
 
 	// Update activity
@@ -191,18 +203,18 @@ func (s *AuthService) ValidatePasswordResetToken(ctx context.Context, token stri
 	tokenHash := HashToken(token)
 	secret, err := s.repo.GetSecret(ctx, "pw_reset:"+tokenHash)
 	if err != nil {
-		return 0, errors.New("invalid or expired reset token")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("invalid or expired reset token"))
 	}
 
 	var p resetTokenPayload
 	if err := json.Unmarshal([]byte(secret.Value.String), &p); err != nil {
-		return 0, errors.New("invalid reset token")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("invalid reset token"))
 	}
 
 	expiresAt, err := time.Parse(time.RFC3339, p.ExpiresAt)
 	if err != nil || time.Now().After(expiresAt) {
 		_ = s.repo.DeleteSecret(ctx, "pw_reset:"+tokenHash)
-		return 0, errors.New("reset token has expired")
+		return 0, wrapKind(ErrUnauthenticated, errors.New("reset token has expired"))
 	}
 
 	return p.UserID, nil
@@ -245,13 +257,19 @@ func (s *AuthService) GetUserByID(ctx context.Context, userID int64) (models.Use
 // gate sensitive actions (changing credentials, exporting/importing a full
 // backup). currentPassword is the SHA-256-hex the frontend sends, exactly as at
 // login — never plaintext. Returns nil when it matches.
+// ErrPasswordIncorrect is a failed re-authentication challenge: the caller is
+// already signed in, so this is ErrForbidden (403) rather than
+// ErrUnauthenticated (401), matching what the handlers answered before the
+// taxonomy existed.
+var ErrPasswordIncorrect = kindSentinel(ErrForbidden, "current password incorrect")
+
 func (s *AuthService) VerifyUserPassword(ctx context.Context, userID int64, currentPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
 		return err
 	}
 	if !VerifyPassword(currentPassword, user.PasswordHash) {
-		return errors.New("current password incorrect")
+		return ErrPasswordIncorrect
 	}
 	return nil
 }
@@ -290,7 +308,7 @@ func (s *AuthService) ChangeEmail(ctx context.Context, userID int64, currentPass
 
 	addr, err := mail.ParseAddress(newEmail)
 	if err != nil || addr.Address != newEmail {
-		return errors.New("invalid email address")
+		return wrapKind(ErrInvalidInput, errors.New("invalid email address"))
 	}
 
 	return s.repo.UpdateUserEmail(ctx, models.UpdateUserEmailParams{

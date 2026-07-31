@@ -7,10 +7,9 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	goexif "github.com/rwcarlsen/goexif/exif"
+	exif "github.com/dsoprea/go-exif/v3"
 )
 
 func TestSanitizeEXIFValue(t *testing.T) {
@@ -20,12 +19,23 @@ func TestSanitizeEXIFValue(t *testing.T) {
 	}{
 		{"Canon", "Canon"},
 		{"EOS R5", "EOS R5"},
-		{"Adobe Lightroom 5.7", "Adobe Lightroom 57"},
-		{"2023:05:15 12:30:00", "20230515 123000"},
+		// Punctuation EXIF values genuinely carry is preserved. These used to
+		// be mangled — "1/200" became "1200", so the site rendered a 1/200s
+		// exposure as "1200 s". See point-quickstart-ci-exif-dedup.
+		{"Adobe Lightroom 5.7", "Adobe Lightroom 5.7"},
+		{"2023:05:15 12:30:00", "2023:05:15 12:30:00"},
+		{"1/200", "1/200"},
+		{"f/2.8", "f/2.8"},
+		{"EF24-70mm f/2.8L II USM", "EF24-70mm f/2.8L II USM"},
+		{"+1.5", "+1.5"},
+		{"Nikon D850 (v1.2)", "Nikon D850 (v1.2)"},
+		// Anything that could escape a JPEG header or a JSON/HTML context
+		// still goes.
 		{"Nikon <script>", "Nikon script"},
-		{"f/2.8", "f28"},
+		{`bad"quote`, "badquote"},
+		{`back\slash`, "backslash"},
 		{"", ""},
-		{"   ", "   "},
+		{"   ", ""},
 		{"αβγ", ""},
 		{"Hello\nWorld", "HelloWorld"},
 	}
@@ -72,31 +82,17 @@ func TestWriteEXIFToFile_JPEG_WritesAndReads(t *testing.T) {
 		t.Fatalf("writeEXIFToFile: %v", err)
 	}
 
-	f, err := os.Open(jpegPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = f.Close() }()
-	x, err := goexif.Decode(f)
-	if err != nil {
-		t.Fatalf("goexif.Decode after write: %v", err)
-	}
+	tags := readEXIFTags(t, jpegPath)
 
-	check := func(tag goexif.FieldName, want string) {
+	check := func(tag, want string) {
 		t.Helper()
-		val, err := x.Get(tag)
-		if err != nil {
-			t.Errorf("tag %s not found: %v", tag, err)
-			return
-		}
-		got := strings.Trim(val.String(), "\"")
-		if got != want {
+		if got := tags[tag]; got != want {
 			t.Errorf("tag %s = %q; want %q", tag, got, want)
 		}
 	}
-	check(goexif.Make, "TestCamera")
-	check(goexif.Model, "Model X")
-	check(goexif.Software, "TestSoft 10")
+	check("Make", "TestCamera")
+	check("Model", "Model X")
+	check("Software", "TestSoft 10")
 }
 
 func TestWriteEXIFToFile_JPEG_EmptyFields(t *testing.T) {
@@ -132,14 +128,7 @@ func TestWriteEXIFToFile_JPEG_SkipsNumericFields(t *testing.T) {
 		t.Fatalf("numeric fields: %v", err)
 	}
 
-	f, _ := os.Open(jpegPath)
-	defer func() { _ = f.Close() }()
-	x, err := goexif.Decode(f)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	val, _ := x.Get(goexif.Make)
-	if got := strings.Trim(val.String(), "\""); got != "OnlyString" {
+	if got := readEXIFTags(t, jpegPath)["Make"]; got != "OnlyString" {
 		t.Errorf("Make = %q; want OnlyString", got)
 	}
 }
@@ -179,4 +168,33 @@ func TestWriteEXIFToFile_DateTimeOriginal(t *testing.T) {
 	if err := writeEXIFToFile(jpegPath, "image/jpeg", fields); err != nil {
 		t.Fatalf("writeEXIFToFile with DateTimeOriginal: %v", err)
 	}
+}
+
+// readEXIFTags reads the given EXIF string tags out of a JPEG on disk, using
+// the same library the writer uses (the second EXIF dependency this codebase
+// used to carry was dropped — see point-quickstart-ci-exif-dedup).
+func readEXIFTags(t *testing.T, path string) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	rawExif, err := exif.SearchAndExtractExif(data)
+	if err != nil {
+		t.Fatalf("no EXIF in %s: %v", path, err)
+	}
+	entries, _, err := exif.GetFlatExifData(rawExif, nil)
+	if err != nil {
+		t.Fatalf("parse EXIF in %s: %v", path, err)
+	}
+	out := map[string]string{}
+	for _, e := range entries {
+		if _, seen := out[e.TagName]; seen {
+			continue
+		}
+		if v := formatEXIFValue(e.Value); v != "" {
+			out[e.TagName] = v
+		}
+	}
+	return out
 }

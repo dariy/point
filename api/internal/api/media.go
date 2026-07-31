@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"point-api/internal/services"
 
@@ -51,7 +50,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 	// image/video/audio format (e.g. an HTML page renamed to .jpg).
 	mimeType, err := services.DetectMediaType(content, file.Header.Get("Content-Type"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnsupportedMediaType, "unsupported file type")
+		return echo.NewHTTPError(http.StatusUnsupportedMediaType, uploadRejectionMessage(err))
 	}
 
 	altText := c.FormValue("alt_text")
@@ -74,7 +73,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 		PostID:   postID,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusCreated, mediaToResponse(media))
@@ -92,7 +91,7 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		Folder:   folder,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -117,7 +116,7 @@ func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
 	fileType := c.QueryParam("file_type")
 	folders, err := h.mediaService.GetMediaFolders(c.Request().Context(), fileType)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	items := make([]map[string]interface{}, 0, len(folders))
@@ -132,14 +131,14 @@ func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
 }
 
 func (h *MediaHandler) GetMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	media, err := h.mediaService.GetMediaByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, mediaToResponse(media))
@@ -153,9 +152,9 @@ type UpdateMediaRequest struct {
 }
 
 func (h *MediaHandler) UpdateMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req UpdateMediaRequest
@@ -171,23 +170,20 @@ func (h *MediaHandler) UpdateMedia(c echo.Context) error {
 		Metadata: req.Metadata,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
 func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 	media, err := h.mediaService.ReextractEXIF(c.Request().Context(), id)
 	if err != nil {
-		if strings.Contains(err.Error(), "no rows") {
-			return echo.NewHTTPError(http.StatusNotFound, "media not found")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
@@ -197,9 +193,9 @@ func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
 type UpdateEXIFRequest map[string]string
 
 func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req UpdateEXIFRequest
@@ -212,32 +208,20 @@ func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
 		Fields: req,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "disallowed characters") {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-		}
-		if strings.Contains(err.Error(), "no rows") {
-			return echo.NewHTTPError(http.StatusNotFound, "media not found")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
 func (h *MediaHandler) RevertEXIF(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	media, err := h.mediaService.RevertEXIF(c.Request().Context(), id)
 	if err != nil {
-		if strings.Contains(err.Error(), "no rows") {
-			return echo.NewHTTPError(http.StatusNotFound, "media not found")
-		}
-		if strings.Contains(err.Error(), "no original metadata") {
-			return echo.NewHTTPError(http.StatusConflict, err.Error())
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
@@ -247,7 +231,7 @@ func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
 
 	media, total, err := h.mediaService.ListOrphanedMedia(c.Request().Context(), page, perPage)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -284,7 +268,7 @@ func (h *MediaHandler) BulkDeleteMedia(c echo.Context) error {
 
 	count, err := h.mediaService.BulkDeleteMedia(c.Request().Context(), req.IDs)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -294,14 +278,14 @@ func (h *MediaHandler) BulkDeleteMedia(c echo.Context) error {
 }
 
 func (h *MediaHandler) DeleteMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	err = h.mediaService.DeleteMedia(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -343,7 +327,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 
 		mimeType, err := services.DetectMediaType(content, fh.Header.Get("Content-Type"))
 		if err != nil {
-			failed = append(failed, map[string]string{"filename": fh.Filename, "error": "unsupported file type"})
+			failed = append(failed, map[string]string{"filename": fh.Filename, "error": uploadRejectionMessage(err)})
 			continue
 		}
 
@@ -371,7 +355,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 func (h *MediaHandler) GetStorageStats(c echo.Context) error {
 	stats, err := h.mediaService.GetStorageStats(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, stats)
 }
@@ -381,9 +365,9 @@ type RenameMediaRequest struct {
 }
 
 func (h *MediaHandler) RenameMedia(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	var req RenameMediaRequest
@@ -399,7 +383,7 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 
 	media, err := h.mediaService.RenameMedia(c.Request().Context(), id, req.NewFilename)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, mediaToResponse(media))
@@ -408,7 +392,7 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
 	count, freed, err := h.mediaService.CleanupOrphaned(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -424,7 +408,7 @@ func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
 
 	stats, err := h.mediaService.RebuildThumbnails(c.Request().Context(), onlyMissing)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -454,7 +438,7 @@ func (h *MediaHandler) AnalyzeImage(c echo.Context) error {
 
 	analysis, err := h.mediaService.AnalyzeImage(c.Request().Context(), content, file.Filename, file.Header.Get("Content-Type"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, analysis)
@@ -470,31 +454,33 @@ func (h *MediaHandler) AnalyzeImageByPath(c echo.Context) error {
 
 	analysis, err := h.mediaService.AnalyzeMediaByPath(c.Request().Context(), req.Path)
 	if err != nil {
-		if errors.Is(err, services.ErrNotAnImage) {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, analysis)
 }
 
 func (h *MediaHandler) AnalyzeImageByID(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	analysis, err := h.mediaService.AnalyzeMediaByID(c.Request().Context(), id)
 	if err != nil {
-		if errors.Is(err, services.ErrMediaNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, err.Error())
-		}
-		if errors.Is(err, services.ErrNotAnImage) {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, analysis)
+}
+
+// uploadRejectionMessage turns a DetectMediaType failure into something an
+// admin can act on. An SVG rejected for carrying a script is a different
+// problem from a .exe renamed to .jpg, and "unsupported file type" describes
+// only the second.
+func uploadRejectionMessage(err error) string {
+	if errors.Is(err, services.ErrActiveSVGContent) {
+		return err.Error()
+	}
+	return "unsupported file type"
 }

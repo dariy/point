@@ -27,6 +27,7 @@ import { ViewContext } from '../../utils/viewContext.js';
 import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.js';
 import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.js';
+import { immersiveNavTargets } from '../../utils/immersiveNav.js';
 
 const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
 
@@ -116,13 +117,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
       </p>`;
 
     // Keep the footer's ‹ left / right › links pointing at the same posts the
-    // on-photo nav panels do, under either reading direction (the
-    // immersive_nav_direction setting). The left nav panel ('back') crosses to
-    // feedMode ? navPrev : navNext; the right panel ('fwd') to the other — so
-    // mirror that here instead of hard-coding prev-left / next-right.
-    const feedMode = settings.immersive_nav_direction === 'feed';
-    const leftPost = feedMode ? prev : next;
-    const rightPost = feedMode ? next : prev;
+    // on-photo nav panels do, under either reading direction — same resolver,
+    // so they can't drift apart ('back' is the left panel, 'fwd' the right).
+    const { back: leftPost, fwd: rightPost } = immersiveNavTargets(settings, prev, next);
 
     const navLink = (postObj, side) => {
       if (!postObj) return '<span></span>';
@@ -238,6 +235,51 @@ export class ImmersiveSheetViewer extends MediaViewer {
       const current = store.get('theme') || 'auto';
       store.set('theme', current === 'dark' ? 'light' : 'dark');
     });
+  }
+
+  // ── Keyboard → sheet ────────────────────────────────────────────────────────
+
+  /**
+   * Up/down drive the sheet the same way the vertical swipe does: Up opens it,
+   * Down collapses it — falling through to MediaViewer's close only once the
+   * sheet is already closed, so Down never skips a state. Escape likewise peels
+   * off one layer at a time. While the sheet is open the same keys scroll its
+   * body first; the sheet scroller isn't focusable, so scroll it by hand rather
+   * than hoping the browser's default lands on it.
+   */
+  _onKeyDown(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (this._zoomState.scale > 1) return super._onKeyDown(e);
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!this._sheetOpen) return this._openSheet();
+      return this._scrollSheet(-1);
+    }
+    if (e.key === 'ArrowDown' && this._sheetOpen) {
+      e.preventDefault();
+      if (!this._scrollSheet(1)) this._closeSheet();
+      return;
+    }
+    if (e.key === 'Escape' && this._sheetOpen) {
+      e.preventDefault();
+      return this._closeSheet();
+    }
+    super._onKeyDown(e);
+  }
+
+  /**
+   * Scroll the open sheet one step in `dir` (-1 up, 1 down).
+   * Returns false when it was already at that end, so the caller can fall
+   * through to collapsing the sheet.
+   */
+  _scrollSheet(dir) {
+    const el = this.$('.immersive-sheet-scroll');
+    if (!el) return false;
+    const room = dir < 0 ? el.scrollTop : el.scrollHeight - el.clientHeight - el.scrollTop;
+    if (room <= 1) return false;
+    el.scrollBy({ top: dir * Math.max(80, el.clientHeight * 0.4), behavior: 'smooth' });
+    return true;
   }
 
   /** Measure how far the stage must travel to fully reveal the sheet. */

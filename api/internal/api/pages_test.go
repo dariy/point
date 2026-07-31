@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -525,7 +526,8 @@ func TestPagesHandler_TagsModuleDisabled404(t *testing.T) {
 	e := echo.New()
 	is404 := func(t *testing.T, err error) {
 		t.Helper()
-		he, ok := err.(*echo.HTTPError)
+		var he *echo.HTTPError
+		ok := errors.As(err, &he)
 		if !ok || he.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %v", err)
 		}

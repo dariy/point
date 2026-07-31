@@ -2,7 +2,9 @@ import { Component } from '../../components/Component.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
+import {
+  showCrumbDropdown, hideFlyout, tagHref, attachFlyoutTrigger, HOVER_OPEN_MS,
+} from '../../utils/tags.js';
 
 export class Breadcrumbs extends Component {
   render() {
@@ -163,9 +165,6 @@ export class Breadcrumbs extends Component {
   afterRender() {
     const { navTags = [], group } = this.props;
 
-    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-    let hoverTimer = null;
-
     // The trail is "hidden" when the header has folded ancestors into "…" or
     // ellipsized the current crumb. Only then does the dropdown need to carry
     // the ancestor path — on a wide header the trail is already fully visible,
@@ -179,35 +178,10 @@ export class Breadcrumbs extends Component {
     // the drill-down list. The final spec is assembled per open.
     const attachCrumbDropdown = (el, children, buildPath = null) => {
       if (!children.length && !buildPath) return;
-      const openSpec = () => ({
+      attachFlyoutTrigger(el, () => ({
         path: (buildPath && trailHidden()) ? buildPath() : [],
         children,
-      });
-      if (canHover) {
-        el.addEventListener('mouseenter', () => {
-          clearTimeout(hoverTimer);
-          hoverTimer = setTimeout(
-            () => showCrumbDropdown(el, openSpec(), navigate, group),
-            180,
-          );
-        });
-        el.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
-        el.addEventListener('click', () => { clearTimeout(hoverTimer); hideFlyout(); });
-      } else {
-        el.addEventListener('click', (e) => {
-          if (el.classList.contains('is-flyout-open')) {
-            const href = el.getAttribute('href');
-            if (href) {
-              hideFlyout();
-              navigate(href);
-              e.preventDefault();
-              return;
-            }
-          }
-          e.preventDefault();
-          showCrumbDropdown(el, openSpec(), navigate, group);
-        });
-      }
+      }), navigate, group);
     };
 
     const breadcrumbSlugs = (this.props.breadcrumb || [])
@@ -246,7 +220,18 @@ export class Breadcrumbs extends Component {
       // Marker for the CSS affordance: a "reveal trail" chevron shows on this
       // crumb only while the header is actually hiding ancestors (see header.css).
       lastCrumbCurrent.classList.add('crumb-trail-toggle');
+      let trailTimer = null;
+      lastCrumbCurrent.addEventListener('pointerenter', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        clearTimeout(trailTimer);
+        trailTimer = setTimeout(() => {
+          if (!trailHidden()) return;
+          showCrumbDropdown(lastCrumbCurrent, { path }, navigate, group);
+        }, HOVER_OPEN_MS);
+      });
+      lastCrumbCurrent.addEventListener('pointerleave', () => clearTimeout(trailTimer));
       lastCrumbCurrent.addEventListener('click', (e) => {
+        clearTimeout(trailTimer);
         if (!trailHidden()) return;
         e.preventDefault();
         e.stopPropagation();

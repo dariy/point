@@ -76,6 +76,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      # Required to publish the Trivy image-scan SARIF to code scanning.
+      security-events: write
 
     steps:
       - name: Checkout
@@ -137,6 +139,30 @@ jobs:
           image: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}
           artifact-name: point-sbom.spdx.json
           output-format: spdx-json
+
+      # Scan the image we just pushed for known CVEs in OS packages and Go
+      # dependencies. The SBOM records what shipped; this says whether any of
+      # it is known-vulnerable. Findings are uploaded to code scanning so they
+      # land next to the CodeQL results rather than only in a log.
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          # Report, don't gate: a release must not be blocked by a CVE
+          # disclosed in a base-image package between build and publish, with
+          # no fix available. The findings are still surfaced below.
+          exit-code: "0"
+          ignore-unfixed: true
+
+      - name: Upload scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
 
       - name: Sign images
         env:

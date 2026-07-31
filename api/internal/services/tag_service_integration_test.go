@@ -4,13 +4,13 @@ package services
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"point-api/internal/models"
 
-	"github.com/labstack/echo/v4"
 )
 
 func TestTagService_CRUD(t *testing.T) {
@@ -132,10 +132,24 @@ func TestTagService_TagCloud(t *testing.T) {
 		)
 	}
 	var p1, p2, p3 int64
-	rows, _ := repo.DB().Query(`SELECT id FROM posts ORDER BY id LIMIT 3`)
+	rows, err := repo.DB().Query(`SELECT id FROM posts ORDER BY id LIMIT 3`)
+	if err != nil {
+		t.Fatalf("query post ids: %v", err)
+	}
 	ids := []*int64{&p1, &p2, &p3}
-	for i := 0; rows.Next(); i++ {
-		_ = rows.Scan(ids[i])
+	n := 0
+	for ; rows.Next(); n++ {
+		if err := rows.Scan(ids[n]); err != nil {
+			t.Fatalf("scan post id: %v", err)
+		}
+	}
+	// A short read would leave p2/p3 at zero and the assertions below would
+	// blame GetTagCloud for counts the fixture never actually set up.
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate post ids: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("fixture: expected 3 posts, got %d", n)
 	}
 	_ = rows.Close()
 	// p1, p2 → Tag 1 (count=2); p3 → Tag 2 (count=1)
@@ -941,13 +955,12 @@ func TestTagService_CycleRejection(t *testing.T) {
 	err := service.SetTagParents(ctx, tagA.ID, []int64{tagC.ID})
 	if err == nil {
 		t.Error("expected error when creating cycle C -> A -> B -> C, but got nil")
+	} else if !errors.Is(err, ErrConflict) {
+		// The service reports the kind; turning that into 409 is the mapper's
+		// job (see api.MapError), not something a service test should assert.
+		t.Errorf("expected ErrConflict, got %v", err)
 	} else {
-		he, ok := err.(*echo.HTTPError)
-		if !ok || he.Code != http.StatusConflict {
-			t.Errorf("expected 409 Conflict, got %v", err)
-		} else {
-			t.Logf("Got expected error (Parents): %v", he.Message)
-		}
+		t.Logf("Got expected error (Parents): %v", err)
 	}
 
 	// Try to add A -> C as a child of C (should fail)
@@ -955,25 +968,23 @@ func TestTagService_CycleRejection(t *testing.T) {
 	err = service.SetTagChildren(ctx, tagC.ID, []int64{tagA.ID})
 	if err == nil {
 		t.Error("expected error when creating cycle A -> C -> B -> A, but got nil")
+	} else if !errors.Is(err, ErrConflict) {
+		// The service reports the kind; turning that into 409 is the mapper's
+		// job (see api.MapError), not something a service test should assert.
+		t.Errorf("expected ErrConflict, got %v", err)
 	} else {
-		he, ok := err.(*echo.HTTPError)
-		if !ok || he.Code != http.StatusConflict {
-			t.Errorf("expected 409 Conflict, got %v", err)
-		} else {
-			t.Logf("Got expected error (Children): %v", he.Message)
-		}
+		t.Logf("Got expected error (Children): %v", err)
 	}
 
 	// Try direct AddTagRelationship
 	err = service.AddTagRelationship(ctx, tagC.ID, tagA.ID)
 	if err == nil {
 		t.Error("expected error when creating cycle C -> A -> B -> C via AddTagRelationship, but got nil")
+	} else if !errors.Is(err, ErrConflict) {
+		// The service reports the kind; turning that into 409 is the mapper's
+		// job (see api.MapError), not something a service test should assert.
+		t.Errorf("expected ErrConflict, got %v", err)
 	} else {
-		he, ok := err.(*echo.HTTPError)
-		if !ok || he.Code != http.StatusConflict {
-			t.Errorf("expected 409 Conflict, got %v", err)
-		} else {
-			t.Logf("Got expected error (AddTagRelationship): %v", he.Message)
-		}
+		t.Logf("Got expected error (AddTagRelationship): %v", err)
 	}
 }

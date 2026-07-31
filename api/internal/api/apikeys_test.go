@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -87,7 +88,8 @@ func TestApiKeyHandler(t *testing.T) {
 		c, rec := createCtx(http.MethodPost, "/api/auth/api-keys", reqBody)
 
 		err := handler.CreateKey(c)
-		httpErr, ok := err.(*echo.HTTPError)
+		var httpErr *echo.HTTPError
+		ok := errors.As(err, &httpErr)
 		if !ok || httpErr.Code != http.StatusBadRequest {
 			t.Errorf("expected 400 Bad Request, got %v", err)
 		}

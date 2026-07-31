@@ -62,3 +62,24 @@ export function decodeImmersiveHash(hash) {
   }
   return { startIndex, forceImmersive };
 }
+
+/**
+ * Map the API's chronological neighbours onto the viewer's step directions,
+ * under the `immersive_nav_direction` setting. The API's `prev` is the older
+ * post, `next` the newer one; 'back' is the left panel / step below slide 0,
+ * 'fwd' the right panel / step past the last slide (also the slideshow's
+ * advance direction).
+ *
+ *   feed order    — the feed reads newest-first, so forward means older
+ *                   (◁ newer, ▷ older)
+ *   chronological — forward follows the timeline into newer posts
+ *                   (◁ older, ▷ newer)
+ *
+ * Single source of truth: the nav panels, the sheet's footer links and the
+ * slideshow's cross-post skip all read the direction from here, so they can
+ * never disagree about which way is forward.
+ */
+export function immersiveNavTargets(settings, prev, next) {
+  const feedMode = (settings || {}).immersive_nav_direction === "feed";
+  return feedMode ? { back: next, fwd: prev } : { back: prev, fwd: next };
+}
