@@ -145,7 +145,7 @@ jobs:
       # it is known-vulnerable. Findings are uploaded to code scanning so they
       # land next to the CodeQL results rather than only in a log.
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}
           format: sarif
