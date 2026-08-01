@@ -141,6 +141,10 @@ var Registry = []Descriptor{
 	// clients at /mcp. Off by default — it is a powerful remote-control surface
 	// that admins opt into from the Plugins page.
 	{ID: "mcp", Title: "MCP", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
+	// Compares the running build against the upstream git tags and surfaces an
+	// update banner on the dashboard. Toggle it off to stop the (daily, cached)
+	// call out to the GitHub API entirely — the version endpoint then 404s.
+	{ID: "version-check", Title: "Version Check", Type: TypeService, Routes: []string{"/api/system/version"}, DefaultEnabled: true},
 }
 
 // byID indexes Registry for O(1) lookups.

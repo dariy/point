@@ -20,6 +20,9 @@ deployment-*.log
 api/coverage.html
 coverage-frontend.lcov
 api/api*
+# Binaries a bare `go build` drops in api/ (run.sh builds to ./point instead)
+api/point
+api/migrate-paths
 api/cmd/api/cache/
 *.out
 

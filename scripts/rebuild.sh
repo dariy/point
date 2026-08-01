@@ -46,12 +46,12 @@ ENABLE_REMARK42="${ENABLE_REMARK42:-true}"
 if [ "$ENABLE_REMARK42" == "false" ]; then
     IMAGE_TAG="point:dev-slim"
     CONTAINER_NAME="point-test-slim"
-    REMARK42_ARGS=("--build-arg" "WITH_REMARK42=false")
+    IS_SLIM_ARGS=("--build-arg" "IS_SLIM=true")
     REMARK42_ENV_VARS=()
 else
     IMAGE_TAG="point:dev"
     CONTAINER_NAME="point-test"
-    REMARK42_ARGS=()
+    IS_SLIM_ARGS=()
     REMARK42_ENV_VARS=(
         "-e" "TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}"
         "-e" "NOTIFY_TELEGRAM_CHAN=${NOTIFY_TELEGRAM_CHAN:-}"
@@ -73,10 +73,10 @@ podman build $PULL_FLAG \
 podman build $PULL_FLAG \
     --format docker \
     -t "$IMAGE_TAG" \
+    "${IS_SLIM_ARGS[@]}" \
     -f Dockerfile \
     --cache-from point-builder \
     --build-arg "BUILD_VERSION=$DEV_BUILD_VERSION" \
-    "${REMARK42_ARGS[@]}" \
     ..
 
 # Stop and remove existing container to ensure a clean start

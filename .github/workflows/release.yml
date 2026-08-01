@@ -40,7 +40,7 @@ jobs:
       - name: Run Go tests
         run: |
           cd api
-          go test ./... -coverprofile=coverage.txt -covermode=atomic
+          go test -tags=integration ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7
@@ -135,7 +135,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BUILD_VERSION=${{ inputs.tag || github.ref_name }}
-            WITH_REMARK42=${{ matrix.flavor == 'slim' && 'false' || 'true' }}
+            IS_SLIM=${{ matrix.flavor == 'slim' && 'true' || 'false' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

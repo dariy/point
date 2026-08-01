@@ -66,9 +66,9 @@ func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
 // listViews returns the full catalog as views, in registry order,
 // omitting plugins that are not available in the current build/environment.
 func listViews(settings map[string]string) []pluginView {
-	// remark42 is completely disabled in the slim image (WITH_REMARK42=false)
+	// remark42 is completely disabled in the slim image (IS_SLIM=true)
 	// or explicitly turned off in local dev (ENABLE_REMARK42=false).
-	hasRemark42 := os.Getenv("WITH_REMARK42") != "false" && os.Getenv("ENABLE_REMARK42") != "false"
+	hasRemark42 := os.Getenv("IS_SLIM") != "true" && os.Getenv("ENABLE_REMARK42") != "false"
 
 	out := make([]pluginView, 0, len(plugins.Registry))
 	for _, d := range plugins.Registry {

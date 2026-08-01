@@ -60,7 +60,8 @@ All five phases of the original refactor are done.
   `custom-css`, `comments` (remark42), `post-navigation`.
 - **Admin routes** (`Core`): `media-library`, `admin-posts-list`, `admin-home`.
 - **Services**: `instagram`, `ai-analysis`, `passkeys`, `api-keys`, `backups`,
-  `offline-sync`, `rss`, `mcp` (the only `DefaultEnabled: false` service).
+  `offline-sync`, `rss`, `version-check`, `mcp` (the only `DefaultEnabled: false`
+  service).
 
 ## Key architectural decisions
 
