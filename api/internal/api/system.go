@@ -131,7 +131,27 @@ type versionCheckCache struct {
 // GetVersion returns the running version and the latest available version from GitHub.
 // The GitHub response is cached in blog_settings for 24 hours to avoid hammering the API.
 func (h *SystemHandler) GetVersion(c echo.Context) error {
-	ctx := c.Request().Context()
+	return c.JSON(http.StatusOK, h.versionStatus(c.Request().Context(), false))
+}
+
+// CheckVersion is the manual "Check now" behind the Version Check plugin's
+// settings drawer: it ignores the 24h cache and calls GitHub on the spot.
+//
+// The point is verifiability. The cached endpoint answers identically whether
+// the upstream call succeeded a minute ago, failed silently, or never ran at
+// all, so an admin has no way to tell a working check from a dead one. This one
+// moves `checked_at` and reports the fetch error verbatim when there is one.
+func (h *SystemHandler) CheckVersion(c echo.Context) error {
+	return c.JSON(http.StatusOK, h.versionStatus(c.Request().Context(), true))
+}
+
+// versionStatus builds the version payload, refreshing the cached upstream tag
+// when it is missing, older than 24h, or when force is set (manual check).
+//
+// A failed fetch never clears a previously known `latest` — a flaky network
+// must not make the UI claim the running build is current — but it is surfaced
+// as `error` so the caller can say the check itself is broken.
+func (h *SystemHandler) versionStatus(ctx context.Context, force bool) map[string]interface{} {
 	isSlim := os.Getenv("IS_SLIM") == "true"
 	current := h.appVersion
 	if isSlim {
@@ -145,17 +165,20 @@ func (h *SystemHandler) GetVersion(c echo.Context) error {
 		_ = json.Unmarshal([]byte(cacheStr), &cache)
 	}
 
-	// Refresh if cache is missing or stale (>24h).
-	if cache.Latest == "" || time.Since(cache.CheckedAt) > 24*time.Hour {
-		latest, err := fetchLatestGitHubTag()
-		if err == nil {
+	fetchErr := ""
+	fetched := false
+	if force || cache.Latest == "" || time.Since(cache.CheckedAt) > 24*time.Hour {
+		latest, err := fetchLatestTag()
+		if err != nil {
+			fetchErr = err.Error()
+		} else {
+			fetched = true
 			cache.Latest = latest
 			cache.CheckedAt = time.Now()
 			if b, marshalErr := json.Marshal(cache); marshalErr == nil {
 				_ = h.settingsService.SetSetting(ctx, "_version_check_cached", string(b), "string")
 			}
 		}
-		// On fetch failure: keep existing cache.Latest (may be empty string).
 	}
 
 	latest := cache.Latest
@@ -163,13 +186,21 @@ func (h *SystemHandler) GetVersion(c echo.Context) error {
 		latest = withSlimSuffix(latest)
 	}
 
-	updateAvailable := latest != "" && semverGreaterThan(latest, current)
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	out := map[string]interface{}{
 		"current":          current,
 		"latest":           latest,
-		"update_available": updateAvailable,
-	})
+		"update_available": latest != "" && semverGreaterThan(latest, current),
+		// True when this very request reached GitHub, as opposed to answering
+		// from the cache — the difference the manual check exists to show.
+		"fetched": fetched,
+	}
+	if !cache.CheckedAt.IsZero() {
+		out["checked_at"] = cache.CheckedAt
+	}
+	if fetchErr != "" {
+		out["error"] = fetchErr
+	}
+	return out
 }
 
 // withSlimSuffix labels a version as the slim flavour, so what the admin sees
@@ -184,6 +215,10 @@ func withSlimSuffix(v string) string {
 	}
 	return v + "-slim"
 }
+
+// fetchLatestTag is the upstream lookup used by versionStatus, indirected
+// through a var so tests can exercise the caching/error paths without network.
+var fetchLatestTag = fetchLatestGitHubTag
 
 // githubTag is the single field of the GitHub tags API this needs.
 type githubTag struct {

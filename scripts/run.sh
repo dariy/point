@@ -103,7 +103,9 @@ export STORAGE_PATH=${STORAGE_PATH:-data}
 export FRONTEND_DIR=frontend
 export PORT=$PORT
 export HOST=${HOST:-127.0.0.1}
-export APP_VERSION=$DEV_VERSION
+# Normally the per-run dev stamp; an APP_VERSION set by the caller wins, which is
+# how scripts/run-old-version-check.sh makes the build look like an old release.
+export APP_VERSION=${APP_VERSION:-$DEV_VERSION}
 export FRONTEND_DEBUG=$DEBUG
 
 echo "DATABASE_URL: ", $DATABASE_URL

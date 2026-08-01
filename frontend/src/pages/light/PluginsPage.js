@@ -87,6 +87,7 @@ const PLUGIN_SETTINGS = {
   passkeys: { sections: ["passkeys"] },
   "api-keys": { sections: ["api-keys"] },
   "offline-sync": { sections: ["offline-data", "sync-queue"] },
+  "version-check": { sections: ["version-check"] },
   comments: {
     keys: [
       "remark_simple_view",

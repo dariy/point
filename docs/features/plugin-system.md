@@ -63,6 +63,26 @@ All five phases of the original refactor are done.
   `offline-sync`, `rss`, `version-check`, `mcp` (the only `DefaultEnabled: false`
   service).
 
+### Per-plugin settings drawer
+
+`PLUGIN_SETTINGS` in `PluginsPage.js` maps a plugin id to the settings it shows in
+the right-hand drawer (`PluginSettingsPanel.js`): `keys` renders plain settings
+fields saved together through `PUT /api/settings`, `sections` mounts self-contained
+components from `components/light/sections/` (backups, Instagram import, passkeys,
+API keys, offline data, sync queue, version check). Plugins whose configuration is a
+whole page instead deep-link via `SETTINGS_PAGE_PATHS`.
+
+`version-check` is the pattern for a *verifiable* service plugin: the section shows
+the running version, the newest upstream tag and when that answer was obtained, and
+its **Check now** button posts to `/api/system/version/check`, which bypasses the 24h
+cache and reports `fetched` plus the upstream `error` verbatim. Without it, a
+plugin whose only visible output is an absent banner cannot be told apart from a
+broken one. Failed checks never clear the last known `latest` — a flaky network must
+not turn "update available" into "you're up to date". Exercising the update paths
+locally needs a semver version to compare (a dev build's `dev-…` stamp never looks
+out of date): `scripts/run-old-version-check.sh` runs the dev server pinned to an
+old release for exactly that.
+
 ## Key architectural decisions
 
 1. **Server-driven manifest, not a client plugin table** — the only design that satisfies
