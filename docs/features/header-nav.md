@@ -43,6 +43,25 @@ rest live under "More ▾". Items with children get breadcrumb-style dropdowns:
 hover-with-intent on fine pointers, tap-to-toggle on coarse. There are no
 hover-only surfaces.
 
+## The site title is a crumb, so it has a dropdown
+
+Every crumb opens what sits one level below it; the site crumb is the blog
+title, and below it are the root tags. Same trigger as the rest of the header
+(hover-with-intent / tap), same anchored panel.
+
+In `tags` mode that mirrors the menu's top level — deliberate duplication: the
+crumb trail reads as one navigable path from the site root down. In `custom`
+mode the two diverge, and the title becomes the only surface still exposing the
+tag tree, so `GET /api/pages/nav` ships it as a separate `tags` field next to
+the authored `menu` (in `tags` mode the field is omitted and the client falls
+back to `menu`). In `none` mode neither is offered — a menuless site stays
+menuless.
+
+Both plugins that need the payload load it through `frontend/src/api/nav.js`,
+which fetches once and publishes `navTags` (the menu) and `rootTags` (the tree)
+to the store; the site crumb reads the store at open time and re-renders when it
+lands, so either plugin can be disabled without taking the other's data with it.
+
 ## Managing it
 
 `/light/menu` is the single management surface: mode picker, inline cap, the
@@ -56,4 +75,6 @@ Before this design the menu had no desktop surface: items lived in the mobile
 burger and in a hover-only flyout on the site title, and that flyout was
 attached once at first render — before the nav fetch resolved — so it never
 appeared on a fresh page load. The fold controller's re-measure-on-change
-contract removes that class of bug structurally.
+contract removes that class of bug structurally, and the title dropdown is back
+on those terms: it reads its list at open time and re-renders when the fetch
+lands, so late data re-flows the header instead of being invisible.

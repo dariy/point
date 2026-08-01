@@ -5,7 +5,7 @@
  * Props:
  *   settings        {object}    Public blog settings (blog_title, blog_subtitle)
  *   currentPath     {string}    Current pathname for active nav highlighting
- *   navTags         {object[]}  Root tags with children (used for "site" crumb dropdown)
+ *   navTags         {object[]}  Nav tag tree with children (crumb child dropdowns)
  *   currentTagSlug  {string}    Active tag slug (for flyout highlight)
  *   breadcrumb      {object[]}  Tag-ancestry crumbs: { name, slug?, href?, is_hidden?, tooltip? }.
  *                               Last item = current tag (may have a slug for a self-link).
@@ -209,7 +209,7 @@ export class PublicHeader extends Component {
     // acts on the *previous* render's detached DOM — which is how a leaked
     // nav-menu ended up closing every header dropdown the moment it opened.
     if (pluginHost.hasSlot('breadcrumbs')) {
-      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group })
+      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group, fold: this._fold })
         .then((comps) => { this._keepSlotMounts(gen, comps); this._fold?.relayout(); });
     }
     if (pluginHost.hasSlot('nav-menu')) {

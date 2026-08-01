@@ -58,9 +58,12 @@ describe('Breadcrumbs plugin', () => {
     };
   });
 
-  // Helper: render the header with given props and a given route
-  function renderWith(routeOverride, propsOverride = {}) {
+  // Helper: render the header with given props and a given route.
+  // `rootTags` lives in the store (published by the shared nav loader), not in
+  // the props, so it is set per render here.
+  function renderWith(routeOverride, propsOverride = {}, rootTags = []) {
     store.set('route', routeOverride);
+    store.set('rootTags', rootTags);
     const header = new BreadcrumbsComponent(container, {
       settings: { blog_title: 'Test Blog' },
       navTags: [],
@@ -140,15 +143,38 @@ describe('Breadcrumbs plugin', () => {
     assert.ok(markup.includes('Test Blog'), 'Site crumb should display blog title');
   });
 
-  test('site crumb is a plain home link even when navTags provided', () => {
-    // The site-title flyout was removed; nav tags are shown inline in the
-    // nav zone instead. Child-tag dropdowns on breadcrumb items remain.
+  test('site crumb is a plain home link when there are no root tags', () => {
     const markup = renderWith(
       { pathname: '/', query: {} },
-      { navTags: [{ name: 'Travel', slug: 'travel', post_count: 10 }] },
+      { navTags: [{ name: 'Links', slug: '', url: '/about' }] },
     );
     assert.ok(!markup.includes('has-dropdown'), 'Site crumb should not render a dropdown');
     assert.ok(!markup.includes('aria-haspopup'), 'Site crumb should not announce a popup');
+  });
+
+  test('site crumb gets a root-tag dropdown when the store has root tags', () => {
+    const markup = renderWith(
+      { pathname: '/', query: {} },
+      {},
+      [{ name: 'Travel', slug: 'travel', post_count: 10 }],
+    );
+    assert.ok(markup.includes('crumb-site'), 'Should still render the site crumb');
+    assert.ok(markup.includes('has-dropdown'), 'Site crumb should advertise a dropdown');
+    assert.ok(markup.includes('aria-haspopup="true"'), 'Site crumb should announce a popup');
+  });
+
+  test('site crumb dropdown is independent of the menu (custom-mode case)', () => {
+    // Custom mode: navTags holds authored links, so the root tags reach the
+    // header only through the store — and only through this dropdown.
+    const markup = renderWith(
+      { pathname: '/tags/travel', query: {} },
+      {
+        navTags: [{ name: 'About', slug: '', url: '/about' }],
+        breadcrumb: [{ name: 'Travel', slug: 'travel' }],
+      },
+      [{ name: 'Travel', slug: 'travel', post_count: 10 }],
+    );
+    assert.ok(markup.includes('crumb-site has-dropdown'), 'Site crumb should carry the dropdown');
   });
 
   // ── Aria-live announcement ────────────────────────────────────────────────

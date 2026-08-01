@@ -684,3 +684,76 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 		t.Errorf("hidden ancestor should be included and inherited when publicOnly=false, got %+v (ok=%v)", ht, ok)
 	}
 }
+
+// TestPagesHandler_GetNavMenu covers the three menu modes and, with them, where
+// the root tag tree ends up: the site-title dropdown reads `tags` when the menu
+// is authored links, falls back to `menu` when the menu already is the tree,
+// and shows nothing on a deliberately menuless site.
+func TestPagesHandler_GetNavMenu(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	e := echo.New()
+	ctx := context.Background()
+
+	// nav_order makes the tag nav-visible without needing posts behind it.
+	navOrder := int64(1)
+	if _, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{
+		Name: "Travel", Slug: "travel", NavOrder: &navOrder,
+	}); err != nil {
+		t.Fatalf("CreateTag: %v", err)
+	}
+
+	getNav := func() map[string]interface{} {
+		req := httptest.NewRequest(http.MethodGet, "/api/pages/nav", nil)
+		rec := httptest.NewRecorder()
+		if err := ph.GetNavMenu(e.NewContext(req, rec)); err != nil {
+			t.Fatalf("GetNavMenu failed: %v", err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode nav response: %v", err)
+		}
+		return resp
+	}
+
+	names := func(v interface{}) []string {
+		items, _ := v.([]interface{})
+		out := make([]string, 0, len(items))
+		for _, it := range items {
+			m, _ := it.(map[string]interface{})
+			out = append(out, fmt.Sprint(m["name"]))
+		}
+		return out
+	}
+
+	// Tags mode (default): the menu is the tree, no separate `tags` field.
+	resp := getNav()
+	if got := names(resp["menu"]); len(got) != 1 || got[0] != "Travel" {
+		t.Errorf("tags mode: expected menu [Travel], got %v", got)
+	}
+	if _, ok := resp["tags"]; ok {
+		t.Error("tags mode: `tags` should be omitted — the menu already is the tree")
+	}
+
+	// Custom mode: authored links in the menu, root tags alongside them.
+	_ = h.settingsSvc.SetSetting(ctx, "nav_menu_mode", "custom", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "custom_nav_menu", `[{"name":"About","url":"/about"}]`, "string")
+	resp = getNav()
+	if got := names(resp["menu"]); len(got) != 1 || got[0] != "About" {
+		t.Errorf("custom mode: expected menu [About], got %v", got)
+	}
+	if got := names(resp["tags"]); len(got) != 1 || got[0] != "Travel" {
+		t.Errorf("custom mode: expected tags [Travel], got %v", got)
+	}
+
+	// None mode: no menu, and no tags either — the site is menuless on purpose.
+	_ = h.settingsSvc.SetSetting(ctx, "nav_menu_mode", "none", "string")
+	resp = getNav()
+	if got := names(resp["menu"]); len(got) != 0 {
+		t.Errorf("none mode: expected empty menu, got %v", got)
+	}
+	if _, ok := resp["tags"]; ok {
+		t.Error("none mode: `tags` should be omitted")
+	}
+}

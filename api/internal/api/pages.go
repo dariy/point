@@ -1168,6 +1168,14 @@ func tagsModuleAccessible(settings map[string]string, want []string, publicOnly 
 
 // GetNavMenu returns the hierarchical tag tree (or custom menu) for navigation,
 // scoped to the current user's auth level.
+//
+// Response: {"menu": [...], "tags": [...]}. `menu` is the nav zone's list —
+// whatever `nav_menu_mode` selects. `tags` is the root tag tree behind the
+// site-title dropdown, and is only sent in "custom" mode, where the menu shows
+// authored links and the dropdown becomes the one surface still exposing the
+// tag tree. In "tags" mode the menu *is* that tree (the client falls back to
+// `menu`); in "none" mode the site is deliberately menuless, so neither the
+// menu nor the title offers tags.
 // GET /api/pages/nav
 func (h *PagesHandler) GetNavMenu(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -1180,20 +1188,24 @@ func (h *PagesHandler) GetNavMenu(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]interface{}{"menu": []services.NavTagNode{}})
 	}
 
-	if allSettings["nav_menu_mode"] == "custom" {
-		raw := allSettings["custom_nav_menu"]
-		if raw != "" {
-			var nodes []services.NavTagNode
-			if err := json.Unmarshal([]byte(raw), &nodes); err == nil {
-				return c.JSON(http.StatusOK, map[string]interface{}{"menu": nodes})
-			}
-		}
-		return c.JSON(http.StatusOK, map[string]interface{}{"menu": []services.NavTagNode{}})
-	}
-
 	minPosts := int64(0)
 	if publicOnly {
 		minPosts = getMinTagPostsSetting(allSettings)
+	}
+
+	if allSettings["nav_menu_mode"] == "custom" {
+		menu := []services.NavTagNode{}
+		if raw := allSettings["custom_nav_menu"]; raw != "" {
+			var nodes []services.NavTagNode
+			if err := json.Unmarshal([]byte(raw), &nodes); err == nil && nodes != nil {
+				menu = nodes
+			}
+		}
+		rootTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
+		if rootTags == nil {
+			rootTags = []services.NavTagNode{}
+		}
+		return c.JSON(http.StatusOK, map[string]interface{}{"menu": menu, "tags": rootTags})
 	}
 
 	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
