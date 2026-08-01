@@ -72,6 +72,9 @@ jobs:
   build-and-push:
     needs: [test, vulnerability-scan]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [full, slim]
     permissions:
       contents: read
       packages: write
@@ -104,6 +107,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/dariy/point
+          flavor: |
+            suffix=${{ matrix.flavor == 'slim' && '-slim' || '' }}
           tags: |
             type=semver,pattern={{version}}
             type=ref,event=branch
@@ -130,6 +135,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BUILD_VERSION=${{ inputs.tag || github.ref_name }}
+            WITH_REMARK42=${{ matrix.flavor == 'slim' && 'false' || 'true' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

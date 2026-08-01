@@ -41,6 +41,24 @@ if [ -f gemini_api_key.age ]; then
 fi
 unset _GEMINI_KEY
 
+# Determine flavors and parameters based on ENABLE_REMARK42
+ENABLE_REMARK42="${ENABLE_REMARK42:-true}"
+if [ "$ENABLE_REMARK42" == "false" ]; then
+    IMAGE_TAG="point:dev-slim"
+    CONTAINER_NAME="point-test-slim"
+    REMARK42_ARGS=("--build-arg" "WITH_REMARK42=false")
+    REMARK42_ENV_VARS=()
+else
+    IMAGE_TAG="point:dev"
+    CONTAINER_NAME="point-test"
+    REMARK42_ARGS=()
+    REMARK42_ENV_VARS=(
+        "-e" "TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}"
+        "-e" "NOTIFY_TELEGRAM_CHAN=${NOTIFY_TELEGRAM_CHAN:-}"
+        "-e" "NOTIFY_ADMINS=${NOTIFY_ADMINS:-}"
+    )
+fi
+
 # Use podman as the standard container engine
 # Using build/Dockerfile which is a multi-stage build
 # We tag the builder stage to avoid dangling images and reuse it
@@ -54,15 +72,16 @@ podman build $PULL_FLAG \
 
 podman build $PULL_FLAG \
     --format docker \
-    -t point:dev \
+    -t "$IMAGE_TAG" \
     -f Dockerfile \
     --cache-from point-builder \
     --build-arg "BUILD_VERSION=$DEV_BUILD_VERSION" \
+    "${REMARK42_ARGS[@]}" \
     ..
 
 # Stop and remove existing container to ensure a clean start
 echo "Stopping and removing existing container..."
-podman rm -f point-test 2>/dev/null || true
+podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
 # Host data dir, overridable via POINT_DATA_DIR in .env (defaults to ../data)
 _DATA_DIR=$(grep -E '^POINT_DATA_DIR=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]' || true)
@@ -80,14 +99,15 @@ if [ -n "$_PHOTO_PATH" ]; then
 fi
 unset _PHOTO_PATH
 
-# Optionally set host port mapping via DEPLOY_PORT in .env
-_HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || true)
-HOST_PORT=${_HOST_PORT:-8000}
-unset _HOST_PORT
+# Optionally set host port mapping via DEPLOY_PORT (env var or .env file)
+if [ -z "${DEPLOY_PORT:-}" ]; then
+    DEPLOY_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || true)
+fi
+HOST_PORT=${DEPLOY_PORT:-8000}
 
 echo "Starting container..."
 podman run -d \
-    --name point-test \
+    --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     --user "$(id -u):$(id -g)" \
     --userns=keep-id \
@@ -100,15 +120,13 @@ podman run -d \
     -e FRONTEND_DIR=/app/frontend \
     -e PORT=8000 \
     -e HOST=0.0.0.0 \
-    -e TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}" \
-    -e NOTIFY_TELEGRAM_CHAN="${NOTIFY_TELEGRAM_CHAN:-}" \
-    -e NOTIFY_ADMINS="${NOTIFY_ADMINS:-}" \
+    "${REMARK42_ENV_VARS[@]}" \
     "${PHOTO_IMPORT_ARGS[@]}" \
-    point:dev
+    "$IMAGE_TAG"
 
 # Clean up dangling images to save space
 echo "Cleaning up dangling images..."
 podman image prune -f
 
 echo "Rebuild is done."
-podman ps -f name=point-test
+podman ps -f name="$CONTAINER_NAME"

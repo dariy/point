@@ -1,7 +1,15 @@
-# Remark42 comment engine — pinned so releases are reproducible and upgrades
-# are deliberate (override with --build-arg REMARK42_VERSION=… to test newer).
 ARG REMARK42_VERSION=v1.16.4
-FROM ghcr.io/umputun/remark42:${REMARK42_VERSION} AS remark42
+ARG WITH_REMARK42=true
+
+# The real remark42 image (used when WITH_REMARK42=true)
+FROM ghcr.io/umputun/remark42:${REMARK42_VERSION} AS remark42-true
+
+# An empty dummy image (used when WITH_REMARK42=false)
+FROM docker.io/library/alpine:3.24 AS remark42-false
+RUN mkdir -p /srv
+
+# Alias the chosen stage to "remark42" so the rest of the Dockerfile can just use it
+FROM remark42-${WITH_REMARK42} AS remark42
 
 # Build stage
 FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.5-alpine3.23 AS builder
@@ -83,6 +91,8 @@ COPY --chown=appuser:appuser --from=remark42 /srv /app/remark42
 # __BUILD_VERSION__ placeholder; the server substitutes APP_VERSION into it at
 # serve time (see cmd/api/main.go), so the shipped file is never mutated.
 ARG BUILD_VERSION=dev
+ARG WITH_REMARK42=true
+ENV WITH_REMARK42=${WITH_REMARK42}
 ENV APP_VERSION=${BUILD_VERSION}
 ENV DATABASE_URL=/data/point.db
 ENV STORAGE_PATH=/data
