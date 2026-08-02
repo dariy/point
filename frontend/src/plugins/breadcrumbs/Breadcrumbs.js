@@ -1,26 +1,29 @@
+/**
+ * Breadcrumbs — the tag-ancestry trail and the active facet crumbs.
+ *
+ * The blog title that heads the trail is NOT here: it is site identity and
+ * outlives this plugin being switched off, so the header owns it (see
+ * components/public/SiteCrumb.js). This component renders everything after it.
+ */
+
 import { Component } from '../../components/Component.js';
-import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import {
-  showCrumbDropdown, hideFlyout, hideFlyoutWithin, tagHref, attachFlyoutTrigger,
-  HOVER_OPEN_MS,
+  showCrumbDropdown, hideFlyout, tagHref, attachFlyoutTrigger, HOVER_OPEN_MS,
 } from '../../utils/tags.js';
 
 export class Breadcrumbs extends Component {
   render() {
     const {
-      settings = {},
       navTags = [],
       breadcrumb = [],
       total = 0,
       timelineVisible = false,
     } = this.props;
 
-    const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const vc = ViewContext.current();
-    const hasTagCrumbs = breadcrumb.length > 0;
 
     let yearLabel = null;
     if (vc.years && !timelineVisible) {
@@ -38,20 +41,6 @@ export class Breadcrumbs extends Component {
     const ariaLiveText = ariaLabels.length
       ? `Showing ${ariaLabels.join(', ')} — ${total} post${total !== 1 ? 's' : ''}`
       : '';
-
-    // The site crumb is the home link, and — like every other crumb — a
-    // dropdown of what sits one level below it: the root tags. Same trigger as
-    // the rest of the header (hover-intent with a mouse, tap on touch), and
-    // the list is read from the store at open time, so the nav fetch landing
-    // after first paint can no longer leave an empty or missing dropdown.
-    const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
-    const siteClass = siteHasFollowingCrumbs ? 'breadcrumb-link' : 'breadcrumb-current';
-    const siteHasDropdown = this._rootTagItems().length > 0;
-    const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
-      <a href="/" class="${siteClass} crumb-site${siteHasDropdown ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="${title}"${siteHasDropdown ? ' aria-haspopup="true"' : ''}>${title}</a>
-      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
-    </span>`;
 
     const tagCrumbsHtml = breadcrumb.map((crumb, i) => {
       const isLast = i === breadcrumb.length - 1;
@@ -113,7 +102,6 @@ export class Breadcrumbs extends Component {
 
     return `
       ${ariaLiveText ? `<span class="sr-only" aria-live="polite">${escapeHtml(ariaLiveText)}</span>` : ''}
-      ${siteCrumbHtml}
       ${tagCrumbsHtml}
       ${facetCrumbsHtml}
     `;
@@ -153,24 +141,6 @@ export class Breadcrumbs extends Component {
     return find(navTags) === true;
   }
 
-  /**
-   * The site crumb's dropdown list: root tags, shaped for the shared flyout.
-   *
-   * Read from the store rather than the `navTags` prop because the two differ
-   * whenever the menu is custom — there `navTags` holds authored links and this
-   * dropdown is the only surface left showing the tag tree. With a `tags` menu
-   * the two agree and the dropdown mirrors the menu's top level; with no menu
-   * at all the store holds nothing and the crumb stays a plain home link.
-   */
-  _rootTagItems() {
-    return (store.get('rootTags') || []).map((t) => ({
-      name: t.name,
-      slug: t.slug,
-      count: t.post_count,
-      href: t.url || tagHref(t.slug),
-    }));
-  }
-
   _getTagChildren(slug, navTags) {
     const find = (tags) => {
       for (const t of tags) {
@@ -186,22 +156,7 @@ export class Breadcrumbs extends Component {
   }
 
   afterRender() {
-    const { navTags = [], group, fold } = this.props;
-
-    // The nav payload arrives after first paint. Re-render when it lands so the
-    // site crumb picks up its dropdown, then let the header re-measure — the
-    // crumb grows by a caret and the row may no longer fit. Subscribed once:
-    // afterRender runs again on every re-render.
-    if (!this._rootTagsSubscribed) {
-      this._rootTagsSubscribed = true;
-      this.subscribeStore(store, 'rootTags', () => this._rerender());
-    }
-
-    // Site crumb → root tags, the same drill-down every other crumb offers.
-    const siteCrumb = this.container.querySelector('.crumb-site.has-dropdown');
-    if (siteCrumb) {
-      attachFlyoutTrigger(siteCrumb, () => this._rootTagItems(), navigate, group);
-    }
+    const { navTags = [], group } = this.props;
 
     // The trail is "hidden" when the header has folded ancestors into "…" or
     // ellipsized the current crumb. Only then does the dropdown need to carry
@@ -280,17 +235,6 @@ export class Breadcrumbs extends Component {
         }
       });
     }
-
-    // New crumb content, new width. Harmless on the first render (the header
-    // relayouts once the slot fill resolves); it is the store-driven re-render
-    // that would otherwise leave a stale fold state behind.
-    fold?.relayout();
-  }
-
-  beforeRender() {
-    // A re-render replaces the element an open dropdown is anchored to. Only
-    // our own: the flyout is a singleton the nav zone shares.
-    hideFlyoutWithin(this.container);
   }
 
   beforeUnmount() {

@@ -57,17 +57,32 @@ the authored `menu` (in `tags` mode the field is omitted and the client falls
 back to `menu`). In `none` mode neither is offered — a menuless site stays
 menuless.
 
-Both plugins that need the payload load it through `frontend/src/api/nav.js`,
-which fetches once and publishes `navTags` (the menu) and `rootTags` (the tree)
-to the store; the site crumb reads the store at open time and re-renders when it
-lands, so either plugin can be disabled without taking the other's data with it.
+The nav-menu plugin and the site crumb both load that payload through
+`frontend/src/api/nav.js`, which fetches once and publishes `navTags` (the menu)
+and `rootTags` (the tree) to the store. The crumb reads the store at open time
+and re-renders when it lands, so neither surface depends on the other existing.
+
+### Who renders the title
+
+The blog title is *site identity*, not page context, so the header owns it —
+`components/public/SiteCrumb.js`, mounted at the head of the context zone —
+while the breadcrumbs plugin renders the trail after it. Switch breadcrumbs off
+and the title and its dropdown stay; the trail is simply gone. The two render
+into sibling `display: contents` wrappers inside `.site-breadcrumb` (each
+Component owns its container's innerHTML), so every crumb remains a direct flex
+child and the fold stages see one list.
 
 ## Managing it
 
-`/light/menu` is the single management surface: mode picker, inline cap, the
-custom items editor (visual + markdown), and a live preview at three widths
-(900 / 640 / 360 px) laid out by the real fold engine — what folds in the
+`/light/menu` is the single management surface for the menu: mode picker, inline
+cap, the custom items editor (visual + markdown), and a live preview at three
+widths (900 / 640 / 360 px) laid out by the real fold engine — what folds in the
 preview is what folds on the site.
+
+The title dropdown belongs to the header, so it is toggled from the Public
+Header plugin's settings (Plugins → Public Header → Settings): `show_title_dropdown`,
+on unless explicitly saved off. Off, the title is a plain home link and the
+header makes no nav request of its own.
 
 ## History
 

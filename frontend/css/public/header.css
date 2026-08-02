@@ -105,6 +105,16 @@
     line-height: 1;
 }
 
+/* Two renderers share the context zone — the header's site crumb and the
+   breadcrumbs plugin's trail — and each owns its container's innerHTML. The
+   wrappers exist only for that: `display: contents` keeps every crumb a direct
+   flex child of `.site-breadcrumb`, so gaps and folding behave as if they were
+   one list. */
+.site-breadcrumb > .site-crumb-mount,
+.site-breadcrumb > .breadcrumb-trail {
+    display: contents;
+}
+
 .site-breadcrumb .breadcrumb-separator {
     color: var(--text-tertiary);
     font-weight: 400;

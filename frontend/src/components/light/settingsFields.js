@@ -14,6 +14,7 @@ import { escapeHtml } from "../../utils/helpers.js";
 // Friendlier labels for keys whose snake_case name reads poorly.
 export const LABEL_OVERRIDES = {
   tags_visibility: "Tags visible to",
+  show_title_dropdown: "Root-tag dropdown on the site title",
   atlas_post_limit: "Atlas posts to fetch",
   // Not a second "enable the plugin" switch — the plugin list owns that. This
   // gates cross-posting on publish, so label it for what it does.
@@ -71,6 +72,8 @@ export const DEFAULT_ON_KEYS = new Set([
   "remark_no_footer",
   "remark_auth_anon",
   "remark_smtp_tls",
+  // The header treats an absent show_title_dropdown as on (SiteCrumb).
+  "show_title_dropdown",
 ]);
 
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */

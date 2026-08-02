@@ -58,12 +58,9 @@ describe('Breadcrumbs plugin', () => {
     };
   });
 
-  // Helper: render the header with given props and a given route.
-  // `rootTags` lives in the store (published by the shared nav loader), not in
-  // the props, so it is set per render here.
-  function renderWith(routeOverride, propsOverride = {}, rootTags = []) {
+  // Helper: render the trail with given props and a given route
+  function renderWith(routeOverride, propsOverride = {}) {
     store.set('route', routeOverride);
-    store.set('rootTags', rootTags);
     const header = new BreadcrumbsComponent(container, {
       settings: { blog_title: 'Test Blog' },
       navTags: [],
@@ -136,45 +133,17 @@ describe('Breadcrumbs plugin', () => {
 
   // ── Root "site" crumb ─────────────────────────────────────────────────────
 
-  test('root site crumb always present', () => {
-    const markup = renderWith({ pathname: '/', query: {} });
-    assert.ok(markup.includes('crumb-site'), 'Should always render site crumb');
-    assert.ok(markup.includes('href="/"'), 'Site crumb should link to /');
-    assert.ok(markup.includes('Test Blog'), 'Site crumb should display blog title');
-  });
-
-  test('site crumb is a plain home link when there are no root tags', () => {
+  test('the blog title is not rendered here', () => {
+    // It is the header's SiteCrumb (see components/public/SiteCrumb.js) so that
+    // switching this plugin off leaves the site identity — and its root-tag
+    // dropdown — standing. This component starts at the first tag crumb.
     const markup = renderWith(
       { pathname: '/', query: {} },
-      { navTags: [{ name: 'Links', slug: '', url: '/about' }] },
+      { breadcrumb: [{ name: 'Travel', slug: 'travel' }] },
     );
-    assert.ok(!markup.includes('has-dropdown'), 'Site crumb should not render a dropdown');
-    assert.ok(!markup.includes('aria-haspopup'), 'Site crumb should not announce a popup');
-  });
-
-  test('site crumb gets a root-tag dropdown when the store has root tags', () => {
-    const markup = renderWith(
-      { pathname: '/', query: {} },
-      {},
-      [{ name: 'Travel', slug: 'travel', post_count: 10 }],
-    );
-    assert.ok(markup.includes('crumb-site'), 'Should still render the site crumb');
-    assert.ok(markup.includes('has-dropdown'), 'Site crumb should advertise a dropdown');
-    assert.ok(markup.includes('aria-haspopup="true"'), 'Site crumb should announce a popup');
-  });
-
-  test('site crumb dropdown is independent of the menu (custom-mode case)', () => {
-    // Custom mode: navTags holds authored links, so the root tags reach the
-    // header only through the store — and only through this dropdown.
-    const markup = renderWith(
-      { pathname: '/tags/travel', query: {} },
-      {
-        navTags: [{ name: 'About', slug: '', url: '/about' }],
-        breadcrumb: [{ name: 'Travel', slug: 'travel' }],
-      },
-      [{ name: 'Travel', slug: 'travel', post_count: 10 }],
-    );
-    assert.ok(markup.includes('crumb-site has-dropdown'), 'Site crumb should carry the dropdown');
+    assert.ok(!markup.includes('crumb-site'), 'Should not render the site crumb');
+    assert.ok(!markup.includes('Test Blog'), 'Should not render the blog title');
+    assert.ok(markup.includes('Travel'), 'Should render the tag crumb');
   });
 
   // ── Aria-live announcement ────────────────────────────────────────────────

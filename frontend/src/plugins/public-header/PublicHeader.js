@@ -17,6 +17,7 @@
  */
 
 import { Component } from '../../components/Component.js';
+import { SiteCrumb } from '../../components/public/SiteCrumb.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
@@ -59,7 +60,18 @@ export class PublicHeader extends Component {
 
     const vc = ViewContext.current();
 
-    const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb"></nav>`;
+    // The context zone holds two renderers: the site crumb (ours — identity,
+    // and the only crumb left when the breadcrumbs plugin is off) and the trail
+    // the plugin fills. Each needs its own container because a Component owns
+    // its container's innerHTML; both wrappers are `display: contents`, so the
+    // crumbs stay direct flex children of `.site-breadcrumb`.
+    this._hasTrail = pluginHost.hasSlot('breadcrumbs') && !!(
+      breadcrumb.length || (vc.years && !this.props.timelineVisible) || vc.query
+    );
+    const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">
+            <span class="site-crumb-mount"></span>
+            <span class="breadcrumb-trail"></span>
+          </nav>`;
 
     // ICON BUTTON GUIDANCE
     // All icon-only buttons in the header use the `header-action-btn` class.
@@ -89,7 +101,8 @@ export class PublicHeader extends Component {
         <div class="site-header-inner">
 
           <!-- Zone: identity — logo (+ subtitle); the textual blog title is the
-               breadcrumb's site crumb, so "title → logo" folds in the context zone. -->
+               site crumb at the head of the context zone, so "title → logo"
+               folds there (stage 50). -->
           <div class="site-identity">
             <a href="/" class="site-title-link">
               <h1 class="site-title">
@@ -208,8 +221,17 @@ export class PublicHeader extends Component {
     // hold store subscriptions and document-level listeners, and a stale one
     // acts on the *previous* render's detached DOM — which is how a leaked
     // nav-menu ended up closing every header dropdown the moment it opened.
+    // The blog title. Mounted before the trail fill so it is present whatever
+    // the breadcrumbs plugin does — including not existing.
+    this.mountChild(SiteCrumb, '.site-crumb-mount', {
+      settings: this.props.settings || {},
+      hasTrail: this._hasTrail,
+      group: this._group,
+      fold: this._fold,
+    });
+
     if (pluginHost.hasSlot('breadcrumbs')) {
-      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group, fold: this._fold })
+      pluginHost.fill('breadcrumbs', this.$('.breadcrumb-trail'), { ...this.props, group: this._group })
         .then((comps) => { this._keepSlotMounts(gen, comps); this._fold?.relayout(); });
     }
     if (pluginHost.hasSlot('nav-menu')) {
