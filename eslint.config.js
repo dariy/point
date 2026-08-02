@@ -118,6 +118,7 @@ export default [
         DOMParser: "readonly",
         customElements: "readonly",
         HTMLElement: "readonly",
+        HTMLImageElement: "readonly",
         ResizeObserver: "readonly",
         performance: "readonly",
         atob: "readonly",

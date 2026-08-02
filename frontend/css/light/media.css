@@ -283,6 +283,8 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    /* Anchors the play glyph a video lays over its poster frame. */
+    position: relative;
 }
 
 .media-item-preview img {
@@ -304,6 +306,19 @@
 .media-item-preview .file-icon {
     font-size: var(--file-icon-font-size);
     color: var(--text-muted);
+}
+
+/* A video with a poster keeps its play glyph, but over the frame rather than
+   in place of it — white on a scrim so it reads against any thumbnail. */
+.media-item-preview .file-icon--overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-white);
+    text-shadow: 0 1px 6px var(--color-black-alpha-60);
+    pointer-events: none;
 }
 
 .media-video-preview,

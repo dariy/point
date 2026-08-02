@@ -126,6 +126,31 @@ export function clearElement(el) {
 }
 
 /**
+ * Drop any <img> under `root` that fails to load, revealing whatever markup
+ * sits behind it.
+ *
+ * Used where a thumbnail URL is optimistic: a video's ?thumb resolves to its
+ * captured poster frame, and the server 404s it when the video never got one
+ * (uploaded before poster capture, or ingested outside the admin UI). Rather
+ * than ask every caller to know which videos have posters, the image is
+ * rendered over a placeholder and removed if it does not arrive.
+ *
+ * `error` does not bubble, hence the capture-phase listener.
+ *
+ * @param {HTMLElement} root
+ */
+export function dropBrokenImages(root) {
+  if (!root) return;
+  root.addEventListener(
+    'error',
+    (e) => {
+      if (e.target instanceof HTMLImageElement) e.target.remove();
+    },
+    true,
+  );
+}
+
+/**
  * Programmatically navigate to a path using the history API.
  * Dispatches a custom 'navigate' event so the router can handle it without
  * coupling to the router module directly.

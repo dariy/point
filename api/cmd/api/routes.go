@@ -77,6 +77,7 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 	mediaGroup.PUT("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PATCH("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/rename", h.RenameMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/poster", h.SetVideoPoster, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/analyze", h.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "ai-analysis"))
 	mediaGroup.POST("/:id/reextract", h.ReextractEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PUT("/:id/exif", h.UpdateEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))

@@ -8,11 +8,16 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 )
+
+// maxPosterBytes bounds a video poster frame. Posters are downscaled to the
+// thumbnail box on arrival, so anything larger than this is not a frame capture.
+const maxPosterBytes = 8 << 20 // 8 MB
 
 type MediaHandler struct {
 	mediaService    *services.MediaService
@@ -76,7 +81,74 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 		return MapError(err)
 	}
 
+	// A video upload may carry a poster frame the browser grabbed off the file
+	// before sending it — the only way this build gets a video still, since the
+	// server has no video decoder. Best-effort: a rejected or missing poster
+	// leaves the video thumbnail-less rather than failing the upload.
+	if poster, err := posterFromForm(c); err == nil && len(poster) > 0 {
+		if updated, err := h.mediaService.SaveVideoPoster(c.Request().Context(), media.ID, poster); err == nil {
+			media = updated
+		}
+	}
+
 	return c.JSON(http.StatusCreated, mediaToResponse(media))
+}
+
+// posterFromForm reads the optional "poster" upload field and returns its bytes
+// once they have been confirmed to be an allowlisted image. It returns a nil
+// slice and no error when the field is absent.
+func posterFromForm(c echo.Context) ([]byte, error) {
+	fh, err := c.FormFile("poster")
+	if err != nil {
+		return nil, nil
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	// Cap the read: a poster is a single downscaled frame, and the bytes are
+	// attacker-controlled up to whatever the upload limit allows.
+	content, err := io.ReadAll(io.LimitReader(f, maxPosterBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	mimeType, err := services.DetectMediaType(content, fh.Header.Get("Content-Type"))
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(mimeType, "image/") {
+		return nil, services.ErrUnsupportedMediaType
+	}
+	return content, nil
+}
+
+// SetVideoPoster stores a client-captured frame as an existing video's
+// thumbnail. It backfills videos that arrived without one — anything uploaded
+// before posters existed, or ingested over the API/MCP rather than the admin UI.
+func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	poster, err := posterFromForm(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnsupportedMediaType, uploadRejectionMessage(err))
+	}
+	if len(poster) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "poster is required")
+	}
+
+	media, err := h.mediaService.SaveVideoPoster(c.Request().Context(), id, poster)
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
 func (h *MediaHandler) ListMedia(c echo.Context) error {

@@ -27,7 +27,9 @@ import {
   reextractMediaEXIF,
   updateMediaEXIF,
   revertMediaEXIF,
+  setVideoPoster,
 } from "../../api/media.js";
+import { captureVideoPoster } from "../../utils/videoPoster.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
@@ -75,6 +77,8 @@ export class MediaBrowser extends Component {
       draggingOver: false,
       selectedIds: new Set(),
       selectMode: false,
+      // "n/total…" while backfilling video posters, null when idle
+      posterProgress: null,
       // per-item referring-posts panel: { [mediaId]: { loading, posts, error } }
       referringPostsState: {},
     };
@@ -126,6 +130,7 @@ export class MediaBrowser extends Component {
     const folderTree = `
       <nav class="media-folder-tree" aria-label="Media folders">
         <button id="mb-upload-btn" class="btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
+        ${this._renderPosterBackfill()}
         <select id="mb-type-filter" class="filter-select">${typeOptions}</select>
 
         <button class="folder-tree-item folder-tree-all${!selectedFolder ? " active" : ""}" data-folder="">
@@ -212,6 +217,64 @@ export class MediaBrowser extends Component {
       </div>`;
   }
 
+  /** Videos on the current page that were never given a poster frame. */
+  _posterlessVideos() {
+    return this.state.media.filter(
+      (m) => (m.file_type || "").toLowerCase() === "video" && !m.thumbnail_path,
+    );
+  }
+
+  /**
+   * Offer to backfill poster frames for the videos on this page that lack one —
+   * anything uploaded before poster capture existed, or ingested over the API
+   * rather than through this browser. Capture needs a decoder, so it has to
+   * happen here; the button downloads each video to grab a single frame, which
+   * is why it is opt-in rather than automatic.
+   */
+  _renderPosterBackfill() {
+    if (this.props.pickerMode) return "";
+    const pending = this._posterlessVideos().length;
+    if (!pending) return "";
+    const busy = this.state.posterProgress;
+    return `
+      <button id="mb-posters-btn" class="btn btn-sm btn-secondary"
+              title="Download each video to capture a thumbnail frame"
+              ${busy ? "disabled" : ""}>
+        ${busy ? `▶ ${escapeHtml(busy)}` : `▶ Poster ${pending} video${pending === 1 ? "" : "s"}`}
+      </button>`;
+  }
+
+  async _backfillPosters() {
+    const pending = this._posterlessVideos();
+    if (!pending.length || this.state.posterProgress) return;
+
+    let done = 0;
+    let failed = 0;
+    for (const m of pending) {
+      this.setState({ posterProgress: `${done + 1}/${pending.length}…` });
+      try {
+        const poster = await captureVideoPoster(m.path);
+        if (!poster) {
+          failed++;
+          continue;
+        }
+        await setVideoPoster(m.id, poster);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+
+    this.setState({ posterProgress: null });
+    store.set("toast", {
+      message: failed
+        ? `${done} poster${done === 1 ? "" : "s"} captured; ${failed} could not be decoded by this browser.`
+        : `${done} poster${done === 1 ? "" : "s"} captured.`,
+      type: failed ? "warning" : "success",
+    });
+    await this._load();
+  }
+
   _renderBreadcrumbs() {
     const { selectedFolder } = this.state;
     const parts = selectedFolder ? selectedFolder.split("/") : [];
@@ -247,14 +310,23 @@ export class MediaBrowser extends Component {
     const pickerMode = this.props.pickerMode;
     const fileType = (m.file_type || "").toLowerCase();
     const isImage = fileType === "image";
+    const isVideo = fileType === "video";
     const thumb = m.thumbnail_path || (isImage ? m.original_path : null);
     const isSelected = selectedIds.has(m.id);
 
+    // A video shows its captured poster frame when it has one, with the play
+    // glyph laid over it; without a poster it keeps the bare glyph. The <img>
+    // carries a load handler (see _bindPreviewFallback) so a poster that has
+    // gone missing on disk degrades to the glyph rather than a broken image.
     const preview =
-      isImage && thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">`
+      thumb && (isImage || isVideo)
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${
+            isVideo
+              ? `<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>`
+              : ""
+          }`
         : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${
-            fileType === "video" ? "▶" : fileType === "audio" ? "♫" : "📄"
+            isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"
           }</div>`;
 
     const publicStatus = m.is_public
@@ -657,6 +729,10 @@ export class MediaBrowser extends Component {
       fileInput?.click(),
     );
 
+    this.$("#mb-posters-btn")?.addEventListener("click", () =>
+      this._backfillPosters(),
+    );
+
     // Mobile capture buttons
     this.$("#mb-capture-camera-btn")?.addEventListener("click", () =>
       this.$("#mb-capture-camera-input")?.click(),
@@ -699,6 +775,7 @@ export class MediaBrowser extends Component {
     });
 
     this._wireDragDrop(fileInput, pickerMode);
+    this._bindPreviewFallback();
 
     this.$("#mb-type-filter")?.addEventListener("change", (e) => {
       this.setState({ typeFilter: e.target.value });
@@ -1000,6 +1077,33 @@ export class MediaBrowser extends Component {
    */
   getSelectedItems() {
     return Object.values(this._selectedItemsById);
+  }
+
+  /**
+   * Swap a preview <img> for its file-type glyph when the image fails to load.
+   *
+   * A video's poster lives at the same ?thumb URL an image thumbnail does, and
+   * the server 404s that URL when no poster was ever captured — so a video that
+   * predates poster capture, or whose thumbnail file went missing, would
+   * otherwise render as a broken image. `error` does not bubble, hence the
+   * capture-phase listener on the grid.
+   */
+  _bindPreviewFallback() {
+    const grid = this.$(".media-grid");
+    if (!grid) return;
+    grid.addEventListener(
+      "error",
+      (e) => {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        const preview = img.closest(".media-item-preview");
+        if (!preview) return;
+        const overlay = preview.querySelector(".file-icon--overlay");
+        img.remove();
+        if (overlay) overlay.classList.remove("file-icon--overlay");
+      },
+      true,
+    );
   }
 
   _wireDragDrop(fileInput, pickerMode) {

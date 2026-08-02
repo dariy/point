@@ -339,6 +339,21 @@ export default class AtlasPage extends Component {
     this._markerLayer = L.layerGroup().addTo(this._map);
     this._cloudMarkers = L.layerGroup().addTo(this._map);
 
+    // A video post's chip asks for a poster frame that may not exist; when the
+    // request 404s, collapse the chip back to a plain label. `error` does not
+    // bubble, hence the capture-phase listener on the map pane.
+    mapEl.addEventListener(
+      "error",
+      (e) => {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        if (!img.classList.contains("atlas-node__thumb")) return;
+        img.closest(".atlas-node")?.classList.remove("atlas-node--has-thumb");
+        img.remove();
+      },
+      true,
+    );
+
     this._themeListener = () => {
       if (this._tileLayer) {
         this._tileLayer.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
@@ -705,7 +720,9 @@ export default class AtlasPage extends Component {
           label: p.title || p.slug,
           href: `/posts/${p.slug}`,
           max: 24,
-          // Image posts reveal a thumbnail when their place is selected.
+          // Media posts reveal a thumbnail when their place is selected. The
+          // server hands back a ?thumb=128 URL (atlasThumbURL), which for a
+          // video resolves to a square crop of its poster frame.
           thumb: useThumbnails ? p.media_url || null : null,
         });
       });
@@ -758,7 +775,7 @@ export default class AtlasPage extends Component {
 
     const sats = ordered.map((node, i) => {
       const ll = llOf(nodePos.get(node.key));
-      // Image posts lead with a thumbnail tucked into the chip; the modifier
+      // Media posts lead with a thumbnail tucked into the chip; the modifier
       // class lets the CSS reshape the pill around it.
       const thumbUrl = node.thumb && safeUrl(node.thumb);
       const thumbHtml =

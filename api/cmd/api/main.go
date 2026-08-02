@@ -1386,6 +1386,15 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 					}
 				}
 			}
+
+			// Falling through to the original is only a graceful degradation when
+			// the original is itself a still. For a video or audio file the caller
+			// asked for a thumbnail and would get an <img> pointed at a media
+			// stream — a broken image that costs a full download. 404 instead;
+			// the UI drops back to a type glyph on error.
+			if strings.EqualFold(media.FileType, "video") || strings.EqualFold(media.FileType, "audio") {
+				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail for this media")
+			}
 		}
 
 		// Serve original — try exact path first, then checksum-glob fallback.

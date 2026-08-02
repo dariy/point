@@ -20,7 +20,12 @@ import {
   generatePreviewLink,
 } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import {
+  escapeHtml,
+  navigate,
+  debounce,
+  dropBrokenImages,
+} from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import {
   EDIT_SVG,
@@ -48,6 +53,18 @@ const STATUS_LABELS = {
 // "Page" is surfaced as a status in the UI but is really type=page (always
 // published). Treat any type=page post as having the effective status "page".
 const effStatus = (p) => (p.type === "page" ? "page" : (p.status || "draft"));
+
+/**
+ * Preview for a video post: its captured poster frame laid over the play glyph.
+ * The poster URL 404s for videos that never got one (see dropBrokenImages),
+ * which strips the <img> back to the bare glyph this list has always shown.
+ */
+const videoThumb = (mediaUrl) =>
+  `${PLAY_SVG}${
+    mediaUrl
+      ? `<img src="${escapeHtml(mediaUrl + "?thumb")}" class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">`
+      : ""
+  }`;
 
 export default class PostsListPage extends Component {
   constructor(container, props = {}) {
@@ -96,7 +113,7 @@ export default class PostsListPage extends Component {
     if (isImage && p.media_url) {
       thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
     } else if (isVideo) {
-      thumbInner = PLAY_SVG;
+      thumbInner = videoThumb(p.media_url);
     } else if (isAudio) {
       thumbInner = MUSIC_SVG;
     }
@@ -232,7 +249,7 @@ export default class PostsListPage extends Component {
                 if (isImage && p.media_url) {
                   previewHtml = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
                 } else if (isVideo) {
-                  previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
+                  previewHtml = `<div class="post-preview-placeholder" title="Video">${videoThumb(p.media_url)}</div>`;
                 } else if (isAudio) {
                   previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
                 } else {
@@ -389,6 +406,9 @@ export default class PostsListPage extends Component {
     // Opt into the fixed-viewport layout (layout.css .posts-list-main): the list
     // fills the window and pagination stays pinned to the bottom edge.
     this.$(".light-main")?.classList.add("posts-list-main");
+
+    // Video posters are rendered optimistically; strip the ones that 404.
+    dropBrokenImages(this.$(".light-main"));
 
     try {
       sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
