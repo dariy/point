@@ -77,8 +77,7 @@ export class MediaBrowser extends Component {
       draggingOver: false,
       selectedIds: new Set(),
       selectMode: false,
-      // "n/total…" while backfilling video posters, null when idle
-      posterProgress: null,
+      capturingPosters: false,
       // per-item referring-posts panel: { [mediaId]: { loading, posts, error } }
       referringPostsState: {},
     };
@@ -235,23 +234,31 @@ export class MediaBrowser extends Component {
     if (this.props.pickerMode) return "";
     const pending = this._posterlessVideos().length;
     if (!pending) return "";
-    const busy = this.state.posterProgress;
     return `
       <button id="mb-posters-btn" class="btn btn-sm btn-secondary"
               title="Download each video to capture a thumbnail frame"
-              ${busy ? "disabled" : ""}>
-        ${busy ? `▶ ${escapeHtml(busy)}` : `▶ Poster ${pending} video${pending === 1 ? "" : "s"}`}
+              ${this.state.capturingPosters ? "disabled" : ""}>
+        ▶ Poster ${pending} video${pending === 1 ? "" : "s"}
       </button>`;
   }
 
   async _backfillPosters() {
     const pending = this._posterlessVideos();
-    if (!pending.length || this.state.posterProgress) return;
+    if (!pending.length || this.state.capturingPosters) return;
+
+    // Downloading each video to grab one frame is slow enough that starting
+    // silently reads as a dead button, so the run is announced up front and
+    // reported at the end — both through the toast store, like every other
+    // outcome in this component.
+    this.setState({ capturingPosters: true });
+    store.set("toast", {
+      message: `Capturing poster${pending.length === 1 ? "" : "s"} for ${pending.length} video${pending.length === 1 ? "" : "s"}…`,
+      type: "info",
+    });
 
     let done = 0;
     let failed = 0;
     for (const m of pending) {
-      this.setState({ posterProgress: `${done + 1}/${pending.length}…` });
       try {
         const poster = await captureVideoPoster(m.path);
         if (!poster) {
@@ -265,11 +272,9 @@ export class MediaBrowser extends Component {
       }
     }
 
-    this.setState({ posterProgress: null });
+    this.setState({ capturingPosters: false });
     store.set("toast", {
-      message: failed
-        ? `${done} poster${done === 1 ? "" : "s"} captured; ${failed} could not be decoded by this browser.`
-        : `${done} poster${done === 1 ? "" : "s"} captured.`,
+      message: `Captured ${done} poster${done === 1 ? "" : "s"}${failed ? `, ${failed} could not be decoded by this browser` : ""}.`,
       type: failed ? "warning" : "success",
     });
     await this._load();
