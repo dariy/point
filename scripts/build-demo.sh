@@ -26,9 +26,10 @@ DIST="$ROOT_DIR/dist-demo"
 FIXTURES="$ROOT_DIR/frontend/src/mock/fixtures/fixtures.json"
 DEMO_VERSION="demo"
 
-# Source of the original media files referenced by the fixtures. Overridable so
-# the demo can be rebuilt from any instance's storage.
-MEDIA_SRC="${MEDIA_SRC:-/mnt/lab_storage/point-data/media/originals}"
+# Source of the original media files referenced by the fixtures. Defaults to the
+# scratch instance scripts/make-demo-content.sh builds; override to record a
+# demo from some other instance's storage.
+MEDIA_SRC="${MEDIA_SRC:-$ROOT_DIR/.demo-scratch/media/originals}"
 
 # Downscale target. Demo images only ever appear on a screen, and the bundle is
 # shipped to a CDN, so full-resolution originals (330MB+) are pure cost.

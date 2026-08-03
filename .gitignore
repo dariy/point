@@ -40,6 +40,8 @@ frontend/css/p/
 
 # Static UI demo (scripts/build-demo.sh) — build output.
 dist-demo/
+# Throwaway instance used to generate demo content (scripts/make-demo-content.sh).
+.demo-scratch/
 # Recorded demo fixtures. Regenerate with scripts/record-demo-fixtures.mjs
 # against an instance whose content you intend to publish: the recording is a
 # copy of that instance's posts, tags and media metadata.

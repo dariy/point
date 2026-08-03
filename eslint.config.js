@@ -183,9 +183,11 @@ export default [
         process: "readonly",
         console: "readonly",
         JSON: "readonly",
-        // Node 18+ provides these as globals; the demo recorder and its
+        // Node 18+ provides these as globals; the demo recorder, generator and
         // acceptance test use them directly rather than pulling in a client.
         fetch: "readonly",
+        FormData: "readonly",
+        Blob: "readonly",
         URL: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",

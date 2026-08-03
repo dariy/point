@@ -103,13 +103,27 @@ async function main() {
   console.log(`\nPublic routes (logged out)`);
   for (const route of PUBLIC_ROUTES) await visit(route);
 
-  // Deep-link into a real post, exercising the SPA fallback for a nested path.
-  const firstPost = await page.locator('a[href^="/posts/"]').first().getAttribute("href").catch(() => null);
-  if (firstPost) {
-    console.log(`\nPost detail`);
-    await visit(firstPost);
+  // Open a post from the grid. Cards are <article role="button"> with click
+  // handlers and CSS background images — not anchors and not <img> — so this
+  // has to click one rather than read an href.
+  console.log(`\nPost detail`);
+  await page.goto(BASE + "/", { waitUntil: "networkidle" });
+  await page.waitForTimeout(1200);
+  const cards = page.locator("article.post-card");
+  const cardCount = await cards.count();
+  if (cardCount === 0) {
+    failures.push("home page rendered no post cards");
   } else {
-    failures.push("no /posts/ link found on the public site");
+    await cards.first().click();
+    await page.waitForTimeout(1500);
+    const landed = new URL(page.url()).pathname;
+    if (!landed.startsWith("/posts/")) {
+      failures.push(`clicking a post card went to ${landed}, not /posts/*`);
+    } else {
+      console.log(`  ✓ ${cardCount} card(s); opened ${landed}`);
+      // Reload it to prove the SPA fallback serves a deep-linked nested path.
+      await visit(landed);
+    }
   }
 
   console.log(`\nLogin`);

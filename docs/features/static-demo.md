@@ -72,8 +72,8 @@ explicitly exempts from that event.
 ## Building
 
 ```bash
-# 1. Record fixtures from a running instance whose content you intend to publish
-node scripts/record-demo-fixtures.mjs --base=http://localhost:8001 --session=<token>
+# 1. Generate content and record fixtures (~5 min, needs network + a Gemini key)
+GEMINI_API_KEY=... scripts/make-demo-content.sh
 
 # 2. Build
 scripts/build-demo.sh              # or --skip-media for a fast iteration loop
@@ -83,8 +83,49 @@ npx serve -s dist-demo -l 3000
 node scripts/test-demo.mjs --base=http://localhost:3000
 ```
 
+### The content pipeline
+
+`scripts/make-demo-content.sh` stands up a **throwaway Point instance** in
+`.demo-scratch/` — its own database and storage — fills it, records it, and tears
+it down. Your real instance is never touched.
+
+`scripts/generate-demo-content.mjs` does the filling:
+
+1. Samples the [picsum.photos](https://picsum.photos) catalogue (Unsplash-sourced,
+   freely usable). Landscape only, and at most one photo per contributor —
+   picsum's opening run is a single photographer's desk-and-laptop series, so
+   taking the head of the list yields a demo where every post looks the same.
+2. Assigns a location and year **round-robin**, not by asking the model. Letting
+   Gemini choose clustered almost everything onto one city, leaving the map with
+   a single pin. With 28 posts over 4 locations and 7 years the two cycles are
+   coprime, so every combination appears exactly once: 7 per location, 4 per year.
+3. Sends each image to Gemini (`gemini-2.5-flash`, structured output) with its
+   assigned place and year, asking for a title, excerpt, body and topical tags.
+   The text describes the actual photograph rather than reading as filler.
+4. Creates everything **through the REST API** — uploads, tags, posts — so slugs,
+   tag counts, media linking and visibility all follow the same code paths as a
+   real edit.
+5. Backdates `published_at` directly in SQLite. This is the one thing the API
+   cannot do: it sets the timestamp server-side at publish time, and a past
+   `scheduled_at` publishes immediately instead of backdating. Timestamps are
+   clamped to an hour ago so the current year never produces future-dated posts.
+
+Photo selection and date jitter run off a seeded PRNG, so a re-run reproduces the
+same layout — a demo that reshuffles on every rebuild makes screenshots and bug
+reports impossible to compare. Gemini's prose still varies.
+
+### Recording from a real instance instead
+
+`scripts/record-demo-fixtures.mjs` works against any instance:
+
+```bash
+node scripts/record-demo-fixtures.mjs --base=http://localhost:8001 --session=<token>
+MEDIA_SRC=/path/to/data/media/originals scripts/build-demo.sh
+```
+
 `<token>` is a raw value from the `sessions` table; any admin session works.
-Nothing is written back to the source instance.
+Nothing is written back to the source instance. Note that this publishes that
+instance's content — see Scrubbing below.
 
 ### What the build reproduces
 
@@ -116,16 +157,28 @@ take effect. The build enforces this.
 
 ## Scrubbing
 
-The recorder scrubs at the recording boundary, so an unscrubbed fixture never
-exists on disk. It drops every settings key beginning with `_` (`_secret_key` is
-the instance's signing key), drops known credential keys, rewrites emails, and
-replaces the blog title and author identity with demo values.
+The generated pipeline produces nothing sensitive, but the recorder is also
+usable against a real blog, so it scrubs at the recording boundary — an
+unscrubbed fixture never exists on disk. It drops every settings key beginning
+with `_` (`_secret_key` is the instance's signing key), drops known credential
+keys, rewrites emails, and replaces the blog title and author identity with demo
+values.
 
 It then **audits its own output** and exits non-zero if a banned key or value
-pattern survives.
+pattern survives. The audit checks keys and value patterns rather than doing a
+raw substring search, which false-positives on innocent content — a migration is
+genuinely named `migrate_secret_key_to_secrets`.
 
-`fixtures.json` is gitignored: it is a copy of a real instance's content, and
-committing it is a publishing decision, not a build detail.
+`fixtures.json` is gitignored. For the generated pipeline that is just build
+output; if you record from a real instance, committing it is a publishing
+decision rather than a build detail.
+
+## Content licensing
+
+Photographs come from picsum.photos, which serves Unsplash images under the
+[Unsplash License](https://unsplash.com/license) (free to use commercially, no
+attribution required). Post text is model-generated. Nothing in the demo bundle
+is anyone's real content.
 
 ## Known limitations
 
