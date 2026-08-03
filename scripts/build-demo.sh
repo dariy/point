@@ -175,11 +175,26 @@ fi
 echo "==> Writing host config"
 
 # SPA fallback: every unknown path renders index.html so deep links and reloads
-# work. Media paths are listed first so a missing image 404s honestly instead of
-# returning HTML with a 200 (which would defeat dropBrokenImages()).
+# work. `_redirects` is only consulted when no file matches, so real assets are
+# unaffected.
+#
+# Assets and media are excluded from the fallback and sent to a 404 instead: a
+# missing image must not resolve to the HTML shell with a 200, which would
+# defeat dropBrokenImages() (frontend/src/utils/helpers.js) and leave broken
+# <img> elements on the page. Media lives at /YYYY/MM/<file>, which never
+# collides with an SPA route.
+cat > "$DIST/404.html" <<'EOF'
+<!doctype html>
+<meta charset="utf-8">
+<title>Not found</title>
+<p>Not found.</p>
+EOF
+
 cat > "$DIST/_redirects" <<'EOF'
-/assets/*  /assets/:splat  404
-/*         /index.html     200
+/assets/*  /404.html    404
+/19*       /404.html    404
+/20*       /404.html    404
+/*         /index.html  200
 EOF
 
 cat > "$DIST/_headers" <<'EOF'
