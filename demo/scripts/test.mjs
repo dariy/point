@@ -178,6 +178,68 @@ async function main() {
     console.log(`  ✓ created tag #${created.id}, ${tagCountBefore} → ${tagCountAfter}`);
   }
 
+  // ── Admin actions that repaint the page ────────────────────────────────
+  //
+  // Both of these are one click that has to change the page around it, and both
+  // are answered by the mock standing in for work the Go server does to files
+  // (see demo/README.md). A regression in either is invisible from the route
+  // walk above — the page still renders, it just stops responding.
+  console.log(`\nAdmin actions`);
+
+  await page.goto(`${BASE}/light/plugins`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(900);
+  const enabledCount = () =>
+    page.evaluate(() => document.querySelectorAll(".plugin-card.is-enabled").length);
+  const offRegions = () =>
+    page.evaluate(() => document.querySelectorAll(".pmap-region.is-off").length);
+  const beforePreset = { rows: await enabledCount(), off: await offRegions() };
+  await page.locator('.preset-pill:has-text("Minimalistic")').click();
+  await page.waitForTimeout(900);
+  const afterPreset = { rows: await enabledCount(), off: await offRegions() };
+  if (afterPreset.rows >= beforePreset.rows || afterPreset.off <= beforePreset.off) {
+    failures.push(
+      `applying a preset did not change the catalog or the site map ` +
+        `(enabled ${beforePreset.rows}→${afterPreset.rows}, dimmed regions ${beforePreset.off}→${afterPreset.off})`,
+    );
+  } else {
+    console.log(
+      `  ✓ preset applied: ${beforePreset.rows}→${afterPreset.rows} enabled, ` +
+        `${beforePreset.off}→${afterPreset.off} dimmed map regions`,
+    );
+  }
+
+  await page.goto(`${BASE}/light/themes`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(900);
+  const themeTitle = () =>
+    page.evaluate(
+      () =>
+        (document.getElementById("point-theme")?.textContent || "").match(
+          /theme-title: "([^"]+)"/,
+        )?.[1] || "none",
+    );
+  const beforeTheme = await themeTitle();
+  const other = await page.evaluate(
+    (active) =>
+      [...document.querySelectorAll(".theme-card")]
+        .map((c) => c.querySelector(".theme-name")?.textContent.trim())
+        .find((n) => n && n.toLowerCase() !== active.toLowerCase()) || null,
+    beforeTheme,
+  );
+  if (!other) {
+    failures.push("themes page offered no second theme to activate");
+  } else {
+    await page.locator(`.theme-card:has-text("${other}") .set-active-btn`).click();
+    await page.waitForTimeout(900);
+    const afterTheme = await themeTitle();
+    if (afterTheme.toLowerCase() !== other.toLowerCase()) {
+      failures.push(
+        `activating "${other}" left theme.css on "${afterTheme}" — the injected stylesheet did not swap`,
+      );
+    } else {
+      console.log(`  ✓ theme switched live: ${beforeTheme} → ${afterTheme}`);
+    }
+  }
+
   await browser.close();
 
   // ── Report ─────────────────────────────────────────────────────────────

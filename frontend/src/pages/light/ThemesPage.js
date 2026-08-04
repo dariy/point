@@ -13,6 +13,7 @@ import { STAR_SVG } from "../../utils/icons.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
 import { pluginHost } from "../../core/pluginHost.js";
+import { loadThemeCss } from "../../utils/themeLoader.js";
 
 export default class ThemesPage extends Component {
   constructor(container, props = {}) {
@@ -161,6 +162,10 @@ export default class ThemesPage extends Component {
     this.setState({ saving: true });
     try {
       await setActiveTheme(name);
+      // The response means the server has already rewritten theme.css, so
+      // re-fetching it repaints the whole app in the new theme the way the
+      // light/dark toggle does. Cache-busted: the URL is unchanged.
+      await loadThemeCss({ bust: true });
       store.set("toast", { message: `Theme "${name}" activated.`, type: "success" });
       this.setState({ saving: false, activeTheme: name });
     } catch (err) {
@@ -174,6 +179,9 @@ export default class ThemesPage extends Component {
     this.setState({ savingCSS: true });
     try {
       const result = await updateCustomCSS(css);
+      // Custom CSS is appended to theme.css server-side, so the same re-fetch
+      // shows the saved (and sanitized) result without a reload.
+      await loadThemeCss({ bust: true });
       // The server sanitizes site-wide CSS (@import, off-origin url(), '<').
       // Say so rather than letting the removal look like a save that worked.
       const warnings = result?.css_warnings;

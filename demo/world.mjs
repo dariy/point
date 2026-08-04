@@ -166,6 +166,13 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
         parent_ids: undefined,
       });
       existing.set(tag.name.toLowerCase(), tag);
+    } else if (body.nav_order != null && tag.nav_order !== body.nav_order) {
+      // An adopted tag keeps whatever it was created with, so nav_order has to
+      // be reconciled explicitly — otherwise a --retag run over an instance
+      // built before this existed leaves the header menu empty. PUT is
+      // partial-update, so this touches nothing else.
+      tag = await api("PUT", `/api/tags/${tag.id}`, { nav_order: body.nav_order });
+      existing.set(tag.name.toLowerCase(), tag);
     }
     // Parents are set separately in both branches: PUT is the only call that
     // *replaces* them, so a re-run cannot accumulate stale links.
@@ -176,20 +183,27 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
     return tag;
   };
 
+  // The four roots carry nav_order because that flag — not "has no parent" — is
+  // what puts a tag in the header menu and the site-title dropdown
+  // (TagGraph.NavTree is built from tags with nav_order set). Without it the
+  // tree still exists, but the header has nothing to show.
   const countryRoot = await makeTag({
     name: "country",
     kind: "tag",
     description: "Where in the world.",
+    nav_order: 1,
   });
   const cityRoot = await makeTag({
     name: "city",
     kind: "tag",
     description: "Every place, flat.",
+    nav_order: 2,
   });
   const dateRoot = await makeTag({
     name: "date",
     kind: "tag",
     description: "When these were taken.",
+    nav_order: 3,
   });
 
   for (const country of [...new Set(LOCATIONS.map((l) => l.country))]) {
@@ -225,6 +239,7 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
       name: "subject",
       kind: "tag",
       description: "What is in the frame.",
+      nav_order: 4,
     });
     for (const [group, members] of Object.entries(SUBJECT_GROUPS)) {
       const live = members.filter((t) => wanted.has(t));

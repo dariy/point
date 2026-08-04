@@ -81,6 +81,14 @@ if [ ! -f "$DIST/assets/css/common/theme.css" ]; then
   echo "         it at startup. Run the app once before building the demo." >&2
 fi
 
+# Theme sources. On a real deployment these never reach the browser: the server
+# copies the active one into common/theme.css. The demo has no server to do that
+# copy, so it ships all of them and the shim composes theme.css from whichever
+# is active — that is what makes "Set Active" change the page rather than only a
+# highlight. Six small files; only the built-ins, matching the demo's fixtures.
+mkdir -p "$DIST/assets/themes"
+cp "$ROOT_DIR"/frontend/themes/*.css "$DIST/assets/themes/"
+
 # ── Static assets ─────────────────────────────────────────────────────────
 #
 # vendor/ is --external to esbuild (leaflet, prismjs, codejar) and must ship

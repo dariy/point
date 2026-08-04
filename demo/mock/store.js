@@ -47,8 +47,29 @@ export function setAuthenticated(value) {
   }
 }
 
+/**
+ * Seed plugin presets, mirroring plugins.DefaultPresets()
+ * (api/internal/plugins/registry.go), which the real backend derives from its
+ * registry the first time the Plugins page is opened. Deriving them from the
+ * recorded catalog rather than hardcoding ids keeps "Fully featured" honest
+ * when the fixture is re-recorded against a registry that grew a plugin.
+ *
+ * Core areas are re-filled by the apply logic whatever the membership says, so
+ * a preset only has to enumerate the rest.
+ */
+function defaultPresets(plugins) {
+  const all = plugins.map((p) => p.id);
+  const advanced = new Set(["ai-analysis", "instagram", "immersive-sheet"]);
+  return {
+    minimalistic: ["immersive-sheet"],
+    standalone: all.filter((id) => !advanced.has(id)),
+    "fully-featured": all,
+  };
+}
+
 /** Structured-clone the seed so mutations never touch the imported module. */
 function seed(fx) {
+  const plugins = structuredClone(fx.plugins || []);
   return {
     settings: { ...fx.settings },
     publicSettings: { ...fx.publicSettings },
@@ -61,7 +82,11 @@ function seed(fx) {
     postNavigation: structuredClone(fx.postNavigation || {}),
     tags: structuredClone(fx.tags || []),
     media: structuredClone(fx.media || []),
-    plugins: structuredClone(fx.plugins || []),
+    plugins,
+    pluginPresets: defaultPresets(plugins),
+    // No preset has been applied to the recorded catalog, so it starts diverged
+    // — the same "custom" the backend reports before the first apply.
+    activePreset: "custom",
     themes: structuredClone(fx.themes || []),
     activeTheme: structuredClone(fx.activeTheme || null),
     customCss: structuredClone(fx.customCss || { css: "" }),
@@ -138,18 +163,45 @@ export function paginate(rows, query, key, defaultPerPage = 20) {
   };
 }
 
+/**
+ * Restrict rows to the `year_from`..`year_to` window the timeline sends.
+ *
+ * The real filter is not a comparison against published_at: buildPostsQuery
+ * (api/internal/repository/queries_posts.go) keeps posts carrying a
+ * `kind: "year"` tag whose slug casts to a year inside the range. Matching the
+ * same tag here keeps the demo honest — filtering on the date column instead
+ * would disagree with the archive for any post whose date and year tag differ,
+ * and would silently pass while the tag-driven views disagreed with it.
+ *
+ * An absent or partial range means "all years", which is what the timeline
+ * sends when it is showing everything.
+ */
+function withinYears(rows, query) {
+  const from = Number(query.year_from);
+  const to = Number(query.year_to);
+  if (!(from > 0 && to > 0)) return rows;
+  return rows.filter((p) =>
+    (p.tags || []).some((t) => {
+      if (t.kind !== 'year') return false;
+      const year = parseInt(t.slug, 10);
+      return Number.isFinite(year) && year >= from && year <= to;
+    }),
+  );
+}
+
 /** `{posts, pagination:{...}}` — the shape the public page payloads use. */
 export function paginatedPage(rows, query, perPageDefault) {
+  const matching = withinYears(rows, query);
   const perPage = Number(query.per_page) || perPageDefault;
   const page = Number(query.page) || 1;
   const start = (page - 1) * perPage;
   return {
-    posts: rows.slice(start, start + perPage),
+    posts: matching.slice(start, start + perPage),
     pagination: {
       page,
-      pages: Math.max(1, Math.ceil(rows.length / perPage)),
+      pages: Math.max(1, Math.ceil(matching.length / perPage)),
       per_page: perPage,
-      total: rows.length,
+      total: matching.length,
     },
   };
 }

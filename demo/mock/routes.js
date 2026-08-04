@@ -60,10 +60,41 @@ function postDetail(state, post) {
   };
 }
 
-/** Tags carrying a given post, by slug match against the post's tag list. */
+/**
+ * A tag's own slug plus every descendant's.
+ *
+ * A parent tag page lists everything filed anywhere beneath it: /tags/light
+ * shows the posts of morning-light, mist, sky and twilight, not only the posts
+ * carrying `light` itself. TagService.GetPostsByTag does the same closure over
+ * the real graph, so without this the demo's inner tags each work while every
+ * grouping tag above them reads as empty.
+ *
+ * The tree is a DAG — a city is a child of both its country and the flat `city`
+ * index — so a tag is reachable by more than one path; `seen` terminates the
+ * walk and keeps each tag counted once.
+ */
+function tagSlugClosure(state, tag) {
+  const slugs = new Set();
+  const seen = new Set();
+  const walk = (t) => {
+    if (!t || seen.has(t.id)) return;
+    seen.add(t.id);
+    slugs.add(t.slug);
+    for (const ref of t.children || []) {
+      walk(state.tags.find((x) => x.id === ref.id));
+    }
+  };
+  walk(tag);
+  return slugs;
+}
+
+/** Posts filed under a tag or any of its descendants, newest first. */
 function postsForTag(state, slug) {
+  const tag = state.tags.find((t) => t.slug === slug);
+  if (!tag) return [];
+  const slugs = tagSlugClosure(state, tag);
   return readablePosts(state)
-    .filter((p) => (p.tags || []).some((t) => t.slug === slug))
+    .filter((p) => (p.tags || []).some((t) => slugs.has(t.slug)))
     .sort(byNewest);
 }
 
@@ -88,6 +119,66 @@ function breadcrumbsFor(state, tag) {
     current = parent;
   }
   return chain;
+}
+
+/** `{presets, active}` — the shape of GET /api/plugins/presets. */
+function presetsView(state) {
+  return { presets: state.pluginPresets, active: state.activePreset };
+}
+
+/**
+ * Recompute each core plugin's `locked` flag.
+ *
+ * Mirrors plugins.IsLockedOff: the sole enabled member of a core area may not
+ * be disabled, and the Plugins page renders that row read-only. The frontend
+ * recomputes this itself after a single toggle, but a preset apply takes the
+ * server's word for it — and a page revisit re-reads GET /api/plugins — so the
+ * store has to keep the flag true.
+ */
+function relockPlugins(state) {
+  for (const p of state.plugins) {
+    if (!p.core) continue;
+    const enabled = state.plugins.filter((q) => q.area === p.area && q.enabled);
+    p.locked = !!p.enabled && enabled.length === 1;
+  }
+}
+
+/**
+ * Set every plugin's enabled state from a preset's membership.
+ *
+ * Mirrors PluginsHandler.ApplyPreset (api/internal/api/plugin_presets.go),
+ * including the two corrections it applies to the raw membership list: a core
+ * area a preset leaves empty falls back to its default member (Minimalistic
+ * names no immersive viewer, yet one has to stay on), and an exclusive area
+ * keeps only its first enabled member (Fully featured names all three tag
+ * visualizations, but only one can own /tags). Without both, the demo would
+ * show states the real backend refuses to produce.
+ */
+function applyPluginPreset(state, list) {
+  const want = new Set(list);
+  const membersOf = (area) => state.plugins.filter((p) => p.area === area);
+
+  for (const p of state.plugins) {
+    if (!p.core || !p.area) continue;
+    const members = membersOf(p.area);
+    if (members.some((m) => want.has(m.id))) continue;
+    want.add((members.find((m) => m.default_enabled) || members[0]).id);
+  }
+
+  const seenAreas = new Set();
+  for (const p of state.plugins) {
+    if (!p.exclusive || !p.area || seenAreas.has(p.area)) continue;
+    seenAreas.add(p.area);
+    let kept = false;
+    for (const m of membersOf(p.area)) {
+      if (!want.has(m.id)) continue;
+      if (kept) want.delete(m.id);
+      else kept = true;
+    }
+  }
+
+  for (const p of state.plugins) p.enabled = want.has(p.id);
+  relockPlugins(state);
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────
@@ -187,7 +278,11 @@ export const routes = [
   ["GET", "/api/pages/tags", ({ state }) => ok(state.pages.tags)],
   ["GET", "/api/pages/graph", ({ state }) => ok(state.pages.graph)],
   ["GET", "/api/pages/map", ({ state }) => ok(state.pages.map ?? { locations: [] })],
-  ["GET", "/api/pages/nav", ({ state }) => ok(state.pages.nav ?? { items: [] })],
+  // `menu` is the header's tree and `tags` the site-title dropdown's; api/nav.js
+  // falls back to `menu` when `tags` is absent, which is what the server sends
+  // in the default "tags" mode. The empty fallback has to use the same key —
+  // `{items: []}` would leave navTags undefined and refetch on every mount.
+  ["GET", "/api/pages/nav", ({ state }) => ok(state.pages.nav ?? { menu: [] })],
 
   [
     "GET",
@@ -579,7 +674,35 @@ export const routes = [
   ],
 
   ["GET", "/api/plugins", ({ state }) => ok(state.plugins)],
-  ["GET", "/api/plugins/presets", () => ok([])],
+  ["GET", "/api/plugins/presets", ({ state }) => ok(presetsView(state))],
+
+  // Preset membership editing. Unknown plugin ids are dropped rather than
+  // rejected: the Plugins page only ever sends ids it just rendered.
+  [
+    "PUT",
+    "/api/plugins/presets/:id",
+    ({ state, params, body }) => {
+      if (!state.pluginPresets[params.id]) return notFound("unknown preset");
+      const known = new Set(state.plugins.map((p) => p.id));
+      const wanted = Array.isArray(body?.plugins) ? body.plugins : [];
+      state.pluginPresets[params.id] = [...new Set(wanted)].filter((id) => known.has(id));
+      return ok(presetsView(state));
+    },
+  ],
+
+  // Applying returns the whole catalog, which is what makes the site map, the
+  // group cards and the toggles below re-render together in one round-trip.
+  [
+    "POST",
+    "/api/plugins/presets/:id/apply",
+    ({ state, params }) => {
+      const list = state.pluginPresets[params.id];
+      if (!list) return notFound("unknown preset");
+      applyPluginPreset(state, list);
+      state.activePreset = params.id;
+      return ok(state.plugins);
+    },
+  ],
 
   [
     "PATCH",
@@ -595,6 +718,10 @@ export const routes = [
           if (other !== plugin && other.area === plugin.area) other.enabled = false;
         }
       }
+      relockPlugins(state);
+      // An individual toggle diverges from whatever preset was applied — the
+      // backend rewrites plugins.active_preset to "custom" for the same reason.
+      state.activePreset = "custom";
       return ok(plugin);
     },
   ],

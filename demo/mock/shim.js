@@ -14,8 +14,10 @@
  * so the demo exercises genuine error handling and caching rather than a
  * parallel implementation of it.
  *
- * Everything that is not an API call (theme CSS, vendor geojson, media images)
- * passes through to the network untouched — those are real static files.
+ * Everything that is not an API call (vendor geojson, media images) passes
+ * through to the network untouched — those are real static files. The one
+ * exception is theme.css, which is a static file only because a server wrote it
+ * there; see THEME_CSS below.
  */
 
 import { routes } from "./routes.js";
@@ -26,6 +28,39 @@ const NativeXHR = window.XMLHttpRequest;
 
 /** Paths the mock owns. Anything else is a real static asset. */
 const INTERCEPT = /^\/(api|comments)\//;
+
+/**
+ * The one non-API path the mock owns.
+ *
+ * On a real deployment this is a file that the *server* rewrites: activating a
+ * theme or saving custom CSS runs ThemeService.SyncActiveTheme, which copies the
+ * chosen theme over frontend/css/common/theme.css and appends the site's custom
+ * CSS. Served statically it would be frozen at whatever was active when the demo
+ * was recorded, so "Set Active" would move a highlight and change nothing else.
+ * Composing it here from the store — same two ingredients, same order — makes
+ * both the theme switch and the CSS editor take effect immediately.
+ */
+const THEME_CSS = "/assets/css/common/theme.css";
+
+async function themeCss() {
+  const state = await getState();
+  const name = String(state.activeTheme?.name || "default").toLowerCase();
+
+  // Themes ship as /assets/themes/<name>.css (demo/scripts/build.sh). A build
+  // predating that, or a theme with no file, falls back to the baked-in
+  // theme.css so the page stays styled instead of losing every variable.
+  let res = await nativeFetch(`/assets/themes/${encodeURIComponent(name)}.css`);
+  if (!res.ok) res = await nativeFetch(THEME_CSS);
+  let css = res.ok ? await res.text() : "";
+
+  const custom = state.customCss?.css || "";
+  if (custom) css += `\n\n/* System Custom CSS */\n${custom}`;
+
+  return new Response(css, {
+    status: 200,
+    headers: { "Content-Type": "text/css" },
+  });
+}
 
 // A touch of latency so spinners, optimistic updates and disabled-while-saving
 // states behave the way they do against a real server. Instant resolution makes
@@ -131,6 +166,8 @@ window.fetch = async function mockFetch(input, init = {}) {
   const url = typeof input === "string" ? input : input.url;
   const pathname = new URL(url, window.location.origin).pathname;
 
+  // themeLoader.js cache-busts with a ?t= query, so match on the path alone.
+  if (pathname === THEME_CSS) return themeCss();
   if (!INTERCEPT.test(pathname)) return nativeFetch(input, init);
 
   const method = (init.method || (typeof input === "object" && input.method) || "GET").toUpperCase();

@@ -90,7 +90,7 @@ export class PluginSettingsPanel extends Component {
 
     return `
       <div class="plugin-settings-overlay" data-close></div>
-      <aside class="plugin-settings-drawer" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)} settings">
+      <aside class="plugin-settings-drawer${this._opened ? " is-open" : ""}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)} settings">
         <header class="plugin-settings-header">
           <h2 class="plugin-settings-title">${escapeHtml(title)}</h2>
           <button type="button" class="plugin-settings-close" data-close aria-label="Close">${X_SVG}</button>
@@ -142,8 +142,18 @@ export class PluginSettingsPanel extends Component {
     }
     document.body.style.overflow = "hidden";
 
-    // Slide in on the next frame so the CSS transition runs from off-screen.
-    requestAnimationFrame(() => this.$(".plugin-settings-drawer")?.classList.add("is-open"));
+    // Slide in on the next frame so the CSS transition runs from off-screen —
+    // but only for the first render. `is-open` is also part of render()'s output
+    // once open, because afterRender re-runs on every setState: a re-render while
+    // the drawer is open (the Save spinner) produces a fresh element without the
+    // class, which snaps it off-screen and replays the slide-in. Saving then read
+    // as the panel reopening itself before closing.
+    if (!this._opened) {
+      requestAnimationFrame(() => {
+        this._opened = true;
+        this.$(".plugin-settings-drawer")?.classList.add("is-open");
+      });
+    }
 
     this.$$("[data-close]").forEach((el) =>
       el.addEventListener("click", () => this._close()),
@@ -230,6 +240,9 @@ export class PluginSettingsPanel extends Component {
     const drawer = this.$(".plugin-settings-drawer");
     const done = () => this.props.onClose?.();
     if (!drawer) return done();
+    // Cleared before the class is removed so a re-render landing mid-animation
+    // renders the closed state rather than putting `is-open` straight back.
+    this._opened = false;
     drawer.classList.remove("is-open");
     let called = false;
     const once = () => {

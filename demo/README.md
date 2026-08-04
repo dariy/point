@@ -74,6 +74,23 @@ handling and caching instead of a parallel implementation of it.
 Tag pages are **synthesized** from the entity stores rather than recorded, so a
 tag created inside the demo gets a working page too.
 
+### Work the server normally does to files
+
+Two pieces of demo behaviour are not endpoints at all — on a real deployment the
+Go server *rewrites files* in response to an admin action, and a static build
+would freeze them at whatever they were when the fixtures were recorded:
+
+- **`/assets/css/common/theme.css`** — `ThemeService.SyncActiveTheme` copies the
+  active theme over this file and appends the site's custom CSS. `shim.js`
+  intercepts the path and composes the same two ingredients from the store, so
+  activating a theme or saving custom CSS repaints the page immediately instead
+  of only moving a highlight. The theme sources ship as `/assets/themes/*.css`.
+- **Plugin presets** — `plugins.DefaultPresets()` is seeded into the store
+  (`store.js`) and `POST /api/plugins/presets/:id/apply` reproduces the
+  backend's two corrections: a core area a preset empties falls back to its
+  default member, and an exclusive area keeps only its first. Without them the
+  demo could show combinations the real backend refuses to produce.
+
 ### Failing soft
 
 An unmatched endpoint returns an empty `200`, never a rejection and never a
