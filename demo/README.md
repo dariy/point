@@ -41,6 +41,7 @@ demo/
     generate-content.mjs picsum photos + Gemini prose
     retag-content.mjs    restructure tags without regenerating prose
     record-fixtures.mjs  record an instance's API responses
+    fill-excerpts.mjs    synthetic excerpt prose for posts recorded without one
     build.sh             fixtures + frontend → demo/dist/
     build-html.mjs       index.html templating the Go server normally does
     build-feeds.mjs      static feed.xml and sitemap.xml
@@ -78,6 +79,12 @@ they share): it is one payload per place *and* per timeline range, so recording
 it would mean a blob per combination, and a place the visitor retagged inside
 the demo would still answer with the cloud it had at recording time.
 
+The tag graph is the in-between case: recorded, but re-scored live whenever the
+Atlas asks for a timeline range (`GET /api/pages/graph?year_from=…`). The blob
+supplies the nodes and the store supplies the arithmetic, so narrowing the
+timeline drops the places with nothing left in range — same as the backend, and
+for the same reason as the cloud, one blob per range is not a fixture.
+
 ### Work the server normally does to files
 
 Two pieces of demo behaviour are not endpoints at all — on a real deployment the
@@ -111,16 +118,38 @@ explicitly exempts from that event.
 # 1. Generate content and record fixtures (~5 min, needs network + a Gemini key)
 GEMINI_API_KEY=... demo/scripts/make-content.sh
 
-# 2. Build
+# 2. Fill any excerpt the recording left empty (see below)
+node demo/scripts/fill-excerpts.mjs
+
+# 3. Build
 demo/scripts/build.sh              # or --skip-media for a fast iteration loop
 
-# 3. Serve and verify, with the backend STOPPED
+# 4. Serve and verify, with the backend STOPPED
 demo/scripts/run.sh                                       # http://localhost:8002
 node demo/scripts/test.mjs --base=http://localhost:8002
 ```
 
 `test.mjs` drives a real browser: `npm install`, then `npx playwright
 install chromium` if the browser is not already cached.
+
+### Excerpts
+
+The demo's post bodies hold a photograph and nothing else — the writing lives in
+`excerpt`, which is what the post cards preview and what the Sheet viewer
+renders. The recorded bundle nevertheless came back with `excerpt: null` on
+every post: `PUT /api/posts/:id` merges an omitted `title`, `content`, `slug`,
+`formatter`, `status` and `type` from the stored post but *not* an omitted
+`excerpt`, so `retag-content.mjs`'s tags-only write cleared the field for every
+post whose body it had already stripped of prose.
+
+`fill-excerpts.mjs` writes one or two paragraphs onto each post that has none,
+seeded from the post's id (so re-runs are byte-identical and the copies of a
+post across `posts`, `postDetail` and the prerendered `pages` payloads all
+agree) and assembled from its own city, country, year and topic tags. It is
+filler that fits the archive, not a description of the photograph — prose that
+is actually *about* the images needs a fresh `make-content.sh` run with a Gemini
+key. Pass `--force` to overwrite excerpts that are already there, `--dry-run` to
+see the text without writing.
 
 ### Serving it
 
@@ -166,6 +195,15 @@ have them, then matches each one's name against its boundary files — so a
 country with coordinates is drawn as a filled shape and one without is not
 drawn at all, which is what left the map showing four city pins over an empty
 world.
+
+Each place is visited in **some** years rather than all of them (`years` on each
+entry in `LOCATIONS`, dealt out by `placementFor`). The first generation dealt
+place and year from two round-robins whose lengths are coprime — 4 and 7 — so 28
+posts covered all 28 combinations and every place had a post in every year. The
+archive read fine, but it made the Atlas's timeline filter look broken: a filter
+that can never drop a place from the map is indistinguishable from one that does
+nothing. Now 2020 is Lisbon alone and 2026 is Kyoto and El Chaltén, while every
+year still holds at least one place so the timeline's histogram has no gap.
 
 The topical vocabulary is **closed**. Letting the model invent keywords per
 photo produced ~100 tags of which roughly 80 named exactly one post — a flat
@@ -310,6 +348,16 @@ Photographs come from picsum.photos, which serves Unsplash images under the
 [Unsplash License](https://unsplash.com/license) (free to use commercially, no
 attribution required). Post text is model-generated. Nothing in the demo bundle
 is anyone's real content.
+
+The footer credits the source anyway — `ADD_SETTINGS` in `record-fixtures.mjs`
+writes `footer_copyright` into every recorded settings map, so the demo reads
+"© UI showcase of Point, photos are from picsum.photos, admin UI" with the last
+two linked. It is an addition rather than a `REPLACE_SETTINGS` entry because an
+unset setting is absent from the API response, and there is nothing to replace.
+
+Both constants only take effect when fixtures are **re-recorded** — the build
+reads `demo/mock/fixtures/fixtures.json`, not the script. Editing one of them
+without re-running `make-content.sh` leaves the demo showing the old values.
 
 ## Known limitations
 

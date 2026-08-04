@@ -162,11 +162,53 @@ function toExcerpt(prose) {
 const CITY_NAMES = new Set(LOCATIONS.map((l) => l.name));
 const YEAR_NAMES = new Set(YEARS.map(String));
 
+/**
+ * Deals each of a city's posts a year from that city's own window (see
+ * LOCATIONS in demo/world.mjs), cycling so the posts spread evenly across it.
+ *
+ * The first generation dealt location and year from two round-robins whose
+ * lengths happen to be coprime (4 and 7), so 28 posts landed on all 28
+ * combinations: every place had a post in every year. That reads fine on the
+ * archive, but it makes the Atlas's timeline filter look broken — narrowing the
+ * range can never drop a place from the map when every place is in every range.
+ */
+function yearScheduler() {
+  const seen = new Map();
+  return (cityName) => {
+    const loc = LOCATIONS.find((l) => l.name === cityName);
+    if (!loc) return null;
+    const n = seen.get(cityName) || 0;
+    seen.set(cityName, n + 1);
+    return loc.years[n % loc.years.length];
+  };
+}
+
+/**
+ * Move a recorded timestamp onto `year`, keeping its month, day and time.
+ *
+ * The archive's dates and its year tags have to agree — the timeline reads the
+ * tags, the post cards print the date — so rescheduling a post's year without
+ * this would leave a "2026" post dated 2020.
+ */
+function restamp(stamp, year) {
+  if (typeof stamp !== "string" || !/^\d{4}-/.test(stamp)) return stamp;
+  const moved = `${year}${stamp.slice(4)}`;
+  // Same clamp generate-content.mjs applies: the current year is only partly
+  // elapsed, and a post dated in the future sorts above everything and reads
+  // as a bug.
+  const ceiling = new Date(Date.now() - 3600_000);
+  return new Date(moved.replace(" ", "T") + "Z") > ceiling
+    ? ceiling.toISOString().slice(0, 19).replace("T", " ")
+    : moved;
+}
+
 async function main() {
   console.log(`Restructuring ${BASE}`);
 
   const posts = await listAll("/api/posts", "posts");
   console.log(`· ${posts.length} post(s)`);
+  // Deal the years in a stable order, so a re-run reproduces the same archive.
+  posts.sort((a, b) => a.id - b.id);
 
   // Timestamps are captured before any write and restored after: the archive
   // spans 2020–2026 only because generate-content.mjs backdated it
@@ -181,6 +223,7 @@ async function main() {
 
   const dropped = new Set();
   const used = new Set();
+  const nextYear = yearScheduler();
   let moved = 0;
 
   for (const summary of posts) {
@@ -188,10 +231,17 @@ async function main() {
     const names = (post.tags || []).map((t) => (typeof t === "string" ? t : t.name));
 
     const city = names.find((n) => CITY_NAMES.has(n));
-    const year = names.find((n) => YEAR_NAMES.has(n));
-    if (!city || !year) {
+    if (!city || !names.some((n) => YEAR_NAMES.has(n))) {
       console.warn(`  ! post ${post.id} has no city/year tag — leaving it alone`);
       continue;
+    }
+    // The post keeps its place and its prose; only its year is redealt, onto
+    // that place's window. Its timestamp moves with it (see restamp).
+    const year = String(nextYear(city));
+    const stamp = stamps.get(post.id);
+    if (stamp) {
+      stamp.published_at = restamp(stamp.published_at, year);
+      stamp.created_at = restamp(stamp.created_at, year);
     }
 
     const topics = [];

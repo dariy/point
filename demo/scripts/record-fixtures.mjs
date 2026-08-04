@@ -77,10 +77,28 @@ const DROP_SETTING_KEYS = [
 const REPLACE_SETTINGS = {
   blog_title: "Point Demo",
   blog_subtitle: "A demo of the Point photo blog engine",
-  author_name: "Demo Author",
-  author_bio: "This is a demonstration instance of Point.",
+  author_name: "Demo",
+  author_bio: "This is an UI demonstration of Point.",
   tags_visibility: "all",
 };
+
+/**
+ * Settings written into every recorded settings map whether the source instance
+ * carries them or not — REPLACE_SETTINGS only rewrites keys that are already
+ * there, and an unset setting is simply absent from the API's response.
+ *
+ * `footer_copyright` credits picsum.photos, where the demo's photographs come
+ * from (see README, Content licensing). `{{author_name}}` and `{{engine}}` are
+ * tokens and `[text](url)` is a link (PublicFooter.js); everything else is
+ * literal text and is escaped — raw HTML here renders as visible markup.
+ */
+const ADD_SETTINGS = {
+  footer_copyright:
+    "© UI showcase of {{engine}}, photos are from [picsum.photos](https://picsum.photos), [admin UI](/light)",
+};
+
+/** A recorded object carrying this key is a settings map. */
+const SETTINGS_MARKER = "blog_title";
 
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 
@@ -91,6 +109,11 @@ const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
  * is literally the instance's signing key, and `_version_check_cached` leaks
  * the deployed version. Prefix-dropping is deliberately broader than an
  * explicit list so a newly-added internal key is excluded by default.
+ *
+ * ADD_SETTINGS is applied by shape rather than at the three call sites that
+ * record a settings map today (`/api/settings`, `/api/settings/public` and the
+ * copy embedded in `/api/pages/home`), so a page payload that starts embedding
+ * settings later carries them too.
  */
 function scrub(value) {
   if (Array.isArray(value)) return value.map(scrub);
@@ -101,7 +124,7 @@ function scrub(value) {
       if (DROP_SETTING_KEYS.includes(k)) continue;
       out[k] = k in REPLACE_SETTINGS ? REPLACE_SETTINGS[k] : scrub(v);
     }
-    return out;
+    return SETTINGS_MARKER in out ? { ...out, ...ADD_SETTINGS } : out;
   }
   if (typeof value === "string") return value.replace(EMAIL_RE, "demo@example.com");
   return value;

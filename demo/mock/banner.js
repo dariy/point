@@ -61,8 +61,7 @@ function buildBanner() {
   bar.className = "demo-banner";
   bar.setAttribute("role", "note");
   bar.innerHTML = `
-    <p><strong>Point demo.</strong> Everything works, nothing is saved —
-       changes live in this browser tab only.</p>
+    <p><strong>Point demo.</strong> Changes live in this browser tab only.</p>
     <a class="demo-admin-link" href="/light">Open the admin →</a>
     <button type="button" data-demo-reset>Reset demo</button>
     <button type="button" data-demo-dismiss aria-label="Hide this notice">Hide</button>

@@ -224,6 +224,64 @@ function atlasCloud(state, tag, query) {
 }
 
 /**
+ * The tag graph narrowed to a timeline range — PagesHandler.GetTagsGraph with
+ * `year_from`/`year_to` (api/internal/api/pages.go).
+ *
+ * The graph is one of the recorded blobs, but the range can't be: it is a
+ * payload per range, and the Atlas redraws its markers from this on every move
+ * of the timeline. So the blob supplies the nodes and the store supplies the
+ * arithmetic — tags with nothing left in range drop out, the rest carry their
+ * in-range count (which is what sizes a marker).
+ *
+ * Counts roll up the sub-tree, matching GetHierarchicalPostCountsInYearRange:
+ * a post is usually tagged with its city and not its country, so counting only
+ * direct tags would drop every country shape the moment the timeline narrowed —
+ * emptying the Atlas of the very thing it draws.
+ */
+function scopedGraph(state, query) {
+  const graph = state.pages.graph || {};
+  const from = Number(query.year_from);
+  const to = Number(query.year_to);
+  if (!(from > 0 && to > 0 && from <= to)) return graph;
+
+  const inRange = withinYears(readablePosts(state), query);
+  const inRangeIds = new Set(inRange.map((p) => p.id));
+
+  const counts = new Map();
+  for (const tag of state.tags) {
+    const slugs = tagSlugClosure(state, tag);
+    const n = inRange.filter((p) =>
+      (p.tags || []).some((t) => slugs.has(t.slug)),
+    ).length;
+    if (n > 0) counts.set(tag.id, n);
+  }
+
+  const tags = (graph.tags || [])
+    .filter((t) => counts.has(t.id))
+    .map((t) => ({ ...t, post_count: counts.get(t.id) }));
+  const kept = new Set(tags.map((t) => t.id));
+
+  const scoped = {
+    ...graph,
+    tags,
+    hierarchyEdges: (graph.hierarchyEdges || []).filter(
+      (e) => kept.has(e.parent) && kept.has(e.child),
+    ),
+  };
+
+  // The force-graph's post nodes, when the blob carries them (the Atlas asks
+  // for `posts=0` and never sees these). Edges only ever join surviving nodes.
+  if (graph.posts) {
+    scoped.posts = graph.posts.filter((p) => inRangeIds.has(p.id));
+    scoped.membershipEdges = (graph.membershipEdges || []).filter(
+      (e) => inRangeIds.has(e.post) && kept.has(e.tag),
+    );
+  }
+
+  return scoped;
+}
+
+/**
  * Walk a tag's ancestry for breadcrumbs.
  *
  * Recorded tags carry `parents[]`, so this follows the first parent up to the
@@ -401,7 +459,7 @@ export const routes = [
   ],
 
   ["GET", "/api/pages/tags", ({ state }) => ok(state.pages.tags)],
-  ["GET", "/api/pages/graph", ({ state }) => ok(state.pages.graph)],
+  ["GET", "/api/pages/graph", ({ state, query }) => ok(scopedGraph(state, query))],
   [
     "GET",
     "/api/pages/graph/tag/:id",

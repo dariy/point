@@ -182,7 +182,7 @@ function inputHtml(key, value, { posts = [] }) {
   if (key === "footer_copyright") {
     const v = escapeHtml(String(value || ""));
     return `<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
-      <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Leave blank for the default.</small>`;
+      <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Links: <code>[text](https://example.com)</code> or <code>[text](/path)</code>. Leave blank for the default.</small>`;
   }
   if (key.startsWith("gemini_prompt_")) {
     // ponytail: placeholders mirror media_service.go's built-in defaults.

@@ -26,10 +26,10 @@ import { DatabaseSync } from "node:sqlite";
 import { Buffer } from "node:buffer";
 
 import {
-  LOCATIONS,
   YEARS,
   TOPICS,
   buildTagScaffold,
+  placementFor,
   postTags,
   toTopic,
 } from "../world.mjs";
@@ -252,12 +252,10 @@ async function createOne(photo, index) {
     download(`https://picsum.photos/id/${photo.id}/640/${Math.round((640 * photo.height) / photo.width)}`),
   ]);
 
-  // Location and year are assigned round-robin rather than chosen by the model.
-  // Letting Gemini pick clustered almost everything onto one city, which leaves
-  // the map with a single pin and the timeline lopsided — the two features the
-  // spread exists to demonstrate.
-  const location = LOCATIONS[index % LOCATIONS.length];
-  const year = YEARS[index % YEARS.length];
+  // Location and year are assigned by the world's own schedule rather than
+  // chosen by the model — see placementFor, which also explains why they are not
+  // a full location × year grid.
+  const { location, year } = placementFor(index);
 
   const text = await generateText(photo, small.toString("base64"), location, year);
 

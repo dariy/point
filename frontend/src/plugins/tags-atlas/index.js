@@ -114,6 +114,9 @@ export default class AtlasPage extends Component {
     this._placeActivators = new Map(); // tagId -> { latLng, setActive, key } for programmatic selection
     this._hiddenTypes = new Set(); // node types filtered out via the legend
     this._reposition = () => this._repositionCloud();
+    this._graphReq = 0; // monotonic token guarding against out-of-order graph fetches
+    this._drawSeq = 0; // monotonic token; only the newest _drawLayers pass may draw
+    this._didFitBounds = false; // the opening fit-to-places happens once, not per filter
 
     this._timeline = null;
 
@@ -244,15 +247,63 @@ export default class AtlasPage extends Component {
     ViewContext.update({ years }, { replace: true });
   }
 
+  /** Query params carrying the active timeline scope, if any. */
+  _scopeParams() {
+    const vc = ViewContext.current();
+    return vc.years ? { year_from: vc.years[0], year_to: vc.years[1] } : {};
+  }
+
   /**
-   * Apply the current timeline year scope. Posts are fetched per-place and
-   * year-scoped server-side, so a scope change just re-fetches the open place's
-   * cloud (its cache key embeds the year range); with no place selected there is
-   * nothing to do.
+   * Apply the current timeline year scope to the map itself: re-fetch the graph
+   * for the range and redraw the places, so narrowing the timeline drops the
+   * places with nothing left in it and rescales the markers that remain. The
+   * open place's cloud follows (its cache key embeds the range).
+   *
+   * The markers are redrawn on the live map rather than through setState — a
+   * re-render would tear down and rebuild the Leaflet map and the timeline,
+   * which reads as a blink on every drag of the timeline handle.
    */
-  _applyYearScope() {
-    if (this._activeTag && this._activeAnchor) {
-      this._loadAndSpawnCloud(this._activeTag, this._activeAnchor);
+  async _applyYearScope() {
+    const token = ++this._graphReq;
+    let data;
+    try {
+      data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
+    } catch {
+      return; // keep the places already drawn rather than emptying the map
+    }
+    if (this._unmounted || !this._map || token !== this._graphReq) return;
+
+    this.state.data = data;
+    this._redrawPlaces();
+  }
+
+  /**
+   * Rebuild the place layer from `state.data`, keeping the current selection if
+   * that place survived the new scope. Everything the old layer owned — shapes,
+   * markers, and the activators closing over them — is dropped first, so no
+   * handler is left holding a layer that has been removed from the map.
+   */
+  async _redrawPlaces() {
+    const keepTagId = this._activeTag?.id ?? null;
+
+    // Drop the highlight callback before its layer goes: it closes over the old
+    // marker/polygon, and styling one already removed from the map throws.
+    this._activeSetActive = null;
+    this._clearSelection();
+
+    this._countryLayer?.clearLayers();
+    this._markerLayer?.clearLayers();
+    this._placeActivators.clear();
+    this._tagsById.clear();
+    this._buildIndexes(this.state.data);
+
+    // The boundary files are cached by now, so this settles within a microtask.
+    await this._drawLayers(window.L);
+    if (this._unmounted || !this._map) return;
+
+    // Re-open the place the user was looking at, when the range still has it.
+    if (keepTagId != null && this._placeActivators.has(keepTagId)) {
+      this._selectPlaceById(keepTagId, { pan: false });
     }
   }
 
@@ -275,7 +326,11 @@ export default class AtlasPage extends Component {
     try {
       // posts=0: the Atlas only needs markers + hierarchy up front; each place's
       // posts are fetched lazily on tap (getTagCloud), so skip the full post set.
-      const data = await getTagsGraph({ posts: 0 });
+      // A year range in the URL scopes the places from the first paint, so a
+      // shared/reloaded link opens on the same map the timeline last showed.
+      const token = ++this._graphReq;
+      const data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
+      if (token !== this._graphReq) return; // a scope change overtook this load
       document.title = "Atlas";
       setCanonical(`${window.location.origin}/tags`);
       this._buildIndexes(data);
@@ -385,6 +440,11 @@ export default class AtlasPage extends Component {
    *      province/state wins the click within its own borders.
    */
   async _drawLayers(L) {
+    // A timeline change can start a redraw while the opening pass is still
+    // awaiting its boundary files. Both would then add to the same layers,
+    // leaving the map holding two scopes at once — so only the newest pass draws.
+    const seq = ++this._drawSeq;
+
     const geoTags = (this.state.data.tags || []).filter(
       (t) => typeof t.latitude === "number" && typeof t.longitude === "number",
     );
@@ -412,7 +472,7 @@ export default class AtlasPage extends Component {
       fetchGeojson("_caProvinces", CA_PROVINCES_GEOJSON),
       fetchGeojson("_usStates", US_STATES_GEOJSON),
     ]);
-    if (this._unmounted || !this._map) return;
+    if (this._unmounted || !this._map || seq !== this._drawSeq) return;
 
     const shapeTagIds = new Set();
     const bounds = [];
@@ -552,16 +612,33 @@ export default class AtlasPage extends Component {
       bounds.push([tag.latitude, tag.longitude]);
     });
 
-    if (bounds.length) {
+    // Fit to the places once, on the opening draw. A timeline redraw keeps the
+    // user's own pan and zoom — refitting on every handle drag would fling the
+    // map around while they are reading it.
+    if (bounds.length && !this._didFitBounds) {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+      this._didFitBounds = true;
     }
 
-    // Honour any year range carried in the URL now that the places exist.
-    this._applyYearScope();
+    this._updateHint(bounds.length);
 
     // If we arrived here by closing a post that was opened from the Atlas,
     // reselect its place and highlight the post chip.
     this._restoreFromPost();
+  }
+
+  /**
+   * The idle hint doubles as the empty state: a timeline range can leave the map
+   * with no places at all, which otherwise reads as a failed load.
+   */
+  _updateHint(placeCount) {
+    const hint = this.$("#atlas-hint");
+    if (!hint) return;
+    hint.textContent = placeCount
+      ? "Click a place to reveal its tags & posts"
+      : "No places in this timeline range";
+    hint.classList.toggle("atlas-hint--empty", !placeCount);
+    hint.classList.remove("is-hidden");
   }
 
   // ── Selection → on-map cloud ────────────────────────────────────────────────
@@ -607,8 +684,10 @@ export default class AtlasPage extends Component {
 
     const spawned = this._loadAndSpawnCloud(tag, anchorLatLng, opts);
 
-    // Nudge the place into view if its cloud would spill off an edge.
-    if (typeof this._map.panInside === "function") {
+    // Nudge the place into view if its cloud would spill off an edge. Skipped
+    // when the selection is being restored rather than made (`pan: false`, from
+    // a timeline redraw), where moving the map under the user is unwelcome.
+    if (opts.pan !== false && typeof this._map.panInside === "function") {
       this._map.panInside(anchorLatLng, { padding: [220, 220] });
     }
     return spawned;

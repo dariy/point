@@ -112,69 +112,70 @@ type mockRepository struct {
 		ID   int64
 		Slug string
 	}, error)
-	MockUpsertTagLocation               func(ctx context.Context, tagID int64, lat, lon float64) error
-	MockGetTagLocationsByTagIDs         func(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error)
-	MockDeleteTagLocation               func(ctx context.Context, tagID int64) error
-	MockListOrphanedMedia               func(ctx context.Context, limit, offset int64) ([]models.Medium, error)
-	MockCountOrphanedMedia              func(ctx context.Context) (int64, error)
-	MockGetMediaByIDs                   func(ctx context.Context, ids []int64) ([]models.Medium, error)
-	MockDeleteMediaByIDs                func(ctx context.Context, ids []int64) error
-	MockListOrphanedMediaByPage         func(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
-	MockListMediaFolders                func(ctx context.Context, fileType string) ([]repository.MediaFolder, error)
-	MockListMediaFiltered               func(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
-	MockCountMediaFiltered              func(ctx context.Context, fileType, folder string) (int64, error)
-	MockGetMediaByPath                  func(ctx context.Context, originalPath string) (models.Medium, error)
-	MockSetMediaPublic                  func(ctx context.Context, mediaID int64, isPublic bool, postID *int64) error
-	MockGetAllMediaPaths                func(ctx context.Context) ([]models.Medium, error)
-	MockGetMediaByPaths                 func(ctx context.Context, paths []string) ([]models.Medium, error)
-	MockGetStorageStats                 func(ctx context.Context) (repository.StorageStats, error)
-	MockGetMigrations                   func(ctx context.Context) ([]repository.MigrationRecord, error)
-	MockApplyMigration                  func(ctx context.Context, name, sql string) error
-	MockMigrateFlagsToSystemTags        func(ctx context.Context) error
-	MockRebuildTagsTableDropBooleans    func(ctx context.Context) error
-	MockEnsureSystemTags                func(ctx context.Context) error
-	MockMigrateTagFlagsFromSystemTags   func(ctx context.Context) error
-	MockListPostsInYearRange            func(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
-	MockCountPostsInYearRange           func(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
-	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)
-	MockCountPostsWithSearch            func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error)
-	MockGetPostByPreviewToken           func(ctx context.Context, token string) (models.Post, error)
-	MockGetPostNavigation               func(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error)
-	MockReplacePostContentPath          func(ctx context.Context, oldPath, newPath string) (int64, error)
-	MockUpdatePostThumbnailPath         func(ctx context.Context, oldPath, newPath string) (int64, error)
-	MockListPublishedPostStubs          func(ctx context.Context) ([]repository.PostStub, error)
-	MockListPostNodesForGraph           func(ctx context.Context, publishedOnly bool) ([]repository.GraphPostNode, error)
-	MockGetPostsByTagIDs                func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
-	MockCountPostsByTagIDs              func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
-	MockGetPostsByTagIDsInYearRange     func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
-	MockCountPostsByTagIDsInYearRange   func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
-	MockGetAllPublishedPostContents     func(ctx context.Context) ([]repository.PostContentRow, error)
-	MockListPostLinkAuditRows           func(ctx context.Context) ([]repository.PostLinkAuditRow, error)
-	MockGetHierarchicalPostCounts       func(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
-	MockGetSystemStats                  func(ctx context.Context) (repository.SystemStats, error)
-	MockBackupDB                        func(ctx context.Context, destPath string) error
-	MockSearchTags                      func(ctx context.Context, query string, limit int) ([]models.Tag, error)
-	MockGetTagAncestors                 func(ctx context.Context, tagID int64) ([]models.Tag, error)
-	MockGetTagDescendants               func(ctx context.Context, tagID int64) ([]models.Tag, error)
-	MockGetCoOccurringTags              func(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error)
-	MockGetAllTagRelationships          func(ctx context.Context) ([]repository.TagRelationship, error)
-	MockClearTagParents                 func(ctx context.Context, childID int64) error
-	MockClearTagChildren                func(ctx context.Context, parentID int64) error
-	MockGetTagsWithoutLocation          func(ctx context.Context, tagIDs []int64) ([]models.Tag, error)
-	MockFindTagsByNames                 func(ctx context.Context, names []string) ([]models.Tag, error)
-	MockFindTagsBySlugs                 func(ctx context.Context, slugs []string) (map[string]models.Tag, error)
-	MockGetTagsByPostIDs                func(ctx context.Context, postIDs []int64) (map[int64][]repository.PostTagInfo, error)
-	MockGetChildrenOfTag                func(ctx context.Context, parentID int64) ([]models.Tag, error)
-	MockGetRootTags                     func(ctx context.Context) ([]models.Tag, error)
-	MockUpdateTagSortOrder              func(ctx context.Context, id int64, sortOrder int32) error
-	MockListMapTagsForYearRange         func(ctx context.Context, fromYear, toYear int) ([]repository.MapYearRangeTag, error)
-	MockListInTimelineDescendants       func(ctx context.Context) ([]repository.InTimelineTag, error)
-	MockListInTimelineDescendantsForTag func(ctx context.Context, contextTagSlug string) ([]repository.InTimelineTag, error)
-	MockGetLocationTagsCoOccurringWith  func(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]repository.LocationTagCoOccurrence, error)
-	MockGetYearTagsByLocationTagIDs     func(ctx context.Context, locTagIDs []int64) (map[int64][]repository.PostTagInfo, error)
-	MockGetExistingInstagramIDs         func(ctx context.Context, ids []string) ([]string, error)
-	MockSetPostInstagramID              func(ctx context.Context, postID int64, instagramID string) error
-	MockSetPostMediaURL                 func(ctx context.Context, postID int64, mediaURL string) error
+	MockUpsertTagLocation                    func(ctx context.Context, tagID int64, lat, lon float64) error
+	MockGetTagLocationsByTagIDs              func(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error)
+	MockDeleteTagLocation                    func(ctx context.Context, tagID int64) error
+	MockListOrphanedMedia                    func(ctx context.Context, limit, offset int64) ([]models.Medium, error)
+	MockCountOrphanedMedia                   func(ctx context.Context) (int64, error)
+	MockGetMediaByIDs                        func(ctx context.Context, ids []int64) ([]models.Medium, error)
+	MockDeleteMediaByIDs                     func(ctx context.Context, ids []int64) error
+	MockListOrphanedMediaByPage              func(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
+	MockListMediaFolders                     func(ctx context.Context, fileType string) ([]repository.MediaFolder, error)
+	MockListMediaFiltered                    func(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
+	MockCountMediaFiltered                   func(ctx context.Context, fileType, folder string) (int64, error)
+	MockGetMediaByPath                       func(ctx context.Context, originalPath string) (models.Medium, error)
+	MockSetMediaPublic                       func(ctx context.Context, mediaID int64, isPublic bool, postID *int64) error
+	MockGetAllMediaPaths                     func(ctx context.Context) ([]models.Medium, error)
+	MockGetMediaByPaths                      func(ctx context.Context, paths []string) ([]models.Medium, error)
+	MockGetStorageStats                      func(ctx context.Context) (repository.StorageStats, error)
+	MockGetMigrations                        func(ctx context.Context) ([]repository.MigrationRecord, error)
+	MockApplyMigration                       func(ctx context.Context, name, sql string) error
+	MockMigrateFlagsToSystemTags             func(ctx context.Context) error
+	MockRebuildTagsTableDropBooleans         func(ctx context.Context) error
+	MockEnsureSystemTags                     func(ctx context.Context) error
+	MockMigrateTagFlagsFromSystemTags        func(ctx context.Context) error
+	MockListPostsInYearRange                 func(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
+	MockCountPostsInYearRange                func(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
+	MockListPostsWithSearch                  func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)
+	MockCountPostsWithSearch                 func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error)
+	MockGetPostByPreviewToken                func(ctx context.Context, token string) (models.Post, error)
+	MockGetPostNavigation                    func(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error)
+	MockReplacePostContentPath               func(ctx context.Context, oldPath, newPath string) (int64, error)
+	MockUpdatePostThumbnailPath              func(ctx context.Context, oldPath, newPath string) (int64, error)
+	MockListPublishedPostStubs               func(ctx context.Context) ([]repository.PostStub, error)
+	MockListPostNodesForGraph                func(ctx context.Context, publishedOnly bool) ([]repository.GraphPostNode, error)
+	MockGetPostsByTagIDs                     func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
+	MockCountPostsByTagIDs                   func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
+	MockGetPostsByTagIDsInYearRange          func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
+	MockCountPostsByTagIDsInYearRange        func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
+	MockGetAllPublishedPostContents          func(ctx context.Context) ([]repository.PostContentRow, error)
+	MockListPostLinkAuditRows                func(ctx context.Context) ([]repository.PostLinkAuditRow, error)
+	MockGetHierarchicalPostCounts            func(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
+	MockGetHierarchicalPostCountsInYearRange func(ctx context.Context, publishedOnly bool, fromYear, toYear int) (map[int64]int64, error)
+	MockGetSystemStats                       func(ctx context.Context) (repository.SystemStats, error)
+	MockBackupDB                             func(ctx context.Context, destPath string) error
+	MockSearchTags                           func(ctx context.Context, query string, limit int) ([]models.Tag, error)
+	MockGetTagAncestors                      func(ctx context.Context, tagID int64) ([]models.Tag, error)
+	MockGetTagDescendants                    func(ctx context.Context, tagID int64) ([]models.Tag, error)
+	MockGetCoOccurringTags                   func(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error)
+	MockGetAllTagRelationships               func(ctx context.Context) ([]repository.TagRelationship, error)
+	MockClearTagParents                      func(ctx context.Context, childID int64) error
+	MockClearTagChildren                     func(ctx context.Context, parentID int64) error
+	MockGetTagsWithoutLocation               func(ctx context.Context, tagIDs []int64) ([]models.Tag, error)
+	MockFindTagsByNames                      func(ctx context.Context, names []string) ([]models.Tag, error)
+	MockFindTagsBySlugs                      func(ctx context.Context, slugs []string) (map[string]models.Tag, error)
+	MockGetTagsByPostIDs                     func(ctx context.Context, postIDs []int64) (map[int64][]repository.PostTagInfo, error)
+	MockGetChildrenOfTag                     func(ctx context.Context, parentID int64) ([]models.Tag, error)
+	MockGetRootTags                          func(ctx context.Context) ([]models.Tag, error)
+	MockUpdateTagSortOrder                   func(ctx context.Context, id int64, sortOrder int32) error
+	MockListMapTagsForYearRange              func(ctx context.Context, fromYear, toYear int) ([]repository.MapYearRangeTag, error)
+	MockListInTimelineDescendants            func(ctx context.Context) ([]repository.InTimelineTag, error)
+	MockListInTimelineDescendantsForTag      func(ctx context.Context, contextTagSlug string) ([]repository.InTimelineTag, error)
+	MockGetLocationTagsCoOccurringWith       func(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]repository.LocationTagCoOccurrence, error)
+	MockGetYearTagsByLocationTagIDs          func(ctx context.Context, locTagIDs []int64) (map[int64][]repository.PostTagInfo, error)
+	MockGetExistingInstagramIDs              func(ctx context.Context, ids []string) ([]string, error)
+	MockSetPostInstagramID                   func(ctx context.Context, postID int64, instagramID string) error
+	MockSetPostMediaURL                      func(ctx context.Context, postID int64, mediaURL string) error
 }
 
 // Ensure mockRepository implements repository.Repository
@@ -1112,6 +1113,13 @@ func (m *mockRepository) GetHierarchicalPostCounts(ctx context.Context, publishe
 		return m.MockGetHierarchicalPostCounts(ctx, publishedOnly)
 	}
 	return nil, fmt.Errorf("GetHierarchicalPostCounts not implemented")
+}
+
+func (m *mockRepository) GetHierarchicalPostCountsInYearRange(ctx context.Context, publishedOnly bool, fromYear, toYear int) (map[int64]int64, error) {
+	if m.MockGetHierarchicalPostCountsInYearRange != nil {
+		return m.MockGetHierarchicalPostCountsInYearRange(ctx, publishedOnly, fromYear, toYear)
+	}
+	return nil, fmt.Errorf("GetHierarchicalPostCountsInYearRange not implemented")
 }
 
 func (m *mockRepository) GetSystemStats(ctx context.Context) (repository.SystemStats, error) {

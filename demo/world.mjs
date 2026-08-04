@@ -26,12 +26,23 @@
  * so no branch of the tree is decorative.
  */
 
-/** Four places, spread far enough apart that the map has something to plot. */
+/**
+ * Four places, spread far enough apart that the map has something to plot.
+ *
+ * `years` is the window each place was visited in, and the windows deliberately
+ * do not all cover the whole archive. An archive where every place appears in
+ * every year makes the timeline filter invisible on the map: narrowing the range
+ * would rescale the markers and never drop one, so the Atlas would look broken
+ * (nothing happens) when it was in fact working. Overlapping-but-distinct
+ * windows give the demo something to show — 2020 is Lisbon alone, 2026 is Kyoto
+ * and El Chaltén — while still leaving every year with at least one place, so
+ * the timeline's own histogram has no empty column.
+ */
 export const LOCATIONS = [
-  { name: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393 },
-  { name: "Reykjavík", country: "Iceland", latitude: 64.1466, longitude: -21.9426 },
-  { name: "Kyoto", country: "Japan", latitude: 35.0116, longitude: 135.7681 },
-  { name: "El Chaltén", country: "Argentina", latitude: -49.3315, longitude: -72.8863 },
+  { name: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393, years: [2020, 2021, 2022, 2023] },
+  { name: "Reykjavík", country: "Iceland", latitude: 64.1466, longitude: -21.9426, years: [2021, 2022, 2023] },
+  { name: "Kyoto", country: "Japan", latitude: 35.0116, longitude: 135.7681, years: [2023, 2024, 2025, 2026] },
+  { name: "El Chaltén", country: "Argentina", latitude: -49.3315, longitude: -72.8863, years: [2025, 2026] },
 ];
 
 /**
@@ -302,4 +313,19 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
 /** The tags a post carries: its country, its city, its year, then its topics. */
 export function postTags(cityName, year, topics) {
   return [countryOf(cityName), cityName, String(year), ...topics].filter(Boolean);
+}
+
+/**
+ * The place and year for the nth generated post.
+ *
+ * Round-robin over the locations rather than letting the model choose: asked to
+ * pick, Gemini clustered nearly everything onto one city, leaving the map with a
+ * single pin. The year then cycles that location's own window (see LOCATIONS),
+ * so the archive is a spread rather than a full location × year grid — which is
+ * what lets the timeline actually empty part of the map.
+ */
+export function placementFor(index) {
+  const location = LOCATIONS[index % LOCATIONS.length];
+  const round = Math.floor(index / LOCATIONS.length);
+  return { location, year: location.years[round % location.years.length] };
 }
