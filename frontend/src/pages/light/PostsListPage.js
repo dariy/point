@@ -417,13 +417,16 @@ export default class PostsListPage extends Component {
     const { statusFilter } = this.state;
     const isTrash = statusFilter === "trash";
 
-    if (!this.state.loading && this.state.pagination.pages > 1) {
-      this.mountChild(Pagination, "#pagination-mount", {
-        page: this.state.pagination.page,
-        pages: this.state.pagination.pages,
-        total: this.state.pagination.total,
-        onPage: (p) => this._load({ page: p }),
-      });
+    if (!this.state.loading) {
+      if (this.state.pagination.pages > 1) {
+        this.mountChild(Pagination, "#pagination-mount", {
+          page: this.state.pagination.page,
+          pages: this.state.pagination.pages,
+          total: this.state.pagination.total,
+          onPage: (p) => this._load({ page: p }),
+        });
+      }
+      this._setupPageControls(this.state.pagination);
     }
 
     // Restore focus to search input after a re-render triggered by _load
@@ -769,6 +772,48 @@ export default class PostsListPage extends Component {
   beforeUnmount() {
     this._cleanupAdminLayout?.();
     if (this._onResize) window.removeEventListener("resize", this._onResize);
+    this._teardownPageControls();
+  }
+
+  _setupPageControls(pagination) {
+    this._teardownPageControls();
+    
+    const pages = pagination.pages || 1;
+    const page = pagination.page || 1;
+    const goPrev = () => { if (page > 1) this._load({ page: page - 1 }); };
+    const goNext = () => { if (page < pages) this._load({ page: page + 1 }); };
+
+    this._onKeyNav = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') { e.preventDefault(); goPrev(); }
+      else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') { e.preventDefault(); goNext(); }
+    };
+    window.addEventListener('keydown', this._onKeyNav);
+
+    const CHEVRON = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
+                       ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = CHEVRON(d);
+      b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
+      b.addEventListener('click', go);
+      document.body.appendChild(b);
+      return b;
+    });
+  }
+
+  _teardownPageControls() {
+    if (this._onKeyNav) {
+      window.removeEventListener('keydown', this._onKeyNav);
+      this._onKeyNav = null;
+    }
+    for (const a of this._navArrows || []) a.remove();
+    this._navArrows = null;
   }
 
   /**

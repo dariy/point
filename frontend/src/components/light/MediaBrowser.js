@@ -32,7 +32,6 @@ import {
 import { captureVideoPoster } from "../../utils/videoPoster.js";
 import {
   monthLabel,
-  groupFoldersByYear,
   folderChips,
 } from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
@@ -40,9 +39,6 @@ import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import {
-  FOLDER_SVG,
-  CALENDAR_SVG,
-  CHEVRON_SVG,
   EDIT_SVG,
   LOCK_SVG,
   TRASH_SVG,
@@ -61,7 +57,6 @@ export class MediaBrowser extends Component {
       typeFilter: "",
       selectedFolder: null,
       folders: [],
-      expandedYears: {},
       error: null,
       uploading: false,
       draggingOver: false,
@@ -88,7 +83,6 @@ export class MediaBrowser extends Component {
       draggingOver,
       folders,
       selectedFolder,
-      expandedYears,
       selectedIds,
     } = this.state;
     const pickerMode = this.props.pickerMode;
@@ -100,55 +94,6 @@ export class MediaBrowser extends Component {
         : !media.length
           ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`
           : `<div class="media-grid">${media.map((m) => this._renderItem(m, selectedIds)).join("")}</div>`;
-
-    const { years: sortedYears, byYear: yearGroups } =
-      groupFoldersByYear(folders);
-
-    const folderTree = `
-      <nav class="media-folder-tree" aria-label="Media folders">
-        ${this._renderControls(typeFilter)}
-
-        <button class="folder-tree-item folder-tree-all${!selectedFolder ? " active" : ""}" data-folder="">
-          <span class="folder-tree-icon">${FOLDER_SVG}</span>
-          <span class="folder-tree-label">All media</span>
-        </button>
-        ${sortedYears
-          .map((year) => {
-            const expanded = expandedYears[year] === true;
-            const months = yearGroups[year];
-            const isYearActive = selectedFolder === year;
-            const hasActiveMonth = months.some(
-              (f) => selectedFolder === f.path,
-            );
-
-            return `
-            <div class="folder-year-group${expanded ? " is-expanded" : ""}">
-              <div class="folder-year-row${isYearActive ? " active" : ""}${hasActiveMonth ? " has-active-child" : ""}">
-                <button class="folder-year-arrow${expanded ? " rotated" : ""}" data-year="${escapeHtml(year)}" aria-label="${expanded ? "Collapse" : "Expand"}">
-                  ${CHEVRON_SVG}
-                </button>
-                <button class="folder-tree-item folder-year-label${isYearActive ? " active" : ""}" data-folder="${escapeHtml(year)}">
-                  <span class="folder-tree-icon">${CALENDAR_SVG}</span>
-                  <span class="folder-tree-label">${escapeHtml(year)}</span>
-                </button>
-              </div>
-              <div class="folder-year-months${expanded ? "" : " hidden"}">
-                ${months
-                  .map((f) => {
-                    const monthName = monthLabel(f.month);
-                    const isActive = selectedFolder === f.path;
-                    return `
-                    <button class="folder-tree-item folder-month-btn${isActive ? " active" : ""}"
-                            data-folder="${escapeHtml(f.path)}">
-                      <span class="folder-tree-label">${escapeHtml(monthName)}</span>
-                    </button>`;
-                  })
-                  .join("")}
-              </div>
-            </div>`;
-          })
-          .join("")}
-      </nav>`;
 
     const dropOverlay = pickerMode
       ? `<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
@@ -175,7 +120,6 @@ export class MediaBrowser extends Component {
         ${selectionBar}
         ${this._renderMobileBar(typeFilter)}
         <div class="media-layout">
-          ${folderTree}
           <div class="media-content">
             <div id="mb-media-area">${grid}</div>
             <div id="mb-pagination-mount"></div>
@@ -816,22 +760,10 @@ export class MediaBrowser extends Component {
       }),
     );
 
-    // Folder year expansion toggle (arrow only)
-    this.$$(".folder-year-arrow").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const year = btn.dataset.year;
-        const expanded = this.state.expandedYears[year] === true;
-        this.setState({
-          expandedYears: { ...this.state.expandedYears, [year]: !expanded },
-        });
-      });
-    });
-
-    // Folder / "all" / Year selection — tree rows and mobile chips share the
+    // Folder / "all" / Year selection — mobile chips share the
     // data-folder contract. (Not [data-folder]: that would also match the
     // breadcrumb buttons wired above.)
-    this.$$(".folder-tree-item, .mb-folder-chip").forEach((btn) => {
+    this.$$(".mb-folder-chip").forEach((btn) => {
       btn.addEventListener("click", () => {
         const folder = btn.dataset.folder || null;
         this.setState({ selectedFolder: folder });
@@ -840,24 +772,6 @@ export class MediaBrowser extends Component {
     });
 
     this._centerActiveChip();
-
-    // Toggle all years when clicking the "All media" icon
-    this.$(".folder-tree-all .folder-tree-icon")?.addEventListener(
-      "click",
-      (e) => {
-        e.stopPropagation();
-        const allYears = [...new Set(this.state.folders.map((f) => f.year))];
-        // A year is collapsed if not explicitly set to true (since default is now collapsed)
-        const anyCollapsed = allYears.some(
-          (y) => this.state.expandedYears[y] !== true,
-        );
-        const newExpanded = {};
-        allYears.forEach((y) => {
-          newExpanded[y] = anyCollapsed;
-        });
-        this.setState({ expandedYears: newExpanded });
-      },
-    );
 
     if (pickerMode || this.state.selectMode) {
       // Picker/Select: toggle selection via checkbox or clicking the item

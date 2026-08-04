@@ -591,9 +591,9 @@ export default class HomePage extends Component {
   }
 
   // Keyboard + mouse page navigation for the grid, complementing swipe/trackpad.
-  // Keyboard works in every mode (arrows + hjkl-style); the edge arrows are the
-  // mouse path for distraction-free mode, where the paginator is hidden (the DF
-  // plugin CSS reveals them on hover for fine pointers only — touch swipes).
+  // Keyboard works in every mode (arrows + hjkl-style); the edge arrows provide
+  // a mouse path for paginated grids (revealed on hover for fine pointers only
+  // — touch users swipe).
   _setupPageControls(pagination) {
     const pages = pagination.pages || 1;
     const goPrev = () => { if (pagination.page > 1) ViewContext.update({ page: pagination.page - 1 }); };
@@ -616,7 +616,7 @@ export default class HomePage extends Component {
                        ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `df-nav-arrow df-nav-${dir}`;
+      b.className = `page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
       b.innerHTML = CHEVRON(d);
       b.disabled = dir === 'prev' ? pagination.page <= 1 : pagination.page >= pages;

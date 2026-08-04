@@ -74,3 +74,46 @@
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 }
+
+/* Edge page-arrows (created by the public grid and the admin post list). Idle
+   faint, lifting to full on hover; a disabled arrow at a list end drops out
+   entirely. Parked in the side gutter when the viewport is wider than the
+   content, tucked to the edge otherwise. */
+.page-nav-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3rem;
+  height: 3rem;
+  z-index: 200;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-accent, #4ea1ff);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.page-nav-arrow:hover { opacity: 1; }
+.page-nav-arrow:disabled { display: none; }
+
+.page-nav-prev {
+  left: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
+}
+.page-nav-next {
+  right: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
+}
+
+/* Mobile: touch users swipe and the paginator sits right below the list, so
+   fixed arrows would only float over the content. Dropped for a coarse or
+   hover-less pointer and for phone-width viewports. Keep this last — the
+   section overrides below re-position the arrows but must not re-show them. */
+@media (max-width: 48em), (hover: none), (pointer: coarse) {
+  .page-nav-arrow {
+    display: none;
+  }
+}

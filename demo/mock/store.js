@@ -67,10 +67,57 @@ function defaultPresets(plugins) {
   };
 }
 
+/**
+ * The demo runs the nav-menu plugin in "custom" mode rather than the recorded
+ * "tags" tree: four authored links into the demo's own tags. It puts the
+ * feature in front of a visitor who would otherwise have to go and configure
+ * it to know it exists, and pins the header to a known set of links instead of
+ * whatever shape the tag universe happens to have after a re-record.
+ *
+ * The tag tree is not lost — in custom mode the backend sends it separately for
+ * the site-title dropdown (GetNavMenu in api/internal/api/pages.go), which
+ * applyNavMenu below mirrors.
+ */
+const DEMO_NAV_LINKS = [
+  { name: "Portugal", url: "/tags/portugal" },
+  { name: "Reykjavík", url: "/tags/reykjavik" },
+  { name: "2024", url: "/tags/2024" },
+  { name: "Light", url: "/tags/light" },
+];
+
+/** `{name,url}` → the NavTagNode shape the nav endpoints speak. */
+function navNodes(links) {
+  return links.map(({ name, url }) => ({ name, url, children: [] }));
+}
+
+/** `{name,url}` → the `- [Label](url)` source the menu editor round-trips. */
+export function navMarkdown(links) {
+  return links.map(({ name, url }) => `- [${name}](${url})`).join("\n");
+}
+
+/**
+ * Write a nav menu configuration into the store the way the backend does: the
+ * settings rows the admin editor reads back, plus the derived /api/pages/nav
+ * payload the public header renders. Keeping both in one place is what lets a
+ * visitor switch modes on /light/menu and watch the header follow.
+ *
+ * `navTagTree` is the recorded tags-mode tree, held aside so switching away
+ * from custom mode and back restores it.
+ */
+export function applyNavMenu(s, { mode, items, markdown }) {
+  s.settings.nav_menu_mode = mode;
+  s.settings.custom_nav_menu = JSON.stringify(items);
+  s.settings.custom_markdown = markdown;
+
+  if (mode === "none") s.pages.nav = { menu: [] };
+  else if (mode === "custom") s.pages.nav = { menu: items, tags: s.navTagTree };
+  else s.pages.nav = { menu: s.navTagTree };
+}
+
 /** Structured-clone the seed so mutations never touch the imported module. */
 function seed(fx) {
   const plugins = structuredClone(fx.plugins || []);
-  return {
+  const s = {
     settings: { ...fx.settings },
     publicSettings: { ...fx.publicSettings },
     user: fx.user ? { ...fx.user } : null,
@@ -91,6 +138,8 @@ function seed(fx) {
     activeTheme: structuredClone(fx.activeTheme || null),
     customCss: structuredClone(fx.customCss || { css: "" }),
     pages: structuredClone(fx.pages || {}),
+    // The recorded tags-mode menu, kept aside so a mode switch can restore it.
+    navTagTree: structuredClone(fx.pages?.nav?.menu || []),
     timeline: structuredClone(fx.timeline || {}),
     timelineLocations: structuredClone(fx.timelineLocations || {}),
     tagCloud: structuredClone(fx.tagCloud || []),
@@ -99,6 +148,14 @@ function seed(fx) {
     mediaFolders: structuredClone(fx.mediaFolders || []),
     system: structuredClone(fx.system || {}),
   };
+
+  applyNavMenu(s, {
+    mode: "custom",
+    items: navNodes(DEMO_NAV_LINKS),
+    markdown: navMarkdown(DEMO_NAV_LINKS),
+  });
+
+  return s;
 }
 
 /**

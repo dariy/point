@@ -15,6 +15,7 @@
  */
 
 import {
+  applyNavMenu,
   byNewest,
   nextId,
   paginate,
@@ -29,6 +30,22 @@ import {
 const ok = (body) => ({ status: 200, body });
 const noContent = () => ({ status: 204, body: null });
 const notFound = (msg = "not found") => ({ status: 404, body: { detail: msg } });
+
+/** Settings rows hold JSON as text; a malformed row degrades to the default. */
+function parseJson(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+/** Links shown inline before "More ▾" — out-of-range or unset means 4. */
+function inlineMaxOrDefault(raw) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 10 ? n : 4;
+}
 
 /** Posts visible to the current principal — admins additionally see drafts. */
 function readablePosts(state) {
@@ -283,6 +300,49 @@ export const routes = [
   // in the default "tags" mode. The empty fallback has to use the same key —
   // `{items: []}` would leave navTags undefined and refetch on every mount.
   ["GET", "/api/pages/nav", ({ state }) => ok(state.pages.nav ?? { menu: [] })],
+
+  // Admin menu editor (/light/menu). Mirrors NavMenuHandler in
+  // api/internal/api/nav_menu.go: the config lives in settings rows, and
+  // `tag_items` is the tags-mode tree so the editor can preview a mode switch
+  // before saving. Handled rather than left to the shim's empty-200 default so
+  // a visitor can actually re-author the menu and watch the header follow.
+  [
+    "GET",
+    "/api/nav-menu",
+    ({ state }) => {
+      const s = state.settings;
+      return ok({
+        mode: s.nav_menu_mode || "tags",
+        items: parseJson(s.custom_nav_menu, []),
+        custom_markdown: s.custom_markdown || "",
+        inline_max: inlineMaxOrDefault(s.nav_inline_max),
+        more_title: s.nav_more_title || "More",
+        tag_items: state.navTagTree,
+      });
+    },
+  ],
+  [
+    "PUT",
+    "/api/nav-menu",
+    ({ state, body }) => {
+      const mode = ["tags", "custom", "none"].includes(body.mode) ? body.mode : "tags";
+      const items = Array.isArray(body.items) ? body.items : [];
+      applyNavMenu(state, { mode, items, markdown: body.custom_markdown || "" });
+
+      if (body.inline_max >= 1 && body.inline_max <= 10) {
+        state.settings.nav_inline_max = String(body.inline_max);
+      }
+      state.settings.nav_more_title = body.more_title || "More";
+
+      return ok({
+        mode,
+        items,
+        custom_markdown: state.settings.custom_markdown,
+        inline_max: inlineMaxOrDefault(state.settings.nav_inline_max),
+        more_title: state.settings.nav_more_title,
+      });
+    },
+  ],
 
   [
     "GET",
