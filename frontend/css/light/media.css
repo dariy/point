@@ -107,11 +107,11 @@
     flex-direction: column;
 }
 
-#mb-upload-btn {
+.mb-upload-btn {
     margin-bottom: var(--spacing-md);
 }
 
-#mb-type-filter {
+.mb-type-filter {
     margin-bottom: var(--spacing-md);
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
@@ -1005,4 +1005,100 @@
     font-size: 12px;
     font-weight: bold;
     pointer-events: none;
+}
+
+/* Narrow screens: the folder tree would spend ~200px of a 360px viewport on a
+   mostly-empty list, so it is replaced by the chip strip in .mb-mobile-bar
+   (rendered by MediaBrowser at every width, shown only here). Exact complement
+   of the min-width block above. */
+.mb-mobile-bar {
+    display: none;
+}
+
+@media (max-width: 48em) {
+    .media-folder-tree {
+        display: none;
+    }
+
+    .media-layout {
+        display: block;
+    }
+
+    .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(var(--media-grid-columns-mobile), 1fr));
+        gap: var(--spacing-sm);
+    }
+
+    /* Bleeds past .light-content's padding so nothing scrolls through a side
+       gap; sits below the sticky header (z-index 50) and above the grid. */
+    .mb-mobile-bar {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        position: sticky;
+        top: var(--header-height);
+        z-index: 20;
+        margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background-color: var(--bg-primary);
+        border-bottom: var(--border-width) solid var(--border-primary);
+    }
+
+    /* In the picker the bar sits inside the modal body — no header to clear. */
+    .media-browser--picker .mb-mobile-bar {
+        top: 0;
+    }
+
+    .mb-mobile-controls {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    /* The tree stacks these; the bar puts them on one row. */
+    .mb-mobile-controls .mb-upload-btn,
+    .mb-mobile-controls .mb-posters-btn,
+    .mb-mobile-controls .mb-type-filter {
+        margin-bottom: 0;
+    }
+
+    .mb-mobile-controls .mb-type-filter {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mb-folder-chips {
+        display: flex;
+        gap: var(--spacing-xs);
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+    }
+
+    .mb-folder-chips::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mb-folder-chip {
+        flex: 0 0 auto;
+        min-height: var(--mb-folder-chip-min-height);
+        padding: var(--spacing-xs) var(--spacing-md);
+        border: var(--border-width) solid var(--border-primary);
+        border-radius: var(--mb-folder-chip-radius);
+        background-color: var(--surface-card);
+        color: var(--text-secondary);
+        font-size: var(--font-size-sm);
+        white-space: nowrap;
+        cursor: pointer;
+        scroll-snap-align: center;
+        transition: background-color var(--transition-fast), color var(--transition-fast);
+    }
+
+    /* Mirrors .folder-tree-item.active */
+    .mb-folder-chip.active {
+        background-color: var(--color-primary-light);
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+        font-weight: 600;
+    }
 }

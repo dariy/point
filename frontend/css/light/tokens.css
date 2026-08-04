@@ -190,6 +190,9 @@
     --folder-year-months-gap: var(--size-0-0625);
     --folder-month-btn--width: var(--size-0-5);
     --media-grid-grid-template-columns: var(--size-11-25);
+    --media-grid-columns-mobile: var(--size-9);
+    --mb-folder-chip-min-height: var(--size-2-25);
+    --mb-folder-chip-radius: var(--size-624-938);
     --file-icon-font-size: var(--size-3);
     --media-play-overlay-width: var(--size-3-75);
     --media-play-overlay-height: var(--size-3-75);

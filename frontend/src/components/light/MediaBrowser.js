@@ -30,6 +30,11 @@ import {
   setVideoPoster,
 } from "../../api/media.js";
 import { captureVideoPoster } from "../../utils/videoPoster.js";
+import {
+  monthLabel,
+  groupFoldersByYear,
+  folderChips,
+} from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
@@ -45,21 +50,6 @@ import {
   LINK_SVG,
   PLUS_SVG,
 } from "../../utils/icons.js";
-
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
 
 export class MediaBrowser extends Component {
   constructor(container, props = {}) {
@@ -103,13 +93,6 @@ export class MediaBrowser extends Component {
     } = this.state;
     const pickerMode = this.props.pickerMode;
 
-    const typeOptions = ["", "image", "video", "audio", "file"]
-      .map((t) => {
-        const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
-        return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
-      })
-      .join("");
-
     const grid = loading
       ? `<div class="loading-spinner" aria-label="Loading media…"></div>`
       : error
@@ -118,19 +101,12 @@ export class MediaBrowser extends Component {
           ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`
           : `<div class="media-grid">${media.map((m) => this._renderItem(m, selectedIds)).join("")}</div>`;
 
-    // Group folders by year for the tree
-    const yearGroups = {};
-    for (const f of folders) {
-      if (!yearGroups[f.year]) yearGroups[f.year] = [];
-      yearGroups[f.year].push(f);
-    }
-    const sortedYears = Object.keys(yearGroups).sort((a, b) => b - a);
+    const { years: sortedYears, byYear: yearGroups } =
+      groupFoldersByYear(folders);
 
     const folderTree = `
       <nav class="media-folder-tree" aria-label="Media folders">
-        <button id="mb-upload-btn" class="btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
-        ${this._renderPosterBackfill()}
-        <select id="mb-type-filter" class="filter-select">${typeOptions}</select>
+        ${this._renderControls(typeFilter)}
 
         <button class="folder-tree-item folder-tree-all${!selectedFolder ? " active" : ""}" data-folder="">
           <span class="folder-tree-icon">${FOLDER_SVG}</span>
@@ -159,8 +135,7 @@ export class MediaBrowser extends Component {
               <div class="folder-year-months${expanded ? "" : " hidden"}">
                 ${months
                   .map((f) => {
-                    const monthName =
-                      MONTH_NAMES[parseInt(f.month, 10) - 1] || f.month;
+                    const monthName = monthLabel(f.month);
                     const isActive = selectedFolder === f.path;
                     return `
                     <button class="folder-tree-item folder-month-btn${isActive ? " active" : ""}"
@@ -198,13 +173,7 @@ export class MediaBrowser extends Component {
 
         ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ""}
         ${selectionBar}
-        ${
-          pickerMode
-            ? `<div class="mb-top-bar mobile-only">
-          ${this._renderBreadcrumbs()}
-        </div>`
-            : ""
-        }
+        ${this._renderMobileBar(typeFilter)}
         <div class="media-layout">
           ${folderTree}
           <div class="media-content">
@@ -214,6 +183,61 @@ export class MediaBrowser extends Component {
         </div>
         ${dropOverlay}
       </div>`;
+  }
+
+  /**
+   * Upload / poster-backfill / type filter. Rendered twice — in the folder tree
+   * (wide) and in the mobile bar (narrow) — since only one of the two is ever
+   * displayed. Hence classes rather than ids, and $$ wiring in afterRender.
+   */
+  _renderControls(typeFilter) {
+    const typeOptions = ["", "image", "video", "audio", "file"]
+      .map((t) => {
+        const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
+        return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
+      })
+      .join("");
+
+    return `
+      <button class="mb-upload-btn btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
+      ${this._renderPosterBackfill()}
+      <select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
+  }
+
+  /**
+   * Narrow-screen replacement for the folder tree (CSS decides which shows).
+   * A phone can't spare ~200px of width for a sidebar, so folders become a
+   * horizontally scrollable chip strip that drills down one level at a time.
+   * In picker mode it also carries the breadcrumbs; the standalone page puts
+   * those in the header <h1> instead (see afterRender).
+   */
+  _renderMobileBar(typeFilter) {
+    const chips = folderChips(this.state.folders, this.state.selectedFolder)
+      .map(
+        (c) =>
+          `<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${escapeHtml(c.folder)}">${escapeHtml(c.label)}</button>`,
+      )
+      .join("");
+
+    return `
+      <div class="mb-mobile-bar">
+        ${this.props.pickerMode ? this._renderBreadcrumbs() : ""}
+        <div class="mb-mobile-controls">${this._renderControls(typeFilter)}</div>
+        <div class="mb-folder-chips" role="group" aria-label="Media folders">${chips}</div>
+      </div>`;
+  }
+
+  /**
+   * Keep the selected folder chip in view after a re-render. scrollLeft is set
+   * directly rather than via scrollIntoView(), which would also scroll the
+   * sticky strip's ancestors and jump the page.
+   */
+  _centerActiveChip() {
+    const strip = this.$(".mb-folder-chips");
+    const active = strip?.querySelector(".mb-folder-chip.active");
+    if (!strip || !active) return;
+    strip.scrollLeft =
+      active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
   }
 
   /** Videos on the current page that were never given a poster frame. */
@@ -235,7 +259,7 @@ export class MediaBrowser extends Component {
     const pending = this._posterlessVideos().length;
     if (!pending) return "";
     return `
-      <button id="mb-posters-btn" class="btn btn-sm btn-secondary"
+      <button class="mb-posters-btn btn btn-sm btn-secondary"
               title="Download each video to capture a thumbnail frame"
               ${this.state.capturingPosters ? "disabled" : ""}>
         ▶ Poster ${pending} video${pending === 1 ? "" : "s"}
@@ -288,7 +312,7 @@ export class MediaBrowser extends Component {
     let currentPath = "";
     parts.forEach((p, i) => {
       currentPath += (currentPath ? "/" : "") + p;
-      const label = i === 1 ? MONTH_NAMES[parseInt(p, 10) - 1] || p : p;
+      const label = i === 1 ? monthLabel(p) : p;
       crumbs += ` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${escapeHtml(currentPath)}">${escapeHtml(label)}</button>`;
     });
     return `<div class="mb-breadcrumbs">${crumbs}</div>`;
@@ -730,12 +754,14 @@ export class MediaBrowser extends Component {
 
     const fileInput = this.$("#mb-file-input");
 
-    this.$("#mb-upload-btn")?.addEventListener("click", () =>
-      fileInput?.click(),
+    // Tree and mobile-bar copies of each control are both in the DOM (CSS shows
+    // one), so every listener binds across all matches.
+    this.$$(".mb-upload-btn").forEach((btn) =>
+      btn.addEventListener("click", () => fileInput?.click()),
     );
 
-    this.$("#mb-posters-btn")?.addEventListener("click", () =>
-      this._backfillPosters(),
+    this.$$(".mb-posters-btn").forEach((btn) =>
+      btn.addEventListener("click", () => this._backfillPosters()),
     );
 
     // Mobile capture buttons
@@ -782,11 +808,13 @@ export class MediaBrowser extends Component {
     this._wireDragDrop(fileInput, pickerMode);
     this._bindPreviewFallback();
 
-    this.$("#mb-type-filter")?.addEventListener("change", (e) => {
-      this.setState({ typeFilter: e.target.value });
-      this._load({ page: 1 });
-      this._loadFolders();
-    });
+    this.$$(".mb-type-filter").forEach((select) =>
+      select.addEventListener("change", (e) => {
+        this.setState({ typeFilter: e.target.value });
+        this._load({ page: 1 });
+        this._loadFolders();
+      }),
+    );
 
     // Folder year expansion toggle (arrow only)
     this.$$(".folder-year-arrow").forEach((btn) => {
@@ -800,14 +828,18 @@ export class MediaBrowser extends Component {
       });
     });
 
-    // Folder / "all" / Year selection
-    this.$$(".folder-tree-item").forEach((btn) => {
+    // Folder / "all" / Year selection — tree rows and mobile chips share the
+    // data-folder contract. (Not [data-folder]: that would also match the
+    // breadcrumb buttons wired above.)
+    this.$$(".folder-tree-item, .mb-folder-chip").forEach((btn) => {
       btn.addEventListener("click", () => {
         const folder = btn.dataset.folder || null;
         this.setState({ selectedFolder: folder });
         this._load({ page: 1 });
       });
     });
+
+    this._centerActiveChip();
 
     // Toggle all years when clicking the "All media" icon
     this.$(".folder-tree-all .folder-tree-icon")?.addEventListener(
