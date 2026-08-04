@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the demo fixture bundle from scratch: synthetic content in,
-# frontend/src/mock/fixtures/fixtures.json out.
+# demo/mock/fixtures/fixtures.json out.
 #
 # Runs a THROWAWAY Point instance on its own database and storage directory,
 # fills it with generated content, records the API responses, and tears it down.
@@ -11,13 +11,14 @@
 # without deciding whether to publish anybody's real blog.
 #
 # Usage:
-#   GEMINI_API_KEY=... scripts/make-demo-content.sh [--count=28] [--port=8002]
+#   GEMINI_API_KEY=... demo/scripts/make-content.sh [--count=28] [--port=8002]
 #
-# Then:  scripts/build-demo.sh
+# Then:  demo/scripts/build.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+DEMO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT_DIR="$(cd "$DEMO_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
 COUNT=28
@@ -43,7 +44,7 @@ if [ "$RETAG" = "0" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
   exit 1
 fi
 
-SCRATCH="${DEMO_SCRATCH:-$ROOT_DIR/.demo-scratch}"
+SCRATCH="${DEMO_SCRATCH:-$DEMO_DIR/.scratch}"
 BASE="http://127.0.0.1:$PORT"
 
 cleanup() {
@@ -123,13 +124,13 @@ PY
 
 if [ "$RETAG" = "1" ]; then
   echo "==> Restructuring tags"
-  node "$SCRIPT_DIR/retag-demo-content.mjs" \
+  node "$SCRIPT_DIR/retag-content.mjs" \
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db"
 else
   echo "==> Generating $COUNT posts"
-  node "$SCRIPT_DIR/generate-demo-content.mjs" \
+  node "$SCRIPT_DIR/generate-content.mjs" \
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db" \
@@ -140,12 +141,12 @@ fi
 # ── Record ────────────────────────────────────────────────────────────────
 
 echo "==> Recording fixtures"
-node "$SCRIPT_DIR/record-demo-fixtures.mjs" \
+node "$SCRIPT_DIR/record-fixtures.mjs" \
   --base="$BASE" \
   --session="$SESSION"
 
 echo
-echo "==> Done. Next: scripts/build-demo.sh"
+echo "==> Done. Next: demo/scripts/build.sh"
 if [ "$KEEP" = "1" ]; then
   echo "    Scratch instance left running at $BASE (pid $SERVER_PID)"
   echo "    Log in with password: demo"

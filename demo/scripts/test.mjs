@@ -13,8 +13,8 @@
  *      escalates it to a hard navigation.
  *
  * Run against a served build with the backend STOPPED:
- *   npx serve -s dist-demo -l 3000
- *   node scripts/test-demo.mjs --base=http://localhost:3000
+ *   npx serve -s demo/dist -l 3000
+ *   node demo/scripts/test.mjs --base=http://localhost:3000
  */
 
 import { chromium } from "playwright";

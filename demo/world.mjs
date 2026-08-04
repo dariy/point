@@ -1,6 +1,6 @@
 /**
- * The demo's tag universe — shared by generate-demo-content.mjs (fresh content)
- * and retag-demo-content.mjs (restructuring an instance that already has some).
+ * The demo's tag universe — shared by generate-content.mjs (fresh content)
+ * and retag-content.mjs (restructuring an instance that already has some).
  *
  * It lives in one module because the two scripts have to agree exactly: a
  * vocabulary that drifts between them produces a hierarchy where half the posts

@@ -38,14 +38,14 @@ frontend/css/asset-manifest.json
 frontend/css/common/theme.css
 frontend/css/p/
 
-# Static UI demo (scripts/build-demo.sh) — build output.
-dist-demo/
-# Throwaway instance used to generate demo content (scripts/make-demo-content.sh).
-.demo-scratch/
-# Recorded demo fixtures. Regenerate with scripts/record-demo-fixtures.mjs
+# Static UI demo (demo/scripts/build.sh) — build output.
+demo/dist/
+# Throwaway instance used to generate demo content (demo/scripts/make-content.sh).
+demo/.scratch/
+# Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.mjs
 # against an instance whose content you intend to publish: the recording is a
 # copy of that instance's posts, tags and media metadata.
-frontend/src/mock/fixtures/fixtures.json
+demo/mock/fixtures/fixtures.json
 
 # bv (beads viewer) local config and caches
 .bv/

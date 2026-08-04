@@ -1,9 +1,9 @@
 #!/bin/bash
-# Builds the static UI demo into dist-demo/ — a self-contained copy of the Point
+# Builds the static UI demo into demo/dist/ — a self-contained copy of the Point
 # frontend that runs with no backend at all.
 #
-# The demo bundles recorded fixtures (scripts/record-demo-fixtures.mjs) and a
-# fetch/XHR shim (frontend/src/mock/) that answers every API call from memory,
+# The demo bundles recorded fixtures (demo/scripts/record-fixtures.mjs) and a
+# fetch/XHR shim (demo/mock/) that answers every API call from memory,
 # so the output is plain static files: no origin to attack, no database, no
 # credentials, and nothing to reset — a reload restores the pristine state.
 #
@@ -13,23 +13,24 @@
 # loads but silently drops half the UI.
 #
 # Usage:
-#   scripts/build-demo.sh [--skip-media]
+#   demo/scripts/build.sh [--skip-media]
 #
-# Prerequisites: fixtures recorded to frontend/src/mock/fixtures/fixtures.json.
+# Prerequisites: fixtures recorded to demo/mock/fixtures/fixtures.json.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+DEMO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT_DIR="$(cd "$DEMO_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-DIST="$ROOT_DIR/dist-demo"
-FIXTURES="$ROOT_DIR/frontend/src/mock/fixtures/fixtures.json"
+DIST="$DEMO_DIR/dist"
+FIXTURES="$DEMO_DIR/mock/fixtures/fixtures.json"
 DEMO_VERSION="demo"
 
 # Source of the original media files referenced by the fixtures. Defaults to the
-# scratch instance scripts/make-demo-content.sh builds; override to record a
+# scratch instance demo/scripts/make-content.sh builds; override to record a
 # demo from some other instance's storage.
-MEDIA_SRC="${MEDIA_SRC:-$ROOT_DIR/.demo-scratch/media/originals}"
+MEDIA_SRC="${MEDIA_SRC:-$DEMO_DIR/.scratch/media/originals}"
 
 # Downscale target. Demo images only ever appear on a screen, and the bundle is
 # shipped to a CDN, so full-resolution originals (330MB+) are pure cost.
@@ -41,7 +42,7 @@ SKIP_MEDIA=0
 
 if [ ! -f "$FIXTURES" ]; then
   echo "Missing $FIXTURES" >&2
-  echo "Record it first:  node scripts/record-demo-fixtures.mjs --session=<token>" >&2
+  echo "Record it first:  node demo/scripts/record-fixtures.mjs --session=<token>" >&2
   exit 1
 fi
 
@@ -59,11 +60,11 @@ echo "==> Building JS (mock entry)"
 # JS_DEBUG_DIR is redirected into the demo tree even though the debug set is
 # skipped: build-js.sh removes that directory when skipping, and the default
 # points at frontend/js-debug — the working tree's dev bundle.
-APP_ENTRY="$ROOT_DIR/frontend/src/mock/entry.js" \
+APP_ENTRY="$DEMO_DIR/mock/entry.js" \
 JS_RELEASE_DIR="$DIST/assets/js" \
 JS_DEBUG_DIR="$DIST/.js-debug-unused" \
 BUILD_DEBUG_FRONTEND=0 \
-  "$SCRIPT_DIR/build-js.sh"
+  "$ROOT_DIR/scripts/build-js.sh"
 
 # ── CSS ───────────────────────────────────────────────────────────────────
 #
@@ -72,7 +73,7 @@ BUILD_DEBUG_FRONTEND=0 \
 # fetches as text before first paint. A build that omits it renders unstyled.
 
 echo "==> Building CSS"
-"$SCRIPT_DIR/build-css.sh" >/dev/null
+"$ROOT_DIR/scripts/build-css.sh" >/dev/null
 cp -r "$ROOT_DIR/frontend/css" "$DIST/assets/css"
 
 if [ ! -f "$DIST/assets/css/common/theme.css" ]; then
@@ -93,7 +94,7 @@ cp "$ROOT_DIR/frontend/manifest.webmanifest" "$DIST/manifest.webmanifest"
 # ── index.html ────────────────────────────────────────────────────────────
 
 echo "==> Templating index.html"
-node "$SCRIPT_DIR/build-demo-html.mjs" \
+node "$SCRIPT_DIR/build-html.mjs" \
   --src="$ROOT_DIR/frontend/index.html" \
   --out="$DIST/index.html" \
   --js-dir="$DIST/assets/js" \
@@ -178,7 +179,7 @@ echo "==> Writing host config"
 # SPA fallback: every unknown path renders index.html so deep links and reloads
 # work — without it the admin UI, whose routes are entirely client-side, is one
 # large 404. `_redirects` is only consulted when no file matches, so real assets
-# are unaffected. scripts/serve-demo.mjs reads this same file, so serving the
+# are unaffected. demo/scripts/serve.mjs reads this same file, so serving the
 # build locally behaves like the deployed one.
 #
 # Assets and media are excluded from the fallback and sent to a 404 instead: a
@@ -237,7 +238,7 @@ EOF
 # feed.xml and sitemap.xml are rendered by the Go server in production, so a
 # static build has to emit them as files or the <link rel=alternate> in the
 # shell points at a 404.
-node "$SCRIPT_DIR/build-demo-feeds.mjs" \
+node "$SCRIPT_DIR/build-feeds.mjs" \
   --fixtures="$FIXTURES" \
   --out="$DIST"
 
@@ -246,5 +247,5 @@ echo "==> Done: $DIST"
 du -sh "$DIST" 2>/dev/null || true
 echo
 echo "Serve locally with the backend STOPPED, then confirm zero /api/ requests:"
-echo "  scripts/run-demo.sh"
-echo "  node scripts/test-demo.mjs --base=http://localhost:8002"
+echo "  demo/scripts/run.sh"
+echo "  node demo/scripts/test.mjs --base=http://localhost:8002"

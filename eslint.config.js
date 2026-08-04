@@ -71,7 +71,9 @@ const rules = {
 
 export default [
   {
-    files: ["frontend/src/**/*.js"],
+    // demo/mock/ is browser code too — it is bundled into the static demo in
+    // place of the normal entry point (demo/scripts/build.sh).
+    files: ["frontend/src/**/*.js", "demo/mock/**/*.js"],
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: "module",
@@ -173,9 +175,10 @@ export default [
     },
     rules,
   },
-  // Node build scripts (e.g. scripts/build-plugin-manifest.mjs).
+  // Node build scripts (e.g. scripts/build-plugin-manifest.mjs) and the demo's
+  // content-generation and build tooling (demo/scripts/, demo/world.mjs).
   {
-    files: ["scripts/**/*.mjs"],
+    files: ["scripts/**/*.mjs", "demo/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

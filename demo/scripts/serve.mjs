@@ -13,7 +13,7 @@
  * So the rules are read from the build itself rather than restated here: local
  * serving and the deployed site cannot drift apart.
  *
- * Usage: node scripts/serve-demo.mjs [--dir=dist-demo] [--host=127.0.0.1] [--port=8002]
+ * Usage: node demo/scripts/serve.mjs [--dir=demo/dist] [--host=127.0.0.1] [--port=8002]
  */
 
 import { createServer } from "node:http";
@@ -28,7 +28,7 @@ const args = Object.fromEntries(
   }),
 );
 
-const ROOT = resolve(args.dir || "dist-demo");
+const ROOT = resolve(args.dir || "demo/dist");
 const HOST = args.host || "127.0.0.1";
 const PORT = Number(args.port || 8002);
 
@@ -62,7 +62,7 @@ const MIME = {
 
 /**
  * Parses `_redirects`: `<source> <destination> [status]`, one rule per line,
- * first match wins. Only the trailing-`*` splat that build-demo.sh emits is
+ * first match wins. Only the trailing-`*` splat that build.sh emits is
  * supported — an unrecognised source is reported rather than silently ignored,
  * since a rule that quietly does nothing is exactly how the admin UI 404s.
  */

@@ -1,5 +1,5 @@
 /**
- * Entry point for the static demo build (scripts/build-demo.sh).
+ * Entry point for the static demo build (demo/scripts/build.sh).
  *
  * Import order is the whole trick: the shim patches window.fetch and
  * XMLHttpRequest as a side effect of being imported, and ES modules evaluate in
@@ -12,4 +12,4 @@
 
 import "./shim.js";
 import "./banner.js";
-import "../app.js";
+import "../../frontend/src/app.js";

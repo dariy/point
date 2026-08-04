@@ -26,13 +26,28 @@ A read-only backend was the obvious alternative and is strictly worse here:
 ## How it works
 
 ```
-frontend/src/mock/
-  entry.js      build entry — imports the shim, then the real app.js
-  shim.js       patches window.fetch + XMLHttpRequest
-  store.js      mutable in-memory model, seeded from fixtures
-  routes.js     endpoint handlers over the store
-  banner.js     demo-only banner, reset control, login hint
-  fixtures/     recorded API payloads (gitignored)
+demo/
+  README.md       this document
+  world.mjs       tag universe, locations and topical vocabulary
+  mock/
+    entry.js      build entry — imports the shim, then the real app.js
+    shim.js       patches window.fetch + XMLHttpRequest
+    store.js      mutable in-memory model, seeded from fixtures
+    routes.js     endpoint handlers over the store
+    banner.js     demo-only banner, reset control, login hint
+    fixtures/     recorded API payloads (gitignored)
+  scripts/
+    make-content.sh      throwaway instance → generated content → fixtures
+    generate-content.mjs picsum photos + Gemini prose
+    retag-content.mjs    restructure tags without regenerating prose
+    record-fixtures.mjs  record an instance's API responses
+    build.sh             fixtures + frontend → demo/dist/
+    build-html.mjs       index.html templating the Go server normally does
+    build-feeds.mjs      static feed.xml and sitemap.xml
+    run.sh / serve.mjs   serve demo/dist/ with the build's SPA fallback
+    test.mjs             acceptance check against a served build
+  dist/           build output (gitignored)
+  .scratch/       throwaway instance (gitignored)
 ```
 
 The interception point is the **platform**, not `frontend/src/api/client.js`.
@@ -73,26 +88,26 @@ explicitly exempts from that event.
 
 ```bash
 # 1. Generate content and record fixtures (~5 min, needs network + a Gemini key)
-GEMINI_API_KEY=... scripts/make-demo-content.sh
+GEMINI_API_KEY=... demo/scripts/make-content.sh
 
 # 2. Build
-scripts/build-demo.sh              # or --skip-media for a fast iteration loop
+demo/scripts/build.sh              # or --skip-media for a fast iteration loop
 
 # 3. Serve and verify, with the backend STOPPED
-scripts/run-demo.sh                                       # http://localhost:8002
-node scripts/test-demo.mjs --base=http://localhost:8002
+demo/scripts/run.sh                                       # http://localhost:8002
+node demo/scripts/test.mjs --base=http://localhost:8002
 ```
 
-`test-demo.mjs` drives a real browser: `npm install`, then `npx playwright
+`test.mjs` drives a real browser: `npm install`, then `npx playwright
 install chromium` if the browser is not already cached.
 
 ### Serving it
 
-`scripts/run-demo.sh` runs `scripts/serve-demo.mjs`, which reads the build's own
+`demo/scripts/run.sh` runs `demo/scripts/serve.mjs`, which reads the build's own
 `_redirects` and applies it the way Cloudflare Pages does: static file first,
 rules only when nothing matched.
 
-Serving the directory as plain files instead — `npx serve dist-demo` — leaves
+Serving the directory as plain files instead — `npx serve demo/dist` — leaves
 every `/light` route a 404, because admin routes are client-side and have no
 file behind them; the entire admin UI disappears. `serve -s` goes too far the
 other way and rewrites *everything* to `index.html`, so a missing image answers
@@ -101,7 +116,7 @@ local server from `_redirects` keeps the two from drifting.
 
 ### The demo's tag tree
 
-`scripts/demo-world.mjs` is the single definition of the demo's tag universe,
+`demo/world.mjs` is the single definition of the demo's tag universe,
 shared by the generator and the restructuring script so the two cannot describe
 different worlds:
 
@@ -137,11 +152,11 @@ of the tree is decorative.
 
 ### The content pipeline
 
-`scripts/make-demo-content.sh` stands up a **throwaway Point instance** in
-`.demo-scratch/` — its own database and storage — fills it, records it, and tears
+`demo/scripts/make-content.sh` stands up a **throwaway Point instance** in
+`demo/.scratch/` — its own database and storage — fills it, records it, and tears
 it down. Your real instance is never touched.
 
-`scripts/generate-demo-content.mjs` does the filling:
+`demo/scripts/generate-content.mjs` does the filling:
 
 1. Samples the [picsum.photos](https://picsum.photos) catalogue (Unsplash-sourced,
    freely usable). Landscape only, and at most one photo per contributor —
@@ -177,10 +192,10 @@ reports impossible to compare. Gemini's prose still varies.
 ### Restructuring without regenerating
 
 ```bash
-scripts/make-demo-content.sh --retag   # no Gemini key, no new photographs
+demo/scripts/make-content.sh --retag   # no Gemini key, no new photographs
 ```
 
-Runs `scripts/retag-demo-content.mjs` against the existing `.demo-scratch/`
+Runs `demo/scripts/retag-content.mjs` against the existing `demo/.scratch/`
 instance: it folds each post's keywords onto the controlled vocabulary
 (`TOPIC_ALIASES`), rebuilds the tree around what survived, moves the prose into
 `excerpt`, sets the plugin selection, and re-records. Existing titles and text
@@ -193,11 +208,11 @@ timestamps are captured up front and restored afterwards — the API owns
 
 ### Recording from a real instance instead
 
-`scripts/record-demo-fixtures.mjs` works against any instance:
+`demo/scripts/record-fixtures.mjs` works against any instance:
 
 ```bash
-node scripts/record-demo-fixtures.mjs --base=http://localhost:8001 --session=<token>
-MEDIA_SRC=/path/to/data/media/originals scripts/build-demo.sh
+node demo/scripts/record-fixtures.mjs --base=http://localhost:8001 --session=<token>
+MEDIA_SRC=/path/to/data/media/originals demo/scripts/build.sh
 ```
 
 `<token>` is a raw value from the `sessions` table; any admin session works.
@@ -207,7 +222,7 @@ instance's content — see Scrubbing below.
 ### What the build reproduces
 
 The Go server rewrites `index.html` in memory on every request and never touches
-the file on disk (`api/cmd/api/main.go`). `scripts/build-demo-html.mjs` does that
+the file on disk (`api/cmd/api/main.go`). `demo/scripts/build-html.mjs` does that
 work at build time:
 
 - `__BUILD_VERSION__` → a fixed demo string
@@ -218,7 +233,7 @@ work at build time:
   emit an empty manifest.
 
 `feed.xml` and `sitemap.xml` are server-rendered in production, so
-`scripts/build-demo-feeds.mjs` writes them out as files.
+`demo/scripts/build-feeds.mjs` writes them out as files.
 
 ### Plugins withheld from the demo
 
@@ -274,14 +289,14 @@ is anyone's real content.
 - **`?thumb` does not resolve to a thumbnail.** The client appends it to media
   URLs in several admin views (`PostsListPage.js`, `VisualEditor.js`), and a
   static host ignores query strings, so the full-size image is served instead.
-  `build-demo.sh` downscales originals to compensate;
+  `build.sh` downscales originals to compensate;
   `utils/helpers.js dropBrokenImages()` handles anything missing.
 - **Backend-shaped admin surfaces are canned**: backups, log tailing,
   photo-library import, system restart, Instagram connect, passkey registration.
   They render and respond plausibly rather than being hidden — seeing that the
   features exist is the point.
 - **The mock is a parallel implementation and will drift.** Fixtures being
-  recorded rather than transcribed limits this, and `scripts/test-demo.mjs`
+  recorded rather than transcribed limits this, and `demo/scripts/test.mjs`
   catches it. Re-record at each release.
 
 ## Deploying

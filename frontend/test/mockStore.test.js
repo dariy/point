@@ -8,9 +8,9 @@ import {
   paginatedPage,
   toListShape,
   visiblePosts,
-} from "../src/mock/store.js";
+} from "../../demo/mock/store.js";
 
-// The static demo (scripts/build-demo.sh) answers every API call from these
+// The static demo (demo/scripts/build.sh) answers every API call from these
 // helpers, so their edge cases are the demo's edge cases: a wrong sort or a
 // dropped field shows up as a visibly broken page with no server log to explain
 // it.

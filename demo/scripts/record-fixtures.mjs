@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Records API responses from a running Point instance into the fixture bundle
- * that the static demo build (scripts/build-demo.sh) serves from.
+ * that the static demo build (demo/scripts/build.sh) serves from.
  *
  * Fixtures are RECORDED rather than hand-written so their shapes are true by
  * construction. The mock only has to model behaviour, never guess payloads —
@@ -18,8 +18,8 @@
  *   demo value.
  *
  * Usage:
- *   node scripts/record-demo-fixtures.mjs --base=http://localhost:8001 \
- *        --session=<token> [--out=frontend/src/mock/fixtures]
+ *   node demo/scripts/record-fixtures.mjs --base=http://localhost:8001 \
+ *        --session=<token> [--out=demo/mock/fixtures]
  *
  * The session token is a raw (unhashed) value from the `sessions` table. Any
  * admin session works; nothing is written back to the source instance.
@@ -39,7 +39,7 @@ const args = Object.fromEntries(
 
 const BASE = args.base || "http://localhost:8001";
 const SESSION = args.session || process.env.POINT_SESSION || "";
-const OUT = resolve(args.out || "frontend/src/mock/fixtures");
+const OUT = resolve(args.out || "demo/mock/fixtures");
 
 if (!SESSION) {
   console.error("Missing --session=<token>. Admin-only endpoints need one.");
@@ -267,7 +267,7 @@ async function main() {
     migrations: await get("/api/system/migrations"),
   };
 
-  // Every media path the demo must ship as a real file. build-demo.sh reads
+  // Every media path the demo must ship as a real file. build.sh reads
   // this to copy (and downscale) exactly the images that are referenced —
   // walking the source media directory would sweep in unpublished originals.
   const paths = new Set();

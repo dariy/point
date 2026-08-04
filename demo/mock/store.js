@@ -1,7 +1,7 @@
 /**
  * In-memory data model for the static demo.
  *
- * Seeded from recorded fixtures (scripts/record-demo-fixtures.mjs) and mutated
+ * Seeded from recorded fixtures (demo/scripts/record-fixtures.mjs) and mutated
  * in place, so create/edit/delete in the demo actually change what the rest of
  * the UI shows. Nothing is persisted: a reload re-seeds from the fixture and the
  * demo is pristine again. That is the whole reset story — there is no server to

@@ -74,10 +74,10 @@ function walk(dir) {
 // with code the shipped app does not contain. Mirrors the Go side, where
 // scripts/coverage-gate.sh excludes cmd/seed for the same reason.
 //
-// frontend/src/mock/ is the static demo's fixture-backed API stand-in
-// (scripts/build-demo.sh). It is only ever reachable from mock/entry.js, which
-// is not an entry point of a normal build.
-const COVERAGE_EXCLUDE = [/^frontend\/src\/mock\//];
+// demo/mock/ is the static demo's fixture-backed API stand-in
+// (demo/scripts/build.sh). It lives outside SRC_DIR, so it is already outside
+// the walk below; nothing in a normal build reaches it.
+const COVERAGE_EXCLUDE = [];
 
 const allSrc = walk(SRC_DIR)
   .map((f) => relative(ROOT, f).split(sep).join("/"))

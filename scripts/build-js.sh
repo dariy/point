@@ -44,7 +44,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # APP_ENTRY / JS_RELEASE_DIR are overridable so an alternate bundle can be built
 # from the same flags rather than a divergent copy of this script — see
-# scripts/build-demo.sh, which swaps in the mock entry point.
+# demo/scripts/build.sh, which swaps in the mock entry point.
 APP_ENTRY="${APP_ENTRY:-$ROOT_DIR/frontend/src/app.js}"
 JS_RELEASE_DIR="${JS_RELEASE_DIR:-$ROOT_DIR/frontend/js}"
 JS_DEBUG_DIR="${JS_DEBUG_DIR:-$ROOT_DIR/frontend/js-debug}"

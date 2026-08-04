@@ -29,7 +29,7 @@ const JS_DIR = resolve(args["js-dir"]);
 const CSS_DIR = resolve(args["css-dir"]);
 const VERSION = args.version || "demo";
 const FIXTURES = resolve(
-  args.fixtures || "frontend/src/mock/fixtures/fixtures.json",
+  args.fixtures || "demo/mock/fixtures/fixtures.json",
 );
 
 /**

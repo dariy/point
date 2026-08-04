@@ -15,11 +15,11 @@
  * so backdating is applied directly to the database at the end.
  *
  * Usage:
- *   node scripts/generate-demo-content.mjs \
+ *   node demo/scripts/generate-content.mjs \
  *     --base=http://localhost:8002 --session=<token> \
  *     --db=/path/to/scratch/point.db --gemini-key=<key> [--count=28]
  *
- * Intended to run against a SCRATCH instance — see scripts/make-demo-content.sh.
+ * Intended to run against a SCRATCH instance — see demo/scripts/make-content.sh.
  */
 
 import { DatabaseSync } from "node:sqlite";
@@ -32,7 +32,7 @@ import {
   buildTagScaffold,
   postTags,
   toTopic,
-} from "./demo-world.mjs";
+} from "../world.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -62,8 +62,8 @@ for (const [name, value] of [
 
 // ── Demo world ────────────────────────────────────────────────────────────
 //
-// Locations, years and the topical vocabulary live in scripts/demo-world.mjs,
-// shared with retag-demo-content.mjs so the two cannot describe different
+// Locations, years and the topical vocabulary live in demo/world.mjs,
+// shared with retag-content.mjs so the two cannot describe different
 // worlds.
 
 /**

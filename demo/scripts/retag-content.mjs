@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Restructures an already-generated demo instance onto the tag tree in
- * scripts/demo-world.mjs, without regenerating any prose.
+ * demo/world.mjs, without regenerating any prose.
  *
  * The first demo generation let the model invent its own keywords per photo.
  * That produced ~100 topical tags of which roughly 80 named a single post — a
@@ -15,12 +15,12 @@
  * enabling: the sheet renders `excerpt`, so the writing surfaces there instead
  * of sitting below the fold of a page nobody scrolls.
  *
- * A fresh `scripts/make-demo-content.sh` run produces this shape directly —
- * generate-demo-content.mjs shares the same module. This script exists so the
+ * A fresh `demo/scripts/make-content.sh` run produces this shape directly —
+ * generate-content.mjs shares the same module. This script exists so the
  * existing bundle can be restructured without a Gemini key or new photographs.
  *
  * Usage:
- *   node scripts/retag-demo-content.mjs --base=http://127.0.0.1:8002 \
+ *   node demo/scripts/retag-content.mjs --base=http://127.0.0.1:8002 \
  *     --session=<token> --db=/path/to/scratch/point.db
  */
 
@@ -33,7 +33,7 @@ import {
   countryOf,
   postTags,
   toTopic,
-} from "./demo-world.mjs";
+} from "../world.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -169,7 +169,7 @@ async function main() {
   console.log(`· ${posts.length} post(s)`);
 
   // Timestamps are captured before any write and restored after: the archive
-  // spans 2020–2026 only because generate-demo-content.mjs backdated it
+  // spans 2020–2026 only because generate-content.mjs backdated it
   // directly in SQLite, and a PUT through the API has no way to preserve that.
   const db = new DatabaseSync(DB_PATH);
   const stamps = new Map(
@@ -248,7 +248,7 @@ async function main() {
   const thin = [...used].filter((t) => counts.get(t) < 2);
   if (thin.length) {
     console.error(`\nFAIL — topic(s) on fewer than 2 posts: ${thin.join(", ")}`);
-    console.error("Nothing was deleted. Widen TOPIC_ALIASES in scripts/demo-world.mjs.");
+    console.error("Nothing was deleted. Widen TOPIC_ALIASES in demo/world.mjs.");
     process.exit(1);
   }
 
