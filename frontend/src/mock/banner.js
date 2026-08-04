@@ -23,6 +23,9 @@ const STYLE = `
     border-top: 1px solid rgba(255, 255, 255, .14);
   }
   .demo-banner[hidden] { display: none; }
+  /* The immersive viewers are full-bleed, and the Sheet viewer puts its
+     swipe-up hint at the bottom centre — exactly where this bar sits. */
+  .demo-banner.is-immersive { display: none; }
   .demo-banner p { margin: 0; }
   .demo-banner strong { font-weight: 650; }
   .demo-banner button {
@@ -31,6 +34,13 @@ const STYLE = `
     border-radius: 6px;
   }
   .demo-banner button:hover { background: rgba(255, 255, 255, .2); }
+  .demo-banner a.demo-admin-link {
+    padding: .3rem .7rem; font: inherit; color: #fff; text-decoration: none;
+    background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .22);
+    border-radius: 6px;
+  }
+  .demo-banner a.demo-admin-link:hover { background: rgba(255, 255, 255, .2); }
+  .demo-banner a.demo-admin-link[hidden] { display: none; }
   .demo-login-hint {
     margin: .5rem 0 0; padding: .5rem .7rem;
     font: .8125rem/1.45 system-ui, sans-serif; text-align: center;
@@ -53,6 +63,7 @@ function buildBanner() {
   bar.innerHTML = `
     <p><strong>Point demo.</strong> Everything works, nothing is saved —
        changes live in this browser tab only.</p>
+    <a class="demo-admin-link" href="/light">Open the admin →</a>
     <button type="button" data-demo-reset>Reset demo</button>
     <button type="button" data-demo-dismiss aria-label="Hide this notice">Hide</button>
   `;
@@ -76,6 +87,38 @@ function buildBanner() {
   }
 
   return bar;
+}
+
+/**
+ * The admin UI is the part of the demo worth showing, and nothing on the public
+ * site links to it — a real deployment keeps that entrance quiet on purpose.
+ * The link hides itself once inside `/light`, where the admin's own navigation
+ * takes over.
+ */
+// Both syncs below run from a MutationObserver that also watches attributes,
+// so they must not write an attribute that is already correct: reflecting
+// `hidden = true` onto an element that is already hidden still queues a
+// mutation record, and the observer would re-enter itself forever.
+function syncAdminLink() {
+  const link = document.querySelector(".demo-admin-link");
+  const hide = window.location.pathname.startsWith("/light");
+  if (link && link.hidden !== hide) link.hidden = hide;
+}
+
+/**
+ * Steps out of the way of the immersive viewers.
+ *
+ * Kept separate from the `hidden` attribute so that leaving a photo restores
+ * whatever the visitor chose — dismissing the bar and stepping aside for a
+ * full-screen image are different states.
+ */
+function syncBannerVisibility() {
+  const bar = document.querySelector(".demo-banner");
+  if (!bar) return;
+  const immersive = !!document.querySelector(".immersive-layout");
+  if (bar.classList.contains("is-immersive") !== immersive) {
+    bar.classList.toggle("is-immersive", immersive);
+  }
 }
 
 /**
@@ -103,16 +146,32 @@ function watchForLogin() {
   };
 
   fill();
-  new MutationObserver(fill).observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+  return fill;
 }
 
 function init() {
   injectStyles();
   document.body.appendChild(buildBanner());
-  watchForLogin();
+  const fill = watchForLogin();
+  syncAdminLink();
+  syncBannerVisibility();
+
+  // One observer for all three: the SPA re-renders on every navigation, so this
+  // is also the signal that the path — and the immersive layout — may have
+  // changed. `attributes` is needed because the immersive viewers announce
+  // themselves by toggling a class, not by replacing nodes.
+  new MutationObserver(() => {
+    fill();
+    syncAdminLink();
+    syncBannerVisibility();
+  }).observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+
+  window.addEventListener("popstate", syncAdminLink);
 }
 
 if (document.readyState === "loading") {

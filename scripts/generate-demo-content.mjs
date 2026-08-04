@@ -25,6 +25,15 @@
 import { DatabaseSync } from "node:sqlite";
 import { Buffer } from "node:buffer";
 
+import {
+  LOCATIONS,
+  YEARS,
+  TOPICS,
+  buildTagScaffold,
+  postTags,
+  toTopic,
+} from "./demo-world.mjs";
+
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
@@ -53,18 +62,9 @@ for (const [name, value] of [
 
 // ── Demo world ────────────────────────────────────────────────────────────
 //
-// Four locations with real coordinates so the map and atlas plot something
-// meaningful, chosen to be visually distinct enough that Gemini can plausibly
-// match most photographs to one of them.
-
-const LOCATIONS = [
-  { name: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393 },
-  { name: "Reykjavík", country: "Iceland", latitude: 64.1466, longitude: -21.9426 },
-  { name: "Kyoto", country: "Japan", latitude: 35.0116, longitude: 135.7681 },
-  { name: "El Chaltén", country: "Argentina", latitude: -49.3315, longitude: -72.8863 },
-];
-
-const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
+// Locations, years and the topical vocabulary live in scripts/demo-world.mjs,
+// shared with retag-demo-content.mjs so the two cannot describe different
+// worlds.
 
 /**
  * Deterministic PRNG (mulberry32) so a re-run reproduces the same year and
@@ -123,7 +123,10 @@ const SCHEMA = {
     title: { type: "string" },
     excerpt: { type: "string" },
     body: { type: "string" },
-    tags: { type: "array", items: { type: "string" } },
+    // Constrained to the shared vocabulary. Left free-form, 28 posts invent
+    // ~100 keywords of which 80 name exactly one post, and the tag tree becomes
+    // a list of dead ends.
+    tags: { type: "array", items: { type: "string", enum: TOPICS } },
   },
   required: ["title", "excerpt", "body", "tags"],
 };
@@ -144,9 +147,10 @@ Return JSON with:
   if the subject is a close-up or an interior, keep the place incidental rather
   than inventing scenery that is not visible. Keep it under 130 words. Do not
   mention cameras, settings, or the word "photo".
-- "tags": 3-5 lowercase single-word or hyphenated topical keywords describing
-  the subject matter (e.g. "architecture", "coastline", "street-life"). No
-  place names, no years.
+- "tags": 3-4 terms chosen ONLY from this list, describing what is actually
+  visible in the frame. Do not invent terms and do not include place names or
+  years — those are added separately.
+  ${TOPICS.join(", ")}
 
 The photograph is credited to ${photo.author}.`;
 }
@@ -236,65 +240,6 @@ async function download(url) {
   throw new Error(`download failed: ${url}`);
 }
 
-// ── Tag scaffold ──────────────────────────────────────────────────────────
-
-/**
- * Create the tag hierarchy the navigation and visualisations read.
- *
- * `location` and `year` are roots; cities hang under `location` carrying real
- * coordinates, and each year is a `kind: "year"` tag, which is what the
- * timeline pills are built from.
- */
-async function buildTagScaffold() {
-  const created = {};
-
-  // Idempotent: creating a tag that exists is a 409, and the script should be
-  // safe to re-run against a partially-built instance.
-  const existing = new Map(
-    ((await api("GET", "/api/tags"))?.tags || []).map((t) => [t.name.toLowerCase(), t]),
-  );
-
-  const makeTag = async (body) => {
-    const hit = existing.get(body.name.toLowerCase());
-    if (hit) {
-      created[hit.name] = hit;
-      return hit;
-    }
-    const tag = await api("POST", "/api/tags", {
-      in_breadcrumbs: true,
-      in_ancestor_flyout: true,
-      ...body,
-    });
-    created[tag.name] = tag;
-    existing.set(tag.name.toLowerCase(), tag);
-    return tag;
-  };
-
-  const locationRoot = await makeTag({
-    name: "location",
-    kind: "tag",
-    description: "Where these were taken.",
-  });
-
-  for (const loc of LOCATIONS) {
-    await makeTag({
-      name: loc.name,
-      kind: "tag",
-      description: `${loc.name}, ${loc.country}`,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-      parent_ids: [locationRoot.id],
-    });
-  }
-
-  for (const year of YEARS) {
-    await makeTag({ name: String(year), kind: "year" });
-  }
-
-  console.log(`  tag scaffold: ${Object.keys(created).length} tags`);
-  return created;
-}
-
 // ── Post creation ─────────────────────────────────────────────────────────
 
 async function createOne(photo, index) {
@@ -326,31 +271,29 @@ async function createOne(photo, index) {
     throw new Error(`upload returned no path: ${JSON.stringify(uploaded).slice(0, 200)}`);
   }
 
-  const body = [
-    `![${text.title}](${mediaPath})`,
-    "",
-    text.body.trim(),
-  ].join("\n");
-
-  const topical = (text.tags || [])
-    .map((t) => String(t).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-"))
-    .filter(Boolean)
-    .slice(0, 5);
+  // The body is the photograph and nothing else; the writing goes into
+  // `excerpt`, which is what the Sheet immersive viewer renders and what the
+  // post cards preview. A demo whose prose only appears below the fold of the
+  // article page is prose nobody in the demo reads.
+  const topics = [...new Set((text.tags || []).map(toTopic).filter(Boolean))].slice(0, 4);
 
   const post = await api("POST", "/api/posts", {
     title: text.title,
-    content: body,
-    excerpt: text.excerpt,
+    content: `![${text.title}](${mediaPath})`,
+    excerpt: [text.excerpt.trim(), text.body.trim().replace(/\s*\n+\s*/g, " ")]
+      .filter(Boolean)
+      .join(" "),
     status: "published",
     formatter: "markdown",
     thumbnail_path: mediaPath,
-    // Location and year are tags, which is how Point models both — the timeline
-    // reads `kind: "year"` tags and the map reads coordinates off place tags.
-    tags: [location.name, String(year), ...topical],
+    // Country, city and year are tags, which is how Point models all three —
+    // the timeline reads `kind: "year"` tags and the map reads coordinates off
+    // the city tags.
+    tags: postTags(location.name, year, topics),
     is_featured: index === 0,
   });
 
-  return { post, year, location, title: text.title };
+  return { post, year, location, topics, title: text.title };
 }
 
 /** Run `worker` over `items` with a bounded number in flight. */
@@ -413,13 +356,54 @@ function backdate(assignments) {
   db.close();
 }
 
+// ── Topic balance ─────────────────────────────────────────────────────────
+
+/**
+ * Drops any topic the model only reached for once.
+ *
+ * A tag on a single post is a label, not a facet: clicking it lands on an
+ * archive page holding the post you came from. The vocabulary is closed, so
+ * this is rare, but a demo is judged on the click that goes nowhere.
+ *
+ * Removal rather than invention — padding an unrelated post to make the count
+ * would put a tag on a photograph that does not show it. Mutates `results` so
+ * the caller's topic set matches what the instance now holds.
+ */
+async function balanceTopics(results) {
+  const holders = new Map();
+  for (const r of results) {
+    for (const topic of r.topics) {
+      if (!holders.has(topic)) holders.set(topic, []);
+      holders.get(topic).push(r);
+    }
+  }
+
+  const singletons = [...holders].filter(([, rs]) => rs.length < 2).map(([t]) => t);
+  if (!singletons.length) return;
+
+  const touched = new Set(singletons.flatMap((t) => holders.get(t)));
+  for (const r of touched) {
+    r.topics = r.topics.filter((t) => !singletons.includes(t));
+    await api("PATCH", `/api/posts/${r.post.id}/tags`, {
+      tags: postTags(r.location.name, r.year, r.topics),
+    });
+    if (r.topics.length < 2) {
+      console.warn(`  ! post ${r.post.id} is down to ${r.topics.length} topic(s)`);
+    }
+  }
+  console.log(`· dropped ${singletons.length} single-use topic(s): ${singletons.join(", ")}`);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log(`Generating ${COUNT} demo posts into ${BASE}`);
 
-  console.log("· tag scaffold");
-  await buildTagScaffold();
+  // Geography and dates first, so the city tags carry their coordinates before
+  // any post references them. The subject tree is built afterwards, once the
+  // surviving vocabulary is known.
+  console.log("· tag scaffold (geography, dates)");
+  await buildTagScaffold(api, { topics: [] });
 
   console.log("· fetching picsum catalogue");
   const photos = await fetchPhotoList(COUNT);
@@ -435,6 +419,13 @@ async function main() {
   const ok = results.filter((r) => r && !r.error);
   const failed = results.filter((r) => r && r.error);
   for (const f of failed) console.warn(`  ! ${f.error.message}`);
+
+  await balanceTopics(ok);
+
+  console.log("· tag scaffold (subjects)");
+  await buildTagScaffold(api, {
+    topics: [...new Set(ok.flatMap((r) => r.topics))],
+  });
 
   console.log(`· backdating ${ok.length} post(s) across ${YEARS[0]}–${YEARS.at(-1)}`);
   backdate(ok.map((r) => ({ postId: r.post.id, year: r.year })));

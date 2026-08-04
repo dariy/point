@@ -176,8 +176,10 @@ fi
 echo "==> Writing host config"
 
 # SPA fallback: every unknown path renders index.html so deep links and reloads
-# work. `_redirects` is only consulted when no file matches, so real assets are
-# unaffected.
+# work — without it the admin UI, whose routes are entirely client-side, is one
+# large 404. `_redirects` is only consulted when no file matches, so real assets
+# are unaffected. scripts/serve-demo.mjs reads this same file, so serving the
+# build locally behaves like the deployed one.
 #
 # Assets and media are excluded from the fallback and sent to a 404 instead: a
 # missing image must not resolve to the HTML shell with a 200, which would
@@ -244,4 +246,5 @@ echo "==> Done: $DIST"
 du -sh "$DIST" 2>/dev/null || true
 echo
 echo "Serve locally with the backend STOPPED, then confirm zero /api/ requests:"
-echo "  npx --yes serve -s $DIST -l 3000"
+echo "  scripts/run-demo.sh"
+echo "  node scripts/test-demo.mjs --base=http://localhost:8002"

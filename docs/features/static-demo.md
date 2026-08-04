@@ -78,10 +78,62 @@ GEMINI_API_KEY=... scripts/make-demo-content.sh
 # 2. Build
 scripts/build-demo.sh              # or --skip-media for a fast iteration loop
 
-# 3. Verify with the backend STOPPED
-npx serve -s dist-demo -l 3000
-node scripts/test-demo.mjs --base=http://localhost:3000
+# 3. Serve and verify, with the backend STOPPED
+scripts/run-demo.sh                                       # http://localhost:8002
+node scripts/test-demo.mjs --base=http://localhost:8002
 ```
+
+`test-demo.mjs` drives a real browser: `npm install`, then `npx playwright
+install chromium` if the browser is not already cached.
+
+### Serving it
+
+`scripts/run-demo.sh` runs `scripts/serve-demo.mjs`, which reads the build's own
+`_redirects` and applies it the way Cloudflare Pages does: static file first,
+rules only when nothing matched.
+
+Serving the directory as plain files instead — `npx serve dist-demo` — leaves
+every `/light` route a 404, because admin routes are client-side and have no
+file behind them; the entire admin UI disappears. `serve -s` goes too far the
+other way and rewrites *everything* to `index.html`, so a missing image answers
+`200` with the HTML shell and `dropBrokenImages()` never fires. Driving the
+local server from `_redirects` keeps the two from drifting.
+
+### The demo's tag tree
+
+`scripts/demo-world.mjs` is the single definition of the demo's tag universe,
+shared by the generator and the restructuring script so the two cannot describe
+different worlds:
+
+```
+country ─┬ Portugal ── Lisbon      cities are children of their country *and*
+         ├ Iceland ─── Reykjavík   of the `city` root, so the tree reads as
+         ├ Japan ───── Kyoto       geography while `city` stays a flat index
+         └ Argentina ─ El Chaltén
+city ────┬ Lisbon, Reykjavík, Kyoto, El Chaltén
+date ────┬ 2020 … 2026             kind: "year" — what the timeline reads
+subject ─┬ terrain ─┬ mountains, forest, coastline, valley, flora
+         ├ water ───┬ ocean, waves, still-water, droplets
+         ├ built ───┬ architecture, street-life, cityscape, winding-road
+         ├ light ───┬ morning-light, mist, sky, twilight
+         ├ season ──┬ winter, summer
+         ├ people ──┬ solitude, companionship, everyday
+         └ objects ─┬ analog, close-up, texture
+```
+
+Point's tag graph is a DAG, so the two parents on each city are a supported
+shape rather than a trick: breadcrumbs render `country → Japan → Kyoto` and the
+ancestor flyout offers the other path.
+
+The topical vocabulary is **closed**. Letting the model invent keywords per
+photo produced ~100 tags of which roughly 80 named exactly one post — a flat
+list that exercises the tag *page* but not the hierarchy, the breadcrumbs or the
+flyout, and every click on which lands on an archive of one. Twenty-five terms
+over 28 posts keeps every tag a facet that narrows the archive to more than one
+entry, which both scripts assert before finishing.
+
+Each post carries its country, its city, its year and 2–4 topics, so no branch
+of the tree is decorative.
 
 ### The content pipeline
 
@@ -101,11 +153,19 @@ it down. Your real instance is never touched.
    coprime, so every combination appears exactly once: 7 per location, 4 per year.
 3. Sends each image to Gemini (`gemini-2.5-flash`, structured output) with its
    assigned place and year, asking for a title, excerpt, body and topical tags.
-   The text describes the actual photograph rather than reading as filler.
+   The text describes the actual photograph rather than reading as filler. Tags
+   are constrained to the vocabulary above by a schema `enum`, not by asking
+   nicely.
 4. Creates everything **through the REST API** — uploads, tags, posts — so slugs,
    tag counts, media linking and visibility all follow the same code paths as a
-   real edit.
-5. Backdates `published_at` directly in SQLite. This is the one thing the API
+   real edit. The prose lands in `excerpt` and the body holds only the
+   photograph: `excerpt` is what the Sheet immersive viewer renders and what
+   the post cards preview, so writing left in the body is writing nobody in the
+   demo reads.
+5. Drops any topic the model only reached for once, then builds the `subject`
+   branch from what survived — a topic tag on one post, or none, is a dead end
+   in the navigation.
+6. Backdates `published_at` directly in SQLite. This is the one thing the API
    cannot do: it sets the timestamp server-side at publish time, and a past
    `scheduled_at` publishes immediately instead of backdating. Timestamps are
    clamped to an hour ago so the current year never produces future-dated posts.
@@ -113,6 +173,23 @@ it down. Your real instance is never touched.
 Photo selection and date jitter run off a seeded PRNG, so a re-run reproduces the
 same layout — a demo that reshuffles on every rebuild makes screenshots and bug
 reports impossible to compare. Gemini's prose still varies.
+
+### Restructuring without regenerating
+
+```bash
+scripts/make-demo-content.sh --retag   # no Gemini key, no new photographs
+```
+
+Runs `scripts/retag-demo-content.mjs` against the existing `.demo-scratch/`
+instance: it folds each post's keywords onto the controlled vocabulary
+(`TOPIC_ALIASES`), rebuilds the tree around what survived, moves the prose into
+`excerpt`, sets the plugin selection, and re-records. Existing titles and text
+are untouched.
+
+It verifies the ≥2-posts-per-topic invariant *before* deleting anything, so a
+vocabulary gap leaves the instance as it was rather than half-migrated. Post
+timestamps are captured up front and restored afterwards — the API owns
+`published_at`, and a PUT would collapse the 2020–2026 archive into today.
 
 ### Recording from a real instance instead
 
@@ -154,6 +231,18 @@ work at build time:
 `app.js` falls back to importing `offline-sync` statically when the manifest is
 **empty**, so the manifest must be present and non-empty for that omission to
 take effect. The build enforces this.
+
+### Plugins the demo turns off
+
+These ship in the bundle but are disabled in the recorded instance, so the demo
+opens on a particular selection rather than the defaults:
+
+| Plugin | State | Why |
+|---|---|---|
+| `tags-atlas` | on | The map answers "what is in this archive?" against the geography the tag tree now models |
+| `tag-cloud` | off | Answers the same question as a flat weighted list — which is what the hierarchy replaces |
+| `immersive-sheet` | on | Renders `excerpt`, where the demo's prose lives |
+| `immersive` | off | Standard and Sheet are the two members of an exclusive area; at least one must stay enabled, so Sheet goes on **before** Standard goes off |
 
 ## Scrubbing
 
