@@ -34,6 +34,28 @@ export const LOCATIONS = [
   { name: "El Chaltén", country: "Argentina", latitude: -49.3315, longitude: -72.8863 },
 ];
 
+/**
+ * A coordinate for each country, so the Atlas draws it as a filled shape.
+ *
+ * The Atlas plots only geo-tags — tags carrying a latitude/longitude — and then
+ * matches each one's *name* against countries.geojson: a match becomes a
+ * polygon, everything else a circle marker. A country tag without coordinates
+ * clears neither bar and simply never appears, which left the demo's map
+ * showing four city pins over an empty world.
+ *
+ * The point is a rough interior point rather than a strict centroid. It is not
+ * where the shape is drawn — the boundary file decides that — only the anchor
+ * the tag's cloud opens from when it is selected with no click point (returning
+ * from a post), so "somewhere sensibly inside the country" is the whole
+ * requirement.
+ */
+export const COUNTRY_COORDS = {
+  Portugal: { latitude: 39.5, longitude: -8.0 },
+  Iceland: { latitude: 64.9631, longitude: -19.0208 },
+  Japan: { latitude: 36.2048, longitude: 138.2529 },
+  Argentina: { latitude: -38.4161, longitude: -63.6167 },
+};
+
 export const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
 
 /**
@@ -166,13 +188,31 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
         parent_ids: undefined,
       });
       existing.set(tag.name.toLowerCase(), tag);
-    } else if (body.nav_order != null && tag.nav_order !== body.nav_order) {
-      // An adopted tag keeps whatever it was created with, so nav_order has to
-      // be reconciled explicitly — otherwise a --retag run over an instance
-      // built before this existed leaves the header menu empty. PUT is
-      // partial-update, so this touches nothing else.
-      tag = await api("PUT", `/api/tags/${tag.id}`, { nav_order: body.nav_order });
-      existing.set(tag.name.toLowerCase(), tag);
+    } else {
+      // An adopted tag keeps whatever it was created with, so anything the tree
+      // depends on has to be reconciled explicitly — otherwise a --retag run
+      // over an instance built before a field existed silently keeps the old
+      // shape. nav_order is the header menu; coordinates are whether the Atlas
+      // can place the tag at all, and country tags are always adopted (the post
+      // API auto-creates them when the first post is tagged), so without this
+      // they would never gain any. PUT is partial-update, so it touches nothing
+      // else.
+      const patch = {};
+      if (body.nav_order != null && tag.nav_order !== body.nav_order) {
+        patch.nav_order = body.nav_order;
+      }
+      const at = tag.locations?.[0];
+      if (
+        body.latitude != null &&
+        (at?.latitude !== body.latitude || at?.longitude !== body.longitude)
+      ) {
+        patch.latitude = body.latitude;
+        patch.longitude = body.longitude;
+      }
+      if (Object.keys(patch).length) {
+        tag = await api("PUT", `/api/tags/${tag.id}`, patch);
+        existing.set(tag.name.toLowerCase(), tag);
+      }
     }
     // Parents are set separately in both branches: PUT is the only call that
     // *replaces* them, so a re-run cannot accumulate stale links.
@@ -211,6 +251,7 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
       name: country,
       kind: "tag",
       description: country,
+      ...COUNTRY_COORDS[country],
       parent_ids: [countryRoot.id],
     });
   }

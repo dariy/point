@@ -69,10 +69,14 @@ handling and caching instead of a parallel implementation of it.
 | Kind | Examples | Behaviour |
 |---|---|---|
 | Entities | posts, tags, media, settings, plugins | Seed a mutable store — create/edit/delete really take effect |
-| Derived views | tag graph, atlas, timeline | Served as recorded blobs; recomputing them in the browser would duplicate real backend work for no visible gain |
+| Derived views | tag graph, timeline | Served as recorded blobs; recomputing them in the browser would duplicate real backend work for no visible gain |
 
 Tag pages are **synthesized** from the entity stores rather than recorded, so a
-tag created inside the demo gets a working page too.
+tag created inside the demo gets a working page too. So is the Atlas's on-tap
+cloud (`GET /api/pages/graph/tag/:id` — the place's recent posts and the tags
+they share): it is one payload per place *and* per timeline range, so recording
+it would mean a blob per combination, and a place the visitor retagged inside
+the demo would still answer with the cloud it had at recording time.
 
 ### Work the server normally does to files
 
@@ -156,6 +160,12 @@ subject ─┬ terrain ─┬ mountains, forest, coastline, valley, flora
 Point's tag graph is a DAG, so the two parents on each city are a supported
 shape rather than a trick: breadcrumbs render `country → Japan → Kyoto` and the
 ancestor flyout offers the other path.
+
+Countries carry coordinates as well as cities. The Atlas plots only tags that
+have them, then matches each one's name against its boundary files — so a
+country with coordinates is drawn as a filled shape and one without is not
+drawn at all, which is what left the map showing four city pins over an empty
+world.
 
 The topical vocabulary is **closed**. Letting the model invent keywords per
 photo produced ~100 tags of which roughly 80 named exactly one post — a flat

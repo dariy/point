@@ -22,7 +22,7 @@ const FIXTURES = resolve(args.fixtures);
 const OUT = resolve(args.out);
 // Relative URLs are invalid in RSS, so the feed needs an absolute base. It is
 // only cosmetic in a demo; override when the real hostname is known.
-const BASE = (args.base || "https://demo.example.com").replace(/\/$/, "");
+const BASE = (args.base || "https://demo.point.photos").replace(/\/$/, "");
 
 const escapeXml = (s = "") =>
   String(s)

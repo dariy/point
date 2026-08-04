@@ -23,6 +23,7 @@ import {
   setAuthenticated,
   toListShape,
   visiblePosts,
+  withinYears,
 } from "./store.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -78,6 +79,28 @@ function postDetail(state, post) {
 }
 
 /**
+ * A tag and every tag beneath it.
+ *
+ * The tree is a DAG — a city is a child of both its country and the flat `city`
+ * index — so a tag is reachable by more than one path; `seen` terminates the
+ * walk and keeps each tag visited once.
+ */
+function tagSubtree(state, tag) {
+  const out = [];
+  const seen = new Set();
+  const walk = (t) => {
+    if (!t || seen.has(t.id)) return;
+    seen.add(t.id);
+    out.push(t);
+    for (const ref of t.children || []) {
+      walk(state.tags.find((x) => x.id === ref.id));
+    }
+  };
+  walk(tag);
+  return out;
+}
+
+/**
  * A tag's own slug plus every descendant's.
  *
  * A parent tag page lists everything filed anywhere beneath it: /tags/light
@@ -85,24 +108,9 @@ function postDetail(state, post) {
  * carrying `light` itself. TagService.GetPostsByTag does the same closure over
  * the real graph, so without this the demo's inner tags each work while every
  * grouping tag above them reads as empty.
- *
- * The tree is a DAG — a city is a child of both its country and the flat `city`
- * index — so a tag is reachable by more than one path; `seen` terminates the
- * walk and keeps each tag counted once.
  */
 function tagSlugClosure(state, tag) {
-  const slugs = new Set();
-  const seen = new Set();
-  const walk = (t) => {
-    if (!t || seen.has(t.id)) return;
-    seen.add(t.id);
-    slugs.add(t.slug);
-    for (const ref of t.children || []) {
-      walk(state.tags.find((x) => x.id === ref.id));
-    }
-  };
-  walk(tag);
-  return slugs;
+  return new Set(tagSubtree(state, tag).map((t) => t.slug));
 }
 
 /** Posts filed under a tag or any of its descendants, newest first. */
@@ -113,6 +121,106 @@ function postsForTag(state, slug) {
   return readablePosts(state)
     .filter((p) => (p.tags || []).some((t) => slugs.has(t.slug)))
     .sort(byNewest);
+}
+
+/**
+ * Rewrite a media URL the way atlasThumbURL (api/internal/api/pages.go) does,
+ * so a cloud chip requests the same square thumbnail the recorded graph blob
+ * already points at. A static host ignores the query and serves the (already
+ * downscaled) original — the demo's documented `?thumb` limitation rather than
+ * a new one.
+ */
+function atlasThumbUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//.test(url)) return url;
+  return url.split("?")[0] + "?thumb=128";
+}
+
+/**
+ * The Atlas cloud for one place: the most recent posts filed anywhere beneath
+ * it, the tags those posts most often carry, and the edges wiring the two
+ * together — PagesHandler.GetTagCloud (api/internal/api/pages.go).
+ *
+ * Derived rather than recorded, unlike the graph blob it sits beside. The
+ * payload is per place *and* per timeline range, so recording it would mean one
+ * fixture per combination — and a place would still answer with a stale cloud
+ * after the visitor retagged a post inside the demo. Deriving it keeps every
+ * marker on the map clickable, including tags created in the demo itself.
+ *
+ * Posts are year-scoped and the related tags are not, matching the backend:
+ * narrowing the timeline changes which photographs a place offers, not what the
+ * place is about.
+ */
+function atlasCloud(state, tag, query) {
+  // atlasCloudLimit, which is also the atlas_post_limit default.
+  const LIMIT = 10;
+
+  const inSubtree = new Set(tagSubtree(state, tag).map((t) => t.slug));
+  const subtreePosts = readablePosts(state).filter((p) =>
+    (p.tags || []).some((t) => inSubtree.has(t.slug)),
+  );
+
+  const recent = withinYears(subtreePosts, query).sort(byNewest).slice(0, LIMIT);
+  const posts = recent.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    media_url: atlasThumbUrl(p.media_url),
+  }));
+
+  // Related tags, ranked by how many of the place's posts carry them and tied
+  // on name. The place itself is dropped; its descendants stay, since a
+  // country's own cities are what make its cloud read as geography. Counted
+  // over every post in the sub-tree, not only the few returned above.
+  const counts = new Map();
+  for (const p of subtreePosts) {
+    for (const t of p.tags || []) {
+      if (t.slug === tag.slug || t.slug.startsWith("_")) continue;
+      counts.set(t.slug, (counts.get(t.slug) || 0) + 1);
+    }
+  }
+  const bySlug = new Map(state.tags.map((t) => [t.slug, t]));
+  const tags = [...counts]
+    .map(([slug, count]) => ({ tag: bySlug.get(slug), count }))
+    .filter((row) => row.tag)
+    .sort((a, b) => b.count - a.count || a.tag.name.localeCompare(b.tag.name))
+    .slice(0, LIMIT)
+    .map(({ tag: t }) => {
+      const node = { id: t.id, name: t.name, slug: t.slug, kind: t.kind };
+      // Coordinates are what make a chip render as a place rather than a plain
+      // tag (utils/tags.js tagKind).
+      const at = (t.locations || [])[0];
+      if (at) {
+        node.latitude = at.latitude;
+        node.longitude = at.longitude;
+      }
+      return node;
+    });
+
+  // Edges only ever join nodes this payload carries, so the cloud wires itself
+  // without the caller holding the whole graph. The centre is always wired.
+  const wired = new Map(tags.map((t) => [t.slug, t.id]));
+  wired.set(tag.slug, tag.id);
+  const wiredIds = new Set(wired.values());
+
+  const membershipEdges = [];
+  for (const p of recent) {
+    for (const t of p.tags || []) {
+      if (wired.has(t.slug)) membershipEdges.push({ post: p.id, tag: wired.get(t.slug) });
+    }
+  }
+
+  const hierarchyEdges = [];
+  for (const id of wiredIds) {
+    const t = state.tags.find((x) => x.id === id);
+    for (const parent of t?.parents || []) {
+      if (wiredIds.has(parent.id)) {
+        hierarchyEdges.push({ parent: parent.id, child: id });
+      }
+    }
+  }
+
+  return { tags, posts, membershipEdges, hierarchyEdges };
 }
 
 /**
@@ -294,6 +402,18 @@ export const routes = [
 
   ["GET", "/api/pages/tags", ({ state }) => ok(state.pages.tags)],
   ["GET", "/api/pages/graph", ({ state }) => ok(state.pages.graph)],
+  [
+    "GET",
+    "/api/pages/graph/tag/:id",
+    ({ state, params, query }) => {
+      const tag = state.tags.find((t) => t.id === Number(params.id));
+      // A real 404 rather than the soft empty 200: the Atlas catches the
+      // rejection and leaves the place unselected, where an empty body would
+      // spawn a cloud of nothing around it.
+      if (!tag) return notFound("tag not found");
+      return ok(atlasCloud(state, tag, query));
+    },
+  ],
   ["GET", "/api/pages/map", ({ state }) => ok(state.pages.map ?? { locations: [] })],
   // `menu` is the header's tree and `tags` the site-title dropdown's; api/nav.js
   // falls back to `menu` when `tags` is absent, which is what the server sends

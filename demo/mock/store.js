@@ -8,9 +8,12 @@
  * roll back.
  *
  * Entities (posts/tags/media/settings) live here as mutable collections.
- * Genuinely derived views — the tag graph, the atlas — stay as recorded blobs;
- * recomputing them in the browser would be a second implementation of real
- * backend work that no demo visitor would notice.
+ * Genuinely derived views — the tag graph, the timeline — stay as recorded
+ * blobs; recomputing them in the browser would be a second implementation of
+ * real backend work that no demo visitor would notice. The Atlas's per-place
+ * cloud is the exception and is computed (routes.js atlasCloud): it is one
+ * payload per place *and* per timeline range, so there is no single blob to
+ * record.
  */
 
 let fixtures = null;
@@ -233,7 +236,7 @@ export function paginate(rows, query, key, defaultPerPage = 20) {
  * An absent or partial range means "all years", which is what the timeline
  * sends when it is showing everything.
  */
-function withinYears(rows, query) {
+export function withinYears(rows, query) {
   const from = Number(query.year_from);
   const to = Number(query.year_to);
   if (!(from > 0 && to > 0)) return rows;
