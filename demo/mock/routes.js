@@ -115,14 +115,56 @@ function tagSlugClosure(state, tag) {
   return new Set(tagSubtree(state, tag).map((t) => t.slug));
 }
 
+/**
+ * The slug set a `?tag=` filter selects: the named tag and everything beneath
+ * it, or nothing at all when no such tag exists — the recursive CTE in
+ * buildPostsQuery (api/internal/repository/queries_posts.go) yields an empty id
+ * list for an unknown slug, so an unrecognised filter matches no posts rather
+ * than quietly matching all of them.
+ */
+function tagFilterSlugs(state, slug) {
+  const tag = state.tags.find((t) => t.slug === slug);
+  return tag ? tagSlugClosure(state, tag) : new Set();
+}
+
+/** Whether a post carries any of `slugs`, directly. */
+function taggedWithAny(post, slugs) {
+  return (post.tags || []).some((t) => slugs.has(t.slug));
+}
+
 /** Posts filed under a tag or any of its descendants, newest first. */
 function postsForTag(state, slug) {
-  const tag = state.tags.find((t) => t.slug === slug);
-  if (!tag) return [];
-  const slugs = tagSlugClosure(state, tag);
+  const slugs = tagFilterSlugs(state, slug);
   return readablePosts(state)
-    .filter((p) => (p.tags || []).some((t) => slugs.has(t.slug)))
+    .filter((p) => taggedWithAny(p, slugs))
     .sort(byNewest);
+}
+
+/**
+ * Does a post match a free-text query?
+ *
+ * The real search is one SQL predicate over the post's title, slug and content
+ * plus the names and slugs of its tags (buildPostsQuery,
+ * api/internal/repository/queries_posts.go) — which is why searching for a
+ * place finds the photographs taken there, not just the posts that happen to
+ * name it in their title.
+ *
+ * Content is the one column with no counterpart here: the recorded list shape
+ * carries only the excerpt the cards render, and the bodies live in a separate
+ * detail map the list never loads. The excerpt stands in for it, which narrows
+ * the demo's matches rather than widening them — everything found is something
+ * a visitor can see the reason for on the results grid.
+ */
+function postMatchesQuery(post, search) {
+  const needle = String(search || "").trim().toLowerCase();
+  if (!needle) return true;
+  const has = (value) => String(value || "").toLowerCase().includes(needle);
+  return (
+    has(post.title) ||
+    has(post.slug) ||
+    has(post.excerpt) ||
+    (post.tags || []).some((t) => has(t.name) || has(t.slug))
+  );
 }
 
 /**
@@ -615,17 +657,26 @@ export const routes = [
     "/api/posts",
     ({ state, query }) => {
       let rows = readablePosts(state);
-      if (query.status) rows = rows.filter((p) => p.status === query.status);
-      if (query.search) {
-        const q = query.search.toLowerCase();
-        rows = rows.filter(
-          (p) =>
-            (p.title || "").toLowerCase().includes(q) ||
-            (p.excerpt || "").toLowerCase().includes(q),
-        );
+      // "all" is the admin's explicit "don't filter" (PostHandler.ListPosts),
+      // not a status any post carries.
+      if (query.status && query.status !== "all") {
+        rows = rows.filter((p) => p.status === query.status);
       }
+      if (query.tag) {
+        const slugs = tagFilterSlugs(state, query.tag);
+        rows = rows.filter((p) => taggedWithAny(p, slugs));
+      }
+      // `q` is what every caller sends — the search page, the header typeahead,
+      // the admin list and the command palette all name it that.
+      if (query.q) rows = rows.filter((p) => postMatchesQuery(p, query.q));
       rows = rows.sort(byNewest);
-      return ok(paginate(rows, query, "posts"));
+      // A caller that sends no per_page gets the site's own page size, which is
+      // what PostHandler.ListPosts falls back to. The header typeahead is that
+      // caller (it asks for `limit`, which the real endpoint ignores too), so
+      // the generic 20 made the demo's dropdown twice the length of a real
+      // one's.
+      const perPage = Number(state.settings?.posts_per_page) || 10;
+      return ok(paginate(rows, query, "posts", perPage));
     },
   ],
 
@@ -765,10 +816,22 @@ export const routes = [
     "/api/tags",
     ({ state, query }) => {
       let rows = state.tags.slice();
-      if (query.search) {
-        const q = query.search.toLowerCase();
-        rows = rows.filter((t) => (t.name || "").toLowerCase().includes(q));
+      if (query.q) {
+        // Name *and* slug, like TagHandler.ListTags: "reykjavik" has to find
+        // Reykjavík, which is exactly the query a visitor without the accent
+        // available types.
+        const q = String(query.q).trim().toLowerCase();
+        rows = rows.filter(
+          (t) =>
+            (t.name || "").toLowerCase().includes(q) ||
+            (t.slug || "").toLowerCase().includes(q),
+        );
       }
+      // A logged-out visitor never sees a hidden tag; `include_empty=false` (the
+      // search page and the header typeahead, which offer tags as links) drops
+      // the ones that would lead to an empty page.
+      if (!state.authenticated) rows = rows.filter((t) => !t.effective_hidden);
+      if (query.include_empty === "false") rows = rows.filter((t) => t.post_count > 0);
       // The real endpoint returns the full set; the admin page paginates client
       // side. Matching that keeps the tag manager's counts honest.
       return ok({ tags: rows, total: rows.length });
