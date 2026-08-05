@@ -26,6 +26,7 @@ import { getPostBySlug, getPostNavigation } from "../../api/posts.js";
 import { store } from "../../store.js";
 import {
   escapeHtml,
+  isShortViewport,
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
@@ -263,15 +264,16 @@ export default class TagPage extends Component {
     const slug = this.props.params?.slug || "";
     const { data, post } = this.state;
 
-    const canShowTimeline = pluginHost.hasSlot("timeline");
-    this._canShowTimeline = canShowTimeline;
-    if (
-      canShowTimeline &&
+    // One condition, used both to mount the timeline and to tell the header it
+    // is there: a post view or an error page renders none, and the header must
+    // not drop the year crumb on the strength of a timeline that never appears.
+    const canShowTimeline =
+      pluginHost.hasSlot("timeline") &&
       !this._isPostView() &&
       !this.state.loading &&
-      !this.state.error &&
-      pluginHost.hasSlot("timeline")
-    ) {
+      !this.state.error;
+    this._canShowTimeline = canShowTimeline;
+    if (canShowTimeline) {
       const vc = ViewContext.current();
       const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
       pluginHost.fill("timeline", this.$("#timeline-mount"), {
@@ -363,7 +365,7 @@ export default class TagPage extends Component {
         currentPath: window.location.pathname,
         editUrl: post ? `/light/posts/${post.id}/edit` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
-        timelineVisible: this._canShowTimeline,
+        timelineVisible: this._canShowTimeline && !isShortViewport(),
       }).then(comps => {
         if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
@@ -400,7 +402,9 @@ export default class TagPage extends Component {
         currentPath: window.location.pathname,
         editUrl: tag ? `/light/tags/${tag.slug}` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
-        timelineVisible: this._canShowTimeline,
+        // Hidden timeline ⇒ the year crumb is the only thing left saying the
+        // list is filtered — see the same call in HomePage.
+        timelineVisible: this._canShowTimeline && !isShortViewport(),
         // Same distraction-free toggle the home grid offers.
         distractionToggle: true,
       }).then(comps => {

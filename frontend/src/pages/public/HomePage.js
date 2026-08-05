@@ -17,7 +17,7 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { store } from '../../store.js';
-import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
+import { escapeHtml, isShortViewport, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
@@ -235,13 +235,29 @@ export default class HomePage extends Component {
     // but keep the custom menu visible since it contains explicit navigation links.
     const isCustomMenu = settings.nav_menu_mode === 'custom';
     const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
+
+    // Settled before the header is filled, not at the mount site further down:
+    // the header reads it to decide whether the year facet still needs a crumb,
+    // and answering that with last render's value (or `undefined` on the first)
+    // showed the crumb on every fresh load whatever the timeline was doing.
+    // The conditions mirror the mount below — a static home page and a page
+    // still loading render no timeline at all.
+    this._canShowTimeline =
+      !isStaticHomePage && !this.state.loading && !!this.state.data
+      && pluginHost.hasSlot('timeline');
+
     pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       currentPath: '/',
       navTags: (immersive && !isCustomMenu) ? [] : navTags,
       editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
       total,
-      timelineVisible: this._canShowTimeline,
+      // The header drops the year crumb only because the timeline is showing
+      // the same range more usefully; on a short viewport the timeline is
+      // hidden (css/public/timeline.css), so the crumb is the year's only
+      // remaining trace and has to come back. Evaluated at render, so a device
+      // rotated mid-view keeps the previous answer until the next navigation.
+      timelineVisible: this._canShowTimeline && !isShortViewport(),
       // Only the paginated grid view offers the distraction-free toggle.
       distractionToggle: !isStaticHomePage && !immersive,
     }).then(comps => {
@@ -278,8 +294,7 @@ export default class HomePage extends Component {
     const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
     pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
 
-    // timeline slot.
-    this._canShowTimeline = pluginHost.hasSlot('timeline');
+    // timeline slot (decided above, before the header was told about it).
     if (this._canShowTimeline) {
       const vc = ViewContext.current();
       pluginHost.fill('timeline', this.$('#timeline-mount'), {

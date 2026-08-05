@@ -18,6 +18,12 @@
    (the horizontally-scrolling tag strip) stretch the card past the viewport. */
 .post-card-slot {
     min-width: 0;
+    /* A card is sized by its grid track, not by the viewport — the same 360px
+       box turns up on a phone in one column, on a tablet in two and on a
+       desktop in three. What the card can afford to show is a question about
+       the box, so the rules that trim it are container queries against this
+       slot rather than another viewport tier. */
+    container-type: inline-size;
 }
 
 /* ===========================
@@ -330,6 +336,65 @@
 /* Track wrapper — provides the relative-positioning context for scroll arrow buttons */
 .post-card-content .tag-strip-track {
     margin-top: auto;               /* push tags to bottom of card flex */
+}
+
+/* A card's tags wrap rather than scroll. Everywhere else a strip appears —
+   the header bar, the post page — it is one line of a long list and scrolling
+   is the whole design; on a card it is the post's own three-to-seven tags, and
+   a 360px card shows four of them with the rest behind an arrow that has to be
+   found before it can be tapped. Wrapping is inert on a card whose tags already
+   fit, so this costs the wide ones nothing. */
+.post-card-content .tag-strip-scroll {
+    flex-wrap: wrap;
+    /* Rows sit tighter than chips do side by side: the second row is space the
+       photograph is giving up, and on a seven-tag card the saving is what keeps
+       the excerpt on whole lines. */
+    row-gap: var(--spacing-xs);
+    /* Wrapped rows have nothing to scroll past: setupScrollableStrip leaves
+       .has-scroll-* off, so the arrows and the edge fade stay dormant — and
+       pan-x would otherwise swallow a vertical page scroll that began on a
+       strip now two rows tall. */
+    overflow-x: visible;
+    touch-action: pan-y;
+}
+
+/* Below a thumbnail's width there is no wrapping worth doing: the zoomed grid
+   squares a card down to ~160px, where seven tags stack five rows deep, bury
+   the photograph the mode exists to show, and still run off the bottom edge.
+   These go back to one scrolling row. */
+@container (max-width: 16rem) {
+    .post-card-content .tag-strip-scroll {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        touch-action: pan-x;
+    }
+}
+
+/* --- Narrow cards: tags before date --- */
+/* Below ~24rem the card cannot afford every row it is asked to draw, and the
+   date is the line it can most afford to lose: the tags say what the post is
+   about and each one is a way further into the archive, while the date is
+   still on the post itself. Dropping it pays for the tag row that wrapping
+   added. A view count, where the setting turns one on, is the other thing the
+   meta row is for, so the row only collapses when the date was all of it. */
+@container (max-width: 24rem) {
+    .post-card-content .post-date {
+        display: none;
+    }
+
+    .post-card-meta:not(:has(.view-count)) {
+        display: none;
+    }
+
+    /* Card height is fixed, so the wrapped row has to come from somewhere. Left
+       at three lines the excerpt is not dropped but *squeezed*: the flex item
+       shrinks below its clamp and the last line is cut through the middle of
+       the glyphs. Two lines end the preview on a whole one. */
+    .post-card-content.overlay .post-card-excerpt,
+    .featured-post .post-card-content.overlay .post-card-excerpt {
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
 }
 
 /* ===========================
