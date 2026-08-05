@@ -232,6 +232,33 @@ cat > "$DIST/_redirects" <<'EOF'
 /*         /index.html  200
 EOF
 
+# Cloudflare Pages does not honour the rules above: it ignores 200-rewrites in
+# `_redirects` entirely, and its own implicit index.html fallback is disabled by
+# the presence of a 404.html — so on Pages the static build alone serves 404 for
+# every /light route. Neither half can be given up (dropping 404.html restores
+# SPA routing but turns missing assets and media into 200s, the exact soft-404
+# the rules above exist to prevent), so on Pages the routing is expressed as a
+# worker instead. `_headers` still applies to asset responses in this mode.
+#
+# `_redirects` is kept because demo/scripts/serve.mjs reads it to reproduce the
+# same routing locally, and because any other static host still honours it.
+cat > "$DIST/_worker.js" <<'EOF'
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const res = await env.ASSETS.fetch(request);
+    if (res.status !== 404) return res;
+
+    // Genuine 404s: build assets, and dated media/post URLs not in this deploy.
+    const p = url.pathname;
+    if (p.startsWith("/assets/") || /^\/(19|20)/.test(p)) return res;
+
+    // Everything else is a client-routed page — serve the shell.
+    return env.ASSETS.fetch(new URL("/index.html", url));
+  },
+};
+EOF
+
 cat > "$DIST/_headers" <<'EOF'
 # Content-hashed chunks can never change meaning at a fixed URL.
 /assets/js/chunks/*
