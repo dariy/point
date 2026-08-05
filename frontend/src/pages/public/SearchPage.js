@@ -182,10 +182,10 @@ export default class SearchPage extends Component {
         <span class="search-tag-chip-count">${t.post_count}</span>
       </a>
     `).join('');
-
+// <h3 class="search-tag-results-title">Tags</h3>
     mount.innerHTML = `
       <div class="search-tag-results">
-        <h3 class="search-tag-results-title">Tags</h3>
+
         <div class="search-tag-strip">
           ${tagsHtml}
         </div>
@@ -212,10 +212,10 @@ export default class SearchPage extends Component {
 
   async _load() {
     const vc = ViewContext.current();
-    
+
     let titleQuery = vc.query || '';
     if (vc.tag) titleQuery += ` in ${vc.tag}`;
-    
+
     document.title = titleQuery ? `Search: ${titleQuery} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
 
     if (!vc.query?.trim()) {
@@ -233,7 +233,7 @@ export default class SearchPage extends Component {
         listPosts(params),
         listTags({ q: vc.query, include_empty: false })
       ]);
-      
+
       this.setState({ loading: false, data, tags: tagsData.tags || [], error: null });
     } catch (err) {
       this.setState({ loading: false, data: null, tags: [], error: err.message || 'Failed to search.' });
