@@ -42,15 +42,17 @@ export default class DashboardPage extends Component {
 
     if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
     if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    // Omit the sidebar element entirely when it has nothing in it — an empty
+    // one still reserves its grid column and shrinks the stats grid.
+    const sidebar = this._renderContinueWriting(drafts);
+    //       ${this._renderComposeStrip()}
     return `
-      ${this._renderComposeStrip()}
+
       <div class="dashboard-grid">
         <div class="dashboard-main">
           ${this._renderStats(stats, analyticsStats, topPosts)}
         </div>
-        <div class="dashboard-sidebar">
-          ${this._renderContinueWriting(drafts)}
-        </div>
+        ${sidebar ? `<div class="dashboard-sidebar">${sidebar}</div>` : ''}
       </div>
     `;
   }
