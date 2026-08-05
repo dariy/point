@@ -219,11 +219,14 @@ html[data-section="public"] .site-footer {
 /* Square, flat, and tucked into the corner the grid now reaches. `right`/`left`
    parked these in the gutter between the viewport and --content-max-width;
    under this theme the grid page has no such gutter, so they were floating over
-   the tiles instead of beside them. */
+   the tiles instead of beside them.
+
+   The tint is no longer set here: common/pagination.css now paints both this
+   and the distraction toggle from --color-primary / --text-inverted, which
+   this theme already defines. Only the shape and the corner remain ours. */
 .page-nav-arrow {
   border-radius: 0;
   box-shadow: none;
-  color: var(--text-inverted);
 }
 
 .page-nav-prev {
@@ -243,5 +246,4 @@ body.distraction-free .header-action-btn.distraction-toggle {
   right: 0;
   border-radius: 0;
   box-shadow: none;
-  color: var(--text-inverted);
 }

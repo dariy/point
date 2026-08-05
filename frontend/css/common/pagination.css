@@ -91,8 +91,16 @@
   z-index: 200;
   border: none;
   border-radius: 50%;
-  background: var(--color-accent, #4ea1ff);
-  color: #fff;
+  /* --color-primary, not --color-accent: accent is a fixed brand sky-blue that
+     no theme but Mosaic redefines, so a golden or sepia site grew a blue puck
+     floating over its own photographs. --color-primary IS the theme's main
+     colour — every theme file sets one, light and dark — so this tracks the
+     palette without each theme having to restate it. The glyph pairs with
+     --text-inverted for the same reason: hardcoded #fff was 2.77:1 on the old
+     accent, under the 3:1 minimum for a graphical control, and inverted-on-
+     primary clears 3:1 in every shipped theme (worst: Golden light at 3.19). */
+  background: var(--color-primary, #4ea1ff);
+  color: var(--text-inverted, #fff);
   cursor: pointer;
   opacity: 0.25;
   transition: opacity 0.2s ease;

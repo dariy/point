@@ -14,9 +14,6 @@
 import { pluginHost } from '../core/pluginHost.js';
 
 const MAX_PER_PAGE = 60;
-// Mobile and tablet viewports (iPad landscape is 1024px) get a fixed page size;
-// only wider desktop layouts fan out into enough columns to be worth measuring.
-const TABLET_MAX_WIDTH = 1024;
 
 // ── Pinch-zoom ──────────────────────────────────────────────────────────────
 // "Zoom" is just a chosen column count (a personal, sticky preference). Rows
@@ -120,7 +117,58 @@ function belowGridReserve(gridEl) {
   const footer = pluginHost.hasSlot('footer')
     ? Math.max(FOOTER_FALLBACK, measure('#footer-mount'))
     : 0;
-  return measure('#pagination-mount') + footer;
+  // .site-main's bottom padding sits under the pagination and above the footer,
+  // and it is real height the grid does not get. Omitting it made `avail` 24px
+  // (--spacing-lg) too generous — enough, on a 390px-wide phone, to tip a 1.96-
+  // row fit up to 2 and leave the page permanently 11px longer than the
+  // viewport. Read off the live element rather than the token so a theme that
+  // repads .site-main is measured, not assumed.
+  const main = doc.querySelector('.site-main');
+  const mainPadBottom = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+  return measure('#pagination-mount') + footer + mainPadBottom;
+}
+
+// The chrome bracketing the grid — everything computePerPage has to measure
+// around it, above (`top`) and below (`belowGridReserve`).
+const CHROME_MOUNTS = ['#header-mount', '#timeline-mount', '#pagination-mount', '#footer-mount'];
+
+/**
+ * Re-run a viewport fit whenever the chrome bracketing the grid changes height.
+ *
+ * The header, timeline and footer are async plugin slots that render, then
+ * fetch, then render again, so the fit a page schedules on a rAF after its own
+ * grid measures a layout that is not finished: an empty timeline leaves the grid
+ * 64px too high and an unmounted footer falls back to FOOTER_FALLBACK, between
+ * them offering a phone ~590px of room where the settled page has ~460. That is
+ * one row too many, and the page stays past the viewport for good — the fit is
+ * never asked again. Awaiting the slots' mount() promises does not fix it
+ * (several render their real content a tick later still); watching the boxes is
+ * indifferent to how late any of them arrives, and keeps working afterwards when
+ * the same chrome changes size (a footer that wraps, a timeline toggled off).
+ *
+ * @param {ParentNode} root  the page element holding the mounts.
+ * @param {() => void} onSettle  re-fit callback; must be idempotent, since a
+ *   settled layout can still emit a final no-op observation.
+ * @returns {() => void} teardown — disconnects the observer and cancels a
+ *   pending callback. Safe to call more than once.
+ */
+export function watchChromeFit(root, onSettle) {
+  if (!root || typeof ResizeObserver === 'undefined') return () => {};
+  let timer;
+  const ro = new ResizeObserver(() => {
+    clearTimeout(timer);
+    // Debounced: a slot that renders in two passes would otherwise re-fit twice,
+    // and the second fit is the only one measuring anything real.
+    timer = setTimeout(onSettle, 120);
+  });
+  for (const sel of CHROME_MOUNTS) {
+    const el = root.querySelector(sel);
+    if (el) ro.observe(el);
+  }
+  return () => {
+    clearTimeout(timer);
+    ro.disconnect();
+  };
 }
 
 /**
@@ -164,18 +212,14 @@ export function computePerPage(minPerPage, gridEl = null) {
       ? clampZoom(getZoom())
       : 0;
 
-  // Landscape mobile/tablet: the grid fans into a few columns and a couple of
-  // rows already fill the viewport, so lock to the floor and skip measurement.
-  // Portrait phones/tablets fall through: a single column of full-height cards
-  // would push the footer far off-screen, so we fit rows to the viewport the
-  // same way desktop does (≈3 cards) to keep pagination + footer visible.
-  // An explicit zoom overrides this — the user's column choice applies on every
-  // viewport, so fit rows to it instead of locking to the floor.
-  if (!zoomCols && window.innerWidth <= TABLET_MAX_WIDTH && window.innerWidth >= window.innerHeight) {
-    _cache = floor;
-    return floor;
-  }
-
+  // Every viewport is measured, landscape phones and tablets included. This used
+  // to short-circuit to `floor` (the posts_per_page setting) on the argument
+  // that a landscape grid fans into a few columns and "a couple of rows already
+  // fill the viewport" — which is true of the width and backwards about the
+  // height. A phone on its side is ~390px tall and a card floors at
+  // --post-cardhas-image-min-height (220px), so a floor of 6 laid out 2×3 and
+  // asked a 390px window to show 724px of grid. Measuring gives it the one row
+  // that actually fits; the rest is what pagination is for.
   let cols;
   let rowH;
   let gap;

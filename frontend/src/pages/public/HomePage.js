@@ -21,7 +21,7 @@ import { escapeHtml, isShortViewport, normalizeSettings } from '../../utils/help
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
-import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom, watchChromeFit } from '../../utils/gridFit.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -146,26 +146,36 @@ export default class HomePage extends Component {
   // Measure the rendered grid and, if the viewport fits a different number of
   // posts than we loaded, persist the new per_page to the URL — recomputing the
   // page so the first post currently shown stays visible on the resized list.
-  _reconcilePerPage({ fromResize = false } = {}) {
+  _reconcilePerPage({ fromResize = false, settling = false } = {}) {
     if (this._unmounted) return;
     const grid = this.$('.posts-grid');
     if (!grid) return; // static/immersive home has no grid to fill
     applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
-    // actual resize re-fits it to the new window.
-    if (!fromResize && vc.perPage) return;
+    // actual resize re-fits it to the new window. A settling pass is the
+    // exception that is not a new decision: it re-measures a value THIS mount
+    // computed (_fitOwned) now that the chrome around the grid has finished
+    // laying out, so a hand-typed ?per_page= is still reproduced untouched.
+    if (vc.perPage && !fromResize && !(settling && this._fitOwned)) return;
     const fit = computePerPage(this._minPerPage(), grid);
     const current = this._loadedPerPage || fit;
     if (fit === current) return;
     const firstIndex = (vc.page - 1) * current;
     const newPage = Math.floor(firstIndex / fit) + 1;
+    this._fitOwned = true;
     ViewContext.update({ per_page: fit, page: newPage }, { replace: true });
   }
 
   _onResize() {
     clearTimeout(this._resizeTimer);
     this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
+  }
+
+  /** (Re)arm the settling re-fit for the chrome around the grid — see watchChromeFit. */
+  _watchChrome() {
+    this._unwatchChrome?.();
+    this._unwatchChrome = watchChromeFit(this.container, () => this._reconcilePerPage({ settling: true }));
   }
 
   render() {
@@ -365,8 +375,11 @@ export default class HomePage extends Component {
     this._preloadAdjacentGrids(pagination);
     this._promoteGridAhead();
 
-    // After the real grid has laid out, fit per_page to the viewport.
+    // After the real grid has laid out, fit per_page to the viewport — then keep
+    // watching, because the chrome it has to measure around itself arrives later
+    // (see _watchChrome).
     requestAnimationFrame(() => this._reconcilePerPage());
+    this._watchChrome();
   }
 
   _clearPostContent() {
@@ -924,6 +937,8 @@ export default class HomePage extends Component {
     document.body.style.removeProperty('--posts-grid-cols');
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+    this._unwatchChrome?.();
+    this._unwatchChrome = null;
   }
 
   mount() {

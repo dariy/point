@@ -23,8 +23,12 @@ body.distraction-free .distraction-toggle {
   top: var(--spacing-lg, 1.5rem);
   right: calc(max(0px, (100vw - var(--content-max-width)) / 2) + var(--spacing-md, 1rem));
   z-index: 200;
-  background: var(--color-accent, #4ea1ff);
-  color: #fff;
+  /* Same pairing as .page-nav-arrow (common/pagination.css) — the theme's main
+     colour rather than the fixed brand accent, and --text-inverted rather than
+     a hardcoded #fff that only cleared 2.77:1 against it. The two controls sit
+     on screen together in DF mode, so they have to be tinted from one token. */
+  background: var(--color-primary, #4ea1ff);
+  color: var(--text-inverted, #fff);
   border-color: transparent;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }

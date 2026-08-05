@@ -66,6 +66,22 @@
     /* Default text color on image */
 }
 
+/* On a viewport too short to spend 13.75rem on one row, the floor stops being a
+   minimum and becomes the reason the page overflows: a phone on its side has
+   ~390px, of which the header and the footer band take ~200, and a single 220px
+   card row still ran 27px past the bottom edge — with no smaller row count left
+   for gridFit to fall back to. 10rem fits, and because the grid's rows are
+   minmax(min-content, 1fr) inside a flex:1 track the card still stretches to
+   take whatever room is actually there; this only lowers the floor, it does not
+   shrink a card that fits. Same 30em query as the timeline's own short-viewport
+   rule (css/public/timeline.css) — the two are answering the same shortage. */
+@media (max-height: 30em) {
+    .post-card.has-image,
+    .post-card.has-visual {
+        min-height: 10rem;
+    }
+}
+
 .post-card.type-audio {
     background-color: var(--bg-tertiary);
 }
@@ -339,45 +355,21 @@
     margin-top: auto;               /* push tags to bottom of card flex */
 }
 
-/* A card's tags wrap rather than scroll. Everywhere else a strip appears —
-   the header bar, the post page — it is one line of a long list and scrolling
-   is the whole design; on a card it is the post's own three-to-seven tags, and
-   a 360px card shows four of them with the rest behind an arrow that has to be
-   found before it can be tapped. Wrapping is inert on a card whose tags already
-   fit, so this costs the wide ones nothing. */
-.post-card-content .tag-strip-scroll {
-    flex-wrap: wrap;
-    /* Rows sit tighter than chips do side by side: the second row is space the
-       photograph is giving up, and on a seven-tag card the saving is what keeps
-       the excerpt on whole lines. */
-    row-gap: var(--spacing-xs);
-    /* Wrapped rows have nothing to scroll past: setupScrollableStrip leaves
-       .has-scroll-* off, so the arrows and the edge fade stay dormant — and
-       pan-x would otherwise swallow a vertical page scroll that began on a
-       strip now two rows tall. */
-    overflow-x: visible;
-    touch-action: pan-y;
-}
-
-/* Below a thumbnail's width there is no wrapping worth doing: the zoomed grid
-   squares a card down to ~160px, where seven tags stack five rows deep, bury
-   the photograph the mode exists to show, and still run off the bottom edge.
-   These go back to one scrolling row. */
-@container (max-width: 16rem) {
-    .post-card-content .tag-strip-scroll {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        touch-action: pan-x;
-    }
-}
+/* A card's tags scroll on one row, like every other strip — the base
+   .tag-strip-scroll (nowrap / overflow-x:auto / touch-action:pan-x) is what we
+   want here, so there is deliberately no card-specific override. A previous
+   revision wrapped them instead, on the argument that an overflow arrow is
+   harder to find than a second row; that traded away the consistency of one
+   strip behaving one way everywhere, and the rows cost the photograph height
+   on exactly the cards where it matters most. */
 
 /* --- Narrow cards: tags before date --- */
 /* Below ~24rem the card cannot afford every row it is asked to draw, and the
    date is the line it can most afford to lose: the tags say what the post is
    about and each one is a way further into the archive, while the date is
-   still on the post itself. Dropping it pays for the tag row that wrapping
-   added. A view count, where the setting turns one on, is the other thing the
-   meta row is for, so the row only collapses when the date was all of it. */
+   still on the post itself. A view count, where the setting turns one on, is
+   the other thing the meta row is for, so the row only collapses when the date
+   was all of it. */
 @container (max-width: 24rem) {
     .post-card-content .post-date {
         display: none;
@@ -387,8 +379,8 @@
         display: none;
     }
 
-    /* Card height is fixed, so the wrapped row has to come from somewhere. Left
-       at three lines the excerpt is not dropped but *squeezed*: the flex item
+    /* Card height is fixed and a narrow card has less of it to spend. Left at
+       three lines the excerpt is not dropped but *squeezed*: the flex item
        shrinks below its clamp and the last line is cut through the middle of
        the glyphs. Two lines end the preview on a whole one. */
     .post-card-content.overlay .post-card-excerpt,
