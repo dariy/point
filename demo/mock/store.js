@@ -16,6 +16,8 @@
  * record.
  */
 
+import { applyDemoSettings, applyDemoSettingsDeep } from "../settings.mjs";
+
 let fixtures = null;
 let state = null;
 
@@ -117,7 +119,14 @@ export function applyNavMenu(s, { mode, items, markdown }) {
   else s.pages.nav = { menu: s.navTagTree };
 }
 
-/** Structured-clone the seed so mutations never touch the imported module. */
+/**
+ * Structured-clone the seed so mutations never touch the imported module.
+ *
+ * The demo's own settings (demo/settings.mjs) are overlaid on every settings
+ * map on the way in — they were already baked into the fixture at record time,
+ * so this only bites when that file has been edited since, which is the point:
+ * change a demo string, rebuild, see it. Nothing here re-records.
+ */
 function seed(fx) {
   const plugins = structuredClone(fx.plugins || []);
   const s = {
@@ -151,6 +160,12 @@ function seed(fx) {
     mediaFolders: structuredClone(fx.mediaFolders || []),
     system: structuredClone(fx.system || {}),
   };
+
+  // Only `pages` needs the shape-based walk — the two top-level settings maps
+  // are settings by definition, and no other collection holds one.
+  s.settings = applyDemoSettings(s.settings);
+  s.publicSettings = applyDemoSettings(s.publicSettings);
+  s.pages = applyDemoSettingsDeep(s.pages);
 
   applyNavMenu(s, {
     mode: "custom",

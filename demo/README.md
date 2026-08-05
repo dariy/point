@@ -29,6 +29,7 @@ A read-only backend was the obvious alternative and is strictly worse here:
 demo/
   README.md       this document
   world.mjs       tag universe, locations and topical vocabulary
+  settings.mjs    the settings the demo presents (titles, footer line)
   mock/
     entry.js      build entry — imports the shim, then the real app.js
     shim.js       patches window.fetch + XMLHttpRequest
@@ -45,10 +46,11 @@ demo/
     build.sh             fixtures + frontend → demo/dist/
     build-html.mjs       index.html templating the Go server normally does
     build-feeds.mjs      static feed.xml and sitemap.xml
-    run.sh / serve.mjs   serve demo/dist/ with the build's SPA fallback
+    run.sh / serve.mjs   build, then serve with the build's SPA fallback
     test.mjs             acceptance check against a served build
   dist/           build output (gitignored)
   .scratch/       throwaway instance (gitignored)
+  .media-cache/   transcoded media, reused across builds (gitignored)
 ```
 
 The interception point is the **platform**, not `frontend/src/api/client.js`.
@@ -114,23 +116,40 @@ explicitly exempts from that event.
 
 ## Building
 
+Content generation is a **separate, explicit step** from building. It is the
+only part that needs the network — picsum.photos for the photographs, Gemini for
+the prose — and it produces `demo/mock/fixtures/fixtures.json`, which is then
+just an input. Everything after it is local and repeatable:
+
 ```bash
-# 1. Generate content and record fixtures (~5 min, needs network + a Gemini key)
+# Once (~5 min, needs network + a Gemini key): content + recorded fixtures
 GEMINI_API_KEY=... demo/scripts/make-content.sh
+node demo/scripts/fill-excerpts.mjs   # fill any excerpt the recording left empty
 
-# 2. Fill any excerpt the recording left empty (see below)
-node demo/scripts/fill-excerpts.mjs
-
-# 3. Build
-demo/scripts/build.sh              # or --skip-media for a fast iteration loop
-
-# 4. Serve and verify, with the backend STOPPED
+# Every time: build and serve, with the backend STOPPED
 demo/scripts/run.sh                                       # http://localhost:8002
 node demo/scripts/test.mjs --base=http://localhost:8002
 ```
 
+`run.sh` builds before it serves, so an edit to `frontend/src`, `frontend/css`,
+`demo/mock/` or `demo/settings.mjs` is on screen after the next run — no network,
+no re-recording. A warm build is a second or two; media is transcoded into
+`demo/.media-cache/` and re-encoded only when an original changes.
+
+- `--no-build` serves `demo/dist/` as it stands.
+- `--skip-media` leaves the build without images — worth it only when iterating
+  on markup or styling from a cold cache.
+
 `test.mjs` drives a real browser: `npm install`, then `npx playwright
 install chromium` if the browser is not already cached.
+
+### Changing what the demo says
+
+`demo/settings.mjs` holds the settings the demo presents — blog title, author,
+the footer copyright line. Both the recorder and the mock store apply it, so
+editing it and re-running `run.sh` is enough; re-recording is not. Anything that
+*hides* rather than presents (dropped keys, scrubbed emails) stays at the
+recording boundary in `record-fixtures.mjs`, so a raw fixture never hits disk.
 
 ### Excerpts
 

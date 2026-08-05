@@ -8,7 +8,7 @@
 
 import { Component } from "../../components/Component.js";
 import { Pagination } from "../../components/shared/Pagination.js";
-import { escapeHtml, safeUrl } from "../../utils/helpers.js";
+import { renderCopyright } from "../../utils/copyright.js";
 import {
   renderTagLink,
   buildTagIndex,
@@ -37,48 +37,11 @@ import {
 export class PublicFooter extends Component {
   render() {
     const { settings = {}, immersiveTags = [] } = this.props;
-    const author = escapeHtml(
-      settings.author_name || settings.blog_title || "",
-    );
-
-    const aboutHref = settings.about_post_id
-      ? `/posts/${escapeHtml(settings.about_post_id)}`
-      : "/light";
 
     // Copyright line: admin-editable template with {{author_name}} / {{engine}}
-    // tokens (point-62zu) and [text](url) links. Literal text is escaped; only
-    // known tokens and validated links emit HTML.
-    const tokens = {
-      author_name: author ? `<a href="${aboutHref}">${author}</a>` : "",
-      engine: `<a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>`,
-    };
-
-    // The field is admin-editable, so the href goes through safeUrl() —
-    // http(s) and same-site paths only, no `javascript:`. Protocol-relative
-    // `//host` is rejected on top of that: safeUrl admits any '/'-leading
-    // string, and `//host` is off-site while looking like a path. A rejected
-    // href falls through to the literal branch and renders as the text the
-    // admin typed, which is visible feedback rather than a vanished line.
-    const link = (text, href) => {
-      const url = safeUrl(href);
-      if (url === "#" || url.startsWith("//")) return null;
-      const external = /^https?:\/\//i.test(url);
-      const attrs = external ? ` target="_blank" rel="noopener noreferrer"` : "";
-      return `<a href="${escapeHtml(url)}"${attrs}>${escapeHtml(text)}</a>`;
-    };
-
-    const template = (settings.footer_copyright || "").trim()
-      || (author ? "© {{author_name}}, powered by {{engine}}" : "© powered by {{engine}}");
-    // Literals stop at `{` and `[` so the token and link forms get a chance to
-    // match; a lone one of either is consumed as literal text.
-    const copyright = template.replace(
-      /\{\{(\w+)\}\}|\[([^\]]*)\]\(([^)\s]+)\)|([^{[]+|[{[])/g,
-      (m, token, text, href, literal) => {
-        if (token !== undefined) return token in tokens ? tokens[token] : escapeHtml(m);
-        if (href !== undefined) return link(text, href) ?? escapeHtml(m);
-        return escapeHtml(literal);
-      },
-    );
+    // tokens (point-62zu) and [text](url) links. Shared with the immersive
+    // sheet's footer so the two render the same line.
+    const copyright = renderCopyright(settings);
 
     let centerSlot = "";
     if (immersiveTags.length) {

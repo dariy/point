@@ -178,6 +178,37 @@ async function main() {
     console.log(`  ✓ created tag #${created.id}, ${tagCountBefore} → ${tagCountAfter}`);
   }
 
+  // ── The post editor loads its post ─────────────────────────────────────
+  //
+  // The route walk cannot see this: an unhandled endpoint fails soft with an
+  // empty 200, so the edit form renders — with every field blank. Assert the
+  // fields actually carry the post, which is what `GET /api/posts/:id` is for.
+  console.log(`\nPost editor`);
+  const editHref = await page.evaluate(async () => {
+    const res = await fetch("/api/posts?per_page=1");
+    const id = (await res.json()).posts?.[0]?.id;
+    return id ? `/light/posts/${id}/edit` : null;
+  });
+  if (!editHref) {
+    failures.push("no post to open in the editor");
+  } else {
+    await page.goto(`${BASE}${editHref}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1200);
+    const filled = await page.evaluate(() => ({
+      title: document.getElementById("title-input")?.value || "",
+      slug: document.getElementById("slug-input")?.value || "",
+      excerpt: document.getElementById("excerpt-editor")?.value || "",
+    }));
+    const empty = Object.entries(filled)
+      .filter(([, v]) => !v.trim())
+      .map(([k]) => k);
+    if (empty.length) {
+      failures.push(`${editHref} → editor field(s) blank: ${empty.join(", ")}`);
+    } else {
+      console.log(`  ✓ ${editHref} loaded: "${filled.title}" (${filled.excerpt.length}-char excerpt)`);
+    }
+  }
+
   // ── Admin actions that repaint the page ────────────────────────────────
   //
   // Both of these are one click that has to change the page around it, and both

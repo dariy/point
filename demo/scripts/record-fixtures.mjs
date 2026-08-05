@@ -27,6 +27,11 @@
 
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import {
+  REPLACE_SETTINGS,
+  ADD_SETTINGS,
+  SETTINGS_MARKER,
+} from "../settings.mjs";
 
 // ── Args ──────────────────────────────────────────────────────────────────
 
@@ -66,39 +71,10 @@ const DROP_SETTING_KEYS = [
   "remark_secret",
 ];
 
-/**
- * Settings replaced with demo-safe or demo-appropriate values.
- *
- * `tags_visibility` is a demo choice rather than a scrub: the source instance
- * keeps the tag visualisation admin-only, which makes /tags redirect logged-out
- * visitors home (app.js resolveTagsModule). Showing it is most of the point of
- * a demo.
- */
-const REPLACE_SETTINGS = {
-  blog_title: "Point Demo",
-  blog_subtitle: "A demo of the Point photo blog engine",
-  author_name: "Demo",
-  author_bio: "This is an UI demonstration of Point.",
-  tags_visibility: "all",
-};
-
-/**
- * Settings written into every recorded settings map whether the source instance
- * carries them or not — REPLACE_SETTINGS only rewrites keys that are already
- * there, and an unset setting is simply absent from the API's response.
- *
- * `footer_copyright` credits picsum.photos, where the demo's photographs come
- * from (see README, Content licensing). `{{author_name}}` and `{{engine}}` are
- * tokens and `[text](url)` is a link (PublicFooter.js); everything else is
- * literal text and is escaped — raw HTML here renders as visible markup.
- */
-const ADD_SETTINGS = {
-  footer_copyright:
-    "© UI showcase of {{engine}}, photos are from [picsum.photos](https://picsum.photos), [admin UI](/light)",
-};
-
-/** A recorded object carrying this key is a settings map. */
-const SETTINGS_MARKER = "blog_title";
+// REPLACE_SETTINGS / ADD_SETTINGS / SETTINGS_MARKER are what the demo *says*
+// rather than what it hides, so they live in demo/settings.mjs — the build
+// re-applies them from there, which is what makes editing a demo string a
+// rebuild rather than a re-record.
 
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 

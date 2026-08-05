@@ -37,6 +37,14 @@ MEDIA_SRC="${MEDIA_SRC:-$DEMO_DIR/.scratch/media/originals}"
 MAX_WIDTH="${MAX_WIDTH:-1400}"
 JPEG_QUALITY="${JPEG_QUALITY:-4}" # ffmpeg -q:v scale, 2 (best) … 31 (worst)
 
+# Transcoded media, kept outside $DIST so the wipe above doesn't discard it.
+# This build runs on every demo/scripts/run.sh, so re-encoding an unchanged
+# photograph each time is the difference between a rebuild you wait for and one
+# you don't. It also keeps the images shipping after a scratch instance is
+# deleted — the originals are throwaway, the demo is not. Delete the directory
+# to force a re-encode.
+MEDIA_CACHE="${MEDIA_CACHE:-$DEMO_DIR/.media-cache}"
+
 SKIP_MEDIA=0
 [ "${1:-}" = "--skip-media" ] && SKIP_MEDIA=1
 
@@ -118,26 +126,40 @@ if [ "$SKIP_MEDIA" = "1" ]; then
   echo "==> Skipping media (--skip-media)"
 else
   echo "==> Copying and downscaling media from $MEDIA_SRC"
-  if [ ! -d "$MEDIA_SRC" ]; then
+  if [ ! -d "$MEDIA_SRC" ] && [ ! -d "$MEDIA_CACHE" ]; then
     echo "WARNING: $MEDIA_SRC not found — the demo will render without images." >&2
   else
     copied=0
+    cached=0
     missing=0
     while IFS= read -r rel; do
       src="$MEDIA_SRC$rel"
       dst="$DIST${rel}"
+      enc="$MEDIA_CACHE$rel"
+      mkdir -p "$(dirname "$dst")"
+
+      # Cache hit: nothing to re-encode unless the original has been replaced
+      # since (`-nt` is false when $src is missing, so a deleted scratch
+      # instance keeps serving the cache rather than dropping the image).
+      if [ -f "$enc" ] && [ ! "$src" -nt "$enc" ]; then
+        cp "$enc" "$dst"
+        cached=$((cached + 1))
+        continue
+      fi
+
       if [ ! -f "$src" ]; then
         missing=$((missing + 1))
         continue
       fi
-      mkdir -p "$(dirname "$dst")"
+
+      mkdir -p "$(dirname "$enc")"
       case "${rel,,}" in
         *.jpg | *.jpeg | *.png)
           # Scale down only — `min(w,iw)` never upscales a small original.
           if ! ffmpeg -nostdin -loglevel error -y -i "$src" \
               -vf "scale='min($MAX_WIDTH,iw)':-2" \
-              -q:v "$JPEG_QUALITY" "$dst" 2>/dev/null; then
-            cp "$src" "$dst"
+              -q:v "$JPEG_QUALITY" "$enc" 2>/dev/null; then
+            cp "$src" "$enc"
           fi
           ;;
         *.mp4 | *.mov | *.m4v | *.webm)
@@ -149,9 +171,9 @@ else
               -vf "scale='min(1280,iw)':-2" \
               -c:v libx264 -preset medium -crf 28 \
               -c:a aac -b:a 96k \
-              -movflags +faststart "$dst" 2>/dev/null; then
+              -movflags +faststart "$enc" 2>/dev/null; then
             echo "    ! could not transcode $rel — skipping" >&2
-            rm -f "$dst"
+            rm -f "$enc"
             continue
           fi
           ;;
@@ -161,22 +183,23 @@ else
           # so any <img> pointing at it still resolves.
           if ! ffmpeg -nostdin -loglevel error -y -i "$src" \
               -vf "scale='min($MAX_WIDTH,iw)':-2" \
-              -q:v "$JPEG_QUALITY" -f mjpeg "$dst" 2>/dev/null; then
+              -q:v "$JPEG_QUALITY" -f mjpeg "$enc" 2>/dev/null; then
             echo "    ! could not convert $rel — skipping" >&2
-            rm -f "$dst"
+            rm -f "$enc"
             continue
           fi
           ;;
         *)
-          cp "$src" "$dst"
+          cp "$src" "$enc"
           ;;
       esac
+      cp "$enc" "$dst"
       copied=$((copied + 1))
     done < <(node -e '
       const fx = require("'"$FIXTURES"'");
       (fx.mediaFiles || []).forEach((p) => console.log(p));
     ')
-    echo "    $copied file(s) copied, $missing missing"
+    echo "    $copied encoded, $cached from cache, $missing missing"
   fi
 fi
 

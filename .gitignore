@@ -42,6 +42,8 @@ frontend/css/p/
 demo/dist/
 # Throwaway instance used to generate demo content (demo/scripts/make-content.sh).
 demo/.scratch/
+# Transcoded demo media, reused across builds (demo/scripts/build.sh).
+demo/.media-cache/
 # Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.mjs
 # against an instance whose content you intend to publish: the recording is a
 # copy of that instance's posts, tags and media metadata.

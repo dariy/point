@@ -50,7 +50,7 @@ run_step "JS lint" bash -c "
     cd '$ROOT_DIR'
     [ -x node_modules/.bin/eslint ] || npm ci --no-audit --no-fund
     node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs \\
-        demo/mock demo/world.mjs demo/scripts/*.mjs
+        demo/mock demo/*.mjs demo/scripts/*.mjs
 "
 
 if [ -n "$LINT_ONLY" ]; then

@@ -588,6 +588,27 @@ export const routes = [
   ],
 
   [
+    // What the admin editor loads a post with (PostEditPage → api/posts.js
+    // getPost). Missing, it fell to the soft empty 200 and the edit form opened
+    // with every field blank — a post that reads fine on the public site and
+    // has no title, slug or excerpt the moment you edit it.
+    //
+    // Registered after `/api/posts/analytics`: matching is first-hit in table
+    // order, and this pattern would otherwise swallow that literal path.
+    "GET",
+    "/api/posts/:id",
+    ({ state, params }) => {
+      const post = findPost(state, params.id);
+      // A logged-out visitor gets a 404 for drafts and hidden posts, the way
+      // PostHandler.GetPostByID does — readablePosts holds the same references.
+      if (!post || !readablePosts(state).includes(post)) {
+        return notFound("post not found");
+      }
+      return ok(postDetail(state, post));
+    },
+  ],
+
+  [
     "GET",
     "/api/posts",
     ({ state, query }) => {

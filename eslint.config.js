@@ -198,4 +198,28 @@ export default [
     },
     rules,
   },
+  // The demo's acceptance test drives a real browser: every callback it hands to
+  // Playwright's page.evaluate() is serialised and executed *in the page*, where
+  // the DOM globals exist. It is Node code that legitimately contains browser
+  // code, so it needs both sets.
+  {
+    files: ["demo/scripts/test.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        JSON: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        document: "readonly",
+        window: "readonly",
+        location: "readonly",
+      },
+    },
+    rules,
+  },
 ];
