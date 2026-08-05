@@ -183,49 +183,51 @@
     border-radius: var(--border-radius-sm);
 }
 
-/* Search Results Tag Strip (point-x52z.8) */
+/* Search Results Tag Strip (point-x52z.8) — aligned with the grid below it, so
+   no horizontal margin of its own: .main-container already supplies the gutter. */
 .search-tag-results {
-  margin: 0 var(--space-4) var(--space-8);
+    margin: 0 0 var(--spacing-xl);
 }
+
 .search-tag-results-title {
-  font-size: var(--font-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-bottom: var(--space-2);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
 }
+
 .search-tag-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
 }
+
 .search-tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px 12px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  text-decoration: none;
-  color: var(--text-color);
-  font-size: var(--font-sm);
-  transition: border-color 0.2s, background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--surface-hover);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-full, 999px);
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
+
 .search-tag-chip:hover {
-  border-color: var(--color-primary);
-  background: var(--surface-active);
+    border-color: var(--color-primary);
+    background: var(--surface-active);
 }
-.search-tag-chip .tag-count {
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-  margin-top: 0; /* Reset from .tag-count global */
-}
-@media (min-width: 768px) {
-  .search-tag-results {
-    margin: 0 var(--space-8) var(--space-8);
-  }
+
+.search-tag-chip-count {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
 }
 
 /* Tag Filter Box (point-x52z.18) */

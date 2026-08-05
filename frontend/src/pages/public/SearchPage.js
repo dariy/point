@@ -75,19 +75,15 @@ export default class SearchPage extends Component {
     const rootMenu = store.get('navTags') || [];
     const q = this.props.query?.q || '';
 
-    let breadcrumb = [{ name: 'search' }];
-    if (q) {
-      const displayQuery = q.length > 20 ? q.substring(0, 20) + '…' : q;
-      if (this.state.data) {
-        const total = this.state.data.total;
-        breadcrumb.push({
-          name: `${displayQuery}`,
-          tooltip: `${total} post${total !== 1 ? 's' : ''} found`
-        });
-      } else {
-        breadcrumb.push({ name: displayQuery });
-      }
-    }
+    // Only the "search" crumb — the query itself is rendered by Breadcrumbs as a
+    // facet crumb (“…”) off the ViewContext, so pushing it here duplicated it.
+    const resultCount = this.state.data?.total;
+    const breadcrumb = [{
+      name: 'search',
+      ...(q && resultCount !== undefined
+        ? { tooltip: `${resultCount} post${resultCount !== 1 ? 's' : ''} found` }
+        : {}),
+    }];
 
     pluginHost.fill('header', this.$('#header-mount'), {
       settings,
@@ -182,8 +178,8 @@ export default class SearchPage extends Component {
 
     const tagsHtml = this.state.tags.map(t => `
       <a href="/tags/${escapeHtml(t.slug)}" class="search-tag-chip">
-        <span class="tag-name">${escapeHtml(t.name)}</span>
-        <span class="tag-count">${t.post_count}</span>
+        <span class="search-tag-chip-name">${escapeHtml(t.name)}</span>
+        <span class="search-tag-chip-count">${t.post_count}</span>
       </a>
     `).join('');
 
