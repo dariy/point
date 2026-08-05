@@ -25,7 +25,8 @@ cd "$ROOT_DIR"
 
 DIST="$DEMO_DIR/dist"
 FIXTURES="$DEMO_DIR/mock/fixtures/fixtures.json"
-DEMO_VERSION="demo"
+# DEMO_VERSION is derived from the built output further down — see the cache-bust
+# stamp above the index.html step.
 
 # Source of the original media files referenced by the fixtures. Defaults to the
 # scratch instance demo/scripts/make-content.sh builds; override to record a
@@ -108,6 +109,29 @@ cp -r "$ROOT_DIR/frontend/images" "$DIST/assets/images"
 cp "$ROOT_DIR/frontend/manifest.webmanifest" "$DIST/manifest.webmanifest"
 
 # ── index.html ────────────────────────────────────────────────────────────
+
+# Cache-bust stamp. index.html carries __BUILD_VERSION__ in its app.js and
+# stylesheet URLs (?v=), which the Go server fills with its build version; the
+# demo has to fill it itself, and a constant leaves every build at the same URL.
+#
+# That matters because the entry bundle and stylesheets live at fixed, unhashed
+# paths (build-js.sh hashes chunk names but deliberately not entries — the
+# server sends no-cache for /assets/js, so entries revalidate there). A static
+# host has no such header, and Cloudflare additionally floors max-age to its
+# zone-wide Browser Cache TTL, so `_headers` asking for max-age=0 does not get
+# it. A visitor holding a stale app.js after a redeploy imports content-hashed
+# chunk names that the new deploy no longer contains — those 404 and the demo
+# breaks until the cache lapses.
+#
+# Deriving the stamp from the built bytes means the URL changes exactly when the
+# content does, and never otherwise. Media is excluded: it is content-addressed
+# by path and immutable, so including it would churn the stamp for no reason.
+echo "==> Stamping build version"
+DEMO_VERSION="demo-$(
+  cd "$DIST" && find assets/js assets/css -type f -print0 |
+    sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12
+)"
+echo "    version=$DEMO_VERSION"
 
 echo "==> Templating index.html"
 node "$SCRIPT_DIR/build-html.mjs" \
