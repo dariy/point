@@ -81,8 +81,6 @@ export class MediaBrowser extends Component {
       error,
       uploading,
       draggingOver,
-      folders,
-      selectedFolder,
       selectedIds,
     } = this.state;
     const pickerMode = this.props.pickerMode;
