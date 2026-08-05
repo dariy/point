@@ -3,9 +3,18 @@
  *
  * Seeded from recorded fixtures (demo/scripts/record-fixtures.mjs) and mutated
  * in place, so create/edit/delete in the demo actually change what the rest of
- * the UI shows. Nothing is persisted: a reload re-seeds from the fixture and the
- * demo is pristine again. That is the whole reset story — there is no server to
- * roll back.
+ * the UI shows. A reload re-seeds from the fixture and the demo is pristine
+ * again. That is the whole reset story — there is no server to roll back.
+ *
+ * Two things are held in sessionStorage across that reload rather than being
+ * re-seeded, because both are site-wide state that a page load would otherwise
+ * silently undo: whether the visitor is logged in, and which theme they
+ * activated. Both end with the tab, and the reset control clears them.
+ *
+ * The theme catalogue is the one collection that does not come from the fixture
+ * at all: the backend derives it from the theme files on every request, so the
+ * demo reads the build's equivalent (demo/scripts/build-themes.mjs) instead of
+ * a recording that would freeze the list.
  *
  * Entities (posts/tags/media/settings) live here as mutable collections.
  * Genuinely derived views — the tag graph, the timeline — stay as recorded
@@ -19,6 +28,7 @@
 import { applyDemoSettings, applyDemoSettingsDeep } from "../settings.mjs";
 
 let fixtures = null;
+let themeCatalog = null;
 let state = null;
 
 /**
@@ -49,6 +59,39 @@ export function setAuthenticated(value) {
     else sessionStorage.removeItem(AUTH_KEY);
   } catch {
     /* private browsing — auth just won't survive a reload */
+  }
+}
+
+/**
+ * The theme the visitor activated, kept for the same reason as the auth flag.
+ *
+ * On a real deployment the active theme is a stored setting the server applies
+ * to every response, admin and public alike. Here it is store state, and the
+ * store dies on every full page load — so activating a theme in /light and then
+ * going to look at the public site (a hard navigation from the admin, or simply
+ * a reload) repainted it back to the recorded default, which reads as the theme
+ * switch having applied to the admin only.
+ *
+ * sessionStorage, like the auth flag: a theme the visitor picked lasts as long
+ * as the tab and no longer, so the demo is still pristine for the next one and
+ * the banner's reset control still returns to the recorded state.
+ */
+const THEME_KEY = "demo-active-theme";
+
+export function storedThemeName() {
+  try {
+    return sessionStorage.getItem(THEME_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeThemeName(name) {
+  try {
+    if (name) sessionStorage.setItem(THEME_KEY, name);
+    else sessionStorage.removeItem(THEME_KEY);
+  } catch {
+    /* private browsing — the theme just won't survive a reload */
   }
 }
 
@@ -120,15 +163,44 @@ export function applyNavMenu(s, { mode, items, markdown }) {
 }
 
 /**
+ * Find a theme by name, case-insensitively — the comparison the backend makes
+ * when it resolves a theme name to a file.
+ */
+export function findTheme(themes, name) {
+  const wanted = String(name || "").toLowerCase();
+  return themes.find((t) => String(t.name || "").toLowerCase() === wanted) || null;
+}
+
+/**
+ * Resolve which theme the demo opens on: the one the visitor activated in this
+ * tab, else the recorded one, else the first in the catalogue so the page is
+ * never left without a theme.
+ */
+function initialTheme(themes, fx) {
+  return (
+    findTheme(themes, storedThemeName()) ||
+    findTheme(themes, fx.activeTheme?.name) ||
+    structuredClone(fx.activeTheme || null) ||
+    themes[0] ||
+    null
+  );
+}
+
+/**
  * Structured-clone the seed so mutations never touch the imported module.
  *
  * The demo's own settings (demo/settings.mjs) are overlaid on every settings
  * map on the way in — they were already baked into the fixture at record time,
  * so this only bites when that file has been edited since, which is the point:
  * change a demo string, rebuild, see it. Nothing here re-records.
+ *
+ * `catalog` is the build's theme list (demo/scripts/build-themes.mjs); the
+ * fixture's own list is the fallback for a build that predates it.
  */
-function seed(fx) {
+function seed(fx, catalog) {
   const plugins = structuredClone(fx.plugins || []);
+  const themes = structuredClone(catalog?.length ? catalog : fx.themes || []);
+  const activeTheme = initialTheme(themes, fx);
   const s = {
     settings: { ...fx.settings },
     publicSettings: { ...fx.publicSettings },
@@ -146,8 +218,8 @@ function seed(fx) {
     // No preset has been applied to the recorded catalog, so it starts diverged
     // — the same "custom" the backend reports before the first apply.
     activePreset: "custom",
-    themes: structuredClone(fx.themes || []),
-    activeTheme: structuredClone(fx.activeTheme || null),
+    themes,
+    activeTheme: structuredClone(activeTheme),
     customCss: structuredClone(fx.customCss || { css: "" }),
     pages: structuredClone(fx.pages || {}),
     // The recorded tags-mode menu, kept aside so a mode switch can restore it.
@@ -167,6 +239,14 @@ function seed(fx) {
   s.publicSettings = applyDemoSettings(s.publicSettings);
   s.pages = applyDemoSettingsDeep(s.pages);
 
+  // The active theme is a setting as far as the rest of the API is concerned,
+  // so a theme carried over from the visitor's last page has to land in both
+  // maps too — the same two writes PUT /api/themes/active makes.
+  if (s.activeTheme?.name) {
+    s.settings.active_css_theme = s.activeTheme.name;
+    s.publicSettings.active_css_theme = s.activeTheme.name;
+  }
+
   applyNavMenu(s, {
     mode: "custom",
     items: navNodes(DEMO_NAV_LINKS),
@@ -174,6 +254,27 @@ function seed(fx) {
   });
 
   return s;
+}
+
+/**
+ * The theme catalogue the build derived from frontend/themes/
+ * (demo/scripts/build-themes.mjs), fetched rather than bundled so it stays the
+ * same list the CSS files next to it describe.
+ *
+ * Fetched through the *patched* window.fetch, which passes /assets/ straight to
+ * the network — the shim owns /api/ and theme.css, nothing else.
+ */
+async function loadThemeCatalog() {
+  try {
+    const res = await fetch("/assets/themes/index.json");
+    if (!res.ok) return null;
+    const list = await res.json();
+    return Array.isArray(list) && list.length ? list : null;
+  } catch {
+    // A build predating the manifest, or an offline reload: fall back to the
+    // themes recorded in the fixture rather than leaving the page with none.
+    return null;
+  }
 }
 
 /**
@@ -185,10 +286,14 @@ function seed(fx) {
 export async function getState() {
   if (state) return state;
   if (!fixtures) {
-    const mod = await import("./fixtures/fixtures.json");
+    const [mod, catalog] = await Promise.all([
+      import("./fixtures/fixtures.json"),
+      loadThemeCatalog(),
+    ]);
     fixtures = mod.default || mod;
+    themeCatalog = catalog;
   }
-  state = seed(fixtures);
+  state = seed(fixtures, themeCatalog);
   return state;
 }
 
@@ -196,6 +301,8 @@ export async function getState() {
 export async function resetState() {
   state = null;
   setAuthenticated(false);
+  // Reset means the recorded state, and the theme is part of it.
+  storeThemeName(null);
   return getState();
 }
 

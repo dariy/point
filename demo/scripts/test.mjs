@@ -249,13 +249,13 @@ async function main() {
         )?.[1] || "none",
     );
   const beforeTheme = await themeTitle();
-  const other = await page.evaluate(
-    (active) =>
-      [...document.querySelectorAll(".theme-card")]
-        .map((c) => c.querySelector(".theme-name")?.textContent.trim())
-        .find((n) => n && n.toLowerCase() !== active.toLowerCase()) || null,
-    beforeTheme,
+  const listed = await page.evaluate(() =>
+    [...document.querySelectorAll(".theme-card")]
+      .map((c) => c.querySelector(".theme-name")?.textContent.trim())
+      .filter(Boolean),
   );
+  const other =
+    listed.find((n) => n.toLowerCase() !== beforeTheme.toLowerCase()) || null;
   if (!other) {
     failures.push("themes page offered no second theme to activate");
   } else {
@@ -269,6 +269,36 @@ async function main() {
     } else {
       console.log(`  ✓ theme switched live: ${beforeTheme} → ${afterTheme}`);
     }
+
+    // The theme is a site-wide setting, so it has to survive the walk out of
+    // the admin to the public site — which is a full page load, and the store
+    // is re-seeded by every one of those. Without the stored name the visitor
+    // watches their theme revert the moment they go to look at it.
+    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(900);
+    const publicTheme = await themeTitle();
+    if (publicTheme.toLowerCase() !== other.toLowerCase()) {
+      failures.push(
+        `after activating "${other}" the public site loaded "${publicTheme}" — the theme did not survive the page load`,
+      );
+    } else {
+      console.log(`  ✓ theme held on the public site across a full load`);
+    }
+  }
+
+  // The catalogue is built from frontend/themes/ rather than recorded, so every
+  // shipped theme is offered. A missing one means build-themes.mjs did not run
+  // and the fixture's frozen list is being served instead.
+  const shipped = await page.evaluate(async () => {
+    const res = await fetch("/assets/themes/index.json");
+    return res.ok ? (await res.json()).map((t) => t.name) : [];
+  });
+  const offered = new Set(listed.map((n) => n.toLowerCase()));
+  const absent = shipped.filter((n) => !offered.has(n.toLowerCase()));
+  if (absent.length) {
+    failures.push(`themes shipped but not listed: ${absent.join(", ")}`);
+  } else {
+    console.log(`  ✓ all ${shipped.length} shipped themes offered`);
   }
 
   await browser.close();

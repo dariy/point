@@ -171,7 +171,7 @@ export default class PostsListPage extends Component {
         <div class="post-card-swipe-actions">
           <button class="btn btn-sm swipe-publish-btn" data-id="${escapeHtml(String(p.id))}">${CHECK_SVG}<span>Publish</span></button>
           <button class="btn btn-sm swipe-preview-btn" data-id="${escapeHtml(String(p.id))}">${LINK_SVG}<span>Link</span></button>
-          <a class="btn btn-sm" href="/posts/${escapeHtml(p.slug)}" target="_blank" data-external>${EXTERNAL_LINK_SVG}<span>Open</span></a>
+          <a class="btn btn-sm" href="/posts/${escapeHtml(p.slug)}">${EXTERNAL_LINK_SVG}<span>Open</span></a>
           <button class="btn btn-sm btn-danger swipe-delete-btn" data-id="${escapeHtml(String(p.id))}" data-title="${escapeHtml(p.title)}">${X_SVG}<span>Delete</span></button>
         </div>
       </div>`;
@@ -339,7 +339,7 @@ export default class PostsListPage extends Component {
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
                        class="btn btn-sm" title="Edit" aria-label="Edit post">${EDIT_SVG}</a>
                     <a href="/posts/${escapeHtml(p.slug)}" class="btn btn-sm"
-                       title="View" aria-label="View on public site" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
+                       title="View" aria-label="View on public site">${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
                             data-title="${escapeHtml(p.title)}"

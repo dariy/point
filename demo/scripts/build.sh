@@ -94,9 +94,17 @@ fi
 # copies the active one into common/theme.css. The demo has no server to do that
 # copy, so it ships all of them and the shim composes theme.css from whichever
 # is active — that is what makes "Set Active" change the page rather than only a
-# highlight. Six small files; only the built-ins, matching the demo's fixtures.
+# highlight. A handful of small files; only the built-ins.
 mkdir -p "$DIST/assets/themes"
 cp "$ROOT_DIR"/frontend/themes/*.css "$DIST/assets/themes/"
+
+# The catalogue behind GET /api/themes. The backend derives it from these same
+# files on every request, so recording it into the fixture would freeze the demo
+# at the themes that existed on recording day — a theme added later would ship
+# in the bundle above and still be missing from the Themes page.
+node "$SCRIPT_DIR/build-themes.mjs" \
+  --src="$ROOT_DIR/frontend/themes" \
+  --out="$DIST/assets/themes/index.json"
 
 # ── Static assets ─────────────────────────────────────────────────────────
 #

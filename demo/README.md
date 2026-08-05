@@ -21,7 +21,8 @@ A read-only backend was the obvious alternative and is strictly worse here:
 - A static bundle has no origin to exhaust, so denial-of-service protection is
   structural rather than configured.
 - There is nothing to reset. A reload re-seeds the store; the demo is pristine
-  again.
+  again, bar the two things held for the tab on purpose (being logged in, and
+  the theme the visitor activated) which the reset control drops.
 
 ## How it works
 
@@ -45,6 +46,7 @@ demo/
     fill-excerpts.mjs    synthetic excerpt prose for posts recorded without one
     build.sh             fixtures + frontend → demo/dist/
     build-html.mjs       index.html templating the Go server normally does
+    build-themes.mjs     the theme catalogue, read from frontend/themes/
     build-feeds.mjs      static feed.xml and sitemap.xml
     run.sh / serve.mjs   build, then serve with the build's SPA fallback
     test.mjs             acceptance check against a served build
@@ -98,6 +100,26 @@ would freeze them at whatever they were when the fixtures were recorded:
   intercepts the path and composes the same two ingredients from the store, so
   activating a theme or saving custom CSS repaints the page immediately instead
   of only moving a highlight. The theme sources ship as `/assets/themes/*.css`.
+
+  Two consequences of the theme being a *setting* rather than a page's own state:
+
+  - The catalogue behind `GET /api/themes` is **built, not recorded**.
+    `ThemeService.ListThemes` derives it from the files in `frontend/themes/` on
+    every request, so a recorded copy freezes the demo at the themes that
+    existed on recording day — a theme added later ships in the bundle and is
+    still missing from the Themes page. `build-themes.mjs` parses the same
+    metadata out of the same files (`theme-title`, `description`,
+    `preview-color`, the `:root` colour literals behind the admin swatch, and
+    whether a `[data-theme="dark"]` block is present) into
+    `/assets/themes/index.json`, which `store.js` seeds from.
+  - The **activated theme is kept in `sessionStorage`**, like the auth flag and
+    for the same reason: the store is module state that dies on every full page
+    load, so without it the walk from `/light` out to the public site — or a
+    reload — repainted the site back to the recorded theme, which reads as the
+    switch having applied to the admin only. The reset control clears it.
+    Custom CSS is deliberately not kept: it is the visitor's own text rather
+    than a choice among what the demo ships, and it survives inside the tab
+    until a reload the same way every other edit does.
 - **Plugin presets** — `plugins.DefaultPresets()` is seeded into the store
   (`store.js`) and `POST /api/plugins/presets/:id/apply` reproduces the
   backend's two corrections: a core area a preset empties falls back to its

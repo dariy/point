@@ -678,13 +678,30 @@ export default class PostEditPage extends Component {
       case "analyze": this._analyzeNow(); break;
       case "toggle-preview": this._toggleLivePreview(); break;
       case "preview-link": this._generatePreviewLink(); break;
-      case "view-on-site": window.open(this.props.publicUrl, "_blank"); break;
+      // Same tab, like every other public-site link in the admin. The editor is
+      // the one place where leaving can cost something — edits typed inside the
+      // autosave idle window are still only in the form — so flush them first
+      // and let the navigation follow the save.
+      case "view-on-site": this._viewOnSite(); break;
       case "delete": {
         const title = this.container.querySelector("#title-input")?.value || this.state.post?.title || "this post";
         this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash", "danger", () => this._deletePost(this.state.postId));
         break;
       }
     }
+  }
+
+  /**
+   * Open the post on the public site, in this tab.
+   *
+   * The slug can have changed under an unflushed edit, so the destination is
+   * re-read from the saved post afterwards rather than from the props rendered
+   * before the save.
+   */
+  async _viewOnSite() {
+    if (this.state.hasPendingEdits) await this._autosave();
+    const slug = this.state.post?.slug;
+    navigate(slug ? `/posts/${slug}` : this.props.publicUrl || "/");
   }
 
   _analyzeNow() {

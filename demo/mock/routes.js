@@ -17,10 +17,12 @@
 import {
   applyNavMenu,
   byNewest,
+  findTheme,
   nextId,
   paginate,
   paginatedPage,
   setAuthenticated,
+  storeThemeName,
   toListShape,
   visiblePosts,
   withinYears,
@@ -916,9 +918,19 @@ export const routes = [
     "PUT",
     "/api/themes/active",
     ({ state, body }) => {
-      state.activeTheme = { ...(state.activeTheme || {}), name: body.name };
-      state.settings.active_css_theme = body.name;
-      state.publicSettings.active_css_theme = body.name;
+      // Resolve against the catalogue rather than renaming the previous entry:
+      // the response carries the theme's own description and swatch colours,
+      // which the Themes page shows next to the highlight it just moved.
+      const theme = findTheme(state.themes, body.name);
+      if (!theme) return notFound("theme not found");
+
+      state.activeTheme = { ...theme };
+      state.settings.active_css_theme = theme.name;
+      state.publicSettings.active_css_theme = theme.name;
+      // Outlive this document: shim.js composes theme.css from the store, and
+      // the store is re-seeded by every full page load — including the walk
+      // from /light back out to the public site.
+      storeThemeName(theme.name);
       return ok(state.activeTheme);
     },
   ],

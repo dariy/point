@@ -125,7 +125,7 @@ function inputHtml(key, value, { posts = [] }) {
       })
       .join("");
     const previewLink = value
-      ? `<a href="/posts/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
+      ? `<a href="/posts/${escapeHtml(String(value))}" class="settings-preview-link">Preview</a>`
       : "";
     return `<div class="settings-input-with-preview">
         <select name="${key}" id="${key}" class="form-select">

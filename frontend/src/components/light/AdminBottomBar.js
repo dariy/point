@@ -58,7 +58,7 @@ export class AdminBottomBar extends Component {
               <span class="icon-moon">${MOON_SVG}</span>
               <span>Theme</span>
             </button>
-            <a href="${escapeHtml(this.props.publicUrl || '/')}" class="more-footer-btn" data-external>
+            <a href="${escapeHtml(this.props.publicUrl || '/')}" class="more-footer-btn">
               ${EXTERNAL_LINK_SVG}
               <span>View Site</span>
             </a>
