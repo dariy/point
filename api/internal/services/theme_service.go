@@ -13,11 +13,19 @@ import (
 )
 
 type Theme struct {
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	PreviewColor string `json:"preview_color"`
-	HasDarkMode  bool   `json:"has_dark_mode"`
-	Path         string `json:"-"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// PreviewColor is the theme's declared accent; the Preview* fields below are
+	// read from its :root block so the admin swatch can render the real palette
+	// instead of a single accent stripe. Each is empty when the theme omits the
+	// variable or declares it as something other than a plain colour literal.
+	PreviewColor   string `json:"preview_color"`
+	PreviewBg      string `json:"preview_bg,omitempty"`
+	PreviewSurface string `json:"preview_surface,omitempty"`
+	PreviewText    string `json:"preview_text,omitempty"`
+	PreviewBorder  string `json:"preview_border,omitempty"`
+	HasDarkMode    bool   `json:"has_dark_mode"`
+	Path           string `json:"-"`
 }
 
 type ThemeService struct {
@@ -35,11 +43,36 @@ func NewThemeService(cfg *config.Config, settingsService *SettingsService) *Them
 }
 
 var (
-	metaTitleRe      = regexp.MustCompile(`/\*\s*theme-title:\s*"([^"]+)"\s*\*/`)
-	metaDescRe       = regexp.MustCompile(`/\*\s*description:\s*"([^"]+)"\s*\*/`)
-	metaColorRe      = regexp.MustCompile(`/\*\s*preview-color:\s*"([^"]+)"\s*\*/`)
-	themeNameSafeRe  = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	metaTitleRe     = regexp.MustCompile(`/\*\s*theme-title:\s*"([^"]+)"\s*\*/`)
+	metaDescRe      = regexp.MustCompile(`/\*\s*description:\s*"([^"]+)"\s*\*/`)
+	metaColorRe     = regexp.MustCompile(`/\*\s*preview-color:\s*"([^"]+)"\s*\*/`)
+	themeNameSafeRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
+	// Light-mode :root block and the custom-property declarations inside it.
+	rootBlockRe = regexp.MustCompile(`(?s):root\s*\{(.*?)\}`)
+	cssDeclRe   = regexp.MustCompile(`(--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+);`)
+	// Only plain colour literals are surfaced — the values end up in an inline
+	// style attribute on the admin page, and anything else (var() chains that
+	// resolve elsewhere, url(), functions) is dropped rather than passed along.
+	colorLiteralRe = regexp.MustCompile(`^(?i)(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\)|hsla?\([0-9.,%\s/deg]+\))$`)
 )
+
+// rootColorVars returns the plain colour literals declared in a theme's
+// light-mode :root block, keyed by custom-property name.
+func rootColorVars(content string) map[string]string {
+	m := rootBlockRe.FindStringSubmatch(content)
+	if len(m) != 2 {
+		return nil
+	}
+	vars := make(map[string]string)
+	for _, decl := range cssDeclRe.FindAllStringSubmatch(m[1], -1) {
+		value := strings.TrimSpace(decl[2])
+		if colorLiteralRe.MatchString(value) {
+			vars[decl[1]] = value
+		}
+	}
+	return vars
+}
 
 // ListThemes scans both ThemesPath (system) and UserThemesPath (user) directories.
 // User themes override system themes with the same name.
@@ -147,6 +180,15 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 
 	if m := metaColorRe.FindStringSubmatch(content); len(m) == 2 {
 		theme.PreviewColor = m[1]
+	}
+
+	vars := rootColorVars(content)
+	theme.PreviewBg = vars["--bg-primary"]
+	theme.PreviewSurface = vars["--surface-card"]
+	theme.PreviewText = vars["--text-primary"]
+	theme.PreviewBorder = vars["--border-primary"]
+	if theme.PreviewColor == "" {
+		theme.PreviewColor = vars["--color-primary"]
 	}
 
 	return theme, nil

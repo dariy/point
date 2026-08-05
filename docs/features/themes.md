@@ -19,7 +19,13 @@ owned by `ThemeService` (`api/internal/services/theme_service.go`).
   dark variant by the presence of `[data-theme="dark"]` rules (cached in
   `ThemeService.darkModeCache` until restart).
 - **Admin**: `/light/themes` (ThemesPage) lists, previews, and activates themes; blog
-  title/description are separate Settings reflected in the public UI and RSS.
+  title/description are separate Settings reflected in the public UI and RSS. Each row
+  is a palette swatch beside the name/description and the activate button. The swatch
+  colours are the theme's own — `GET /api/themes` returns `preview_bg`,
+  `preview_surface`, `preview_text`, `preview_border` alongside `preview_color`, read
+  out of the theme's light-mode `:root` block. Only plain colour literals are
+  surfaced (the values land in an inline `style` attribute); anything else — a
+  `var()` chain, a function — is omitted and the page falls back to a neutral.
 - **MCP**: `point_list_themes`, `point_get_theme_css`, `point_set_active_theme` allow
   AI-driven theme work.
 - Every color/spacing token is a CSS custom property (`frontend/css/common/tokens.css`),

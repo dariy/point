@@ -84,7 +84,7 @@ var Registry = []Descriptor{
 
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},
-	{ID: "tag-cloud", Type: TypeSlot, Slot: "home-explore", EntryName: "tag-cloud", DefaultEnabled: true},
+	{ID: "tag-cloud", Type: TypeSlot, Slot: "home-explore", EntryName: "tag-cloud", DefaultEnabled: false},
 	{ID: "nav-menu", Type: TypeSlot, Slot: "nav-menu", Routes: []string{"/light/menu", "/api/nav-menu", "/api/pages/nav"}, EntryName: "nav-menu", DefaultEnabled: true},
 	{ID: "breadcrumbs", Type: TypeSlot, Slot: "breadcrumbs", EntryName: "breadcrumbs", DefaultEnabled: true},
 	{ID: "public-header", Type: TypeSlot, Slot: "header", EntryName: "public-header", DefaultEnabled: true},
@@ -101,6 +101,7 @@ var Registry = []Descriptor{
 	// the pair must stay enabled.
 	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
 	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
+
 	// custom-css has no frontend chunk: the CSS injection lives in core and the
 	// plugin only gates the /api/themes/custom-css endpoints via RequirePlugin.
 	{ID: "custom-css", Type: TypeEnhancer, DefaultEnabled: true},
@@ -246,9 +247,9 @@ func DefaultPresets() map[string][]string {
 		// Bare guest experience: only the sheet viewer (core admin areas stay on).
 		"minimalistic": {"immersive-sheet"},
 		// Self-hosted blog without the advanced/integration services.
-		"standalone": filterOut(all, "ai-analysis", "instagram", "immersive-sheet"),
+		"standalone": filterOut(all, "tag-cloud", "ai-analysis", "instagram", "immersive-sheet"),
 		// Everything available.
-		"fully-featured": all,
+		"fully-featured": filterOut(all, "tag-cloud"),
 	}
 }
 

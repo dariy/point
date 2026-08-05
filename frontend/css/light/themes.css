@@ -1,197 +1,152 @@
 /**
  * Themes Page styles.
+ *
+ * Each theme is one horizontal row: palette swatch, name + description, and the
+ * activate button, so the three read as a single unit. The swatch colours come
+ * from the theme's own :root block (API `preview_*` fields) and arrive as
+ * --swatch-* custom properties on an inline style attribute.
  */
 
 .themes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-4);
-  padding: var(--space-2);
+  /* Wide enough that a two-line description fits beside the swatch and button;
+     min() keeps the track from forcing horizontal overflow on narrow phones,
+     where the available width is under that preferred minimum. */
+  grid-template-columns: repeat(auto-fill, minmax(min(30rem, 100%), 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 .theme-card {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  height: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius-lg);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .theme-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--primary-light);
+  box-shadow: var(--shadow);
+  border-color: var(--color-primary);
 }
 
 .theme-card.active {
-  border-color: var(--primary);
-  border-width: 2px;
-  box-shadow: 0 0 0 1px var(--primary);
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 var(--border-width) var(--color-primary);
 }
 
-.theme-card-preview {
-  height: 160px;
-  width: 100%;
-  position: relative;
-  background-size: cover;
-  background-position: center;
-  background-color: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-}
+/* ── Palette swatch ─────────────────────────────────────────────────────── */
 
-.theme-preview-mock {
-  width: 140px;
-  height: 90px;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
+.theme-swatch {
   display: flex;
   flex-direction: column;
+  width: var(--size-4-5);
+  height: var(--size-3-5);
+  padding: var(--size-0-25);
+  gap: var(--size-0-25);
+  background: var(--swatch-bg);
+  border: var(--border-width) solid var(--swatch-border);
+  border-radius: var(--border-radius);
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.mock-header {
-  height: 12px;
-  background: rgba(0, 0, 0, 0.1);
-  margin-bottom: 8px;
+.theme-swatch-bar {
+  height: var(--size-0-5);
+  border-radius: var(--size-0-125);
+  background: var(--swatch-accent);
 }
 
-.mock-content {
-  padding: 0 8px;
+.theme-swatch-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--size-0-25);
+  padding: var(--size-0-25);
+  background: var(--swatch-surface);
+  border-radius: var(--size-0-125);
 }
 
-.mock-line {
-  height: 4px;
-  background: rgba(0, 0, 0, 0.05);
-  margin-bottom: 4px;
-  border-radius: 2px;
+.theme-swatch-line {
+  height: var(--size-0-125);
+  border-radius: var(--size-0-125);
+  background: var(--swatch-text);
+  opacity: 0.7;
 }
 
-.mock-line.short {
+.theme-swatch-line.short {
   width: 60%;
 }
 
-.active-badge {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  background: var(--primary);
-  color: #fff;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-xs);
-  font-weight: var(--font-bold);
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  box-shadow: var(--shadow-sm);
-}
+/* ── Name, description, action ──────────────────────────────────────────── */
 
-.theme-card-body {
-  padding: var(--space-4);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.theme-card-info {
+  min-width: 0;
 }
 
 .theme-name {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-lg);
-  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.theme-dark-badge {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.theme-dark-badge svg {
+  width: var(--size-0-875);
+  height: var(--size-0-875);
 }
 
 .theme-description {
-  margin: 0 0 var(--space-4);
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-  flex: 1;
-  line-height: 1.5;
+  /* Two lines keeps every row the same height however long the blurb is. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: var(--size-0-125) 0 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: var(--text-secondary);
 }
 
-.theme-modes {
-  display: flex;
-  gap: var(--space-1);
-  margin-bottom: var(--space-3);
+.theme-card-action .btn {
+  white-space: nowrap;
 }
 
-.theme-mode-badge {
-  font-size: var(--font-sm);
-  opacity: 0.6;
-  line-height: 1;
-}
+/* Portrait phones: the row cannot hold three columns, so the button drops to
+   its own line under the name and stays right-aligned with the card edge. */
+@media (max-width: 34rem) {
+  .theme-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    row-gap: var(--spacing-sm);
+  }
 
-.theme-card-footer {
-  margin-top: auto;
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* Settings page link */
-.card-header-link {
-  font-size: var(--font-sm);
-  font-weight: var(--font-medium);
-  color: var(--primary);
-  text-decoration: none;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.card-header-link:hover {
-  text-decoration: underline;
-}
-
-@media (max-width: 600px) {
-  .themes-grid {
-    grid-template-columns: 1fr;
+  .theme-card-action {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 }
 
-/* Custom CSS Section */
-.custom-css-section {
-  margin-top: var(--space-8);
-  padding: var(--space-6);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
+/* ── Custom CSS section ─────────────────────────────────────────────────── */
 
-.custom-css-section .section-header {
-  margin-bottom: var(--space-4);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.custom-css-section h2 {
-  margin: 0 0 var(--space-1);
-  font-size: var(--font-xl);
-  color: var(--text-main);
-}
-
-.section-desc {
-  margin: 0;
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.custom-css-section .form-group {
-  margin-bottom: var(--space-4);
-}
-
-.custom-css-section .form-actions {
+.custom-css-section .card-header {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  cursor: default;
 }
 
 /* Light-mode token color overrides for CssEditor.
