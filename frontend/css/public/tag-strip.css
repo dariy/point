@@ -202,7 +202,9 @@
     color: var(--text-primary);
 }
 
-.flyout-item .count {
+.flyout-item .count,
+.flyout-current .count,
+.flyout-path-current .count {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
 }
@@ -232,10 +234,18 @@
     cursor: default;
 }
 
+/* Doubles as a section and a single row, so it must override the column
+   direction .flyout-section sets — otherwise name and count wrap onto
+   separate lines. */
 .flyout-current {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--surface-active);
     color: var(--text-primary);
+    font-size: var(--font-size-sm);
     font-weight: 600;
 }
 
