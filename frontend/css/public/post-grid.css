@@ -141,7 +141,7 @@
             var(--color-black-alpha-0) 40%,
             var(--color-black-alpha-60) 70%,
             var(--color-black-alpha-90) 100%);
-    padding: var(--spacing-lg);
+    padding: var(--post-card-overlay-padding);
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -250,6 +250,7 @@
     color: var(--color-white-alpha-90);
     font-size: var(--font-size-sm);
     margin-bottom: var(--spacing-md);
+    padding-top: 0;
 }
 
 /* --- TEXT ONLY STYLE --- */

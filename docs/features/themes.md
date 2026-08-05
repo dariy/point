@@ -6,9 +6,17 @@ owned by `ThemeService` (`api/internal/services/theme_service.go`).
 ## What is implemented
 
 - **Themes are plain CSS files** declaring CSS custom properties. Built-in themes live
-  in `frontend/themes/*.css` (`base`, `default`, `golden`, `minimal`, `ocean`,
-  `sepia`); user themes live under the data dir (`UserThemesPath`). Lookup priority:
-  **user path first, then system path** — a user theme can shadow a built-in by name.
+  in `frontend/themes/*.css` (`base`, `default`, `golden`, `minimal`, `mosaic`,
+  `ocean`, `sepia`); user themes live under the data dir (`UserThemesPath`). Lookup
+  priority: **user path first, then system path** — a user theme can shadow a built-in
+  by name.
+- **A theme may carry layout, not just colour.** `mosaic` is the worked example: it
+  zeroes the grid gap and every radius token so post cards tile edge to edge, drops
+  the spacing scale, and runs the grid page full-bleed. Themes are injected as a
+  `<style>` appended to `<head>` (`utils/themeLoader.js`), so a plain selector in a
+  theme beats the same selector in the bundles on document order — no `!important`
+  needed. Density overrides there are scoped to `html[data-section="public"]` so the
+  admin section keeps its own spacing.
 - **Activation syncs a public file**: setting the active theme writes the merged result
   to `<FrontendDir>/css/common/theme.css`, served as
   `/assets/css/common/theme.css` — one static file, no per-request theming cost.
