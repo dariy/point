@@ -99,12 +99,12 @@ var Registry = []Descriptor{
 	// area "immersive"): Standard is the default; Sheet ships disabled. Enabling
 	// Sheet and disabling Standard switches the public viewer; at least one of
 	// the pair must stay enabled.
-	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
-	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
+	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: false, Area: "immersive", Core: true},
+	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: true, Area: "immersive", Core: true},
 
 	// custom-css has no frontend chunk: the CSS injection lives in core and the
 	// plugin only gates the /api/themes/custom-css endpoints via RequirePlugin.
-	{ID: "custom-css", Type: TypeEnhancer, DefaultEnabled: true},
+	{ID: "custom-css", Type: TypeEnhancer, DefaultEnabled: false},
 
 	// Remark42 comments: widget embedded after post content (post-comments
 	// slot), served by the remark42 sidecar through the gated /comments reverse
@@ -131,12 +131,12 @@ var Registry = []Descriptor{
 	// only code-splitting, which esbuild --splitting provides directly.
 
 	// ── Backend-gated services ───────────────────────────────────────────────
-	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: true},
-	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: true},
+	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: false},
+	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: false},
 	{ID: "passkeys", Type: TypeService, Routes: []string{"/api/auth/webauthn"}, DefaultEnabled: true},
-	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: true},
-	{ID: "backups", Type: TypeService, DefaultEnabled: true},
-	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
+	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: false},
+	{ID: "backups", Type: TypeService, DefaultEnabled: false},
+	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: false},
 	{ID: "rss", Title: "RSS", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
 	// In-process MCP (Model Context Protocol) server: exposes the blog to AI
 	// clients at /mcp. Off by default — it is a powerful remote-control surface
