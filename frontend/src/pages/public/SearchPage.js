@@ -3,6 +3,12 @@
  *
  * Fetches: GET /api/posts?q=term
  *
+ * The results grid is a first-class grid view: it pages by swipe, trackpad,
+ * arrow keys and hover chevrons, and zooms by pinch or the footer slider, all of
+ * which come from the shared GridPager (core/gridPager.js) that the home and tag
+ * grids use. A page change refreshes only the grid — the header, breadcrumb and
+ * matching-tag chips depend on the query, not the page, so they stay put.
+ *
  * Props (from router): { query: { q, page } }
  */
 import { pluginHost } from '../../core/pluginHost.js';
@@ -14,19 +20,48 @@ import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { computePerPage, cachedPerPage, watchChromeFit } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit } from '../../utils/gridFit.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, data: null, tags: [], error: null };
+    // Swipe/trackpad/keyboard pagination and pinch zoom for the results grid —
+    // see core/gridPager.js. Shared with HomePage and TagPage.
+    this._pager = new GridPager({
+      gridMount: () => this.$('#grid-mount'),
+      gestureRoot: () => this.$('.site-main'),
+      fetchPosts: async (page) => {
+        const data = await listPosts(this._buildParams({ ...ViewContext.current(), page }));
+        return data.posts || [];
+      },
+      gotoPage: (p) => ViewContext.update({ page: p }),
+      onZoomCommit: () => this._reconcilePerPage({ fromResize: true }),
+      isAlive: () => !this._unmounted,
+      emptyHtml: '<p class="empty-state">No posts matched your search.</p>',
+    });
   }
 
   onRouteUpdate(params, query) {
+    const prevVc = this._loadedVc;
     this.props.params = params;
     this.props.query = query;
-    this._load();
+    const nextVc = ViewContext.current();
+    // A page change within the same search only affects the grid — refresh it in
+    // place so a committed swipe hands off to the new page without the whole
+    // view (header, tag chips) being torn down and rebuilt underneath it.
+    if (this._canPartialUpdate(prevVc, nextVc)) {
+      this._refreshPostContent();
+    } else {
+      this._load();
+    }
+  }
+
+  _canPartialUpdate(prev, next) {
+    if (!prev || !this.state.data || this.state.error) return false;
+    return prev.query === next.query && prev.tag === next.tag;
   }
 
   render() {
@@ -71,6 +106,10 @@ export default class SearchPage extends Component {
 
   afterRender() {
     document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
+    // Reset the footer paginator's feed; _mountPostContent republishes it when
+    // the results run to more than one page.
+    store.set('pagination', null);
+    this._pager.disarm();
     const settings = store.get('settings') || {};
     const rootMenu = store.get('navTags') || [];
     const q = this.props.query?.q || '';
@@ -109,22 +148,46 @@ export default class SearchPage extends Component {
 
     if (this.state.loading || !this.state.data) return;
 
+    this._mountPostContent();
+  }
+
+  // Mounts the page-dependent content (results grid, pagination, gestures).
+  // Kept separate from the page chrome so a page change can refresh just this in
+  // place — see _refreshPostContent.
+  _mountPostContent() {
+    const settings = store.get('settings') || {};
     const { posts = [], page, pages, total } = this.state.data;
 
-    this.mountChild(PostGrid, '#grid-mount', {
-      posts,
-      showViewCount: !!settings.show_view_counts,
-      emptyMessage: 'No posts matched your search.',
-    });
+    this._postChildren = [];
+
+    // A paginated swipe leaves an inline transform on the grid mount; clear it so
+    // the refreshed grid isn't left offset.
+    this._pager.resetGridStyles();
+
+    this._postChildren.push(
+      this.mountChild(PostGrid, '#grid-mount', {
+        posts,
+        showViewCount: !!settings.show_view_counts,
+        emptyMessage: 'No posts matched your search.',
+      }),
+    );
 
     if (pages > 1) {
-      this.mountChild(Pagination, '#pagination-mount', {
-        page,
-        pages,
-        total,
-        onPage: (p) => ViewContext.update({ page: p }),
-      });
+      this._postChildren.push(
+        this.mountChild(Pagination, '#pagination-mount', {
+          page,
+          pages,
+          total,
+          onPage: (p) => ViewContext.update({ page: p }),
+        }),
+      );
     }
+
+    // Publish the page state for the footer paginator — on desktop and
+    // phone-landscape it replaces the in-flow paginator above (CSS swaps them).
+    store.set('pagination', pages > 1 ? { page, pages, total } : null);
+
+    this._pager.arm({ page, pages, total });
 
     // After the real grid has laid out, fit per_page to the viewport — then keep
     // watching, because the chrome it has to measure around itself arrives later
@@ -133,8 +196,82 @@ export default class SearchPage extends Component {
     this._watchChrome();
   }
 
+  _clearPostContent() {
+    for (const c of this._postChildren || []) {
+      c.unmount();
+      const i = this._children.indexOf(c);
+      if (i !== -1) this._children.splice(i, 1);
+    }
+    this._postChildren = [];
+    this._pager.disarm();
+  }
+
+  /**
+   * Load another page of the same search and swap just the grid. A swipe that
+   * committed has already slid the preloaded neighbour grid to centre (the
+   * "committed ghost"), so we hand off to the real grid under it with no fade;
+   * otherwise crossfade — fade the current grid out while the next page loads,
+   * then fade the fresh grid in.
+   */
+  async _refreshPostContent() {
+    const vc = ViewContext.current();
+    const gridMount = this.$('#grid-mount');
+
+    const seamless = this._pager.takeSeamless();
+    const fromSwipe = seamless || this._pager.isMidSwipe();
+
+    let fadeOut = Promise.resolve();
+    if (gridMount && !fromSwipe) {
+      gridMount.style.transition = 'opacity 0.2s ease-in';
+      gridMount.style.opacity = '0';
+      fadeOut = new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    let data;
+    try {
+      data = await listPosts(this._buildParams(vc));
+    } catch (err) {
+      this.setState({ loading: false, data: null, tags: [], error: err.message || 'Failed to search.' });
+      return;
+    }
+    if (this._unmounted) return;
+    await fadeOut;
+    if (this._unmounted) return;
+
+    this.state.data = data;
+    this.state.error = null;
+    this._loadedVc = vc;
+    this._clearPostContent();
+    this._mountPostContent();
+
+    const newGrid = this.$('#grid-mount');
+    if (seamless) {
+      // The real grid is mounted and centred directly under the committed ghost;
+      // hand off to it — identical pixels, so no blink.
+      this._pager.finishHandoff();
+    } else if (newGrid) {
+      // Fade the freshly-mounted grid in. _mountPostContent() reset the mount's
+      // inline styles, so we start from a clean opacity:0 and transition up.
+      newGrid.style.transition = 'none';
+      newGrid.style.opacity = '0';
+      void newGrid.offsetWidth; // force reflow so the next change animates
+      newGrid.style.transition = 'opacity 0.2s ease-out';
+      newGrid.style.opacity = '1';
+    }
+  }
+
   _minPerPage() {
     return (store.get('settings') || {}).posts_per_page || 10;
+  }
+
+  _buildParams(vc) {
+    // per_page is the device-fit value from the URL, or the cached estimate for
+    // a fresh load that hasn't been reconciled against the real grid yet.
+    const perPage = vc.perPage || cachedPerPage(this._minPerPage());
+    this._loadedPerPage = perPage;
+    const params = { q: vc.query, page: vc.page, per_page: perPage, status: 'published' };
+    if (vc.tag) params.tag = vc.tag;
+    return params;
   }
 
   // Measure the rendered grid and, if the viewport fits a different number of
@@ -144,6 +281,7 @@ export default class SearchPage extends Component {
     if (this._unmounted) return;
     const grid = this.$('.posts-grid');
     if (!grid) return;
+    applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
     // actual resize re-fits it to the new window. A settling pass is the
@@ -195,6 +333,7 @@ export default class SearchPage extends Component {
   mount() {
     // Seed the per_page cache from the window size so the first fetch is sized
     // before the grid exists to be measured.
+    applyZoomVar(); // reflect a sticky zoom before the first grid paints
     if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
     this._resizeHandler = () => this._onResize();
     window.addEventListener('resize', this._resizeHandler);
@@ -203,6 +342,9 @@ export default class SearchPage extends Component {
   }
 
   beforeUnmount() {
+    // Non-grid pages share the footer — don't leave a stale paginator feed behind.
+    store.set('pagination', null);
+    this._pager.destroy();
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
     this._unwatchChrome?.();
@@ -211,6 +353,7 @@ export default class SearchPage extends Component {
 
   async _load() {
     const vc = ViewContext.current();
+    this._loadedVc = vc;
 
     let titleQuery = vc.query || '';
     if (vc.tag) titleQuery += ` in ${vc.tag}`;
@@ -223,13 +366,8 @@ export default class SearchPage extends Component {
     }
 
     try {
-      const perPage = vc.perPage || cachedPerPage(this._minPerPage());
-      this._loadedPerPage = perPage;
-      const params = { q: vc.query, page: vc.page, per_page: perPage, status: 'published' };
-      if (vc.tag) params.tag = vc.tag;
-
       const [data, tagsData] = await Promise.all([
-        listPosts(params),
+        listPosts(this._buildParams(vc)),
         listTags({ q: vc.query, include_empty: false })
       ]);
 
