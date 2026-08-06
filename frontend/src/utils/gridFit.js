@@ -172,6 +172,54 @@ export function watchChromeFit(root, onSettle) {
 }
 
 /**
+ * Guard for a fit that never settles.
+ *
+ * computePerPage measures the chrome around the grid, and the pagination band
+ * is part of that chrome while also being a *function* of per_page: 25 posts at
+ * 4 a page is 7 pages, which Pagination lays out in full and wraps onto two
+ * lines on a phone; at 2 a page it is 13 pages, past the threshold where the
+ * paginator switches to its compact ellipsis form and fits on one line. So a
+ * 375×667 viewport with two zoom columns fits two rows while the paginator is
+ * compact (per_page 4) and one row once it is not (per_page 2), each value
+ * implying the other for as long as the page is open — the visible flicker.
+ *
+ * Any chrome whose height depends on the post count can close that loop, so the
+ * fit guards itself rather than the paginator being special-cased: a value that
+ * comes back around a second time is a cycle, not a measurement. Settle on the
+ * smaller of the two — that is the layout that is guaranteed to leave the
+ * pagination and footer on screen — and stop until something resets the latch.
+ *
+ * @returns {{accept: (current: number, fit: number) => number|null, reset: () => void}}
+ */
+export function createFitLatch() {
+  const applied = new Set();
+  let latched = false;
+  return {
+    /**
+     * @param {number} current  the per_page the grid was loaded with.
+     * @param {number} fit  what the viewport measures as fitting now.
+     * @returns {number|null} the per_page to apply, or null to leave it alone.
+     */
+    accept(current, fit) {
+      if (latched || fit === current) return null;
+      if (applied.has(fit)) {
+        latched = true;
+        // Shrinking is always safe; growing back into a value we have already
+        // been chased away from is what the cycle is made of.
+        return fit < current ? fit : null;
+      }
+      applied.add(fit);
+      return fit;
+    },
+    /** Forget the cycle — a resize or a zoom step is a genuinely new decision. */
+    reset() {
+      applied.clear();
+      latched = false;
+    },
+  };
+}
+
+/**
  * Resolve a CSS length expression (possibly nested var(), rem, calc, …) to
  * pixels by letting the browser compute it on a throwaway probe element.
  * @param {string} expr  e.g. 'var(--spacing-xl)'

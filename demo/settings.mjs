@@ -44,10 +44,24 @@ export const REPLACE_SETTINGS = {
  * from (see README, Content licensing). `{{author_name}}` and `{{engine}}` are
  * tokens and `[text](url)` is a link (utils/copyright.js); everything else is
  * literal text and is escaped — raw HTML here renders as visible markup.
+ *
+ * The managed-hosting link is the demo's only outbound pointer to point.photos,
+ * and it is a plain hyperlink — nothing is fetched from that origin, so the
+ * demo stays the self-contained bundle a visitor can read end to end, and
+ * deploy-demo.sh's "no third-party origin in index.html" check still holds
+ * (settings live in the fixtures bundle, not the shell). The /and/ path is a
+ * channel marker counted server-side; see point-hosting
+ * docs/10-funnel-measurement.md.
  */
 export const ADD_SETTINGS = {
+  // © is the character, not `&copy;`, and the credit is held to one line
+  // with a non-breaking space rather than <nobr> — entity and tag alike are
+  // escaped and shown as the markup they are, which is what the paragraph
+  // above warns about.
   footer_copyright:
-    "© UI showcase of {{engine}}, photos are from [picsum.photos](https://picsum.photos)",
+    "© UI showcase of {{engine}}" +
+    ", [hosting](https://point.photos/and/sushi)" +
+    ", photos are from\u00a0[picsum.photos](https://picsum.photos)",
 };
 
 /** A recorded object carrying this key is a settings map. */

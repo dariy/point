@@ -158,8 +158,11 @@
 
 /* Childless leaf crumb: when the header hides the ancestor trail (ancestors
    folded into "…" or the current crumb ellipsized), the crumb itself becomes
-   the tap target that reveals the full path. Show a chevron only in that state
-   so it doesn't advertise an action it wouldn't perform on a wide header. */
+   the tap target that reveals the full path. Show the affordance only in that
+   state so it doesn't advertise an action it wouldn't perform on a wide header.
+   It is the same arrow every other crumb carries, turning the same way: this
+   crumb opens the same anchored panel as they do, and a chevron of its own only
+   read as some other mechanism. */
 .site-header-group:has(.crumb-pair.folded) .crumb-trail-toggle,
 .site-header-group.fold-current .crumb-trail-toggle {
     cursor: pointer;
@@ -167,8 +170,8 @@
 
 .site-header-group:has(.crumb-pair.folded) .crumb-trail-toggle::after,
 .site-header-group.fold-current .crumb-trail-toggle::after {
-    content: "⌄";
-    margin-left: 6px;
+    content: "←";
+    margin-left: 8px;
     display: inline-block;
     width: 1em;
     text-align: center;
@@ -179,7 +182,7 @@
 
 .site-header-group:has(.crumb-pair.folded) .crumb-trail-toggle.is-flyout-open::after,
 .site-header-group.fold-current .crumb-trail-toggle.is-flyout-open::after {
-    transform: rotate(180deg);
+    transform: rotate(-90deg);
 }
 
 .site-breadcrumb .breadcrumb-current {

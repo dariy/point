@@ -22,12 +22,15 @@ import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch } from '../../utils/gridFit.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, data: null, tags: [], error: null };
+    // Stops the viewport fit chasing a per_page whose own chrome moves the
+    // target — see createFitLatch.
+    this._fitLatch = createFitLatch();
     // Swipe/trackpad/keyboard pagination and pinch zoom for the results grid —
     // see core/gridPager.js. Shared with HomePage and TagPage.
     this._pager = new GridPager({
@@ -38,7 +41,10 @@ export default class SearchPage extends Component {
         return data.posts || [];
       },
       gotoPage: (p) => ViewContext.update({ page: p }),
-      onZoomCommit: () => this._reconcilePerPage({ fromResize: true }),
+      onZoomCommit: () => {
+        this._fitLatch.reset(); // a new column count is a new question to fit
+        this._reconcilePerPage({ fromResize: true });
+      },
       isAlive: () => !this._unmounted,
       emptyHtml: '<p class="empty-state">No posts matched your search.</p>',
     });
@@ -291,14 +297,20 @@ export default class SearchPage extends Component {
     if (vc.perPage && !fromResize && !(settling && this._fitOwned)) return;
     const fit = computePerPage(this._minPerPage(), grid);
     const current = this._loadedPerPage || fit;
-    if (fit === current) return;
+    const next = this._fitLatch.accept(current, fit);
+    if (next === null) return;
     const firstIndex = (vc.page - 1) * current;
-    const newPage = Math.floor(firstIndex / fit) + 1;
+    const newPage = Math.floor(firstIndex / next) + 1;
     this._fitOwned = true;
-    ViewContext.update({ per_page: fit, page: newPage }, { replace: true });
+    ViewContext.update({ per_page: next, page: newPage }, { replace: true });
   }
 
   _onResize() {
+    // Reset on the event, not on the debounced re-fit: the chrome observer fires
+    // sooner than 200ms, and a settling pass that ran against the old latch
+    // would have its decision cleared out from under it — one whole extra
+    // flicker cycle before the new viewport settles.
+    this._fitLatch.reset();
     clearTimeout(this._resizeTimer);
     this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
   }

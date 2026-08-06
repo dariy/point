@@ -392,9 +392,17 @@ export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
 
   el.addEventListener('click', (e) => {
     cancel();
+    // Ask this click what produced it rather than the session-wide verdict: a
+    // tap reports pointerType 'touch' even on a machine that has a mouse (and
+    // whose remembered verdict is therefore "fine"), and answering from the
+    // session there turned every tap on a crumb into a navigation — the arrow
+    // flipped on the emulated hover, then the page reloaded out from under the
+    // dropdown that was never opened. Keyboard activation reports no pointer
+    // type at all; the session verdict is the right answer for it.
+    const fromMouse = e.pointerType ? e.pointerType === 'mouse' : hasFinePointer();
     // With a mouse the dropdown is already showing from hover, so a click means
     // "go to this item" — let the link navigate.
-    if (hasFinePointer()) { _hideFlyout(); return; }
+    if (fromMouse) { _hideFlyout(); return; }
     // Coarse pointer: first tap opens the dropdown, second tap follows the link.
     if (el.classList.contains('is-flyout-open')) {
       const href = el.getAttribute('href');
