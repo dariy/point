@@ -35,10 +35,8 @@ var publicSettingKeys = map[string]bool{
 	"active_css_theme":    true,
 	"show_view_counts":    true,
 	"google_analytics_id": true,
-	"use_thumbnails":      true,
 	"about_post_id":       true,
 	"home_page_post_id":   true,
-	"multi_user_mode":     true,
 
 	"tags_visibility":         true,
 	"timeline_mode":           true,

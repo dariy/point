@@ -9,8 +9,10 @@
  *                          delete/copy actions, and scopes drag-drop to the
  *                          component container. Defaults to false.
  *
- * Public methods (picker mode):
- *   getSelectedItems()  Returns array of selected media objects.
+ * Public methods:
+ *   openFilePicker()    Opens the file chooser (used by MediaPage's header
+ *                       Upload button, which sits outside this container).
+ *   getSelectedItems()  Picker mode: array of selected media objects.
  */
 
 import { Component } from "../Component.js";
@@ -128,11 +130,22 @@ export class MediaBrowser extends Component {
   }
 
   /**
-   * Upload / poster-backfill / type filter. Rendered twice — in the folder tree
-   * (wide) and in the mobile bar (narrow) — since only one of the two is ever
-   * displayed. Hence classes rather than ids, and $$ wiring in afterRender.
+   * Upload / poster-backfill row. Upload is picker-only: the standalone page
+   * carries it in the admin header instead (see MediaPage), the way the posts
+   * list carries "New Post". Returns "" when neither control applies, so the
+   * row itself can be skipped.
+   *
+   * Controls use classes rather than ids, and $$ wiring in afterRender, since
+   * more than one copy may be in the DOM.
    */
-  _renderControls(typeFilter) {
+  _renderControls() {
+    return `
+      ${this.props.pickerMode ? `<button class="mb-upload-btn btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>` : ""}
+      ${this._renderPosterBackfill()}`;
+  }
+
+  /** Media type filter — first control on the folder (media/year/month) line. */
+  _renderTypeFilter(typeFilter) {
     const typeOptions = ["", "image", "video", "audio", "file"]
       .map((t) => {
         const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
@@ -140,10 +153,7 @@ export class MediaBrowser extends Component {
       })
       .join("");
 
-    return `
-      <button class="mb-upload-btn btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
-      ${this._renderPosterBackfill()}
-      <select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
+    return `<select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
   }
 
   /**
@@ -161,11 +171,16 @@ export class MediaBrowser extends Component {
       )
       .join("");
 
+    const controls = this._renderControls().trim();
+
     return `
       <div class="mb-mobile-bar">
         ${this.props.pickerMode ? this._renderBreadcrumbs() : ""}
-        <div class="mb-mobile-controls">${this._renderControls(typeFilter)}</div>
-        <div class="mb-folder-chips" role="group" aria-label="Media folders">${chips}</div>
+        ${controls ? `<div class="mb-mobile-controls">${controls}</div>` : ""}
+        <div class="mb-folder-row">
+          ${this._renderTypeFilter(typeFilter)}
+          <div class="mb-folder-chips" role="group" aria-label="Media folders">${chips}</div>
+        </div>
       </div>`;
   }
 
@@ -1017,6 +1032,15 @@ export class MediaBrowser extends Component {
       };
       this.setState({ referringPostsState: rps2 });
     }
+  }
+
+  /**
+   * Opens the hidden file input. The standalone page's Upload button lives in
+   * the admin header, outside this component's container, so it can't reach the
+   * input directly.
+   */
+  openFilePicker() {
+    this.$("#mb-file-input")?.click();
   }
 
   /**

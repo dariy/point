@@ -270,6 +270,48 @@ func TestSystemHandler_GetStats_Success(t *testing.T) {
 	}
 }
 
+// The storage quota is operator-set (STORAGE_QUOTA_MB) rather than a DB
+// setting, and is reported only when configured — an unset quota must stay out
+// of the response so the dashboard shows bare usage instead of a "of 0 MB" bar.
+func TestSystemHandler_GetStats_StorageQuota(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tmpDir := t.TempDir()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: tmpDir}, settingsSvc, tagSvc)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
+	cacheSvc := services.NewCacheService(tmpDir)
+
+	statsFor := func(t *testing.T, quotaMB int) map[string]interface{} {
+		t.Helper()
+		h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0").
+			WithStorageQuotaMB(quotaMB)
+		e := echo.New()
+		rec := httptest.NewRecorder()
+		c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec)
+		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+		if err := h.GetStats(c); err != nil {
+			t.Fatalf("GetStats failed: %v", err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+		return resp
+	}
+
+	if got, ok := statsFor(t, 2048)["storage_quota_mb"]; !ok || got != float64(2048) {
+		t.Errorf("configured quota: got storage_quota_mb=%v (present=%v), want 2048", got, ok)
+	}
+
+	if _, ok := statsFor(t, 0)["storage_quota_mb"]; ok {
+		t.Error("unset quota: storage_quota_mb should be absent from the response")
+	}
+}
+
 func TestSemverGreaterThan(t *testing.T) {
 	cases := []struct {
 		a, b string

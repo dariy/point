@@ -114,7 +114,6 @@ export default class SearchPage extends Component {
     this.mountChild(PostGrid, '#grid-mount', {
       posts,
       showViewCount: !!settings.show_view_counts,
-      useThumbnails: settings.use_thumbnails !== false,
       emptyMessage: 'No posts matched your search.',
     });
 

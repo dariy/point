@@ -99,6 +99,8 @@ export default class DashboardPage extends Component {
   _renderStats(s, analytics, topPosts) {
     if (!s) return '';
 
+    // The quota is operator-set (STORAGE_QUOTA_MB) and absent from the stats
+    // response when unlimited — then we report bare usage with no bar to fill.
     const usagePercent = s.storage_quota_mb
       ? Math.min(100, Math.round((s.storage_used_mb / s.storage_quota_mb) * 100))
       : 0;
@@ -174,9 +176,10 @@ export default class DashboardPage extends Component {
             ${escapeHtml(formatFileSize((s.storage_used_mb ?? 0) * 1024 * 1024))}
             ${s.storage_quota_mb ? ` of ${escapeHtml(formatFileSize(s.storage_quota_mb * 1024 * 1024))} used (${escapeHtml(String(usagePercent))}%)` : ' used'}
           </p>
+          ${s.storage_quota_mb ? `
           <div class="storage-bar">
             <div class="storage-bar-fill ${barClass}" style="width: ${escapeHtml(String(usagePercent))}%"></div>
-          </div>
+          </div>` : ''}
         </div>
       </div>
       ${topPostsTable}`;

@@ -48,12 +48,23 @@ type SystemHandler struct {
 	// health is the background-job outcome registry surfaced by GetHealth.
 	// Nil is valid: the endpoint then reports no jobs.
 	health *services.HealthRegistry
+	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
+	// reported by GetStats. 0 means unlimited and is omitted from the response.
+	storageQuotaMB int
 }
 
 // WithHealth attaches the background-job health registry. A setter rather than
 // another constructor parameter — NewSystemHandler already takes ten.
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
+	return h
+}
+
+// WithStorageQuotaMB attaches the operator-configured storage allowance. A
+// setter for the same reason as WithHealth, and because 0 (unlimited) is the
+// right behaviour for every caller that does not set one.
+func (h *SystemHandler) WithStorageQuotaMB(mb int) *SystemHandler {
+	h.storageQuotaMB = mb
 	return h
 }
 
@@ -320,7 +331,7 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		return MapError(err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"published_posts":   stats.PublishedCount,
 		"total_posts":       stats.PostCount,
 		"total_tags":        stats.TagCount,
@@ -328,7 +339,14 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
 		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
 		"import_configured": h.settingsService.SecretIsSet(ctx, "photo_library_path"),
-	})
+	}
+	// Omitted when unset so the dashboard shows plain usage rather than a
+	// "0 MB of 0 MB" bar.
+	if h.storageQuotaMB > 0 {
+		resp["storage_quota_mb"] = h.storageQuotaMB
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // readLogLines returns every line of one log file. A file that vanished since

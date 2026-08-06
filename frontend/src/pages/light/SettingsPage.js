@@ -3,7 +3,9 @@
  *
  * Fetches all settings and renders them in a grouped form. Plugin-specific
  * settings (AI, Instagram, immersive, tags) live in their per-plugin drawer on
- * /light/plugins — this page holds only the general blog/display/storage config.
+ * /light/plugins — this page holds only the general blog/display config.
+ * Operator-level knobs (storage quota, session TTL) are env vars, not settings:
+ * they are properties of the deployment, not of the blog.
  */
 
 import { Component } from "../../components/Component.js";
@@ -32,18 +34,7 @@ const SETTING_GROUPS = [
       "posts_per_page",
       "default_theme",
       "show_view_counts",
-      "use_thumbnails",
       "exif_visibility",
-    ],
-  },
-  {
-    title: "Storage & System",
-    keys: [
-      "storage_quota_mb",
-      "session_ttl_days",
-      "cleanup_interval_days",
-      "multi_user_mode",
-      "require_registration_code",
     ],
   },
 ];

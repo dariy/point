@@ -852,18 +852,28 @@
     color: var(--text-tertiary);
 }
 
-.mb-upload-btn {
-    margin-bottom: var(--spacing-md);
+/* Sits inline with the folder chips, so it takes their metrics — chip height,
+   pill radius, sm text, no lift — instead of the toolbar .filter-select look.
+   The `select` qualifier is what outweighs .filter-select, bundled later.
+   Right padding clears the inherited chevron (right spacing-sm, sized
+   --filter-select-background-size). */
+select.mb-type-filter {
+    height: var(--mb-folder-chip-min-height);
+    padding: var(--spacing-xs) calc(var(--spacing-sm) * 2 + var(--filter-select-background-size)) var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--mb-folder-chip-radius);
+    background-color: var(--surface-card);
+    color: var(--text-secondary);
+    box-shadow: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
-.mb-type-filter {
-    margin-bottom: var(--spacing-md);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    border-radius: var(--border-radius-sm);
-    border: var(--border-width) solid var(--border-primary);
-    background-color: var(--surface-input);
-    color: var(--text-primary);
+select.mb-type-filter:hover {
+    box-shadow: none;
+    transform: none;
+    border-color: var(--border-primary);
 }
 
 /* Bleeds past .light-content's padding so nothing scrolls through a side
@@ -892,14 +902,20 @@
     gap: var(--spacing-sm);
 }
 
-.mb-mobile-controls .mb-upload-btn,
-.mb-mobile-controls .mb-posters-btn,
-.mb-mobile-controls .mb-type-filter {
-    margin-bottom: 0;
+/* Type filter pinned to the head of the folder line; the chips scroll past it. */
+.mb-folder-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-width: 0;
 }
 
-.mb-mobile-controls .mb-type-filter {
-    flex: 1;
+.mb-folder-row .mb-type-filter {
+    flex: 0 0 auto;
+}
+
+.mb-folder-row .mb-folder-chips {
+    flex: 1 1 auto;
     min-width: 0;
 }
 

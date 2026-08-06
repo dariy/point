@@ -47,8 +47,6 @@ export default class LoginPage extends Component {
 
   render() {
     const { loading, error, passkeySupported } = this.state;
-    const settings = store.get('settings') || {};
-    const multiUser = settings.multi_user_mode === 'true' || settings.multi_user_mode === true;
 
     return `
       <div class="login-overlay-backdrop" id="login-backdrop">
@@ -60,10 +58,6 @@ export default class LoginPage extends Component {
           </button>
           <div class="login-divider"><span>or</span></div>` : ''}
           <form id="login-form" class="login-modal-form" novalidate>
-            ${multiUser ? `
-            <input type="text" id="username-input" name="username"
-                   class="login-input" autocomplete="username"
-                   placeholder="Username">` : ''}
             <input type="password" id="password-input" name="password"
                    class="login-input" autocomplete="current-password"
                    required placeholder="${loading ? 'Signing in…' : 'Password'}"
@@ -101,7 +95,6 @@ export default class LoginPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const username = this.$('#username-input')?.value.trim() || null;
       const password = this.$('#password-input')?.value || '';
 
       if (!password) {
@@ -112,7 +105,9 @@ export default class LoginPage extends Component {
       this.setState({ loading: true, error: null });
 
       try {
-        const result = await login(username, password, true);
+        // No username: the install has a single owner, so the API resolves the
+        // credential against the first (only) user.
+        const result = await login(null, password, true);
         store.set('user', result.user);
         this._finish(result.user);
       } catch (err) {
@@ -143,10 +138,9 @@ export default class LoginPage extends Component {
     };
     window.addEventListener('keydown', this._onKeyDown);
 
-    // Auto-focus first input after animation settles.
+    // Auto-focus the password field after animation settles.
     const pwField = this.$('#password-input');
-    const usrField = this.$('#username-input');
-    setTimeout(() => (usrField || pwField)?.focus(), 80);
+    setTimeout(() => pwField?.focus(), 80);
 
     // Auto-redirect if already logged in.
     if (store.get('user')) this._finish(store.get('user'));

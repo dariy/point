@@ -44,9 +44,6 @@ export const LABEL_OVERRIDES = {
 export const NUMERIC_KEYS = new Set([
   "posts_per_page",
   "min_tag_posts_to_show",
-  "storage_quota_mb",
-  "session_ttl_days",
-  "cleanup_interval_days",
   "atlas_post_limit",
   "remark_smtp_port",
 ]);
@@ -78,17 +75,13 @@ export const DEFAULT_ON_KEYS = new Set([
 
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
 export function isToggleKey(key) {
-  if (key.includes("username")) return false; // "username" would match "use"
   return (
     key.includes("enable") ||
     key.includes("show") ||
-    key.includes("use") ||
     key.includes("_anon") ||
     key.includes("_tls") ||
     key === "remark_simple_view" ||
-    key === "remark_no_footer" ||
-    key === "multi_user_mode" ||
-    key === "require_registration_code"
+    key === "remark_no_footer"
   );
 }
 
@@ -96,8 +89,6 @@ function isNumericKey(key) {
   return (
     NUMERIC_KEYS.has(key) ||
     key.includes("per_page") ||
-    key.includes("quota") ||
-    key.includes("interval") ||
     key.includes("posts_to_show")
   );
 }

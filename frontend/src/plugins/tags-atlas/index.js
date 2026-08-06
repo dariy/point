@@ -790,8 +790,6 @@ export default class AtlasPage extends Component {
 
     const postSats = [];
     if (!hidden.has("post")) {
-      const useThumbnails =
-        (store.get("settings") || {}).use_thumbnails !== false;
       (cloudData.posts || []).forEach((p) => {
         postSats.push({
           key: "p" + p.id,
@@ -802,7 +800,7 @@ export default class AtlasPage extends Component {
           // Media posts reveal a thumbnail when their place is selected. The
           // server hands back a ?thumb=128 URL (atlasThumbURL), which for a
           // video resolves to a square crop of its poster frame.
-          thumb: useThumbnails ? p.media_url || null : null,
+          thumb: p.media_url || null,
         });
       });
     }

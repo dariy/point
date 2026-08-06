@@ -46,7 +46,6 @@ var pagePublicSettingKeys = map[string]bool{
 	"posts_per_page":         true,
 	"default_theme":          true,
 	"show_view_counts":       true,
-	"use_thumbnails":         true,
 	"about_post_id":          true,
 	"home_page_post_id":      true,
 	"show_immersive_excerpt": true,

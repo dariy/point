@@ -217,9 +217,9 @@ export function normalizeSettings(raw) {
   const result = { ...raw };
   for (const key in raw) {
     const value = raw[key];
-    if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
+    if (key.includes('per_page') || key.includes('posts_to_show')) {
       result[key] = parseInt(value, 10) || 0;
-    } else if (key.includes('enable') || key.includes('show') || key.includes('use') || key === 'multi_user_mode') {
+    } else if (key.includes('enable') || key.includes('show')) {
       result[key] = value === 'true' || value === '1' || value === true || value === 1;
     }
   }

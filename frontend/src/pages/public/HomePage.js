@@ -350,7 +350,6 @@ export default class HomePage extends Component {
       this.mountChild(PostGrid, '#grid-mount', {
         posts,
         showViewCount: !!settings.show_view_counts,
-        useThumbnails: settings.use_thumbnails !== false,
       }),
     );
 
@@ -793,7 +792,6 @@ export default class HomePage extends Component {
       const card = new PostCard(dummy, {
         post,
         showViewCount: !!settings.show_view_counts,
-        useThumbnails: settings.use_thumbnails !== false,
         isHero: i === heroIndex,
       }).render();
       return `<div class="post-card-slot${cls}">${card}</div>`;
