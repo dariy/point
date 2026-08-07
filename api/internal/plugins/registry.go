@@ -56,31 +56,67 @@ type Descriptor struct {
 	// DefaultEnabled is the enabled state for fresh installs and whenever the
 	// plugin.<id>.enabled setting is absent.
 	DefaultEnabled bool
-	// Area groups plugins that are alternatives for the same responsibility
-	// (e.g. the two immersive viewers). Plugins with no shared area leave it "".
-	Area string
-	// Core marks a plugin whose Area must always have at least one enabled
-	// member: the last enabled plugin in a core area cannot be disabled. An area
-	// with a single core plugin therefore stays permanently enabled.
-	Core bool
-	// Exclusive marks an area where AT MOST one member is enabled (radio
-	// semantics; "none" allowed). Enabling a member disables its peers. Contrast
-	// Core, which requires at least one member. An area is Exclusive when its
-	// members declare it — do not combine Exclusive with Core.
-	Exclusive bool
+}
+
+// Cardinality is how many enabled plugins a slot accepts. It belongs to the
+// SLOT, not to the plugins claiming it: whether alternatives exclude each other,
+// and whether the shell survives with none, is a property of the region being
+// filled. Plugins are then just candidates for it.
+type Cardinality string
+
+const (
+	// CardAny — any number of claimants; they compose instead of competing.
+	// This is the rule for every slot left out of SlotCardinality.
+	CardAny Cardinality = "0+"
+	// CardAtMostOne — one claimant or none; enabling one switches the others
+	// off, and with none enabled the slot's feature simply disappears.
+	CardAtMostOne Cardinality = "0-1"
+	// CardExactlyOne — always precisely one claimant: alternatives switch each
+	// other off, and the last one standing cannot be disabled.
+	CardExactlyOne Cardinality = "1"
+	// CardAtLeastOne — one or more; the last claimant cannot be disabled.
+	CardAtLeastOne Cardinality = "1+"
+)
+
+// SingleClaim reports whether the slot admits at most one enabled plugin, so
+// enabling a claimant must switch its peers off (radio semantics).
+func (c Cardinality) SingleClaim() bool { return c == CardAtMostOne || c == CardExactlyOne }
+
+// RequiresOne reports whether the slot must always keep a claimant, so its sole
+// enabled plugin may not be disabled (see IsLockedOff).
+func (c Cardinality) RequiresOne() bool { return c == CardExactlyOne || c == CardAtLeastOne }
+
+// SlotCardinality holds the slots whose rule is not CardAny. List a slot here
+// when its claimants are alternatives rather than additions, or when the page
+// renders nothing useful without one.
+var SlotCardinality = map[string]Cardinality{
+	// The enabled visualization owns /tags; with none enabled the route is
+	// hidden, which is a supported (and preset-used) configuration.
+	"tags-route": CardAtMostOne,
+	// An immersive post renders the viewer and nothing else, so it needs one —
+	// the Standard and Sheet viewers are the two candidates for it.
+	"post-viewer": CardExactlyOne,
+}
+
+// SlotRule returns the cardinality of a slot; unlisted slots accept any number.
+func SlotRule(slot string) Cardinality {
+	if c, ok := SlotCardinality[slot]; ok {
+		return c
+	}
+	return CardAny
 }
 
 // Registry is the static, authoritative catalog of all plugins. Phase 1 ships
 // with every plugin DefaultEnabled:true so behavior is identical to today; the
 // admin Plugins page (Phase 3) and per-plugin extraction (Phase 4) build on top.
 var Registry = []Descriptor{
-	// ── Tag visualizations: exclusive claim on the tags-route slot ───────────
-	// At most one of the three may be enabled (Area "tags-viz", Exclusive) — the
-	// enabled one owns /tags; none enabled hides /tags. Atlas is the default; the
-	// others ship off. This replaces the old `tags_module` selector setting.
-	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true, Area: "tags-viz", Exclusive: true},
-	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: false, Area: "tags-viz", Exclusive: true},
-	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: false, Area: "tags-viz", Exclusive: true},
+	// ── Tag visualizations: candidates for the tags-route slot ───────────────
+	// The slot takes at most one (SlotCardinality), so the enabled one owns
+	// /tags and none enabled hides it. Atlas is the default; the others ship
+	// off. This replaces the old `tags_module` selector setting.
+	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true},
+	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: false},
+	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: false},
 
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},
@@ -95,12 +131,13 @@ var Registry = []Descriptor{
 	{ID: "distraction-free", Type: TypeSlot, Slot: "post-list-tools", EntryName: "distraction-free", DefaultEnabled: true},
 
 	// ── Content enhancers ────────────────────────────────────────────────────
-	// The immersive viewers are alternatives for the post-viewer slot (core
-	// area "immersive"): Standard is the default; Sheet ships disabled. Enabling
-	// Sheet and disabling Standard switches the public viewer; at least one of
-	// the pair must stay enabled.
-	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: false, Area: "immersive", Core: true},
-	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: true, Area: "immersive", Core: true},
+	// The two immersive viewers are the candidates for the post-viewer slot,
+	// which takes exactly one (SlotCardinality): enabling one switches the
+	// public viewer by turning the other off, and the survivor cannot be
+	// disabled — same radio behavior as the tag visualizations, minus the
+	// "none" option, because an immersive post has nothing else to render.
+	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: false},
+	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: true},
 
 	// custom-css has no frontend chunk: the CSS injection lives in core and the
 	// plugin only gates the /api/themes/custom-css endpoints via RequirePlugin.
@@ -180,25 +217,25 @@ func IsEnabled(id string, settings map[string]string) bool {
 	return d.DefaultEnabled
 }
 
-// AreaPlugins returns the descriptors that share an area, in registry order. An
-// empty area string matches nothing (plugins without an area are not grouped).
-func AreaPlugins(area string) []Descriptor {
-	if area == "" {
+// SlotPlugins returns the descriptors claiming a slot, in registry order. An
+// empty slot string matches nothing (plugins without a slot claim no region).
+func SlotPlugins(slot string) []Descriptor {
+	if slot == "" {
 		return nil
 	}
 	var out []Descriptor
 	for _, d := range Registry {
-		if d.Area == area {
+		if d.Slot == slot {
 			out = append(out, d)
 		}
 	}
 	return out
 }
 
-// EnabledInArea returns the enabled plugin ids in an area, in registry order.
-func EnabledInArea(area string, settings map[string]string) []string {
+// EnabledInSlot returns the enabled plugin ids claiming a slot, registry order.
+func EnabledInSlot(slot string, settings map[string]string) []string {
 	var out []string
-	for _, d := range AreaPlugins(area) {
+	for _, d := range SlotPlugins(slot) {
 		if IsEnabled(d.ID, settings) {
 			out = append(out, d.ID)
 		}
@@ -206,28 +243,29 @@ func EnabledInArea(area string, settings map[string]string) []string {
 	return out
 }
 
-// IsLockedOff reports whether plugin id may NOT be disabled: it is the sole
-// enabled member of a core area, so disabling it would leave that area empty.
-// A non-core plugin, or one with an enabled sibling, is never locked off.
+// IsLockedOff reports whether plugin id may NOT be disabled: its slot requires a
+// claimant and id is the only enabled one, so disabling it would leave the slot
+// empty. A plugin in a slot that tolerates none, or one with an enabled sibling,
+// is never locked off.
 func IsLockedOff(id string, settings map[string]string) bool {
 	d, ok := byID[id]
-	if !ok || !d.Core || !IsEnabled(id, settings) {
+	if !ok || !SlotRule(d.Slot).RequiresOne() || !IsEnabled(id, settings) {
 		return false
 	}
-	enabled := EnabledInArea(d.Area, settings)
+	enabled := EnabledInSlot(d.Slot, settings)
 	return len(enabled) == 1 && enabled[0] == id
 }
 
-// ExclusivePeers returns the other members of id's exclusive area, in registry
-// order (nil if id is not in an exclusive area). Enabling id must disable these
-// so at most one member of the area stays on.
-func ExclusivePeers(id string) []string {
+// SlotPeers returns the other candidates for id's slot, in registry order, when
+// that slot takes a single claimant (nil otherwise). Enabling id must disable
+// these so the slot keeps at most one.
+func SlotPeers(id string) []string {
 	d, ok := byID[id]
-	if !ok || !d.Exclusive || d.Area == "" {
+	if !ok || !SlotRule(d.Slot).SingleClaim() {
 		return nil
 	}
 	var out []string
-	for _, m := range AreaPlugins(d.Area) {
+	for _, m := range SlotPlugins(d.Slot) {
 		if m.ID != id {
 			out = append(out, m.ID)
 		}
@@ -235,20 +273,76 @@ func ExclusivePeers(id string) []string {
 	return out
 }
 
+// NormalizeSlots corrects a desired enabled-set in place so it satisfies every
+// slot rule: single-claim slots keep their first requested candidate (registry
+// order) and lose the rest; slots that require a claimant fall back to their
+// default candidate when the set leaves them empty. Callers that write a whole
+// configuration at once (preset application) use it instead of reimplementing
+// the rules; individual toggles go through SlotPeers/IsLockedOff.
+func NormalizeSlots(want map[string]bool) {
+	done := map[string]bool{}
+	for _, d := range Registry {
+		if d.Slot == "" || done[d.Slot] {
+			continue
+		}
+		done[d.Slot] = true
+		rule := SlotRule(d.Slot)
+		if rule == CardAny {
+			continue
+		}
+
+		members := SlotPlugins(d.Slot)
+		var enabled []Descriptor
+		for _, m := range members {
+			if want[m.ID] {
+				enabled = append(enabled, m)
+			}
+		}
+		if rule.SingleClaim() && len(enabled) > 1 {
+			for _, m := range enabled[1:] {
+				want[m.ID] = false
+			}
+			enabled = enabled[:1]
+		}
+		if rule.RequiresOne() && len(enabled) == 0 {
+			want[DefaultClaimant(d.Slot)] = true
+		}
+	}
+}
+
+// DefaultClaimant is the plugin that fills a slot when nothing else does: the
+// candidate marked DefaultEnabled, else the first in registry order. Empty for
+// a slot with no candidates at all.
+func DefaultClaimant(slot string) string {
+	members := SlotPlugins(slot)
+	for _, m := range members {
+		if m.DefaultEnabled {
+			return m.ID
+		}
+	}
+	if len(members) > 0 {
+		return members[0].ID
+	}
+	return ""
+}
+
 // DefaultPresets returns the seed preset definitions: a preset id mapped to the
-// plugin ids it enables. Core-area plugins are kept enabled by the apply logic
-// regardless of membership, so presets only need to enumerate the rest.
+// plugin ids it enables. Slots that require a claimant get one from the apply
+// logic regardless of membership (see NormalizeSlots), so presets only need to
+// enumerate what they actually want.
 func DefaultPresets() map[string][]string {
 	all := make([]string, 0, len(Registry))
 	for _, d := range Registry {
 		all = append(all, d.ID)
 	}
 	return map[string][]string{
-		// Bare guest experience: only the sheet viewer (core admin areas stay on).
+		// Bare guest experience: the sheet viewer and nothing else (/tags hidden).
 		"minimalistic": {"immersive-sheet"},
 		// Self-hosted blog without the advanced/integration services.
 		"standalone": filterOut(all, "tag-cloud", "ai-analysis", "instagram", "immersive-sheet"),
-		// Everything available.
+		// Everything available. Candidates for a single-claim slot (tags-route,
+		// post-viewer) are all listed; NormalizeSlots trims each slot to its first
+		// candidate on apply, so this stays a plain "everything" list.
 		"fully-featured": filterOut(all, "tag-cloud"),
 	}
 }

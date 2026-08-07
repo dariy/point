@@ -469,6 +469,40 @@ body.grid-zoom .posts-grid {
        allows rounding *up* — otherwise a 1.9-row fit collapses to one row of
        stretched sausages with the leftover dumped into their height. */
     grid-auto-rows: minmax(0, 1fr);
+    /* `--posts-grid-rows` is the row count the fit landed on (gridFit's
+       applyRowsVar). Pinning the tracks keeps the grid the same shape between a
+       zoom step and the refit that fills it — without it the cards still on
+       screen share the whole viewport height as one stretched row for the
+       length of the refetch, then snap back. Unset (no zoom yet, or an
+       unmeasurable grid) the repeat() is invalid at computed-value time and the
+       property falls back to `none`, i.e. auto rows as before. */
+    grid-template-rows: repeat(var(--posts-grid-rows), minmax(0, 1fr));
+}
+
+/* Cards past the pinned geometry's capacity — a zoom step that made the cards
+   bigger holds more than the new shape does. They are dropped by the refit
+   moments later; hiding them now means the grid never shows a state the refit
+   has to undo. */
+body.grid-zoom .post-card-slot.is-zoom-surplus {
+    display: none;
+}
+
+/* Cards the refit added, dropping into the space the pinned rows held open.
+   Only the arrivals animate: the cards already on screen are not re-rendered
+   at all (PostGrid.reconcile), so they have nothing to fade. */
+.post-card-slot.is-entering {
+    animation: post-card-in 0.22s ease-out both;
+}
+
+@keyframes post-card-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .post-card-slot.is-entering {
+        animation: none;
+    }
 }
 
 body.grid-zoom .post-card-slot {

@@ -69,6 +69,7 @@ export function applyZoomVar() {
   } else {
     document.body.classList.remove('grid-zoom');
     document.body.style.removeProperty('--posts-grid-cols');
+    applyRowsVar(0);
   }
   // Let detached zoom UIs (the footer slider) mirror every change, whatever
   // input path caused it — pinch, wheel, keys, or the slider itself.
@@ -77,10 +78,51 @@ export function applyZoomVar() {
   );
 }
 
+// ── Row tracks ──────────────────────────────────────────────────────────────
+// The column count alone does not fix a zoomed grid's geometry: rows are
+// `minmax(0, 1fr)` and the grid stretches to the viewport, so N cards laid out
+// in one row are as tall as the whole page. That is fine once the refit has
+// fetched the cards the new column count implies, and wrong for the ~250ms
+// before it — the cards balloon, then snap back. Pinning the row *count* the
+// fit will land on (`--posts-grid-rows`) gives the grid its final shape in the
+// same frame as the step: the cards already there jump straight to their final
+// size, and the incoming ones drop into the space held for them.
+let _rows = 0;
+
+/** Pin (or, with 0, release) the row tracks a zoomed grid lays out on. */
+export function applyRowsVar(rows) {
+  _rows = rows > 0 ? rows : 0;
+  if (_rows) document.body.style.setProperty('--posts-grid-rows', String(_rows));
+  else document.body.style.removeProperty('--posts-grid-rows');
+}
+
+/**
+ * How many cards the pinned geometry holds (columns × rows), 0 when unzoomed.
+ * The grid holds this shape from the zoom step onward, so it is also how many
+ * cards belong on screen while the refit is in flight.
+ */
+export function zoomCapacity() {
+  const cols = getZoom() ? clampZoom(getZoom()) : 0;
+  return cols && _rows ? cols * _rows : 0;
+}
+
+/**
+ * Re-measure and re-pin the row tracks for the zoom now in force.
+ *
+ * The row count wanted here is exactly the one the refit will apply, so this is
+ * computePerPage itself, called for its `--posts-grid-rows` side effect. The
+ * floor argument is irrelevant to that side effect (it only stands in when the
+ * geometry is unmeasurable), hence 1.
+ */
+export function pinZoomRows(gridEl) {
+  if (gridEl) computePerPage(1, gridEl);
+}
+
 /** Set an absolute zoom column count (from the footer slider) and apply it. */
-export function requestZoom(cols) {
+export function requestZoom(cols, gridEl = null) {
   setZoom(clampZoom(cols));
   applyZoomVar();
+  pinZoomRows(gridEl);
 }
 
 /**
@@ -95,6 +137,7 @@ export function stepZoom(gridEl, delta) {
   const next = clampZoom(current + delta);
   setZoom(next);
   applyZoomVar();
+  pinZoomRows(gridEl);
   return next;
 }
 // Pagination + footer sit below the grid; if cards fill the whole viewport they
@@ -336,6 +379,8 @@ export function computePerPage(minPerPage, gridEl = null) {
   // (flooring a 1.9-row fit would leave one row of double-height sausages).
   const fit = (avail + gap) / (rowH + gap);
   const rows = Math.max(1, zoomCols ? Math.round(fit) : Math.floor(fit));
+  // Hold the grid to this shape from now on — see applyRowsVar.
+  applyRowsVar(zoomCols ? rows : 0);
   // Fit the viewport exactly so pagination + footer stay on-screen. We do NOT
   // floor at posts_per_page here: on narrow desktop widths (few columns) the
   // setting can exceed what fits and would push the footer off-screen. The

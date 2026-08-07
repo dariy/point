@@ -44,17 +44,17 @@ func registryDefaultIDs(t *testing.T, exclude ...string) (on, off string) {
 	return on, off
 }
 
-// coreAreaSplit returns a core area's default-enabled member (the one the
-// toggle endpoint must refuse to disable) and a default-disabled sibling that
-// can take over the area.
-func coreAreaSplit(t *testing.T) (on, off string) {
+// requiredSlotSplit returns the default-enabled claimant of a slot that must
+// keep one (the plugin the toggle endpoint has to refuse to disable) plus a
+// default-disabled candidate for the same slot, which can take over from it.
+func requiredSlotSplit(t *testing.T) (slot, on, off string) {
 	t.Helper()
-	for _, d := range plugins.Registry {
-		if !d.Core || d.Area == "" {
+	for s, rule := range plugins.SlotCardinality {
+		if !rule.RequiresOne() {
 			continue
 		}
 		on, off = "", ""
-		for _, m := range plugins.AreaPlugins(d.Area) {
+		for _, m := range plugins.SlotPlugins(s) {
 			if m.DefaultEnabled && on == "" {
 				on = m.ID
 			}
@@ -63,11 +63,11 @@ func coreAreaSplit(t *testing.T) (on, off string) {
 			}
 		}
 		if on != "" && off != "" {
-			return on, off
+			return s, on, off
 		}
 	}
-	t.Fatal("registry has no core area with one enabled and one disabled member")
-	return "", ""
+	t.Fatal("registry has no required slot with one enabled and one disabled candidate")
+	return "", "", ""
 }
 
 func newPluginsHandler(t *testing.T) (*PluginsHandler, *services.SettingsService, *echo.Echo) {
@@ -149,7 +149,7 @@ func TestTogglePlugin_DisableThenEnable(t *testing.T) {
 	}
 
 	// Disable → 200, response reflects disabled, and it persists to settings.
-	// Uses a non-core plugin so the toggle isn't blocked by the core-area guard.
+	// Uses a plugin whose slot has no minimum, so nothing blocks the toggle.
 	code, v := toggle("timeline", `{"enabled":false}`)
 	if code != http.StatusOK || v.Enabled {
 		t.Fatalf("disable: code=%d enabled=%v", code, v.Enabled)
@@ -170,7 +170,7 @@ func TestTogglePlugin_DisableThenEnable(t *testing.T) {
 	}
 }
 
-func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
+func TestTogglePlugin_RequiredSlotCannotBeEmptied(t *testing.T) {
 	h, svc, e := newPluginsHandler(t)
 	ctx := context.Background()
 
@@ -191,29 +191,39 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 		return rec.Code
 	}
 
-	// The immersive viewers are the only core area left (the admin routes that
-	// used to be single-member core areas are ordinary routes in app.js).
-	// Whichever of the two ships enabled is the area's sole member → locked.
-	sole, sibling := coreAreaSplit(t)
+	// post-viewer is the required slot (the tags route tolerates none); whichever
+	// viewer ships enabled is its sole claimant → locked against being disabled.
+	slot, sole, sibling := requiredSlotSplit(t)
 	if code := toggle(sole, `{"enabled":false}`); code != http.StatusConflict {
-		t.Fatalf("disabling sole viewer %q should 409, got %d", sole, code)
+		t.Fatalf("disabling sole claimant %q of %q should 409, got %d", sole, slot, code)
 	}
 
-	// Enable the sibling, and the first may be disabled — the area stays alive.
+	// Enabling the sibling is the way out: the slot takes a single claimant, so
+	// the switch happens in one call — the sibling comes on and the incumbent
+	// goes off, leaving the slot with exactly one claimant as before.
 	if code := toggle(sibling, `{"enabled":true}`); code != http.StatusOK {
 		t.Fatalf("enabling %q should 200, got %d", sibling, code)
 	}
+	mid, _ := svc.GetAllSettings(ctx)
+	if got := plugins.EnabledInSlot(slot, mid); len(got) != 1 || got[0] != sibling {
+		t.Errorf("after switching, %q should hold only %q, got %v", slot, sibling, got)
+	}
+	// The switched-off viewer accepts a redundant disable (it is already off, so
+	// there is nothing for the guard to protect).
 	if code := toggle(sole, `{"enabled":false}`); code != http.StatusOK {
 		t.Fatalf("disabling %q with %q on should 200, got %d", sole, sibling, code)
 	}
+	// ...and the sibling is the locked sole claimant in its turn.
+	if code := toggle(sibling, `{"enabled":false}`); code != http.StatusConflict {
+		t.Fatalf("disabling sole claimant %q should 409, got %d", sibling, code)
+	}
 	all, _ := svc.GetAllSettings(ctx)
-	if plugins.IsEnabled(sole, all) || !plugins.IsEnabled(sibling, all) {
-		t.Errorf("expected %s on, %s off; got %s=%v %s=%v",
-			sibling, sole, sole, plugins.IsEnabled(sole, all), sibling, plugins.IsEnabled(sibling, all))
+	if got := plugins.EnabledInSlot(slot, all); len(got) != 1 || got[0] != sibling {
+		t.Errorf("slot %q should still hold only %q, got %v", slot, sibling, got)
 	}
 }
 
-func TestTogglePlugin_ExclusiveAreaKeepsAtMostOne(t *testing.T) {
+func TestTogglePlugin_SingleClaimSlotKeepsAtMostOne(t *testing.T) {
 	h, svc, e := newPluginsHandler(t)
 	ctx := context.Background()
 
@@ -239,30 +249,31 @@ func TestTogglePlugin_ExclusiveAreaKeepsAtMostOne(t *testing.T) {
 		t.Fatalf("enabling tags-map should 200, got %d", code)
 	}
 	all, _ := svc.GetAllSettings(ctx)
-	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 1 || got[0] != "tags-map" {
-		t.Fatalf("exclusive area should hold only tags-map, got %v", got)
+	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-map" {
+		t.Fatalf("tags-route should hold only tags-map, got %v", got)
 	}
 
-	// Switching to Graph likewise leaves it the sole enabled member.
+	// Switching to Graph likewise leaves it the sole claimant.
 	if code := toggle("tags-graph", `{"enabled":true}`); code != http.StatusOK {
 		t.Fatalf("enabling tags-graph should 200, got %d", code)
 	}
 	all, _ = svc.GetAllSettings(ctx)
-	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 1 || got[0] != "tags-graph" {
-		t.Fatalf("exclusive area should hold only tags-graph, got %v", got)
+	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-graph" {
+		t.Fatalf("tags-route should hold only tags-graph, got %v", got)
 	}
 
-	// "None" is allowed: disabling the active viz empties the area (not locked).
+	// "None" is allowed for this slot (0-1): disabling the active viz empties it
+	// and hides /tags — unlike post-viewer, whose last claimant is locked.
 	if code := toggle("tags-graph", `{"enabled":false}`); code != http.StatusOK {
 		t.Fatalf("disabling the sole tags viz should 200 (none allowed), got %d", code)
 	}
 	all, _ = svc.GetAllSettings(ctx)
-	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 0 {
-		t.Fatalf("exclusive area should be empty, got %v", got)
+	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 0 {
+		t.Fatalf("tags-route should be empty, got %v", got)
 	}
 }
 
-func TestApplyPreset_SetsStateAndKeepsCoreAreas(t *testing.T) {
+func TestApplyPreset_SetsStateAndKeepsRequiredSlotsFilled(t *testing.T) {
 	h, svc, e := newPluginsHandler(t)
 	ctx := context.Background()
 
@@ -287,9 +298,9 @@ func TestApplyPreset_SetsStateAndKeepsCoreAreas(t *testing.T) {
 	if !plugins.IsEnabled("immersive-sheet", all) || plugins.IsEnabled("immersive", all) {
 		t.Error("minimalistic should enable Sheet and disable Standard")
 	}
-	// …and never empties a core area: some viewer stays enabled.
-	if !plugins.IsEnabled("immersive-sheet", all) && !plugins.IsEnabled("immersive", all) {
-		t.Error("a preset must not leave the immersive core area empty")
+	// …and never empties a required slot: exactly one viewer stays enabled.
+	if got := plugins.EnabledInSlot("post-viewer", all); len(got) != 1 {
+		t.Errorf("a preset must leave post-viewer with one claimant, got %v", got)
 	}
 	// The active preset is recorded.
 	if all[activePresetKey] != "minimalistic" {

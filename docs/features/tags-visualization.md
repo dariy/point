@@ -1,8 +1,9 @@
 # Tags Visualization (`/tags`) — Atlas, Map, Graph
 
-The public `/tags` route is a **single-claim plugin slot** (`tags-route`): exactly one
-of three mutually-exclusive plugins (`Area: "tags-viz"`, `Exclusive: true` in
-`api/internal/plugins/registry.go`) owns it, selectable from `/light/plugins`.
+The public `/tags` route is a **single-claim plugin slot** (`tags-route`, cardinality
+`0-1` in `SlotCardinality` — see `api/internal/plugins/registry.go`): one of three
+plugins owns it, selectable from `/light/plugins`, and with none enabled the route is
+hidden altogether.
 
 ## The three providers
 
@@ -75,7 +76,8 @@ fallback; `prefers-reduced-motion` is respected.
 - **Year nodes are only explicit `kind='year'` tags** — never derived from a post's
   `created_at`.
 - **Exclusivity via the plugin system** rather than a `tags_module` setting — the
-  registry's `Exclusive`/`Area` mechanism is the generic form of the old radio setting.
+  slot's cardinality is the generic form of the old radio setting, shared with the
+  `post-viewer` slot (which differs only in that it may not be left empty).
 
 - **The Atlas filters places, the map filters markers** — `tags-map` scopes its markers
   with a flat per-tag count (`ListMapTagsForYearRange`), so a country tagged only through

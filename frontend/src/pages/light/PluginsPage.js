@@ -15,9 +15,13 @@
  * the row. The geometry is frontend-owned (see _renderMap) — the backend
  * registry knows slots, not where a slot sits on a page.
  *
- * Core areas (e.g. the admin pages, and the immersive viewer pair) must keep at
- * least one enabled plugin: the backend marks the sole survivor `locked` and
- * rejects disabling it; this page renders that toggle read-only.
+ * How many plugins a slot takes is the slot's own rule (`slot_rule` on each row,
+ * mirroring plugins.Cardinality on the backend): a single-claim slot turns its
+ * candidates into a radio group — enabling one flips the others off — and a slot
+ * that requires a claimant has its last enabled one marked `locked` by the
+ * backend, rendered read-only here. The tags visualizations (`tags-route`, 0-1)
+ * and the immersive viewers (`post-viewer`, exactly 1) are the two such slots;
+ * both are switched the same way, by enabling the candidate you want.
  *
  * This page is the one admin surface that reveals disabled plugins; the public
  * site never sees them (server-side enabled-only manifest + 404'd chunks/routes).
@@ -32,6 +36,12 @@ import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
+
+// Slot cardinalities that make a slot's candidates alternatives (at most one
+// enabled) and that keep a slot occupied (its last claimant can't be turned
+// off). Values mirror the plugins.Cardinality constants in the Go registry.
+const SINGLE_CLAIM_SLOT = new Set(["0-1", "1"]);
+const REQUIRED_SLOT = new Set(["1", "1+"]);
 
 // Group headings keyed by Descriptor.Type, rendered in this order.
 const TYPE_GROUPS = [
@@ -330,10 +340,10 @@ export default class PluginsPage extends Component {
       </section>`;
   }
 
-  /** Plugins in the same area as `area` (immersive pair, single admin pages, …). */
-  _areaSize(area) {
-    if (!area) return 0;
-    return this.state.plugins.filter((p) => p.area === area).length;
+  /** How many plugins are candidates for `slot` (tags trio, immersive pair, …). */
+  _slotSize(slot) {
+    if (!slot) return 0;
+    return this.state.plugins.filter((p) => p.slot === slot).length;
   }
 
   _renderPlugin(plugin) {
@@ -341,7 +351,11 @@ export default class PluginsPage extends Component {
     const editing = this.state.editingPreset !== null;
 
     const meta = [];
-    if (plugin.core) meta.push(`<span class="plugin-badge">Core</span>`);
+    // Rows competing for the same single-claim slot say so, so it is obvious why
+    // enabling one switched another off.
+    if (SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1) {
+      meta.push(`<span class="plugin-badge">Alternative</span>`);
+    }
     if (plugin.slot) meta.push(`<span class="plugin-meta-text">slot: ${escapeHtml(plugin.slot)}</span>`);
     if (Array.isArray(plugin.routes) && plugin.routes.length) {
       meta.push(`<span class="plugin-meta-text">${escapeHtml(plugin.routes.join(", "))}</span>`);
@@ -371,10 +385,16 @@ export default class PluginsPage extends Component {
     }
 
     if (plugin.locked) {
+      // The lock is not a dead end when the slot has other candidates (the
+      // immersive pair): enabling one of them switches over and unlocks this row.
+      const switchable = this._slotSize(plugin.slot) > 1;
+      const lockHint = switchable
+        ? "In use — enable another plugin for this slot to switch to it"
+        : "Required — this slot must keep an enabled plugin";
       return `${settingsLink}
-        <span class="plugin-pill plugin-pill-locked" title="Required — at least one plugin must stay enabled in this area">
+        <span class="plugin-pill plugin-pill-locked" title="${escapeHtml(lockHint)}">
           <span class="plugin-lock" aria-hidden="true">🔒</span>
-          <span class="setting-pill-label">Required</span>
+          <span class="setting-pill-label">${switchable ? "In use" : "Required"}</span>
         </span>`;
     }
 
@@ -390,8 +410,8 @@ export default class PluginsPage extends Component {
   _renderInclude(plugin) {
     const list = this.state.presets[this.state.editingPreset] || [];
     const included = list.includes(plugin.id);
-    // Single-member core areas (admin pages) are always on regardless of preset.
-    const forced = plugin.core && this._areaSize(plugin.area) <= 1;
+    // Sole candidate for a slot that requires one: on regardless of the preset.
+    const forced = REQUIRED_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) <= 1;
 
     return `
       <label class="setting-pill plugin-pill plugin-include">
@@ -568,11 +588,11 @@ export default class PluginsPage extends Component {
     try {
       const updated = await setPluginEnabled(id, enabled);
       let plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
-      // Exclusive area: enabling one member disables its peers server-side; mirror
-      // that here so the sibling toggles flip off without a reload.
-      if (enabled && updated.exclusive && updated.area) {
+      // Single-claim slot: enabling one candidate disables its peers server-side;
+      // mirror that here so the sibling toggles flip off without a reload.
+      if (enabled && updated.slot && SINGLE_CLAIM_SLOT.has(updated.slot_rule)) {
         plugins = plugins.map((p) =>
-          p.id !== id && p.area === updated.area ? { ...p, enabled: false } : p,
+          p.id !== id && p.slot === updated.slot ? { ...p, enabled: false } : p,
         );
       }
       const pending = { ...this.state.pending };
@@ -595,7 +615,7 @@ export default class PluginsPage extends Component {
         type: "success",
       });
     } catch (err) {
-      // Revert the optimistic checkbox state on failure (e.g. locked core area).
+      // Revert the optimistic checkbox state on failure (e.g. a locked claimant).
       const pending = { ...this.state.pending };
       delete pending[id];
       this.setState({ pending });
@@ -604,14 +624,14 @@ export default class PluginsPage extends Component {
   }
 
   /**
-   * Recompute the `locked` flag client-side after a toggle so the last enabled
-   * plugin in a core area immediately becomes read-only without a reload.
+   * Recompute the `locked` flag client-side after a toggle so the last claimant
+   * of a required slot immediately becomes read-only without a reload.
    */
   _withLocks(plugins) {
     return plugins.map((p) => {
-      if (!p.core) return p;
-      const enabledInArea = plugins.filter((q) => q.area === p.area && q.enabled);
-      return { ...p, locked: p.enabled && enabledInArea.length === 1 };
+      if (!REQUIRED_SLOT.has(p.slot_rule)) return p;
+      const enabledInSlot = plugins.filter((q) => q.slot === p.slot && q.enabled);
+      return { ...p, locked: p.enabled && enabledInSlot.length === 1 };
     });
   }
 

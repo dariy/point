@@ -33,7 +33,8 @@
 import { PostCard } from '../components/public/PostCard.js';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
 import { store } from '../store.js';
-import { stepZoom, requestZoom } from '../utils/gridFit.js';
+import { stepZoom, requestZoom, zoomCapacity } from '../utils/gridFit.js';
+import { flipGrid } from '../utils/gridFlip.js';
 
 export class GridPager {
   /**
@@ -322,9 +323,33 @@ export class GridPager {
   _zoomBy(delta) {
     const grid = this._o.gridMount()?.querySelector('.posts-grid');
     if (!grid) return;
-    stepZoom(grid, delta); // CSS-only: pins columns + squares cards, no remount
+    // CSS-only: pins columns + rows + squares cards, no remount. Both halves of
+    // the new geometry go inside the FLIP so the cards glide into it rather
+    // than cutting to it — see utils/gridFlip.js.
+    flipGrid(grid, () => {
+      stepZoom(grid, delta);
+      this._trimToCapacity(grid);
+    });
     clearTimeout(this._zoomCommitTimer);
     this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
+  }
+
+  /**
+   * Hide the cards the stepped-to geometry has no room for.
+   *
+   * A step towards fewer columns makes the cards bigger, so the page that was
+   * loaded no longer fits — the refit drops the tail of it a moment later.
+   * Hiding those cards on the step means the grid goes straight to the shape it
+   * is going to keep, instead of showing an overflowing one in between. The
+   * refit clears the marks (PostGrid.reconcile), so nothing stays hidden if it
+   * turns out to fit after all.
+   */
+  _trimToCapacity(grid) {
+    const capacity = zoomCapacity();
+    if (!capacity) return;
+    grid.querySelectorAll('.post-card-slot').forEach((slot, i) => {
+      slot.classList.toggle('is-zoom-surplus', i >= capacity);
+    });
   }
 
   /** Refit per_page (and page) to the new column count — the remounting step. */
@@ -341,7 +366,11 @@ export class GridPager {
     // Footer slider sets an absolute column count; commit is debounced here
     // like every other zoom path.
     this._onZoomRequest = (e) => {
-      requestZoom(e.detail?.cols || 0);
+      const grid = this._o.gridMount()?.querySelector('.posts-grid');
+      flipGrid(grid, () => {
+        requestZoom(e.detail?.cols || 0, grid);
+        if (grid) this._trimToCapacity(grid);
+      });
       clearTimeout(this._zoomCommitTimer);
       this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
     };

@@ -276,6 +276,33 @@ var schema = []struct{ name, sql string }{
 				'storage_quota_mb'
 			)`,
 	},
+	{
+		// The post-viewer slot takes exactly one plugin (plugins.SlotCardinality),
+		// which the toggle endpoint enforces from here on. Installs configured
+		// while both viewers could be on at once are reconciled to the standard
+		// viewer — the one the frontend already mounted when both were enabled
+		// (single-claim slots resolve in registry order), so nothing visibly
+		// changes for those blogs.
+		"reconcile_post_viewer_single_claim",
+		`UPDATE blog_settings SET value = 'false', updated_at = CURRENT_TIMESTAMP
+			 WHERE key = 'plugin.immersive-sheet.enabled' AND value = 'true'
+			   AND EXISTS (SELECT 1 FROM blog_settings
+			                WHERE key = 'plugin.immersive.enabled' AND value = 'true')`,
+	},
+	{
+		// ...and the same slot may not be left empty, which used to render an
+		// immersive post as a blank page. Only touches installs whose viewer
+		// settings were already seeded, so a fresh database still gets its
+		// defaults from the registry at setup time.
+		"reconcile_post_viewer_requires_one",
+		`INSERT OR REPLACE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.immersive.enabled', 'true', 'string', CURRENT_TIMESTAMP
+			  WHERE EXISTS (SELECT 1 FROM blog_settings
+			                 WHERE key IN ('plugin.immersive.enabled', 'plugin.immersive-sheet.enabled'))
+			    AND NOT EXISTS (SELECT 1 FROM blog_settings
+			                     WHERE key IN ('plugin.immersive.enabled', 'plugin.immersive-sheet.enabled')
+			                       AND value = 'true')`,
+	},
 }
 
 // Run applies all pending schema migrations, then the special multi-step tag

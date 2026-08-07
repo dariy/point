@@ -32,14 +32,12 @@ export class PostGrid extends Component {
   }
 
   afterRender() {
-    const { posts = [], showViewCount = false, tagSlug, tagPage } = this.props;
+    const { posts = [] } = this.props;
     const heroIndex = posts.findIndex((p) => p.is_featured);
 
-    posts.forEach((post, i) => {
+    this._cards = posts.map((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
-      if (slot) {
-        this.mountChild(PostCard, slot, { post, showViewCount, isHero: i === heroIndex, tagSlug, tagPage });
-      }
+      return slot ? this.mountChild(PostCard, slot, this._cardProps(post, i, heroIndex)) : null;
     });
 
     const grid = this.container.querySelector('.posts-grid');
@@ -60,5 +58,69 @@ export class PostGrid extends Component {
 
   beforeUnmount() {
     if (this._gridKeyHandler) document.removeEventListener('keydown', this._gridKeyHandler);
+  }
+
+  _cardProps(post, i, heroIndex) {
+    const { showViewCount = false, tagSlug, tagPage } = this.props;
+    return { post, showViewCount, isHero: i === heroIndex, tagSlug, tagPage };
+  }
+
+  /**
+   * Update the grid in place for a post list that only grew or shrank at the
+   * end — the per_page refit case, where the viewport now holds a different
+   * number of the same posts.
+   *
+   * The cards that are staying keep their DOM nodes, so their images stay
+   * decoded and never repaint; a re-render would blank them for a frame (the
+   * flash GridPager.finishHandoff holds a ghost to avoid) and the host page
+   * would have to crossfade over it, which reads as a page change rather than
+   * a resize.
+   *
+   * @param {object[]} posts  the refit list.
+   * @returns {boolean} false when the lists diverge — caller re-renders instead.
+   */
+  reconcile(posts = []) {
+    const current = this.props.posts || [];
+    const grid = this.container.querySelector('.posts-grid');
+    // An empty list on either side is the empty-state markup, not a grid.
+    if (!grid || !current.length || !posts.length || !this._cards) return false;
+    // The hero spans a whole row; moving it re-flows everything below, so that
+    // is a re-render, not an append.
+    if (posts.findIndex((p) => p.is_featured) !== current.findIndex((p) => p.is_featured)) return false;
+    // Only a common prefix can be reused — anything else is a different page.
+    const shared = Math.min(current.length, posts.length);
+    for (let i = 0; i < shared; i++) {
+      if (posts[i].id !== current[i].id) return false;
+    }
+
+    const heroIndex = posts.findIndex((p) => p.is_featured);
+    for (let i = current.length - 1; i >= posts.length; i--) {
+      this._dropCard(i);
+    }
+    for (let i = current.length; i < posts.length; i++) {
+      const slot = document.createElement('div');
+      slot.className = `post-card-slot${i === heroIndex ? ' featured-post' : ''} is-entering`;
+      slot.dataset.index = String(i);
+      slot.addEventListener('animationend', () => slot.classList.remove('is-entering'), { once: true });
+      grid.appendChild(slot);
+      this._cards[i] = this.mountChild(PostCard, slot, this._cardProps(posts[i], i, heroIndex));
+    }
+    // A step that shrank the grid may have hidden cards it was about to drop;
+    // whatever survived the refit belongs on screen (see .is-zoom-surplus).
+    grid.querySelectorAll('.is-zoom-surplus').forEach((el) => el.classList.remove('is-zoom-surplus'));
+    this.props = { ...this.props, posts };
+    return true;
+  }
+
+  /** Unmount the card at `i` and remove its slot, keeping _children in step. */
+  _dropCard(i) {
+    const card = this._cards[i];
+    this._cards.length = i;
+    if (!card) return;
+    const slot = card.container;
+    card.unmount();
+    const at = this._children.indexOf(card);
+    if (at !== -1) this._children.splice(at, 1);
+    slot.remove();
   }
 }

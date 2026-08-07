@@ -178,21 +178,7 @@ export default class SearchPage extends Component {
       }),
     );
 
-    if (pages > 1) {
-      this._postChildren.push(
-        this.mountChild(Pagination, '#pagination-mount', {
-          page,
-          pages,
-          total,
-          onPage: (p) => ViewContext.update({ page: p }),
-        }),
-      );
-    }
-
-    // Publish the page state for the footer paginator — on desktop and
-    // phone-landscape it replaces the in-flow paginator above (CSS swaps them).
-    store.set('pagination', pages > 1 ? { page, pages, total } : null);
-
+    this._syncPagination({ page, pages, total });
     this._pager.arm({ page, pages, total });
 
     // After the real grid has laid out, fit per_page to the viewport — then keep
@@ -200,6 +186,45 @@ export default class SearchPage extends Component {
     // (see _watchChrome).
     requestAnimationFrame(() => this._reconcilePerPage());
     this._watchChrome();
+  }
+
+  /**
+   * Mount, update or drop the in-flow paginator, and publish the same state for
+   * the footer paginator (on desktop and phone-landscape CSS shows that one
+   * instead). Kept apart from _mountPostContent so a refit can re-point it
+   * without the grid beside it being rebuilt.
+   */
+  _syncPagination({ page, pages, total }) {
+    const existing = this._postChildren[1];
+    if (pages > 1) {
+      const props = { page, pages, total, onPage: (p) => ViewContext.update({ page: p }) };
+      if (existing) existing.setProps(props);
+      else this._postChildren[1] = this.mountChild(Pagination, '#pagination-mount', props);
+    } else if (existing) {
+      existing.unmount();
+      const at = this._children.indexOf(existing);
+      if (at !== -1) this._children.splice(at, 1);
+      this._postChildren.length = 1;
+    }
+
+    store.set('pagination', pages > 1 ? { page, pages, total } : null);
+  }
+
+  /**
+   * Apply a per_page refit without remounting anything: hand the grid its new
+   * tail, re-point the paginator, re-arm the pager on the new page count.
+   *
+   * @returns {boolean} false when the grid could not take the new list in place
+   *   (the lists diverge), leaving the caller to fall back to a remount.
+   */
+  _applyRefit() {
+    const grid = this._postChildren?.[0];
+    const { posts = [], page, pages, total } = this.state.data || {};
+    if (!grid?.reconcile?.(posts)) return false;
+    this._syncPagination({ page, pages, total });
+    this._pager.arm({ page, pages, total });
+    this._watchChrome();
+    return true;
   }
 
   _clearPostContent() {
@@ -223,11 +248,18 @@ export default class SearchPage extends Component {
     const vc = ViewContext.current();
     const gridMount = this.$('#grid-mount');
 
+    // A refit is a resize of the current view, not a move to another one: the
+    // posts already on screen stay exactly where they are and only the tail of
+    // the list changes. Crossfading it blanked the grid and read as a page
+    // turn — it updates in place instead (_applyRefit).
+    const refit = this._refitRefresh;
+    this._refitRefresh = false;
+
     const seamless = this._pager.takeSeamless();
     const fromSwipe = seamless || this._pager.isMidSwipe();
 
     let fadeOut = Promise.resolve();
-    if (gridMount && !fromSwipe) {
+    if (gridMount && !fromSwipe && !refit) {
       gridMount.style.transition = 'opacity 0.2s ease-in';
       gridMount.style.opacity = '0';
       fadeOut = new Promise((resolve) => setTimeout(resolve, 200));
@@ -247,6 +279,9 @@ export default class SearchPage extends Component {
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
+    // A refit keeps every card that is already up — it stops here rather than
+    // rebuilding the grid to add or drop the tail of the list.
+    if (refit && this._applyRefit()) return;
     this._clearPostContent();
     this._mountPostContent();
 
@@ -302,6 +337,9 @@ export default class SearchPage extends Component {
     const firstIndex = (vc.page - 1) * current;
     const newPage = Math.floor(firstIndex / next) + 1;
     this._fitOwned = true;
+    // Tells the refresh this update provokes that it is a refit, not a
+    // navigation — see _refreshPostContent.
+    this._refitRefresh = true;
     ViewContext.update({ per_page: next, page: newPage }, { replace: true });
   }
 
@@ -366,6 +404,9 @@ export default class SearchPage extends Component {
   async _load() {
     const vc = ViewContext.current();
     this._loadedVc = vc;
+    // A full render rebuilds the grid anyway; don't leave the flag set for
+    // whatever refresh comes next.
+    this._refitRefresh = false;
 
     let titleQuery = vc.query || '';
     if (vc.tag) titleQuery += ` in ${vc.tag}`;

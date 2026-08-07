@@ -215,10 +215,11 @@ async function bootstrap() {
 // (absent)      →  requires authentication (authGuard redirect)
 
 // The tag-viz plugins that may own /tags, in the order the backend resolves
-// them (registry order). At most one is enabled — the exclusive "tags-viz" area.
+// them (registry order). At most one is enabled — the `tags-route` slot takes a
+// single claimant (plugins.SlotCardinality on the backend).
 const TAGS_VIZ_PLUGINS = ["tags-atlas", "tags-map", "tags-graph"];
 
-// Resolve the lazy module for the /tags route. `/tags` is an exclusive slot
+// Resolve the lazy module for the /tags route. `/tags` is a single-claim slot
 // (`tags-route`): the single enabled tag-visualization plugin owns it — that
 // enabled plugin IS the selection (the old `tags_module` setting is gone).
 // Mirrors the backend gate in tagsModuleAccessible: no enabled viz (or

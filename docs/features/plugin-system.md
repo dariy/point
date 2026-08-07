@@ -14,7 +14,8 @@ All five phases of the original refactor are done.
 
 - `Descriptor` + static `Registry` slice (~30 plugins). Fields: `ID`, `Type`
   (route / slot / enhancer / service), `Slot`, `Routes`, `EntryName`, `DefaultEnabled`,
-  `Title`, `Area`, `Exclusive`, `Core`.
+  `Title`. How many plugins may claim a slot is not a descriptor field — it belongs
+  to the slot, in the `SlotCardinality` table (`0+`, `0-1`, `1`, `1+`).
 - Enabled state persists in `blog_settings` as `plugin.<id>.enabled` (string
   `"true"`/`"false"`); absent key falls back to `DefaultEnabled`, so existing installs
   need no migration. Fresh installs are seeded in `setup.go`.
@@ -51,12 +52,14 @@ All five phases of the original refactor are done.
 
 ### Plugin catalog (registry as of 2026-07)
 
-- **Route / tags-viz** (`Area: "tags-viz"`, `Exclusive` — exactly one claims `/tags`):
-  `tags-atlas` (default), `tags-map` (Leaflet world map), `tags-graph` (force graph).
+- **Route / tags-viz** (slot `tags-route`, cardinality `0-1` — one claims `/tags`,
+  or none and the route is hidden): `tags-atlas` (default), `tags-map` (Leaflet
+  world map), `tags-graph` (force graph).
 - **Slots**: `timeline`, `tag-cloud` (home-explore `ExploreBlock`), `nav-menu`,
   `breadcrumbs`, `public-header`, `public-footer`, `distraction-free`
   (post-list-tools), `immersive-share`, `slideshow`.
-- **Enhancers**: `immersive` / `immersive-sheet` (exclusive pair, `Area: "immersive"`),
+- **Enhancers**: `immersive` / `immersive-sheet` (slot `post-viewer`, cardinality
+  `1` — exactly one viewer, always),
   `custom-css`, `comments` (remark42), `post-navigation`.
 - **Admin routes** (`Core`): `media-library`, `admin-posts-list`, `admin-home`.
 - **Services**: `instagram`, `ai-analysis`, `passkeys`, `api-keys`, `backups`,
@@ -95,9 +98,15 @@ old release for exactly that.
    chunks are content-hashed; one invocation can't apply both entry-name policies. Code
    shared between core and plugins is duplicated across the two graphs; acceptable since
    plugins are leaf features.
-5. **`Core: true`** marks plugins whose absence leaves the admin unusable; the Plugins
-   page treats them accordingly. `Exclusive`/`Area` model radio-button groups
-   (tags-viz, immersive variants).
+5. **Cardinality is a property of the slot, not of the plugins** — `SlotCardinality`
+   says how many enabled plugins a region takes (`0+` default, `0-1`, `1`, `1+`), and
+   every rule follows from it: a single-claim slot (`0-1`, `1`) makes its candidates a
+   radio group — enabling one switches the peers off (`SlotPeers`) — and a slot that
+   requires a claimant (`1`, `1+`) locks its last enabled one (`IsLockedOff` → 409).
+   `tags-route` is `0-1` (none = /tags hidden), `post-viewer` is `1` (an immersive post
+   renders nothing else). Whole-configuration writes go through `NormalizeSlots`, which
+   trims and refills slots to satisfy the same rules; installs configured before a rule
+   existed are reconciled once by a migration, the way `tags_module` was.
 
 ## Notes for future development
 

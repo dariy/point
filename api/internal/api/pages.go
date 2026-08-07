@@ -1194,16 +1194,16 @@ func getMinTagPostsSetting(settings map[string]string) int64 {
 const defaultTagsVisibility = "hidden"
 
 // tagsModuleAccessible reports whether the active tag-visualization plugin may be
-// served for the given request. Which viz is active is the sole enabled member
-// of the exclusive "tags-viz" area (tags-atlas/tags-map/tags-graph); `want` lists
-// the plugin ids the calling endpoint can render (the graph endpoint backs both
-// the atlas and graph plugins).
+// served for the given request. Which viz is active is the enabled claimant of
+// the single-claim "tags-route" slot (tags-atlas/tags-map/tags-graph); `want`
+// lists the plugin ids the calling endpoint can render (the graph endpoint backs
+// both the atlas and graph plugins).
 //
 // Rules: no enabled viz hides the feature from everyone. Otherwise admins always
 // have access, while the public sees it only when tags_visibility is "all".
 func tagsModuleAccessible(settings map[string]string, want []string, publicOnly bool) bool {
 	active := ""
-	if ids := plugins.EnabledInArea("tags-viz", settings); len(ids) > 0 {
+	if ids := plugins.EnabledInSlot("tags-route", settings); len(ids) > 0 {
 		active = ids[0]
 	}
 	if active == "" {

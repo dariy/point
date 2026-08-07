@@ -612,6 +612,16 @@ body {
     display: none;
 }
 
+/* Collapsed over the page you are on. The active item is the usual trace of
+   where you are and it is hidden now, so the group header carries it instead —
+   otherwise collapsing Manage while inside it leaves the nav showing nothing
+   as current. */
+.nav-group.is-collapsed.has-active .nav-group-title,
+.nav-group.is-collapsed.has-active .toggle-icon {
+    opacity: 0.9;
+    color: var(--sidebar-text-hover);
+}
+
 /* ===========================
    Admin Bottom Bar (mobile)
    =========================== */

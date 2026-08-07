@@ -11,11 +11,19 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 };
-globalThis.window = { innerWidth: 1200, innerHeight: 800, getComputedStyle: () => ({}) };
+globalThis.window = {
+  innerWidth: 1200, innerHeight: 800, getComputedStyle: () => ({}),
+  dispatchEvent() {}, // applyZoomVar announces every change to the footer slider
+};
+globalThis.CustomEvent = class { constructor(type, init) { Object.assign(this, { type }, init); } };
+const bodyVars = new Map();
 globalThis.document = {
   body: {
     classList: { add() {}, remove() {} },
-    style: { setProperty() {}, removeProperty() {} },
+    style: {
+      setProperty(k, v) { bodyVars.set(k, v); },
+      removeProperty(k) { bodyVars.delete(k); },
+    },
     appendChild() {}, // tokenPx() appends a measurement probe here
   },
   createElement: () => ({ style: {}, remove() {}, offsetWidth: 0 }),
@@ -23,7 +31,10 @@ globalThis.document = {
   querySelector: () => null,
 };
 
-const { getZoom, setZoom, clampZoom, maxZoomCols, createFitLatch } = await import('../src/utils/gridFit.js');
+const {
+  getZoom, setZoom, clampZoom, maxZoomCols, createFitLatch,
+  applyZoomVar, applyRowsVar, zoomCapacity,
+} = await import('../src/utils/gridFit.js');
 
 describe('grid zoom', () => {
   beforeEach(() => { store.clear(); });
@@ -53,6 +64,46 @@ describe('grid zoom', () => {
     assert.equal(clampZoom(0), 1);       // never below 1
     window.innerWidth = 1200;
     assert.equal(clampZoom(4), 4);       // within range, untouched
+  });
+});
+
+// The row count is pinned so the grid holds its final shape between a zoom step
+// and the refit that fills it — without it the cards still on screen share the
+// whole viewport height as one stretched row until the refetch lands.
+describe('zoom row pinning', () => {
+  beforeEach(() => { store.clear(); bodyVars.clear(); applyRowsVar(0); });
+
+  test('applyRowsVar publishes the row count and 0 withdraws it', () => {
+    applyRowsVar(2);
+    assert.equal(bodyVars.get('--posts-grid-rows'), '2');
+    applyRowsVar(0);
+    assert.equal(bodyVars.has('--posts-grid-rows'), false);
+  });
+
+  test('zoomCapacity is columns × rows, and 0 until both are known', () => {
+    applyRowsVar(2);
+    assert.equal(zoomCapacity(), 0);     // no zoom ⇒ no pinned geometry
+    setZoom(4);
+    assert.equal(zoomCapacity(), 8);
+    applyRowsVar(0);
+    assert.equal(zoomCapacity(), 0);     // rows unknown ⇒ nothing to hold to
+  });
+
+  test('capacity follows the clamped column count, not the stored one', () => {
+    window.innerWidth = 375;             // phone: maxZoomCols is 2
+    setZoom(5);
+    applyRowsVar(3);
+    assert.equal(zoomCapacity(), 6);     // 2 × 3, not 5 × 3
+    window.innerWidth = 1200;
+  });
+
+  test('leaving zoom releases the row tracks too', () => {
+    setZoom(3);
+    applyRowsVar(2);
+    setZoom(0);
+    applyZoomVar();
+    assert.equal(bodyVars.has('--posts-grid-rows'), false);
+    assert.equal(zoomCapacity(), 0);
   });
 });
 
