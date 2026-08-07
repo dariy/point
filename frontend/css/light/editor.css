@@ -936,6 +936,173 @@ textarea.is-maximized,
     display: none;
 }
 
+/* ---------------------------
+   Arrange mode
+   Fields collapse to labelled bars with a drag handle so the layout — order on
+   both sides, and which side each field is on — can be rearranged without the
+   field bodies getting in the way of a drag.
+   --------------------------- */
+.arrange-bar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--surface-card);
+    border-bottom: var(--border-width-thick, 2px) solid var(--color-primary);
+    box-shadow: var(--shadow-lg);
+}
+
+/* display:flex would otherwise win over the hidden attribute */
+.arrange-bar[hidden] {
+    display: none;
+}
+
+.arrange-bar-hint {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-sm);
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+}
+
+.arrange-bar-hint-detail {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.details-group-handle {
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    color: var(--text-muted);
+    cursor: grab;
+    /* The gesture owns the pointer — without this a touch-drag scrolls instead */
+    touch-action: none;
+}
+
+.details-group-handle:active {
+    cursor: grabbing;
+}
+
+.details-group-handle:hover,
+.details-group-handle:focus-visible {
+    color: var(--color-primary);
+}
+
+.details-group-handle svg {
+    display: block;
+}
+
+.editor-layout.is-arranging .details-group-handle {
+    display: flex;
+}
+
+/* Every field reads the same while arranging, pinned or not */
+.editor-layout.is-arranging .details-group {
+    margin-bottom: var(--spacing-xs);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+}
+
+.editor-layout.is-arranging .details-group-body,
+.editor-layout.is-arranging .details-group > summary::after {
+    display: none;
+}
+
+.editor-layout.is-arranging .details-group > summary.details-group-summary-row {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: default;
+}
+
+/* The value is the only thing identifying a collapsed field — keep it shown */
+.editor-layout.is-arranging .details-group[open] > summary .details-group-summary {
+    display: block;
+}
+
+.editor-layout.is-arranging .details-group.is-pinned .details-group-title {
+    font-size: var(--font-size-sm);
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text-primary);
+}
+
+.editor-layout.is-arranging .details-pin-btn {
+    opacity: 1;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+/* Both lists stay aimable even when empty, so one side can be filled from the other */
+.editor-layout.is-arranging .pinned-fields,
+.editor-layout.is-arranging .details-panel-body {
+    display: block;
+    min-height: var(--size-2-75);
+    outline: var(--border-width) dashed var(--border-primary);
+    outline-offset: var(--spacing-xs);
+    border-radius: var(--border-radius);
+}
+
+.reorder-indicator {
+    height: var(--ve-drop-indicator-height);
+    margin: var(--spacing-xs) 0;
+    background: var(--color-primary);
+    border-radius: var(--ve-drop-indicator-border-radius);
+    pointer-events: none;
+}
+
+.details-group.is-dragging {
+    opacity: 0.4;
+}
+
+/* Names the canvas list while arranging; the panel has its own "Details" header */
+.arrange-list-label {
+    display: none;
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.editor-layout.is-arranging .arrange-list-label {
+    display: block;
+}
+
+@media (max-width: 64em) {
+    /* The Details panel is a bottom sheet here, and a sheet would cover the
+       canvas list it has to be dragged to. While arranging it drops back into
+       the page flow, below the canvas list: one scrollable surface holding both. */
+    .editor-layout.is-arranging .editor-details-panel {
+        position: static;
+        transform: none;
+        max-height: none;
+        margin-top: var(--spacing-lg);
+        border: var(--border-width) solid var(--border-primary);
+        border-radius: var(--border-radius);
+        box-shadow: none;
+    }
+
+    .editor-layout.is-arranging .details-backdrop,
+    .editor-layout.is-arranging .details-panel-close {
+        display: none;
+    }
+}
+
 .details-panel-empty {
     margin: 0;
     padding: var(--spacing-md);

@@ -25,16 +25,26 @@ learn, a setting to forget).
   Security, System).
 - **Bottom tab bar on phones** (`AdminBottomBar.js`) with a prominent center ➕; the
   editor goes full-screen over it; the hamburger drawer is gone on phones.
-- **Editor** (`PostEditPage.js`):
-  - Content (Text/Visual) always owns the canvas. Every other post property — title,
-    tags, status & visibility, schedule, slug, excerpt, immersive mode, custom CSS,
-    Instagram — is one collapsible group with a one-line summary, living either in the
-    **Details** rail (wide) / bottom sheet (narrow) or, when **pinned**, on the canvas.
-  - **Pinning** (`PIN_ORDER`, `point:editor:pinned`): every group header carries a pin
-    toggle; pinned groups move into `#pinned-fields` above the content editor, in the
-    canonical order, and the choice persists across posts and sessions. The default
-    (title + tags pinned) is the pre-pinning canvas. Toggling *moves the live element*
-    rather than re-rendering, so unflushed edits, focus and listeners survive.
+- **Editor** (`PostEditPage.js`): every block is one group — content (Text/Visual),
+  title, tags, status & visibility, schedule, slug, excerpt, immersive mode, custom
+  CSS, Instagram — rendered by `_renderGroup()` with a one-line summary, a drag handle
+  and (except content) a pin.
+  - **Pinning** (`point:editor:pinned`): pinned groups sit on the canvas in
+    `#pinned-fields`, the rest in the **Details** rail (wide) / bottom sheet (narrow).
+    Content is always pinned — it is what the page is for — so it has no pin and a drop
+    into Details is refused.
+  - **Order** (`point:editor:field-order`): one sequence spanning both sides, so a
+    field pinned and unpinned again lands back where it belongs. `DEFAULT_ORDER` seeds
+    it and orders anything a stored one doesn't mention.
+  - **Arrange mode** (menu → Arrange fields, Esc or Done to leave): fields collapse to
+    labelled bars with drag handles. Drag to reorder within a list or across the two —
+    a cross-list drop says the same thing the pin does. Dragging is pointer-based
+    (`utils/pointerReorder.js`) rather than HTML5 DnD, which does not exist on iOS;
+    handles also take ArrowUp/ArrowDown. Below 64em the sheet drops into the page flow
+    for the duration, since a sheet would cover the list being dragged to.
+  - Both preferences are global — how this user works, not a property of one post.
+    Pinning and dragging *move the live element* rather than re-rendering, so unflushed
+    edits, focus and listeners survive.
   - **Autosave chip + contextual Publish ▾ / Update** split button — see
     [publishing.md](publishing.md) for the save model.
   - **Live preview pane** on wide screens (`showLivePreview`, `_isWide()`): renders
@@ -68,5 +78,6 @@ learn, a setting to forget).
 - Any new list/table needs its card form at phone widths and always-visible actions on
   coarse pointers.
 - New editor fields belong in a Details group, not directly on the canvas — render them
-  through `_renderGroup()` so they get a summary and a pin like every other property.
-  Plugin-provided groups need no extra wiring: the pin handler is delegated.
+  through `_renderGroup()` so they get a summary, a pin and a drag handle like every
+  other block. Plugin-provided groups need no extra wiring: the pin and reorder
+  handlers are delegated, and a key missing from `DEFAULT_ORDER` sorts last.

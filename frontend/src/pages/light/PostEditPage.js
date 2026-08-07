@@ -30,8 +30,9 @@ import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { defaultPostTitle } from "../../utils/formatters.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, PIN_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, PIN_SVG, GRIP_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
+import { attachPointerReorder } from "../../utils/pointerReorder.js";
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
@@ -41,16 +42,30 @@ const AUTOSAVE_BUSY_MS = 30_000;
  * (`.editor-main` → `#pinned-fields`), an unpinned one in the Details panel;
  * the pin button in each group's header row moves it between the two.
  *
- * PIN_ORDER fixes the sequence in both places, so a group always lands back in
- * the same spot. A group not listed here — a future plugin section rendering
- * through `_renderGroup()` — is ordered last but is pinnable like the rest.
+ * Two preferences describe the editor's layout, both persisted globally because
+ * they are how this user works, not something about one post:
+ *   - the pinned set  (`point:editor:pinned`)      — which side a field is on
+ *   - the field order (`point:editor:field-order`) — one sequence spanning both
+ *     sides, so a field pinned and unpinned again lands back where it belongs
+ *
+ * DEFAULT_ORDER seeds the order and orders anything missing from a stored one —
+ * a future plugin section rendering through `_renderGroup()` sorts last and is
+ * pinnable and movable like the rest, with no extra wiring.
  */
-const PIN_ORDER = ["title", "tags", "status", "schedule", "slug", "excerpt", "immersive", "css", "instagram"];
+const DEFAULT_ORDER = ["title", "tags", "content", "status", "schedule", "slug", "excerpt", "immersive", "css", "instagram"];
 
 /** Canvas layout before pinning existed: title and tags, everything else in Details. */
 const DEFAULT_PINNED = ["title", "tags"];
 
+/**
+ * The content editor is a block like the others — it can be moved among them —
+ * but it is what the page is for, so it can never leave the canvas: no pin, and
+ * a drop into the Details panel is refused.
+ */
+const FIXED_TO_CANVAS = "content";
+
 const PINNED_STORAGE_KEY = "point:editor:pinned";
+const ORDER_STORAGE_KEY = "point:editor:field-order";
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
@@ -129,9 +144,11 @@ export default class PostEditPage extends Component {
       detailsOpen: this._readDetailsPref(),
       showLivePreview: this._readLivePreviewPref(),
       menuOpen: false,
+      arranging: false,
       hasPendingEdits: false,
     };
     this._pinned = this._readPinned();
+    this._order = this._readOrder();
     this._tags = [];
     this._nodes = [];
     this._unmounted = false;
@@ -172,6 +189,7 @@ export default class PostEditPage extends Component {
           <hr>
           ${pluginHost.isEnabled("ai-analysis") ? `<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${SPARKLE_SVG} Analyze media</button>` : ''}
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${LINK_SVG} Preview link</button>
+          <button class="menu-item" type="button" data-action="arrange">${GRIP_SVG} Arrange fields</button>
           ${this._isWide() ? `<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
           ${!isNew ? `<button class="menu-item" type="button" data-action="view-on-site">${EXTERNAL_LINK_SVG} View on site</button>` : ''}
           <hr>
@@ -322,6 +340,12 @@ export default class PostEditPage extends Component {
             ${aiBtn("excerpt")}
           </div>`,
       },
+      content: {
+        label: "Content",
+        summary: "",
+        fixed: true,
+        body: `${modeToggle}${contentArea}`,
+      },
       immersive: {
         label: "Immersive mode",
         summary: immersiveSummary,
@@ -347,7 +371,7 @@ export default class PostEditPage extends Component {
       groups.instagram = this._instagramGroup(p, igStatus, publishingToInstagram, anyActionInProgress, isNew);
     }
 
-    const keys = Object.keys(groups).sort((a, b) => this._pinIndex(a) - this._pinIndex(b));
+    const keys = Object.keys(groups).sort((a, b) => this._orderIndex(a) - this._orderIndex(b));
     const renderWhere = (pinned) =>
       keys.filter((k) => this._pinned.has(k) === pinned)
           .map((k) => this._renderGroup(k, groups[k], pinned))
@@ -357,13 +381,17 @@ export default class PostEditPage extends Component {
 
     return `
             <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
-              <div class="editor-main">
-                <div class="pinned-fields" id="pinned-fields">${pinnedHtml}</div>
+              <div class="arrange-bar" id="arrange-bar" role="region" aria-label="Arrange fields" hidden>
+                <span class="arrange-bar-hint">
+                  <strong>Arranging fields</strong>
+                  <span class="arrange-bar-hint-detail">Drag a field to reorder it, or pin it to move it between the editor and Details.</span>
+                </span>
+                <button id="arrange-done" class="btn btn-primary btn-sm" type="button">Done</button>
+              </div>
 
-                <div class="form-group">
-                  ${modeToggle}
-                  ${contentArea}
-                </div>
+              <div class="editor-main">
+                <p class="arrange-list-label">Shown in the editor</p>
+                <div class="pinned-fields" id="pinned-fields">${pinnedHtml}</div>
               </div>
 
               <div class="editor-live-preview" id="live-preview-mount">
@@ -397,14 +425,18 @@ export default class PostEditPage extends Component {
    * instead of re-rendering, keeping unsaved input values, focus and listeners.
    */
   _renderGroup(key, group, pinned) {
-    return `
-      <details class="details-group${pinned ? " is-pinned" : ""}${group.hidden ? " is-hidden" : ""}" data-group="${key}"${pinned ? " open" : ""}>
-        <summary class="details-group-summary-row">
-          <span class="details-group-title">${group.label}</span>
-          <span class="details-group-summary" id="summary-${key}">${group.summary}</span>
+    const plain = group.label.replace(/&amp;/g, "&");
+    const pin = group.fixed ? "" : `
           <button type="button" class="details-pin-btn${pinned ? " is-pinned" : ""}" data-pin="${key}"
                   aria-pressed="${pinned}" title="${pinned ? "Unpin — move back to Details" : "Pin to the editor"}"
-                  aria-label="${pinned ? "Unpin from the editor" : "Pin to the editor"}">${PIN_SVG}</button>
+                  aria-label="${pinned ? "Unpin from the editor" : "Pin to the editor"}">${PIN_SVG}</button>`;
+    return `
+      <details class="details-group${pinned ? " is-pinned" : ""}${group.fixed ? " is-fixed" : ""}${group.hidden ? " is-hidden" : ""}" data-group="${key}"${pinned ? " open" : ""}>
+        <summary class="details-group-summary-row">
+          <button type="button" class="details-group-handle" data-handle="${key}"
+                  aria-label="Move ${escapeHtml(plain)}" title="Drag to reorder — or use the arrow keys">${GRIP_SVG}</button>
+          <span class="details-group-title">${group.label}</span>
+          <span class="details-group-summary" id="summary-${key}">${group.summary}</span>${pin}
         </summary>
         <div class="details-group-body">${group.body}</div>
       </details>`;
@@ -415,23 +447,59 @@ export default class PostEditPage extends Component {
     return str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
   }
 
-  /** Position of a group in the canonical order; unknown keys (plugins) sort last. */
-  _pinIndex(key) {
-    const i = PIN_ORDER.indexOf(key);
-    return i === -1 ? PIN_ORDER.length : i;
+  /** Position of a group in the user's order; anything unknown sorts last. */
+  _orderIndex(key) {
+    const i = this._order.indexOf(key);
+    if (i !== -1) return i;
+    const d = DEFAULT_ORDER.indexOf(key);
+    return this._order.length + (d === -1 ? DEFAULT_ORDER.length : d);
+  }
+
+  /** The stored order, with any key it doesn't mention appended in default order. */
+  _readOrder() {
+    let raw = null;
+    try { raw = localStorage.getItem(ORDER_STORAGE_KEY); } catch { /* ignore */ }
+    let stored = [];
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) stored = parsed.filter((k) => typeof k === "string");
+    } catch { /* fall through to the default */ }
+    return [...stored, ...DEFAULT_ORDER.filter((k) => !stored.includes(k))];
+  }
+
+  _persistOrder() {
+    try { localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(this._order)); } catch { /* ignore */ }
+  }
+
+  /**
+   * Move `key` to sit directly after `afterKey` (or first, when null) in the one
+   * order shared by both sides. Everything else keeps its relative position, so
+   * a drag inside the Details panel doesn't disturb the canvas and vice versa.
+   */
+  _moveInOrder(key, afterKey) {
+    const rest = this._order.filter((k) => k !== key);
+    const at = afterKey ? rest.indexOf(afterKey) + 1 : 0;
+    rest.splice(at < 0 ? rest.length : at, 0, key);
+    this._order = rest;
+    this._persistOrder();
   }
 
   /** The pinned set, persisted across posts and sessions (an editor preference, not post data). */
   _readPinned() {
     let raw = null;
     try { raw = localStorage.getItem(PINNED_STORAGE_KEY); } catch { /* ignore */ }
-    if (raw === null) return new Set(DEFAULT_PINNED);
-    try {
-      const parsed = JSON.parse(raw);
-      // An empty array is a real choice (everything in Details), so only a
-      // malformed value falls back to the defaults.
-      return Array.isArray(parsed) ? new Set(parsed.filter((k) => typeof k === "string")) : new Set(DEFAULT_PINNED);
-    } catch { return new Set(DEFAULT_PINNED); }
+    let keys = DEFAULT_PINNED;
+    if (raw !== null) {
+      try {
+        const parsed = JSON.parse(raw);
+        // An empty array is a real choice (everything in Details), so only a
+        // malformed value falls back to the defaults.
+        if (Array.isArray(parsed)) keys = parsed.filter((k) => typeof k === "string");
+      } catch { /* keep the defaults */ }
+    }
+    // Content lives on the canvas by definition — being "pinned" is what puts a
+    // block there, so it is always in the set whatever was stored.
+    return new Set([...keys, FIXED_TO_CANVAS]);
   }
 
   _persistPinned() {
@@ -457,15 +525,7 @@ export default class PostEditPage extends Component {
     const btn = el.querySelector(".details-pin-btn");
     const hadFocus = btn && typeof document !== "undefined" && document.activeElement === btn;
 
-    el.classList.toggle("is-pinned", pinned);
-    if (pinned) el.open = true;
-    if (btn) {
-      btn.classList.toggle("is-pinned", pinned);
-      btn.setAttribute("aria-pressed", String(pinned));
-      btn.title = pinned ? "Unpin — move back to Details" : "Pin to the editor";
-      btn.setAttribute("aria-label", pinned ? "Unpin from the editor" : "Pin to the editor");
-    }
-
+    this._applyPinState(el, pinned);
     this._placeGroup(el, key, pinned);
     // Unpinning is a move into a panel the user may not have open — show it,
     // otherwise the field just disappears.
@@ -480,11 +540,103 @@ export default class PostEditPage extends Component {
   _placeGroup(el, key, pinned) {
     const host = this.container.querySelector(pinned ? "#pinned-fields" : ".details-panel-body");
     if (!host) return;
-    const idx = this._pinIndex(key);
+    const idx = this._orderIndex(key);
     const next = Array.from(host.children).find(
-      (c) => c.classList?.contains("details-group") && c !== el && this._pinIndex(c.dataset.group) > idx,
+      (c) => c.classList?.contains("details-group") && c !== el && this._orderIndex(c.dataset.group) > idx,
     );
     host.insertBefore(el, next || null);
+  }
+
+  /**
+   * Arrange mode: the fields collapse to labelled bars with a drag handle, so
+   * the whole layout — order on both sides, and which side each field is on —
+   * can be rearranged without the field bodies getting in the way of a drag.
+   *
+   * A mode rather than always-on handles because the editor is for writing:
+   * handles next to every field would be permanent clutter around the one thing
+   * the page is actually for.
+   */
+  _toggleArrange(on) {
+    const arranging = typeof on === "boolean" ? on : !this.state.arranging;
+    this.state.arranging = arranging;
+    this.container.querySelector(".editor-layout")?.classList.toggle("is-arranging", arranging);
+    const bar = this.container.querySelector("#arrange-bar");
+    if (bar) bar.hidden = !arranging;
+    // Both lists have to be on screen to move fields between them.
+    if (arranging) this._toggleDetails(true);
+    if (arranging) this.container.querySelector("#arrange-done")?.focus();
+  }
+
+  /** Wire dragging and keyboard reordering. Bound once; gated on arrange mode. */
+  _setupArrange() {
+    this._detachReorder?.();
+    this._detachReorder = attachPointerReorder({
+      handleSelector: ".details-group-handle",
+      itemSelector: ".details-group",
+      containers: () => [
+        this.container.querySelector("#pinned-fields"),
+        this.container.querySelector(".details-panel-body"),
+      ],
+      isEnabled: () => this.state.arranging,
+      onDrop: ({ item, to, afterEl }) => this._dropGroup(item, to, afterEl),
+    });
+
+    // Keyboard equivalent: the handle is a button, so arrows are free. Without
+    // this the whole feature would be mouse/touch-only.
+    this.container.querySelector(".editor-layout")?.addEventListener("keydown", (e) => {
+      if (!this.state.arranging) return;
+      const handle = e.target.closest?.(".details-group-handle");
+      if (!handle) return;
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      const group = handle.closest(".details-group");
+      const host = group.parentElement;
+      const sibs = [...host.querySelectorAll(":scope > .details-group")];
+      const i = sibs.indexOf(group);
+      const j = e.key === "ArrowUp" ? i - 1 : i + 1;
+      if (j < 0 || j >= sibs.length) return;
+      this._dropGroup(group, host, e.key === "ArrowUp" ? sibs[j].previousElementSibling : sibs[j]);
+      handle.focus();
+    });
+  }
+
+  /**
+   * Commit a move: `item` lands in `to`, directly after `afterEl`.
+   *
+   * Dropping into the other container is the same statement the pin button
+   * makes, so it updates the pinned set too — one gesture, one meaning.
+   */
+  _dropGroup(item, to, afterEl) {
+    const key = item.dataset.group;
+    if (!key || !to) return;
+
+    const pinnedHost = this.container.querySelector("#pinned-fields");
+    const pinned = to === pinnedHost;
+    // Content can be moved among the canvas blocks but never into Details.
+    if (!pinned && key === FIXED_TO_CANVAS) return;
+    if (this._pinned.has(key) !== pinned) {
+      if (pinned) this._pinned.add(key); else this._pinned.delete(key);
+      this._persistPinned();
+      this._applyPinState(item, pinned);
+    }
+
+    let after = afterEl;
+    while (after && !after.classList?.contains("details-group")) after = after.previousElementSibling;
+    to.insertBefore(item, after ? after.nextSibling : to.firstChild);
+    this._moveInOrder(key, after?.dataset.group || null);
+    this._updatePanelEmpty();
+  }
+
+  /** Reflect a group's pinned state on the element and its pin button. */
+  _applyPinState(el, pinned) {
+    el.classList.toggle("is-pinned", pinned);
+    if (pinned) el.open = true;
+    const btn = el.querySelector(".details-pin-btn");
+    if (!btn) return;
+    btn.classList.toggle("is-pinned", pinned);
+    btn.setAttribute("aria-pressed", String(pinned));
+    btn.title = pinned ? "Unpin — move back to Details" : "Pin to the editor";
+    btn.setAttribute("aria-label", pinned ? "Unpin from the editor" : "Pin to the editor");
   }
 
   /** Show the "everything is pinned" note only when the panel has no groups left. */
@@ -650,8 +802,10 @@ export default class PostEditPage extends Component {
       }
       // A pinned group is the field itself on the canvas — its header row is a
       // label, not a disclosure control, so clicking it must not collapse it.
+      // While arranging, every row is a bar to be dragged, not opened.
       const summary = e.target.closest?.("summary.details-group-summary-row");
-      if (summary?.parentElement?.classList.contains("is-pinned")) e.preventDefault();
+      if (!summary) return;
+      if (this.state.arranging || summary.parentElement?.classList.contains("is-pinned")) e.preventDefault();
     });
 
     // Header overflow menu — toggle a class rather than setState. A full
@@ -743,6 +897,9 @@ export default class PostEditPage extends Component {
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); this._save(); }
+      // Escape leaves arrange mode — the drag itself cancels on Escape too, and
+      // pointerReorder handles that first while one is in progress.
+      if (e.key === "Escape" && this.state.arranging) this._toggleArrange(false);
     };
     document.addEventListener("keydown", onKeyDown);
     this._onKeyDown = onKeyDown;
@@ -823,6 +980,11 @@ export default class PostEditPage extends Component {
 
     if (this.state.showLivePreview) this._debouncedPreview();
 
+    this.container.querySelector("#arrange-done")?.addEventListener("click", () => this._toggleArrange(false));
+    this._setupArrange();
+    // A re-render rebuilds the layout with the bar hidden; restore the mode.
+    if (this.state.arranging) this._toggleArrange(true);
+
     this._updateDetailsSummaries();
     this._updatePanelEmpty();
     this._setupWindowDragAndDrop();
@@ -841,6 +1003,7 @@ export default class PostEditPage extends Component {
       case "mark-hidden": this._save({ status: "hidden" }); break;
       case "unpublish": this._save({ status: "draft" }); break;
       case "analyze": this._analyzeNow(); break;
+      case "arrange": this._toggleArrange(true); break;
       case "toggle-preview": this._toggleLivePreview(); break;
       case "preview-link": this._generatePreviewLink(); break;
       // Same tab, like every other public-site link in the admin. The editor is
@@ -978,6 +1141,7 @@ export default class PostEditPage extends Component {
 
   beforeUnmount() {
     this._cleanupAdminLayout?.();
+    this._detachReorder?.();
     this._unmounted = true;
     if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
     clearTimeout(this._idleTimer);
