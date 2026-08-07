@@ -143,43 +143,110 @@
 }
 
 /* ===========================
-   Tags Manager & Mobile Header — portrait phones
+   Tags Manager — phones and portrait tablets
+   Same 48em as the post card list, so both admin lists switch to the touch
+   layout on the same devices (portrait iPad mini is exactly 48em).
    =========================== */
-@media (max-width: 40em) {
-
+@media (max-width: 48em) {
 
     /* Hide drag handles — touch drag is unavailable */
     .tm-drag-handle {
         display: none;
     }
 
-    .card {
+    /* Rows run edge to edge like the post cards. Scoped to the tags card so
+       every other admin page keeps its panel down to 40em (block below). */
+    .tm-card {
         background: none;
     }
 
-    .card-body {
+    .tm-card .card-body {
         padding: 0;
     }
 
     /* ── Swipe-to-reveal actions ── */
+    /* Tree rows and list rows behave like the post cards in /light/posts: the
+       action panel sits off-screen right and the row slides left over it. */
     .tm-node,
     .tm-unfiled-node {
         overflow: hidden;
     }
 
-    .tm-row {
+    /* The list view stops being a table here: every part of it becomes a plain
+       block, and the rows become flex boxes.
+       A <tr> is not a dependable containing block for the drawer — Safari
+       before 16 ignores `position: relative` on table rows, so the panel
+       escapes to a taller ancestor and stretches down over many rows. Block
+       boxes behave identically in every engine. */
+    .tm-tags-table,
+    .tm-tags-table thead,
+    .tm-tags-table tbody,
+    .tm-tags-table tr,
+    .tm-tags-table th,
+    .tm-tags-table td {
+        display: block;
+    }
+
+    .tm-tags-table tr {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        position: relative;
+        padding: var(--spacing-sm) var(--tm-row-padding);
+    }
+
+    /* One border per row rather than one per cell, which would otherwise
+       break into steps at each cell's own height. */
+    .tm-tags-table th,
+    .tm-tags-table td {
+        padding: 0;
+        border-bottom: none;
+        background: none;
+    }
+
+    .tm-tags-table tbody tr {
+        border-bottom: var(--border-width) solid var(--border-primary);
+    }
+
+    .tm-tags-table thead tr {
+        background-color: var(--surface-hover);
+    }
+
+    .tm-tags-table .tm-col-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .tm-tags-table .tm-col-count,
+    .tm-tags-table .tm-check-col {
+        flex: 0 0 auto;
+    }
+
+    /* Rows are block boxes now but still can't clip a panel that has to show
+       when they slide, so the container clips. Hiding the horizontal scroll
+       also keeps it from fighting the gesture. */
+    .table-container:has(.tm-tags-table) {
+        overflow-x: hidden;
+    }
+
+    .tm-row,
+    .tm-tags-table .tm-tag-row {
         transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         will-change: transform;
     }
 
-    .tm-row .tm-actions {
+    .tm-row .tm-actions,
+    .tm-tags-table .tm-actions {
         position: absolute;
         right: 0;
         top: 0;
         bottom: 0;
         transform: translateX(100%);
         display: flex;
-        align-items: center;
+        align-items: stretch;
         gap: var(--tm-actions-gap);
         padding: 0 var(--spacing-sm);
         background: var(--surface-card);
@@ -188,16 +255,31 @@
         border-left: var(--border-width) solid var(--border-primary);
     }
 
-    .tm-row.tm-row--revealed {
+    /* Buttons fill the drawer height, as on the post cards */
+    .tm-row .tm-actions > .btn,
+    .tm-tags-table .tm-actions > .btn {
+        height: auto;
+    }
+
+    .tm-row.tm-row--revealed,
+    .tm-tags-table .tm-tag-row.tm-row--revealed {
         background-color: var(--surface-hover);
     }
 
-    /* List-view table rows: same concept but on <tr> / <td> */
-    .tm-tags-table .tm-actions {
-        position: static;
-        transform: none;
-        border-left: none;
+    /* The cell collapses — its panel is absolutely positioned on the row.
+       font-size:0 drops the "Actions" header, which has nowhere left to sit. */
+    .tm-tags-table .tm-actions-cell {
+        flex: 0 0 0;
         padding: 0;
+        font-size: 0;
+    }
+
+    /* Drop the secondary columns: the remaining name + count fit without
+       horizontal scroll, mirroring the tree row. */
+    .tm-tags-table .tm-col-slug,
+    .tm-tags-table .tm-col-coords,
+    .tm-tags-table .tm-col-parents {
+        display: none;
     }
 
     /* Single-line tree rows: actions revealed by swiping left */
@@ -236,6 +318,45 @@
     .tm-tree:not(.level-0) {
         padding-left: var(--tm-treelevel-1-padding-left);
         margin-left: var(--tm-treelevel-1-margin-left);
+    }
+
+    /* Bulk toolbar: two rows, icon-only action buttons — as on the posts list */
+    .tm-bulk-toolbar {
+        flex-wrap: wrap;
+        align-content: center;
+    }
+
+    .tm-bulk-toolbar .select-all-label {
+        flex-basis: 100%;
+    }
+
+    .tm-bulk-actions {
+        display: flex;
+        flex-basis: 100%;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .tm-bulk-actions #tm-bulk-count {
+        margin-right: auto;       /* count left, controls pushed right */
+    }
+
+    .tm-bulk-toolbar .btn-label {
+        display: none;
+    }
+}
+
+/* ===========================
+   Mobile header & modals — portrait phones
+   =========================== */
+@media (max-width: 40em) {
+
+    .card {
+        background: none;
+    }
+
+    .card-body {
+        padding: 0;
     }
 
     /* Tag editor modal — full width on small screens */

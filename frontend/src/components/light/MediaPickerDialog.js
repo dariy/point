@@ -15,6 +15,7 @@ import { Component } from '../Component.js';
 import { MediaBrowser } from './MediaBrowser.js';
 import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
 import { store } from '../../store.js';
+import { UPLOAD_SVG } from '../../utils/icons.js';
 
 export class MediaPickerDialog extends Component {
   constructor({ onConfirm }) {
@@ -34,8 +35,9 @@ export class MediaPickerDialog extends Component {
   render() {
     return `
       <div class="modal media-picker-modal">
-        <header class="modal-header">
+        <header class="modal-header media-picker-header">
           <h3>Insert Media</h3>
+          <button class="btn btn-sm btn-secondary" id="mpd-upload-btn" title="Upload files">${UPLOAD_SVG}<span class="btn-label">Upload</span></button>
           <button class="modal-close" id="mpd-close-btn" aria-label="Close">\xd7</button>
         </header>
         <div class="modal-body media-picker-body" id="mpd-browser-mount"></div>
@@ -52,6 +54,12 @@ export class MediaPickerDialog extends Component {
     this.$('#mpd-cancel-btn')?.addEventListener('click', () => this.close());
     this.$('#mpd-add-btn')?.addEventListener('click', () => this._handleAdd());
     this.$('#mpd-library-btn')?.addEventListener('click', () => this._handleFromLibrary());
+
+    // Upload sits on the header line, the way MediaPage carries it in the admin
+    // header; the file input itself belongs to the browser mounted on open().
+    this.$('#mpd-upload-btn')?.addEventListener('click', () =>
+      this._activeBrowser?.openFilePicker(),
+    );
 
     // Close on backdrop click
     this.container.addEventListener('click', (e) => {

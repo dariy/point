@@ -642,7 +642,9 @@
 }
 
 .tm-row:hover .tm-actions,
-.tm-row:focus-within .tm-actions {
+.tm-row:focus-within .tm-actions,
+.tm-tag-row:hover .tm-actions,
+.tm-tag-row:focus-within .tm-actions {
     opacity: 1;
 }
 
@@ -653,6 +655,50 @@
     :where(html:not(.pointer-fine)) .tm-actions {
         opacity: 1;
     }
+}
+
+/* ===========================
+   Tags Manager — select mode
+   =========================== */
+.tm-bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    font-size: var(--font-size-sm);
+}
+
+/* Transparent on desktop so the toolbar stays one row; becomes a real flex
+   row on portrait — see responsive.css. Mirrors .bulk-actions on the posts list. */
+.tm-bulk-actions {
+    display: contents;
+}
+
+#tm-bulk-count {
+    color: var(--text-secondary);
+    min-width: var(--bulk-count-min-width);
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-check-col {
+    width: var(--check-col-width);
+    text-align: center;
+    vertical-align: middle;
+}
+
+.tm-select-cb {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* Translucent accent, so it reads the same in light and dark themes */
+.tm-row.is-selected,
+.tm-tag-row.is-selected {
+    background-color: var(--color-primary-light-alpha-20);
 }
 
 /* ===========================

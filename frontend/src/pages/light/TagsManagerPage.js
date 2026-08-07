@@ -15,7 +15,7 @@ import { parseMapsCoords } from '../../api/util.js';
 
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { EDIT_SVG, X_SVG, REFRESH_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
+import { EDIT_SVG, X_SVG, REFRESH_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG, SELECT_SVG, CHECK_SVG, TRASH_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 
 export default class TagsManagerPage extends Component {
@@ -30,6 +30,8 @@ export default class TagsManagerPage extends Component {
       unfiledExpanded: false,
       sortField: 'sort_order',
       sortOrder: 'asc',
+      selectMode: false,
+      selectedIds: new Set(),
     };
     this._modal = null;
     this._modalKeyHandler = null;
@@ -44,16 +46,17 @@ export default class TagsManagerPage extends Component {
   }
 
   render() {
-    const { view } = this.state;
+    const { view, selectMode } = this.state;
 
     const actions = `
       <div class="tm-view-toggle">
         <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG}<span class="btn-label"> Tree</span></button>
         <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG}<span class="btn-label"> List</span></button>
       </div>
-      ${view === 'tree' ? `
+      ${view === 'tree' && !selectMode ? `
       <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
       <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>` : ''}
+      <button id="tm-select-btn" class="btn btn-sm btn-secondary" title="${selectMode ? 'Cancel selection' : 'Select tags'}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label"> ${selectMode ? 'Cancel' : 'Select'}</span></button>
       <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${PLUS_SVG}<span class="btn-label"> New Tag</span></button>
       <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
     `;
@@ -80,11 +83,47 @@ export default class TagsManagerPage extends Component {
     }
 
     return `
-            <div class="card">
+            ${this._renderBulkToolbar()}
+            <div class="card tm-card">
               <div class="card-body">
                 ${content}
               </div>
             </div>`;
+  }
+
+  // ── Bulk selection ───────────────────────────────────────────────────────────
+
+  /**
+   * Toolbar shown while select mode is on. Unlike the posts list this sits in
+   * the flow rather than overlaying a filter block — the tags tree has none.
+   */
+  _renderBulkToolbar() {
+    if (!this.state.selectMode || this.state.loading || this.state.error) return '';
+    return `
+      <div class="tm-bulk-toolbar" id="tm-bulk-toolbar">
+        <label class="select-all-label"><input type="checkbox" id="tm-select-all-cb"> Select all</label>
+        <div class="tm-bulk-actions">
+          <span id="tm-bulk-count">0 selected</span>
+          <select id="tm-bulk-visibility-select" aria-label="Visibility to apply">
+            <option value="hidden">Hidden</option>
+            <option value="visible">Visible</option>
+          </select>
+          <button id="tm-bulk-apply-btn" class="btn btn-sm" disabled title="Apply visibility">${CHECK_SVG}<span class="btn-label"> Apply</span></button>
+          <button id="tm-bulk-move-btn" class="btn btn-sm" disabled title="Move under a parent…">Move…</button>
+          <button id="tm-bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Delete tags">${TRASH_SVG}<span class="btn-label"> Delete</span></button>
+          <!-- Deliberately not a .btn-label: this is the way out of select
+               mode, so its text has to survive the icon-only collapse. -->
+          <button id="tm-bulk-done-btn" class="btn btn-sm btn-secondary" title="Leave selection mode">Done</button>
+        </div>
+      </div>`;
+  }
+
+  /** Tags "Select all" applies to — the list view honours its own filters. */
+  _selectableTags() {
+    if (this.state.view === 'list') {
+      return this.state.tags.filter(t => this._matchesListFilter(t));
+    }
+    return this.state.tags;
   }
 
   // === List view ===
@@ -112,21 +151,23 @@ export default class TagsManagerPage extends Component {
       return 0;
     });
 
+    const { selectMode, selectedIds } = this.state;
+
     const rows = sorted.map(tag => {
-      const parentIds  = (tag.parents || []).map(p => p.id).join(',');
-      const parentNamesLower = (tag.parents || []).map(p => p.name.toLowerCase()).join(' ');
       const parentBadges = (tag.parents || [])
         .map(p => `<button type="button" class="tm-parent-filter-btn tm-rel-badge" data-parent-id="${p.id}" data-parent-name="${escapeHtml(p.name)}" title="Filter by ${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`)
         .join('');
 
       const hasLocation = tag.locations?.length > 0;
+      const isSelected = selectedIds.has(tag.id);
 
       return `
-        <tr class="tm-tag-row" data-name="${escapeHtml(tag.name.toLowerCase())}" data-slug="${escapeHtml(tag.slug.toLowerCase())}" data-parent-ids="${parentIds}" data-parent-names="${escapeHtml(parentNamesLower)}">
-          <td><span class="tm-tag-name">${escapeHtml(tag.name)}</span></td>
-          <td><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
-          <td class="text-center"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
-          <td class="text-center">
+        <tr class="tm-tag-row${isSelected ? ' is-selected' : ''}" data-id="${tag.id}">
+          ${selectMode ? `<td class="tm-check-col"><input type="checkbox" class="tm-select-cb" data-id="${tag.id}"${isSelected ? ' checked' : ''} aria-label="Select ${escapeHtml(tag.name)}"></td>` : ''}
+          <td class="tm-col-name"><span class="tm-tag-name">${escapeHtml(tag.name)}</span></td>
+          <td class="tm-col-slug"><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
+          <td class="text-center tm-col-count"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
+          <td class="text-center tm-col-coords">
             ${hasLocation ? `
               <a href="/map?tag=${encodeURIComponent(tag.slug)}" class="btn btn-sm tm-flag-link active tm-flag-location" title="View on map">
                 ${MAP_SVG}<span class="btn-label"> Map</span>
@@ -134,11 +175,13 @@ export default class TagsManagerPage extends Component {
               <span class="tm-flag-static tm-flag-location" title="No coordinates">${MAP_SVG}</span>
             `}
           </td>
-          <td><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">—</span>'}</div></td>
-          <td class="tm-actions">
-            <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
-            <button class="btn btn-sm merge-tag-btn"  data-id="${tag.id}" title="Merge into…">Merge…</button>
-            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
+          <td class="tm-col-parents"><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">—</span>'}</div></td>
+          <td class="tm-actions-cell">
+            <div class="tm-actions">
+              <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+              <button class="btn btn-sm merge-tag-btn"  data-id="${tag.id}" title="Merge into…">Merge…</button>
+              <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
+            </div>
           </td>
         </tr>`;
     }).join('');
@@ -160,12 +203,13 @@ export default class TagsManagerPage extends Component {
         <table class="table tm-tags-table">
           <thead>
             <tr>
-              ${this._renderSortHeader('name', 'Name')}
-              ${this._renderSortHeader('slug', 'Slug')}
-              ${this._renderSortHeader('post_count', 'Posts', 'text-center')}
-              ${this._renderSortHeader('locations', '📍', 'text-center', 'Coordinates')}
-              ${this._renderSortHeader('parents', 'Parents')}
-              <th>Actions</th>
+              ${selectMode ? '<th class="tm-check-col"></th>' : ''}
+              ${this._renderSortHeader('name', 'Name', 'tm-col-name')}
+              ${this._renderSortHeader('slug', 'Slug', 'tm-col-slug')}
+              ${this._renderSortHeader('post_count', 'Posts', 'text-center tm-col-count')}
+              ${this._renderSortHeader('locations', '📍', 'text-center tm-col-coords', 'Coordinates')}
+              ${this._renderSortHeader('parents', 'Parents', 'tm-col-parents')}
+              <th class="tm-actions-cell">Actions</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -173,17 +217,29 @@ export default class TagsManagerPage extends Component {
       </div>`;
   }
 
-  _applyListFilter() {
+  /**
+   * Does this tag survive the list view's search box and parent chips?
+   * Shared with "Select all" so the selection can never reach past what the
+   * filters are showing.
+   */
+  _matchesListFilter(tag) {
     const q = (this._listSearch || '').trim().toLowerCase();
-    const filterIds = this._listFilterParents.map(p => p.id);
+    const parents = tag.parents || [];
+    const textMatch = !q ||
+      tag.name.toLowerCase().includes(q) ||
+      tag.slug.toLowerCase().includes(q) ||
+      parents.some(p => p.name.toLowerCase().includes(q));
+
+    const parentIds = parents.map(p => p.id);
+    const parentMatch = this._listFilterParents.every(f => parentIds.includes(f.id));
+    return textMatch && parentMatch;
+  }
+
+  _applyListFilter() {
+    const byId = new Map(this.state.tags.map(t => [t.id, t]));
     this.container.querySelectorAll('.tm-tag-row').forEach(row => {
-      const textMatch = !q ||
-        row.dataset.name.includes(q) ||
-        row.dataset.slug.includes(q) ||
-        row.dataset.parentNames.includes(q);
-      const rowParentIds = row.dataset.parentIds ? row.dataset.parentIds.split(',').map(Number) : [];
-      const parentMatch = filterIds.length === 0 || filterIds.every(id => rowParentIds.includes(id));
-      row.classList.toggle('hidden', !(textMatch && parentMatch));
+      const tag = byId.get(parseInt(row.dataset.id, 10));
+      row.classList.toggle('hidden', !tag || !this._matchesListFilter(tag));
     });
   }
 
@@ -347,11 +403,14 @@ export default class TagsManagerPage extends Component {
 
     const badges = this._renderRowBadges(node);
     const parentAttr = parentId != null ? parentId : '';
+    const { selectMode } = this.state;
+    const isSelected = this.state.selectedIds.has(node.id);
 
     return `
       <li class="tm-node" data-id="${node.id}">
-        <div class="tm-row" draggable="true" data-id="${node.id}" data-parent-id="${parentAttr}">
+        <div class="tm-row${isSelected ? ' is-selected' : ''}" draggable="${selectMode ? 'false' : 'true'}" data-id="${node.id}" data-parent-id="${parentAttr}">
           <span class="tm-drag-handle" title="Drag to reorder">⋮⋮</span>
+          ${this._renderSelectCheckbox(node, selectMode, isSelected)}
           ${toggle}
           <div class="tm-node-body">
             <span class="tm-tag-name">${escapeHtml(node.name)}</span>
@@ -370,6 +429,11 @@ export default class TagsManagerPage extends Component {
         </div>
         ${isExpanded && hasChildren ? this._renderTree(node.childrenNodes, level + 1, node.id) : ''}
       </li>`;
+  }
+
+  _renderSelectCheckbox(tag, selectMode, isSelected) {
+    if (!selectMode) return '';
+    return `<input type="checkbox" class="tm-select-cb" data-id="${tag.id}"${isSelected ? ' checked' : ''} aria-label="Select ${escapeHtml(tag.name)}">`;
   }
 
   _renderRowBadges(node) {
@@ -408,10 +472,12 @@ export default class TagsManagerPage extends Component {
   _renderUnfiledGroup(unfiledTags) {
     const { unfiledExpanded } = this.state;
     const n = unfiledTags.length;
+    const { selectMode } = this.state;
     const rows = unfiledTags.map(tag => `
       <li class="tm-node tm-unfiled-node" data-id="${tag.id}">
-        <div class="tm-row" draggable="true" data-id="${tag.id}" data-parent-id="">
+        <div class="tm-row${this.state.selectedIds.has(tag.id) ? ' is-selected' : ''}" draggable="${selectMode ? 'false' : 'true'}" data-id="${tag.id}" data-parent-id="">
           <span class="tm-toggle-spacer"></span>
+          ${this._renderSelectCheckbox(tag, selectMode, this.state.selectedIds.has(tag.id))}
           <span class="tm-toggle-spacer"></span>
           <div class="tm-node-body">
             <span class="tm-tag-name">${escapeHtml(tag.name)}</span>
@@ -458,6 +524,8 @@ export default class TagsManagerPage extends Component {
     this.container.querySelector('#view-list-btn')?.addEventListener('click', () => this.setState({ view: 'list' }));
     this.container.querySelector('#add-root-tag-btn')?.addEventListener('click', () => this._openModal());
     this.container.querySelector('#recalc-counts-btn')?.addEventListener('click', () => this._handleRecalc());
+
+    this._bindSelectMode();
 
     if (this.state.view === 'tree') {
       this.container.querySelector('#expand-all-btn')?.addEventListener('click', () => this._expandAll());
@@ -597,20 +665,275 @@ export default class TagsManagerPage extends Component {
     }
   }
 
+  // ── Select mode ───────────────────────────────────────────────────────────────
+
+  _bindSelectMode() {
+    this.container.querySelector('#tm-select-btn')?.addEventListener('click', () => {
+      this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
+    });
+
+    this._bindRowSelectGestures();
+
+    if (!this.state.selectMode) return;
+
+    this.container.querySelectorAll('.tm-select-cb').forEach(cb => {
+      cb.addEventListener('change', e => {
+        e.stopPropagation();
+        this._setSelected(parseInt(cb.dataset.id, 10), cb.checked);
+      });
+    });
+
+    this.container.querySelector('#tm-select-all-cb')?.addEventListener('change', e => {
+      const selectedIds = new Set();
+      if (e.target.checked) this._selectableTags().forEach(t => selectedIds.add(t.id));
+      this.setState({ selectedIds });
+    });
+
+    this.container.querySelector('#tm-bulk-apply-btn')
+      ?.addEventListener('click', () => this._handleBulkVisibility());
+    this.container.querySelector('#tm-bulk-move-btn')
+      ?.addEventListener('click', () => this._openBulkMoveDialog());
+    this.container.querySelector('#tm-bulk-delete-btn')
+      ?.addEventListener('click', () => this._handleBulkDelete());
+    this.container.querySelector('#tm-bulk-done-btn')
+      ?.addEventListener('click', () => this.setState({ selectMode: false, selectedIds: new Set() }));
+
+    this._updateBulkToolbar();
+  }
+
+  /**
+   * Touch shortcuts into select mode, mirroring the post cards: long-press a
+   * row to start selecting, then tap rows to add and remove them. Bound only
+   * where the touch layout is active, since a row is not a tap target on
+   * desktop — there the header's Select button is the way in.
+   */
+  _bindRowSelectGestures() {
+    if (!window.matchMedia?.('(max-width: 48em)').matches) return;
+
+    const LONG_PRESS_MS = 500;
+    // Controls that act on their own; a press on one is never a row press.
+    const interactive = 'input, button, a, select, label';
+
+    this.container.querySelectorAll('.tm-row, .tm-tag-row').forEach(row => {
+      const id = parseInt(row.dataset.id, 10);
+      if (!Number.isInteger(id)) return;
+
+      let timer = null;
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+      row.addEventListener('pointerdown', e => {
+        if (e.target.closest(interactive)) return;
+        if (this.state.selectMode) return;
+        timer = setTimeout(() => {
+          timer = null;
+          this.setState({ selectMode: true, selectedIds: new Set([id]) });
+        }, LONG_PRESS_MS);
+      });
+      row.addEventListener('pointerup', cancel);
+      row.addEventListener('pointermove', cancel);
+      row.addEventListener('pointercancel', cancel);
+
+      row.addEventListener('click', e => {
+        if (!this.state.selectMode) return;
+        if (e.target.closest(interactive)) return;
+        this._toggleSelected(id);
+      });
+    });
+  }
+
+  /** Swipe-right on a row: start selecting, or add/remove it if already on. */
+  _selectBySwipe(row) {
+    const id = parseInt(row.dataset.id, 10);
+    if (!Number.isInteger(id)) return;
+    if (!this.state.selectMode) {
+      this.setState({ selectMode: true, selectedIds: new Set([id]) });
+      return;
+    }
+    this._toggleSelected(id);
+  }
+
+  /**
+   * Select or deselect a tag without re-rendering — a re-render would steal
+   * focus back to the list-view search box. A tag can appear under several
+   * parents in the tree, so every instance of its row is updated.
+   */
+  _setSelected(id, on) {
+    const selectedIds = this.state.selectedIds;
+    if (on) selectedIds.add(id); else selectedIds.delete(id);
+
+    this.container.querySelectorAll(`.tm-select-cb[data-id="${id}"]`).forEach(cb => {
+      cb.checked = on;
+    });
+    this.container.querySelectorAll(`.tm-row[data-id="${id}"], .tm-tag-row[data-id="${id}"]`)
+      .forEach(row => row.classList.toggle('is-selected', on));
+
+    this._updateBulkToolbar();
+  }
+
+  _toggleSelected(id) {
+    this._setSelected(id, !this.state.selectedIds.has(id));
+  }
+
+  _updateBulkToolbar() {
+    const n = this.state.selectedIds.size;
+    const count = this.container.querySelector('#tm-bulk-count');
+    if (count) count.textContent = `${n} selected`;
+
+    ['#tm-bulk-apply-btn', '#tm-bulk-move-btn', '#tm-bulk-delete-btn'].forEach(sel => {
+      const btn = this.container.querySelector(sel);
+      if (btn) btn.disabled = n === 0;
+    });
+
+    const selectAll = this.container.querySelector('#tm-select-all-cb');
+    if (selectAll) {
+      const total = this._selectableTags().length;
+      selectAll.checked = n > 0 && n === total;
+      selectAll.indeterminate = n > 0 && n < total;
+    }
+  }
+
+  async _handleBulkVisibility() {
+    const hidden = this.container.querySelector('#tm-bulk-visibility-select').value === 'hidden';
+    const ids = Array.from(this.state.selectedIds);
+    await this._runBulk(
+      ids,
+      id => patchTag(id, { hidden }),
+      n => `${n} tag${n === 1 ? '' : 's'} marked ${hidden ? 'hidden' : 'visible'}.`,
+    );
+  }
+
+  _handleBulkDelete() {
+    const n = this.state.selectedIds.size;
+    this._showConfirm(
+      'Delete tags',
+      `Delete ${n} tag${n === 1 ? '' : 's'}? Posts will NOT be deleted.`,
+      'Delete',
+      'danger',
+      async () => {
+        const ids = Array.from(this.state.selectedIds);
+        await this._runBulk(ids, id => deleteTag(id), c => `${c} tag${c === 1 ? '' : 's'} deleted.`);
+      },
+    );
+  }
+
+  /**
+   * Apply an operation to every selected tag, reporting partial failure rather
+   * than stopping at the first one, then reload and leave select mode.
+   */
+  async _runBulk(ids, op, successMessage) {
+    let done = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await op(id);
+        done++;
+      } catch (err) {
+        console.error(`[TagsManagerPage] bulk operation failed for tag ${id}:`, err);
+        failed++;
+      }
+    }
+
+    store.set('toast', {
+      message: failed === 0
+        ? successMessage(done)
+        : `${done} of ${ids.length} done. ${failed} failed.`,
+      type: failed > 0 ? 'error' : 'success',
+    });
+
+    this.setState({ selectMode: false, selectedIds: new Set() });
+    this._load();
+    this._refreshNavTags();
+  }
+
+  // Bulk Move…: pick one parent, then re-file every selected tag under it.
+  _openBulkMoveDialog() {
+    const ids = Array.from(this.state.selectedIds);
+    if (!ids.length) return;
+
+    const selected = new Set(ids);
+    const available = this.state.tags
+      .filter(t => !selected.has(t.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (!available.length) {
+      store.set('toast', { message: 'No tag left to move these under.', type: 'error' });
+      return;
+    }
+
+    const parentItems = available.map(t => `
+      <label class="tm-move-parent-item">
+        <input type="radio" name="tm-bulk-parent" value="${t.id}">
+        <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
+      </label>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay['inner' + 'HTML'] = `
+      <div class="modal tm-move-modal" role="dialog" aria-modal="true">
+        <button class="modal-close" aria-label="Close">×</button>
+        <div class="modal-header">
+          <h3>Move ${ids.length} tag${ids.length === 1 ? '' : 's'} under…</h3>
+        </div>
+        <div class="modal-body">
+          <input type="text" class="form-input tm-move-search" placeholder="Search tags…" autocomplete="off">
+          <div class="tm-move-parent-list">${parentItems}</div>
+          <p class="form-hint">Replaces any parents these tags already have.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="tm-bulk-move-cancel-btn">Cancel</button>
+          <button type="button" class="btn btn-primary" id="tm-bulk-move-confirm-btn">Move</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.querySelector('.modal-close').addEventListener('click', close);
+    overlay.querySelector('#tm-bulk-move-cancel-btn').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('.tm-move-search').addEventListener('input', e => {
+      const q = e.target.value.trim().toLowerCase();
+      overlay.querySelectorAll('.tm-move-parent-item').forEach(item => {
+        const name = item.querySelector('.tm-move-parent-name')?.textContent.toLowerCase() || '';
+        item.classList.toggle('hidden', q !== '' && !name.includes(q));
+      });
+    });
+
+    overlay.querySelector('#tm-bulk-move-confirm-btn').addEventListener('click', async () => {
+      const radio = overlay.querySelector('input[name="tm-bulk-parent"]:checked');
+      if (!radio) {
+        store.set('toast', { message: 'Select a parent first.', type: 'error' });
+        return;
+      }
+      const parentId = parseInt(radio.value, 10);
+      close();
+      await this._runBulk(
+        ids,
+        id => setTagParents(id, [parentId]),
+        n => `${n} tag${n === 1 ? '' : 's'} moved.`,
+      );
+    });
+  }
+
   // ── Swipe-to-reveal actions (portrait mobile) ─────────────────────────────────
 
   /**
    * On narrow portrait viewports, hide .tm-actions off-screen and let users
-   * swipe a row left to reveal them.  Touch handling:
+   * swipe a row left to reveal them — the same drawer the post cards use in
+   * /light/posts.  Applies to tree rows and list-view table rows alike.
+   * Touch handling:
    *  • touchstart records origin
    *  • touchmove translates the row if the gesture is predominantly horizontal-left
    *  • touchend snaps open (if past threshold) or snaps shut
    *  • tapping anywhere else closes the currently-open row
    */
   _bindSwipeToReveal() {
+    this._swipeCleanup?.();             // tear down listeners from the previous render
+    this._swipeCleanup = null;
     if (!window.matchMedia) return;     // SSR / test env guard
-    const mql = window.matchMedia('(max-width: 40em)');
-    if (!mql.matches) return;           // desktop / tablet — nothing to do
+    // Same breakpoint as the post card list — see responsive.css.
+    const mql = window.matchMedia('(max-width: 48em)');
+    if (!mql.matches) return;           // desktop — nothing to do
 
     const THRESHOLD_PX = 40;            // minimum drag to snap open
     const DAMPING = 0.55;               // rubber-band resistance past full-open
@@ -629,9 +952,11 @@ export default class TagsManagerPage extends Component {
       openRow = null;
     };
 
-    const rows = this.container.querySelectorAll('.tm-row');
+    // Tree rows carry .tm-row; list-view rows are the <tr class="tm-tag-row">.
+    const rows = this.container.querySelectorAll('.tm-row, .tm-tag-row');
 
     rows.forEach(row => {
+      if (!row.querySelector('.tm-actions')) return;
       const ac = new AbortController();
       abortControllers.push(ac);
       const sig = { signal: ac.signal };
@@ -713,16 +1038,18 @@ export default class TagsManagerPage extends Component {
             // Snap back to open position
             row.style.transform = `translateX(${-actionsWidth}px)`;
           }
+        } else if (dx < -THRESHOLD_PX && actionsWidth > 0) {
+          // Swiping left on a closed row reveals the action drawer
+          closeOpen();
+          row.style.transform = `translateX(${-actionsWidth}px)`;
+          row.classList.add('tm-row--revealed');
+          openRow = row;
+        } else if (dx > THRESHOLD_PX) {
+          // Swipe right toggles selection, as on the post cards
+          row.style.transform = '';
+          this._selectBySwipe(row);
         } else {
-          // Swiping on a closed row: open if swiped left past threshold
-          if (dx < -THRESHOLD_PX && actionsWidth > 0) {
-            closeOpen();
-            row.style.transform = `translateX(${-actionsWidth}px)`;
-            row.classList.add('tm-row--revealed');
-            openRow = row;
-          } else {
-            row.style.transform = '';
-          }
+          row.style.transform = '';
         }
       }, { ...sig, passive: true });
 

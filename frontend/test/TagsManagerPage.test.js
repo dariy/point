@@ -61,6 +61,99 @@ describe('TagsManagerPage', () => {
     assert.ok(!html.includes('Map</span>'), 'Map label should NOT be present');
   });
 
+  test('list view wraps actions in a swipe panel and tags the collapsible columns', () => {
+    const container = {};
+    const page = new TagsManagerPage(container);
+    page.state.loading = false;
+    page.state.view = 'list';
+    page.state.tags = [
+      { id: 1, name: 'Paris', slug: 'paris', locations: [], post_count: 5, parents: [] }
+    ];
+
+    const html = page.render();
+    // The mobile drawer is positioned against the row, so the buttons need a
+    // wrapper inside the cell rather than living on the <td> itself.
+    assert.ok(html.includes('<td class="tm-actions-cell">'), 'actions cell should carry tm-actions-cell');
+    assert.ok(/tm-actions-cell">\s*<div class="tm-actions">/.test(html), 'actions should be wrapped in .tm-actions');
+    // Columns the mobile layout drops so the row fits without horizontal scroll
+    assert.ok(html.includes('tm-col-slug'), 'slug column should be tagged');
+    assert.ok(html.includes('tm-col-coords'), 'coordinates column should be tagged');
+    assert.ok(html.includes('tm-col-parents'), 'parents column should be tagged');
+  });
+
+  test('select mode adds checkboxes and a bulk toolbar in list view', () => {
+    const container = {};
+    const page = new TagsManagerPage(container);
+    page.state.loading = false;
+    page.state.view = 'list';
+    page.state.tags = [
+      { id: 1, name: 'Paris', slug: 'paris', locations: [], post_count: 5, parents: [] },
+      { id: 2, name: 'Lyon', slug: 'lyon', locations: [], post_count: 1, parents: [] }
+    ];
+
+    assert.ok(!page.render().includes('tm-bulk-toolbar'), 'no toolbar when select mode is off');
+
+    page.state.selectMode = true;
+    page.state.selectedIds = new Set([2]);
+    const html = page.render();
+    assert.ok(html.includes('tm-bulk-toolbar'), 'bulk toolbar should be rendered');
+    assert.ok(html.includes('tm-select-all-cb'), 'select-all checkbox should be present');
+    assert.ok(html.includes('<td class="tm-check-col">'), 'rows get a checkbox cell');
+    assert.ok(/data-id="2"[^>]* checked/.test(html), 'the selected row is checked');
+    assert.ok(html.includes('is-selected'), 'the selected row is marked');
+  });
+
+  test('select mode adds checkboxes and suspends drag in tree view', () => {
+    const container = {};
+    const page = new TagsManagerPage(container);
+    page.state.loading = false;
+    page.state.selectMode = true;
+    page.state.selectedIds = new Set([1]);
+    const node = { id: 1, name: 'Travel', slug: 'travel', parents: [], childrenNodes: [], post_count: 3 };
+
+    const html = page._renderNode(node, 0, null);
+    assert.ok(html.includes('tm-select-cb'), 'tree row gets a checkbox');
+    assert.ok(html.includes('draggable="false"'), 'drag is suspended while selecting');
+    assert.ok(html.includes('is-selected'), 'selected row is marked');
+  });
+
+  test('list filter predicate matches name, slug and parent name', () => {
+    const container = {};
+    const page = new TagsManagerPage(container);
+    const tag = { id: 1, name: 'Kyoto', slug: 'kyoto-jp', parents: [{ id: 9, name: 'Japan' }] };
+
+    page._listSearch = 'kyo';
+    assert.ok(page._matchesListFilter(tag), 'matches on name');
+    page._listSearch = 'jp';
+    assert.ok(page._matchesListFilter(tag), 'matches on slug');
+    page._listSearch = 'japan';
+    assert.ok(page._matchesListFilter(tag), 'matches on parent name');
+    page._listSearch = 'lisbon';
+    assert.ok(!page._matchesListFilter(tag), 'rejects a non-match');
+
+    page._listSearch = '';
+    page._listFilterParents = [{ id: 9, name: 'Japan' }];
+    assert.ok(page._matchesListFilter(tag), 'matches an active parent chip');
+    page._listFilterParents = [{ id: 7, name: 'Peru' }];
+    assert.ok(!page._matchesListFilter(tag), 'rejects a parent chip it lacks');
+  });
+
+  test('select all is limited to filtered tags in list view', () => {
+    const container = {};
+    const page = new TagsManagerPage(container);
+    page.state.view = 'list';
+    page.state.tags = [
+      { id: 1, name: 'Kyoto', slug: 'kyoto', parents: [] },
+      { id: 2, name: 'Lisbon', slug: 'lisbon', parents: [] }
+    ];
+    page._listSearch = 'kyo';
+    assert.deepEqual(page._selectableTags().map(t => t.id), [1]);
+
+    // The tree has no filters, so everything is selectable there.
+    page.state.view = 'tree';
+    assert.deepEqual(page._selectableTags().map(t => t.id), [1, 2]);
+  });
+
   test('should render tree with nav root when tag has nav_order', () => {
     const container = {};
     const page = new TagsManagerPage(container);

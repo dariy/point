@@ -10,8 +10,9 @@
  *                          component container. Defaults to false.
  *
  * Public methods:
- *   openFilePicker()    Opens the file chooser (used by MediaPage's header
- *                       Upload button, which sits outside this container).
+ *   openFilePicker()    Opens the file chooser (used by the Upload buttons of
+ *                       MediaPage's admin header and MediaPickerDialog's modal
+ *                       header, both of which sit outside this container).
  *   getSelectedItems()  Picker mode: array of selected media objects.
  */
 
@@ -130,18 +131,17 @@ export class MediaBrowser extends Component {
   }
 
   /**
-   * Upload / poster-backfill row. Upload is picker-only: the standalone page
-   * carries it in the admin header instead (see MediaPage), the way the posts
-   * list carries "New Post". Returns "" when neither control applies, so the
-   * row itself can be skipped.
+   * Poster-backfill row. Upload is not here in either mode: both hosts carry it
+   * on their own header line — the admin header on the standalone page, the
+   * dialog header in the picker — and reach the file input through
+   * openFilePicker(). Returns "" when nothing applies, so the row can be
+   * skipped.
    *
    * Controls use classes rather than ids, and $$ wiring in afterRender, since
    * more than one copy may be in the DOM.
    */
   _renderControls() {
-    return `
-      ${this.props.pickerMode ? `<button class="mb-upload-btn btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>` : ""}
-      ${this._renderPosterBackfill()}`;
+    return this._renderPosterBackfill();
   }
 
   /** Media type filter — first control on the folder (media/year/month) line. */
@@ -713,10 +713,6 @@ export class MediaBrowser extends Component {
 
     // Tree and mobile-bar copies of each control are both in the DOM (CSS shows
     // one), so every listener binds across all matches.
-    this.$$(".mb-upload-btn").forEach((btn) =>
-      btn.addEventListener("click", () => fileInput?.click()),
-    );
-
     this.$$(".mb-posters-btn").forEach((btn) =>
       btn.addEventListener("click", () => this._backfillPosters()),
     );
@@ -1035,9 +1031,9 @@ export class MediaBrowser extends Component {
   }
 
   /**
-   * Opens the hidden file input. The standalone page's Upload button lives in
-   * the admin header, outside this component's container, so it can't reach the
-   * input directly.
+   * Opens the hidden file input. Both Upload buttons — the standalone page's in
+   * the admin header, the picker's in the dialog header — live outside this
+   * component's container, so they can't reach the input directly.
    */
   openFilePicker() {
     this.$("#mb-file-input")?.click();
