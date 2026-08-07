@@ -881,56 +881,6 @@ textarea.is-maximized,
     gap: var(--spacing-sm);
 }
 
-/* On the canvas the header is just a caption, so keep the pin beside its label
-   instead of pushed to the far edge of a full-width field. */
-.details-group.is-pinned .details-pin-btn {
-    margin-left: var(--spacing-xs);
-    margin-right: auto;
-}
-
-/* Pin toggle — muted until the group is hovered, solid once pinned */
-.details-pin-btn {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: auto;
-    padding: var(--spacing-xs);
-    background: transparent;
-    border: none;
-    border-radius: var(--border-radius-sm);
-    color: var(--text-muted);
-    opacity: 0.45;
-    cursor: pointer;
-    transition:
-        color var(--transition-fast),
-        opacity var(--transition-fast);
-}
-
-.details-group:hover > summary .details-pin-btn,
-.details-pin-btn:focus-visible,
-.details-pin-btn.is-pinned {
-    opacity: 1;
-}
-
-.details-pin-btn:hover,
-.details-pin-btn.is-pinned {
-    color: var(--color-primary);
-}
-
-.details-pin-btn svg {
-    display: block;
-}
-
-/* No hover-only affordances on touch: full-strength icon, ≥44 px target */
-@media (pointer: coarse) {
-    .details-pin-btn {
-        opacity: 1;
-        min-width: var(--size-2-75);
-        min-height: var(--size-2-75);
-    }
-}
-
 /* A group that does not apply right now (Schedule on an unscheduled post) */
 .details-group.is-hidden {
     display: none;
@@ -1002,6 +952,14 @@ textarea.is-maximized,
     color: var(--color-primary);
 }
 
+/* The handle is the only control in this mode — give it a real target on touch */
+@media (pointer: coarse) {
+    .details-group-handle {
+        min-width: var(--size-2-75);
+        min-height: var(--size-2-75);
+    }
+}
+
 .details-group-handle svg {
     display: block;
 }
@@ -1038,12 +996,6 @@ textarea.is-maximized,
     text-transform: none;
     letter-spacing: normal;
     color: var(--text-primary);
-}
-
-.editor-layout.is-arranging .details-pin-btn {
-    opacity: 1;
-    margin-left: auto;
-    margin-right: 0;
 }
 
 /* Both lists stay aimable even when empty, so one side can be filled from the other */

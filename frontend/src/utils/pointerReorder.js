@@ -31,8 +31,17 @@ export function attachPointerReorder({
   let indicator = null; // the drop line
   let pointerId = null;
   let handleEl = null;
+  let lastX = 0;
+  let lastY = 0;
+  let scrollRaf = null;
+
+  const stopAutoScroll = () => {
+    if (scrollRaf !== null) cancelAnimationFrame(scrollRaf);
+    scrollRaf = null;
+  };
 
   const cleanupDrag = () => {
+    stopAutoScroll();
     indicator?.remove();
     indicator = null;
     item?.classList.remove("is-dragging");
@@ -43,6 +52,37 @@ export function attachPointerReorder({
     from = null;
     handleEl = null;
     pointerId = null;
+  };
+
+  /**
+   * Scroll speed for a pointer this close to the top/bottom of the viewport.
+   * Without this a list taller than the screen — or a second list below the
+   * fold — simply cannot be reached: the pointer is captured, so the usual
+   * touch-scroll and edge-scroll behaviours are gone for the duration.
+   */
+  const edgeVelocity = (y) => {
+    const EDGE = 64;
+    const SPEED = 16;
+    if (y < EDGE) return -SPEED * (1 - y / EDGE);
+    const fromBottom = window.innerHeight - y;
+    if (fromBottom < EDGE) return SPEED * (1 - fromBottom / EDGE);
+    return 0;
+  };
+
+  const tickAutoScroll = () => {
+    scrollRaf = null;
+    if (!item) return;
+    const v = edgeVelocity(lastY);
+    if (!v) return;
+    window.scrollBy(0, v);
+    // The page moved under a stationary pointer, so what sits at that point
+    // changed — re-place the line from the same client coordinates.
+    showIndicator(containerAt(lastX, lastY), lastY);
+    scrollRaf = requestAnimationFrame(tickAutoScroll);
+  };
+
+  const startAutoScroll = () => {
+    if (scrollRaf === null && edgeVelocity(lastY)) scrollRaf = requestAnimationFrame(tickAutoScroll);
   };
 
   /** The container under the pointer, or the one the gesture started in. */
@@ -87,6 +127,8 @@ export function attachPointerReorder({
     from = container;
     handleEl = handle;
     pointerId = e.pointerId;
+    lastX = e.clientX;
+    lastY = e.clientY;
     // Claim the gesture: without capture a touch scrolls the page away from
     // under the finger, and a mouse that leaves the handle stops reporting.
     try { handle.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
@@ -98,7 +140,10 @@ export function attachPointerReorder({
   const onPointerMove = (e) => {
     if (!item || e.pointerId !== pointerId) return;
     e.preventDefault();
-    showIndicator(containerAt(e.clientX, e.clientY), e.clientY);
+    lastX = e.clientX;
+    lastY = e.clientY;
+    showIndicator(containerAt(lastX, lastY), lastY);
+    startAutoScroll();
   };
 
   const onPointerUp = (e) => {

@@ -271,14 +271,6 @@ export const GRIP_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="n
   <line x1="4" y1="16" x2="20" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
 
-// Pin toggle on each editor field group — pinned fields move onto the canvas.
-export const PIN_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z"
-    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="12" y1="17" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`;
-
 export const SPARKLE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M12 2l2.4 7.6H22l-6.4 4.6 2.4 7.8L12 17.4l-6 4.6 2.4-7.8L2 9.6h7.6z"

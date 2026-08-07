@@ -317,7 +317,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     }
   });
 
-  test('every group carries a pin toggle, pinned ones marked pressed', () => {
+  test('no per-field pin buttons — arrange mode is the one way to move a field', () => {
     const container = { querySelector: () => null, querySelectorAll: () => [] };
     const page = new PostEditPage(container, { params: { id: '1' } });
     page.state.loading = false;
@@ -326,11 +326,9 @@ test('should preserve other fields when switching from visual to text mode', () 
     page.state.igStatus = { enabled: true, connected: true, default_share: false };
 
     const html = page.render();
-    for (const key of ['title', 'tags', 'status', 'schedule', 'slug', 'excerpt', 'immersive', 'css', 'instagram']) {
-      assert.ok(html.includes(`data-pin="${key}"`), `${key} has a pin button`);
-    }
-    assert.match(html, /data-pin="title"[\s\S]{0,120}aria-pressed="true"/, 'pinned group reports pressed');
-    assert.match(html, /data-pin="slug"[\s\S]{0,120}aria-pressed="false"/, 'unpinned group reports unpressed');
+    assert.ok(!html.includes('data-pin='), 'no pin buttons');
+    assert.ok(!html.includes('details-pin-btn'), 'no pin markup left behind');
+    assert.ok(html.includes('data-action="arrange"'), 'the menu still offers the mode');
   });
 
   test('a persisted pin set decides placement', () => {
@@ -365,10 +363,14 @@ test('should preserve other fields when switching from visual to text mode', () 
     assert.ok(!/is-hidden" data-group="schedule"/.test(page.render()), 'visible for a scheduled post');
   });
 
-  test('toggling a pin moves the live element and persists the set', () => {
-    let stored = null;
+  test('dropping into the other list moves the live element and records the side', () => {
+    let stored = {};
     const saved = global.localStorage;
-    global.localStorage = { getItem: () => stored, setItem: (_k, v) => { stored = v; }, removeItem: () => {} };
+    global.localStorage = {
+      getItem: (k) => stored[k] ?? null,
+      setItem: (k, v) => { stored[k] = v; },
+      removeItem: (k) => { delete stored[k]; },
+    };
     try {
       const el = (classes = [], dataset = {}) => {
         const set = new Set(classes);
@@ -391,30 +393,27 @@ test('should preserve other fields when switching from visual to text mode', () 
       };
 
       const slug = el(['details-group'], { group: 'slug' });
-      const pinBtn = { classList: { toggle: () => {} }, setAttribute: () => {}, title: '', focus: () => {} };
-      slug.querySelector = () => pinBtn;
+      const title = el(['details-group'], { group: 'title' });
       const canvas = el([]);
+      canvas.children = [title];
       const panel = el([]);
       panel.children = [slug];
       panel.querySelector = () => (panel.children.length ? panel.children[0] : null);
 
       const container = {
-        querySelector: (sel) => ({
-          '.details-group[data-group="slug"]': slug,
-          '#pinned-fields': canvas,
-          '.details-panel-body': panel,
-        }[sel] ?? null),
+        querySelector: (sel) => ({ '#pinned-fields': canvas, '.details-panel-body': panel }[sel] ?? null),
         querySelectorAll: () => [],
       };
 
       const page = new PostEditPage(container, { params: { id: '1' } });
-      page._togglePin('slug');
+      page._dropGroup(slug, canvas, title);
 
-      assert.ok(page._pinned.has('slug'), 'slug is now pinned');
-      assert.deepStrictEqual(JSON.parse(stored).includes('slug'), true, 'pin set persisted');
-      assert.strictEqual(canvas.children[0], slug, 'element moved onto the canvas');
-      assert.ok(slug._classes.has('is-pinned'), 'element marked pinned');
-      assert.strictEqual(slug.open, true, 'a pinned group is always expanded');
+      assert.ok(page._pinned.has('slug'), 'slug now lives on the canvas');
+      assert.deepStrictEqual(JSON.parse(stored['point:editor:pinned']).includes('slug'), true, 'side persisted');
+      assert.deepStrictEqual(canvas.children.map((c) => c.dataset.group), ['title', 'slug'], 'dropped after title');
+      assert.ok(slug._classes.has('is-pinned'), 'element marked as a canvas block');
+      assert.strictEqual(slug.open, true, 'a canvas block is always expanded');
+      assert.deepStrictEqual(JSON.parse(stored['point:editor:field-order']).slice(0, 2), ['title', 'slug'], 'order persisted');
     } finally {
       global.localStorage = saved;
     }
@@ -431,7 +430,6 @@ test('should preserve other fields when switching from visual to text mode', () 
     const panelAt = html.indexOf('id="details-panel"');
     assert.ok(html.indexOf('data-group="content"') < panelAt, 'content sits on the canvas');
     assert.ok(html.includes('data-handle="content"'), 'content can be reordered');
-    assert.ok(!html.includes('data-pin="content"'), 'content has no pin — it never leaves the canvas');
     // The editor itself is that block's body, not a sibling of the field list.
     const contentAt = html.indexOf('data-group="content"');
     const mountAt = html.indexOf('visual-editor-mount');
