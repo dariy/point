@@ -58,8 +58,8 @@ The app is configured via environment variables (or a `.env` file in the working
 ### Run locally
 
 ```bash
-cd api && go run ./cmd/api
-# API starts at http://localhost:8000 (reads .env if present)
+./scripts/run.sh            # build + run locally (way faster than rebuild.sh)
+# runs at http://localhost:8001 (reads .env if present)
 ```
 
 ### Tests & CSS
@@ -73,7 +73,7 @@ cd api && go run ./cmd/api
 ### Build + deploy (Podman)
 
 ```bash
-scripts/rebuild.sh        # build + restart container
+./scripts/rebuild.sh        # build + restart container
 ```
 
 ### Prerequisites
@@ -112,6 +112,12 @@ MIT — see [LICENSE](LICENSE).
 ## Built with
 
 [Go](https://golang.org/) · [Echo](https://echo.labstack.com/) · [SQLite](https://sqlite.org/) · [Podman](https://podman.io/)
+
+### External projects in use
+
+- [leaflet](https://github.com/Leaflet/Leaflet) - map library for geo data representation.
+- [remark42](https://github.com/umputun/remark42) - comments engine sidecar.
+- [codejar](https://github.com/antonmedv/codejar) and [prismjs](https://github.com/PrismJS/prism) - highlighting in the post editor.
 
 ```
  _| _ ._oo ._  __|_
