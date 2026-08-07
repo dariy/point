@@ -4,9 +4,9 @@
 [![Tests](https://github.com/dariy/point/actions/workflows/test.yml/badge.svg)](https://github.com/dariy/point/actions/workflows/test.yml)
 [![GHCR](https://ghcr-badge.egpl.dev/dariy/point/latest_tag?trim=major&label=ghcr.io%2Fdariy%2Fpoint)](https://github.com/dariy/point/pkgs/container/point)
 
-A self-hosted personal photo blog engine. Single container, SQLite storage, no external services required.
+A personal photo blog engine.
 
-Built with Go + Echo v4 backend and a plain JS SPA frontend.
+Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS SPA frontend.
 
 ## Quick start
 
