@@ -127,6 +127,21 @@ class Router {
   /** Intercept clicks on same-origin <a> elements. */
   _onLinkClick(event) {
     if (event.defaultPrevented) return;
+
+    // A modified click asks for a destination other than "here" — a new tab or
+    // window, or a download. Leave those to the browser: now that the admin's
+    // links to the public site are ordinary in-app links, this is the way to
+    // deliberately open one beside the admin instead of navigating away from it.
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
     const anchor = event.target.closest("a[href]");
     if (!anchor) return;
 

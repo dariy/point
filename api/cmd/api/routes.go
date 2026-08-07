@@ -77,6 +77,7 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 	mediaGroup.PUT("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PATCH("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/rename", h.RenameMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/poster", h.SetVideoPoster, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/analyze", h.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "ai-analysis"))
 	mediaGroup.POST("/:id/reextract", h.ReextractEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PUT("/:id/exif", h.UpdateEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -148,7 +149,9 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup.GET("/photo-library", h.GetPhotoLibraryContents, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/photo-library/import", h.ImportSelectedPhotos, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/photo-library/file", h.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	systemGroup.GET("/version", h.GetVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/version", h.GetVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "version-check"))
+	// Manual re-check from the plugin's settings drawer: bypasses the 24h cache.
+	systemGroup.POST("/version/check", h.CheckVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "version-check"))
 	// Restart the process in place (re-exec). Session-only: not an API-key action.
 	systemGroup.POST("/restart", h.RestartServer, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 }

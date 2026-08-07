@@ -96,7 +96,6 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"posts_per_page", "10", "integer"},
 		{"default_theme", "dark", "string"},
 		{"active_css_theme", "default", "string"},
-		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
 
 		{"tags_visibility", "hidden", "string"},

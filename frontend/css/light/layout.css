@@ -374,6 +374,18 @@ body {
     flex-shrink: 0;
 }
 
+/* Post list navigation arrows. Position only — visibility (including the
+   mobile hide) belongs to .page-nav-arrow in common/pagination.css, which is
+   bundled ahead of this file. Admin has no content gutter to park them in, so
+   they clear the sidebar instead of the default centred-content offset. */
+.admin-page-nav-arrow.page-nav-prev {
+    left: calc(var(--sidebar-width) + var(--spacing-md));
+}
+
+.admin-page-nav-arrow.page-nav-next {
+    right: var(--spacing-md);
+}
+
 /* Theme Toggle (admin overrides) */
 .theme-toggle {
     display: flex;

@@ -26,6 +26,10 @@
         padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0));
     }
 
+    .light-header {
+        padding: 0 var(--spacing-sm);
+    }
+
     .admin-bottom-bar {
         display: flex;
     }
@@ -139,18 +143,10 @@
 }
 
 /* ===========================
-   Tags Manager — portrait phones
+   Tags Manager & Mobile Header — portrait phones
    =========================== */
 @media (max-width: 40em) {
 
-    /* Actions drop to line 2, full width, wrapping allowed */
-    .header-actions {
-        flex-basis: 100%;
-        flex-wrap: wrap;
-        text-wrap-mode: wrap;
-        justify-content: flex-end;
-        order: 1;
-    }
 
     /* Hide drag handles — touch drag is unavailable */
     .tm-drag-handle {

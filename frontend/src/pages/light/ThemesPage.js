@@ -9,10 +9,13 @@ import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/Ad
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
-import { STAR_SVG } from "../../utils/icons.js";
+import { STAR_SVG, MOON_SVG } from "../../utils/icons.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
 import { pluginHost } from "../../core/pluginHost.js";
+import { loadThemeCss } from "../../utils/themeLoader.js";
+
+const CSS_COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\)|hsla?\([0-9.,%\s/deg]+\))$/i;
 
 export default class ThemesPage extends Component {
   constructor(container, props = {}) {
@@ -63,28 +66,44 @@ export default class ThemesPage extends Component {
         ` : ''}`;
   }
 
+  // Theme colours reach the DOM through an inline style attribute, so only
+  // plain colour literals are let through — a theme file is admin-authored but
+  // its values are still free text, and escaping alone would not stop extra
+  // declarations being smuggled into the attribute.
+  _color(value, fallback) {
+    const v = String(value || "").trim();
+    return CSS_COLOR_RE.test(v) ? v : fallback;
+  }
+
   _renderThemeCard(theme, activeTheme, saving) {
     const isActive = activeTheme === theme.name;
-    const colors = {
-      primary: theme.preview_color || "#000",
-      text: theme.has_dark_mode ? "#f0f0f0" : "#333",
-    };
+    const swatch = [
+      `--swatch-bg:${this._color(theme.preview_bg, "#f4f4f5")}`,
+      `--swatch-surface:${this._color(theme.preview_surface, "#ffffff")}`,
+      `--swatch-text:${this._color(theme.preview_text, "#18181b")}`,
+      `--swatch-border:${this._color(theme.preview_border, "rgba(0,0,0,0.12)")}`,
+      `--swatch-accent:${this._color(theme.preview_color, "#71717a")}`,
+    ].join(";");
 
     return `
       <article class="theme-card ${isActive ? "active" : ""}">
-        <div class="theme-card-preview">
-          <div class="theme-preview-mock" style="background-color: ${theme.has_dark_mode ? '#1a1a1a' : '#ffffff'}">
-            <div class="mock-header" style="background-color: ${escapeHtml(colors.primary)}"></div>
-            <div class="mock-content">
-              <div class="mock-line" style="background-color: ${escapeHtml(colors.text)}"></div>
-              <div class="mock-line" style="background-color: ${escapeHtml(colors.text)}"></div>
-              <div class="mock-line short" style="background-color: ${escapeHtml(colors.text)}"></div>
-            </div>
-          </div>
+        <div class="theme-swatch" style="${swatch}" aria-hidden="true">
+          <span class="theme-swatch-bar"></span>
+          <span class="theme-swatch-page">
+            <span class="theme-swatch-line"></span>
+            <span class="theme-swatch-line"></span>
+            <span class="theme-swatch-line short"></span>
+          </span>
         </div>
-        <div class="theme-info">
-          <div class="theme-name">${escapeHtml(theme.name)}</div>
-          <button class="btn btn-sm ${isActive ? "btn-secondary" : "btn-primary"} set-active-btn" 
+        <div class="theme-card-info">
+          <h3 class="theme-name">
+            ${escapeHtml(theme.name)}
+            ${theme.has_dark_mode ? `<span class="theme-dark-badge" title="Ships a dark mode">${MOON_SVG}</span>` : ""}
+          </h3>
+          ${theme.description ? `<p class="theme-description">${escapeHtml(theme.description)}</p>` : ""}
+        </div>
+        <div class="theme-card-action">
+          <button class="btn btn-sm ${isActive ? "btn-secondary" : "btn-primary"} set-active-btn"
                   data-name="${escapeHtml(theme.name)}" ${isActive || saving ? "disabled" : ""}>
             ${isActive ? STAR_SVG + " Active" : "Set Active"}
           </button>
@@ -161,6 +180,10 @@ export default class ThemesPage extends Component {
     this.setState({ saving: true });
     try {
       await setActiveTheme(name);
+      // The response means the server has already rewritten theme.css, so
+      // re-fetching it repaints the whole app in the new theme the way the
+      // light/dark toggle does. Cache-busted: the URL is unchanged.
+      await loadThemeCss({ bust: true });
       store.set("toast", { message: `Theme "${name}" activated.`, type: "success" });
       this.setState({ saving: false, activeTheme: name });
     } catch (err) {
@@ -174,6 +197,9 @@ export default class ThemesPage extends Component {
     this.setState({ savingCSS: true });
     try {
       const result = await updateCustomCSS(css);
+      // Custom CSS is appended to theme.css server-side, so the same re-fetch
+      // shows the saved (and sanitized) result without a reload.
+      await loadThemeCss({ bust: true });
       // The server sanitizes site-wide CSS (@import, off-origin url(), '<').
       // Say so rather than letting the removal look like a save that worked.
       const warnings = result?.css_warnings;

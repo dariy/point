@@ -35,6 +35,12 @@
     flex: 1;
     position: relative;
     min-height: 0;
+    /* Establishes a stacking context, which confines Leaflet's panes (400–700)
+       and controls (800/1000) and the overlays below (500) to the map. Without
+       it those z-indexes compete in the root context, where they outrank the
+       sticky `#header-mount` (110) — the header's search typeahead then opened
+       *under* the map. `.map-container` does the same with z-index: 1. */
+    z-index: 0;
 }
 
 .atlas-map #atlas-map-el {
@@ -253,6 +259,13 @@
 .atlas-hint.is-hidden {
     opacity: 0;
     transform: translateX(-50%) translateY(-8px);
+}
+
+/* The hint also carries the empty state, when a timeline range leaves the map
+   with no places to show. Muted so it reads as a report, not a prompt. */
+.atlas-hint--empty {
+    color: var(--text-secondary, var(--text-primary));
+    font-weight: 500;
 }
 
 .atlas-legend {

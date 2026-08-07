@@ -14,6 +14,7 @@ import { escapeHtml } from "../../utils/helpers.js";
 // Friendlier labels for keys whose snake_case name reads poorly.
 export const LABEL_OVERRIDES = {
   tags_visibility: "Tags visible to",
+  show_title_dropdown: "Root-tag dropdown on the site title",
   atlas_post_limit: "Atlas posts to fetch",
   // Not a second "enable the plugin" switch — the plugin list owns that. This
   // gates cross-posting on publish, so label it for what it does.
@@ -43,9 +44,6 @@ export const LABEL_OVERRIDES = {
 export const NUMERIC_KEYS = new Set([
   "posts_per_page",
   "min_tag_posts_to_show",
-  "storage_quota_mb",
-  "session_ttl_days",
-  "cleanup_interval_days",
   "atlas_post_limit",
   "remark_smtp_port",
 ]);
@@ -71,21 +69,19 @@ export const DEFAULT_ON_KEYS = new Set([
   "remark_no_footer",
   "remark_auth_anon",
   "remark_smtp_tls",
+  // The header treats an absent show_title_dropdown as on (SiteCrumb).
+  "show_title_dropdown",
 ]);
 
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
 export function isToggleKey(key) {
-  if (key.includes("username")) return false; // "username" would match "use"
   return (
     key.includes("enable") ||
     key.includes("show") ||
-    key.includes("use") ||
     key.includes("_anon") ||
     key.includes("_tls") ||
     key === "remark_simple_view" ||
-    key === "remark_no_footer" ||
-    key === "multi_user_mode" ||
-    key === "require_registration_code"
+    key === "remark_no_footer"
   );
 }
 
@@ -93,8 +89,6 @@ function isNumericKey(key) {
   return (
     NUMERIC_KEYS.has(key) ||
     key.includes("per_page") ||
-    key.includes("quota") ||
-    key.includes("interval") ||
     key.includes("posts_to_show")
   );
 }
@@ -122,7 +116,7 @@ function inputHtml(key, value, { posts = [] }) {
       })
       .join("");
     const previewLink = value
-      ? `<a href="/posts/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
+      ? `<a href="/posts/${escapeHtml(String(value))}" class="settings-preview-link">Preview</a>`
       : "";
     return `<div class="settings-input-with-preview">
         <select name="${key}" id="${key}" class="form-select">
@@ -179,7 +173,7 @@ function inputHtml(key, value, { posts = [] }) {
   if (key === "footer_copyright") {
     const v = escapeHtml(String(value || ""));
     return `<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
-      <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Leave blank for the default.</small>`;
+      <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Links: <code>[text](https://example.com)</code> or <code>[text](/path)</code>. Leave blank for the default.</small>`;
   }
   if (key.startsWith("gemini_prompt_")) {
     // ponytail: placeholders mirror media_service.go's built-in defaults.

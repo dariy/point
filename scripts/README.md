@@ -19,6 +19,12 @@ outside this repo — see [Production](#production) below.
 - **run-remark42-local.sh**: Runs the bundled remark42 comments engine locally
   for dev, mirroring what `build/Dockerfile` + `entrypoint.sh` do in the
   container. Started automatically by `run.sh` when comments are enabled.
+- **run-old-version-check.sh**: `run.sh` with `APP_VERSION` pinned to an old
+  release (default `v0.1.35`), so the upstream tag always looks newer and the
+  `version-check` plugin's update paths render — the dashboard banner and the
+  plugin's settings drawer. `--reset-cache` also forgets the last upstream
+  answer, exercising the cold path. Manual test only; a dev build's "dev-…"
+  version is not semver and never compares as out of date.
 
 ## Quality Gate
 

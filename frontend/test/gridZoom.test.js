@@ -23,7 +23,7 @@ globalThis.document = {
   querySelector: () => null,
 };
 
-const { getZoom, setZoom, clampZoom, maxZoomCols } = await import('../src/utils/gridFit.js');
+const { getZoom, setZoom, clampZoom, maxZoomCols, createFitLatch } = await import('../src/utils/gridFit.js');
 
 describe('grid zoom', () => {
   beforeEach(() => { store.clear(); });
@@ -53,5 +53,43 @@ describe('grid zoom', () => {
     assert.equal(clampZoom(0), 1);       // never below 1
     window.innerWidth = 1200;
     assert.equal(clampZoom(4), 4);       // within range, untouched
+  });
+});
+
+describe('fit latch', () => {
+  test('passes a fit through and lets it keep settling', () => {
+    const latch = createFitLatch();
+    assert.equal(latch.accept(10, 6), 6);  // first measurement
+    assert.equal(latch.accept(6, 6), null); // nothing to change
+    assert.equal(latch.accept(6, 5), 5);   // chrome laid out; still refining
+  });
+
+  test('breaks the 2↔4 cycle a page-count-dependent paginator causes', () => {
+    // 375x667, two zoom columns: compact paginator ⇒ 2 rows fit (4 posts),
+    // whose 7-page paginator wraps to two lines ⇒ only 1 row fits (2 posts),
+    // whose 13 pages go compact again…
+    const latch = createFitLatch();
+    assert.equal(latch.accept(2, 4), 4);
+    assert.equal(latch.accept(4, 2), 2);
+    assert.equal(latch.accept(2, 4), null); // seen 4 before — stay at the smaller
+    assert.equal(latch.accept(2, 4), null); // and stay latched
+    assert.equal(latch.accept(2, 8), null);
+  });
+
+  test('a cycle detected while showing the larger value settles downward', () => {
+    const latch = createFitLatch();
+    assert.equal(latch.accept(4, 2), 2);
+    assert.equal(latch.accept(2, 4), 4);
+    assert.equal(latch.accept(4, 2), 2);    // shrinking is always safe to apply
+    assert.equal(latch.accept(2, 4), null); // latched from here on
+  });
+
+  test('reset re-opens the question after a resize or zoom step', () => {
+    const latch = createFitLatch();
+    latch.accept(2, 4);
+    latch.accept(4, 2);
+    assert.equal(latch.accept(2, 4), null);
+    latch.reset();
+    assert.equal(latch.accept(2, 4), 4);    // new viewport, new decision
   });
 });

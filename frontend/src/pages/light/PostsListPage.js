@@ -20,7 +20,12 @@ import {
   generatePreviewLink,
 } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import {
+  escapeHtml,
+  navigate,
+  debounce,
+  dropBrokenImages,
+} from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import {
   EDIT_SVG,
@@ -48,6 +53,18 @@ const STATUS_LABELS = {
 // "Page" is surfaced as a status in the UI but is really type=page (always
 // published). Treat any type=page post as having the effective status "page".
 const effStatus = (p) => (p.type === "page" ? "page" : (p.status || "draft"));
+
+/**
+ * Preview for a video post: its captured poster frame laid over the play glyph.
+ * The poster URL 404s for videos that never got one (see dropBrokenImages),
+ * which strips the <img> back to the bare glyph this list has always shown.
+ */
+const videoThumb = (mediaUrl) =>
+  `${PLAY_SVG}${
+    mediaUrl
+      ? `<img src="${escapeHtml(mediaUrl + "?thumb")}" class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">`
+      : ""
+  }`;
 
 export default class PostsListPage extends Component {
   constructor(container, props = {}) {
@@ -96,7 +113,7 @@ export default class PostsListPage extends Component {
     if (isImage && p.media_url) {
       thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
     } else if (isVideo) {
-      thumbInner = PLAY_SVG;
+      thumbInner = videoThumb(p.media_url);
     } else if (isAudio) {
       thumbInner = MUSIC_SVG;
     }
@@ -154,7 +171,7 @@ export default class PostsListPage extends Component {
         <div class="post-card-swipe-actions">
           <button class="btn btn-sm swipe-publish-btn" data-id="${escapeHtml(String(p.id))}">${CHECK_SVG}<span>Publish</span></button>
           <button class="btn btn-sm swipe-preview-btn" data-id="${escapeHtml(String(p.id))}">${LINK_SVG}<span>Link</span></button>
-          <a class="btn btn-sm" href="/posts/${escapeHtml(p.slug)}" target="_blank" data-external>${EXTERNAL_LINK_SVG}<span>Open</span></a>
+          <a class="btn btn-sm" href="/posts/${escapeHtml(p.slug)}">${EXTERNAL_LINK_SVG}<span>Open</span></a>
           <button class="btn btn-sm btn-danger swipe-delete-btn" data-id="${escapeHtml(String(p.id))}" data-title="${escapeHtml(p.title)}">${X_SVG}<span>Delete</span></button>
         </div>
       </div>`;
@@ -232,7 +249,7 @@ export default class PostsListPage extends Component {
                 if (isImage && p.media_url) {
                   previewHtml = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
                 } else if (isVideo) {
-                  previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
+                  previewHtml = `<div class="post-preview-placeholder" title="Video">${videoThumb(p.media_url)}</div>`;
                 } else if (isAudio) {
                   previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
                 } else {
@@ -322,7 +339,7 @@ export default class PostsListPage extends Component {
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
                        class="btn btn-sm" title="Edit" aria-label="Edit post">${EDIT_SVG}</a>
                     <a href="/posts/${escapeHtml(p.slug)}" class="btn btn-sm"
-                       title="View" aria-label="View on public site" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
+                       title="View" aria-label="View on public site">${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
                             data-title="${escapeHtml(p.title)}"
@@ -390,6 +407,9 @@ export default class PostsListPage extends Component {
     // fills the window and pagination stays pinned to the bottom edge.
     this.$(".light-main")?.classList.add("posts-list-main");
 
+    // Video posters are rendered optimistically; strip the ones that 404.
+    dropBrokenImages(this.$(".light-main"));
+
     try {
       sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
     } catch { /* ignore */ }
@@ -397,13 +417,16 @@ export default class PostsListPage extends Component {
     const { statusFilter } = this.state;
     const isTrash = statusFilter === "trash";
 
-    if (!this.state.loading && this.state.pagination.pages > 1) {
-      this.mountChild(Pagination, "#pagination-mount", {
-        page: this.state.pagination.page,
-        pages: this.state.pagination.pages,
-        total: this.state.pagination.total,
-        onPage: (p) => this._load({ page: p }),
-      });
+    if (!this.state.loading) {
+      if (this.state.pagination.pages > 1) {
+        this.mountChild(Pagination, "#pagination-mount", {
+          page: this.state.pagination.page,
+          pages: this.state.pagination.pages,
+          total: this.state.pagination.total,
+          onPage: (p) => this._load({ page: p }),
+        });
+      }
+      this._setupPageControls(this.state.pagination);
     }
 
     // Restore focus to search input after a re-render triggered by _load
@@ -749,6 +772,48 @@ export default class PostsListPage extends Component {
   beforeUnmount() {
     this._cleanupAdminLayout?.();
     if (this._onResize) window.removeEventListener("resize", this._onResize);
+    this._teardownPageControls();
+  }
+
+  _setupPageControls(pagination) {
+    this._teardownPageControls();
+    
+    const pages = pagination.pages || 1;
+    const page = pagination.page || 1;
+    const goPrev = () => { if (page > 1) this._load({ page: page - 1 }); };
+    const goNext = () => { if (page < pages) this._load({ page: page + 1 }); };
+
+    this._onKeyNav = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') { e.preventDefault(); goPrev(); }
+      else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') { e.preventDefault(); goNext(); }
+    };
+    window.addEventListener('keydown', this._onKeyNav);
+
+    const CHEVRON = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
+                       ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = CHEVRON(d);
+      b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
+      b.addEventListener('click', go);
+      document.body.appendChild(b);
+      return b;
+    });
+  }
+
+  _teardownPageControls() {
+    if (this._onKeyNav) {
+      window.removeEventListener('keydown', this._onKeyNav);
+      this._onKeyNav = null;
+    }
+    for (const a of this._navArrows || []) a.remove();
+    this._navArrows = null;
   }
 
   /**

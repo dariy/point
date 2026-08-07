@@ -40,8 +40,8 @@ learn, a setting to forget).
   pinned Unfiled queue, Move…/Merge… dialogs (see [tag-system.md](tag-system.md)).
 - **Power-user layer**: `CommandPalette.js` (Ctrl+K — posts, tags, admin pages,
   actions) and `ShortcutHelp.js` (`?` overlay) — depth without visual cost.
-- **Media on touch**: capture/library buttons, breadcrumb + folder chips instead of
-  the tree, long-press selection (see [media.md](media.md)).
+- **Media on touch**: breadcrumb + a drill-down folder chip strip instead of the tree,
+  long-press selection (see [media.md](media.md)).
 - **Touch pass**: ≥44 px targets, no hover-only or drag-only affordances on coarse
   pointers.
 

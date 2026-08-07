@@ -1,11 +1,18 @@
 /* ===========================
    Modal Dialogs
    =========================== */
+/* Above the plugin settings drawer (z-index 10001, light/plugins.css) and below
+   the restart overlay (10010, light/system.css). A dialog is always opened *from*
+   something, and that something can be the drawer — "Create API Key" in the API
+   Keys plugin's settings is the case that exposed this. The `.modal` rule below
+   cannot supply the depth: this element is positioned with a z-index, so it forms
+   a stacking context and its child's 10001 is scoped inside, leaving 10000 as the
+   dialog's real stacking level — under the drawer. */
 .modal-overlay {
     display: none;
     position: fixed;
     inset: 0;
-    z-index: 10000;
+    z-index: 10005;
     background-color: var(--color-black-alpha-50);
     justify-content: center;
     align-items: center;

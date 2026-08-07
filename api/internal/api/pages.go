@@ -46,7 +46,6 @@ var pagePublicSettingKeys = map[string]bool{
 	"posts_per_page":         true,
 	"default_theme":          true,
 	"show_view_counts":       true,
-	"use_thumbnails":         true,
 	"about_post_id":          true,
 	"home_page_post_id":      true,
 	"show_immersive_excerpt": true,
@@ -54,6 +53,19 @@ var pagePublicSettingKeys = map[string]bool{
 
 	"tags_visibility":        true,
 	"timeline_mode":          true,
+}
+
+// parseYearRangeParams reads the timeline scope the public views send as
+// `year_from`/`year_to`. ok is false unless both parse to a sane, ordered pair,
+// which callers read as "no scope" — a malformed range widens to everything
+// rather than filtering to nothing.
+func parseYearRangeParams(c echo.Context) (from, to int, ok bool) {
+	from, errFrom := strconv.Atoi(c.QueryParam("year_from"))
+	to, errTo := strconv.Atoi(c.QueryParam("year_to"))
+	if errFrom != nil || errTo != nil || from <= 0 || to <= 0 || from > to {
+		return 0, 0, false
+	}
+	return from, to, true
 }
 
 // GetHomePage returns all data needed to render the public homepage.
@@ -618,7 +630,23 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 
 	minPosts := getMinTagPostsSetting(allSettings)
 
-	// Tags hidden from public viewers: effective-hidden + below min post count.
+	// Optional timeline scope. With a range active the graph describes only the
+	// posts inside it: every tag's count is its in-range count, and a tag left
+	// with nothing drops out entirely — which is what makes the Atlas's markers
+	// (and their radii) track the timeline. Counts are hierarchical, so a country
+	// whose posts hang off its cities stays on the map.
+	var scopedCounts map[int64]int64 // nil = no timeline scope
+	yearFrom, yearTo, hasYearRange := parseYearRangeParams(c)
+	if hasYearRange {
+		scopedCounts, err = h.repo.GetHierarchicalPostCountsInYearRange(ctx, publicOnly, yearFrom, yearTo)
+		if err != nil {
+			return MapError(err)
+		}
+	}
+
+	// Tags this payload omits: hidden from public viewers (effective-hidden or
+	// below the min post count), and — for every viewer — those the active
+	// timeline scope leaves empty.
 	excludeTagIDs := make(map[int64]bool)
 	if publicOnly {
 		for id := range g.EffectiveHidden {
@@ -632,11 +660,18 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 			}
 		}
 	}
+	if scopedCounts != nil {
+		for id := range g.ByID {
+			if scopedCounts[id] == 0 {
+				excludeTagIDs[id] = true
+			}
+		}
+	}
 
 	// Tag nodes. kind + coordinates let the frontend classify year/geo nodes.
 	tags := make([]map[string]interface{}, 0, len(g.ByID))
 	for id, t := range g.ByID {
-		if publicOnly && excludeTagIDs[id] {
+		if excludeTagIDs[id] {
 			continue
 		}
 		node := map[string]interface{}{
@@ -649,22 +684,25 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 			node["latitude"] = t.Latitude.Float64
 			node["longitude"] = t.Longitude.Float64
 		}
-		if publicOnly {
+		switch {
+		case scopedCounts != nil:
+			node["post_count"] = scopedCounts[id]
+		case publicOnly:
 			node["post_count"] = g.CountsPublic[id]
-		} else {
+		default:
 			node["post_count"] = g.CountsAdmin[id]
 		}
 		tags = append(tags, node)
 	}
 
-	// Hierarchy edges (skip edges touching an excluded tag for public viewers).
+	// Hierarchy edges (skip edges touching an omitted tag).
 	rels, err := h.tagService.GetAllTagRelationships(ctx)
 	if err != nil {
 		return MapError(err)
 	}
 	hierarchyEdges := make([]map[string]interface{}, 0, len(rels))
 	for _, rel := range rels {
-		if publicOnly && (excludeTagIDs[rel.ParentID] || excludeTagIDs[rel.ChildID]) {
+		if excludeTagIDs[rel.ParentID] || excludeTagIDs[rel.ChildID] {
 			continue
 		}
 		hierarchyEdges = append(hierarchyEdges, map[string]interface{}{
@@ -699,9 +737,15 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		posts := make([]map[string]interface{}, 0, len(postNodes))
 		membershipEdges := make([]map[string]interface{}, 0)
 		for _, p := range postNodes {
+			// A timeline scope covers a post when it carries a year tag inside the
+			// range — the same rule the scoped counts above are built from. Read off
+			// the tags already loaded rather than re-querying.
+			if scopedCounts != nil && !postInYearRange(tagsByPost[p.ID], yearFrom, yearTo) {
+				continue
+			}
 			edges := 0
 			for _, pt := range tagsByPost[p.ID] {
-				if publicOnly && excludeTagIDs[pt.ID] {
+				if excludeTagIDs[pt.ID] {
 					continue
 				}
 				membershipEdges = append(membershipEdges, map[string]interface{}{
@@ -729,6 +773,21 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+// postInYearRange reports whether a post's tags place it inside a timeline
+// range: it must carry a year tag (kind='year', slug the bare year) that falls
+// within [from, to]. A post with no year tag at all is outside every range.
+func postInYearRange(tags []repository.PostTagInfo, from, to int) bool {
+	for _, t := range tags {
+		if t.Kind != "year" {
+			continue
+		}
+		if y, err := strconv.Atoi(t.Slug); err == nil && y >= from && y <= to {
+			return true
+		}
+	}
+	return false
 }
 
 // atlasCloudLimit caps the popular related tags the Atlas cloud loads for a
@@ -1168,6 +1227,14 @@ func tagsModuleAccessible(settings map[string]string, want []string, publicOnly 
 
 // GetNavMenu returns the hierarchical tag tree (or custom menu) for navigation,
 // scoped to the current user's auth level.
+//
+// Response: {"menu": [...], "tags": [...]}. `menu` is the nav zone's list —
+// whatever `nav_menu_mode` selects. `tags` is the root tag tree behind the
+// site-title dropdown, and is only sent in "custom" mode, where the menu shows
+// authored links and the dropdown becomes the one surface still exposing the
+// tag tree. In "tags" mode the menu *is* that tree (the client falls back to
+// `menu`); in "none" mode the site is deliberately menuless, so neither the
+// menu nor the title offers tags.
 // GET /api/pages/nav
 func (h *PagesHandler) GetNavMenu(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -1180,20 +1247,24 @@ func (h *PagesHandler) GetNavMenu(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]interface{}{"menu": []services.NavTagNode{}})
 	}
 
-	if allSettings["nav_menu_mode"] == "custom" {
-		raw := allSettings["custom_nav_menu"]
-		if raw != "" {
-			var nodes []services.NavTagNode
-			if err := json.Unmarshal([]byte(raw), &nodes); err == nil {
-				return c.JSON(http.StatusOK, map[string]interface{}{"menu": nodes})
-			}
-		}
-		return c.JSON(http.StatusOK, map[string]interface{}{"menu": []services.NavTagNode{}})
-	}
-
 	minPosts := int64(0)
 	if publicOnly {
 		minPosts = getMinTagPostsSetting(allSettings)
+	}
+
+	if allSettings["nav_menu_mode"] == "custom" {
+		menu := []services.NavTagNode{}
+		if raw := allSettings["custom_nav_menu"]; raw != "" {
+			var nodes []services.NavTagNode
+			if err := json.Unmarshal([]byte(raw), &nodes); err == nil && nodes != nil {
+				menu = nodes
+			}
+		}
+		rootTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
+		if rootTags == nil {
+			rootTags = []services.NavTagNode{}
+		}
+		return c.JSON(http.StatusOK, map[string]interface{}{"menu": menu, "tags": rootTags})
 	}
 
 	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)

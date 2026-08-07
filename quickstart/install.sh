@@ -466,10 +466,10 @@ prompt_account_setup() {
 
   local pass; local pass_confirm
   while true; do
-    printf '%sPassword: %s' "$BOLD" "$NC" >&2
+    printf '%sPassword: %s' "${BOLD}" "${NC}" >&2
     read -rs pass </dev/tty
     echo "" >&2
-    printf '%sConfirm Password: %s' "$BOLD" "$NC" >&2
+    printf '%sConfirm Password: %s' "${BOLD}" "${NC}" >&2
     read -rs pass_confirm </dev/tty
     echo "" >&2
     if [ "$pass" = "$pass_confirm" ] && [ -n "$pass" ]; then

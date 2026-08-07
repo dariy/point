@@ -353,7 +353,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithStorageQuotaMB(cfg.StorageQuotaMB)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
@@ -1385,6 +1385,15 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 						return c.File(thumbFile)
 					}
 				}
+			}
+
+			// Falling through to the original is only a graceful degradation when
+			// the original is itself a still. For a video or audio file the caller
+			// asked for a thumbnail and would get an <img> pointed at a media
+			// stream — a broken image that costs a full download. 404 instead;
+			// the UI drops back to a type glyph on error.
+			if strings.EqualFold(media.FileType, "video") || strings.EqualFold(media.FileType, "audio") {
+				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail for this media")
 			}
 		}
 

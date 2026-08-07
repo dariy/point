@@ -112,7 +112,7 @@ export default class CommentsAdminPage extends Component {
         <tr data-i="${i}" class="post-row-main">
           ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
           <td class="meta-col"><strong>${escapeHtml(name)}</strong></td>
-          <td class="title-col">${url ? `<a href="${escapeHtml(url)}" class="table-link muted" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title || c.locator?.title || "post")} ${EXTERNAL_LINK_SVG}</a>` : '<span class="text-muted">—</span>'}</td>
+          <td class="title-col">${url ? `<a href="${escapeHtml(url)}" class="table-link muted">${escapeHtml(c.title || c.locator?.title || "post")} ${EXTERNAL_LINK_SVG}</a>` : '<span class="text-muted">—</span>'}</td>
           <td class="updated-col"><time datetime="${escapeHtml(c.time || "")}">${escapeHtml(formatDate(c.time))}</time></td>
           <td class="actions-col" rowspan="2">
             <div class="actions">
@@ -155,7 +155,7 @@ export default class CommentsAdminPage extends Component {
               <span class="post-card-title" style="flex: 1;">
                 <strong>${escapeHtml(name)}</strong>
                 <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
-                  ${url ? `on <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color: inherit;">${escapeHtml(c.title || c.locator?.title || "post")}</a> · ` : ""}
+                  ${url ? `on <a href="${escapeHtml(url)}" style="color: inherit;">${escapeHtml(c.title || c.locator?.title || "post")}</a> · ` : ""}
                   <time datetime="${escapeHtml(c.time || "")}">${escapeHtml(formatDate(c.time))}</time>
                 </span>
               </span>

@@ -379,3 +379,94 @@
     color: var(--color-danger, #c0392b);
     word-break: break-word;
 }
+
+/* Version check — flush block in the plugin drawer (whose header already titles
+   it): the running version as the headline, the verdict, then the upstream facts
+   and the manual re-check. Vertical rhythm comes from .plugin-section-mount's
+   flex gap, so nothing here sets its own margins. */
+.version-headline {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-sm);
+}
+
+.version-headline-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+
+/* The running version is the headline, not inline code: drop the <code> chrome. */
+.version-current {
+    padding: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-lg);
+    color: var(--text-primary);
+}
+
+.version-facts {
+    margin: 0;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-sm);
+}
+
+.version-fact {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.version-fact + .version-fact {
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+.version-fact dt {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.version-fact dd {
+    margin: 0;
+    text-align: right;
+    word-break: break-word;
+}
+
+.version-unknown {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.version-verdict {
+    margin: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-sm);
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.version-verdict.is-update {
+    background: var(--color-warning-light);
+    color: var(--color-warning);
+}
+
+.version-verdict.is-error {
+    background: var(--color-danger-light);
+    color: var(--color-danger, #c0392b);
+}
+
+.version-fresh {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.version-check-hint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}

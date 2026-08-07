@@ -1,3 +1,11 @@
+/**
+ * Breadcrumbs — the tag-ancestry trail and the active facet crumbs.
+ *
+ * The blog title that heads the trail is NOT here: it is site identity and
+ * outlives this plugin being switched off, so the header owns it (see
+ * components/public/SiteCrumb.js). This component renders everything after it.
+ */
+
 import { Component } from '../../components/Component.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
@@ -9,16 +17,13 @@ import {
 export class Breadcrumbs extends Component {
   render() {
     const {
-      settings = {},
       navTags = [],
       breadcrumb = [],
       total = 0,
       timelineVisible = false,
     } = this.props;
 
-    const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const vc = ViewContext.current();
-    const hasTagCrumbs = breadcrumb.length > 0;
 
     let yearLabel = null;
     if (vc.years && !timelineVisible) {
@@ -36,17 +41,6 @@ export class Breadcrumbs extends Component {
     const ariaLiveText = ariaLabels.length
       ? `Showing ${ariaLabels.join(', ')} — ${total} post${total !== 1 ? 's' : ''}`
       : '';
-
-    // The site crumb is a plain home link. Menu navigation lives in the nav
-    // zone (inline links / More / burger) — the old navTags flyout on the
-    // title was invisible to touch and raced the nav fetch on first load.
-    const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
-    const siteClass = siteHasFollowingCrumbs ? 'breadcrumb-link' : 'breadcrumb-current';
-    const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
-      <a href="/" class="${siteClass} crumb-site" data-crumb="site"
-         aria-label="${title}">${title}</a>
-      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
-    </span>`;
 
     const tagCrumbsHtml = breadcrumb.map((crumb, i) => {
       const isLast = i === breadcrumb.length - 1;
@@ -108,7 +102,6 @@ export class Breadcrumbs extends Component {
 
     return `
       ${ariaLiveText ? `<span class="sr-only" aria-live="polite">${escapeHtml(ariaLiveText)}</span>` : ''}
-      ${siteCrumbHtml}
       ${tagCrumbsHtml}
       ${facetCrumbsHtml}
     `;

@@ -83,6 +83,7 @@ type Repository interface {
 	GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error)
 	ListPostLinkAuditRows(ctx context.Context) ([]PostLinkAuditRow, error)
 	GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
+	GetHierarchicalPostCountsInYearRange(ctx context.Context, publishedOnly bool, fromYear, toYear int) (map[int64]int64, error)
 	GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error)
 	SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error
 	SetPostMediaURL(ctx context.Context, postID int64, mediaURL string) error

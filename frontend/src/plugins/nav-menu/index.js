@@ -1,9 +1,7 @@
 import { store } from '../../store.js';
-import { getNavMenu } from './api.js';
+import { loadNav } from '../../api/nav.js';
 import { NavMenu } from './NavMenu.js';
 import MenuPage from './MenuPage.js';
-
-let fetching = false;
 
 export async function mount(navEl, ctx) {
   // Only mount if the elements exist
@@ -21,25 +19,10 @@ export async function mount(navEl, ctx) {
   });
 
   // Fetch nav tags once
-  if (!store.get('navTags') && !fetching) {
-    fetching = true;
-    try {
-      const data = await getNavMenu();
-      store.set('navTags', data.menu || []);
-    } catch {
-      // ignore
-    } finally {
-      fetching = false;
-    }
-  }
+  await loadNav();
 
   // Also refresh on user login/logout or explicit nav-changed event
-  const refresh = async () => {
-    try {
-      const data = await getNavMenu();
-      store.set('navTags', data.menu || []);
-    } catch { /* ignore */ }
-  };
+  const refresh = () => loadNav({ force: true });
 
   const unsubscribeUser = store.subscribe('user', refresh);
   const onNavChanged = () => refresh();

@@ -16,6 +16,21 @@
     touch-action: pan-y;
 }
 
+/* A phone turned sideways has ~390px of height to give a grid of photographs,
+   and the timeline asks for 64px of it plus the header — a sixth of the screen
+   spent on a control the whole viewport is too short to browse the results of.
+   Keyed on height rather than `(orientation: landscape)` because height is the
+   thing that is actually scarce: a 1200×450 desktop window has the same problem
+   and no orientation that describes it.
+   The twin of this query lives in utils/helpers.js (SHORT_VIEWPORT_QUERY) —
+   the pages read it to put the year back in the breadcrumb, since suppressing
+   that crumb is only correct while the timeline is on screen to replace it. */
+@media (max-height: 30em) {
+    .timeline-container {
+        display: none;
+    }
+}
+
 .timeline-track-wrapper {
     position: relative;
     flex: 1 1 auto;

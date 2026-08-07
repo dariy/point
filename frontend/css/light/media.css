@@ -2,12 +2,13 @@
    Media Page Layout
    =========================== */
 
-/* Two-column layout: folder tree | media content */
+/* Container for media content */
 .media-layout {
     display: flex;
-    gap: var(--spacing-lg);
-    align-items: flex-start;
+    flex-direction: column;
     width: 100%;
+    flex: 1;
+    min-height: 0;
 }
 
 /* Fixed-viewport gallery (opt-in via MediaPage). Desktop/tablet only — mobile
@@ -37,16 +38,6 @@
         min-height: 0;
     }
 
-    .media-page-main .media-layout {
-        flex: 1;
-        min-height: 0;
-        align-items: stretch;
-    }
-
-    .media-page-main .media-folder-tree {
-        overflow-y: auto;
-    }
-
     .media-page-main .media-content {
         display: flex;
         flex-direction: column;
@@ -63,187 +54,11 @@
         flex-shrink: 0;
         padding-top: var(--spacing-md);
     }
-}
 
-/* ===========================
-   Folder Tree
-   =========================== */
-.mb-breadcrumbs {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    flex-wrap: wrap;
-}
-
-.mb-breadcrumb-item {
-    background: none;
-    border: none;
-    padding: 0;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-    text-align: left;
-}
-
-.mb-breadcrumb-item:hover {
-    text-decoration: underline;
-}
-
-.mb-breadcrumb-separator {
-    color: var(--text-tertiary);
-}
-
-.media-folder-tree {
-    flex: 0 0 var(--media-folder-tree-flex);
-    min-width: var(--media-folder-tree-min-width);
-    background: var(--surface-card);
-    border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--border-radius);
-    padding: var(--spacing-sm);
-    position: sticky;
-    top: calc(var(--header-height) + var(--spacing-md));
-    transition: background-color var(--transition-theme), border-color var(--transition-theme);
-    display: flex;
-    flex-direction: column;
-}
-
-#mb-upload-btn {
-    margin-bottom: var(--spacing-md);
-}
-
-#mb-type-filter {
-    margin-bottom: var(--spacing-md);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    border-radius: var(--border-radius-sm);
-    border: var(--border-width) solid var(--border-primary);
-    background-color: var(--surface-input);
-    color: var(--text-primary);
-}
-
-.folder-tree-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    width: 100%;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border: none;
-    background: none;
-    color: var(--text-secondary);
-    font-size: var(--font-size-sm);
-    text-align: left;
-    border-radius: var(--border-radius-sm);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.folder-tree-item:hover {
-    background-color: var(--surface-hover);
-    color: var(--text-primary);
-}
-
-.folder-tree-item.active {
-    background-color: var(--color-primary-light);
-    color: var(--color-primary);
-    font-weight: 600;
-}
-
-.folder-tree-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--folder-tree-icon-width);
-    height: var(--folder-tree-icon-height);
-    opacity: 0.7;
-    flex-shrink: 0;
-}
-
-.folder-tree-icon svg {
-    display: block;
-}
-
-.folder-tree-all .folder-tree-icon {
-    cursor: pointer;
-}
-
-.folder-tree-all .folder-tree-icon:hover {
-    opacity: 1;
-}
-
-.folder-tree-item.active .folder-tree-icon {
-    opacity: 1;
-}
-
-.folder-year-group {
-    margin-top: var(--folder-year-group-margin-top);
-}
-
-.folder-year-row {
-    display: flex;
-    align-items: center;
-    border-radius: var(--border-radius-sm);
-}
-
-/* Row active state (when either year is selected or a child is active) */
-.folder-year-row.active {
-    background-color: var(--color-primary-light);
-}
-
-.folder-year-row.has-active-child:not(.active) {
-    background-color: var(--surface-hover);
-}
-
-.folder-year-arrow {
-    width: var(--folder-year-arrow-width);
-    height: var(--folder-year-arrow-height);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: var(--border-radius-sm);
-    flex-shrink: 0;
-    transition: transform var(--transition-fast);
-    transform: rotate(-90deg);
-}
-
-.folder-year-arrow.rotated {
-    transform: rotate(0deg);
-}
-
-.folder-year-arrow:hover {
-    background-color: var(--surface-hover);
-    color: var(--text-primary);
-}
-
-.folder-year-months {
-    margin-left: var(--folder-year-months-margin-left);
-    border-left: var(--border-width) solid var(--border-primary);
-    padding-left: var(--spacing-xs);
-    margin-top: var(--folder-year-months-margin-top);
-    display: flex;
-    flex-direction: column;
-    gap: var(--folder-year-months-gap);
-}
-
-.folder-year-months.hidden {
-    display: none;
-}
-
-.folder-month-btn {
-    padding-left: var(--spacing-md);
-    position: relative;
-}
-
-.folder-month-btn::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    width: var(--folder-month-btn--width);
-    border-top: var(--border-width) solid var(--border-primary);
+    .media-page-main .mb-mobile-bar {
+        margin: calc(var(--spacing-xl) * -1) calc(var(--spacing-xl) * -1) var(--spacing-md);
+        padding: var(--spacing-sm) var(--spacing-xl);
+    }
 }
 
 /* ===========================
@@ -283,6 +98,8 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    /* Anchors the play glyph a video lays over its poster frame. */
+    position: relative;
 }
 
 .media-item-preview img {
@@ -304,6 +121,19 @@
 .media-item-preview .file-icon {
     font-size: var(--file-icon-font-size);
     color: var(--text-muted);
+}
+
+/* A video with a poster keeps its play glyph, but over the frame rather than
+   in place of it — white on a scrim so it reads against any thumbnail. */
+.media-item-preview .file-icon--overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-white);
+    text-shadow: 0 1px 6px var(--color-black-alpha-60);
+    pointer-events: none;
 }
 
 .media-video-preview,
@@ -990,4 +820,142 @@
     font-size: 12px;
     font-weight: bold;
     pointer-events: none;
+}
+
+/* ===========================
+   Folder Chips Navigation
+   =========================== */
+
+/* Breadcrumbs used inside mb-mobile-bar */
+.mb-breadcrumbs {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+}
+
+.mb-breadcrumb-item {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.mb-breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.mb-breadcrumb-separator {
+    color: var(--text-tertiary);
+}
+
+/* Sits inline with the folder chips, so it takes their metrics — chip height,
+   pill radius, sm text, no lift — instead of the toolbar .filter-select look.
+   The `select` qualifier is what outweighs .filter-select, bundled later.
+   Right padding clears the inherited chevron (right spacing-sm, sized
+   --filter-select-background-size). */
+select.mb-type-filter {
+    height: var(--mb-folder-chip-min-height);
+    padding: var(--spacing-xs) calc(var(--spacing-sm) * 2 + var(--filter-select-background-size)) var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--mb-folder-chip-radius);
+    background-color: var(--surface-card);
+    color: var(--text-secondary);
+    box-shadow: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+select.mb-type-filter:hover {
+    box-shadow: none;
+    transform: none;
+    border-color: var(--border-primary);
+}
+
+/* Bleeds past .light-content's padding so nothing scrolls through a side
+   gap; sits below the sticky header (z-index 50) and above the grid. */
+.mb-mobile-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    position: sticky;
+    /* top: var(--header-height); */
+    z-index: 20;
+    margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--bg-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
+}
+
+/* In the picker the bar sits inside the modal body — no header to clear. */
+.media-browser--picker .mb-mobile-bar {
+    top: 0;
+}
+
+.mb-mobile-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+/* Type filter pinned to the head of the folder line; the chips scroll past it. */
+.mb-folder-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-width: 0;
+}
+
+.mb-folder-row .mb-type-filter {
+    flex: 0 0 auto;
+}
+
+.mb-folder-row .mb-folder-chips {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mb-folder-chips {
+    display: flex;
+    gap: var(--spacing-xs);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+}
+
+.mb-folder-chips::-webkit-scrollbar {
+    display: none;
+}
+
+.mb-folder-chip {
+    flex: 0 0 auto;
+    min-height: var(--mb-folder-chip-min-height);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--mb-folder-chip-radius);
+    background-color: var(--surface-card);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+    cursor: pointer;
+    scroll-snap-align: center;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.mb-folder-chip.active {
+    background-color: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+@media (max-width: 48em) {
+    .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(var(--media-grid-columns-mobile), 1fr));
+        gap: var(--spacing-sm);
+    }
 }

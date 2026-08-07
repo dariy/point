@@ -60,12 +60,18 @@ export function setupAdminLayout(component, { currentPath, publicUrl }) {
     component.$(".light-header"),
   );
 
-  // Public-site link — icon button pinned to the right edge of the header actions.
+  // Public-site link — icon button pinned to the right edge of the header
+  // actions. Deliberately a plain in-app link: the public site and the admin
+  // are one SPA, so this is a route change, not a document load. Opening it in
+  // a second tab (target="_blank") forked the session instead — the new tab got
+  // its own copy of everything the app holds per document, so a setting just
+  // changed in the admin (the active theme, most visibly) was not what the
+  // visitor then looked at.
   const headerActions = component.$(".header-actions");
   if (headerActions) {
     headerActions.insertAdjacentHTML(
       "beforeend",
-      `<a href="${escapeHtml(publicUrl || "/")}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site" target="_blank" rel="noopener" data-external>${EXTERNAL_LINK_SVG}</a>`,
+      `<a href="${escapeHtml(publicUrl || "/")}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${EXTERNAL_LINK_SVG}</a>`,
     );
   }
 

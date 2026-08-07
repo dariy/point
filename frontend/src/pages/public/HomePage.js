@@ -10,23 +10,42 @@
 import { Component } from '../../components/Component.js';
 
 import { PostGrid } from '../../components/public/PostGrid.js';
-import { PostCard } from '../../components/public/PostCard.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { store } from '../../store.js';
-import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
-import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
+import { escapeHtml, isShortViewport, normalizeSettings } from '../../utils/helpers.js';
+import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
-import { computePerPage, cachedPerPage, stepZoom, applyZoomVar, requestZoom } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch } from '../../utils/gridFit.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, data: null, error: null, forceImmersive: false, startIndex: 0 };
+    // Stops the viewport fit chasing a per_page whose own chrome moves the
+    // target — see createFitLatch.
+    this._fitLatch = createFitLatch();
+    // Swipe/trackpad/keyboard pagination and pinch zoom for the grid — see
+    // core/gridPager.js. Shared with TagPage and SearchPage.
+    this._pager = new GridPager({
+      gridMount: () => this.$('#grid-mount'),
+      gestureRoot: () => this.$('.site-main'),
+      fetchPosts: async (page) => {
+        const data = await getHomePage(this._buildParams({ ...ViewContext.current(), page }));
+        return data.posts || [];
+      },
+      gotoPage: (p) => ViewContext.update({ page: p }),
+      onZoomCommit: () => {
+        this._fitLatch.reset(); // a new column count is a new question to fit
+        this._reconcilePerPage({ fromResize: true });
+      },
+      isAlive: () => !this._unmounted,
+      emptyHtml: '<p class="empty-state">No posts yet.</p>',
+    });
   }
 
   onRouteUpdate(params, query) {
@@ -70,9 +89,8 @@ export default class HomePage extends Component {
     // it with no fade. Otherwise crossfade like post-to-post navigation: fade
     // the current grid out while the next page loads, then fade the fresh grid
     // in.
-    const seamless = this._seamlessSwipe;
-    this._seamlessSwipe = false;
-    const fromSwipe = seamless || !!(gridMount && gridMount.style.transform);
+    const seamless = this._pager.takeSeamless();
+    const fromSwipe = seamless || this._pager.isMidSwipe();
 
     let fadeOut = Promise.resolve();
     if (gridMount && !fromSwipe) {
@@ -105,14 +123,9 @@ export default class HomePage extends Component {
 
     const newGrid = this.$('#grid-mount');
     if (seamless) {
-      // The real grid is now mounted and centred directly under the committed
-      // ghost. Removing the ghost in this same frame revealed the grid before
-      // its card images had decoded/painted — a flash of blank cards, the
-      // "re-mount" blink on release. Hold the ghost two frames so the browser
-      // paints the identical real grid underneath first, then drop it.
-      const ghost = this._committedGhost;
-      this._committedGhost = null;
-      requestAnimationFrame(() => requestAnimationFrame(() => ghost?.remove()));
+      // The real grid is mounted and centred directly under the committed ghost;
+      // hand off to it — identical pixels, so no blink.
+      this._pager.finishHandoff();
     } else if (newGrid) {
       // Fade the freshly-mounted grid in. _mountPostContent() reset the mount's
       // inline styles, so we start from a clean opacity:0 and transition up.
@@ -146,26 +159,42 @@ export default class HomePage extends Component {
   // Measure the rendered grid and, if the viewport fits a different number of
   // posts than we loaded, persist the new per_page to the URL — recomputing the
   // page so the first post currently shown stays visible on the resized list.
-  _reconcilePerPage({ fromResize = false } = {}) {
+  _reconcilePerPage({ fromResize = false, settling = false } = {}) {
     if (this._unmounted) return;
     const grid = this.$('.posts-grid');
     if (!grid) return; // static/immersive home has no grid to fill
     applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
-    // actual resize re-fits it to the new window.
-    if (!fromResize && vc.perPage) return;
+    // actual resize re-fits it to the new window. A settling pass is the
+    // exception that is not a new decision: it re-measures a value THIS mount
+    // computed (_fitOwned) now that the chrome around the grid has finished
+    // laying out, so a hand-typed ?per_page= is still reproduced untouched.
+    if (vc.perPage && !fromResize && !(settling && this._fitOwned)) return;
     const fit = computePerPage(this._minPerPage(), grid);
     const current = this._loadedPerPage || fit;
-    if (fit === current) return;
+    const next = this._fitLatch.accept(current, fit);
+    if (next === null) return;
     const firstIndex = (vc.page - 1) * current;
-    const newPage = Math.floor(firstIndex / fit) + 1;
-    ViewContext.update({ per_page: fit, page: newPage }, { replace: true });
+    const newPage = Math.floor(firstIndex / next) + 1;
+    this._fitOwned = true;
+    ViewContext.update({ per_page: next, page: newPage }, { replace: true });
   }
 
   _onResize() {
+    // Reset on the event, not on the debounced re-fit: the chrome observer fires
+    // sooner than 200ms, and a settling pass that ran against the old latch
+    // would have its decision cleared out from under it — one whole extra
+    // flicker cycle before the new viewport settles.
+    this._fitLatch.reset();
     clearTimeout(this._resizeTimer);
     this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
+  }
+
+  /** (Re)arm the settling re-fit for the chrome around the grid — see watchChromeFit. */
+  _watchChrome() {
+    this._unwatchChrome?.();
+    this._unwatchChrome = watchChromeFit(this.container, () => this._reconcilePerPage({ settling: true }));
   }
 
   render() {
@@ -228,20 +257,36 @@ export default class HomePage extends Component {
       document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     }
 
-    this._teardownGestures();
+    this._pager.disarm();
     const navTags = store.get('navTags') || [];
 
     // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
     // but keep the custom menu visible since it contains explicit navigation links.
     const isCustomMenu = settings.nav_menu_mode === 'custom';
     const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
+
+    // Settled before the header is filled, not at the mount site further down:
+    // the header reads it to decide whether the year facet still needs a crumb,
+    // and answering that with last render's value (or `undefined` on the first)
+    // showed the crumb on every fresh load whatever the timeline was doing.
+    // The conditions mirror the mount below — a static home page and a page
+    // still loading render no timeline at all.
+    this._canShowTimeline =
+      !isStaticHomePage && !this.state.loading && !!this.state.data
+      && pluginHost.hasSlot('timeline');
+
     pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       currentPath: '/',
       navTags: (immersive && !isCustomMenu) ? [] : navTags,
       editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
       total,
-      timelineVisible: this._canShowTimeline,
+      // The header drops the year crumb only because the timeline is showing
+      // the same range more usefully; on a short viewport the timeline is
+      // hidden (css/public/timeline.css), so the crumb is the year's only
+      // remaining trace and has to come back. Evaluated at render, so a device
+      // rotated mid-view keeps the previous answer until the next navigation.
+      timelineVisible: this._canShowTimeline && !isShortViewport(),
       // Only the paginated grid view offers the distraction-free toggle.
       distractionToggle: !isStaticHomePage && !immersive,
     }).then(comps => {
@@ -278,8 +323,7 @@ export default class HomePage extends Component {
     const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
     pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
 
-    // timeline slot.
-    this._canShowTimeline = pluginHost.hasSlot('timeline');
+    // timeline slot (decided above, before the header was told about it).
     if (this._canShowTimeline) {
       const vc = ViewContext.current();
       pluginHost.fill('timeline', this.$('#timeline-mount'), {
@@ -308,24 +352,14 @@ export default class HomePage extends Component {
 
     this._postChildren = [];
 
-    // Fresh grid is mounting — release the swipe lock armed by _commitPageSwipe.
-    this._endPageNav();
-
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.
-    const gridMount = this.$('#grid-mount');
-    if (gridMount) {
-      gridMount.style.transform = '';
-      gridMount.style.opacity = '';
-      gridMount.style.transition = '';
-      gridMount.classList.remove('grid-swiping');
-    }
+    this._pager.resetGridStyles();
 
     this._postChildren.push(
       this.mountChild(PostGrid, '#grid-mount', {
         posts,
         showViewCount: !!settings.show_view_counts,
-        useThumbnails: settings.use_thumbnails !== false,
       }),
     );
 
@@ -346,12 +380,13 @@ export default class HomePage extends Component {
       ? { page: pagination.page, pages: pagination.pages, total: pagination.total }
       : null);
 
-    this._setupGestures(pagination);
-    this._preloadAdjacentGrids(pagination);
-    this._promoteGridAhead();
+    this._pager.arm(pagination);
 
-    // After the real grid has laid out, fit per_page to the viewport.
+    // After the real grid has laid out, fit per_page to the viewport — then keep
+    // watching, because the chrome it has to measure around itself arrives later
+    // (see _watchChrome).
     requestAnimationFrame(() => this._reconcilePerPage());
+    this._watchChrome();
   }
 
   _clearPostContent() {
@@ -361,528 +396,7 @@ export default class HomePage extends Component {
       if (i !== -1) this._children.splice(i, 1);
     }
     this._postChildren = [];
-    this._teardownGestures();
-    this._clearPageGhosts();
-  }
-
-  /** Tear down the swipe gesture controllers and the touch-down layer hooks. */
-  _teardownGestures() {
-    this._gesture?.destroy();
-    this._trackpad?.destroy();
-    if (this._gestureEl) {
-      this._gestureEl.removeEventListener('touchstart', this._onTouchPromote);
-      this._gestureEl = null;
-    }
-    if (this._onKeyNav) {
-      window.removeEventListener('keydown', this._onKeyNav);
-      this._onKeyNav = null;
-    }
-    for (const a of this._navArrows || []) a.remove();
-    this._navArrows = null;
-    this._stride = null;
-    this._teardownZoomInputs();
-    this._endPageNav();
-  }
-
-  _setupGestures(pagination) {
-    // Always capture horizontal swipes (even on single-page lists) so they
-    // rubber-band instead of triggering browser history back/forward.
-    const gridMount = this.$('#grid-mount');
-    const vw = () => window.innerWidth || 500;
-    const atEnd = () => pagination.page >= pagination.pages;
-    const atStart = () => pagination.page <= 1;
-
-    this._gesture = new GestureController(this.$('.site-main'), {
-      // Engage the drag a touch sooner than the immersive default so the grid
-      // starts tracking the finger promptly instead of feeling laggy.
-      commitThresholdPx: 8,
-      onPinchMove: (scaleDelta) => this._pinchStep(scaleDelta),
-      onPinchEnd: () => this._onPinchEnd(),
-      onSwipeMove: (dx, dy) => {
-        // A commit is already animating to the next page; ignore new drags until
-        // it settles so a second commit can't orphan the first's ghost overlay.
-        if (this._pageNavPending) return;
-        if (Math.abs(dx) <= Math.abs(dy)) return;
-        const dir = dx < 0 ? 'next' : 'prev';
-        const blocked = (dir === 'next' && atEnd()) || (dir === 'prev' && atStart());
-        const tx = blocked ? rubberBand(dx) : dx;
-        const ratio = Math.abs(tx) / vw();
-
-        gridMount.style.transition = 'none';
-        gridMount.style.transform = `translateX(${tx}px)`;
-
-        // Slide the preloaded neighbour grid in from the opposite edge, in
-        // lockstep with the outgoing grid — the same "infinite stripe" feel as
-        // the immersive post-to-post swipe. With a real neighbour revealed the
-        // outgoing grid fades fully out; otherwise keep a floor so a blocked
-        // edge drag never blanks the screen.
-        const ghost = blocked ? null : this._pageGhost(dir);
-        gridMount.style.opacity = String(
-          ghost ? Math.max(0, 1 - ratio) : Math.max(blocked ? 0.85 : 0.2, 1 - ratio),
-        );
-
-        this._clearOtherPeek(dir);
-        if (ghost) {
-          // One symmetric stride (grid width + the inter-column gap) drives the
-          // neighbour in from either edge, so the gap between the outgoing and
-          // incoming grids is identical in both directions. (Previously the
-          // ghost was viewport-wide while the grid was inset by the container
-          // padding, so a "prev" drag landed the ghost flush with no gap.)
-          // Use the value cached at touch-down — never measure layout here, or
-          // the per-frame offsetWidth read thrashes against the transform write.
-          const stride = this._cachedStride();
-          const offset = dir === 'next' ? stride : -stride;
-          ghost.style.transition = 'none';
-          ghost.style.transform = `translateX(${offset + tx}px)`;
-          ghost.style.opacity = String(Math.min(1, ratio));
-          ghost.style.zIndex = '10';
-          this._peekGhost = ghost;
-        }
-      },
-      onSwipeCancel: () => this._resetGridSwipe(),
-      onSwipeCommit: (dir) => {
-        // Only horizontal swipes paginate; a vertical swipe is a page scroll.
-        if (dir !== 'left' && dir !== 'right') return;
-        if (this._pageNavPending) return;
-        const d = dir === 'left' ? 'next' : 'prev';
-        if ((d === 'next' && atEnd()) || (d === 'prev' && atStart())) {
-          this._resetGridSwipe();
-        } else {
-          this._commitPageSwipe(d, pagination);
-        }
-      },
-    });
-
-    this._trackpad = new TrackpadDetector(this.$('.site-main'), {
-      onHorizontal: (dir) => {
-        if (this._pageNavPending) return;
-        if (dir === 'left' && pagination.page < pagination.pages) {
-          ViewContext.update({ page: pagination.page + 1 });
-        } else if (dir === 'right' && pagination.page > 1) {
-          ViewContext.update({ page: pagination.page - 1 });
-        }
-      },
-    });
-
-    // The grid's compositor layer is created ahead of time by _promoteGridAhead
-    // (during idle, after render), so the costly one-off rasterization of the
-    // image-heavy grid is already done before a finger ever lands. Promoting it
-    // lazily — even on touchstart — left the first few drag frames blocked on
-    // that raster, so the grid ignored the finger and then snapped to it.
-    // Touchstart now only caches the slide stride so onSwipeMove never measures
-    // layout mid-drag.
-    const siteMain = this.$('.site-main');
-    this._onTouchPromote = () => {
-      this._stride = this._swipeStride();
-    };
-    siteMain.addEventListener('touchstart', this._onTouchPromote, { passive: true });
-    this._gestureEl = siteMain;
-
-    this._setupPageControls(pagination);
-    this._setupZoomInputs();
-  }
-
-  // ── Pinch / wheel / keyboard zoom ──────────────────────────────────────────
-  // Pinch is handled by GestureController's onPinchMove; here we add the desktop
-  // paths: ctrl+wheel (trackpad pinch) and +/- keys. All funnel into _zoomBy.
-  //
-  // A zoom step only re-flows the grid via CSS (instant, no remount). The
-  // per_page reconcile — which updates the route and REBUILDS the post content,
-  // tearing down this very gesture controller — is deferred: flushed on
-  // onPinchEnd, and debounced for the discrete wheel/key paths. Reconciling on
-  // every step would destroy the in-flight pinch mid-gesture (the same trap the
-  // timeline plugin documents), so the zoom would appear frozen after one step.
-
-  /** Accumulate incremental pinch scale and step a column once it crosses ±40%. */
-  _pinchStep(scaleDelta) {
-    this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
-    if (this._pinchAccum > 1.4) { this._zoomBy(-1); this._pinchAccum = 1; }        // spread → bigger cards, fewer cols
-    else if (this._pinchAccum < 1 / 1.4) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller cards, more cols
-  }
-
-  _onPinchEnd() {
-    this._pinchAccum = 1;
-    this._commitZoom(); // gesture's over — safe to refetch/remount now
-  }
-
-  /** Apply a ±1 column zoom step: instant CSS re-flow, deferred per_page refit. */
-  _zoomBy(delta) {
-    const grid = this.$('.posts-grid');
-    if (!grid) return;
-    stepZoom(grid, delta); // CSS-only: pins columns + squares cards, no remount
-    clearTimeout(this._zoomCommitTimer);
-    this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
-  }
-
-  /** Refit per_page (and page) to the new column count — the remounting step. */
-  _commitZoom() {
-    clearTimeout(this._zoomCommitTimer);
-    this._reconcilePerPage({ fromResize: true });
-  }
-
-  _setupZoomInputs() {
-    this._teardownZoomInputs();
-    // Marks this page as zoom-capable — the footer slider is only shown when
-    // this class is present (search shares the grid but doesn't opt in).
-    document.body.classList.add('grid-zoomable');
-    // Footer slider sets an absolute column count; commit is debounced here
-    // like every other zoom path.
-    this._onZoomRequest = (e) => {
-      requestZoom(e.detail?.cols || 0);
-      clearTimeout(this._zoomCommitTimer);
-      this._zoomCommitTimer = setTimeout(() => this._commitZoom(), 250);
-    };
-    window.addEventListener('point:grid-zoom-request', this._onZoomRequest);
-    this._onZoomKey = (e) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      const t = e.target;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      if (e.key === '+' || e.key === '=') { e.preventDefault(); this._zoomBy(-1); }
-      else if (e.key === '-' || e.key === '_') { e.preventDefault(); this._zoomBy(1); }
-    };
-    window.addEventListener('keydown', this._onZoomKey);
-    // Trackpad pinch on Chrome/Firefox/Edge arrives as a wheel event with ctrlKey.
-    this._onZoomWheel = (e) => {
-      if (!e.ctrlKey) return;
-      e.preventDefault();
-      // Trackpad pinches stream many tiny deltas — accumulate so one step needs
-      // a deliberate gesture. A discrete mouse-wheel notch (~±100-120) still
-      // steps immediately. Direction change resets the run.
-      if (Math.sign(e.deltaY) !== Math.sign(this._wheelAccum || 0)) this._wheelAccum = 0;
-      this._wheelAccum = (this._wheelAccum || 0) + e.deltaY;
-      if (Math.abs(this._wheelAccum) >= 100) {
-        this._zoomBy(this._wheelAccum > 0 ? 1 : -1);
-        this._wheelAccum = 0;
-      }
-    };
-    // Desktop Safari does NOT send ctrl+wheel for a trackpad pinch — it fires its
-    // own gesturestart/change/end events with a cumulative `scale`. Handle those
-    // so Safari pinch works (and preventDefault stops Safari's own page zoom).
-    this._onGestureStart = (e) => { e.preventDefault(); this._gestureScale = 1; };
-    this._onGestureChange = (e) => {
-      e.preventDefault();
-      const rel = e.scale / (this._gestureScale || 1);
-      if (rel > 1.4) { this._zoomBy(-1); this._gestureScale = e.scale; }        // spread → fewer cols
-      else if (rel < 1 / 1.4) { this._zoomBy(1); this._gestureScale = e.scale; } // pinch → more cols
-    };
-    this._onGestureEnd = (e) => { e.preventDefault(); this._commitZoom(); };
-    this._zoomWheelEl = this.$('.site-main');
-    this._zoomWheelEl?.addEventListener('wheel', this._onZoomWheel, { passive: false });
-    this._zoomWheelEl?.addEventListener('gesturestart', this._onGestureStart, { passive: false });
-    this._zoomWheelEl?.addEventListener('gesturechange', this._onGestureChange, { passive: false });
-    this._zoomWheelEl?.addEventListener('gestureend', this._onGestureEnd, { passive: false });
-  }
-
-  _teardownZoomInputs() {
-    document.body.classList.remove('grid-zoomable');
-    if (this._onZoomRequest) window.removeEventListener('point:grid-zoom-request', this._onZoomRequest);
-    this._onZoomRequest = null;
-    if (this._onZoomKey) window.removeEventListener('keydown', this._onZoomKey);
-    if (this._zoomWheelEl) {
-      this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
-      this._zoomWheelEl.removeEventListener('gesturestart', this._onGestureStart);
-      this._zoomWheelEl.removeEventListener('gesturechange', this._onGestureChange);
-      this._zoomWheelEl.removeEventListener('gestureend', this._onGestureEnd);
-    }
-    clearTimeout(this._zoomCommitTimer);
-    this._onZoomKey = null;
-    this._onZoomWheel = null;
-    this._zoomWheelEl = null;
-  }
-
-  // Keyboard + mouse page navigation for the grid, complementing swipe/trackpad.
-  // Keyboard works in every mode (arrows + hjkl-style); the edge arrows are the
-  // mouse path for distraction-free mode, where the paginator is hidden (the DF
-  // plugin CSS reveals them on hover for fine pointers only — touch swipes).
-  _setupPageControls(pagination) {
-    const pages = pagination.pages || 1;
-    const goPrev = () => { if (pagination.page > 1) ViewContext.update({ page: pagination.page - 1 }); };
-    const goNext = () => { if (pagination.page < pages) ViewContext.update({ page: pagination.page + 1 }); };
-
-    this._onKeyNav = (e) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      const t = e.target;
-      // Never hijack keys while the user is typing (search box, etc.).
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      // h/k = back, l/j = forward — arrow keys likewise. Up/Down are left to the
-      // browser so vertical scrolling still works.
-      if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') { e.preventDefault(); goPrev(); }
-      else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') { e.preventDefault(); goNext(); }
-    };
-    window.addEventListener('keydown', this._onKeyNav);
-
-    const CHEVRON = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
-                       ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = `df-nav-arrow df-nav-${dir}`;
-      b.setAttribute('aria-label', label);
-      b.innerHTML = CHEVRON(d);
-      b.disabled = dir === 'prev' ? pagination.page <= 1 : pagination.page >= pages;
-      b.addEventListener('click', go);
-      document.body.appendChild(b);
-      return b;
-    });
-  }
-
-  /**
-   * Promote #grid-mount to its own compositor layer ahead of any interaction,
-   * during idle time after the grid has rendered. Creating the layer (and its
-   * one-off rasterization of the image-heavy grid) up front means the first
-   * drag frame is just a cheap GPU transform — there's no raster stall at
-   * touch-down that makes the grid lag behind the finger. translateZ(0) (via
-   * the class) forces the raster now rather than merely hinting at it.
-   */
-  _promoteGridAhead() {
-    const promote = () => this.$('#grid-mount')?.classList.add('grid-promoted');
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(promote);
-    else requestAnimationFrame(promote);
-  }
-
-  // ── Adjacent-page preloading + swipe peek ──────────────────────────────────
-
-  /** The preloaded ghost grid element for a drag direction, if ready. */
-  _pageGhost(dir) {
-    return this._pageGhosts?.[dir]?.el || null;
-  }
-
-  /**
-   * The off-screen slide distance for a page swipe: the live grid's width plus
-   * the inter-column gap. Driving every neighbour position (rest, drag, reset,
-   * commit) from this single value keeps the gap between the outgoing and
-   * incoming grids symmetric in both directions and independent of the viewport
-   * width vs. the padded container width.
-   */
-  _swipeStride() {
-    const gm = this.$('#grid-mount');
-    const w = gm?.offsetWidth || window.innerWidth || 500;
-    const grid = gm?.querySelector('.posts-grid');
-    let gap = 0;
-    if (grid) {
-      const cg = parseFloat(window.getComputedStyle(grid).columnGap);
-      if (!Number.isNaN(cg)) gap = cg;
-    }
-    return w + gap;
-  }
-
-  /**
-   * The slide stride cached at touch-down (see _setupGestures). The stride is
-   * constant for the duration of a drag, so reading it from the cache avoids a
-   * layout-forcing measurement on every touchmove frame; fall back to a fresh
-   * measure if a code path runs without a preceding touchstart.
-   */
-  _cachedStride() {
-    return this._stride || (this._stride = this._swipeStride());
-  }
-
-  /**
-   * Preload the previous/next page and render its grid into an off-screen ghost
-   * element, so a swipe reveals the real next page (not a skeleton) and a
-   * committed swipe hands off to it seamlessly. Mirrors MediaViewer's
-   * _preloadNeighbors for the immersive carousel.
-   */
-  async _preloadAdjacentGrids(pagination) {
-    this._pageGhosts = this._pageGhosts || { prev: null, next: null };
-    const liveGrid = this.$('#grid-mount');
-    const container = liveGrid?.parentElement;
-    if (!container || !pagination || pagination.pages <= 1) return;
-    // The live grid stretches its cards to fill the viewport when content is
-    // short (grid-expand). The ghost sits outside that flex, so pin it to the
-    // live grid's height and let its grid stretch to match — otherwise the
-    // incoming page's cards render at their shorter natural size.
-    const gridHeight = liveGrid.offsetHeight;
-    const version = (this._ghostVersion = (this._ghostVersion || 0) + 1);
-    const vc = ViewContext.current();
-
-    const build = async (dir) => {
-      const page = dir === 'next' ? pagination.page + 1 : pagination.page - 1;
-      if (page < 1 || page > pagination.pages) return;
-      let data;
-      try {
-        data = await getHomePage(this._buildParams({ ...vc, page }));
-      } catch {
-        return;
-      }
-      if (this._unmounted || version !== this._ghostVersion) return;
-      const el = document.createElement('div');
-      el.className = 'grid-preview-placeholder';
-      el.dataset.edge = dir;
-      if (gridHeight) el.style.height = `${gridHeight}px`;
-      el.innerHTML = this._buildGridHtml(data.posts || []);
-      container.appendChild(el);
-      // Warm the neighbour cards' media now, while the ghost is parked
-      // off-screen. The cards paint media as CSS background-image, which the
-      // browser won't fetch or decode until the element is actually painted —
-      // so without this the first drag frame (when the ghost fades in) pays the
-      // whole grid's fetch+decode+paint cost at once, which is the start-of-drag
-      // hitch. Decoding ahead of time lets that first frame just composite an
-      // already-rasterized layer.
-      this._warmGridMedia(data.posts || []);
-      // Rest off-screen at one full stride so the first drag frame doesn't jump.
-      const stride = this._swipeStride();
-      el.style.transform = `translateX(${dir === 'next' ? stride : -stride}px)`;
-      el.style.opacity = '0';
-      this._pageGhosts[dir] = { page, el };
-    };
-    await Promise.all([build('prev'), build('next')]);
-  }
-
-  /**
-   * Pre-fetch and pre-decode the neighbour cards' background-image media so the
-   * first frame of a swipe composites an already-rasterized ghost instead of
-   * triggering a grid-wide fetch+decode+paint burst. Videos paint via <video>
-   * (not background-image) and are skipped here. Runs at idle so it never
-   * competes with the live grid's own first paint.
-   */
-  _warmGridMedia(posts) {
-    const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
-    const urls = posts
-      .map((p) => p && p.media_url)
-      .filter((u) => u && !VIDEO_RE.test(u));
-    if (!urls.length) return;
-    const warm = () => {
-      for (const url of urls) {
-        if (this._warmedMedia?.has(url)) continue;
-        (this._warmedMedia ||= new Set()).add(url);
-        const im = new Image();
-        im.src = url;
-        im.decode?.().catch(() => {});
-      }
-    };
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(warm);
-    else setTimeout(warm, 0);
-  }
-
-  /** Build static grid markup (real cards, no listeners) for a ghost preview. */
-  _buildGridHtml(posts) {
-    if (!posts.length) return '<p class="empty-state">No posts yet.</p>';
-    const settings = store.get('settings') || {};
-    const heroIndex = posts.findIndex((p) => p.is_featured);
-    const dummy = document.createElement('div');
-    const slots = posts.map((post, i) => {
-      const cls = i === heroIndex ? ' featured-post' : '';
-      const card = new PostCard(dummy, {
-        post,
-        showViewCount: !!settings.show_view_counts,
-        useThumbnails: settings.use_thumbnails !== false,
-        isHero: i === heroIndex,
-      }).render();
-      return `<div class="post-card-slot${cls}">${card}</div>`;
-    }).join('');
-    return `<div class="posts-grid">${slots}</div>`;
-  }
-
-  /** Remove the off-screen ghost grids and invalidate any in-flight preload. */
-  _clearPageGhosts() {
-    this._ghostVersion = (this._ghostVersion || 0) + 1;
-    if (this._pageGhosts) {
-      for (const dir of ['prev', 'next']) {
-        this._pageGhosts[dir]?.el?.remove();
-        this._pageGhosts[dir] = null;
-      }
-    }
-    this._peekGhost = null;
-  }
-
-  /** Snap a ghost peeking from the wrong side back off-screen instantly. */
-  _clearOtherPeek(dir) {
-    const g = this._peekGhost;
-    if (g && g.dataset.edge !== dir) {
-      const stride = this._cachedStride();
-      g.style.transition = 'none';
-      g.style.transform = `translateX(${g.dataset.edge === 'next' ? stride : -stride}px)`;
-      g.style.opacity = '0';
-      this._peekGhost = null;
-    }
-  }
-
-  /** Animate the active grid back and settle the peeking ghost off-screen. */
-  _resetGridSwipe() {
-    const gridMount = this.$('#grid-mount');
-    if (gridMount) {
-      gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-      gridMount.style.transform = '';
-      gridMount.style.opacity = '1';
-      gridMount.classList.remove('grid-swiping');
-    }
-    const g = this._peekGhost;
-    if (g) {
-      const stride = this._cachedStride();
-      g.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-      g.style.transform = `translateX(${g.dataset.edge === 'next' ? stride : -stride}px)`;
-      g.style.opacity = '0';
-      this._peekGhost = null;
-    }
-  }
-
-  /**
-   * Carry a committed swipe to rest: the active grid finishes sliding off while
-   * the preloaded neighbour grid slides to centre, then the route swaps under
-   * it — the new page's real grid mounts beneath the ghost and the ghost is
-   * dropped, so the motion flows unbroken with no reload blink.
-   */
-  /** Arm the swipe lock with a watchdog that self-clears if no mount follows. */
-  _beginPageNav() {
-    this._pageNavPending = true;
-    clearTimeout(this._pageNavWatchdog);
-    // Safety net: an aborted navigation (fetch error, same-page nav, unmount)
-    // never reaches _mountPostContent, so auto-release rather than freeze swipes
-    // forever. 3s comfortably outlasts the 280ms hand-off + a slow fetch.
-    this._pageNavWatchdog = setTimeout(() => {
-      this._pageNavPending = false;
-      this._resetGridSwipe();
-    }, 3000);
-  }
-
-  _endPageNav() {
-    this._pageNavPending = false;
-    clearTimeout(this._pageNavWatchdog);
-  }
-
-  _commitPageSwipe(dir, pagination) {
-    const ghost = this._pageGhost(dir);
-    const targetPage = dir === 'next' ? pagination.page + 1 : pagination.page - 1;
-
-    // Lock out further swipes until the new grid mounts (or the watchdog fires).
-    // Without this, a second commit during the ~280ms hand-off overwrites
-    // _committedGhost and orphans the first ghost — a static overlay pinned over
-    // the page that never gets removed, which reads as the page "freezing".
-    this._beginPageNav();
-
-    // No preloaded grid yet (slow network / just landed): fall back to the
-    // plain crossfade by navigating straight away.
-    if (!ghost) {
-      this._resetGridSwipe();
-      ViewContext.update({ page: targetPage });
-      return;
-    }
-
-    const gridMount = this.$('#grid-mount');
-    const stride = this._cachedStride();
-    const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
-
-    if (gridMount) {
-      gridMount.style.transition = T;
-      gridMount.style.transform = `translateX(${dir === 'next' ? -stride : stride}px)`;
-      gridMount.style.opacity = '0';
-    }
-    ghost.style.transition = T;
-    ghost.style.transform = 'translateX(0)';
-    ghost.style.opacity = '1';
-    ghost.style.zIndex = '11';
-
-    // Hold this ghost on screen across the route swap; _refreshPostContent drops
-    // it once the real grid is mounted underneath.
-    this._committedGhost = ghost;
-    this._pageGhosts[dir] = null;
-    this._peekGhost = null;
-
-    setTimeout(() => {
-      if (this._unmounted) return;
-      this._seamlessSwipe = true;
-      ViewContext.update({ page: targetPage });
-    }, 280);
+    this._pager.disarm();
   }
 
   _onTimelineRangeChange({ from, to, isFullExtent }) {
@@ -899,16 +413,11 @@ export default class HomePage extends Component {
     // Non-grid pages (post, search) share the footer — don't leave a stale
     // paginator feed behind.
     store.set('pagination', null);
-    this._teardownGestures();
-    this._clearPageGhosts();
-    this._committedGhost?.remove();
-    this._committedGhost = null;
-    // Drop the zoom class so grids on other pages (e.g. search) aren't squared;
-    // the preference lives in localStorage and re-applies on the next mount.
-    document.body.classList.remove('grid-zoom');
-    document.body.style.removeProperty('--posts-grid-cols');
+    this._pager.destroy();
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+    this._unwatchChrome?.();
+    this._unwatchChrome = null;
   }
 
   mount() {

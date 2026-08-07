@@ -34,6 +34,9 @@ decisions, out-of-scope notes, and gotchas for future development.
 Design proposals graduate into these docs once implemented (or are recorded in their
 "considered and rejected" sections); proposals are not kept as separate files.
 
+The static UI demo keeps its docs beside its code, in the feature folder at
+[`demo/`](../demo/README.md) — the frontend built to run with no backend at all.
+
 ## Plugin catalog
 
 One page per plugin in the registry — [plugins/](./plugins/) (index:

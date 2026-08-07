@@ -84,7 +84,7 @@ var Registry = []Descriptor{
 
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},
-	{ID: "tag-cloud", Type: TypeSlot, Slot: "home-explore", EntryName: "tag-cloud", DefaultEnabled: true},
+	{ID: "tag-cloud", Type: TypeSlot, Slot: "home-explore", EntryName: "tag-cloud", DefaultEnabled: false},
 	{ID: "nav-menu", Type: TypeSlot, Slot: "nav-menu", Routes: []string{"/light/menu", "/api/nav-menu", "/api/pages/nav"}, EntryName: "nav-menu", DefaultEnabled: true},
 	{ID: "breadcrumbs", Type: TypeSlot, Slot: "breadcrumbs", EntryName: "breadcrumbs", DefaultEnabled: true},
 	{ID: "public-header", Type: TypeSlot, Slot: "header", EntryName: "public-header", DefaultEnabled: true},
@@ -99,11 +99,12 @@ var Registry = []Descriptor{
 	// area "immersive"): Standard is the default; Sheet ships disabled. Enabling
 	// Sheet and disabling Standard switches the public viewer; at least one of
 	// the pair must stay enabled.
-	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
-	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
+	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: false, Area: "immersive", Core: true},
+	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: true, Area: "immersive", Core: true},
+
 	// custom-css has no frontend chunk: the CSS injection lives in core and the
 	// plugin only gates the /api/themes/custom-css endpoints via RequirePlugin.
-	{ID: "custom-css", Type: TypeEnhancer, DefaultEnabled: true},
+	{ID: "custom-css", Type: TypeEnhancer, DefaultEnabled: false},
 
 	// Remark42 comments: widget embedded after post content (post-comments
 	// slot), served by the remark42 sidecar through the gated /comments reverse
@@ -130,17 +131,21 @@ var Registry = []Descriptor{
 	// only code-splitting, which esbuild --splitting provides directly.
 
 	// ── Backend-gated services ───────────────────────────────────────────────
-	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: true},
-	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: true},
+	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: false},
+	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: false},
 	{ID: "passkeys", Type: TypeService, Routes: []string{"/api/auth/webauthn"}, DefaultEnabled: true},
-	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: true},
-	{ID: "backups", Type: TypeService, DefaultEnabled: true},
-	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
+	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: false},
+	{ID: "backups", Type: TypeService, DefaultEnabled: false},
+	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: false},
 	{ID: "rss", Title: "RSS", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
 	// In-process MCP (Model Context Protocol) server: exposes the blog to AI
 	// clients at /mcp. Off by default — it is a powerful remote-control surface
 	// that admins opt into from the Plugins page.
 	{ID: "mcp", Title: "MCP", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
+	// Compares the running build against the upstream git tags and surfaces an
+	// update banner on the dashboard. Toggle it off to stop the (daily, cached)
+	// call out to the GitHub API entirely — the version endpoint then 404s.
+	{ID: "version-check", Title: "Version Check", Type: TypeService, Routes: []string{"/api/system/version"}, DefaultEnabled: true},
 }
 
 // byID indexes Registry for O(1) lookups.
@@ -242,9 +247,9 @@ func DefaultPresets() map[string][]string {
 		// Bare guest experience: only the sheet viewer (core admin areas stay on).
 		"minimalistic": {"immersive-sheet"},
 		// Self-hosted blog without the advanced/integration services.
-		"standalone": filterOut(all, "ai-analysis", "instagram", "immersive-sheet"),
+		"standalone": filterOut(all, "tag-cloud", "ai-analysis", "instagram", "immersive-sheet"),
 		// Everything available.
-		"fully-featured": all,
+		"fully-featured": filterOut(all, "tag-cloud"),
 	}
 }
 

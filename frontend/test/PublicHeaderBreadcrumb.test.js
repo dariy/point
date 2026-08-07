@@ -58,7 +58,7 @@ describe('Breadcrumbs plugin', () => {
     };
   });
 
-  // Helper: render the header with given props and a given route
+  // Helper: render the trail with given props and a given route
   function renderWith(routeOverride, propsOverride = {}) {
     store.set('route', routeOverride);
     const header = new BreadcrumbsComponent(container, {
@@ -133,22 +133,17 @@ describe('Breadcrumbs plugin', () => {
 
   // ── Root "site" crumb ─────────────────────────────────────────────────────
 
-  test('root site crumb always present', () => {
-    const markup = renderWith({ pathname: '/', query: {} });
-    assert.ok(markup.includes('crumb-site'), 'Should always render site crumb');
-    assert.ok(markup.includes('href="/"'), 'Site crumb should link to /');
-    assert.ok(markup.includes('Test Blog'), 'Site crumb should display blog title');
-  });
-
-  test('site crumb is a plain home link even when navTags provided', () => {
-    // The site-title flyout was removed; nav tags are shown inline in the
-    // nav zone instead. Child-tag dropdowns on breadcrumb items remain.
+  test('the blog title is not rendered here', () => {
+    // It is the header's SiteCrumb (see components/public/SiteCrumb.js) so that
+    // switching this plugin off leaves the site identity — and its root-tag
+    // dropdown — standing. This component starts at the first tag crumb.
     const markup = renderWith(
       { pathname: '/', query: {} },
-      { navTags: [{ name: 'Travel', slug: 'travel', post_count: 10 }] },
+      { breadcrumb: [{ name: 'Travel', slug: 'travel' }] },
     );
-    assert.ok(!markup.includes('has-dropdown'), 'Site crumb should not render a dropdown');
-    assert.ok(!markup.includes('aria-haspopup'), 'Site crumb should not announce a popup');
+    assert.ok(!markup.includes('crumb-site'), 'Should not render the site crumb');
+    assert.ok(!markup.includes('Test Blog'), 'Should not render the blog title');
+    assert.ok(markup.includes('Travel'), 'Should render the tag crumb');
   });
 
   // ── Aria-live announcement ────────────────────────────────────────────────

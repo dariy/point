@@ -260,6 +260,22 @@ var schema = []struct{ name, sql string }{
 		"create_media_original_path_index",
 		`CREATE INDEX IF NOT EXISTS idx_media_original_path ON media(original_path)`,
 	},
+	{
+		// Retired settings. None of these was ever read: session TTL is
+		// SESSION_EXPIRY_HOURS, there is no cleanup job, no registration flow
+		// and no way to create a second user, and use_thumbnails only ever
+		// hid post-card images. storage_quota_mb moved to STORAGE_QUOTA_MB —
+		// a hosted install's quota belongs to the plan, not to the blog admin.
+		"drop_unused_blog_settings",
+		`DELETE FROM blog_settings WHERE key IN (
+				'session_ttl_days',
+				'cleanup_interval_days',
+				'multi_user_mode',
+				'require_registration_code',
+				'use_thumbnails',
+				'storage_quota_mb'
+			)`,
+	},
 }
 
 // Run applies all pending schema migrations, then the special multi-step tag

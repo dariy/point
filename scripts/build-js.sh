@@ -42,7 +42,12 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-APP_ENTRY="$ROOT_DIR/frontend/src/app.js"
+# APP_ENTRY / JS_RELEASE_DIR are overridable so an alternate bundle can be built
+# from the same flags rather than a divergent copy of this script — see
+# demo/scripts/build.sh, which swaps in the mock entry point.
+APP_ENTRY="${APP_ENTRY:-$ROOT_DIR/frontend/src/app.js}"
+JS_RELEASE_DIR="${JS_RELEASE_DIR:-$ROOT_DIR/frontend/js}"
+JS_DEBUG_DIR="${JS_DEBUG_DIR:-$ROOT_DIR/frontend/js-debug}"
 PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
 
 # Use the lockfile-pinned esbuild from node_modules — NOT `npx --yes esbuild`,
@@ -121,15 +126,15 @@ build_set() {
 # Release set — minified, debug logging stripped.
 # Set BUILD_RELEASE_FRONTEND=0 to skip it (e.g. a debug-only local run).
 if [ "${BUILD_RELEASE_FRONTEND:-1}" != "0" ]; then
-  build_set "$ROOT_DIR/frontend/js" "false" --minify
+  build_set "$JS_RELEASE_DIR" "false" --minify
 else
   echo "BUILD_RELEASE_FRONTEND=0 — skipped release bundle (frontend/js)"
 fi
 
 # Debug set — unminified for readable stack traces, debug logging active.
 if [ "${BUILD_DEBUG_FRONTEND:-1}" != "0" ]; then
-  build_set "$ROOT_DIR/frontend/js-debug" "true"
+  build_set "$JS_DEBUG_DIR" "true"
 else
-  rm -rf "$ROOT_DIR/frontend/js-debug"
-  echo "BUILD_DEBUG_FRONTEND=0 — skipped debug bundle (frontend/js-debug)"
+  rm -rf "$JS_DEBUG_DIR"
+  echo "BUILD_DEBUG_FRONTEND=0 — skipped debug bundle ($JS_DEBUG_DIR)"
 fi

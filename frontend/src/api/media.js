@@ -5,6 +5,7 @@
  */
 
 import { api } from './client.js';
+import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.js';
 
 /**
  * List media items.
@@ -35,17 +36,41 @@ export function getMedia(id) {
 
 /**
  * Upload a single file.
+ *
+ * A video is accompanied by a poster frame captured here in the browser — the
+ * server cannot decode video, so this is the only chance to give the file a
+ * thumbnail. Capture failures are silent and leave the video poster-less.
+ *
  * @param {File}    file
  * @param {{ alt_text?, caption?, post_id? }} [meta]
  * @returns {Promise<object>}
  */
-export function uploadMedia(file, meta = {}) {
+export async function uploadMedia(file, meta = {}) {
   const form = new FormData();
   form.append('file', file);
   if (meta.alt_text) form.append('alt_text', meta.alt_text);
   if (meta.caption)  form.append('caption', meta.caption);
   if (meta.post_id)  form.append('post_id', String(meta.post_id));
+
+  if (isVideoFile(file)) {
+    const poster = await captureVideoPoster(file);
+    if (poster) form.append('poster', poster, 'poster.jpg');
+  }
+
   return api.upload('/api/media/upload', form);
+}
+
+/**
+ * Store a poster frame for an existing video, backfilling one that was
+ * uploaded before posters existed or ingested outside the admin UI.
+ * @param {number} id
+ * @param {Blob}   poster  JPEG frame
+ * @returns {Promise<object>} Updated media object
+ */
+export function setVideoPoster(id, poster) {
+  const form = new FormData();
+  form.append('poster', poster, 'poster.jpg');
+  return api.upload(`/api/media/${id}/poster`, form);
 }
 
 /**

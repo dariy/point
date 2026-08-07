@@ -69,8 +69,19 @@ function walk(dir) {
   return out;
 }
 
+// Paths excluded from the gate: build-time tooling that never reaches a
+// production bundle, so counting it would inflate the untested-file ratchet
+// with code the shipped app does not contain. Mirrors the Go side, where
+// scripts/coverage-gate.sh excludes cmd/seed for the same reason.
+//
+// demo/mock/ is the static demo's fixture-backed API stand-in
+// (demo/scripts/build.sh). It lives outside SRC_DIR, so it is already outside
+// the walk below; nothing in a normal build reaches it.
+const COVERAGE_EXCLUDE = [];
+
 const allSrc = walk(SRC_DIR)
   .map((f) => relative(ROOT, f).split(sep).join("/"))
+  .filter((f) => !COVERAGE_EXCLUDE.some((re) => re.test(f)))
   .sort();
 const unreached = allSrc.filter((f) => !reached.has(f));
 

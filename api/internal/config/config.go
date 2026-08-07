@@ -25,6 +25,11 @@ type Config struct {
 	ThumbnailHeight int `mapstructure:"THUMBNAIL_HEIGHT"`
 	AvatarSize      int `mapstructure:"AVATAR_SIZE"`
 	MaxUploadSizeMB int `mapstructure:"MAX_UPLOAD_SIZE_MB"`
+	// StorageQuotaMB is the media storage allowance the dashboard reports usage
+	// against. Operator-set only (never a DB setting): on a hosted install the
+	// quota is a property of the plan, not something the blog's admin may raise.
+	// 0 means unlimited — the dashboard then shows bare usage with no bar.
+	StorageQuotaMB int `mapstructure:"STORAGE_QUOTA_MB"`
 
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
@@ -87,6 +92,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("THUMBNAIL_HEIGHT", 300)
 	v.SetDefault("JPEG_QUALITY", 85)
 	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
+	v.SetDefault("STORAGE_QUOTA_MB", 0)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")
 	v.SetDefault("SMTP_HOST", "")
