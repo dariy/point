@@ -8,7 +8,7 @@
 
 import { escapeHtml, setupLongPress } from './helpers.js';
 import { CHEVRON_SVG, LOCK_SVG } from './icons.js';
-import { hasFinePointer } from './pointerMode.js';
+import { hasFinePointer, eventPointerType } from './pointerMode.js';
 
 /** Hover-intent delay before a header dropdown opens, in ms. */
 export const HOVER_OPEN_MS = 180;
@@ -399,7 +399,13 @@ export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
     // flipped on the emulated hover, then the page reloaded out from under the
     // dropdown that was never opened. Keyboard activation reports no pointer
     // type at all; the session verdict is the right answer for it.
-    const fromMouse = e.pointerType ? e.pointerType === 'mouse' : hasFinePointer();
+    //
+    // The click's *own* pointerType can't be asked directly: WebKit tags the
+    // compatibility click after a tap as 'mouse', which took every iPad tap
+    // down the mouse branch below and left the dropdown unopenable by touch.
+    // `eventPointerType` answers from the pointerdown that opened the gesture.
+    const pointerType = eventPointerType(e);
+    const fromMouse = pointerType ? pointerType === 'mouse' : hasFinePointer();
     // With a mouse the dropdown is already showing from hover, so a click means
     // "go to this item" — let the link navigate.
     if (fromMouse) { _hideFlyout(); return; }

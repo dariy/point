@@ -28,6 +28,15 @@ const KEY = "pointerFine";
 // this soon after a touch is that echo, not a second input device.
 const TOUCH_ECHO_MS = 700;
 
+// How long a recorded pointerdown still explains the events that follow it. A
+// tap's click lands within a few ms; anything much later is a separate gesture
+// (or a keyboard activation) and gets judged on its own.
+const GESTURE_MS = 1_000;
+
+// The device that opened the gesture in progress — see `eventPointerType`.
+let gestureType = null;
+let gestureAt = 0;
+
 export function initPointerMode() {
   const root = document.documentElement;
 
@@ -76,10 +85,34 @@ export function initPointerMode() {
   // guard above keeps a tap's compatibility mouse events from promoting back.
   window.addEventListener("touchstart", demote, { capture: true, passive: true });
   window.addEventListener("pointerdown", (e) => {
+    gestureType = e.pointerType || null;
+    gestureAt = Date.now();
     if (e.pointerType === "mouse") promote(e);
     else demote();
   }, true);
   window.addEventListener("pointermove", promote, { capture: true, passive: true });
+  // Keyboard activation must never inherit the last tap's verdict.
+  window.addEventListener("keydown", () => { gestureType = null; }, true);
+}
+
+/**
+ * The device that produced `event`, or null when it can't be told.
+ *
+ * A click's own `pointerType` is not that answer. WebKit synthesises the
+ * compatibility click after a tap with `pointerType: "mouse"` (Chrome reports
+ * "touch"), so on iPad every tap read as a mouse click: hover-first UI took its
+ * "the dropdown is already open from hover" branch and simply followed the
+ * link, and crumb/nav dropdowns could never be opened by touch at all.
+ *
+ * The `pointerdown` that opened the gesture reports the real device in every
+ * engine, so clicks are judged by that instead — falling back to the click's
+ * own `pointerType`, and finally to null for the caller to resolve (keyboard
+ * activation reports no pointer type and belongs to the session verdict, see
+ * `hasFinePointer`).
+ */
+export function eventPointerType(event) {
+  if (gestureType && Date.now() - gestureAt < GESTURE_MS) return gestureType;
+  return event?.pointerType || null;
 }
 
 /**

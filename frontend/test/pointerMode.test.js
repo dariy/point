@@ -31,7 +31,7 @@ globalThis.window = {
   matchMedia: () => ({ matches: false }),
 };
 
-const { initPointerMode, hasFinePointer } = await import('../src/utils/pointerMode.js');
+const { initPointerMode, hasFinePointer, eventPointerType } = await import('../src/utils/pointerMode.js');
 
 const fire = (type, event = {}) => (listeners[type] || []).forEach((fn) => fn(event));
 const mouse = () => fire('pointerdown', { pointerType: 'mouse' });
@@ -100,5 +100,46 @@ describe('pointer mode', () => {
     initPointerMode();
     fire('pointerdown', { pointerType: 'pen' });
     assert.equal(hasFinePointer(), false);
+  });
+});
+
+describe('eventPointerType', () => {
+  beforeEach(() => {
+    stored.clear();
+    classes.clear();
+    listeners = {};
+    initPointerMode();
+  });
+
+  test("a tap's click is touch even when the click claims to be a mouse", () => {
+    // The iPad regression: WebKit synthesises the compatibility click after a
+    // tap with pointerType 'mouse' (Chrome says 'touch'), so trusting the click
+    // sent every tap down the mouse path — crumb and nav dropdowns could not be
+    // opened by touch at all, the tap just followed the link.
+    finger();
+    assert.equal(eventPointerType({ pointerType: 'mouse' }), 'touch');
+  });
+
+  test('a real mouse click still reads as a mouse', () => {
+    mouse();
+    assert.equal(eventPointerType({ pointerType: 'mouse' }), 'mouse');
+  });
+
+  test('keyboard activation belongs to no pointer', () => {
+    finger();
+    fire('keydown', { key: 'Enter' });
+    assert.equal(eventPointerType({ pointerType: '' }), null);
+  });
+
+  test('a stale gesture does not decide a later click', () => {
+    finger();
+    const now = Date.now;
+    Date.now = () => now() + 5000;
+    try {
+      assert.equal(eventPointerType({ pointerType: 'mouse' }), 'mouse');
+      assert.equal(eventPointerType({}), null);
+    } finally {
+      Date.now = now;
+    }
   });
 });

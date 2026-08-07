@@ -43,6 +43,15 @@ rest live under "More ▾". Items with children get breadcrumb-style dropdowns:
 hover-with-intent on fine pointers, tap-to-toggle on coarse. There are no
 hover-only surfaces.
 
+Which of the two a click gets is decided by `eventPointerType()`
+(`utils/pointerMode.js`), never by the click's own `pointerType`: **WebKit tags
+the compatibility click that follows a tap as `pointerType: "mouse"`** (Chrome
+reports `"touch"`), so reading the click directly made every tap on iPad take
+the mouse branch — the dropdown never opened and the tap just followed the
+link. The `pointerdown` that opened the gesture reports the real device in both
+engines, so that is what a click is judged by; keyboard activation has no
+pointer and falls back to the session verdict (`hasFinePointer()`).
+
 ## The site title is a crumb, so it has a dropdown
 
 Every crumb opens what sits one level below it; the site crumb is the blog
