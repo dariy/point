@@ -52,9 +52,16 @@ func TestRequirePlugin(t *testing.T) {
 		return rec.Code
 	}
 
-	// Absent key → DefaultEnabled (true) → passes through.
-	if code := call("instagram"); code != http.StatusOK || !hit {
-		t.Errorf("enabled-by-default plugin should pass: code=%d hit=%v", code, hit)
+	// With no setting stored, the gate falls back to the descriptor's
+	// DefaultEnabled — in both directions. The subjects come from the registry
+	// rather than being named here: which plugins ship on is retuned per
+	// release, and this test is about the fallback, not about the tuning.
+	defaultOn, defaultOff := registryDefaultIDs(t)
+	if code := call(defaultOn); code != http.StatusOK || !hit {
+		t.Errorf("enabled-by-default plugin %q should pass: code=%d hit=%v", defaultOn, code, hit)
+	}
+	if code := call(defaultOff); code != http.StatusNotFound || hit {
+		t.Errorf("disabled-by-default plugin %q should 404: code=%d hit=%v", defaultOff, code, hit)
 	}
 
 	// Explicitly disabled → 404, inner handler not reached.

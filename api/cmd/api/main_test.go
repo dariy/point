@@ -227,6 +227,7 @@ func TestDeploymentHeadInjection(t *testing.T) {
 		t.Fatalf("failed to create repo: %v", err)
 	}
 	defer func() { _ = repo.Close() }()
+	seedOwner(t, repo)
 
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
@@ -436,6 +437,21 @@ func TestRunSetupCLI_NewSetup(t *testing.T) {
 }
 
 // ── setupEcho additional coverage ─────────────────────────────────────────
+
+// seedOwner marks the install as configured. Without an owner user the SPA
+// fallback treats every request as a fresh install and redirects it to /setup,
+// so any test asserting on the served shell must seed one first.
+func seedOwner(t *testing.T, repo repository.Repository) {
+	t.Helper()
+	if _, err := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username:     "the_owner",
+		Email:        "owner@example.com",
+		PasswordHash: "hash",
+		DisplayName:  "Owner",
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+}
 
 func newEchoWithRepo(t *testing.T) (repository.Repository, config.Config) {
 	t.Helper()
@@ -1023,6 +1039,7 @@ func TestSetupEcho_CSSSubdirectoriesStillServed(t *testing.T) {
 // Without a manifest the shell must still ship working stylesheet links.
 func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
 	repo, cfg := newEchoWithRepo(t)
+	seedOwner(t, repo)
 	cssDir := filepath.Join(cfg.FrontendDir, "css")
 	_ = os.MkdirAll(cssDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cssDir, "light.css"), []byte("body{}"), 0o644)
@@ -1036,6 +1053,68 @@ func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(rec.Body.String(), "/assets/css/light.css?v="+cfg.AppVersion) {
 		t.Errorf("shell lost its stylesheet link without a manifest:\n%s", rec.Body.String())
+	}
+}
+
+// A fresh install (no owner user) must send every document request to the
+// first-run wizard, not just the admin section — "/" included. The redirect is
+// also uncacheable, or a CDN could keep bouncing visitors to /setup after the
+// blog has been configured.
+func TestSetupEcho_FreshInstallRedirectsToSetup(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	if err := os.WriteFile(filepath.Join(cfg.FrontendDir, "index.html"),
+		[]byte("<html><head></head><body></body></html>"), 0o644); err != nil {
+		t.Fatalf("write index.html: %v", err)
+	}
+	e := setupEcho(cfg, repo, initServices(&cfg, repo))
+
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	for _, p := range []string{"/", "/posts/hello", "/tags", "/light", "/light/posts"} {
+		rec := get(p)
+		if rec.Code != http.StatusFound {
+			t.Errorf("GET %s on a fresh install = %d, want 302", p, rec.Code)
+			continue
+		}
+		if loc := rec.Header().Get("Location"); loc != "/setup" {
+			t.Errorf("GET %s redirected to %q, want /setup", p, loc)
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "private, no-store" {
+			t.Errorf("GET %s redirect Cache-Control = %q, want private, no-store", p, cc)
+		}
+	}
+
+	// /setup itself must serve, or the redirect would loop.
+	if rec := get("/setup"); rec.Code != http.StatusOK {
+		t.Errorf("GET /setup on a fresh install = %d, want 200", rec.Code)
+	}
+
+	// The settings an unconfigured install returns are empty and stop being true
+	// the moment the wizard finishes. Caching them for 60s (what visibilityCache
+	// stamps on a guest GET) leaves the browser replaying the empty payload to
+	// the admin right after setup — no blog title, wrong theme.
+	if rec := get("/api/settings/public"); rec.Header().Get("Cache-Control") != "private, no-store" {
+		t.Errorf("pre-setup /api/settings/public Cache-Control = %q, want private, no-store",
+			rec.Header().Get("Cache-Control"))
+	}
+
+	// Once an owner exists the redirect stops and the shell serves again — the
+	// gate re-queries until it first sees a user, so no restart is needed.
+	seedOwner(t, repo)
+	for _, p := range []string{"/", "/light"} {
+		if rec := get(p); rec.Code != http.StatusOK {
+			t.Errorf("GET %s after setup = %d, want 200", p, rec.Code)
+		}
+	}
+
+	// ...and a configured install goes back to being edge-cacheable.
+	if rec := get("/api/settings/public"); rec.Header().Get("Cache-Control") != "public, max-age=60" {
+		t.Errorf("post-setup /api/settings/public Cache-Control = %q, want public, max-age=60",
+			rec.Header().Get("Cache-Control"))
 	}
 }
 

@@ -158,17 +158,73 @@ func TestRegistry_UniqueIDs(t *testing.T) {
 		}
 		seen[d.ID] = true
 	}
-	// Every plugin defaults enabled except: the alternative immersive viewer,
-	// which ships off so the default public viewer stays Standard; the two
-	// non-default tags-viz alternatives (only Atlas is on by default in the
-	// exclusive area); and the external-service opt-ins (MCP server, remark42
-	// comments) admins must enable deliberately.
-	defaultOff := map[string]bool{"immersive-sheet": true, "tags-map": true, "tags-graph": true, "mcp": true, "comments": true}
+}
+
+// Which plugins ship on is a product decision that gets retuned per release and
+// per deployment, so no test pins the individual flags — an enumerated list of
+// them only ever produces a red suite after a deliberate change. What must hold
+// for ANY tuning is the area arithmetic the toggle endpoint and IsLockedOff
+// depend on: an exclusive area starts with at most one member enabled, and a
+// core area with at least one — otherwise a fresh install boots with no post
+// viewer and nothing stops the admin from emptying the area further.
+func TestRegistry_AreaDefaultsAreCoherent(t *testing.T) {
+	fresh := map[string]string{} // no overrides → every plugin at DefaultEnabled
+
+	areas := map[string][]Descriptor{}
+	var order []string
 	for _, d := range Registry {
-		if !d.DefaultEnabled && !defaultOff[d.ID] {
-			t.Errorf("plugin %q unexpectedly defaults disabled", d.ID)
+		if d.Area == "" {
+			// Core/Exclusive arbitrate between members of an area; without one
+			// the flag has no peers to act on and silently does nothing.
+			if d.Core || d.Exclusive {
+				t.Errorf("plugin %q sets Core/Exclusive but declares no Area", d.ID)
+			}
+			continue
+		}
+		if _, seen := areas[d.Area]; !seen {
+			order = append(order, d.Area)
+		}
+		areas[d.Area] = append(areas[d.Area], d)
+	}
+
+	for _, area := range order {
+		var exclusive, core bool
+		for _, m := range areas[area] {
+			exclusive = exclusive || m.Exclusive
+			core = core || m.Core
+		}
+		enabled := EnabledInArea(area, fresh)
+
+		// "At most one" and "at least one" are contradictory policies for the
+		// same members; the Descriptor docs call this combination out too.
+		if exclusive && core {
+			t.Errorf("area %q declares both Exclusive and Core", area)
+		}
+		if exclusive && len(enabled) > 1 {
+			t.Errorf("exclusive area %q ships %d members enabled (%v), want at most 1", area, len(enabled), enabled)
+		}
+		if core && len(enabled) == 0 {
+			t.Errorf("core area %q ships with no member enabled — the area is empty on a fresh install", area)
 		}
 	}
+}
+
+// defaultSplit returns the default-enabled member of a two-member area and its
+// default-disabled sibling. Tests use it instead of naming the two viewers
+// directly, so retuning which one ships on doesn't turn them red.
+func defaultSplit(t *testing.T, area string) (on, off string) {
+	t.Helper()
+	for _, d := range AreaPlugins(area) {
+		if d.DefaultEnabled {
+			on = d.ID
+		} else {
+			off = d.ID
+		}
+	}
+	if on == "" || off == "" {
+		t.Fatalf("area %q needs exactly one default-on and one default-off member; got on=%q off=%q", area, on, off)
+	}
+	return on, off
 }
 
 func TestAreaPlugins_AndEnabledInArea(t *testing.T) {
@@ -179,15 +235,16 @@ func TestAreaPlugins_AndEnabledInArea(t *testing.T) {
 	if AreaPlugins("") != nil {
 		t.Errorf("empty area should match nothing")
 	}
+	on, off := defaultSplit(t, "immersive")
 
-	// Defaults: only Standard immersive is enabled.
+	// Defaults: exactly the default-on viewer is enabled.
 	enabled := EnabledInArea("immersive", map[string]string{})
-	if len(enabled) != 1 || enabled[0] != "immersive" {
-		t.Errorf("default enabled immersive = %v, want [immersive]", enabled)
+	if len(enabled) != 1 || enabled[0] != on {
+		t.Errorf("default enabled immersive = %v, want [%s]", enabled, on)
 	}
 
 	// Both on.
-	enabled = EnabledInArea("immersive", map[string]string{EnabledKey("immersive-sheet"): "true"})
+	enabled = EnabledInArea("immersive", map[string]string{EnabledKey(off): "true"})
 	if len(enabled) != 2 {
 		t.Errorf("both immersive plugins should be enabled, got %v", enabled)
 	}
@@ -198,17 +255,18 @@ func TestIsLockedOff(t *testing.T) {
 	if IsLockedOff("timeline", map[string]string{}) {
 		t.Errorf("non-core plugin must never be locked")
 	}
-	// Immersive (Standard) is the only enabled member by default → locked.
-	if !IsLockedOff("immersive", map[string]string{}) {
-		t.Errorf("immersive should be locked when it is the only enabled viewer")
+	// Whichever viewer ships on is the area's only enabled member → locked.
+	on, off := defaultSplit(t, "immersive")
+	if !IsLockedOff(on, map[string]string{}) {
+		t.Errorf("%s should be locked when it is the only enabled viewer", on)
 	}
-	// With Sheet also enabled, neither is locked.
-	both := map[string]string{EnabledKey("immersive-sheet"): "true"}
-	if IsLockedOff("immersive", both) || IsLockedOff("immersive-sheet", both) {
+	// With the sibling also enabled, neither is locked.
+	both := map[string]string{EnabledKey(off): "true"}
+	if IsLockedOff(on, both) || IsLockedOff(off, both) {
 		t.Errorf("with both viewers enabled, neither should be locked")
 	}
 	// A disabled plugin is never "locked off".
-	if IsLockedOff("immersive-sheet", map[string]string{}) {
+	if IsLockedOff(off, map[string]string{}) {
 		t.Errorf("disabled plugin must not be reported locked")
 	}
 }
@@ -246,8 +304,24 @@ func TestDefaultPresets(t *testing.T) {
 			t.Errorf("missing default preset %q", id)
 		}
 	}
-	if len(presets["fully-featured"]) != len(Registry) {
-		t.Errorf("fully-featured should include every plugin")
+	// fully-featured is "everything available": every plugin in the registry
+	// except tag-cloud, which no preset offers (it is filtered out of both
+	// fully-featured and standalone — see DefaultPresets).
+	inFull := map[string]bool{}
+	for _, id := range presets["fully-featured"] {
+		inFull[id] = true
+	}
+	if inFull["tag-cloud"] {
+		t.Errorf("fully-featured must not include tag-cloud")
+	}
+	for _, d := range Registry {
+		if d.ID != "tag-cloud" && !inFull[d.ID] {
+			t.Errorf("fully-featured is missing %q", d.ID)
+		}
+	}
+	if want := len(Registry) - 1; len(presets["fully-featured"]) != want {
+		t.Errorf("fully-featured has %d plugins, want %d (every plugin but tag-cloud)",
+			len(presets["fully-featured"]), want)
 	}
 	// Minimalistic enables only the sheet viewer among non-core public plugins.
 	if got := presets["minimalistic"]; len(got) != 1 || got[0] != "immersive-sheet" {

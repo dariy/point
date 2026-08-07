@@ -92,6 +92,17 @@ function applyTheme(theme) {
 }
 
 function loadTheme(settings) {
+  // The first-run wizard runs before any setting exists, and setup seeds
+  // default_theme: dark (api/internal/api/setup.go) — so render it in the theme
+  // the install is about to have, instead of filling in a white form and
+  // landing in a dark admin. Set on the element only, not through applyTheme():
+  // this is a seeded default, not a choice the owner made, so it must not be
+  // written to localStorage as if they had picked it. index.html's inline
+  // bootstrap does the same thing before first paint.
+  if (location.pathname === "/setup") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    return;
+  }
   const saved = localStorage.getItem("theme");
   applyTheme(saved || settings?.default_theme || "auto");
 }

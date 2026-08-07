@@ -46,6 +46,10 @@
                         b = document.getElementById("css-light");
                     if (a) a.media = "not all";
                     if (b) b.media = "all";
+                    // First-run wizard: paint it in the theme setup seeds
+                    // (dark), before app.js loads. See loadTheme() in app.js.
+                    if (p === "/setup")
+                        document.documentElement.dataset.theme = "dark";
                 }
             })();
         </script>

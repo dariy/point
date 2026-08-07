@@ -15,6 +15,61 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// registryDefaultIDs picks one plugin that ships enabled and one that ships
+// disabled. Tests that need "a plugin in state X" use these instead of naming a
+// plugin: the shipped defaults are product tuning that changes between releases
+// and deployments, and a test that hardcodes them goes red on every retune
+// without having found a bug.
+// Ids in exclude are skipped, for tests that already drive one plugin directly.
+func registryDefaultIDs(t *testing.T, exclude ...string) (on, off string) {
+	t.Helper()
+	skip := make(map[string]bool, len(exclude))
+	for _, id := range exclude {
+		skip[id] = true
+	}
+	for _, d := range plugins.Registry {
+		if skip[d.ID] {
+			continue
+		}
+		if d.DefaultEnabled && on == "" {
+			on = d.ID
+		}
+		if !d.DefaultEnabled && off == "" {
+			off = d.ID
+		}
+	}
+	if on == "" || off == "" {
+		t.Fatalf("registry needs a default-on and a default-off plugin; got on=%q off=%q", on, off)
+	}
+	return on, off
+}
+
+// coreAreaSplit returns a core area's default-enabled member (the one the
+// toggle endpoint must refuse to disable) and a default-disabled sibling that
+// can take over the area.
+func coreAreaSplit(t *testing.T) (on, off string) {
+	t.Helper()
+	for _, d := range plugins.Registry {
+		if !d.Core || d.Area == "" {
+			continue
+		}
+		on, off = "", ""
+		for _, m := range plugins.AreaPlugins(d.Area) {
+			if m.DefaultEnabled && on == "" {
+				on = m.ID
+			}
+			if !m.DefaultEnabled && off == "" {
+				off = m.ID
+			}
+		}
+		if on != "" && off != "" {
+			return on, off
+		}
+	}
+	t.Fatal("registry has no core area with one enabled and one disabled member")
+	return "", ""
+}
+
 func newPluginsHandler(t *testing.T) (*PluginsHandler, *services.SettingsService, *echo.Echo) {
 	t.Helper()
 	repo := setupTestDB(t)
@@ -58,9 +113,14 @@ func TestListPlugins_ReturnsFullCatalogWithState(t *testing.T) {
 	if v, ok := state["timeline"]; !ok || v.Enabled {
 		t.Errorf("timeline should be present and disabled: %+v (ok=%v)", v, ok)
 	}
-	// An untouched plugin falls back to DefaultEnabled (true).
-	if v, ok := state["immersive"]; !ok || !v.Enabled {
-		t.Errorf("immersive should be present and enabled by default: %+v (ok=%v)", v, ok)
+	// An untouched plugin reports its DefaultEnabled, whichever way that falls
+	// (timeline excluded — this test just overrode it).
+	defaultOn, defaultOff := registryDefaultIDs(t, "timeline")
+	if v, ok := state[defaultOn]; !ok || !v.Enabled {
+		t.Errorf("%s should be present and enabled by default: %+v (ok=%v)", defaultOn, v, ok)
+	}
+	if v, ok := state[defaultOff]; !ok || v.Enabled {
+		t.Errorf("%s should be present and disabled by default: %+v (ok=%v)", defaultOff, v, ok)
 	}
 }
 
@@ -131,24 +191,25 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 		return rec.Code
 	}
 
-	// Immersive area: Standard is the only enabled viewer by default → locked,
-	// and it is now the only core area left (the admin routes that used to be
-	// single-member core areas are ordinary routes in app.js).
-	if code := toggle("immersive", `{"enabled":false}`); code != http.StatusConflict {
-		t.Fatalf("disabling sole immersive viewer should 409, got %d", code)
+	// The immersive viewers are the only core area left (the admin routes that
+	// used to be single-member core areas are ordinary routes in app.js).
+	// Whichever of the two ships enabled is the area's sole member → locked.
+	sole, sibling := coreAreaSplit(t)
+	if code := toggle(sole, `{"enabled":false}`); code != http.StatusConflict {
+		t.Fatalf("disabling sole viewer %q should 409, got %d", sole, code)
 	}
 
-	// Enable Sheet, then Standard may be disabled (Sheet keeps the area alive).
-	if code := toggle("immersive-sheet", `{"enabled":true}`); code != http.StatusOK {
-		t.Fatalf("enabling immersive-sheet should 200, got %d", code)
+	// Enable the sibling, and the first may be disabled — the area stays alive.
+	if code := toggle(sibling, `{"enabled":true}`); code != http.StatusOK {
+		t.Fatalf("enabling %q should 200, got %d", sibling, code)
 	}
-	if code := toggle("immersive", `{"enabled":false}`); code != http.StatusOK {
-		t.Fatalf("disabling Standard with Sheet on should 200, got %d", code)
+	if code := toggle(sole, `{"enabled":false}`); code != http.StatusOK {
+		t.Fatalf("disabling %q with %q on should 200, got %d", sole, sibling, code)
 	}
 	all, _ := svc.GetAllSettings(ctx)
-	if plugins.IsEnabled("immersive", all) || !plugins.IsEnabled("immersive-sheet", all) {
-		t.Errorf("expected Sheet on, Standard off; got standard=%v sheet=%v",
-			plugins.IsEnabled("immersive", all), plugins.IsEnabled("immersive-sheet", all))
+	if plugins.IsEnabled(sole, all) || !plugins.IsEnabled(sibling, all) {
+		t.Errorf("expected %s on, %s off; got %s=%v %s=%v",
+			sibling, sole, sole, plugins.IsEnabled(sole, all), sibling, plugins.IsEnabled(sibling, all))
 	}
 }
 

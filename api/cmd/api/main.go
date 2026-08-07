@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -77,6 +78,42 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 // on what counts as admin.
 func isAdminPath(p string) bool {
 	return strings.HasPrefix(p, "/light") || p == "/setup"
+}
+
+// newSetupGate returns a predicate reporting whether the install has an owner
+// user yet, i.e. whether first-run setup has been completed. Setup runs once and
+// never reverts, so the answer is latched the first time it comes back true and
+// the query only costs anything while the install is still unconfigured.
+func newSetupGate(repo repository.Repository) func(context.Context) bool {
+	var complete atomic.Bool
+	return func(ctx context.Context) bool {
+		if complete.Load() {
+			return true
+		}
+		if _, err := repo.GetFirstUser(ctx); err == nil {
+			complete.Store(true)
+			return true
+		}
+		return false
+	}
+}
+
+// noStoreBeforeSetup keeps the responses of an unconfigured install out of
+// caches. Listed AFTER visibilityCache on a route so it overrides the
+// `public, max-age=60` a guest GET is stamped with: everything a fresh install
+// returns is empty, and it stops being true the instant the wizard finishes.
+// The settings payload is the one that bites — the wizard's own page load puts
+// the empty version in the browser cache, and the admin, loading seconds later,
+// reads it back with no blog title and the wrong theme.
+func noStoreBeforeSetup(setupComplete func(context.Context) bool) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !setupComplete(c.Request().Context()) {
+				c.Response().Header().Set("Cache-Control", "private, no-store")
+			}
+			return next(c)
+		}
+	}
 }
 
 // hasSession reports whether the request carries a non-empty session cookie —
@@ -357,7 +394,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
-	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
+	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo, &cfg)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings, svcs.Tag)
 	instagramImportService := services.NewInstagramImportService(svcs.Instagram, svcs.Media, svcs.Post)
 	instagramHandler := api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg)
@@ -657,11 +694,16 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 
+	// Shared by the pre-setup no-store rule below and the SPA fallback's
+	// redirect to the wizard: one latch, so the "is this install configured yet"
+	// query stops running the moment it has an answer.
+	setupComplete := newSetupGate(repo)
+
 	// API route groups — registered per domain (see routes.go).
 	registerPostRoutes(e, postHandler, svcs)
 	registerTagRoutes(e, tagHandler, svcs)
 	registerMediaRoutes(e, mediaHandler, svcs)
-	registerSettingsRoutes(e, settingsHandler, svcs)
+	registerSettingsRoutes(e, settingsHandler, svcs, setupComplete)
 	registerPluginRoutes(e, pluginsHandler, svcs)
 	registerInstagramRoutes(e, instagramHandler, svcs)
 	registerThemeRoutes(e, themeHandler, svcs)
@@ -860,6 +902,19 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.GET("/*", func(c echo.Context) error {
 		if indexHTMLContent != "" {
 			path := c.Request().URL.Path
+
+			// Fresh install: every document lands on the first-run wizard, not
+			// just the admin section. A blog with no owner has nothing to show
+			// on "/" either, and doing it here (rather than only in the SPA's
+			// route guard) means the very first page load goes straight to
+			// /setup — no public shell rendered first, no JS required.
+			if path != "/setup" && !setupComplete(c.Request().Context()) {
+				// visibilityCache already stamped `public, max-age=60` on this
+				// guest GET; a cached redirect would outlive setup itself and
+				// bounce visitors to /setup after the blog is configured.
+				c.Response().Header().Set("Cache-Control", "private, no-store")
+				return c.Redirect(http.StatusFound, "/setup")
+			}
 			// Pick the shell: the admin one (no deployment-injected third-party
 			// markup) whenever the viewer is privileged — an admin route, or any
 			// request carrying a session. A logged-in admin shows admin controls

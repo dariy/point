@@ -2,7 +2,7 @@ import { Component } from '../../components/Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { api } from '../../api/client.js';
 import { sha256 } from '../../api/auth.js';
-import { router } from '../../router.js';
+import { APP_LOGO_SVG } from '../../utils/icons.js';
 
 export default class SetupPage extends Component {
   constructor(container, props = {}) {
@@ -23,6 +23,7 @@ export default class SetupPage extends Component {
       <div class="setup-page-container">
         <div class="card">
           <div class="card-header">
+            ${APP_LOGO_SVG}
             <h2>Welcome to Point</h2>
             <p class="text-muted text-small">Complete this one-time setup to create your blog.</p>
           </div>
@@ -122,7 +123,13 @@ export default class SetupPage extends Component {
           name: await sha256(password),
         });
 
-        router.navigate('/light');
+        // Full document load rather than an SPA navigate: the app bootstrapped
+        // against an unconfigured install (no settings, no user, no theme), and
+        // setup has just changed all three. Reloading picks up the seeded
+        // settings and the session the API issued — landing the owner straight
+        // in the admin instead of at the login screen. If the session could not
+        // be minted, the auth guard sends them to login from there.
+        window.location.assign('/light');
       } catch (err) {
         this.setState({
           loading: false,

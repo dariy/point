@@ -24,6 +24,14 @@ done
 PASS=()
 FAIL=()
 
+# run_step records pass/fail by the exit status of "$@" and keeps going, so one
+# red check still reports the rest.
+#
+# Every multi-command step below starts with `set -eo pipefail`: a `bash -c`
+# body does NOT inherit this script's -e, so without it only the LAST command's
+# status reaches run_step. That silently passed "Go tests" while tests failed —
+# `go test` was red, the `go tool cover` line after it was green, and green won.
+# Keep the guard in any body you add.
 run_step() {
     local name="$1"
     shift
@@ -39,6 +47,7 @@ run_step() {
 
 # ── Go lint ──────────────────────────────────────────────────────────────────
 run_step "Go lint" bash -c "
+    set -eo pipefail
     cd '$ROOT_DIR/api'
     golangci-lint run --timeout 5m $FIX_FLAG --build-tags integration
 "
@@ -47,6 +56,7 @@ run_step "Go lint" bash -c "
 # Use the lockfile-pinned eslint (flat config, eslint.config.js) — the system
 # eslint may be a different major version reading a different config format.
 run_step "JS lint" bash -c "
+    set -eo pipefail
     cd '$ROOT_DIR'
     [ -x node_modules/.bin/eslint ] || npm ci --no-audit --no-fund
     node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs \\
@@ -66,12 +76,16 @@ fi
 
 # ── Go vet ────────────────────────────────────────────────────────────────────
 run_step "Go vet" bash -c "
+    set -eo pipefail
     cd '$ROOT_DIR/api'
     go vet -tags=integration ./...
 "
 
 # ── Go tests ──────────────────────────────────────────────────────────────────
+# The coverage summary is deliberately after `set -e`: a failed run must not be
+# followed by a reassuring coverage line, and the failure must reach run_step.
 run_step "Go tests" bash -c "
+    set -eo pipefail
     cd '$ROOT_DIR/api'
     go test -tags=integration $SHORT_FLAG -coverprofile=coverage.out ./...
     go tool cover -func=coverage.out | tail -1
@@ -91,6 +105,7 @@ fi
 # Coverage is collected in the same pass (V8 instrumentation, no extra runner)
 # and written as lcov for the gate below and for codecov in CI.
 run_step "JS tests" bash -c "
+    set -eo pipefail
     cd '$ROOT_DIR'
     node --test --experimental-test-coverage \
         --test-coverage-include='frontend/src/**' \
@@ -104,6 +119,7 @@ run_step "JS coverage" node "$SCRIPT_DIR/js-coverage-report.mjs" "$ROOT_DIR/cove
 
 # ── Vulnerability scan ────────────────────────────────────────────────────────
 run_step "govulncheck" bash -c "
+    set -eo pipefail
     cd '$ROOT_DIR/api'
     govulncheck ./...
 "

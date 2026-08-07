@@ -5,6 +5,8 @@ package main
 // domain handler, and the shared services for auth/plugin middleware.
 
 import (
+	"context"
+
 	"point-api/internal/api"
 
 	"github.com/labstack/echo/v4"
@@ -85,9 +87,12 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 	mediaGroup.DELETE("/:id", h.DeleteMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 }
 
-func registerSettingsRoutes(e *echo.Echo, h *api.SettingsHandler, svcs *AppServices) {
+func registerSettingsRoutes(e *echo.Echo, h *api.SettingsHandler, svcs *AppServices, setupComplete func(context.Context) bool) {
 	settingsGroup := e.Group("/api/settings")
-	settingsGroup.GET("/public", h.GetPublicSettings, visibilityCache)
+	// noStoreBeforeSetup is listed last so it runs after visibilityCache and can
+	// override it: the empty settings of a not-yet-configured install must not
+	// survive in a cache across the setup hand-off.
+	settingsGroup.GET("/public", h.GetPublicSettings, visibilityCache, noStoreBeforeSetup(setupComplete))
 	settingsGroup.GET("", h.GetSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.GET("/:key", h.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PUT("", h.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
