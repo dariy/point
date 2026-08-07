@@ -10,10 +10,12 @@
  */
 
 import { escapeHtml } from "../../utils/helpers.js";
+import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.js";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
 export const LABEL_OVERRIDES = {
   tags_visibility: "Tags visible to",
+  default_post_title_format: "Title for untitled posts",
   show_title_dropdown: "Root-tag dropdown on the site title",
   atlas_post_limit: "Atlas posts to fetch",
   // Not a second "enable the plugin" switch — the plugin list owns that. This
@@ -174,6 +176,11 @@ function inputHtml(key, value, { posts = [] }) {
     const v = escapeHtml(String(value || ""));
     return `<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
       <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Links: <code>[text](https://example.com)</code> or <code>[text](/path)</code>. Leave blank for the default.</small>`;
+  }
+  if (key === "default_post_title_format") {
+    const format = String(value || "").trim() || DEFAULT_POST_TITLE_FORMAT;
+    return `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" placeholder="${DEFAULT_POST_TITLE_FORMAT}">
+      <small class="form-hint">A post saved without a title is named after the day it was written. Tokens: <code>YYYY</code> <code>YY</code> <code>MMMM</code> <code>MMM</code> <code>MM</code> <code>DDDD</code> <code>DDD</code> <code>DD</code> <code>HH</code> <code>mm</code> <code>ss</code>. Anything else is literal; use <code>[brackets]</code> for words that contain a token. Today: <strong>${escapeHtml(formatTitleDate(format))}</strong></small>`;
   }
   if (key.startsWith("gemini_prompt_")) {
     // ponytail: placeholders mirror media_service.go's built-in defaults.

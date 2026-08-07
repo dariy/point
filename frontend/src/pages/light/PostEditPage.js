@@ -28,6 +28,7 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import { defaultPostTitle } from "../../utils/formatters.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
@@ -229,7 +230,7 @@ export default class PostEditPage extends Component {
               <div class="editor-main">
                 <div class="title-row">
                   <div class="title-input-wrapper">
-                    <input type="text" id="title-input" class="form-input editor-title" placeholder="Post title" value="${title}" required>
+                    <input type="text" id="title-input" class="form-input editor-title" placeholder="${escapeHtml(defaultPostTitle(store.get("settings")))}" title="Leave blank to title this post with today's date" value="${title}">
                     ${aiBtn("title")}
                   </div>
                 </div>
@@ -735,7 +736,9 @@ export default class PostEditPage extends Component {
     if (this._unmounted || this.state.saving || this.state.deleting || !this.state.hasPendingEdits) return;
 
     const data = this._applyPageType(this._collectFormData());
-    if (!data.title) return;
+    // An untitled post is fine — the backend titles it after today. A brand new
+    // one with nothing in it at all is not worth a draft row yet.
+    if (this.state.isNew && !data.title && !data.content.trim()) return;
 
     store.set('autosave_status', { status: 'saving' });
     
@@ -745,6 +748,10 @@ export default class PostEditPage extends Component {
          this.state.isNew = false;
          this.state.postId = result.id;
          this.state.post = result;
+         // Show the date title the backend assigned to an untitled post — a
+         // re-render here would wipe the caret, so write the field directly.
+         const titleEl = this.container.querySelector("#title-input");
+         if (titleEl && !titleEl.value.trim() && result.title) titleEl.value = result.title;
          history.replaceState(null, "", `/light/posts/${result.id}/edit`);
       } else {
          const result = await updatePost(this.state.postId, data);
@@ -780,7 +787,6 @@ export default class PostEditPage extends Component {
 
   async _save(overrides = {}) {
     const data = this._applyPageType({ ...this._collectFormData(), ...overrides });
-    if (!data.title) { store.set("toast", { message: "Title is required.", type: "error" }); return; }
 
     this.setState({ saving: true });
     store.set('autosave_status', { status: 'saving' });

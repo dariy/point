@@ -29,6 +29,12 @@ const SETTING_GROUPS = [
     ],
   },
   {
+    title: "Posts",
+    keys: [
+      "default_post_title_format",
+    ],
+  },
+  {
     title: "Display",
     keys: [
       "posts_per_page",

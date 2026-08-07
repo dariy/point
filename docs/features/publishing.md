@@ -21,6 +21,15 @@ Backend core is `PostService` (`api/internal/services/post_service.go`); the edi
   Known gap: **global** custom CSS bypasses the sanitizer.
 - **AI fill** per field when Gemini is configured (see
   [ai-analysis.md](ai-analysis.md)).
+- **Titles are optional**: a post saved with an empty title is named after the day it
+  was written. The pattern lives in `blog_settings.default_post_title_format`
+  (/light/settings → Posts), defaults to `YYYY-MM-DD`, and is rendered by
+  `FormatTitleDate` (`api/internal/services/post_title.go`) — tokens `YYYY YY MMMM MMM
+  MM DDDD DDD DD HH mm ss`, `[brackets]` for literal words. `formatTitleDate`
+  (`frontend/src/utils/formatters.js`) mirrors it so the editor's title placeholder
+  previews what the backend will assign; the two token tables must stay in sync.
+  Same-day untitled posts would derive the same slug, so `CreatePost` suffixes
+  `-2`, `-3`… rather than returning a conflict the author can't act on.
 
 ## Save model — autosave is the only save
 

@@ -38,6 +38,11 @@ var publicSettingKeys = map[string]bool{
 	"about_post_id":       true,
 	"home_page_post_id":   true,
 
+	// Not read by the public site: the post editor shows the date a blank
+	// title would become, and the admin SPA only ever loads this endpoint.
+	// A date pattern discloses nothing — post titles are public anyway.
+	"default_post_title_format": true,
+
 	"tags_visibility":         true,
 	"timeline_mode":           true,
 	"enable_backup":           true,

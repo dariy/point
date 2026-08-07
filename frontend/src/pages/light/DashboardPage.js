@@ -213,7 +213,8 @@ export default class DashboardPage extends Component {
           const post = await createPost({
             content,
             status: 'draft',
-            title: content.split('\n')[0].substring(0, 50) || 'Untitled'
+            // Blank first line: let the backend apply the date default.
+            title: content.split('\n')[0].substring(0, 50).trim()
           });
           navigate(`/light/posts/${post.id}/edit`);
         } catch (err) {

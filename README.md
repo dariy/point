@@ -111,7 +111,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Built with
 
-[Go](https://golang.org/) · [Echo](https://echo.labstack.com/) · [SQLite](https://sqlite.org/) · [Docker](https://www.docker.com/) / [Podman](https://podman.io/)
+[Go](https://golang.org/) · [Echo](https://echo.labstack.com/) · [SQLite](https://sqlite.org/) · [Podman](https://podman.io/)
 
 ```
  _| _ ._oo ._  __|_
