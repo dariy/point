@@ -114,7 +114,12 @@ function belowGridReserve(gridEl) {
   };
   // Pagination is mounted synchronously (only when pages > 1), so its measured
   // height is reliable here. Footer is an async plugin slot — fall back until laid out.
-  const footer = pluginHost.hasSlot('footer')
+  // Distraction-free mode is the one layout where the footer is not below the
+  // grid at all: it is parked off-screen and flicked up *over* it as the mode's
+  // overlay (plugins/distraction-free), so it reserves nothing. The paginator
+  // measures 0 there on its own — that mode hides it outright.
+  const footerOverGrid = doc.body?.classList.contains('distraction-free');
+  const footer = pluginHost.hasSlot('footer') && !footerOverGrid
     ? Math.max(FOOTER_FALLBACK, measure('#footer-mount'))
     : 0;
   // .site-main's bottom padding sits under the pagination and above the footer,

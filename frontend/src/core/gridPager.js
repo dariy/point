@@ -205,7 +205,9 @@ export class GridPager {
       },
       onSwipeCancel: () => this._resetGridSwipe(),
       onSwipeCommit: (dir) => {
-        // Only horizontal swipes paginate; a vertical swipe is a page scroll.
+        // Only horizontal swipes paginate; a vertical one is a page scroll, and
+        // is forwarded for whatever page-level mode wants it (see below).
+        if (dir === 'up' || dir === 'down') return this._emitVerticalSwipe(dir);
         if (dir !== 'left' && dir !== 'right') return;
         if (this._pageNavPending) return;
         const d = dir === 'left' ? 'next' : 'prev';
@@ -235,6 +237,25 @@ export class GridPager {
     this._onTouchDown = () => { this._stride = this._swipeStride(); };
     root.addEventListener('touchstart', this._onTouchDown, { passive: true });
     this._touchEl = root;
+  }
+
+  /**
+   * Announce a vertical flick on the grid. The pager never paginates vertically,
+   * but it owns the only gesture recogniser on a grid page, so the modes layered
+   * over that page listen here rather than each binding a second controller to
+   * the same touches — currently distraction-free, which raises its footer
+   * overlay on a flick up and leaves the mode on a flick down.
+   *
+   * Only fires at the scroll extremes: mid-document the same flick is a scroll
+   * and nothing else. (The gesture layer deliberately doesn't preventDefault a
+   * vertical drag, so the browser scrolls in parallel either way.)
+   */
+  _emitVerticalSwipe(dir) {
+    const y = window.scrollY || 0;
+    const atTop = y <= 2;
+    const atBottom = y + window.innerHeight >= document.documentElement.scrollHeight - 2;
+    if (dir === 'down' ? !atTop : !atBottom) return;
+    window.dispatchEvent(new CustomEvent('point:grid-swipe-vertical', { detail: { dir } }));
   }
 
   // Keyboard + mouse page navigation for the grid, complementing swipe/trackpad.

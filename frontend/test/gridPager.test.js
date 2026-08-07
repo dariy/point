@@ -35,6 +35,7 @@ function fire(el, type, event) {
 
 let GridPager;
 let body, gridMount, container, siteMain, keyHandlers;
+let dispatched = [];
 
 before(async () => {
   globalThis.localStorage = {
@@ -47,13 +48,16 @@ before(async () => {
   globalThis.window = {
     innerWidth: 800,
     innerHeight: 600,
+    scrollY: 0,
     getComputedStyle: () => ({ columnGap: '16px' }),
     addEventListener(type, fn) { (keyHandlers[type] ||= []).push(fn); },
     removeEventListener(type, fn) { keyHandlers[type] = (keyHandlers[type] || []).filter((f) => f !== fn); },
+    dispatchEvent(e) { dispatched.push(e); },
   };
   globalThis.Image = class { set src(_v) {} decode() { return Promise.resolve(); } };
   globalThis.document = {
     body: null, // set per test
+    documentElement: { scrollHeight: 600 }, // fits the viewport, like a DF grid
     createElement: () => makeEl(),
     querySelector: () => null,
     addEventListener() {},
@@ -65,6 +69,9 @@ before(async () => {
 /** A pager wired to stub elements, recording every navigation it requests. */
 function setup({ page = 2, pages = 4, posts = [] } = {}) {
   keyHandlers = {};
+  dispatched = [];
+  window.scrollY = 0;
+  document.documentElement.scrollHeight = 600;
   body = makeEl();
   document.body = body;
   gridMount = makeEl({ offsetTop: 40 });
@@ -275,6 +282,42 @@ describe('GridPager', () => {
     assert.equal(gridMount.style.transform, undefined);
     swipe.onSwipeCommit('up');
     assert.deepEqual(nav, []);
+  });
+
+  test('a vertical flick is forwarded to whatever mode is layered on the page', async () => {
+    const { pager } = setup({ page: 2, pages: 4 });
+    pager.arm({ page: 2, pages: 4 });
+    await flush();
+
+    const swipe = pager._gesture._opts;
+    swipe.onSwipeCommit('up');
+    swipe.onSwipeCommit('down');
+    assert.deepEqual(dispatched.map((e) => e.detail.dir), ['up', 'down']);
+    assert.equal(dispatched[0].type, 'point:grid-swipe-vertical');
+  });
+
+  test('mid-document the same flick is only a scroll', async () => {
+    const { pager } = setup({ page: 2, pages: 4 });
+    pager.arm({ page: 2, pages: 4 });
+    await flush();
+
+    // A page twice the viewport, scrolled to the middle: neither edge is met.
+    document.documentElement.scrollHeight = 1200;
+    window.scrollY = 300;
+    const swipe = pager._gesture._opts;
+    swipe.onSwipeCommit('up');
+    swipe.onSwipeCommit('down');
+    assert.deepEqual(dispatched, []);
+
+    window.scrollY = 0;          // at the top: only a flick down carries
+    swipe.onSwipeCommit('up');
+    swipe.onSwipeCommit('down');
+    assert.deepEqual(dispatched.map((e) => e.detail.dir), ['down']);
+
+    window.scrollY = 600;        // at the bottom: only a flick up
+    swipe.onSwipeCommit('up');
+    swipe.onSwipeCommit('down');
+    assert.deepEqual(dispatched.map((e) => e.detail.dir), ['down', 'up']);
   });
 
   test('trackpad flicks page within range only', async () => {

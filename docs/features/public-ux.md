@@ -71,4 +71,6 @@ targeted consistency and legibility.
 - A visible tag must never 404: surfaces must respect the same visibility filters as
   tag pages (`min_tag_posts_to_show`, effective hidden).
 - Any new hover affordance needs a touch path; any new gesture needs a visible
-  alternative.
+  alternative. The one deliberate exception is distraction-free mode on touch, whose
+  exit is flick-only by design — the visible control was the distraction
+  (see [../plugins/distraction-free.md](../plugins/distraction-free.md)).
