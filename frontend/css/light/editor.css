@@ -199,6 +199,14 @@ body.drag-active::after {
     align-items: center;
 }
 
+/* Prefix and input sit on one line whatever the width they are given */
+.slug-input-wrapper {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
 .slug-prefix {
     font-family: var(--font-mono);
     font-size: var(--font-size-base);
@@ -830,6 +838,113 @@ textarea.is-maximized,
     flex-direction: column;
     gap: var(--spacing-md);
     padding: 0 var(--spacing-md) var(--spacing-md);
+}
+
+/* ---------------------------
+   Pinned field groups
+   Every post property is one .details-group. Pinned ones are moved (by
+   PostEditPage, not re-rendered) into #pinned-fields on the canvas, where the
+   header row becomes a plain label above the field.
+   --------------------------- */
+.pinned-fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.pinned-fields:empty {
+    display: none;
+}
+
+.details-group.is-pinned {
+    border-bottom: none;
+}
+
+.details-group.is-pinned > summary.details-group-summary-row {
+    padding: 0 0 var(--spacing-xs);
+    cursor: default;
+}
+
+.details-group.is-pinned > summary::after {
+    display: none;
+}
+
+.details-group.is-pinned .details-group-title {
+    font-size: var(--font-size-xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.details-group.is-pinned .details-group-body {
+    padding: 0;
+    gap: var(--spacing-sm);
+}
+
+/* On the canvas the header is just a caption, so keep the pin beside its label
+   instead of pushed to the far edge of a full-width field. */
+.details-group.is-pinned .details-pin-btn {
+    margin-left: var(--spacing-xs);
+    margin-right: auto;
+}
+
+/* Pin toggle — muted until the group is hovered, solid once pinned */
+.details-pin-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    padding: var(--spacing-xs);
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    color: var(--text-muted);
+    opacity: 0.45;
+    cursor: pointer;
+    transition:
+        color var(--transition-fast),
+        opacity var(--transition-fast);
+}
+
+.details-group:hover > summary .details-pin-btn,
+.details-pin-btn:focus-visible,
+.details-pin-btn.is-pinned {
+    opacity: 1;
+}
+
+.details-pin-btn:hover,
+.details-pin-btn.is-pinned {
+    color: var(--color-primary);
+}
+
+.details-pin-btn svg {
+    display: block;
+}
+
+/* No hover-only affordances on touch: full-strength icon, ≥44 px target */
+@media (pointer: coarse) {
+    .details-pin-btn {
+        opacity: 1;
+        min-width: var(--size-2-75);
+        min-height: var(--size-2-75);
+    }
+}
+
+/* A group that does not apply right now (Schedule on an unscheduled post) */
+.details-group.is-hidden {
+    display: none;
+}
+
+.details-panel-empty {
+    margin: 0;
+    padding: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+.details-panel-body.has-groups .details-panel-empty {
+    display: none;
 }
 
 /* Status + featured share one row inside the Status group */

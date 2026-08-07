@@ -26,9 +26,15 @@ learn, a setting to forget).
 - **Bottom tab bar on phones** (`AdminBottomBar.js`) with a prominent center ➕; the
   editor goes full-screen over it; the hamburger drawer is gone on phones.
 - **Editor** (`PostEditPage.js`):
-  - Canvas is three things: title, content (Text/Visual), tags. Everything else lives
-    in the **Details** rail (wide) / bottom sheet (narrow), sectioned with one-line
-    summaries.
+  - Content (Text/Visual) always owns the canvas. Every other post property — title,
+    tags, status & visibility, schedule, slug, excerpt, immersive mode, custom CSS,
+    Instagram — is one collapsible group with a one-line summary, living either in the
+    **Details** rail (wide) / bottom sheet (narrow) or, when **pinned**, on the canvas.
+  - **Pinning** (`PIN_ORDER`, `point:editor:pinned`): every group header carries a pin
+    toggle; pinned groups move into `#pinned-fields` above the content editor, in the
+    canonical order, and the choice persists across posts and sessions. The default
+    (title + tags pinned) is the pre-pinning canvas. Toggling *moves the live element*
+    rather than re-rendering, so unflushed edits, focus and listeners survive.
   - **Autosave chip + contextual Publish ▾ / Update** split button — see
     [publishing.md](publishing.md) for the save model.
   - **Live preview pane** on wide screens (`showLivePreview`, `_isWide()`): renders
@@ -61,4 +67,6 @@ learn, a setting to forget).
 - New admin pages must use `AdminLayout` — never hand-roll `light-layout` markup.
 - Any new list/table needs its card form at phone widths and always-visible actions on
   coarse pointers.
-- New editor fields belong in a Details section, not on the canvas.
+- New editor fields belong in a Details group, not directly on the canvas — render them
+  through `_renderGroup()` so they get a summary and a pin like every other property.
+  Plugin-provided groups need no extra wiring: the pin handler is delegated.

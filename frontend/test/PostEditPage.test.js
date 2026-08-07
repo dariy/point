@@ -19,14 +19,14 @@ describe('PostEditPage', () => {
         appendChild: () => {}, 
         remove: () => {}, 
         style: {}, 
-        classList: { add: () => {}, remove: () => {} },
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
         addEventListener: () => {},
         removeEventListener: () => {},
         setAttribute: () => {},
         querySelector: () => null,
         querySelectorAll: () => []
       }),
-      body: { appendChild: () => {}, remove: () => {}, classList: { add: () => {}, remove: () => {} } },
+      body: { appendChild: () => {}, remove: () => {}, classList: { add: () => {}, remove: () => {}, toggle: () => {} } },
       activeElement: {},
       addEventListener: () => {},
       removeEventListener: () => {},
@@ -94,7 +94,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     innerHTML: '', 
     querySelector: () => null, 
     querySelectorAll: () => [],
-    classList: { add: () => {}, remove: () => {} },
+    classList: { add: () => {}, remove: () => {}, toggle: () => {} },
     addEventListener: () => {},
     closest: () => null,
     replaceChildren: () => {},
@@ -153,7 +153,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     innerHTML: '', 
     querySelector: () => null, 
     querySelectorAll: () => [],
-    classList: { add: () => {}, remove: () => {} },
+    classList: { add: () => {}, remove: () => {}, toggle: () => {} },
     addEventListener: () => {},
     closest: () => null,
     replaceChildren: () => {},
@@ -297,6 +297,127 @@ test('should preserve other fields when switching from visual to text mode', () 
     assert.ok(page.render().includes('aria-hidden="false"'), 'panel visible when open');
     page.state.detailsOpen = false;
     assert.ok(page.render().includes('aria-hidden="true"'), 'panel hidden when closed');
+  });
+
+  test('pins title and tags to the canvas by default, everything else to Details', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', slug: 'test' };
+
+    const html = page.render();
+    const panelAt = html.indexOf('id="details-panel"');
+    assert.ok(html.indexOf('id="pinned-fields"') < panelAt, 'pinned container is on the canvas');
+    for (const key of ['title', 'tags']) {
+      assert.ok(html.indexOf(`data-group="${key}"`) < panelAt, `${key} renders on the canvas`);
+    }
+    for (const key of ['status', 'schedule', 'slug', 'excerpt', 'immersive', 'css']) {
+      assert.ok(html.indexOf(`data-group="${key}"`) > panelAt, `${key} renders in the Details panel`);
+    }
+  });
+
+  test('every group carries a pin toggle, pinned ones marked pressed', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test' };
+    page.state.igStatus = { enabled: true, connected: true, default_share: false };
+
+    const html = page.render();
+    for (const key of ['title', 'tags', 'status', 'schedule', 'slug', 'excerpt', 'immersive', 'css', 'instagram']) {
+      assert.ok(html.includes(`data-pin="${key}"`), `${key} has a pin button`);
+    }
+    assert.match(html, /data-pin="title"[\s\S]{0,120}aria-pressed="true"/, 'pinned group reports pressed');
+    assert.match(html, /data-pin="slug"[\s\S]{0,120}aria-pressed="false"/, 'unpinned group reports unpressed');
+  });
+
+  test('a persisted pin set decides placement', () => {
+    const saved = global.localStorage;
+    global.localStorage = { getItem: () => JSON.stringify(['slug']), setItem: () => {}, removeItem: () => {} };
+    try {
+      const container = { querySelector: () => null, querySelectorAll: () => [] };
+      const page = new PostEditPage(container, { params: { id: '1' } });
+      page.state.loading = false;
+      page.state.isNew = false;
+      page.state.post = { id: 1, title: 'Test', slug: 'test' };
+
+      const html = page.render();
+      const panelAt = html.indexOf('id="details-panel"');
+      assert.ok(html.indexOf('data-group="slug"') < panelAt, 'slug pinned to the canvas');
+      assert.ok(html.indexOf('data-group="title"') > panelAt, 'title moved into Details');
+    } finally {
+      global.localStorage = saved;
+    }
+  });
+
+  test('Schedule is hidden unless the post is scheduled', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+
+    page.state.post = { id: 1, title: 'Test', status: 'draft' };
+    assert.match(page.render(), /class="details-group is-hidden" data-group="schedule"/, 'hidden for a draft');
+
+    page.state.post = { id: 1, title: 'Test', status: 'scheduled', scheduled_at: '2030-01-02T10:00:00Z' };
+    assert.ok(!/is-hidden" data-group="schedule"/.test(page.render()), 'visible for a scheduled post');
+  });
+
+  test('toggling a pin moves the live element and persists the set', () => {
+    let stored = null;
+    const saved = global.localStorage;
+    global.localStorage = { getItem: () => stored, setItem: (_k, v) => { stored = v; }, removeItem: () => {} };
+    try {
+      const el = (classes = [], dataset = {}) => {
+        const set = new Set(classes);
+        return {
+          dataset, open: false, children: [], _classes: set,
+          classList: {
+            contains: (c) => set.has(c),
+            add: (c) => set.add(c),
+            remove: (c) => set.delete(c),
+            toggle: (c, on) => { if (on) set.add(c); else set.delete(c); },
+          },
+          setAttribute: () => {}, focus: () => {},
+          querySelector: () => null,
+          insertBefore(node, ref) {
+            this.children = this.children.filter((c) => c !== node);
+            const at = ref ? this.children.indexOf(ref) : -1;
+            if (at === -1) this.children.push(node); else this.children.splice(at, 0, node);
+          },
+        };
+      };
+
+      const slug = el(['details-group'], { group: 'slug' });
+      const pinBtn = { classList: { toggle: () => {} }, setAttribute: () => {}, title: '', focus: () => {} };
+      slug.querySelector = () => pinBtn;
+      const canvas = el([]);
+      const panel = el([]);
+      panel.children = [slug];
+      panel.querySelector = () => (panel.children.length ? panel.children[0] : null);
+
+      const container = {
+        querySelector: (sel) => ({
+          '.details-group[data-group="slug"]': slug,
+          '#pinned-fields': canvas,
+          '.details-panel-body': panel,
+        }[sel] ?? null),
+        querySelectorAll: () => [],
+      };
+
+      const page = new PostEditPage(container, { params: { id: '1' } });
+      page._togglePin('slug');
+
+      assert.ok(page._pinned.has('slug'), 'slug is now pinned');
+      assert.deepStrictEqual(JSON.parse(stored).includes('slug'), true, 'pin set persisted');
+      assert.strictEqual(canvas.children[0], slug, 'element moved onto the canvas');
+      assert.ok(slug._classes.has('is-pinned'), 'element marked pinned');
+      assert.strictEqual(slug.open, true, 'a pinned group is always expanded');
+    } finally {
+      global.localStorage = saved;
+    }
   });
 
   test('should use default_share for new posts when igStatus loaded', () => {

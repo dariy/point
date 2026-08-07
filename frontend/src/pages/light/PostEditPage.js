@@ -30,11 +30,27 @@ import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { defaultPostTitle } from "../../utils/formatters.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, PIN_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
+
+/**
+ * Every post property is one pinnable group. A pinned group sits on the canvas
+ * (`.editor-main` → `#pinned-fields`), an unpinned one in the Details panel;
+ * the pin button in each group's header row moves it between the two.
+ *
+ * PIN_ORDER fixes the sequence in both places, so a group always lands back in
+ * the same spot. A group not listed here — a future plugin section rendering
+ * through `_renderGroup()` — is ordered last but is pinnable like the rest.
+ */
+const PIN_ORDER = ["title", "tags", "status", "schedule", "slug", "excerpt", "immersive", "css", "instagram"];
+
+/** Canvas layout before pinning existed: title and tags, everything else in Details. */
+const DEFAULT_PINNED = ["title", "tags"];
+
+const PINNED_STORAGE_KEY = "point:editor:pinned";
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
@@ -115,6 +131,7 @@ export default class PostEditPage extends Component {
       menuOpen: false,
       hasPendingEdits: false,
     };
+    this._pinned = this._readPinned();
     this._tags = [];
     this._nodes = [];
     this._unmounted = false;
@@ -224,24 +241,124 @@ export default class PostEditPage extends Component {
     const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
     const cssSummary = (p.css || "").trim() ? "custom" : "none";
     const cssEnabled = pluginHost.isEnabled("custom-css");
+    const tagNames = toTagNames(p.tags);
+
+    // Every property is a group; `_renderGroup` decides where it goes from the
+    // pin set, so the markup for a field exists once regardless of placement.
+    const groups = {
+      title: {
+        label: "Post title",
+        summary: title ? escapeHtml(this._truncate(p.title)) : "auto",
+        body: `
+          <div class="title-row">
+            <div class="title-input-wrapper">
+              <input type="text" id="title-input" class="form-input editor-title" placeholder="${escapeHtml(defaultPostTitle(store.get("settings")))}" title="Leave blank to title this post with today's date" value="${title}">
+              ${aiBtn("title")}
+            </div>
+          </div>`,
+      },
+      tags: {
+        label: "Tags",
+        summary: tagNames.length ? escapeHtml(this._truncate(tagNames.join(", "))) : "none",
+        body: `
+          <div class="tags-row">
+            <div class="tags-input-wrapper">
+              <div id="tags-input-mount" class="tags-row-input"></div>
+              ${aiBtn("tags")}
+            </div>
+          </div>`,
+      },
+      status: {
+        label: "Status &amp; visibility",
+        summary: statusSummary,
+        body: `
+          <div class="details-split-row">
+            <div class="form-group">
+              <label class="form-label" for="status-select">Status</label>
+              <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
+                ${statusOpts}
+              </select>
+            </div>
+            <div class="form-group featured-toggle-group">
+              <label class="form-label">Featured</label>
+              <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
+                ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
+              </button>
+              <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
+            </div>
+          </div>`,
+      },
+      // Only relevant while the post is scheduled; the group hides itself
+      // otherwise, wherever it currently sits (see `_setScheduleVisible`).
+      schedule: {
+        label: "Schedule",
+        summary: this._scheduleSummary(p.scheduled_at),
+        hidden: status !== "scheduled",
+        body: `
+          <div class="schedule-row" id="schedule-row">
+            <div class="schedule-input-wrapper">
+              <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
+              <span class="schedule-input-hint" id="schedule-hint" style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
+            </div>
+          </div>`,
+      },
+      slug: {
+        label: "Slug",
+        summary: escapeHtml(slugSummary),
+        body: `
+          <div class="slug-row">
+            <div class="slug-input-wrapper">
+              <span class="slug-prefix">/posts/</span>
+              <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
+            </div>
+          </div>`,
+      },
+      excerpt: {
+        label: "Excerpt",
+        summary: excerptSummary,
+        body: `
+          <div class="form-group excerpt-row">
+            <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+            ${aiBtn("excerpt")}
+          </div>`,
+      },
+      immersive: {
+        label: "Immersive mode",
+        summary: immersiveSummary,
+        body: `
+          <div class="form-group">
+            <select id="immersive-mode-select" class="form-input immersive-mode-select">
+              <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
+              <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
+              <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
+            </select>
+          </div>`,
+      },
+    };
+
+    if (cssEnabled) {
+      groups.css = {
+        label: "Custom CSS",
+        summary: cssSummary,
+        body: `<div class="form-group"><div id="css-editor-mount"></div></div>`,
+      };
+    }
+    if (pluginHost.isEnabled("instagram") && igStatus?.enabled) {
+      groups.instagram = this._instagramGroup(p, igStatus, publishingToInstagram, anyActionInProgress, isNew);
+    }
+
+    const keys = Object.keys(groups).sort((a, b) => this._pinIndex(a) - this._pinIndex(b));
+    const renderWhere = (pinned) =>
+      keys.filter((k) => this._pinned.has(k) === pinned)
+          .map((k) => this._renderGroup(k, groups[k], pinned))
+          .join("");
+    const pinnedHtml = renderWhere(true);
+    const detailsHtml = renderWhere(false);
 
     return `
             <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
               <div class="editor-main">
-                <div class="title-row">
-                  <div class="title-input-wrapper">
-                    <input type="text" id="title-input" class="form-input editor-title" placeholder="${escapeHtml(defaultPostTitle(store.get("settings")))}" title="Leave blank to title this post with today's date" value="${title}">
-                    ${aiBtn("title")}
-                  </div>
-                </div>
-
-
-                <div class="tags-row">
-                  <div class="tags-input-wrapper">
-                    <div id="tags-input-mount" class="tags-row-input"></div>
-                    ${aiBtn("tags")}
-                  </div>
-                </div>
+                <div class="pinned-fields" id="pinned-fields">${pinnedHtml}</div>
 
                 <div class="form-group">
                   ${modeToggle}
@@ -261,100 +378,36 @@ export default class PostEditPage extends Component {
                   <span class="details-panel-title">Details</span>
                   <button id="details-close-btn" class="details-panel-close" type="button" aria-label="Close details">&times;</button>
                 </div>
-                <div class="details-panel-body">
-                  <details class="details-group" data-group="status">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Status &amp; visibility</span>
-                      <span class="details-group-summary" id="summary-status">${statusSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="details-split-row">
-                        <div class="form-group">
-                          <label class="form-label" for="status-select">Status</label>
-                          <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
-                            ${statusOpts}
-                          </select>
-                        </div>
-                        <div class="form-group featured-toggle-group">
-                          <label class="form-label">Featured</label>
-                          <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
-                            ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
-                          </button>
-                          <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
-                        </div>
-                      </div>
-
-                      <div class="schedule-row" id="schedule-row" style="display:${status === "scheduled" ? "flex" : "none"}">
-                        <div class="schedule-input-wrapper">
-                          <label class="form-label" for="schedule-input">Schedule</label>
-                          <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
-                          <span class="schedule-input-hint" id="schedule-hint" style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="slug">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Slug</span>
-                      <span class="details-group-summary" id="summary-slug">${escapeHtml(slugSummary)}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="slug-row">
-                        <div class="slug-input-wrapper">
-                          <span class="slug-prefix">/posts/</span>
-                          <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="excerpt">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Excerpt</span>
-                      <span class="details-group-summary" id="summary-excerpt">${excerptSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group excerpt-row">
-                        <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
-                        ${aiBtn("excerpt")}
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="immersive">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Immersive mode</span>
-                      <span class="details-group-summary" id="summary-immersive">${immersiveSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group">
-                        <select id="immersive-mode-select" class="form-input immersive-mode-select">
-                          <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
-                          <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
-                          <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
-                        </select>
-                      </div>
-                    </div>
-                  </details>
-
-                  ${cssEnabled ? `
-                  <details class="details-group" data-group="css">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Custom CSS</span>
-                      <span class="details-group-summary" id="summary-css">${cssSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group">
-                        <div id="css-editor-mount"></div>
-                      </div>
-                    </div>
-                  </details>` : ''}
-
-                  ${(pluginHost.isEnabled("instagram") && igStatus?.enabled) ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
+                <div class="details-panel-body${detailsHtml ? " has-groups" : ""}">
+                  <!-- Kept first so a group unpinned back into an empty panel can
+                       simply be appended and still land after this note. -->
+                  <p class="details-panel-empty">Every field is pinned to the editor. Unpin one to bring it back here.</p>
+                  ${detailsHtml}
                 </div>
               </aside>
             </div>`;
+  }
+
+  /**
+   * One post property as a collapsible group with a pin toggle in its header.
+   *
+   * Pinned groups render the same markup with `is-pinned` and forced open — the
+   * body is the field itself, so pinning is purely a question of which parent
+   * the element hangs off. That lets `_togglePin` *move* the live element
+   * instead of re-rendering, keeping unsaved input values, focus and listeners.
+   */
+  _renderGroup(key, group, pinned) {
+    return `
+      <details class="details-group${pinned ? " is-pinned" : ""}${group.hidden ? " is-hidden" : ""}" data-group="${key}"${pinned ? " open" : ""}>
+        <summary class="details-group-summary-row">
+          <span class="details-group-title">${group.label}</span>
+          <span class="details-group-summary" id="summary-${key}">${group.summary}</span>
+          <button type="button" class="details-pin-btn${pinned ? " is-pinned" : ""}" data-pin="${key}"
+                  aria-pressed="${pinned}" title="${pinned ? "Unpin — move back to Details" : "Pin to the editor"}"
+                  aria-label="${pinned ? "Unpin from the editor" : "Pin to the editor"}">${PIN_SVG}</button>
+        </summary>
+        <div class="details-group-body">${group.body}</div>
+      </details>`;
   }
 
   /** Trim a value to a one-line summary length. */
@@ -362,35 +415,125 @@ export default class PostEditPage extends Component {
     return str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
   }
 
-  _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
+  /** Position of a group in the canonical order; unknown keys (plugins) sort last. */
+  _pinIndex(key) {
+    const i = PIN_ORDER.indexOf(key);
+    return i === -1 ? PIN_ORDER.length : i;
+  }
+
+  /** The pinned set, persisted across posts and sessions (an editor preference, not post data). */
+  _readPinned() {
+    let raw = null;
+    try { raw = localStorage.getItem(PINNED_STORAGE_KEY); } catch { /* ignore */ }
+    if (raw === null) return new Set(DEFAULT_PINNED);
+    try {
+      const parsed = JSON.parse(raw);
+      // An empty array is a real choice (everything in Details), so only a
+      // malformed value falls back to the defaults.
+      return Array.isArray(parsed) ? new Set(parsed.filter((k) => typeof k === "string")) : new Set(DEFAULT_PINNED);
+    } catch { return new Set(DEFAULT_PINNED); }
+  }
+
+  _persistPinned() {
+    try { localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...this._pinned])); } catch { /* ignore */ }
+  }
+
+  /**
+   * Pin/unpin a group: move the live element between the canvas and the panel.
+   *
+   * Never re-renders — the element carries its inputs (with values the user has
+   * typed but autosave has not flushed yet) and its listeners along, and every
+   * `this.container.querySelector("#…")` in `_collectFormData` keeps resolving
+   * because both destinations sit inside the same container.
+   */
+  _togglePin(key) {
+    const el = this.container.querySelector(`.details-group[data-group="${key}"]`);
+    if (!el) return;
+
+    const pinned = !this._pinned.has(key);
+    if (pinned) this._pinned.add(key); else this._pinned.delete(key);
+    this._persistPinned();
+
+    const btn = el.querySelector(".details-pin-btn");
+    const hadFocus = btn && typeof document !== "undefined" && document.activeElement === btn;
+
+    el.classList.toggle("is-pinned", pinned);
+    if (pinned) el.open = true;
+    if (btn) {
+      btn.classList.toggle("is-pinned", pinned);
+      btn.setAttribute("aria-pressed", String(pinned));
+      btn.title = pinned ? "Unpin — move back to Details" : "Pin to the editor";
+      btn.setAttribute("aria-label", pinned ? "Unpin from the editor" : "Pin to the editor");
+    }
+
+    this._placeGroup(el, key, pinned);
+    // Unpinning is a move into a panel the user may not have open — show it,
+    // otherwise the field just disappears.
+    if (!pinned) this._toggleDetails(true);
+    this._updatePanelEmpty();
+    // insertBefore re-inserts the node, which drops focus; put it back so the
+    // pin stays keyboard-operable.
+    if (hadFocus) btn.focus();
+  }
+
+  /** Insert a group into its destination container at its canonical position. */
+  _placeGroup(el, key, pinned) {
+    const host = this.container.querySelector(pinned ? "#pinned-fields" : ".details-panel-body");
+    if (!host) return;
+    const idx = this._pinIndex(key);
+    const next = Array.from(host.children).find(
+      (c) => c.classList?.contains("details-group") && c !== el && this._pinIndex(c.dataset.group) > idx,
+    );
+    host.insertBefore(el, next || null);
+  }
+
+  /** Show the "everything is pinned" note only when the panel has no groups left. */
+  _updatePanelEmpty() {
+    const body = this.container.querySelector(".details-panel-body");
+    body?.classList.toggle("has-groups", !!body.querySelector(".details-group"));
+  }
+
+  /** The Schedule group is only meaningful for scheduled posts — hide it elsewhere. */
+  _setScheduleVisible(on) {
+    this.container.querySelector('.details-group[data-group="schedule"]')?.classList.toggle("is-hidden", !on);
+  }
+
+  _scheduleSummary(scheduledAt) {
+    if (!scheduledAt) return "not set";
+    const d = new Date(scheduledAt);
+    return isNaN(d) ? "not set" : escapeHtml(d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+  }
+
+  /** Bring a group into view wherever it lives: expanded, and with the panel open if unpinned. */
+  _revealGroup(key) {
+    if (!this._pinned.has(key)) this._toggleDetails(true);
+    this.container.querySelector(`.details-group[data-group="${key}"]`)?.setAttribute("open", "");
+  }
+
+  _instagramGroup(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
     const igShare = isNew ? (igStatus.default_share ?? false) : (post.instagram_share ?? false);
     const igSt = post.instagram_status || "none";
     const igError = post.instagram_error || "";
     const igStatusBadgeClass = { published: "badge-success", error: "badge-danger", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
     const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
-    const igSummary = igShare ? "on" : "off";
 
-    return `
-      <details class="details-group" data-group="instagram">
-        <summary class="details-group-summary-row">
-          <span class="details-group-title">Instagram</span>
-          <span class="details-group-summary" id="summary-instagram">${igSummary}</span>
-        </summary>
-        <div class="details-group-body">
-          <div class="form-group ig-post-section">
-            <div class="ig-controls">
-              <label class="setting-pill">
-                <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
-                <span class="setting-pill-label">Share to Instagram</span>
-              </label>
-              ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
-              ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
-            </div>
-            ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
-            <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
+    return {
+      label: "Instagram",
+      summary: igShare ? "on" : "off",
+      body: `
+        <div class="form-group ig-post-section">
+          <div class="ig-controls">
+            <label class="setting-pill">
+              <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
+              <span class="setting-pill-label">Share to Instagram</span>
+            </label>
+            ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
+            ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
           </div>
-        </div>
-      </details>`;
+          ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
+          <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
+        </div>`,
+    };
   }
 
   /** True on ultrawide viewports where the live-preview pane is available (≥112em, per admin-ux C5). */
@@ -443,6 +586,12 @@ export default class PostEditPage extends Component {
     const q = (sel) => this.container.querySelector(sel);
     const set = (id, text) => { const el = this.container.querySelector(`#${id}`); if (el) el.textContent = text; };
 
+    const title = (q("#title-input")?.value || "").trim();
+    set("summary-title", title ? this._truncate(title) : "auto");
+
+    const tags = this._tagsInputRef?.getTags?.() ?? this._tags ?? [];
+    set("summary-tags", tags.length ? this._truncate(tags.join(", ")) : "none");
+
     const status = q("#status-select")?.value || "draft";
     const featured = q("#featured-check")?.checked;
     const scheduledAt = q("#schedule-input")?.value;
@@ -453,6 +602,11 @@ export default class PostEditPage extends Component {
     }
     if (featured) statusSummary += " · ★";
     set("summary-status", statusSummary);
+
+    const scheduleDate = scheduledAt ? new Date(scheduledAt) : null;
+    set("summary-schedule", scheduleDate && !isNaN(scheduleDate)
+      ? scheduleDate.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "not set");
 
     set("summary-slug", q("#slug-input")?.value.trim() || "auto");
 
@@ -483,6 +637,22 @@ export default class PostEditPage extends Component {
     this.container.querySelector("#details-toggle")?.addEventListener("click", () => this._toggleDetails());
     this.container.querySelector("#details-close-btn")?.addEventListener("click", () => this._toggleDetails(false));
     this.container.querySelector("#details-backdrop")?.addEventListener("click", () => this._toggleDetails(false));
+
+    // Pin toggles, delegated on the layout rather than bound per button so a
+    // group added later (a plugin section rendered through `_renderGroup`) is
+    // pinnable without extra wiring.
+    this.container.querySelector(".editor-layout")?.addEventListener("click", (e) => {
+      const btn = e.target.closest?.(".details-pin-btn");
+      if (btn) {
+        e.preventDefault();  // the button sits in a <summary>: don't toggle the group
+        this._togglePin(btn.dataset.pin);
+        return;
+      }
+      // A pinned group is the field itself on the canvas — its header row is a
+      // label, not a disclosure control, so clicking it must not collapse it.
+      const summary = e.target.closest?.("summary.details-group-summary-row");
+      if (summary?.parentElement?.classList.contains("is-pinned")) e.preventDefault();
+    });
 
     // Header overflow menu — toggle a class rather than setState. A full
     // re-render here would rebuild the editor from state.post and discard any
@@ -594,26 +764,20 @@ export default class PostEditPage extends Component {
     });
 
     const statusSelect = this.container.querySelector("#status-select");
-    const scheduleRow = this.container.querySelector("#schedule-row");
     const scheduleInput = this.container.querySelector("#schedule-input");
     statusSelect?.addEventListener("change", () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
-      if (newStatus === "scheduled") {
-        if (scheduleRow) scheduleRow.style.display = "flex";
-      } else {
-        if (scheduleRow) scheduleRow.style.display = "none";
-        if (scheduleInput) scheduleInput.value = "";
-      }
+      this._setScheduleVisible(newStatus === "scheduled");
+      if (newStatus !== "scheduled" && scheduleInput) scheduleInput.value = "";
       this._onInput();
     });
 
-    if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
-      this._toggleDetails(true);
-      this.container.querySelector('.details-group[data-group="status"]')?.setAttribute("open", "");
-      scheduleRow.style.display = "flex";
+    if (this.props.query?.openSchedule && statusSelect && scheduleInput) {
       statusSelect.value = "scheduled";
       statusSelect.className = "status-select badge-scheduled";
+      this._setScheduleVisible(true);
+      this._revealGroup("schedule");
       setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
     }
 
@@ -660,6 +824,7 @@ export default class PostEditPage extends Component {
     if (this.state.showLivePreview) this._debouncedPreview();
 
     this._updateDetailsSummaries();
+    this._updatePanelEmpty();
     this._setupWindowDragAndDrop();
   }
 
@@ -667,10 +832,9 @@ export default class PostEditPage extends Component {
     switch (action) {
       case "publish-now": this._save({ status: "published" }); break;
       case "schedule": {
-        this._toggleDetails(true);
-        this.container.querySelector('.details-group[data-group="status"]')?.setAttribute("open", "");
         const sel = this.container.querySelector("#status-select");
         if (sel) { sel.value = "scheduled"; sel.dispatchEvent(new Event("change")); }
+        this._revealGroup("schedule");
         setTimeout(() => this.container.querySelector("#schedule-input")?.focus(), 10);
         break;
       }
