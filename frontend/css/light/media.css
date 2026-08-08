@@ -78,6 +78,45 @@
     gap: var(--spacing-md);
 }
 
+/* ===========================
+   Pinch zoom
+   =========================== */
+/* "Zoom" on this grid is a pinned column count: fewer columns = bigger
+   thumbnails, more = smaller. `--media-grid-cols` and the class are stamped by
+   core/mediaPager.js on the browser root and on each swipe ghost (which lives
+   on <body>, so it inherits nothing from the browser). More specific than the
+   auto-fill rules above — including the narrow-viewport override at the end of
+   this file — so a deliberate choice wins over the width-derived default.
+   The grid area scrolls, so unlike the public post grid there are no row tracks
+   to pin: the per_page refit only has to keep the first screen full. */
+.media-browser.is-zoomed .media-grid,
+.mb-page-ghost.is-zoomed .media-grid {
+    grid-template-columns: repeat(var(--media-grid-cols, 4), 1fr);
+}
+
+/* ===========================
+   Page swipe
+   =========================== */
+/* The preloaded neighbouring page, parked off-screen and slid in under the
+   finger. Pinned over the live grid area's visible box (position/size set
+   inline in JS) and held on <body> so the browser's own re-render — the one the
+   committed swipe just triggered — can't destroy it mid-animation. */
+.mb-page-ghost {
+    position: fixed;
+    z-index: 40;
+    overflow: hidden;
+    pointer-events: none;
+    background-color: var(--bg-primary);
+    will-change: transform, opacity;
+}
+
+/* Promote the outgoing grid to its own compositor layer for the duration of a
+   drag, so each frame is a GPU transform rather than a repaint of a gridful of
+   thumbnails. Applied only while swiping, to avoid a permanent layer cost. */
+#mb-media-area.mb-swiping {
+    will-change: transform, opacity;
+}
+
 .media-item {
     position: relative;
     background: var(--surface-card);

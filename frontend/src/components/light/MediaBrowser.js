@@ -33,6 +33,7 @@ import {
   setVideoPoster,
 } from "../../api/media.js";
 import { captureVideoPoster } from "../../utils/videoPoster.js";
+import { MediaPager } from "../../core/mediaPager.js";
 import {
   monthLabel,
   folderChips,
@@ -72,8 +73,71 @@ export class MediaBrowser extends Component {
     this._dragCount = 0;
     this._dragListeners = [];
     this._lightbox = this.props.pickerMode ? null : new MediaLightbox();
+    // Swipe-to-page and pinch-to-zoom on the grid, like the public post grids
+    // (core/mediaPager.js). Standalone only: the picker is a modal that owns its
+    // own dismiss gestures, and its host page has arrow keys of its own.
+    this._pager = this.props.pickerMode ? null : this._makePager();
     // Picker mode: persists selected media objects across page/folder changes
     this._selectedItemsById = {};
+  }
+
+  /** Wire the grid gesture layer to this browser's data and DOM. */
+  _makePager() {
+    return new MediaPager({
+      root: () => this.$(".media-browser"),
+      area: () => this.$("#mb-media-area"),
+      grid: () => this.$(".media-grid"),
+      fetchPage: (page) => this._pageMarkup(page),
+      gotoPage: (page) => {
+        // A page swipe that lands mid-list reads as a failed swipe; the new
+        // page starts at its top. (Desktop resets for free — the scrolling box
+        // is re-rendered — so this is really for the mobile document flow.)
+        window.scrollTo({ top: 0 });
+        this._load({ page });
+      },
+      onZoomCommit: () => this._refitToZoom(),
+      isAlive: () => !this._unmounted,
+    });
+  }
+
+  /**
+   * Identity of the listing currently on screen. The pager re-preloads the
+   * neighbouring pages only when this changes — without it every referring-posts
+   * lookup (one setState per image) would refetch both neighbours.
+   */
+  _listingKey() {
+    const { page } = this.state.pagination;
+    return [page, this.state.typeFilter, this.state.selectedFolder, this._lastPerPage].join("|");
+  }
+
+  /**
+   * Static markup for another page of the current listing — the pager's swipe
+   * ghost. Rendered by the same _renderItem as the live grid (so the neighbour
+   * that slides in is the real page, not a placeholder) but with no listeners
+   * bound: nothing in a ghost is ever clicked.
+   */
+  async _pageMarkup(page) {
+    const params = { page, per_page: this._lastPerPage || 24 };
+    if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+    if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
+    const data = await listMedia(params);
+    const items = data.media || [];
+    if (!items.length) return `<p class="empty-state">No media files.</p>`;
+    const none = new Set();
+    return `<div class="media-grid">${items.map((m) => this._renderItem(m, none)).join("")}</div>`;
+  }
+
+  /**
+   * A zoom step changed the column count, so the page no longer fills (or now
+   * overflows) the visible area — refetch at the capacity the new geometry
+   * implies. Deferred by the pager until the gesture is over, since this
+   * re-renders the grid the gesture is bound to.
+   */
+  _refitToZoom() {
+    const cap = this._gridCapacity();
+    if (!cap || cap === this._lastPerPage) return;
+    this._measuredPerPage = cap;
+    this._load({ page: this.state.pagination.page || 1 });
   }
 
   render() {
@@ -817,7 +881,11 @@ export class MediaBrowser extends Component {
       // Long-press to enter select mode (standalone only)
       this.$$(".media-item").forEach((item) => {
         let timer = null;
-        const start = () => {
+        let originX = 0;
+        let originY = 0;
+        const start = (e) => {
+          originX = e.clientX;
+          originY = e.clientY;
           timer = setTimeout(() => {
             if (!this.state.selectMode) {
               const id = parseInt(item.dataset.id, 10);
@@ -829,7 +897,15 @@ export class MediaBrowser extends Component {
           if (timer) clearTimeout(timer);
           timer = null;
         };
+        // A drag is a page swipe (or a scroll), not a long press — a slow one
+        // would otherwise sit still long enough to open select mode under the
+        // moving grid.
+        const moved = (e) => {
+          if (!timer) return;
+          if (Math.hypot(e.clientX - originX, e.clientY - originY) > 10) cancel();
+        };
         item.addEventListener("pointerdown", start);
+        item.addEventListener("pointermove", moved);
         item.addEventListener("pointerup", cancel);
         item.addEventListener("pointerleave", cancel);
         item.addEventListener("pointercancel", cancel);
@@ -915,6 +991,13 @@ export class MediaBrowser extends Component {
       }
 
       this._bindExifPanels();
+    }
+
+    // (Re)bind the grid gestures to the markup just written. Only over a real
+    // grid — there is nothing to swipe or zoom on a spinner, an error or an
+    // empty folder, and arming there would strip the page arrows.
+    if (this._pager && this.$(".media-grid")) {
+      this._pager.arm(this.state.pagination, this._listingKey());
     }
   }
 
@@ -1139,6 +1222,7 @@ export class MediaBrowser extends Component {
     }
     this._dragListeners = [];
     this._lightbox?.destroy();
+    this._pager?.destroy();
     this._dragCount = 0;
   }
 
