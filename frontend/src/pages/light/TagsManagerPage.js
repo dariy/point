@@ -19,6 +19,7 @@ import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG, CHECK_SVG
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest, renderTagTree, renderTagNode, renderSelectCheckbox, renderRowBadges, renderUnfiledGroup } from '../../components/light/tags/TagTreeView.js';
 import { renderTagList, matchesListFilter, renderSortHeader } from '../../components/light/tags/TagListView.js';
+import { getChildrenOf, getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -903,23 +904,11 @@ export default class TagsManagerPage extends Component {
     });
   }
 
-  // Returns the ID of the sibling just before targetId in parentId's children list,
-  // or null if targetId is first (meaning move dragId to the front).
   _getSiblingBefore(targetId, parentId) {
-    const siblings = this._getChildrenOf(parentId);
-    const idx = siblings.findIndex(t => t.id === targetId);
-    if (idx <= 0) return null;
-    return siblings[idx - 1].id;
+    return getSiblingBefore(this.state.tags, targetId, parentId);
   }
 
-  // Returns children of parentId in sort_order (uses the parent's ordered children list).
-  _getChildrenOf(parentId) {
-    if (!parentId) return [];
-    const parent = this.state.tags.find(t => t.id === parentId);
-    if (!parent) return [];
-    const childIds = (parent.children || []).map(c => c.id);
-    return childIds.map(id => this.state.tags.find(t => t.id === id)).filter(Boolean);
-  }
+  _getChildrenOf(parentId) { return getChildrenOf(this.state.tags, parentId); }
 
   // Confirm dialog shown when dragging one tag onto another.
   _openDropOnConfirm(dragId, targetId) {
