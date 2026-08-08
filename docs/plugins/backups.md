@@ -78,3 +78,63 @@ the backups folder; nothing is applied until the operator explicitly Restores it
     DB). No external supervisor is required, so it also works under bare
     `scripts/run.sh`. The UI offers "Restart now" right after scheduling a restore,
     plus a standalone "Restart server" button.
+
+## Pre-migration snapshots
+
+Separate from this plugin, and deliberately not gated by it: schema migrations
+are protected by their own snapshot, so a failed upgrade never has to be
+recovered from a backup the operator may not have enabled.
+
+Migrations are fail-forward and run outside a transaction — several of them
+rebuild a table by copying it and dropping the original — so a failure part way
+through leaves a database that is neither the old schema nor the new one. SQLite
+offers no rollback for that, so the boot takes a copy first:
+
+- Before applying anything, `runMigrationsGuarded` asks `migrations.Pending`
+  what is outstanding. Every migration records its own name in
+  `migration_history`, so an empty answer means there is genuinely nothing to
+  do and **no snapshot is taken** — an ordinary restart costs nothing.
+- Otherwise `SnapshotForMigrations` writes a `VACUUM INTO` copy to
+  `<data>/backups/migrations/premigration_<ts>.db`. If it can't (no disk space,
+  read-only data dir) the server **refuses to start** rather than migrate
+  unprotected. `MIGRATION_BACKUP=false` overrides that; `MIGRATION_BACKUP_KEEP`
+  (default 3) sets retention.
+- If the migrations then fail, the server closes the database, hard-links the
+  broken one aside as `failed_<ts>.db` with a `failed_<ts>.txt` naming the
+  failed steps, swaps the snapshot back in, and exits non-zero. It **never
+  retries** — the same migration would fail the same way. Rolling back to the
+  previous image is a complete recovery, because the database is exactly as it
+  was before the upgrade.
+
+The swap is ordered so the database file is never absent (an absent `point.db`
+makes the next boot initialize an empty one from `schema.sql`): the snapshot is
+copied to `point.db.restoring`, fsynced, the `-wal`/`-shm` sidecars of the
+broken database are deleted, and only then is the staging file renamed over
+`point.db`. A `restore_pending` marker is written before that sequence and
+cleared after it, so a crash in the middle is finished by
+`ApplyPendingMigrationRestore` on the next boot — before the database is opened,
+the same rule `pending_restore` follows and for the same reason.
+
+These files are invisible to everything above: `CreateBackup` and the free-space
+estimate skip any directory named `backups`, and the backups list, rotation and
+due-check skip directories and match only `*.tar.gz`.
+
+To restore by hand — the automatic restore failed, the migration "succeeded" but
+was wrong, or the container won't boot far enough to reach the UI — use
+[`scripts/restore-db.sh`](../../scripts/restore-db.sh), which takes either a
+`.db` snapshot or a `.tar.gz` archive.
+
+The two paths deliberately order the swap differently, because one is attended
+and the other is not:
+
+- **The boot's restore** copies the snapshot to a staging file and renames it
+  *over* `point.db`, so the path always resolves to a complete database. It has
+  to: nobody is watching a container restart, and a crash with `point.db` absent
+  would have the next boot build an empty one from `schema.sql`.
+- **`restore-db.sh`** renames the current database aside *first*, then copies,
+  then verifies (size, SQLite header, `integrity_check`), rolling back with a
+  rename if any check fails. That leaves a brief window with no `point.db` —
+  acceptable only because an operator is present, and bracketed by a
+  `restore_in_progress` marker naming the renamed file. In exchange the
+  verification can actually undo itself, and what it replaced is kept as
+  `replaced_<ts>.db` so the restore is itself reversible.

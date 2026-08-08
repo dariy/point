@@ -350,6 +350,22 @@ body {
 
 /* Posts list: fixed-viewport layout — table scrolls, pagination stays visible */
 .posts-list-main {
+    /* .light-main is a column flex item, and two flexbox defaults have to be
+       undone before a height on it means anything. `flex: 1` above sets
+       flex-basis to 0%, which supersedes `height` on the main axis; and the
+       item's automatic minimum size (min-height: auto, i.e. its content's
+       height) then stops it shrinking to the window regardless. Until both were
+       cleared the height below was inert: .light-main sized to its content, the
+       inner scroller never clipped, and the whole admin page scrolled — so the
+       pagination this layout exists to pin sat at the bottom of a very long
+       document instead of on the bottom edge. `flex: 0 0 auto` hands the sizing
+       back to `height`, and `min-height: 0` lets it hold.
+       (light/media.css does the same for the media library, above its own
+       breakpoint — the media page keeps document flow on narrow screens.)
+       The mobile bottom-bar reserve is padding on .light-main, and box-sizing
+       is border-box, so it stays inside this clamp rather than adding to it. */
+    flex: 0 0 auto;
+    min-height: 0;
     height: 100vh;
     height: 100dvh;
     overflow: hidden;

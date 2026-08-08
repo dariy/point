@@ -19,6 +19,14 @@ type Config struct {
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	StoragePath string `mapstructure:"STORAGE_PATH"`
 
+	// MigrationBackup snapshots the database before a boot applies pending
+	// migrations, and puts the snapshot back if they fail. Turning it off means
+	// a failed migration leaves a half-migrated database with no way back — the
+	// escape hatch exists for hosts too tight on disk to hold a second copy.
+	// MigrationBackupKeep is how many snapshots to retain.
+	MigrationBackup     bool `mapstructure:"MIGRATION_BACKUP"`
+	MigrationBackupKeep int  `mapstructure:"MIGRATION_BACKUP_KEEP"`
+
 	MaxImageWidth   int `mapstructure:"MAX_IMAGE_WIDTH"`
 	JpegQuality     int `mapstructure:"JPEG_QUALITY"`
 	ThumbnailWidth  int `mapstructure:"THUMBNAIL_WIDTH"`
@@ -81,6 +89,8 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("PORT", 8000)
 	v.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
 	v.SetDefault("STORAGE_PATH", "./data")
+	v.SetDefault("MIGRATION_BACKUP", true)
+	v.SetDefault("MIGRATION_BACKUP_KEEP", 3)
 	v.SetDefault("FRONTEND_DIR", "../frontend")
 	v.SetDefault("FRONTEND_DEBUG", false)
 	v.SetDefault("THEMES_PATH", "")

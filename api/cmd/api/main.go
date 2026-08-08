@@ -28,7 +28,6 @@ import (
 	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/mcp"
-	"point-api/internal/migrations"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -1099,10 +1098,22 @@ func main() {
 	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
 	// the database is opened: extracting a backup over an open SQLite file corrupts
 	// it, so the restore is deferred to here.
-	if applied, err := services.NewSystemService(nil, cfg.StoragePath, cfg.DatabaseURL).ApplyPendingRestore(); err != nil {
+	sysBoot := services.NewSystemService(nil, cfg.StoragePath, cfg.DatabaseURL)
+	if applied, err := sysBoot.ApplyPendingRestore(); err != nil {
 		slog.Error("failed to apply pending backup restore", "error", err)
 	} else if applied {
 		slog.Info("applied pending backup restore before opening database")
+	}
+
+	// Finish a pre-migration snapshot restore that a crash or a kill interrupted.
+	// Same rule as above — it swaps the database file, so it has to happen before
+	// anything opens it. Unlike a scheduled restore this one is not allowed to
+	// fail quietly: the file at point.db may be the one a failed migration left.
+	if applied, err := sysBoot.ApplyPendingMigrationRestore(); err != nil {
+		slog.Error("could not finish an interrupted pre-migration restore — refusing to start", "error", err)
+		os.Exit(1)
+	} else if applied {
+		slog.Warn("finished an interrupted pre-migration restore before opening database")
 	}
 
 	// Initialize repository
@@ -1138,9 +1149,12 @@ func main() {
 	// Apply DB schema + data migrations (see internal/migrations). A failure
 	// here means the database is not at the schema this build expects, so we
 	// stop rather than serve against it — the alternative is failing later,
-	// somewhere unrelated, on whatever the mismatch happens to break.
-	if err := migrations.Run(ctx, repo); err != nil {
-		slog.Error("database migrations failed — refusing to start", "error", err)
+	// somewhere unrelated, on whatever the mismatch happens to break. The guard
+	// snapshots the database first and puts it back on failure, so stopping
+	// leaves it at its pre-upgrade state rather than half-migrated.
+	if restored, err := runMigrationsGuarded(ctx, repo, svcs.System, cfg); err != nil {
+		slog.Error("database migrations failed — refusing to start",
+			"error", err, "database_restored", restored)
 		os.Exit(1)
 	}
 

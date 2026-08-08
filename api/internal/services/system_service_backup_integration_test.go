@@ -99,3 +99,39 @@ func TestCreateBackup_ConsistentDBSnapshot(t *testing.T) {
 		t.Fatalf("snapshot missing seeded row (count=%d)", count)
 	}
 }
+
+// A user's backup archive must not carry the boot-time snapshots: they live
+// under backups/, which createTarGz skips wholesale, and archiving a copy of
+// the database inside a backup of the database is pure waste.
+func TestCreateBackup_ExcludesMigrationSnapshots(t *testing.T) {
+	dataPath := t.TempDir()
+	dbPath := filepath.Join(dataPath, "point.db")
+
+	repo, err := repository.NewRepository(dbPath)
+	if err != nil {
+		t.Fatalf("open repo: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+
+	s := NewSystemService(repo, dataPath, dbPath)
+	snapshot, err := s.SnapshotForMigrations(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("SnapshotForMigrations: %v", err)
+	}
+	if snapshot == "" {
+		t.Fatal("no snapshot taken")
+	}
+
+	name, _, err := s.CreateBackup(context.Background())
+	if err != nil {
+		t.Fatalf("CreateBackup: %v", err)
+	}
+
+	out := t.TempDir()
+	if err := s.extractTarGz(filepath.Join(dataPath, "backups", name), out); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "backups")); !os.IsNotExist(err) {
+		t.Error("the archive contains the backups directory")
+	}
+}

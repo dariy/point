@@ -17,6 +17,11 @@
    stays visible without scrolling. */
 @media (min-width: 48em) {
     .media-page-main {
+        /* `flex: 0 0 auto` + `min-height: 0` clear the flex-item defaults that
+           otherwise make a height on .light-main inert — see .posts-list-main
+           in light/layout.css for the full note. */
+        flex: 0 0 auto;
+        min-height: 0;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;

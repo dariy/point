@@ -38,6 +38,16 @@ outside this repo — see [Production](#production) below.
   detector, `--html` for a coverage report. See
   [docs/testing.md](../docs/testing.md).
 
+## Recovery
+
+- **restore-db.sh**: Puts a known-good database back by hand, from either a
+  `.db` snapshot (what the pre-migration guard writes to
+  `data/backups/migrations/`) or a `.tar.gz` archive (what the admin UI and the
+  scheduler write). Use it when the automatic restore failed, when a migration
+  succeeded but was wrong, or when the container won't boot far enough to reach
+  the UI. `--list` shows what is available; the database it replaces is kept.
+  See [docs/plugins/backups.md](../docs/plugins/backups.md#pre-migration-snapshots).
+
 ## Docker / Podman Build
 
 - **rebuild.sh**: Builds the container image (`build/Dockerfile`) and restarts
