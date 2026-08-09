@@ -10,7 +10,7 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag, mergeTags } from '../../api/tags.js';
+import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 
 import { store } from '../../store.js';
@@ -19,11 +19,14 @@ import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG, CHECK_SVG
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
 import { renderTagList, matchesListFilter } from '../../components/light/tags/TagListView.js';
-import { getChildrenOf, getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
-import { openTagPickerDialog, openOverlay } from '../../components/light/tags/TagPickerDialog.js';
+import { getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
 import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.js';
 import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/tagGestures.js';
 import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.js';
+import {
+  openMoveDialog, openMergeDialog, openDropOnConfirm, openBulkMoveDialog,
+  bulkVisibility, bulkDelete,
+} from '../../components/light/tags/tagFlows.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -259,15 +262,22 @@ export default class TagsManagerPage extends Component {
 
       this.container.querySelectorAll('.move-tag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          const id = parseInt(btn.dataset.id, 10);
-          const parentId = btn.dataset.parentId !== '' ? parseInt(btn.dataset.parentId, 10) : null;
-          this._openMoveDialog(id, parentId);
+          openMoveDialog({
+            tags: this.state.tags,
+            tagId: parseInt(btn.dataset.id, 10),
+            contextParentId: btn.dataset.parentId !== '' ? parseInt(btn.dataset.parentId, 10) : null,
+            onDone: () => this._afterFlow(),
+          });
         });
       });
 
       this.container.querySelectorAll('.merge-tag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          this._openMergeDialog(parseInt(btn.dataset.id, 10));
+          openMergeDialog({
+            tags: this.state.tags,
+            loserId: parseInt(btn.dataset.id, 10),
+            onDone: () => this._afterFlow(),
+          });
         });
       });
 
@@ -399,11 +409,23 @@ export default class TagsManagerPage extends Component {
     });
 
     this.container.querySelector('#tm-bulk-apply-btn')
-      ?.addEventListener('click', () => this._handleBulkVisibility());
+      ?.addEventListener('click', () => bulkVisibility({
+        ids: [...this.state.selectedIds],
+        hidden: this.container.querySelector('#tm-bulk-visibility-select').value === 'hidden',
+        onDone: () => this._afterBulk(),
+      }));
     this.container.querySelector('#tm-bulk-move-btn')
-      ?.addEventListener('click', () => this._openBulkMoveDialog());
+      ?.addEventListener('click', () => openBulkMoveDialog({
+        tags: this.state.tags,
+        ids: [...this.state.selectedIds],
+        onDone: () => this._afterBulk(),
+      }));
     this.container.querySelector('#tm-bulk-delete-btn')
-      ?.addEventListener('click', () => this._handleBulkDelete());
+      ?.addEventListener('click', () => bulkDelete({
+        ids: [...this.state.selectedIds],
+        confirm: (...args) => this._showConfirm(...args),
+        onDone: () => this._afterBulk(),
+      }));
     this.container.querySelector('#tm-bulk-done-btn')
       ?.addEventListener('click', () => this.setState({ selectMode: false, selectedIds: new Set() }));
 
@@ -501,99 +523,20 @@ export default class TagsManagerPage extends Component {
     }
   }
 
-  async _handleBulkVisibility() {
-    const hidden = this.container.querySelector('#tm-bulk-visibility-select').value === 'hidden';
-    const ids = Array.from(this.state.selectedIds);
-    await this._runBulk(
-      ids,
-      id => patchTag(id, { hidden }),
-      n => `${n} tag${n === 1 ? '' : 's'} marked ${hidden ? 'hidden' : 'visible'}.`,
-    );
-  }
-
-  _handleBulkDelete() {
-    const n = this.state.selectedIds.size;
-    this._showConfirm(
-      'Delete tags',
-      `Delete ${n} tag${n === 1 ? '' : 's'}? Posts will NOT be deleted.`,
-      'Delete',
-      'danger',
-      async () => {
-        const ids = Array.from(this.state.selectedIds);
-        await this._runBulk(ids, id => deleteTag(id), c => `${c} tag${c === 1 ? '' : 's'} deleted.`);
-      },
-    );
-  }
-
   /**
-   * Apply an operation to every selected tag, reporting partial failure rather
-   * than stopping at the first one, then reload and leave select mode.
+   * What every flow does once its mutation lands: the list and the nav both
+   * show hierarchy, and every one of these changes it.
    */
-  async _runBulk(ids, op, successMessage) {
-    let done = 0;
-    let failed = 0;
-    for (const id of ids) {
-      try {
-        await op(id);
-        done++;
-      } catch (err) {
-        console.error(`[TagsManagerPage] bulk operation failed for tag ${id}:`, err);
-        failed++;
-      }
-    }
-
-    store.set('toast', {
-      message: failed === 0
-        ? successMessage(done)
-        : `${done} of ${ids.length} done. ${failed} failed.`,
-      type: failed > 0 ? 'error' : 'success',
-    });
-
-    this.setState({ selectMode: false, selectedIds: new Set() });
+  _afterFlow() {
     this._load();
     this._refreshNavTags();
   }
 
-  // Bulk Move…: pick one parent, then re-file every selected tag under it.
-  _openBulkMoveDialog() {
-    const ids = Array.from(this.state.selectedIds);
-    if (!ids.length) return;
-
-    const selected = new Set(ids);
-    const available = this.state.tags
-      .filter(t => !selected.has(t.id))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    if (!available.length) {
-      store.set('toast', { message: 'No tag left to move these under.', type: 'error' });
-      return;
-    }
-
-    openTagPickerDialog({
-      title: `Move ${ids.length} tag${ids.length === 1 ? '' : 's'} under…`,
-      modalClass: 'tm-move-modal',
-      tags: available,
-      radioName: 'tm-bulk-parent',
-      renderItem: t => `
-      <label class="tm-move-parent-item">
-        <input type="radio" name="tm-bulk-parent" value="${t.id}">
-        <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
-      </label>`,
-      itemClass: 'tm-move-parent-item',
-      nameClass: 'tm-move-parent-name',
-      listClass: 'tm-move-parent-list',
-      searchClass: 'tm-move-search',
-      afterList: '<p class="form-hint">Replaces any parents these tags already have.</p>',
-      cancelId: 'tm-bulk-move-cancel-btn',
-      confirmId: 'tm-bulk-move-confirm-btn',
-      confirmLabel: 'Move',
-      onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
-      onConfirm: parentId => this._runBulk(
-        ids,
-        id => setTagParents(id, [parentId]),
-        n => `${n} tag${n === 1 ? '' : 's'} moved.`,
-      ),
-    });
+  /** As above, and leave select mode — the selection it acted on is spent. */
+  _afterBulk() {
+    this.setState({ selectMode: false, selectedIds: new Set() });
+    this._load();
+    this._refreshNavTags();
   }
 
   // ── Swipe-to-reveal actions (portrait mobile) ─────────────────────────────────
@@ -621,7 +564,9 @@ export default class TagsManagerPage extends Component {
   _bindDragAndDrop() {
     bindDragAndDrop(this.container, {
       siblingBefore: (targetId, parentId) => getSiblingBefore(this.state.tags, targetId, parentId),
-      onReparent: (dragId, targetId) => this._openDropOnConfirm(dragId, targetId),
+      onReparent: (dragId, targetId) => openDropOnConfirm({
+        tags: this.state.tags, dragId, targetId, onDone: () => this._afterFlow(),
+      }),
       onInvalidReorder: () => store.set('toast', {
         message: 'Drop ON a tag to reparent. Reordering only works within the same parent.',
         type: 'error',
@@ -632,183 +577,6 @@ export default class TagsManagerPage extends Component {
           this._load();
         } catch (err) {
           store.set('toast', { message: err.message || 'Reorder failed.', type: 'error' });
-        }
-      },
-    });
-  }
-
-
-  // Confirm dialog shown when dragging one tag onto another.
-  _openDropOnConfirm(dragId, targetId) {
-    const drag   = this.state.tags.find(t => t.id === dragId);
-    const target = this.state.tags.find(t => t.id === targetId);
-    if (!drag || !target) return;
-
-    const { overlay, close } = openOverlay(`
-      <div class="modal" role="dialog" aria-modal="true" style="max-width:28rem">
-        <div class="modal-header">
-          <h3>Move "${escapeHtml(drag.name)}" under "${escapeHtml(target.name)}"?</h3>
-        </div>
-        <div class="modal-body">
-          <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin:0">
-            Choose how to place <strong>${escapeHtml(drag.name)}</strong>:
-          </p>
-        </div>
-        <div class="modal-footer tm-drop-confirm-footer">
-          <button class="btn btn-primary" id="drop-move-btn">
-            Move under "${escapeHtml(target.name)}" — replaces other parents
-          </button>
-          <button class="btn btn-secondary" id="drop-also-btn">
-            Also file under "${escapeHtml(target.name)}" — keeps other parents
-          </button>
-          <button class="btn btn-secondary" id="drop-cancel-btn">Cancel</button>
-        </div>
-      </div>`);
-
-    overlay.querySelector('#drop-cancel-btn').addEventListener('click', close);
-
-    overlay.querySelector('#drop-move-btn').addEventListener('click', async () => {
-      close();
-      try {
-        await setTagParents(dragId, [targetId]);
-        this._load();
-        this._refreshNavTags();
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
-      }
-    });
-
-    overlay.querySelector('#drop-also-btn').addEventListener('click', async () => {
-      close();
-      try {
-        const currentParents = (drag.parents || []).map(p => p.id);
-        if (!currentParents.includes(targetId)) {
-          await setTagParents(dragId, [...currentParents, targetId]);
-        }
-        this._load();
-        this._refreshNavTags();
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
-      }
-    });
-  }
-
-  // Merge… dialog: pick destination tag to merge into.
-  _openMergeDialog(loserId) {
-    const loser = this.state.tags.find(t => t.id === loserId);
-    if (!loser) return;
-
-    const available = this.state.tags
-      .filter(t => t.id !== loserId)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    openTagPickerDialog({
-      title: `Merge "${escapeHtml(loser.name)}" into…`,
-      modalClass: 'tm-merge-modal',
-      tags: available,
-      radioName: 'tm-merge-winner',
-      renderItem: t => `
-      <label class="tm-merge-winner-item">
-        <input type="radio" name="tm-merge-winner" value="${t.id}">
-        <div class="tm-merge-winner-info">
-          <span class="tm-merge-winner-name">${escapeHtml(t.name)}</span>
-          ${t.name_path ? `<span class="tm-merge-winner-path">${escapeHtml(t.name_path)}</span>` : ''}
-        </div>
-      </label>`,
-      itemClass: 'tm-merge-winner-item',
-      nameClass: 'tm-merge-winner-name',
-      listClass: 'tm-merge-winner-list',
-      searchClass: 'tm-merge-search',
-      beforeList: '<p class="tm-section-label">Select destination tag</p>',
-      afterList: `
-          <p class="form-hint" style="margin-top:var(--spacing-md)">
-            Posts tagged <strong>${escapeHtml(loser.name)}</strong> will be re-tagged.
-            Hierarchy will be moved. <strong>${escapeHtml(loser.name)}</strong> will be deleted.
-          </p>
-          <label class="tm-flag-row" style="margin-top:var(--spacing-sm)">
-            <input type="checkbox" id="tm-merge-redirect" checked> Keep redirect (not yet implemented)
-          </label>`,
-      cancelId: 'tm-merge-cancel-btn',
-      confirmId: 'tm-merge-confirm-btn',
-      confirmLabel: 'Merge Tags',
-      onEmpty: () => store.set('toast', { message: 'Select a destination tag first.', type: 'error' }),
-      collect: overlay => overlay.querySelector('#tm-merge-redirect').checked,
-      onConfirm: async (winnerId, keepRedirect) => {
-        try {
-          await mergeTags(loserId, { winner_id: winnerId, keep_redirect: keepRedirect });
-          this._load();
-          this._refreshNavTags();
-          store.set('toast', { message: 'Tags merged successfully.', type: 'success' });
-        } catch (err) {
-          store.set('toast', { message: err.message || 'Merge failed.', type: 'error' });
-        }
-      },
-    });
-  }
-
-  // Move… dialog: touch parity for drag — pick parent + position, then call MoveTag.
-  _openMoveDialog(tagId, contextParentId) {
-    const tag = this.state.tags.find(t => t.id === tagId);
-    if (!tag) return;
-
-    const available = this.state.tags
-      .filter(t => t.id !== tagId)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    const positionOptions = parentId => [
-      `<option value="">At beginning</option>`,
-      ...getChildrenOf(this.state.tags, parentId)
-        .filter(t => t.id !== tagId)
-        .map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
-    ].join('');
-
-    openTagPickerDialog({
-      title: `Move "${escapeHtml(tag.name)}"`,
-      modalClass: 'tm-move-modal',
-      tags: available,
-      radioName: 'tm-move-parent',
-      renderItem: t => `
-      <label class="tm-move-parent-item">
-        <input type="radio" name="tm-move-parent" value="${t.id}"${t.id === contextParentId ? ' checked' : ''}>
-        <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
-      </label>`,
-      itemClass: 'tm-move-parent-item',
-      nameClass: 'tm-move-parent-name',
-      listClass: 'tm-move-parent-list',
-      searchClass: 'tm-move-search',
-      beforeList: '<p class="tm-section-label">Under parent</p>',
-      afterList: `
-          <p class="tm-section-label" style="margin-top:var(--spacing-md)">Position</p>
-          <select class="form-input tm-move-position-select">${positionOptions(contextParentId)}</select>`,
-      cancelId: 'tm-move-cancel-btn',
-      confirmId: 'tm-move-confirm-btn',
-      confirmLabel: 'Move',
-      onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
-      onMount: overlay => {
-        // Re-offer positions whenever the chosen parent changes.
-        overlay.querySelector('.tm-move-parent-list').addEventListener('change', e => {
-          if (e.target.name === 'tm-move-parent') {
-            overlay.querySelector('.tm-move-position-select').innerHTML =
-              positionOptions(parseInt(e.target.value, 10));
-          }
-        });
-      },
-      collect: overlay => {
-        const raw = overlay.querySelector('.tm-move-position-select').value;
-        return raw ? parseInt(raw, 10) : null;
-      },
-      onConfirm: async (parentId, afterId) => {
-        try {
-          const currentParents = (tag.parents || []).map(p => p.id);
-          if (!currentParents.includes(parentId)) {
-            await setTagParents(tagId, [...currentParents, parentId]);
-          }
-          await moveTag(tagId, { parent_id: parentId, after_id: afterId });
-          this._load();
-          this._refreshNavTags();
-          store.set('toast', { message: 'Tag moved.', type: 'success' });
-        } catch (err) {
-          store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
         }
       },
     });
