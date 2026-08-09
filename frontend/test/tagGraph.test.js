@@ -2,17 +2,18 @@ import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
 
 /**
- * tagGraph.js draws the public /tags graph on a <canvas>: it turns the tags +
- * posts payload into a node/link graph, runs a force layout over it, frames it
- * to the viewport, and picks nodes back out of pointer coordinates.
+ * TagGraph is the controller behind the public /tags page: it owns the graph,
+ * the view transform and the interaction state, and wires the model, the force
+ * layout, the viewport maths, the renderer and the pointer gestures together.
  *
- * None of that is observable from the DOM — the whole surface is pixels — so
- * this covers the parts that are arithmetic rather than paint: graph
- * construction, the visible-set/hidden-type rules, bounds and fit-to-view, the
- * screen↔world transform and hit-testing, and the hover/selection focus walk.
+ * Those collaborators are covered on their own (tagGraphModel / tagGraphLayout
+ * / tagGraphViewport). What is left here is what only the assembled thing does:
+ * legend toggles clearing a selection, the search filter, the highlight in
+ * force, framing, the tap-to-select-then-open gesture, and the lifecycle.
  *
- * The canvas is stubbed rather than emulated. Drawing is all no-ops; what the
- * tests read is the state the drawing would have used.
+ * None of it is observable from the DOM — the whole surface is pixels — so the
+ * canvas is stubbed rather than emulated. Drawing is all no-ops; what the tests
+ * read is the state the drawing would have used.
  */
 
 let TagGraph;
@@ -24,7 +25,7 @@ before(async () => {
 
 // ── Harness ──────────────────────────────────────────────────────────────────
 
-/** A 2D context whose every method is a no-op; _draw only ever writes to it. */
+/** A 2D context whose every method is a no-op; the renderer only writes to it. */
 function stubCtx() {
   const noop = () => {};
   return {
@@ -101,145 +102,12 @@ const FIXTURE = {
 
 const makeGraph = (data = FIXTURE, opts = {}) => new TagGraph(stubCanvas(), data, opts);
 
-// ── Graph construction ───────────────────────────────────────────────────────
-
-/**
- * Tag and post ids share one namespace on the canvas, so they are prefixed
- * ('t1', 'p1') — without that a tag and a post with the same database id would
- * collide in nodeById and one would silently vanish from the graph.
- */
-describe('graph construction', () => {
-  test('builds a node per tag and per post', () => {
-    const g = makeGraph();
-    assert.strictEqual(g.nodes.length, 6);
-    assert.strictEqual(g.nodes.filter((n) => n.type === 'post').length, 2);
-  });
-
-  test('tag and post ids are namespaced apart', () => {
-    const g = makeGraph({
-      tags: [{ id: 1, name: 'T', slug: 't', post_count: 0 }],
-      posts: [{ id: 1, title: 'P', slug: 'p' }],
-    });
-    assert.strictEqual(g.nodes.length, 2, 'same numeric id must not collide');
-    assert.strictEqual(g.nodeById.get('t1').type, 'tag');
-    assert.strictEqual(g.nodeById.get('p1').type, 'post');
-  });
-
-  test('tags are classified into the shared colour buckets', () => {
-    const g = makeGraph();
-    assert.strictEqual(g.nodeById.get('t1').type, 'tag');
-    assert.strictEqual(g.nodeById.get('t3').type, 'geo', 'has coordinates');
-    assert.strictEqual(g.nodeById.get('t4').type, 'year');
-  });
-
-  test('a post falls back to its slug when it has no title', () => {
-    const g = makeGraph({ tags: [], posts: [{ id: 1, slug: 'untitled-thing' }] });
-    assert.strictEqual(g.nodeById.get('p1').name, 'untitled-thing');
-  });
-
-  test('both edge kinds are linked and labelled', () => {
-    const g = makeGraph();
-    assert.strictEqual(g.links.filter((l) => l.kind === 'hierarchy').length, 2);
-    assert.strictEqual(g.links.filter((l) => l.kind === 'membership').length, 3);
-  });
-
-  test('degree counts every incident edge', () => {
-    const g = makeGraph();
-    assert.strictEqual(g.nodeById.get('t3').degree, 3, 'parent Canada + posts 10 and 11');
-    assert.strictEqual(g.nodeById.get('t1').degree, 1, 'one child, no posts of its own');
-    assert.strictEqual(g.nodeById.get('p10').degree, 2, 'tagged montreal and 2026');
-    assert.strictEqual(g.nodeById.get('p11').degree, 1);
-  });
-
-  test('neighbours are symmetric', () => {
-    const g = makeGraph();
-    assert.ok(g.neighbors.get('t2').has('t3'));
-    assert.ok(g.neighbors.get('t3').has('t2'), 'edges must be walkable both ways');
-  });
-
-  test('an edge naming a tag that does not exist is dropped, not fatal', () => {
-    const g = makeGraph({
-      tags: [{ id: 1, name: 'T', slug: 't', post_count: 0 }],
-      posts: [],
-      hierarchyEdges: [{ parent: 1, child: 999 }],
-      membershipEdges: [{ post: 999, tag: 1 }],
-    });
-    assert.strictEqual(g.links.length, 0);
-    assert.strictEqual(g.nodeById.get('t1').degree, 0);
-  });
-
-  test('an empty payload builds an empty graph rather than throwing', () => {
-    const g = makeGraph({});
-    assert.strictEqual(g.nodes.length, 0);
-    assert.strictEqual(g.links.length, 0);
-    assert.strictEqual(g._bounds(), null);
-  });
-
-  test('the initial scatter is deterministic across builds', () => {
-    // A seeded PRNG, so a reload lands the layout in the same place instead of
-    // reshuffling the graph under the reader.
-    const a = makeGraph().nodes.map((n) => [n.x, n.y]);
-    const b = makeGraph().nodes.map((n) => [n.x, n.y]);
-    assert.deepStrictEqual(a, b);
-  });
-
-  test('every node starts inside the viewport, at rest', () => {
-    for (const n of makeGraph().nodes) {
-      assert.ok(Number.isFinite(n.x) && Number.isFinite(n.y), 'placed at a real point');
-      assert.strictEqual(n.vx, 0);
-      assert.strictEqual(n.vy, 0);
-    }
-  });
-});
-
-// ── Node radius ──────────────────────────────────────────────────────────────
-
-/**
- * Radius scales with degree so the busy tags read as hubs, but it is clamped at
- * both ends: an isolated node still has to be clickable, and a tag on every
- * post must not swallow the canvas.
- */
-describe('node radius', () => {
-  test('grows with degree', () => {
-    const g = makeGraph();
-    assert.ok(g.nodeById.get('t3').r > g.nodeById.get('t1').r, 'the hub is bigger');
-  });
-
-  test('posts are drawn smaller than tags at the same degree', () => {
-    const g = makeGraph({
-      tags: [{ id: 1, name: 'T', slug: 't', post_count: 0 }],
-      posts: [{ id: 1, title: 'P', slug: 'p' }],
-      membershipEdges: [{ post: 1, tag: 1 }],
-    });
-    assert.ok(g.nodeById.get('p1').r < g.nodeById.get('t1').r);
-  });
-
-  test('a lone node is still big enough to hit', () => {
-    const g = makeGraph({ tags: [{ id: 1, name: 'T', slug: 't', post_count: 0 }] });
-    assert.ok(g.nodeById.get('t1').r >= 6);
-  });
-
-  test('a hub is capped', () => {
-    const tags = [{ id: 1, name: 'Hub', slug: 'hub', post_count: 0 }];
-    const posts = [];
-    const membershipEdges = [];
-    for (let i = 2; i < 500; i++) {
-      posts.push({ id: i, title: `p${i}`, slug: `p${i}` });
-      membershipEdges.push({ post: i, tag: 1 });
-    }
-    const g = makeGraph({ tags, posts, membershipEdges });
-    assert.ok(g.nodeById.get('t1').r <= 36, 'tag radius is clamped');
-    assert.ok(g.nodes.every((n) => n.type !== 'post' || n.r <= 11), 'post radius is clamped');
-  });
-});
-
 // ── Visible set / legend toggles ─────────────────────────────────────────────
 
 /**
- * The legend hides a whole node kind. Everything downstream — physics, drawing,
- * hit-testing, fit-to-view — runs off the active set, so hiding a kind has to
- * drop its links too: a link with one hidden endpoint would otherwise be drawn
- * running to nothing.
+ * The legend hides a whole node kind. Beyond dropping the nodes and their
+ * edges, the controller has to let go of any interaction state pointing at
+ * something that just disappeared.
  */
 describe('hidden types', () => {
   test('nothing is hidden to begin with', () => {
@@ -295,6 +163,21 @@ describe('hidden types', () => {
     g.alpha = 0;
     g.setTypeHidden('post', true);
     assert.ok(g.alpha >= 0.25);
+  });
+
+  test('a hidden node cannot be clicked', () => {
+    const g = makeGraph();
+    g.scale = 1;
+    g.tx = 0;
+    g.ty = 0;
+    const post = g.nodes.find((n) => n.type === 'post');
+    post.x = 500;
+    post.y = 300;
+    post.r = 10;
+    assert.ok(g._pickNode(500, 300), 'precondition: hittable while visible');
+
+    g.setTypeHidden('post', true);
+    assert.strictEqual(g._pickNode(500, 300), null, 'hidden nodes are out of the active set');
   });
 });
 
@@ -366,48 +249,15 @@ describe('setFilter', () => {
   });
 });
 
-// ── Focus expansion ──────────────────────────────────────────────────────────
+// ── What drives the highlight ────────────────────────────────────────────────
 
 /**
- * Hovering a tag lights its direct neighbours and then takes a second hop:
- * through each adjacent post out to the *other* tags carrying that post. That
- * second wave is what makes "these two tags co-occur" visible, and those tags
- * are returned separately so they can be ringed differently from direct
- * neighbours.
+ * Three things can light the graph up, and they have an order: a click/tap
+ * selection locks the highlight (so you can move to a related node and click
+ * it), otherwise the live mouse hover drives it, and the search filter is the
+ * fallback. The walk itself is graphModel's; this is the precedence.
  */
-describe('focus expansion', () => {
-  test('a tag lights its neighbours and the tags its posts also carry', () => {
-    const g = makeGraph();
-    const { focus, related } = g._expandFocus(['t3']); // Montréal
-
-    assert.ok(focus.has('t2'), 'parent Canada is a direct neighbour');
-    assert.ok(focus.has('p10') && focus.has('p11'), 'its posts');
-    assert.ok(focus.has('t4'), '2026 shares post 10 — reached on the second hop');
-    assert.deepStrictEqual([...related], ['t4'], 'only the second-wave tag is "related"');
-  });
-
-  test('the seed is in focus but is not related to itself', () => {
-    const g = makeGraph();
-    const { focus, related } = g._expandFocus(['t3']);
-    assert.ok(focus.has('t3'));
-    assert.ok(!related.has('t3'));
-  });
-
-  test('a post seed lights only its own tags — no second hop', () => {
-    const g = makeGraph();
-    const { focus, related } = g._expandFocus(['p10']);
-    assert.ok(focus.has('t3') && focus.has('t4'));
-    assert.ok(!focus.has('p11'), 'must not walk back out to sibling posts');
-    assert.strictEqual(related.size, 0);
-  });
-
-  test('an isolated node lights only itself', () => {
-    const g = makeGraph({ tags: [{ id: 1, name: 'Lonely', slug: 'lonely', post_count: 0 }] });
-    const { focus, related } = g._expandFocus(['t1']);
-    assert.deepStrictEqual([...focus], ['t1']);
-    assert.strictEqual(related.size, 0);
-  });
-
+describe('focus precedence', () => {
   test('a selection wins over a live hover, so the highlight stays put', () => {
     const g = makeGraph();
     g.hovered = g.nodeById.get('t1');
@@ -415,10 +265,22 @@ describe('focus expansion', () => {
     assert.ok(g._focusSets().focus.has('p10'), 'focus follows the selection, not the hover');
   });
 
+  test('with nothing selected, the hover drives it', () => {
+    const g = makeGraph();
+    g.hovered = g.nodeById.get('t3');
+    assert.ok(g._focusSets().focus.has('p10'));
+  });
+
   test('with neither hover nor selection, the filter drives the highlight', () => {
     const g = makeGraph();
     g.setFilter('canada');
     assert.ok(g._focusSets().focus.has('t2'));
+  });
+
+  test('a filter that matches nothing dims nothing', () => {
+    const g = makeGraph();
+    g.setFilter('no-such-tag');
+    assert.strictEqual(g._focusSets(), null, 'an empty match must not black out the graph');
   });
 
   test('nothing hovered, selected or filtered means nothing is dimmed', () => {
@@ -447,54 +309,18 @@ describe('getSelectionStats', () => {
   });
 });
 
-// ── Bounds, fit and the screen↔world transform ───────────────────────────────
+// ── Framing ──────────────────────────────────────────────────────────────────
 
 /**
- * The view maths. world→screen is `s * scale + t`, and every reverse lookup
- * (hit-testing, zoom-at-cursor, drag) depends on _screenToWorld being its exact
- * inverse — if it drifts, clicks land next to the node the user aimed at.
+ * The graph frames itself — on load, once the layout settles, and across
+ * viewport changes — but only until the user takes the view over. After that,
+ * auto-framing would be the app fighting the reader.
  */
-describe('view transform', () => {
+describe('framing', () => {
   let g;
   beforeEach(() => { g = makeGraph(); });
 
-  test('bounds cover every visible node including its radius', () => {
-    const b = g._bounds();
-    for (const n of g._aNodes) {
-      assert.ok(n.x - n.r >= b.minX - 1e-9 && n.x + n.r <= b.maxX + 1e-9);
-      assert.ok(n.y - n.r >= b.minY - 1e-9 && n.y + n.r <= b.maxY + 1e-9);
-    }
-  });
-
-  test('bounds ignore hidden nodes', () => {
-    const before = g._bounds();
-    g.setTypeHidden('post', true);
-    const after = g._bounds();
-    assert.ok(
-      after.minX >= before.minX && after.maxX <= before.maxX,
-      'hiding nodes can only shrink the box',
-    );
-  });
-
-  test('screenToWorld inverts the transform exactly', () => {
-    g.scale = 1.7;
-    g.tx = 42;
-    g.ty = -13;
-    const w = g._screenToWorld(300, 200);
-    assert.ok(Math.abs(w.x * g.scale + g.tx - 300) < 1e-9);
-    assert.ok(Math.abs(w.y * g.scale + g.ty - 200) < 1e-9);
-  });
-
-  test('fit-to-view centres the graph in the viewport', () => {
-    g._fitToView();
-    const b = g._bounds();
-    const cx = (b.minX + b.maxX) / 2;
-    const cy = (b.minY + b.maxY) / 2;
-    assert.ok(Math.abs(cx * g.scale + g.tx - 800 / 2) < 1e-6);
-    assert.ok(Math.abs(cy * g.scale + g.ty - 520 / 2) < 1e-6);
-  });
-
-  test('after fitting, every node is on screen', () => {
+  test('fitting puts every visible node on screen', () => {
     g._fitToView();
     for (const n of g._aNodes) {
       const sx = n.x * g.scale + g.tx;
@@ -504,138 +330,57 @@ describe('view transform', () => {
     }
   });
 
-  test('an empty graph has a usable fallback scale', () => {
+  test('fitting frames the visible set, ignoring hidden nodes', () => {
+    const post = g.nodes.find((n) => n.type === 'post');
+    post.x = 100000; // far off to one side
+    post.y = 100000;
+    g.setTypeHidden('post', true);
+    g._fitToView();
+    for (const n of g._aNodes) {
+      assert.ok(n.x * g.scale + g.tx <= 800, 'a hidden outlier must not shrink the rest away');
+    }
+  });
+
+  test('an empty graph is framed without throwing', () => {
     const empty = makeGraph({});
-    assert.strictEqual(empty._fitScale(), 0.2);
+    empty._fitToView();
+    assert.ok(Number.isFinite(empty.scale));
   });
 
-  test('fit scale is clamped for a graph that is a single point', () => {
-    const one = makeGraph({ tags: [{ id: 1, name: 'T', slug: 't', post_count: 0 }] });
-    assert.ok(one._fitScale() <= 4, 'must not zoom to absurdity on one node');
-  });
-});
-
-// ── Zoom ─────────────────────────────────────────────────────────────────────
-
-describe('zoom', () => {
-  test('keeps the point under the cursor fixed', () => {
-    const g = makeGraph();
-    g._fitToView();
-    const before = g._screenToWorld(300, 200);
-    g._zoomAt(300, 200, 1.5);
-    const after = g._screenToWorld(300, 200);
-    assert.ok(Math.abs(before.x - after.x) < 1e-9, 'zoom anchored at the cursor');
-    assert.ok(Math.abs(before.y - after.y) < 1e-9);
+  test('a resize re-frames the graph', () => {
+    g.scale = 0.01;
+    g.resize();
+    assert.notStrictEqual(g.scale, 0.01, 'the view follows the container');
   });
 
-  test('will not zoom out past "everything visible"', () => {
-    const g = makeGraph();
-    g._fitToView();
-    for (let i = 0; i < 40; i++) g._zoomAt(400, 260, 0.5);
-    assert.ok(g.scale >= g._fitScale() - 1e-9, 'clamped at the fit scale');
-  });
-
-  test('zooming in is capped', () => {
-    const g = makeGraph();
-    for (let i = 0; i < 60; i++) g._zoomAt(400, 260, 2);
-    assert.ok(g.scale <= 6);
+  test('once the user has zoomed, a resize leaves the view alone', () => {
+    g.zoomBy(1.2);
+    const scale = g.scale;
+    g.resize();
+    assert.strictEqual(g.scale, scale, 'the view must not jump under the user');
   });
 
   test('zooming hands the view over to the user', () => {
-    const g = makeGraph();
     assert.strictEqual(g._userView, false);
     g.zoomBy(1.2);
     assert.strictEqual(g._userView, true, 'auto-framing must stop fighting the user');
     assert.strictEqual(g._needFit, false);
   });
 
+  test('zoomBy is anchored on the middle of the viewport', () => {
+    g._fitToView();
+    const before = g._screenToWorld(400, 260);
+    g.zoomBy(1.4);
+    const after = g._screenToWorld(400, 260);
+    assert.ok(Math.abs(before.x - after.x) < 1e-9);
+    assert.ok(Math.abs(before.y - after.y) < 1e-9);
+  });
+
   test('resetView resumes auto-framing', () => {
-    const g = makeGraph();
     g.zoomBy(1.2);
     g.resetView();
     assert.strictEqual(g._userView, false);
     assert.strictEqual(g._needFit, true);
-  });
-});
-
-// ── Hit testing ──────────────────────────────────────────────────────────────
-
-/**
- * Picking is done in world space against each node's radius plus a 3px forgiving
- * margin. When two nodes overlap the nearer centre wins, so the node whose
- * middle you aimed at is the one you get.
- */
-describe('hit testing', () => {
-  /** Place nodes by hand — the force layout's positions are not the subject. */
-  function positioned() {
-    const g = makeGraph();
-    g.scale = 1;
-    g.tx = 0;
-    g.ty = 0;
-    g.nodes.forEach((n, i) => { n.x = i * 100; n.y = 100; n.r = 10; });
-    return g;
-  }
-
-  test('a click on a node centre picks it', () => {
-    const g = positioned();
-    assert.strictEqual(g._pickNode(100, 100).id, g.nodes[1].id);
-  });
-
-  test('a click just inside the rim picks it', () => {
-    const g = positioned();
-    assert.ok(g._pickNode(109, 100), 'r=10, so 9px out is a hit');
-  });
-
-  test('a click just outside the rim misses', () => {
-    const g = positioned();
-    // r=10 plus the 3px forgiving margin, so 14px out must not register —
-    // otherwise the gaps between nodes stop being clickable empty space and a
-    // tap meant to clear the selection opens something instead.
-    assert.strictEqual(g._pickNode(114, 100), null);
-  });
-
-  test('the forgiving margin does not swallow the neighbouring node', () => {
-    const g = positioned();
-    // Midway between two nodes 100px apart is nobody's.
-    assert.strictEqual(g._pickNode(150, 100), null);
-  });
-
-  test('a click well outside every node picks nothing', () => {
-    const g = positioned();
-    assert.strictEqual(g._pickNode(50, 400), null);
-  });
-
-  test('picking honours the pan and zoom in force', () => {
-    const g = positioned();
-    g.scale = 2;
-    g.tx = 30;
-    g.ty = -10;
-    // World (100,100) is now at screen (230,190).
-    assert.strictEqual(g._pickNode(230, 190).id, g.nodes[1].id);
-    assert.strictEqual(g._pickNode(100, 100), null, 'the old screen point is empty now');
-  });
-
-  test('overlapping nodes resolve to the nearer centre', () => {
-    const g = positioned();
-    g.nodes[0].x = 100;
-    g.nodes[0].y = 100; // exactly on top of nodes[1]
-    g.nodes[0].r = 10;
-    assert.strictEqual(g._pickNode(103, 100).id, g.nodes[0].id, 'ties broken by distance');
-  });
-
-  test('a hidden node cannot be clicked', () => {
-    const g = positioned();
-    const post = g.nodes.find((n) => n.type === 'post');
-    post.x = 500;
-    post.y = 300;
-    post.r = 10;
-    assert.ok(g._pickNode(500, 300), 'precondition: hittable while visible');
-
-    g.setTypeHidden('post', true);
-    g.nodes.forEach((n, i) => { n.x = i * 100; n.y = 100; n.r = 10; });
-    post.x = 500;
-    post.y = 300;
-    assert.strictEqual(g._pickNode(500, 300), null, 'hidden nodes are out of the active set');
   });
 });
 
@@ -665,171 +410,6 @@ describe('navigation targets', () => {
   });
 });
 
-// ── Force layout ─────────────────────────────────────────────────────────────
-
-/**
- * One step of the simulation. Four forces act per tick: pairwise repulsion
- * (cut off by distance, bucketed through a spatial grid), springs along the
- * links, gravity toward the viewport centre, and a collision pass that pushes
- * overlapping rims apart.
- *
- * These assert direction and invariants, not exact positions — the constants
- * are tuned by eye and pinning coordinates would make every future tweak a
- * test failure.
- */
-describe('force layout', () => {
-  /** A graph with hand-placed nodes, so the assertion is about one force. */
-  function laidOut(data, place) {
-    const g = makeGraph(data);
-    g.alpha = 1;
-    place(g);
-    return g;
-  }
-
-  const twoTags = {
-    tags: [
-      { id: 1, name: 'A', slug: 'a', post_count: 0 },
-      { id: 2, name: 'B', slug: 'b', post_count: 0 },
-    ],
-  };
-  const twoLinkedTags = { ...twoTags, hierarchyEdges: [{ parent: 1, child: 2 }] };
-
-  const gap = (g) => Math.hypot(
-    g.nodeById.get('t1').x - g.nodeById.get('t2').x,
-    g.nodeById.get('t1').y - g.nodeById.get('t2').y,
-  );
-
-  test('unlinked neighbours repel', () => {
-    const g = laidOut(twoTags, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: 400, y: 260, vx: 0, vy: 0 });
-      Object.assign(g.nodeById.get('t2'), { x: 430, y: 260, vx: 0, vy: 0 });
-    });
-    const before = gap(g);
-    g._tick();
-    assert.ok(gap(g) > before, 'nodes with nothing in common should spread out');
-  });
-
-  test('repulsion is cut off, so distant nodes do not feel each other', () => {
-    // Beyond REPULSION_CUTOFF the pair is skipped entirely; what movement is
-    // left comes from gravity, which pulls both toward the same centre.
-    const g = laidOut(twoTags, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: -5000, y: 260, vx: 0, vy: 0 });
-      Object.assign(g.nodeById.get('t2'), { x: 5000, y: 260, vx: 0, vy: 0 });
-    });
-    const before = gap(g);
-    g._tick();
-    assert.ok(gap(g) < before, 'far apart, only gravity acts — they close in');
-  });
-
-  test('a stretched link pulls its ends together', () => {
-    const g = laidOut(twoLinkedTags, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: 100, y: 260, vx: 0, vy: 0 });
-      Object.assign(g.nodeById.get('t2'), { x: 700, y: 260, vx: 0, vy: 0 });
-    });
-    const before = gap(g);
-    g._tick();
-    assert.ok(gap(g) < before, 'the spring should contract');
-  });
-
-  test('a membership link is slacker than a hierarchy link', () => {
-    // Posts sit closer to their tags than child tags sit to their parents, so
-    // the hierarchy reads as the graph's skeleton.
-    const hier = laidOut(twoLinkedTags, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: 400, y: 260, vx: 0, vy: 0 });
-      Object.assign(g.nodeById.get('t2'), { x: 400, y: 460, vx: 0, vy: 0 });
-    });
-    const memb = laidOut(
-      {
-        tags: [{ id: 1, name: 'A', slug: 'a', post_count: 0 }],
-        posts: [{ id: 2, title: 'P', slug: 'p' }],
-        membershipEdges: [{ post: 2, tag: 1 }],
-      },
-      (g) => {
-        Object.assign(g.nodeById.get('t1'), { x: 400, y: 260, vx: 0, vy: 0 });
-        Object.assign(g.nodeById.get('p2'), { x: 400, y: 460, vx: 0, vy: 0 });
-      },
-    );
-    for (let i = 0; i < 200; i++) { hier._tick(); memb._tick(); }
-    const hierGap = gap(hier);
-    const membGap = Math.hypot(
-      memb.nodeById.get('t1').x - memb.nodeById.get('p2').x,
-      memb.nodeById.get('t1').y - memb.nodeById.get('p2').y,
-    );
-    assert.ok(hierGap > membGap, `hierarchy ${hierGap} should rest wider than membership ${membGap}`);
-  });
-
-  test('gravity pulls a stray node back toward the centre', () => {
-    const g = laidOut({ tags: [{ id: 1, name: 'A', slug: 'a', post_count: 0 }] }, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: 4000, y: 3000, vx: 0, vy: 0 });
-    });
-    const n = g.nodeById.get('t1');
-    g._tick();
-    assert.ok(n.x < 4000 && n.y < 3000, 'nothing should drift off forever');
-  });
-
-  test('collision separates overlapping nodes', () => {
-    // alpha=0 silences repulsion, springs and gravity — all are scaled by it —
-    // leaving the collision pass as the only thing that can move a node. Run
-    // with alpha up and repulsion alone would hide a broken collision pass.
-    const g = laidOut(twoTags, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: 400, y: 260, vx: 0, vy: 0 });
-      Object.assign(g.nodeById.get('t2'), { x: 402, y: 260, vx: 0, vy: 0 });
-    });
-    g.alpha = 0;
-    for (let i = 0; i < 50; i++) g._tick();
-    const a = g.nodeById.get('t1');
-    const b = g.nodeById.get('t2');
-    assert.ok(
-      gap(g) >= a.r + b.r + 8 - 1e-6,
-      `rims must end up a pad apart, got ${gap(g)} for radii ${a.r}/${b.r}`,
-    );
-  });
-
-  test('collision leaves nodes that already clear each other alone', () => {
-    const g = laidOut(twoTags, (g) => {
-      Object.assign(g.nodeById.get('t1'), { x: 400, y: 260, vx: 0, vy: 0 });
-      Object.assign(g.nodeById.get('t2'), { x: 700, y: 260, vx: 0, vy: 0 });
-    });
-    g.alpha = 0;
-    g._tick();
-    assert.strictEqual(g.nodeById.get('t1').x, 400, 'no phantom shove');
-    assert.strictEqual(g.nodeById.get('t2').x, 700);
-  });
-
-  test('a settled layout stops moving once alpha reaches zero', () => {
-    const g = makeGraph();
-    for (let i = 0; i < 300; i++) { g.alpha *= 0.95; g._tick(); }
-    g.alpha = 0;
-    const before = g.nodes.map((n) => [n.x, n.y]);
-    g._tick();
-    const after = g.nodes.map((n) => [n.x, n.y]);
-    for (let i = 0; i < before.length; i++) {
-      assert.ok(Math.abs(before[i][0] - after[i][0]) < 0.5, 'a cold layout should be still');
-      assert.ok(Math.abs(before[i][1] - after[i][1]) < 0.5);
-    }
-  });
-
-  test('the layout stays finite over a long run', () => {
-    const g = makeGraph();
-    for (let i = 0; i < 500; i++) g._tick();
-    for (const n of g.nodes) {
-      assert.ok(Number.isFinite(n.x) && Number.isFinite(n.y), `${n.id} left the plane`);
-    }
-  });
-
-  test('a node held by the pointer is not moved by the forces', () => {
-    const g = makeGraph();
-    const held = g.nodeById.get('t1');
-    held.x = 123;
-    held.y = 456;
-    g.dragNode = held;
-    g.alpha = 1;
-    g._tick();
-    assert.strictEqual(held.x, 123, 'the dragged node follows the finger, not the physics');
-    assert.strictEqual(held.y, 456);
-  });
-});
-
 // ── Pointer gestures ─────────────────────────────────────────────────────────
 
 /**
@@ -837,6 +417,9 @@ describe('force layout', () => {
  * A press that neither moves far nor lasts long is a tap, and taps are the
  * two-stage select-then-open interaction: the first lights the node up (so its
  * highlighted connections can be followed and clicked), the second opens it.
+ *
+ * PointerControls recognises the gesture, TagGraph decides what it means, so
+ * these run through the assembled pair.
  */
 describe('pointer gestures', () => {
   const down = (id, x, y) => ({ pointerId: id, clientX: x, clientY: y, pointerType: 'mouse' });
@@ -853,22 +436,22 @@ describe('pointer gestures', () => {
 
   test('pressing a node starts a drag, not a pan', () => {
     const g = positioned();
-    g._pointerDown(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
     assert.strictEqual(g.dragNode, g.nodes[0]);
     assert.strictEqual(g.panning, false);
   });
 
   test('pressing empty space starts a pan', () => {
     const g = positioned();
-    g._pointerDown(down(1, 400, 400));
+    g._controls.pointerDown(down(1, 400, 400));
     assert.strictEqual(g.dragNode, null);
     assert.strictEqual(g.panning, true);
   });
 
   test('dragging moves the node to the cursor and kills its momentum', () => {
     const g = positioned();
-    g._pointerDown(down(1, 50, 100));
-    g._pointerMove(down(1, 300, 320));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerMove(down(1, 300, 320));
     assert.strictEqual(g.nodes[0].x, 300);
     assert.strictEqual(g.nodes[0].y, 320);
     assert.strictEqual(g.nodes[0].vx, 0, 'no leftover velocity to fling it away');
@@ -876,8 +459,8 @@ describe('pointer gestures', () => {
 
   test('panning translates the view by the cursor delta', () => {
     const g = positioned();
-    g._pointerDown(down(1, 400, 400));
-    g._pointerMove(down(1, 450, 380));
+    g._controls.pointerDown(down(1, 400, 400));
+    g._controls.pointerMove(down(1, 450, 380));
     assert.strictEqual(g.tx, 50);
     assert.strictEqual(g.ty, -20);
   });
@@ -885,8 +468,8 @@ describe('pointer gestures', () => {
   test('a first tap selects the node and announces it', () => {
     let selected = 'untouched';
     const g = positioned({ onSelect: (n) => { selected = n; } });
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100));
     assert.strictEqual(g.selected, g.nodes[0]);
     assert.strictEqual(selected, g.nodes[0]);
   });
@@ -894,22 +477,22 @@ describe('pointer gestures', () => {
   test('a second tap on the same node opens it', () => {
     let href = null;
     const g = positioned({ onNavigate: (h) => { href = h; } });
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100));
     assert.strictEqual(href, null, 'the first tap must not navigate');
 
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100));
     assert.strictEqual(href, '/tags/location');
   });
 
   test('tapping a different node moves the selection instead of opening', () => {
     let href = null;
     const g = positioned({ onNavigate: (h) => { href = h; } });
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100));
-    g._pointerDown(down(1, 150, 100));
-    g._pointerUp(down(1, 150, 100));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 150, 100));
+    g._controls.pointerUp(down(1, 150, 100));
     assert.strictEqual(href, null);
     assert.strictEqual(g.selected, g.nodes[1]);
   });
@@ -917,10 +500,10 @@ describe('pointer gestures', () => {
   test('tapping empty space clears the selection', () => {
     const cleared = [];
     const g = positioned({ onSelect: (n) => cleared.push(n) });
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100));
-    g._pointerDown(down(1, 600, 400));
-    g._pointerUp(down(1, 600, 400));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 600, 400));
+    g._controls.pointerUp(down(1, 600, 400));
     assert.strictEqual(g.selected, null);
     assert.strictEqual(cleared.at(-1), null);
   });
@@ -928,48 +511,48 @@ describe('pointer gestures', () => {
   test('a drag past the slop is not a tap', () => {
     let href = null;
     const g = positioned({ onNavigate: (h) => { href = h; } });
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100)); // select it
-    g._pointerDown(down(1, 50, 100));
-    g._pointerMove(down(1, 300, 300)); // now drag it away
-    assert.strictEqual(g._moved, true, 'travel past the slop must mark the gesture a drag');
-    g._pointerUp(down(1, 300, 300));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100)); // select it
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerMove(down(1, 300, 300)); // now drag it away
+    assert.strictEqual(g._controls._moved, true, 'travel past the slop must mark the gesture a drag');
+    g._controls.pointerUp(down(1, 300, 300));
     assert.strictEqual(href, null, 'dragging a selected node must not open it');
   });
 
   test('jitter under the slop still counts as a tap', () => {
     const g = positioned();
-    g._pointerDown(down(1, 50, 100));
-    g._pointerMove(down(1, 53, 102)); // ~4px — a shaky finger, not a drag
-    assert.strictEqual(g._moved, false, 'sub-slop jitter is not a drag');
-    g._pointerUp(down(1, 53, 102));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerMove(down(1, 53, 102)); // ~4px — a shaky finger, not a drag
+    assert.strictEqual(g._controls._moved, false, 'sub-slop jitter is not a drag');
+    g._controls.pointerUp(down(1, 53, 102));
     assert.strictEqual(g.selected, g.nodes[0], 'a stationary press must survive jitter');
   });
 
   test('the slop is small enough that a deliberate drag clears it', () => {
     const g = positioned();
-    g._pointerDown(down(1, 400, 400)); // empty space — a pan
-    g._pointerMove(down(1, 418, 400)); // 18px: past the 10px slop
-    assert.strictEqual(g._moved, true);
+    g._controls.pointerDown(down(1, 400, 400)); // empty space — a pan
+    g._controls.pointerMove(down(1, 418, 400)); // 18px: past the 10px slop
+    assert.strictEqual(g._controls._moved, true);
     assert.strictEqual(g._userView, true, 'a deliberate pan takes the view over');
   });
 
   test('a long press is not a tap', () => {
     const g = positioned();
-    g._pointerDown(down(1, 50, 100));
-    g._downTime = Date.now() - 800;
-    g._pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls._downTime = Date.now() - 800;
+    g._controls.pointerUp(down(1, 50, 100));
     assert.strictEqual(g.selected, null);
   });
 
   test('hovering a node reports it and changes the cursor', () => {
     const seen = [];
     const g = positioned({ onHover: (n) => seen.push(n) });
-    g._pointerMove(down(9, 50, 100));
+    g._controls.pointerMove(down(9, 50, 100));
     assert.strictEqual(g.hovered, g.nodes[0]);
     assert.strictEqual(g.canvas.style.cursor, 'pointer');
 
-    g._pointerMove(down(9, 600, 400));
+    g._controls.pointerMove(down(9, 600, 400));
     assert.strictEqual(g.hovered, null);
     assert.strictEqual(g.canvas.style.cursor, 'grab');
     assert.deepStrictEqual(seen, [g.nodes[0], null]);
@@ -978,30 +561,30 @@ describe('pointer gestures', () => {
   test('hover is only announced when it actually changes', () => {
     const seen = [];
     const g = positioned({ onHover: (n) => seen.push(n) });
-    g._pointerMove(down(9, 50, 100));
-    g._pointerMove(down(9, 52, 100)); // same node
+    g._controls.pointerMove(down(9, 50, 100));
+    g._controls.pointerMove(down(9, 52, 100)); // same node
     assert.strictEqual(seen.length, 1, 'no redundant redraws while sitting on one node');
   });
 
   test('a second finger cancels the drag and begins a pinch', () => {
     const g = positioned();
-    g._pointerDown(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
     assert.ok(g.dragNode, 'precondition: one finger is dragging');
 
-    g._pointerDown(down(2, 250, 100));
+    g._controls.pointerDown(down(2, 250, 100));
     assert.strictEqual(g.dragNode, null, 'a pinch must not also drag the node');
     assert.strictEqual(g.panning, false);
-    assert.ok(g._pinch);
+    assert.ok(g._controls._pinch);
   });
 
   test('spreading the fingers zooms in', () => {
     const g = positioned();
     g._fitToView();
-    g._pointerDown(down(1, 300, 200));
-    g._pointerDown(down(2, 400, 200));
+    g._controls.pointerDown(down(1, 300, 200));
+    g._controls.pointerDown(down(2, 400, 200));
     const before = g.scale;
-    g._pointerMove(down(1, 250, 200));
-    g._pointerMove(down(2, 450, 200)); // distance 100 -> 200
+    g._controls.pointerMove(down(1, 250, 200));
+    g._controls.pointerMove(down(2, 450, 200)); // distance 100 -> 200
     assert.ok(g.scale > before, 'a spread should magnify');
     assert.ok(Math.abs(g.scale - before * 2) < 1e-6, 'scale follows the finger-distance ratio');
   });
@@ -1009,43 +592,61 @@ describe('pointer gestures', () => {
   test('a pinch cannot zoom out past "everything visible"', () => {
     const g = positioned();
     g._fitToView();
-    g._pointerDown(down(1, 200, 200));
-    g._pointerDown(down(2, 600, 200));
-    g._pointerMove(down(1, 399, 200));
-    g._pointerMove(down(2, 401, 200)); // pinch almost shut
+    g._controls.pointerDown(down(1, 200, 200));
+    g._controls.pointerDown(down(2, 600, 200));
+    g._controls.pointerMove(down(1, 399, 200));
+    g._controls.pointerMove(down(2, 401, 200)); // pinch almost shut
     assert.ok(g.scale >= g._fitScale() - 1e-9);
   });
 
   test('lifting one finger hands the gesture back to panning, without a jump', () => {
     const g = positioned();
-    g._pointerDown(down(1, 300, 200));
-    g._pointerDown(down(2, 400, 200));
-    g._pointerUp(down(2, 400, 200));
+    g._controls.pointerDown(down(1, 300, 200));
+    g._controls.pointerDown(down(2, 400, 200));
+    g._controls.pointerUp(down(2, 400, 200));
 
-    assert.strictEqual(g._pinch, null);
+    assert.strictEqual(g._controls._pinch, null);
     assert.strictEqual(g.panning, true, 'the remaining finger keeps panning');
     const tx = g.tx;
-    g._pointerMove(down(1, 300, 200)); // same place: the view must not lurch
+    g._controls.pointerMove(down(1, 300, 200)); // same place: the view must not lurch
     assert.strictEqual(g.tx, tx);
   });
 
   test('a pinch never ends in a tap', () => {
     let href = null;
     const g = positioned({ onNavigate: (h) => { href = h; } });
-    g._pointerDown(down(1, 50, 100));
-    g._pointerUp(down(1, 50, 100)); // select the node
-    g._pointerDown(down(1, 50, 100));
-    g._pointerDown(down(2, 250, 100)); // second finger
-    g._pointerUp(down(2, 250, 100));
-    g._pointerUp(down(1, 50, 100));
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerUp(down(1, 50, 100)); // select the node
+    g._controls.pointerDown(down(1, 50, 100));
+    g._controls.pointerDown(down(2, 250, 100)); // second finger
+    g._controls.pointerUp(down(2, 250, 100));
+    g._controls.pointerUp(down(1, 50, 100));
     assert.strictEqual(href, null, 'ending a pinch on a node must not open it');
   });
 
   test('touching the canvas stops the auto-framing', () => {
     const g = positioned();
     g._needFit = true;
-    g._pointerDown(down(1, 400, 400));
+    g._controls.pointerDown(down(1, 400, 400));
     assert.strictEqual(g._needFit, false, 'the view must not jump under the user');
+  });
+
+  test('the mouse leaving the canvas clears the hover', () => {
+    const seen = [];
+    const g = positioned({ onHover: (n) => seen.push(n) });
+    g._controls.pointerMove(down(9, 50, 100));
+    g._controls._onLeave({ pointerType: 'mouse' });
+    assert.strictEqual(g.hovered, null);
+    assert.deepStrictEqual(seen, [g.nodes[0], null]);
+  });
+
+  test('a finger leaving the canvas does not clear the highlight', () => {
+    // On touch, lifting a finger fires pointerleave — treating that as "the
+    // pointer left" would wipe the highlight the tap just put up.
+    const g = positioned();
+    g._controls.pointerMove(down(9, 50, 100));
+    g._controls._onLeave({ pointerType: 'touch' });
+    assert.strictEqual(g.hovered, g.nodes[0], 'the highlight must survive the finger lifting');
   });
 });
 
@@ -1064,18 +665,18 @@ describe('wheel zoom', () => {
     const g = makeGraph();
     g._fitToView();
     const start = g.scale;
-    g._wheel(wheel(-100).event);
+    g._controls.wheel(wheel(-100).event);
     const zoomedIn = g.scale;
     assert.ok(zoomedIn > start);
 
-    g._wheel(wheel(100).event);
+    g._controls.wheel(wheel(100).event);
     assert.ok(g.scale < zoomedIn);
   });
 
   test('the page does not scroll behind the graph', () => {
     const g = makeGraph();
     const w = wheel(-100);
-    g._wheel(w.event);
+    g._controls.wheel(w.event);
     assert.ok(w.wasPrevented(), 'the canvas must claim the wheel event');
   });
 
@@ -1083,7 +684,7 @@ describe('wheel zoom', () => {
     const g = makeGraph();
     g._fitToView();
     const before = g._screenToWorld(400, 260);
-    g._wheel(wheel(-100).event);
+    g._controls.wheel(wheel(-100).event);
     const after = g._screenToWorld(400, 260);
     assert.ok(Math.abs(before.x - after.x) < 1e-9);
     assert.ok(Math.abs(before.y - after.y) < 1e-9);
@@ -1147,6 +748,18 @@ describe('lifecycle', () => {
     g.destroy();
     g._kick();
     assert.strictEqual(g._running, false);
+  });
+
+  test('destroy unbinds the pointer listeners', () => {
+    const removed = [];
+    const canvas = stubCanvas();
+    canvas.removeEventListener = (type) => removed.push(type);
+    new TagGraph(canvas, FIXTURE).destroy();
+    assert.deepStrictEqual(
+      removed.sort(),
+      ['pointerdown', 'pointerleave', 'pointermove', 'wheel'],
+      'a torn-down graph must not keep painting on stray events',
+    );
   });
 
   test('resize sizes the backing store by the device pixel ratio', () => {
