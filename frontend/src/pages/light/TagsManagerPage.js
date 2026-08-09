@@ -15,7 +15,7 @@ import { parseMapsCoords } from '../../api/util.js';
 
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG, CHECK_SVG, TRASH_SVG } from '../../utils/icons.js';
+import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
 import { renderTagList, renderFilterChips, matchesListFilter } from '../../components/light/tags/TagListView.js';
@@ -23,10 +23,8 @@ import { getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
 import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.js';
 import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/tagGestures.js';
 import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.js';
-import {
-  openMoveDialog, openMergeDialog, openDropOnConfirm, openBulkMoveDialog,
-  bulkVisibility, bulkDelete,
-} from '../../components/light/tags/tagFlows.js';
+import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../components/light/tags/tagFlows.js';
+import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -52,6 +50,7 @@ export default class TagsManagerPage extends Component {
     this._initialParentIds = [];
     this._initialChildIds = [];
     this._swipeCleanup = null;
+    this._select = null;      // the tagSelection handle for the current render
   }
 
   render() {
@@ -92,47 +91,12 @@ export default class TagsManagerPage extends Component {
     }
 
     return `
-            ${this._renderBulkToolbar()}
+            ${this.state.selectMode && !loading && !error ? renderBulkToolbar() : ''}
             <div class="card tm-card">
               <div class="card-body">
                 ${content}
               </div>
             </div>`;
-  }
-
-  // ── Bulk selection ───────────────────────────────────────────────────────────
-
-  /**
-   * Toolbar shown while select mode is on. Unlike the posts list this sits in
-   * the flow rather than overlaying a filter block — the tags tree has none.
-   */
-  _renderBulkToolbar() {
-    if (!this.state.selectMode || this.state.loading || this.state.error) return '';
-    return `
-      <div class="tm-bulk-toolbar" id="tm-bulk-toolbar">
-        <label class="select-all-label"><input type="checkbox" id="tm-select-all-cb"> Select all</label>
-        <div class="tm-bulk-actions">
-          <span id="tm-bulk-count">0 selected</span>
-          <select id="tm-bulk-visibility-select" aria-label="Visibility to apply">
-            <option value="hidden">Hidden</option>
-            <option value="visible">Visible</option>
-          </select>
-          <button id="tm-bulk-apply-btn" class="btn btn-sm" disabled title="Apply visibility">${CHECK_SVG}<span class="btn-label"> Apply</span></button>
-          <button id="tm-bulk-move-btn" class="btn btn-sm" disabled title="Move under a parent…">Move…</button>
-          <button id="tm-bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Delete tags">${TRASH_SVG}<span class="btn-label"> Delete</span></button>
-          <!-- Deliberately not a .btn-label: this is the way out of select
-               mode, so its text has to survive the icon-only collapse. -->
-          <button id="tm-bulk-done-btn" class="btn btn-sm btn-secondary" title="Leave selection mode">Done</button>
-        </div>
-      </div>`;
-  }
-
-  /** Tags "Select all" applies to — the list view honours its own filters. */
-  _selectableTags() {
-    if (this.state.view === 'list') {
-      return this.state.tags.filter(t => matchesListFilter(t, this._listView()));
-    }
-    return this.state.tags;
   }
 
   // === List view ===
@@ -384,141 +348,24 @@ export default class TagsManagerPage extends Component {
 
   // ── Select mode ───────────────────────────────────────────────────────────────
 
+  /**
+   * Hand select mode to tagSelection, keeping the handle: the swipe binder
+   * below reaches back into it, and it is the only thing that may touch the
+   * selection between renders.
+   */
   _bindSelectMode() {
-    this.container.querySelector('#tm-select-btn')?.addEventListener('click', () => {
-      this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
-    });
-
-    this._bindRowSelectGestures();
-
-    if (!this.state.selectMode) return;
-
-    this.container.querySelectorAll('.tm-select-cb').forEach(cb => {
-      cb.addEventListener('change', e => {
-        e.stopPropagation();
-        this._setSelected(parseInt(cb.dataset.id, 10), cb.checked);
-      });
-    });
-
-    this.container.querySelector('#tm-select-all-cb')?.addEventListener('change', e => {
-      const selectedIds = new Set();
-      if (e.target.checked) this._selectableTags().forEach(t => selectedIds.add(t.id));
-      this.setState({ selectedIds });
-    });
-
-    this.container.querySelector('#tm-bulk-apply-btn')
-      ?.addEventListener('click', () => bulkVisibility({
-        ids: [...this.state.selectedIds],
-        hidden: this.container.querySelector('#tm-bulk-visibility-select').value === 'hidden',
-        onDone: () => this._afterBulk(),
-      }));
-    this.container.querySelector('#tm-bulk-move-btn')
-      ?.addEventListener('click', () => openBulkMoveDialog({
+    this._select = setupSelectMode(this.container, {
+      state: () => ({
+        selectMode: this.state.selectMode,
+        selectedIds: this.state.selectedIds,
         tags: this.state.tags,
-        ids: [...this.state.selectedIds],
-        onDone: () => this._afterBulk(),
-      }));
-    this.container.querySelector('#tm-bulk-delete-btn')
-      ?.addEventListener('click', () => bulkDelete({
-        ids: [...this.state.selectedIds],
-        confirm: (...args) => this._showConfirm(...args),
-        onDone: () => this._afterBulk(),
-      }));
-    this.container.querySelector('#tm-bulk-done-btn')
-      ?.addEventListener('click', () => this.setState({ selectMode: false, selectedIds: new Set() }));
-
-    this._updateBulkToolbar();
-  }
-
-  /**
-   * Touch shortcuts into select mode, mirroring the post cards: long-press a
-   * row to start selecting, then tap rows to add and remove them. Bound only
-   * where the touch layout is active, since a row is not a tap target on
-   * desktop — there the header's Select button is the way in.
-   */
-  _bindRowSelectGestures() {
-    if (!window.matchMedia?.('(max-width: 48em)').matches) return;
-
-    const LONG_PRESS_MS = 500;
-    // Controls that act on their own; a press on one is never a row press.
-    const interactive = 'input, button, a, select, label';
-
-    this.container.querySelectorAll('.tm-row, .tm-tag-row').forEach(row => {
-      const id = parseInt(row.dataset.id, 10);
-      if (!Number.isInteger(id)) return;
-
-      let timer = null;
-      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
-
-      row.addEventListener('pointerdown', e => {
-        if (e.target.closest(interactive)) return;
-        if (this.state.selectMode) return;
-        timer = setTimeout(() => {
-          timer = null;
-          this.setState({ selectMode: true, selectedIds: new Set([id]) });
-        }, LONG_PRESS_MS);
-      });
-      row.addEventListener('pointerup', cancel);
-      row.addEventListener('pointermove', cancel);
-      row.addEventListener('pointercancel', cancel);
-
-      row.addEventListener('click', e => {
-        if (!this.state.selectMode) return;
-        if (e.target.closest(interactive)) return;
-        this._toggleSelected(id);
-      });
+        view: this.state.view,
+        listView: this._listView(),
+      }),
+      onModeChange: (selectMode, selectedIds) => this.setState({ selectMode, selectedIds }),
+      onBulkDone: () => this._afterBulk(),
+      confirm: (...args) => this._showConfirm(...args),
     });
-  }
-
-  /** Swipe-right on a row: start selecting, or add/remove it if already on. */
-  _selectBySwipe(row) {
-    const id = parseInt(row.dataset.id, 10);
-    if (!Number.isInteger(id)) return;
-    if (!this.state.selectMode) {
-      this.setState({ selectMode: true, selectedIds: new Set([id]) });
-      return;
-    }
-    this._toggleSelected(id);
-  }
-
-  /**
-   * Select or deselect a tag without re-rendering — a re-render would steal
-   * focus back to the list-view search box. A tag can appear under several
-   * parents in the tree, so every instance of its row is updated.
-   */
-  _setSelected(id, on) {
-    const selectedIds = this.state.selectedIds;
-    if (on) selectedIds.add(id); else selectedIds.delete(id);
-
-    this.container.querySelectorAll(`.tm-select-cb[data-id="${id}"]`).forEach(cb => {
-      cb.checked = on;
-    });
-    this.container.querySelectorAll(`.tm-row[data-id="${id}"], .tm-tag-row[data-id="${id}"]`)
-      .forEach(row => row.classList.toggle('is-selected', on));
-
-    this._updateBulkToolbar();
-  }
-
-  _toggleSelected(id) {
-    this._setSelected(id, !this.state.selectedIds.has(id));
-  }
-
-  _updateBulkToolbar() {
-    const n = this.state.selectedIds.size;
-    const count = this.container.querySelector('#tm-bulk-count');
-    if (count) count.textContent = `${n} selected`;
-
-    ['#tm-bulk-apply-btn', '#tm-bulk-move-btn', '#tm-bulk-delete-btn'].forEach(sel => {
-      const btn = this.container.querySelector(sel);
-      if (btn) btn.disabled = n === 0;
-    });
-
-    const selectAll = this.container.querySelector('#tm-select-all-cb');
-    if (selectAll) {
-      const total = this._selectableTags().length;
-      selectAll.checked = n > 0 && n === total;
-      selectAll.indeterminate = n > 0 && n < total;
-    }
   }
 
   /**
@@ -553,7 +400,7 @@ export default class TagsManagerPage extends Component {
     this._swipeCleanup?.();             // tear down listeners from the previous render
     this._swipeCleanup = null;
     this._swipeCleanup = bindSwipeToReveal(this.container, {
-      onSelect: row => this._selectBySwipe(row),
+      onSelect: row => this._select?.selectBySwipe(row),
     });
   }
 

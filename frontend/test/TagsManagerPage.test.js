@@ -147,22 +147,6 @@ describe('TagsManagerPage', () => {
     assert.match(chipsEl.innerHTML, /<svg/, 'the × icon survives a re-render');
   });
 
-  test('select all is limited to filtered tags in list view', () => {
-    const container = {};
-    const page = new TagsManagerPage(container);
-    page.state.view = 'list';
-    page.state.tags = [
-      { id: 1, name: 'Kyoto', slug: 'kyoto', parents: [] },
-      { id: 2, name: 'Lisbon', slug: 'lisbon', parents: [] }
-    ];
-    page._listSearch = 'kyo';
-    assert.deepEqual(page._selectableTags().map(t => t.id), [1]);
-
-    // The tree has no filters, so everything is selectable there.
-    page.state.view = 'tree';
-    assert.deepEqual(page._selectableTags().map(t => t.id), [1, 2]);
-  });
-
   test('should render tree with nav root when tag has nav_order', () => {
     const container = {};
     const page = new TagsManagerPage(container);

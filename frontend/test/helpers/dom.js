@@ -90,7 +90,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   win.location = nav.location;
   win.history = nav.history;
 
-  const unpatch = combine(patchFormReflection(win), patchAbortSignal(win));
+  const unpatch = combine(patchFormReflection(win), patchAbortSignal(win), patchTextSelection(win));
 
   return {
     window: win,
@@ -224,6 +224,32 @@ function patchAbortSignal(win) {
     }
   };
   return () => { proto.addEventListener = original; };
+}
+
+/**
+ * Give text controls a `setSelectionRange`, which linkedom omits entirely.
+ *
+ * Pages call it to park the caret after re-rendering a field the user is
+ * typing in (the tags list search box). Missing, it is not a silent no-op but a
+ * TypeError thrown from the middle of afterRender — every listener bound after
+ * that point is simply never bound, and the test that follows exercises a page
+ * half-wired in a way no browser would produce.
+ *
+ * The caret is recorded rather than ignored so an assertion about it means
+ * something; nothing here reads it back yet.
+ */
+function patchTextSelection(win) {
+  const undo = [];
+  for (const ctorName of ['HTMLInputElement', 'HTMLTextAreaElement']) {
+    const proto = win[ctorName]?.prototype;
+    if (!proto || proto.setSelectionRange) continue;
+    proto.setSelectionRange = function (start, end) {
+      this.selectionStart = start;
+      this.selectionEnd = end;
+    };
+    undo.push(() => { delete proto.setSelectionRange; });
+  }
+  return () => undo.forEach(fn => fn());
 }
 
 function patchFormReflection(win) {
