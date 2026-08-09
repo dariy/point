@@ -21,7 +21,8 @@ import { parseHTML } from 'linkedom';
 
 const GLOBAL_KEYS = ['window', 'document', 'Event', 'MouseEvent', 'KeyboardEvent',
   'CustomEvent', 'Node', 'HTMLElement', 'getComputedStyle', 'requestAnimationFrame',
-  'cancelAnimationFrame', 'matchMedia', 'location', 'history', 'FormData', 'navigator'];
+  'cancelAnimationFrame', 'matchMedia', 'location', 'history', 'FormData', 'navigator',
+  'ResizeObserver', 'localStorage', 'sessionStorage'];
 
 /**
  * Install a global by descriptor.
@@ -81,6 +82,23 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
     addEventListener() {}, removeEventListener() {},
     addListener() {}, removeListener() {},
   }));
+
+  // Missing entirely in linkedom, and a missing constructor is a ReferenceError,
+  // not a no-op: the admin header's compact check (utils/headerCompact.js) runs
+  // from setupAdminLayout, so without this NO /light page can be mounted at all.
+  // Nothing resizes in a test, so the callback would never fire on its own —
+  // `observers` exposes the live ones so a test can run one deliberately, and
+  // the disconnected flag makes teardown assertable.
+  def('ResizeObserver', HarnessResizeObserver);
+  HarnessResizeObserver.observers = [];
+
+  // Also absent from linkedom, and also a ReferenceError rather than a no-op —
+  // the sidebar reads its collapsed state from localStorage in its constructor.
+  // Per-setupDOM instances, so preferences never leak between tests.
+  def('localStorage', makeStorage());
+  def('sessionStorage', makeStorage());
+  win.localStorage = globalThis.localStorage;
+  win.sessionStorage = globalThis.sessionStorage;
   win.requestAnimationFrame ??= globalThis.requestAnimationFrame;
   win.matchMedia ??= globalThis.matchMedia;
 
@@ -106,6 +124,41 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
       }
     },
   };
+}
+
+/** An in-memory Storage — the Web Storage API, minus persistence. */
+function makeStorage() {
+  const map = new Map();
+  return {
+    get length() { return map.size; },
+    key: i => [...map.keys()][i] ?? null,
+    getItem: k => (map.has(String(k)) ? map.get(String(k)) : null),
+    setItem: (k, v) => { map.set(String(k), String(v)); },
+    removeItem: k => { map.delete(String(k)); },
+    clear: () => map.clear(),
+  };
+}
+
+/**
+ * A ResizeObserver that records instead of observing.
+ *
+ * linkedom has no layout, so there is nothing for a real one to watch; what the
+ * code under test needs is only that the constructor exists and that
+ * `disconnect()` is there for the teardown to call. Tests that care about the
+ * resize path call `trigger()` themselves.
+ */
+class HarnessResizeObserver {
+  constructor(callback) {
+    this.callback = callback;
+    this.targets = [];
+    this.disconnected = false;
+    HarnessResizeObserver.observers.push(this);
+  }
+  observe(el) { this.targets.push(el); }
+  unobserve(el) { this.targets = this.targets.filter(t => t !== el); }
+  disconnect() { this.targets = []; this.disconnected = true; }
+  /** Run the callback as a resize would, with one entry per observed target. */
+  trigger() { this.callback(this.targets.map(target => ({ target })), this); }
 }
 
 /**
