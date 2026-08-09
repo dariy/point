@@ -71,7 +71,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   win.location = nav.location;
   win.history = nav.history;
 
-  const unpatch = patchFormReflection(win);
+  const unpatch = combine(patchFormReflection(win), patchAbortSignal(win));
 
   return {
     window: win,
@@ -108,6 +108,42 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
  * attribute, so that is unobservable — but it is why this lives in the test
  * harness and not in the source.
  */
+const combine = (...undos) => () => undos.forEach(fn => fn());
+
+/**
+ * Make `addEventListener(..., { signal })` actually detach on abort.
+ *
+ * linkedom accepts the option and ignores it, so an aborted controller leaves
+ * every listener live. Components here use AbortController as their only
+ * teardown mechanism (see bindSwipeToReveal), and re-binding after each render
+ * depends on it — without this, a test cannot tell a correct teardown from a
+ * listener leak, which is the exact bug the teardown exists to prevent.
+ */
+function patchAbortSignal(win) {
+  // The listener methods live on linkedom's DOMEventTarget, several links up
+  // the prototype chain from any element.
+  let proto = win.document && Object.getPrototypeOf(win.document);
+  while (proto && !Object.prototype.hasOwnProperty.call(proto, 'addEventListener')) {
+    proto = Object.getPrototypeOf(proto);
+  }
+  if (!proto) return () => {};
+
+  const original = proto.addEventListener;
+  proto.addEventListener = function (type, callback, options) {
+    const signal = options && typeof options === 'object' ? options.signal : undefined;
+    if (signal?.aborted) return;
+    original.call(this, type, callback, options);
+    if (signal) {
+      signal.addEventListener(
+        'abort',
+        () => this.removeEventListener(type, callback, options),
+        { once: true },
+      );
+    }
+  };
+  return () => { proto.addEventListener = original; };
+}
+
 function patchFormReflection(win) {
   const undo = [];
   const reflect = (ctorName, prop, attr) => {
