@@ -21,7 +21,19 @@ import { parseHTML } from 'linkedom';
 
 const GLOBAL_KEYS = ['window', 'document', 'Event', 'MouseEvent', 'KeyboardEvent',
   'CustomEvent', 'Node', 'HTMLElement', 'getComputedStyle', 'requestAnimationFrame',
-  'cancelAnimationFrame', 'matchMedia', 'location', 'history'];
+  'cancelAnimationFrame', 'matchMedia', 'location', 'history', 'FormData', 'navigator'];
+
+/**
+ * Install a global by descriptor.
+ *
+ * Plain assignment is not enough: Node defines `navigator` as an accessor with
+ * no setter, so `globalThis.navigator = …` throws in a module (strict mode).
+ */
+function def(key, value) {
+  Object.defineProperty(globalThis, key, {
+    value, writable: true, configurable: true, enumerable: true,
+  });
+}
 
 /**
  * A history/location pair that records pushes instead of navigating.
@@ -40,34 +52,41 @@ function makeNavigation(path = '/') {
   return { location, history };
 }
 
-export function setupDOM(html = '<!doctype html><html><body></body></html>', { path = '/' } = {}) {
-  const saved = new Map(GLOBAL_KEYS.map(k => [k, globalThis[k]]));
+export function setupDOM(html = '<!doctype html><html><body></body></html>', { path = '/', onLine = true } = {}) {
+  const saved = new Map(GLOBAL_KEYS.map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
   const win = parseHTML(html);
 
-  globalThis.window = win;
-  globalThis.document = win.document;
+  def('window', win);
+  def('document', win.document);
   for (const k of ['Event', 'MouseEvent', 'KeyboardEvent', 'CustomEvent', 'Node', 'HTMLElement']) {
-    if (win[k]) globalThis[k] = win[k];
+    if (win[k]) def(k, win[k]);
   }
+
+  // api/client.js routes every mutating call through the offline mutation
+  // queue (IndexedDB) when `navigator.onLine` is falsy. Node's `navigator`
+  // exists but has no `onLine`, so without this the harness would silently
+  // send nothing over fetch and hang on a database no test provides.
+  def('navigator', { onLine, userAgent: 'point-tests' });
+  def('FormData', HarnessFormData);
 
   // linkedom has no layout engine; components that ask for geometry get zeros
   // rather than a crash. Tests that care assert on classes and calls instead.
-  globalThis.getComputedStyle = win.getComputedStyle
+  def('getComputedStyle', win.getComputedStyle
     ? win.getComputedStyle.bind(win)
-    : () => ({ getPropertyValue: () => '' });
-  globalThis.requestAnimationFrame = cb => { cb(0); return 0; };
-  globalThis.cancelAnimationFrame = () => {};
-  globalThis.matchMedia = q => ({
+    : () => ({ getPropertyValue: () => '' }));
+  def('requestAnimationFrame', cb => { cb(0); return 0; });
+  def('cancelAnimationFrame', () => {});
+  def('matchMedia', q => ({
     matches: false, media: q,
     addEventListener() {}, removeEventListener() {},
     addListener() {}, removeListener() {},
-  });
+  }));
   win.requestAnimationFrame ??= globalThis.requestAnimationFrame;
   win.matchMedia ??= globalThis.matchMedia;
 
   const nav = makeNavigation(path);
-  globalThis.location = nav.location;
-  globalThis.history = nav.history;
+  def('location', nav.location);
+  def('history', nav.history);
   win.location = nav.location;
   win.history = nav.history;
 
@@ -81,13 +100,76 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
     history: nav.history,
     cleanup() {
       unpatch();
-      for (const [k, v] of saved) {
-        if (v === undefined) delete globalThis[k];
-        else globalThis[k] = v;
+      for (const [k, descriptor] of saved) {
+        if (descriptor === undefined) delete globalThis[k];
+        else Object.defineProperty(globalThis, k, descriptor);
       }
     },
   };
 }
+
+/**
+ * Make `new FormData(form)` read the form, the way a browser does.
+ *
+ * Node ships a spec FormData, but its constructor takes no arguments — handed
+ * an element it throws `Argument 1 could not be converted`. linkedom supplies
+ * no FormData of its own. So the single line every save handler starts with,
+ * `const fd = new FormData(form)`, is unreachable from a test until something
+ * closes the gap; this is that something.
+ *
+ * It walks the controls and applies the parts of the form-submission algorithm
+ * that decide what gets sent, because those decisions ARE the behaviour under
+ * test — an unchecked box must be absent (`fd.has('hidden')` is how the page
+ * reads booleans), and a disabled control must not be submitted at all.
+ *
+ * Two linkedom divergences are corrected while reading, both of which would
+ * otherwise quietly produce the wrong payload rather than fail:
+ *   - `input.type` is null when the markup omits the attribute; a browser says
+ *     'text'. Left alone, a bare <input name=…> matches none of the type rules.
+ *   - a checkbox with no value attribute reports '' where a browser reports
+ *     'on', which is the value the backend would actually receive.
+ */
+const HarnessFormData = (() => {
+  // Captured once, at import: a nested setupDOM must not subclass the shim.
+  const Native = globalThis.FormData;
+
+  const controlType = el => (
+    el.tagName === 'INPUT' ? (el.getAttribute('type') || 'text').toLowerCase()
+      : el.tagName.toLowerCase()
+  );
+
+  function harvest(form, fd) {
+    for (const el of form.querySelectorAll('input, select, textarea')) {
+      const name = el.getAttribute('name');
+      if (!name || el.disabled) continue;
+
+      const type = controlType(el);
+      // Submit-ish controls only submit as the submitter, which nothing here is.
+      if (type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
+
+      if (type === 'checkbox' || type === 'radio') {
+        if (el.checked) fd.append(name, el.getAttribute('value') ?? 'on');
+      } else if (type === 'select') {
+        const options = [...el.querySelectorAll('option')];
+        // A single select with nothing marked submits its first option in a
+        // browser; linkedom reports no selection at all (see selectOption).
+        const chosen = options.filter(o => o.selected);
+        if (!chosen.length && !el.hasAttribute('multiple') && options.length) chosen.push(options[0]);
+        for (const opt of chosen) fd.append(name, opt.getAttribute('value') ?? opt.textContent);
+      } else {
+        fd.append(name, el.value ?? '');
+      }
+    }
+  }
+
+  return class FormData extends Native {
+    constructor(form) {
+      super();
+      if (form && typeof form.querySelectorAll === 'function') harvest(form, this);
+      else if (form !== undefined) throw new TypeError('FormData: not a form element');
+    }
+  };
+})();
 
 /**
  * Teach linkedom the attribute/property reflection a browser does for free.
