@@ -20,6 +20,7 @@ import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest, renderTagTree, renderTagNode, renderSelectCheckbox, renderRowBadges, renderUnfiledGroup } from '../../components/light/tags/TagTreeView.js';
 import { renderTagList, matchesListFilter, renderSortHeader } from '../../components/light/tags/TagListView.js';
 import { getChildrenOf, getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
+import { openTagPickerDialog, openOverlay } from '../../components/light/tags/TagPickerDialog.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -592,58 +593,30 @@ export default class TagsManagerPage extends Component {
       return;
     }
 
-    const parentItems = available.map(t => `
+    openTagPickerDialog({
+      title: `Move ${ids.length} tag${ids.length === 1 ? '' : 's'} under…`,
+      modalClass: 'tm-move-modal',
+      tags: available,
+      radioName: 'tm-bulk-parent',
+      renderItem: t => `
       <label class="tm-move-parent-item">
         <input type="radio" name="tm-bulk-parent" value="${t.id}">
         <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
-      </label>`).join('');
-
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active';
-    overlay['inner' + 'HTML'] = `
-      <div class="modal tm-move-modal" role="dialog" aria-modal="true">
-        <button class="modal-close" aria-label="Close">×</button>
-        <div class="modal-header">
-          <h3>Move ${ids.length} tag${ids.length === 1 ? '' : 's'} under…</h3>
-        </div>
-        <div class="modal-body">
-          <input type="text" class="form-input tm-move-search" placeholder="Search tags…" autocomplete="off">
-          <div class="tm-move-parent-list">${parentItems}</div>
-          <p class="form-hint">Replaces any parents these tags already have.</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" id="tm-bulk-move-cancel-btn">Cancel</button>
-          <button type="button" class="btn btn-primary" id="tm-bulk-move-confirm-btn">Move</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-
-    const close = () => overlay.remove();
-    overlay.querySelector('.modal-close').addEventListener('click', close);
-    overlay.querySelector('#tm-bulk-move-cancel-btn').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-
-    overlay.querySelector('.tm-move-search').addEventListener('input', e => {
-      const q = e.target.value.trim().toLowerCase();
-      overlay.querySelectorAll('.tm-move-parent-item').forEach(item => {
-        const name = item.querySelector('.tm-move-parent-name')?.textContent.toLowerCase() || '';
-        item.classList.toggle('hidden', q !== '' && !name.includes(q));
-      });
-    });
-
-    overlay.querySelector('#tm-bulk-move-confirm-btn').addEventListener('click', async () => {
-      const radio = overlay.querySelector('input[name="tm-bulk-parent"]:checked');
-      if (!radio) {
-        store.set('toast', { message: 'Select a parent first.', type: 'error' });
-        return;
-      }
-      const parentId = parseInt(radio.value, 10);
-      close();
-      await this._runBulk(
+      </label>`,
+      itemClass: 'tm-move-parent-item',
+      nameClass: 'tm-move-parent-name',
+      listClass: 'tm-move-parent-list',
+      searchClass: 'tm-move-search',
+      afterList: '<p class="form-hint">Replaces any parents these tags already have.</p>',
+      cancelId: 'tm-bulk-move-cancel-btn',
+      confirmId: 'tm-bulk-move-confirm-btn',
+      confirmLabel: 'Move',
+      onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
+      onConfirm: parentId => this._runBulk(
         ids,
         id => setTagParents(id, [parentId]),
         n => `${n} tag${n === 1 ? '' : 's'} moved.`,
-      );
+      ),
     });
   }
 
@@ -916,9 +889,7 @@ export default class TagsManagerPage extends Component {
     const target = this.state.tags.find(t => t.id === targetId);
     if (!drag || !target) return;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active';
-    overlay['inner' + 'HTML'] = `
+    const { overlay, close } = openOverlay(`
       <div class="modal" role="dialog" aria-modal="true" style="max-width:28rem">
         <div class="modal-header">
           <h3>Move "${escapeHtml(drag.name)}" under "${escapeHtml(target.name)}"?</h3>
@@ -937,12 +908,9 @@ export default class TagsManagerPage extends Component {
           </button>
           <button class="btn btn-secondary" id="drop-cancel-btn">Cancel</button>
         </div>
-      </div>`;
-    document.body.appendChild(overlay);
+      </div>`);
 
-    const close = () => overlay.remove();
     overlay.querySelector('#drop-cancel-btn').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
     overlay.querySelector('#drop-move-btn').addEventListener('click', async () => {
       close();
@@ -979,73 +947,47 @@ export default class TagsManagerPage extends Component {
       .filter(t => t.id !== loserId)
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const winnerItems = available.map(t => `
+    openTagPickerDialog({
+      title: `Merge "${escapeHtml(loser.name)}" into…`,
+      modalClass: 'tm-merge-modal',
+      tags: available,
+      radioName: 'tm-merge-winner',
+      renderItem: t => `
       <label class="tm-merge-winner-item">
         <input type="radio" name="tm-merge-winner" value="${t.id}">
         <div class="tm-merge-winner-info">
           <span class="tm-merge-winner-name">${escapeHtml(t.name)}</span>
           ${t.name_path ? `<span class="tm-merge-winner-path">${escapeHtml(t.name_path)}</span>` : ''}
         </div>
-      </label>`).join('');
-
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active';
-    overlay.innerHTML = `
-      <div class="modal tm-merge-modal" role="dialog" aria-modal="true">
-        <button class="modal-close" aria-label="Close">×</button>
-        <div class="modal-header">
-          <h3>Merge "${escapeHtml(loser.name)}" into…</h3>
-        </div>
-        <div class="modal-body">
-          <p class="tm-section-label">Select destination tag</p>
-          <input type="text" class="form-input tm-merge-search" placeholder="Search tags…" autocomplete="off">
-          <div class="tm-merge-winner-list">${winnerItems}</div>
+      </label>`,
+      itemClass: 'tm-merge-winner-item',
+      nameClass: 'tm-merge-winner-name',
+      listClass: 'tm-merge-winner-list',
+      searchClass: 'tm-merge-search',
+      beforeList: '<p class="tm-section-label">Select destination tag</p>',
+      afterList: `
           <p class="form-hint" style="margin-top:var(--spacing-md)">
             Posts tagged <strong>${escapeHtml(loser.name)}</strong> will be re-tagged.
             Hierarchy will be moved. <strong>${escapeHtml(loser.name)}</strong> will be deleted.
           </p>
           <label class="tm-flag-row" style="margin-top:var(--spacing-sm)">
             <input type="checkbox" id="tm-merge-redirect" checked> Keep redirect (not yet implemented)
-          </label>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" id="tm-merge-cancel-btn">Cancel</button>
-          <button type="button" class="btn btn-primary" id="tm-merge-confirm-btn">Merge Tags</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-
-    const close = () => overlay.remove();
-    overlay.querySelector('.modal-close').addEventListener('click', close);
-    overlay.querySelector('#tm-merge-cancel-btn').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-
-    overlay.querySelector('.tm-merge-search').addEventListener('input', e => {
-      const q = e.target.value.trim().toLowerCase();
-      overlay.querySelectorAll('.tm-merge-winner-item').forEach(item => {
-        const name = item.querySelector('.tm-merge-winner-name')?.textContent.toLowerCase() || '';
-        item.classList.toggle('hidden', q !== '' && !name.includes(q));
-      });
-    });
-
-    overlay.querySelector('#tm-merge-confirm-btn').addEventListener('click', async () => {
-      const radio = overlay.querySelector('input[name="tm-merge-winner"]:checked');
-      if (!radio) {
-        store.set('toast', { message: 'Select a destination tag first.', type: 'error' });
-        return;
-      }
-      const winnerId = parseInt(radio.value, 10);
-      const keepRedirect = overlay.querySelector('#tm-merge-redirect').checked;
-
-      close();
-      try {
-        await mergeTags(loserId, { winner_id: winnerId, keep_redirect: keepRedirect });
-        this._load();
-        this._refreshNavTags();
-        store.set('toast', { message: 'Tags merged successfully.', type: 'success' });
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Merge failed.', type: 'error' });
-      }
+          </label>`,
+      cancelId: 'tm-merge-cancel-btn',
+      confirmId: 'tm-merge-confirm-btn',
+      confirmLabel: 'Merge Tags',
+      onEmpty: () => store.set('toast', { message: 'Select a destination tag first.', type: 'error' }),
+      collect: overlay => overlay.querySelector('#tm-merge-redirect').checked,
+      onConfirm: async (winnerId, keepRedirect) => {
+        try {
+          await mergeTags(loserId, { winner_id: winnerId, keep_redirect: keepRedirect });
+          this._load();
+          this._refreshNavTags();
+          store.set('toast', { message: 'Tags merged successfully.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Merge failed.', type: 'error' });
+        }
+      },
     });
   }
 
@@ -1058,96 +1000,62 @@ export default class TagsManagerPage extends Component {
       .filter(t => t.id !== tagId)
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const parentItems = available.map(t => `
+    const positionOptions = parentId => [
+      `<option value="">At beginning</option>`,
+      ...this._getChildrenOf(parentId)
+        .filter(t => t.id !== tagId)
+        .map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
+    ].join('');
+
+    openTagPickerDialog({
+      title: `Move "${escapeHtml(tag.name)}"`,
+      modalClass: 'tm-move-modal',
+      tags: available,
+      radioName: 'tm-move-parent',
+      renderItem: t => `
       <label class="tm-move-parent-item">
         <input type="radio" name="tm-move-parent" value="${t.id}"${t.id === contextParentId ? ' checked' : ''}>
         <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
-      </label>`).join('');
-
-    const initialSiblings = contextParentId
-      ? this._getChildrenOf(contextParentId).filter(t => t.id !== tagId)
-      : [];
-
-    const posOpts = [
-      `<option value="">At beginning</option>`,
-      ...initialSiblings.map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
-    ].join('');
-
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active';
-    overlay['inner' + 'HTML'] = `
-      <div class="modal tm-move-modal" role="dialog" aria-modal="true">
-        <button class="modal-close" aria-label="Close">×</button>
-        <div class="modal-header">
-          <h3>Move "${escapeHtml(tag.name)}"</h3>
-        </div>
-        <div class="modal-body">
-          <p class="tm-section-label">Under parent</p>
-          <input type="text" class="form-input tm-move-search" placeholder="Search tags…" autocomplete="off">
-          <div class="tm-move-parent-list">${parentItems}</div>
+      </label>`,
+      itemClass: 'tm-move-parent-item',
+      nameClass: 'tm-move-parent-name',
+      listClass: 'tm-move-parent-list',
+      searchClass: 'tm-move-search',
+      beforeList: '<p class="tm-section-label">Under parent</p>',
+      afterList: `
           <p class="tm-section-label" style="margin-top:var(--spacing-md)">Position</p>
-          <select class="form-input tm-move-position-select">${posOpts}</select>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" id="tm-move-cancel-btn">Cancel</button>
-          <button type="button" class="btn btn-primary" id="tm-move-confirm-btn">Move</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-
-    const updatePosition = (parentId) => {
-      const siblings = parentId
-        ? this._getChildrenOf(parentId).filter(t => t.id !== tagId)
-        : [];
-      overlay.querySelector('.tm-move-position-select').innerHTML = [
-        `<option value="">At beginning</option>`,
-        ...siblings.map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
-      ].join('');
-    };
-
-    const close = () => overlay.remove();
-
-    overlay.querySelector('.modal-close').addEventListener('click', close);
-    overlay.querySelector('#tm-move-cancel-btn').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-
-    overlay.querySelector('.tm-move-search').addEventListener('input', e => {
-      const q = e.target.value.trim().toLowerCase();
-      overlay.querySelectorAll('.tm-move-parent-item').forEach(item => {
-        const name = item.querySelector('.tm-move-parent-name')?.textContent.toLowerCase() || '';
-        item.classList.toggle('hidden', q !== '' && !name.includes(q));
-      });
-    });
-
-    overlay.querySelector('.tm-move-parent-list').addEventListener('change', e => {
-      if (e.target.name === 'tm-move-parent') {
-        updatePosition(parseInt(e.target.value, 10));
-      }
-    });
-
-    overlay.querySelector('#tm-move-confirm-btn').addEventListener('click', async () => {
-      const radio = overlay.querySelector('input[name="tm-move-parent"]:checked');
-      if (!radio) {
-        store.set('toast', { message: 'Select a parent first.', type: 'error' });
-        return;
-      }
-      const parentId = parseInt(radio.value, 10);
-      const afterRaw = overlay.querySelector('.tm-move-position-select').value;
-      const afterId  = afterRaw ? parseInt(afterRaw, 10) : null;
-
-      close();
-      try {
-        const currentParents = (tag.parents || []).map(p => p.id);
-        if (!currentParents.includes(parentId)) {
-          await setTagParents(tagId, [...currentParents, parentId]);
+          <select class="form-input tm-move-position-select">${positionOptions(contextParentId)}</select>`,
+      cancelId: 'tm-move-cancel-btn',
+      confirmId: 'tm-move-confirm-btn',
+      confirmLabel: 'Move',
+      onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
+      onMount: overlay => {
+        // Re-offer positions whenever the chosen parent changes.
+        overlay.querySelector('.tm-move-parent-list').addEventListener('change', e => {
+          if (e.target.name === 'tm-move-parent') {
+            overlay.querySelector('.tm-move-position-select').innerHTML =
+              positionOptions(parseInt(e.target.value, 10));
+          }
+        });
+      },
+      collect: overlay => {
+        const raw = overlay.querySelector('.tm-move-position-select').value;
+        return raw ? parseInt(raw, 10) : null;
+      },
+      onConfirm: async (parentId, afterId) => {
+        try {
+          const currentParents = (tag.parents || []).map(p => p.id);
+          if (!currentParents.includes(parentId)) {
+            await setTagParents(tagId, [...currentParents, parentId]);
+          }
+          await moveTag(tagId, { parent_id: parentId, after_id: afterId });
+          this._load();
+          this._refreshNavTags();
+          store.set('toast', { message: 'Tag moved.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
         }
-        await moveTag(tagId, { parent_id: parentId, after_id: afterId });
-        this._load();
-        this._refreshNavTags();
-        store.set('toast', { message: 'Tag moved.', type: 'success' });
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
-      }
+      },
     });
   }
 
