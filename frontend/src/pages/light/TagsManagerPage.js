@@ -17,8 +17,8 @@ import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG, CHECK_SVG, TRASH_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
-import { buildTagTree, renderTagForest, renderTagTree, renderTagNode, renderSelectCheckbox, renderRowBadges, renderUnfiledGroup } from '../../components/light/tags/TagTreeView.js';
-import { renderTagList, matchesListFilter, renderSortHeader } from '../../components/light/tags/TagListView.js';
+import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
+import { renderTagList, matchesListFilter } from '../../components/light/tags/TagListView.js';
 import { getChildrenOf, getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
 import { openTagPickerDialog, openOverlay } from '../../components/light/tags/TagPickerDialog.js';
 import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.js';
@@ -82,9 +82,9 @@ export default class TagsManagerPage extends Component {
     } else if (error) {
       content = `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
     } else if (view === 'tree') {
-      content = `<div class="tags-tree-container">${this._renderForest(this._buildTree(tags))}</div>`;
+      content = `<div class="tags-tree-container">${renderTagForest(buildTagTree(tags), this._treeView())}</div>`;
     } else {
-      content = this._renderList(tags);
+      content = renderTagList(tags, this._listView());
     }
 
     return `
@@ -126,7 +126,7 @@ export default class TagsManagerPage extends Component {
   /** Tags "Select all" applies to — the list view honours its own filters. */
   _selectableTags() {
     if (this.state.view === 'list') {
-      return this.state.tags.filter(t => this._matchesListFilter(t));
+      return this.state.tags.filter(t => matchesListFilter(t, this._listView()));
     }
     return this.state.tags;
   }
@@ -143,15 +143,11 @@ export default class TagsManagerPage extends Component {
     };
   }
 
-  _renderList(tags) { return renderTagList(tags, this._listView()); }
-
-  _matchesListFilter(tag) { return matchesListFilter(tag, this._listView()); }
-
   _applyListFilter() {
     const byId = new Map(this.state.tags.map(t => [t.id, t]));
     this.container.querySelectorAll('.tm-tag-row').forEach(row => {
       const tag = byId.get(parseInt(row.dataset.id, 10));
-      row.classList.toggle('hidden', !tag || !this._matchesListFilter(tag));
+      row.classList.toggle('hidden', !tag || !matchesListFilter(tag, this._listView()));
     });
   }
 
@@ -204,13 +200,8 @@ export default class TagsManagerPage extends Component {
     if (btn) btn.classList.add('hidden');
   }
 
-  _renderSortHeader(field, label, className = '', title = '') {
-    return renderSortHeader(field, label, className, title, this._listView());
-  }
 
   // ── Tree view ────────────────────────────────────────────────────────────────
-  // Rendering lives in components/light/tags/TagTreeView.js as pure functions.
-  // These delegators keep the page's call sites (and its tests) unchanged.
 
   /** View descriptor the TagTreeView renderers read instead of this.state. */
   _treeView() {
@@ -218,25 +209,8 @@ export default class TagsManagerPage extends Component {
     return { expanded, unfiledExpanded, selectMode, selectedIds };
   }
 
-  _buildTree(tags) { return buildTagTree(tags); }
 
-  _renderForest(forest) { return renderTagForest(forest, this._treeView()); }
 
-  _renderTree(nodes, level = 0, parentId = null) {
-    return renderTagTree(nodes, level, parentId, this._treeView());
-  }
-
-  _renderNode(node, level, parentId) {
-    return renderTagNode(node, level, parentId, this._treeView());
-  }
-
-  _renderSelectCheckbox(tag, selectMode, isSelected) {
-    return renderSelectCheckbox(tag, selectMode, isSelected);
-  }
-
-  _renderRowBadges(node) { return renderRowBadges(node); }
-
-  _renderUnfiledGroup(unfiledTags) { return renderUnfiledGroup(unfiledTags, this._treeView()); }
 
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -380,7 +354,7 @@ export default class TagsManagerPage extends Component {
         collect(n.childrenNodes);
       }
     });
-    const { navRoots, otherRoots } = this._buildTree(this.state.tags);
+    const { navRoots, otherRoots } = buildTagTree(this.state.tags);
     collect(navRoots);
     collect(otherRoots);
     this.setState({ expanded });
@@ -645,7 +619,7 @@ export default class TagsManagerPage extends Component {
 
   _bindDragAndDrop() {
     bindDragAndDrop(this.container, {
-      siblingBefore: (targetId, parentId) => this._getSiblingBefore(targetId, parentId),
+      siblingBefore: (targetId, parentId) => getSiblingBefore(this.state.tags, targetId, parentId),
       onReparent: (dragId, targetId) => this._openDropOnConfirm(dragId, targetId),
       onInvalidReorder: () => store.set('toast', {
         message: 'Drop ON a tag to reparent. Reordering only works within the same parent.',
@@ -662,11 +636,6 @@ export default class TagsManagerPage extends Component {
     });
   }
 
-  _getSiblingBefore(targetId, parentId) {
-    return getSiblingBefore(this.state.tags, targetId, parentId);
-  }
-
-  _getChildrenOf(parentId) { return getChildrenOf(this.state.tags, parentId); }
 
   // Confirm dialog shown when dragging one tag onto another.
   _openDropOnConfirm(dragId, targetId) {
@@ -787,7 +756,7 @@ export default class TagsManagerPage extends Component {
 
     const positionOptions = parentId => [
       `<option value="">At beginning</option>`,
-      ...this._getChildrenOf(parentId)
+      ...getChildrenOf(this.state.tags, parentId)
         .filter(t => t.id !== tagId)
         .map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
     ].join('');
@@ -880,7 +849,7 @@ export default class TagsManagerPage extends Component {
     const slugInput = modal.querySelector('#modal-slug');
     if (isEdit) slugInput.dataset.manual = '1';
     nameInput.addEventListener('input', () => {
-      if (!slugInput.dataset.manual) slugInput.value = this._slugify(nameInput.value);
+      if (!slugInput.dataset.manual) slugInput.value = slugifyTagName(nameInput.value);
     });
     slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
 
@@ -1041,8 +1010,6 @@ export default class TagsManagerPage extends Component {
     }
     this._didPushUrl = false;
   }
-
-  _slugify(text) { return slugifyTagName(text); }
 
   // ── Data operations ──────────────────────────────────────────────────────────
 
