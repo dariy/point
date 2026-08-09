@@ -18,7 +18,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG, CHECK_SVG, TRASH_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
-import { renderTagList, matchesListFilter } from '../../components/light/tags/TagListView.js';
+import { renderTagList, renderFilterChips, matchesListFilter } from '../../components/light/tags/TagListView.js';
 import { getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
 import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.js';
 import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/tagGestures.js';
@@ -158,9 +158,7 @@ export default class TagsManagerPage extends Component {
   _updateFilterChips() {
     const chips = this.container.querySelector('#tm-filter-chips');
     if (!chips) return;
-    chips.innerHTML = this._listFilterParents.map(p =>
-      `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">×</span></button>`
-    ).join('');
+    chips.innerHTML = renderFilterChips(this._listFilterParents);
     chips.querySelectorAll('.tm-filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const id = parseInt(chip.dataset.removeId, 10);

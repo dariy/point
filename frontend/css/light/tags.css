@@ -1236,13 +1236,14 @@
 }
 
 /* ===========================
-   Move… dialog (touch parity for drag)
+   Tag picker dialogs — Move… (touch parity for drag), bulk Move…, Merge…
+   One rule set, because they are one component (TagPickerDialog).
    =========================== */
-.tm-move-modal {
+.tm-picker-modal {
     width: min(28rem, calc(100vw - 2rem));
 }
 
-.tm-move-parent-list {
+.tm-picker-list {
     max-height: 14rem;
     overflow-y: auto;
     border: var(--border-width) solid var(--border-primary);
@@ -1252,7 +1253,7 @@
     margin-bottom: var(--spacing-sm);
 }
 
-.tm-move-parent-item {
+.tm-picker-item {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -1262,18 +1263,34 @@
     transition: background-color var(--transition-fast);
 }
 
-.tm-move-parent-item:hover {
+.tm-picker-item:hover {
     background-color: var(--surface-hover);
 }
 
-.tm-move-parent-item input[type="radio"] {
+.tm-picker-item input[type="radio"] {
     flex-shrink: 0;
     accent-color: var(--color-primary);
     cursor: pointer;
 }
 
-.tm-move-parent-name {
+.tm-picker-name {
     color: var(--text-primary);
+}
+
+/* Merge… stacks the tag's full path under its name; the others are one line. */
+.tm-picker-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-0-0625);
+    min-width: 0;
+}
+
+.tm-picker-path {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Drop-onto confirm dialog — stacked action buttons */

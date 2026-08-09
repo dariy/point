@@ -318,9 +318,9 @@ describe('tagFlows', () => {
     test('offers every tag outside the selection, and warns that it replaces', () => {
       openBulkMoveDialog({ tags: FOREST, ids: [1, 2], onDone });
 
-      assert.deepEqual(qa('.tm-move-parent-name').map(s => s.textContent),
+      assert.deepEqual(qa('.tm-picker-name').map(s => s.textContent),
         ['Food', 'Kyoto', 'Osaka', 'Ramen']);
-      assert.match(q('.tm-move-modal').textContent, /Move 2 tags under…/);
+      assert.match(q('.tm-picker-modal').textContent, /Move 2 tags under…/);
       assert.match(q('.form-hint').textContent, /Replaces any parents/);
     });
 
@@ -361,7 +361,7 @@ describe('tagFlows', () => {
     test('offers every other tag, and spells out what merging destroys', () => {
       openMergeDialog({ tags: FOREST, loserId: 3, onDone });
 
-      assert.deepEqual(qa('.tm-merge-winner-name').map(s => s.textContent),
+      assert.deepEqual(qa('.tm-picker-name').map(s => s.textContent),
         ['Food', 'Japan', 'Osaka', 'Ramen', 'Travel']);
       const body = q('.modal-body').textContent;
       assert.match(body, /Posts tagged\s+Kyoto\s+will be re-tagged/);
@@ -374,7 +374,7 @@ describe('tagFlows', () => {
         loserId: 1,
         onDone,
       });
-      assert.equal(q('.tm-merge-winner-path').textContent, 'Travel / Japan / Osaka');
+      assert.equal(q('.tm-picker-path').textContent, 'Travel / Japan / Osaka');
     });
 
     test('escapes the names it interpolates', () => {
@@ -519,11 +519,11 @@ describe('tagFlows', () => {
     test('the search box narrows the parent list', () => {
       openMoveDialog({ tags: FOREST, tagId: 3, contextParentId: null, onDone });
 
-      type(q('.tm-move-search'), 'ram');
+      type(q('.tm-picker-search'), 'ram');
 
       assert.deepEqual(
-        qa('.tm-move-parent-item').filter(i => !i.classList.contains('hidden'))
-          .map(i => i.querySelector('.tm-move-parent-name').textContent),
+        qa('.tm-picker-item').filter(i => !i.classList.contains('hidden'))
+          .map(i => i.querySelector('.tm-picker-name').textContent),
         ['Ramen'],
       );
     });

@@ -56,6 +56,20 @@ export function sortTagsForList(tags, sortField, sortOrder) {
   });
 }
 
+/**
+ * The active parent-filter chips.
+ *
+ * Exported because the page re-renders this row on its own whenever a chip is
+ * added or removed, without going through renderTagList. Two hand-rolled copies
+ * of the markup drifted once already — the second one had a bare "×" where this
+ * has the icon, so a chip changed shape the moment anything touched the row.
+ */
+export function renderFilterChips(filterParents = []) {
+  return filterParents.map(p =>
+    `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">${X_SVG}</span></button>`
+  ).join('');
+}
+
 export function renderSortHeader(field, label, className = '', title = '', { sortField, sortOrder } = {}) {
   const isActive = sortField === field;
   const icon = isActive ? (sortOrder === 'asc' ? ' ▴' : ' ▾') : '';
@@ -110,9 +124,7 @@ export function renderTagList(tags, view) {
         </tr>`;
   }).join('');
 
-  const chips = filterParents.map(p =>
-    `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">${X_SVG}</span></button>`
-  ).join('');
+  const chips = renderFilterChips(filterParents);
   const hasFilters = search || filterParents.length > 0;
 
   return `

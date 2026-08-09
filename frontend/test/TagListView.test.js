@@ -6,6 +6,7 @@ import {
   sortTagsForList,
   renderSortHeader,
   renderTagList,
+  renderFilterChips,
 } from '../src/components/light/tags/TagListView.js';
 
 // No DOM stubs: TagListView is pure, same as TagTreeView.
@@ -203,6 +204,21 @@ describe('renderTagList', () => {
   test('active parent chips render with a remove target', () => {
     const html = renderTagList(tags, view({ filterParents: [{ id: 9, name: 'Japan' }] }));
     assert.match(html, /tm-filter-chip" data-remove-id="9"/);
+  });
+
+  test('the list embeds the same chips the page re-renders with', () => {
+    const filterParents = [{ id: 9, name: 'Japan' }, { id: 4, name: 'Peru' }];
+    const chips = renderFilterChips(filterParents);
+
+    assert.match(chips, /<svg/, 'the remove target is the icon, not a bare ×');
+    assert.ok(
+      renderTagList(tags, view({ filterParents })).includes(chips),
+      'a chip must not change shape between first paint and a re-render',
+    );
+  });
+
+  test('chip names are escaped', () => {
+    assert.match(renderFilterChips([{ id: 1, name: '<img src=x>' }]), /&lt;img src=x&gt;/);
   });
 
   test('the chips container is always present, even when empty', () => {

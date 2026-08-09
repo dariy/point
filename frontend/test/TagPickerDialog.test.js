@@ -24,7 +24,7 @@ const tags = [
 /** Minimal valid picker config; each test overrides what it cares about. */
 const open = (over = {}) => TagPickerDialog.openTagPickerDialog({
   title: 'Pick one',
-  modalClass: 'tm-move-modal',
+  modalClass: 'tm-picker-modal',
   tags,
   radioName: 'pick',
   renderItem: t => `<label class="item"><input type="radio" name="pick" value="${t.id}"><span class="nm">${t.name}</span></label>`,

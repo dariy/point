@@ -4,7 +4,7 @@ import assert from 'node:assert';
 // These assertions target the extracted modules directly rather than through
 // the page — the page no longer wraps them.
 import { buildTagTree, renderTagForest, renderTagNode, renderRowBadges } from '../src/components/light/tags/TagTreeView.js';
-import { matchesListFilter } from '../src/components/light/tags/TagListView.js';
+import { matchesListFilter, renderFilterChips } from '../src/components/light/tags/TagListView.js';
 
 /** The view descriptor the TagTreeView renderers take in place of page state. */
 const treeView = (over = {}) => ({
@@ -134,6 +134,17 @@ describe('TagsManagerPage', () => {
 
     assert.ok(matchesListFilter(tag, { filterParents: [{ id: 9, name: 'Japan' }] }), 'matches an active parent chip');
     assert.ok(!matchesListFilter(tag, { filterParents: [{ id: 7, name: 'Peru' }] }), 'rejects a parent chip it lacks')
+  });
+
+  test('re-rendered chips keep the shape renderTagList painted', () => {
+    const chipsEl = { innerHTML: '', querySelectorAll: () => [] };
+    const container = { querySelector: sel => (sel === '#tm-filter-chips' ? chipsEl : null) };
+    const page = new TagsManagerPage(container);
+    page._listFilterParents = [{ id: 9, name: 'Japan' }];
+
+    page._updateFilterChips();
+    assert.equal(chipsEl.innerHTML, renderFilterChips(page._listFilterParents));
+    assert.match(chipsEl.innerHTML, /<svg/, 'the × icon survives a re-render');
   });
 
   test('select all is limited to filtered tags in list view', () => {

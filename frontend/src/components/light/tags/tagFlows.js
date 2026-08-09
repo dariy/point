@@ -169,18 +169,18 @@ export function openBulkMoveDialog({ tags, ids, onDone }) {
 
   return openTagPickerDialog({
     title: `Move ${pluralTags(ids.length)} under…`,
-    modalClass: 'tm-move-modal',
+    modalClass: 'tm-picker-modal',
     tags: available,
     radioName: 'tm-bulk-parent',
     renderItem: t => `
-      <label class="tm-move-parent-item">
+      <label class="tm-picker-item">
         <input type="radio" name="tm-bulk-parent" value="${t.id}">
-        <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
+        <span class="tm-picker-name">${escapeHtml(t.name)}</span>
       </label>`,
-    itemClass: 'tm-move-parent-item',
-    nameClass: 'tm-move-parent-name',
-    listClass: 'tm-move-parent-list',
-    searchClass: 'tm-move-search',
+    itemClass: 'tm-picker-item',
+    nameClass: 'tm-picker-name',
+    listClass: 'tm-picker-list',
+    searchClass: 'tm-picker-search',
     afterList: '<p class="form-hint">Replaces any parents these tags already have.</p>',
     cancelId: 'tm-bulk-move-cancel-btn',
     confirmId: 'tm-bulk-move-confirm-btn',
@@ -210,21 +210,21 @@ export function openMergeDialog({ tags, loserId, onDone }) {
 
   return openTagPickerDialog({
     title: `Merge "${escapeHtml(loser.name)}" into…`,
-    modalClass: 'tm-merge-modal',
+    modalClass: 'tm-picker-modal',
     tags: candidateTags(tags, [loserId]),
     radioName: 'tm-merge-winner',
     renderItem: t => `
-      <label class="tm-merge-winner-item">
+      <label class="tm-picker-item">
         <input type="radio" name="tm-merge-winner" value="${t.id}">
-        <div class="tm-merge-winner-info">
-          <span class="tm-merge-winner-name">${escapeHtml(t.name)}</span>
-          ${t.name_path ? `<span class="tm-merge-winner-path">${escapeHtml(t.name_path)}</span>` : ''}
+        <div class="tm-picker-item-info">
+          <span class="tm-picker-name">${escapeHtml(t.name)}</span>
+          ${t.name_path ? `<span class="tm-picker-path">${escapeHtml(t.name_path)}</span>` : ''}
         </div>
       </label>`,
-    itemClass: 'tm-merge-winner-item',
-    nameClass: 'tm-merge-winner-name',
-    listClass: 'tm-merge-winner-list',
-    searchClass: 'tm-merge-search',
+    itemClass: 'tm-picker-item',
+    nameClass: 'tm-picker-name',
+    listClass: 'tm-picker-list',
+    searchClass: 'tm-picker-search',
     beforeList: '<p class="tm-section-label">Select destination tag</p>',
     afterList: `
           <p class="form-hint" style="margin-top:var(--spacing-md)">
@@ -268,18 +268,18 @@ export function openMoveDialog({ tags, tagId, contextParentId, onDone }) {
 
   return openTagPickerDialog({
     title: `Move "${escapeHtml(tag.name)}"`,
-    modalClass: 'tm-move-modal',
+    modalClass: 'tm-picker-modal',
     tags: candidateTags(tags, [tagId]),
     radioName: 'tm-move-parent',
     renderItem: t => `
-      <label class="tm-move-parent-item">
+      <label class="tm-picker-item">
         <input type="radio" name="tm-move-parent" value="${t.id}"${t.id === contextParentId ? ' checked' : ''}>
-        <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
+        <span class="tm-picker-name">${escapeHtml(t.name)}</span>
       </label>`,
-    itemClass: 'tm-move-parent-item',
-    nameClass: 'tm-move-parent-name',
-    listClass: 'tm-move-parent-list',
-    searchClass: 'tm-move-search',
+    itemClass: 'tm-picker-item',
+    nameClass: 'tm-picker-name',
+    listClass: 'tm-picker-list',
+    searchClass: 'tm-picker-search',
     beforeList: '<p class="tm-section-label">Under parent</p>',
     afterList: `
           <p class="tm-section-label" style="margin-top:var(--spacing-md)">Position</p>
@@ -290,7 +290,7 @@ export function openMoveDialog({ tags, tagId, contextParentId, onDone }) {
     onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
     onMount: overlay => {
       // Re-offer positions whenever the chosen parent changes.
-      overlay.querySelector('.tm-move-parent-list').addEventListener('change', e => {
+      overlay.querySelector('.tm-picker-list').addEventListener('change', e => {
         if (e.target.name === 'tm-move-parent') {
           overlay.querySelector('.tm-move-position-select').innerHTML =
             positionOptions(tags, parseInt(e.target.value, 10), tagId);
