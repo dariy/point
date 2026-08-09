@@ -247,6 +247,23 @@ function patchFormReflection(win) {
   reflect('HTMLInputElement', 'checked', 'checked');
   reflect('HTMLOptionElement', 'selected', 'selected');
 
+  // `indeterminate` is not attribute-backed — there is no such content
+  // attribute in HTML, only the property — so it needs a default rather than
+  // reflection. linkedom leaves it undefined until something assigns it, while
+  // a browser reports false from the start. Without this, asserting that a box
+  // is NOT partial reads `undefined`, and `assert.equal(x, false)` fails on a
+  // checkbox that a browser would agree is exactly what the test expected.
+  const inputProto = win.HTMLInputElement?.prototype;
+  if (inputProto && !Object.getOwnPropertyDescriptor(inputProto, 'indeterminate')) {
+    const KEY = Symbol('indeterminate');
+    Object.defineProperty(inputProto, 'indeterminate', {
+      configurable: true,
+      get() { return this[KEY] ?? false; },
+      set(v) { this[KEY] = !!v; },
+    });
+    undo.push(() => delete inputProto.indeterminate);
+  }
+
   return () => undo.forEach(fn => fn());
 }
 

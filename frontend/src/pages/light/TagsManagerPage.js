@@ -23,6 +23,7 @@ import { getChildrenOf, getSiblingBefore } from '../../components/light/tags/tag
 import { openTagPickerDialog, openOverlay } from '../../components/light/tags/TagPickerDialog.js';
 import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.js';
 import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/tagGestures.js';
+import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -834,7 +835,7 @@ export default class TagsManagerPage extends Component {
     modal['inner' + 'HTML'] = html;
     document.body.appendChild(modal);
     this._modal = modal;
-    this._initTagToggleTrees(modal);
+    setupTagToggleTrees(modal);
 
     // Reflect the open tag in the browser URL
     const urlSlug = isEdit ? f.slug : 'new';
@@ -932,71 +933,6 @@ export default class TagsManagerPage extends Component {
     document.addEventListener('keydown', this._modalKeyHandler);
     nameInput.focus();
     setupTextareaMaximizer(modal);
-  }
-
-
-
-  _initTagToggleTrees(modal) {
-    const updateIndeterminate = (tree) => {
-      const nodes = Array.from(tree.querySelectorAll('.tag-toggle-node')).reverse();
-      nodes.forEach(node => {
-        const ownCb = node.querySelector(':scope > .tag-toggle-row .tag-toggle input[type="checkbox"]');
-        if (!ownCb) return;
-        const descCbs = node.querySelectorAll('.tag-toggle-node input[type="checkbox"]');
-        if (!descCbs.length) return;
-        const anyActive = Array.from(descCbs).some(cb => cb.checked || cb.indeterminate);
-        ownCb.indeterminate = !ownCb.checked && anyActive;
-      });
-    };
-
-    modal.querySelectorAll('[data-tt-toggle]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const list = modal.querySelector(`#${btn.dataset.ttToggle}`);
-        if (!list) return;
-        const open = !list.classList.contains('hidden');
-        list.classList.toggle('hidden', open);
-        btn.setAttribute('aria-expanded', String(!open));
-        btn.textContent = open ? '▶' : '▼';
-      });
-    });
-
-    modal.querySelectorAll('.tag-toggle-tree.level-0').forEach(tree => updateIndeterminate(tree));
-
-    modal.querySelectorAll('.tag-toggle-tree input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const tree = cb.closest('.tag-toggle-tree.level-0');
-        if (tree) updateIndeterminate(tree);
-      });
-    });
-
-    modal.querySelectorAll('.tm-toggle-search').forEach(input => {
-      const container = input.nextElementSibling;
-      if (!container) return;
-      input.addEventListener('input', () => {
-        const q = input.value.trim().toLowerCase();
-        const allNodes = Array.from(container.querySelectorAll('.tag-toggle-node'));
-        const allLists = Array.from(container.querySelectorAll('.tag-toggle-tree'));
-        if (!q) {
-          allNodes.forEach(n => n.classList.remove('hidden'));
-          allLists.forEach(l => l.classList.remove('hidden'));
-          return;
-        }
-        allNodes.forEach(n => n.classList.add('hidden'));
-        allLists.forEach(l => l.classList.add('hidden'));
-        allNodes.forEach(n => {
-          const label = n.querySelector(':scope > .tag-toggle-row .tag-toggle span');
-          if (label && label.textContent.toLowerCase().includes(q)) {
-            let el = n;
-            while (el && el !== container) {
-              if (el.classList.contains('tag-toggle-node') || el.classList.contains('tag-toggle-tree')) {
-                el.classList.remove('hidden');
-              }
-              el = el.parentElement;
-            }
-          }
-        });
-      });
-    });
   }
 
   _closeModal() {
