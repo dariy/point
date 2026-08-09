@@ -158,7 +158,7 @@ func TestSecurityHeaders(t *testing.T) {
 		{"X-Content-Type-Options", "nosniff"},
 		{"X-Frame-Options", "DENY"},
 		{"X-Xss-Protection", "1; mode=block"},
-		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'"},
+		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
 		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
 	}

@@ -497,10 +497,18 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		connectSrc += " " + extra
 	}
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; frame-ancestors 'none'",
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		// base-uri and form-action have no default-src fallback, so leaving them
+		// out means "anything goes": an injected <base> could repoint every
+		// relative script/form URL at an attacker origin, and an injected form
+		// could post credentials off-site. Both are 'self' — every form in the
+		// frontend targets a same-origin path (/search), and nothing sets <base>.
+		// object-src does fall back to default-src, but 'none' is stated outright
+		// so the plugin surface stays closed even if default-src is ever widened;
+		// no <object>/<embed>/<applet> exists in the frontend.
+		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		// HSTS: instruct browsers to only reach this origin over HTTPS for a year,
 		// including subdomains. Echo only emits the header when the request is
