@@ -21,9 +21,26 @@ import { parseHTML } from 'linkedom';
 
 const GLOBAL_KEYS = ['window', 'document', 'Event', 'MouseEvent', 'KeyboardEvent',
   'CustomEvent', 'Node', 'HTMLElement', 'getComputedStyle', 'requestAnimationFrame',
-  'cancelAnimationFrame', 'matchMedia'];
+  'cancelAnimationFrame', 'matchMedia', 'location', 'history'];
 
-export function setupDOM(html = '<!doctype html><html><body></body></html>') {
+/**
+ * A history/location pair that records pushes instead of navigating.
+ * Pages here read `location.pathname` and call `history.pushState` directly
+ * as globals, so both have to exist standalone, not only on `window`.
+ */
+function makeNavigation(path = '/') {
+  const location = { pathname: path, search: '', hash: '', href: 'http://localhost' + path };
+  const entries = [];
+  const history = {
+    entries,
+    pushState(state, title, url) { entries.push(['push', url]); location.pathname = String(url); },
+    replaceState(state, title, url) { entries.push(['replace', url]); location.pathname = String(url); },
+    back() { entries.push(['back']); },
+  };
+  return { location, history };
+}
+
+export function setupDOM(html = '<!doctype html><html><body></body></html>', { path = '/' } = {}) {
   const saved = new Map(GLOBAL_KEYS.map(k => [k, globalThis[k]]));
   const win = parseHTML(html);
 
@@ -48,12 +65,20 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>') {
   win.requestAnimationFrame ??= globalThis.requestAnimationFrame;
   win.matchMedia ??= globalThis.matchMedia;
 
+  const nav = makeNavigation(path);
+  globalThis.location = nav.location;
+  globalThis.history = nav.history;
+  win.location = nav.location;
+  win.history = nav.history;
+
   const unpatch = patchFormReflection(win);
 
   return {
     window: win,
     document: win.document,
     body: win.document.body,
+    location: nav.location,
+    history: nav.history,
     cleanup() {
       unpatch();
       for (const [k, v] of saved) {
