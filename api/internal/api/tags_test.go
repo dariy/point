@@ -678,3 +678,78 @@ func insertHidePostsSystemTag(h *testHandlers) int64 {
 	})
 	return tag.ID
 }
+
+// TestTagHandler_SetRelations covers PUT /api/tags/:id/{parents,children} —
+// the two endpoints that share setTagRelations — including the empty-array
+// clear and the rendered response reflecting the write.
+func TestTagHandler_SetRelations(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	tagSvc := services.NewTagService(repo)
+	handler := NewTagHandler(tagSvc, services.NewSettingsService(repo))
+	e := echo.New()
+	ctx := context.Background()
+
+	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Parent"})
+	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Child"})
+	subject, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Subject"})
+
+	call := func(t *testing.T, fn func(echo.Context) error, id int64, body string) map[string]interface{} {
+		t.Helper()
+		idStr := strconv.FormatInt(id, 10)
+		req := httptest.NewRequest(http.MethodPut, "/api/tags/"+idStr+"/parents", strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(idStr)
+		if err := fn(c); err != nil {
+			t.Fatalf("handler failed: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rec.Code)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("bad response body: %v", err)
+		}
+		return resp
+	}
+
+	resp := call(t, handler.SetTagParents, subject.ID, `{"ids":[`+strconv.FormatInt(parent.ID, 10)+`]}`)
+	if parents, _ := resp["parents"].([]interface{}); len(parents) != 1 {
+		t.Errorf("response parents = %v, want the one just set", resp["parents"])
+	}
+
+	resp = call(t, handler.SetTagChildren, subject.ID, `{"ids":[`+strconv.FormatInt(child.ID, 10)+`]}`)
+	if children, _ := resp["children"].([]interface{}); len(children) != 1 {
+		t.Errorf("response children = %v, want the one just set", resp["children"])
+	}
+
+	// An empty array clears the relationships.
+	resp = call(t, handler.SetTagParents, subject.ID, `{"ids":[]}`)
+	if parents, _ := resp["parents"].([]interface{}); len(parents) != 0 {
+		t.Errorf("response parents = %v, want them cleared", resp["parents"])
+	}
+
+	g, _ := tagSvc.GetTagSnapshot(ctx)
+	if len(g.Parents[subject.ID]) != 0 {
+		t.Errorf("stored parents = %v, want none", g.Parents[subject.ID])
+	}
+	if len(g.Children[subject.ID]) != 1 {
+		t.Errorf("stored children = %v, want the child to survive", g.Children[subject.ID])
+	}
+
+	// A malformed body is a 400, not a partial write.
+	req := httptest.NewRequest(http.MethodPut, "/api/tags/1/parents", strings.NewReader(`{"ids":`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	c := e.NewContext(req, httptest.NewRecorder())
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(subject.ID, 10))
+	if err := handler.SetTagParents(c); err == nil {
+		t.Error("expected an error for a malformed body")
+	}
+}

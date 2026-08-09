@@ -3,12 +3,14 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"point-api/internal/models"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -204,5 +206,151 @@ func TestTagHandler_PutPartialSemantics(t *testing.T) {
 	}
 	if len(g.Parents[tag.ID]) != 0 {
 		t.Errorf("expected parents cleared, got %v", g.Parents[tag.ID])
+	}
+}
+
+// patchFixture is a tag with every optional column populated, so a test can
+// tell "left alone" apart from "cleared".
+func patchFixture() models.Tag {
+	return models.Tag{
+		ID:          7,
+		Name:        "Original",
+		Slug:        "original",
+		Kind:        "topic",
+		Description: sql.NullString{String: "Original text", Valid: true},
+		NavOrder:    sql.NullInt64{Int64: 2, Valid: true},
+		Latitude:    sql.NullFloat64{Float64: 1.23, Valid: true},
+		Longitude:   sql.NullFloat64{Float64: 4.56, Valid: true},
+	}
+}
+
+func decodeFields(t *testing.T, body string) map[string]json.RawMessage {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &fields); err != nil {
+		t.Fatalf("bad test body %q: %v", body, err)
+	}
+	return fields
+}
+
+// TestTagPatchParams_PresentKeySemantics pins the absent/null/value distinction
+// the PUT and PATCH bodies rely on, one field at a time.
+func TestTagPatchParams_PresentKeySemantics(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		check func(t *testing.T, p services.UpdateTagParams)
+	}{
+		{
+			name: "an empty body changes nothing",
+			body: `{}`,
+			check: func(t *testing.T, p services.UpdateTagParams) {
+				if p.Name != "Original" || p.Slug != "original" || p.Kind != "topic" {
+					t.Errorf("scalars changed: %+v", p)
+				}
+				if p.Description != "Original text" {
+					t.Errorf("description = %q, want the seeded text", p.Description)
+				}
+				if p.NavOrder == nil || *p.NavOrder != 2 {
+					t.Errorf("nav_order = %v, want 2", p.NavOrder)
+				}
+				if p.Latitude == nil || *p.Latitude != 1.23 {
+					t.Errorf("latitude = %v, want 1.23", p.Latitude)
+				}
+			},
+		},
+		{
+			name: "a present scalar overrides",
+			body: `{"name":"Renamed","hidden":true}`,
+			check: func(t *testing.T, p services.UpdateTagParams) {
+				if p.Name != "Renamed" {
+					t.Errorf("name = %q, want Renamed", p.Name)
+				}
+				if !p.Hidden {
+					t.Error("hidden should be true")
+				}
+				if p.Slug != "original" {
+					t.Errorf("slug = %q, want it untouched", p.Slug)
+				}
+			},
+		},
+		{
+			name: "null clears the nullable numbers",
+			body: `{"nav_order":null,"latitude":null,"longitude":null}`,
+			check: func(t *testing.T, p services.UpdateTagParams) {
+				if p.NavOrder != nil || p.Latitude != nil || p.Longitude != nil {
+					t.Errorf("expected all three cleared, got %v/%v/%v", p.NavOrder, p.Latitude, p.Longitude)
+				}
+			},
+		},
+		{
+			name: "null clears the description",
+			body: `{"description":null}`,
+			check: func(t *testing.T, p services.UpdateTagParams) {
+				if p.Description != "" {
+					t.Errorf("description = %q, want cleared", p.Description)
+				}
+			},
+		},
+		{
+			name: "a present nullable is set even when it does not parse",
+			body: `{"nav_order":"nonsense"}`,
+			check: func(t *testing.T, p services.UpdateTagParams) {
+				if p.NavOrder == nil || *p.NavOrder != 0 {
+					t.Errorf("nav_order = %v, want a zero value (the key was present)", p.NavOrder)
+				}
+			},
+		},
+		{
+			name: "an unparseable scalar leaves the current value",
+			body: `{"name":123}`,
+			check: func(t *testing.T, p services.UpdateTagParams) {
+				if p.Name != "Original" {
+					t.Errorf("name = %q, want the seeded value", p.Name)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := tagPatchParams(patchFixture(), decodeFields(t, tc.body))
+			if p.ID != 7 {
+				t.Errorf("id = %d, want 7", p.ID)
+			}
+			tc.check(t, p)
+		})
+	}
+}
+
+func TestPatchIDList(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		wantIDs []int64
+		wantOK  bool
+	}{
+		{"absent key is left untouched", `{}`, nil, false},
+		{"null is left untouched", `{"parent_ids":null}`, nil, false},
+		{"a malformed value is left untouched", `{"parent_ids":"1,2"}`, nil, false},
+		{"an empty array clears", `{"parent_ids":[]}`, []int64{}, true},
+		{"a populated array replaces", `{"parent_ids":[1,2]}`, []int64{1, 2}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ids, ok := patchIDList(decodeFields(t, tc.body), "parent_ids")
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if len(ids) != len(tc.wantIDs) {
+				t.Fatalf("ids = %v, want %v", ids, tc.wantIDs)
+			}
+			for i := range ids {
+				if ids[i] != tc.wantIDs[i] {
+					t.Fatalf("ids = %v, want %v", ids, tc.wantIDs)
+				}
+			}
+		})
 	}
 }

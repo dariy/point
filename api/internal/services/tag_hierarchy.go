@@ -84,6 +84,11 @@ func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs [
 	if err := s.repo.ClearTagParents(ctx, tagID); err != nil {
 		return err
 	}
+	// The clear alone changes the graph. AddTagRelationship invalidates for the
+	// edges it adds, but an empty parentIDs list adds none — without this the
+	// cache would keep serving the parents that were just removed.
+	s.Invalidate()
+
 	for _, parentID := range parentIDs {
 		if err := s.AddTagRelationship(ctx, parentID, tagID); err != nil {
 			return err
@@ -98,6 +103,8 @@ func (s *TagService) SetTagChildren(ctx context.Context, tagID int64, childIDs [
 	if err := s.repo.ClearTagChildren(ctx, tagID); err != nil {
 		return err
 	}
+	s.Invalidate()
+
 	for _, childID := range childIDs {
 		if err := s.AddTagRelationship(ctx, tagID, childID); err != nil {
 			return err
