@@ -440,4 +440,42 @@ func TestTagService_GetHierarchicalNavTags_Scoped(t *testing.T) {
 			t.Errorf("GetHierarchicalNavTags(unknown root) = (%v, %v), want empty", nodeNames(got), err)
 		}
 	})
+
+	t.Run("minPosts does not filter the admin tree", func(t *testing.T) {
+		g := navSubtreeFixture()
+		g.CountsPublic[11] = 1 // A: below the threshold the public tree would apply
+		root := int64(2)
+
+		got, _ := graphService(g).GetHierarchicalNavTags(ctx, &root, false, 3)
+		if names := nodeNames(got); !reflect.DeepEqual(names, []string{"C", "D", "A", "B"}) {
+			t.Errorf("admin scoped roots at minPosts=3 = %v, want A kept: the threshold is public-only", names)
+		}
+	})
+
+	t.Run("a dangling child id is dropped rather than becoming an empty node", func(t *testing.T) {
+		g := navSubtreeFixture()
+		g.Children[2] = append(g.Children[2], 99) // 99 is not in ByID
+		root := int64(2)
+
+		got, _ := graphService(g).GetHierarchicalNavTags(ctx, &root, true, 0)
+		if names := nodeNames(got); !reflect.DeepEqual(names, []string{"C", "D", "A", "B"}) {
+			t.Errorf("scoped roots = %v, want the dangling id absent", names)
+		}
+	})
+
+	// The graph is a shared cached snapshot and g.Children carries the edges in
+	// their own sort_order, so ordering the nav tree must not reorder it.
+	t.Run("building a scoped tree leaves the graph's edge order alone", func(t *testing.T) {
+		g := navSubtreeFixture()
+		root := int64(2)
+		before := append([]int64(nil), g.Children[2]...)
+
+		if _, err := graphService(g).GetHierarchicalNavTags(ctx, &root, true, 0); err != nil {
+			t.Fatalf("GetHierarchicalNavTags: %v", err)
+		}
+
+		if !reflect.DeepEqual(g.Children[2], before) {
+			t.Errorf("g.Children[2] = %v after the walk, want %v", g.Children[2], before)
+		}
+	})
 }

@@ -162,18 +162,43 @@ func (g *TagGraph) GetDescendantIDs(tagID int64) []int64 {
 	return result
 }
 
-func (g *TagGraph) buildNavTree(minPosts int64) []NavTagNode {
-	tagLess := func(a, b models.Tag) bool {
-		if a.NavOrder.Valid && b.NavOrder.Valid {
-			if a.NavOrder.Int64 != b.NavOrder.Int64 {
-				return a.NavOrder.Int64 < b.NavOrder.Int64
-			}
-		} else if a.NavOrder.Valid {
-			return true
-		} else if b.NavOrder.Valid {
-			return false
+// tagLess is the nav ordering: tags carrying nav_order come first, in that
+// order, and everything else falls back to the name.
+func tagLess(a, b models.Tag) bool {
+	if a.NavOrder.Valid && b.NavOrder.Valid {
+		if a.NavOrder.Int64 != b.NavOrder.Int64 {
+			return a.NavOrder.Int64 < b.NavOrder.Int64
 		}
-		return a.Name < b.Name
+	} else if a.NavOrder.Valid {
+		return true
+	} else if b.NavOrder.Valid {
+		return false
+	}
+	return a.Name < b.Name
+}
+
+// buildNavTree is the whole-graph nav tree: every tag carrying nav_order is a
+// root, hidden tags are dropped. This is the tree cached as g.NavTree.
+func (g *TagGraph) buildNavTree(minPosts int64) []NavTagNode {
+	roots := make([]int64, 0, len(g.ByID))
+	for id, t := range g.ByID {
+		if t.NavOrder.Valid {
+			roots = append(roots, id)
+		}
+	}
+	return g.navTree(roots, false, minPosts)
+}
+
+// navTree walks the hierarchy under roots and returns the visible nodes.
+//
+// includeHidden keeps tags marked hidden (the admin view); minPosts raises the
+// post-count threshold a tag must clear to appear on its own — a tag is always
+// kept if it carries nav_order, is a related tag, or has a visible descendant.
+// Roots are filtered and ordered on the same terms as any other level.
+func (g *TagGraph) navTree(roots []int64, includeHidden bool, minPosts int64) []NavTagNode {
+	threshold := int64(1)
+	if minPosts > threshold {
+		threshold = minPosts
 	}
 
 	var build func(id int64, visited map[int64]bool) (NavTagNode, bool)
@@ -189,24 +214,7 @@ func (g *TagGraph) buildNavTree(minPosts int64) []NavTagNode {
 			Children:        []NavTagNode{},
 		}
 
-		childIDs := g.Children[id]
-		sortedIDs := make([]int64, 0, len(childIDs))
-		for _, cid := range childIDs {
-			_, ok := g.ByID[cid]
-			if !ok {
-				continue
-			}
-			if g.EffectiveHidden[cid] {
-				continue
-			}
-			if visited[cid] {
-				continue
-			}
-			sortedIDs = append(sortedIDs, cid)
-		}
-		sort.Slice(sortedIDs, func(i, j int) bool {
-			return tagLess(g.ByID[sortedIDs[i]], g.ByID[sortedIDs[j]])
-		})
+		sortedIDs := g.navChildren(g.Children[id], includeHidden, visited)
 
 		hasVisibleChildren := false
 		for _, cid := range sortedIDs {
@@ -224,33 +232,44 @@ func (g *TagGraph) buildNavTree(minPosts int64) []NavTagNode {
 
 		isVisible := node.IsRelated || hasVisibleChildren || t.NavOrder.Valid
 		if !isVisible {
-			threshold := int64(1)
-			if minPosts > threshold {
-				threshold = minPosts
-			}
 			isVisible = node.PostCount >= threshold
 		}
 
 		return node, isVisible
 	}
 
-	var navRootIDs []int64
-	for id, t := range g.ByID {
-		if t.NavOrder.Valid && !g.EffectiveHidden[id] {
-			navRootIDs = append(navRootIDs, id)
-		}
-	}
+	rootIDs := g.navChildren(roots, includeHidden, nil)
 
-	sort.Slice(navRootIDs, func(i, j int) bool {
-		return tagLess(g.ByID[navRootIDs[i]], g.ByID[navRootIDs[j]])
-	})
-
-	result := make([]NavTagNode, 0, len(navRootIDs))
-	for _, id := range navRootIDs {
+	result := make([]NavTagNode, 0, len(rootIDs))
+	for _, id := range rootIDs {
 		node, visible := build(id, map[int64]bool{id: true})
 		if visible {
 			result = append(result, node)
 		}
 	}
 	return result
+}
+
+// navChildren returns the members of ids that belong in the tree, in nav order:
+// dangling IDs, hidden tags (unless includeHidden) and tags already on the path
+// being expanded are dropped. It never sorts ids in place — g.Children holds the
+// edges in their own sort_order and the graph is a shared snapshot.
+func (g *TagGraph) navChildren(ids []int64, includeHidden bool, visited map[int64]bool) []int64 {
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := g.ByID[id]; !ok {
+			continue
+		}
+		if !includeHidden && g.EffectiveHidden[id] {
+			continue
+		}
+		if visited[id] {
+			continue
+		}
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return tagLess(g.ByID[out[i]], g.ByID[out[j]])
+	})
+	return out
 }

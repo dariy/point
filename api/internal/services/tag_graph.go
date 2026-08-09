@@ -105,13 +105,9 @@ func (s *TagService) buildGraph(ctx context.Context) (*TagGraph, error) {
 	g.CountsPublic, _ = s.repo.GetHierarchicalPostCounts(ctx, true)
 	g.CountsAdmin, _ = s.repo.GetHierarchicalPostCounts(ctx, false)
 
-	// 4. Nav Tree (requires CountsPublic)
-	// We'll build this on demand or here? Proposal says it's a field in TagGraph.
-	// Since buildNavTree is complex and depends on publicOnly/minPosts,
-	// maybe we store a version with minPosts=0 and filter it later,
-	// or just build it here with default settings.
-	// The proposal says: navTree []NavTagNode (from nav_order tags).
-	// Let's use a helper that doesn't depend on TagService state.
+	// 4. Nav tree (requires CountsPublic). Cached at minPosts=0, which is what
+	// every public request without a threshold asks for; the rarer thresholded
+	// and scoped trees are walked per request off this same snapshot.
 	g.NavTree = g.buildNavTree(0)
 
 	return g, nil
@@ -250,102 +246,30 @@ func (s *TagService) GetTagSnapshot(ctx context.Context) (*TagGraph, error) {
 	return s.getGraph(ctx)
 }
 
-// GetHierarchicalNavTags builds a recursive tag tree for the public navigation bar.
+// GetHierarchicalNavTags builds a recursive tag tree for the navigation bar,
+// either the whole nav hierarchy (rootID nil) or the subtree under one tag.
+//
+// Both are the same walk over the same graph — see TagGraph.navTree. The two
+// asymmetries are deliberate and predate this method: the whole-graph tree is
+// always the public one (it is what gets cached as g.NavTree, and the admin
+// menu reads the same shape), while a scoped tree honours publicOnly, and with
+// it the post-count threshold that only ever applied to the public view.
 func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, publicOnly bool, minPosts int64) ([]NavTagNode, error) {
 	g, err := s.getGraph(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if rootID == nil && publicOnly && minPosts == 0 {
-		return g.NavTree, nil
-	}
-
 	if rootID == nil {
+		if publicOnly && minPosts == 0 {
+			return g.NavTree, nil
+		}
 		return g.buildNavTree(minPosts), nil
 	}
 
-	tagLess := func(a, b models.Tag) bool {
-		if a.NavOrder.Valid && b.NavOrder.Valid {
-			if a.NavOrder.Int64 != b.NavOrder.Int64 {
-				return a.NavOrder.Int64 < b.NavOrder.Int64
-			}
-		} else if a.NavOrder.Valid {
-			return true
-		} else if b.NavOrder.Valid {
-			return false
-		}
-		return a.Name < b.Name
+	threshold := minPosts
+	if !publicOnly {
+		threshold = 0
 	}
-
-	var build func(id int64, visited map[int64]bool) (NavTagNode, bool)
-	build = func(id int64, visited map[int64]bool) (NavTagNode, bool) {
-		t := g.ByID[id]
-		node := NavTagNode{
-			ID:              t.ID,
-			Name:            t.Name,
-			Slug:            t.Slug,
-			PostCount:       g.CountsPublic[t.ID],
-			IsRelated:       t.ShowRelated,
-			ShowInAncestors: t.InAncestorFlyout,
-			Children:        []NavTagNode{},
-		}
-
-		childIDs := g.Children[id]
-		sortedIDs := make([]int64, 0, len(childIDs))
-		for _, cid := range childIDs {
-			if publicOnly && g.EffectiveHidden[cid] {
-				continue
-			}
-			if visited[cid] {
-				continue
-			}
-			sortedIDs = append(sortedIDs, cid)
-		}
-		sort.Slice(sortedIDs, func(i, j int) bool {
-			return tagLess(g.ByID[sortedIDs[i]], g.ByID[sortedIDs[j]])
-		})
-
-		hasVisibleChildren := false
-		for _, cid := range sortedIDs {
-			childVisited := make(map[int64]bool, len(visited)+1)
-			for k, v := range visited {
-				childVisited[k] = v
-			}
-			childVisited[cid] = true
-			childNode, visible := build(cid, childVisited)
-			if visible {
-				node.Children = append(node.Children, childNode)
-				hasVisibleChildren = true
-			}
-		}
-
-		isVisible := node.IsRelated || hasVisibleChildren || t.NavOrder.Valid
-		if !isVisible {
-			threshold := int64(1)
-			if publicOnly && minPosts > 0 {
-				threshold = minPosts
-			}
-			isVisible = node.PostCount >= threshold
-		}
-
-		return node, isVisible
-	}
-
-	navRootIDs := g.Children[*rootID]
-	sort.Slice(navRootIDs, func(i, j int) bool {
-		return tagLess(g.ByID[navRootIDs[i]], g.ByID[navRootIDs[j]])
-	})
-
-	result := make([]NavTagNode, 0, len(navRootIDs))
-	for _, id := range navRootIDs {
-		if publicOnly && g.EffectiveHidden[id] {
-			continue
-		}
-		node, visible := build(id, map[int64]bool{id: true})
-		if visible {
-			result = append(result, node)
-		}
-	}
-	return result, nil
+	return g.navTree(g.Children[*rootID], !publicOnly, threshold), nil
 }
