@@ -20,6 +20,9 @@ deployment-*.log
 api/coverage.html
 coverage-frontend.lcov
 api/api*
+# Binaries a bare `go build` drops in api/ (run.sh builds to ./point instead)
+api/point
+api/migrate-paths
 api/cmd/api/cache/
 *.out
 
@@ -34,6 +37,17 @@ frontend/css/viewer.css
 frontend/css/asset-manifest.json
 frontend/css/common/theme.css
 frontend/css/p/
+
+# Static UI demo (demo/scripts/build.sh) — build output.
+demo/dist/
+# Throwaway instance used to generate demo content (demo/scripts/make-content.sh).
+demo/.scratch/
+# Transcoded demo media, reused across builds (demo/scripts/build.sh).
+demo/.media-cache/
+# Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.mjs
+# against an instance whose content you intend to publish: the recording is a
+# copy of that instance's posts, tags and media metadata.
+demo/mock/fixtures/fixtures.json
 
 # bv (beads viewer) local config and caches
 .bv/

@@ -178,18 +178,11 @@
     --logotheme-toggle-height: var(--size-1-5);
     --card-max-width: var(--size-30);
     --setup-submit-btn-height: var(--size-2-75);
-    --media-folder-tree-flex: var(--size-12-5);
-    --media-folder-tree-min-width: var(--size-11-25);
-    --folder-tree-icon-width: var(--size-1);
-    --folder-tree-icon-height: var(--size-1);
-    --folder-year-group-margin-top: var(--size-0-125);
-    --folder-year-arrow-width: var(--size-1-5);
-    --folder-year-arrow-height: var(--size-1-5);
-    --folder-year-months-margin-left: var(--size-0-75);
-    --folder-year-months-margin-top: var(--size-0-125);
-    --folder-year-months-gap: var(--size-0-0625);
-    --folder-month-btn--width: var(--size-0-5);
+
     --media-grid-grid-template-columns: var(--size-11-25);
+    --media-grid-columns-mobile: var(--size-9);
+    --mb-folder-chip-min-height: var(--size-2-25);
+    --mb-folder-chip-radius: var(--size-624-938);
     --file-icon-font-size: var(--size-3);
     --media-play-overlay-width: var(--size-3-75);
     --media-play-overlay-height: var(--size-3-75);

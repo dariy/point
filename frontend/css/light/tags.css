@@ -642,7 +642,9 @@
 }
 
 .tm-row:hover .tm-actions,
-.tm-row:focus-within .tm-actions {
+.tm-row:focus-within .tm-actions,
+.tm-tag-row:hover .tm-actions,
+.tm-tag-row:focus-within .tm-actions {
     opacity: 1;
 }
 
@@ -653,6 +655,50 @@
     :where(html:not(.pointer-fine)) .tm-actions {
         opacity: 1;
     }
+}
+
+/* ===========================
+   Tags Manager — select mode
+   =========================== */
+.tm-bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    font-size: var(--font-size-sm);
+}
+
+/* Transparent on desktop so the toolbar stays one row; becomes a real flex
+   row on portrait — see responsive.css. Mirrors .bulk-actions on the posts list. */
+.tm-bulk-actions {
+    display: contents;
+}
+
+#tm-bulk-count {
+    color: var(--text-secondary);
+    min-width: var(--bulk-count-min-width);
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-check-col {
+    width: var(--check-col-width);
+    text-align: center;
+    vertical-align: middle;
+}
+
+.tm-select-cb {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* Translucent accent, so it reads the same in light and dark themes */
+.tm-row.is-selected,
+.tm-tag-row.is-selected {
+    background-color: var(--color-primary-light-alpha-20);
 }
 
 /* ===========================
@@ -1190,13 +1236,14 @@
 }
 
 /* ===========================
-   Move… dialog (touch parity for drag)
+   Tag picker dialogs — Move… (touch parity for drag), bulk Move…, Merge…
+   One rule set, because they are one component (TagPickerDialog).
    =========================== */
-.tm-move-modal {
+.tm-picker-modal {
     width: min(28rem, calc(100vw - 2rem));
 }
 
-.tm-move-parent-list {
+.tm-picker-list {
     max-height: 14rem;
     overflow-y: auto;
     border: var(--border-width) solid var(--border-primary);
@@ -1206,7 +1253,7 @@
     margin-bottom: var(--spacing-sm);
 }
 
-.tm-move-parent-item {
+.tm-picker-item {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -1216,18 +1263,34 @@
     transition: background-color var(--transition-fast);
 }
 
-.tm-move-parent-item:hover {
+.tm-picker-item:hover {
     background-color: var(--surface-hover);
 }
 
-.tm-move-parent-item input[type="radio"] {
+.tm-picker-item input[type="radio"] {
     flex-shrink: 0;
     accent-color: var(--color-primary);
     cursor: pointer;
 }
 
-.tm-move-parent-name {
+.tm-picker-name {
     color: var(--text-primary);
+}
+
+/* Merge… stacks the tag's full path under its name; the others are one line. */
+.tm-picker-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-0-0625);
+    min-width: 0;
+}
+
+.tm-picker-path {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Drop-onto confirm dialog — stacked action buttons */

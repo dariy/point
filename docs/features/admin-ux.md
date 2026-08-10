@@ -25,10 +25,29 @@ learn, a setting to forget).
   Security, System).
 - **Bottom tab bar on phones** (`AdminBottomBar.js`) with a prominent center ➕; the
   editor goes full-screen over it; the hamburger drawer is gone on phones.
-- **Editor** (`PostEditPage.js`):
-  - Canvas is three things: title, content (Text/Visual), tags. Everything else lives
-    in the **Details** rail (wide) / bottom sheet (narrow), sectioned with one-line
-    summaries.
+- **Editor** (`PostEditPage.js`): every block is one group — content (Text/Visual),
+  title, tags, status & visibility, schedule, slug, excerpt, immersive mode, custom
+  CSS, Instagram — rendered by `_renderGroup()` with a one-line summary and a drag
+  handle. Two stored preferences describe the layout, both global (how this user
+  works, not a property of one post):
+  - **Side** (`point:editor:pinned`): a block is either on the canvas in
+    `#pinned-fields` or in the **Details** rail (wide) / bottom sheet (narrow).
+    Content is always on the canvas — it is what the page is for — so a move into
+    Details is refused.
+  - **Order** (`point:editor:field-order`): one sequence spanning both sides, so a
+    block moved across and back lands where it belongs. `DEFAULT_ORDER` seeds it and
+    orders anything a stored one doesn't mention.
+  - **Arrange mode** (menu → Arrange fields, Esc or Done to leave) is the only place
+    either is changed — there is deliberately no second, always-visible control for
+    it. Blocks collapse to labelled bars with drag handles; drag to reorder within a
+    list or across the two, since landing in the other list *is* the statement about
+    which side a block is on. Dragging is pointer-based (`utils/pointerReorder.js`,
+    with edge auto-scroll) rather than HTML5 DnD, which does not exist on iOS; handles
+    also take ArrowUp/ArrowDown to reorder and ArrowLeft/ArrowRight to change side.
+    Below 64em the sheet drops into the page flow for the duration, since a sheet
+    would cover the list being dragged to.
+  - Moves *move the live element* rather than re-rendering, so unflushed edits, focus
+    and listeners survive.
   - **Autosave chip + contextual Publish ▾ / Update** split button — see
     [publishing.md](publishing.md) for the save model.
   - **Live preview pane** on wide screens (`showLivePreview`, `_isWide()`): renders
@@ -40,8 +59,8 @@ learn, a setting to forget).
   pinned Unfiled queue, Move…/Merge… dialogs (see [tag-system.md](tag-system.md)).
 - **Power-user layer**: `CommandPalette.js` (Ctrl+K — posts, tags, admin pages,
   actions) and `ShortcutHelp.js` (`?` overlay) — depth without visual cost.
-- **Media on touch**: capture/library buttons, breadcrumb + folder chips instead of
-  the tree, long-press selection (see [media.md](media.md)).
+- **Media on touch**: breadcrumb + a drill-down folder chip strip instead of the tree,
+  long-press selection (see [media.md](media.md)).
 - **Touch pass**: ≥44 px targets, no hover-only or drag-only affordances on coarse
   pointers.
 
@@ -61,4 +80,7 @@ learn, a setting to forget).
 - New admin pages must use `AdminLayout` — never hand-roll `light-layout` markup.
 - Any new list/table needs its card form at phone widths and always-visible actions on
   coarse pointers.
-- New editor fields belong in a Details section, not on the canvas.
+- New editor fields belong in a Details group, not directly on the canvas — render them
+  through `_renderGroup()` so they get a summary and a drag handle like every other
+  block. Plugin-provided groups need no extra wiring: the reorder handlers are
+  delegated, and a key missing from `DEFAULT_ORDER` sorts last.

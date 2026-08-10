@@ -3,15 +3,38 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/spf13/viper"
 )
 
+// hermeticEnv clears every variable LoadConfig reads for the duration of the
+// test. LoadConfig calls viper's AutomaticEnv, so an exported DATABASE_URL or
+// STORAGE_PATH outranks both the defaults and the fixture .env a test writes —
+// and a developer running the suite from a checkout with a .env and direnv has
+// exactly those exported. Without this, the path tests below pass on CI and
+// fail on the machine the engine is actually developed on.
+//
+// Clearing rather than unsetting is deliberate: t.Setenv restores the previous
+// value at the end of the test, and viper treats an empty variable as unset
+// (allowEmptyEnv defaults to false). The keys come off Config's mapstructure
+// tags so a new field cannot quietly escape the cleanup.
+func hermeticEnv(t *testing.T) {
+	t.Helper()
+	typ := reflect.TypeOf(Config{})
+	for i := range typ.NumField() {
+		if key := typ.Field(i).Tag.Get("mapstructure"); key != "" {
+			t.Setenv(key, "")
+		}
+	}
+}
+
 // TestDeploymentInjectionEnv verifies the deployment-driven head/CSP knobs load
 // from the container environment (how the hosting pipeline supplies them).
 func TestDeploymentInjectionEnv(t *testing.T) {
 	viper.Reset()
+	hermeticEnv(t)
 	tmpDir := t.TempDir()
 	head := `<script defer src="https://stats.example/s.js" data-website-id="abc"></script>`
 	t.Setenv("HEAD_HTML", head)
@@ -35,6 +58,7 @@ func TestDeploymentInjectionEnv(t *testing.T) {
 
 func TestLoadConfig(t *testing.T) {
 	viper.Reset()
+	hermeticEnv(t)
 	tmpDir, err := os.MkdirTemp("", "config-test")
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +99,7 @@ APP_URL=https://blog.example.com
 
 func TestLoadConfigDefaults(t *testing.T) {
 	viper.Reset()
+	hermeticEnv(t)
 	// Empty temp dir should load defaults
 	tmpDir, err := os.MkdirTemp("", "config-test-defaults")
 	if err != nil {
@@ -99,6 +124,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 
 func TestThemesPathDerivation(t *testing.T) {
 	viper.Reset()
+	hermeticEnv(t)
 	tmpDir, err := os.MkdirTemp("", "config-test-themes")
 	if err != nil {
 		t.Fatal(err)
@@ -116,8 +142,7 @@ func TestThemesPathDerivation(t *testing.T) {
 
 	// Test case 2: FRONTEND_DIR set, THEMES_PATH not set
 	viper.Reset()
-	_ = os.Setenv("FRONTEND_DIR", "/custom/frontend")
-	defer func() { _ = os.Unsetenv("FRONTEND_DIR") }()
+	t.Setenv("FRONTEND_DIR", "/custom/frontend")
 	config, _ = LoadConfig(tmpDir)
 	expectedThemesPath = "/custom/frontend/themes"
 	if config.ThemesPath != expectedThemesPath {
@@ -126,9 +151,8 @@ func TestThemesPathDerivation(t *testing.T) {
 
 	// Test case 3: Both set
 	viper.Reset()
-	_ = os.Setenv("FRONTEND_DIR", "/custom/frontend")
-	_ = os.Setenv("THEMES_PATH", "/custom/themes")
-	defer func() { _ = os.Unsetenv("THEMES_PATH") }()
+	t.Setenv("FRONTEND_DIR", "/custom/frontend")
+	t.Setenv("THEMES_PATH", "/custom/themes")
 	config, _ = LoadConfig(tmpDir)
 	expectedThemesPath = "/custom/themes"
 	if config.ThemesPath != expectedThemesPath {
@@ -138,6 +162,7 @@ func TestThemesPathDerivation(t *testing.T) {
 
 func TestSmartPathDetection(t *testing.T) {
 	viper.Reset()
+	hermeticEnv(t)
 	// Create a temp dir to act as our "working directory"
 	wd, err := os.MkdirTemp("", "config-test-wd")
 	if err != nil {
@@ -197,6 +222,7 @@ func TestSmartPathDetection(t *testing.T) {
 
 func TestUserThemesPathDerivation(t *testing.T) {
 	viper.Reset()
+	hermeticEnv(t)
 	tmpDir, err := os.MkdirTemp("", "config-test-user-themes")
 	if err != nil {
 		t.Fatal(err)
@@ -214,8 +240,7 @@ func TestUserThemesPathDerivation(t *testing.T) {
 
 	// STORAGE_PATH set explicitly
 	viper.Reset()
-	_ = os.Setenv("STORAGE_PATH", "/data")
-	defer func() { _ = os.Unsetenv("STORAGE_PATH") }()
+	t.Setenv("STORAGE_PATH", "/data")
 	config, _ = LoadConfig(tmpDir)
 	if config.UserThemesPath != "/data/themes" {
 		t.Errorf("expected UserThemesPath /data/themes, got %s", config.UserThemesPath)
@@ -223,9 +248,8 @@ func TestUserThemesPathDerivation(t *testing.T) {
 
 	// USER_THEMES_PATH set explicitly overrides derivation
 	viper.Reset()
-	_ = os.Setenv("STORAGE_PATH", "/data")
-	_ = os.Setenv("USER_THEMES_PATH", "/custom/user-themes")
-	defer func() { _ = os.Unsetenv("USER_THEMES_PATH") }()
+	t.Setenv("STORAGE_PATH", "/data")
+	t.Setenv("USER_THEMES_PATH", "/custom/user-themes")
 	config, _ = LoadConfig(tmpDir)
 	if config.UserThemesPath != "/custom/user-themes" {
 		t.Errorf("expected UserThemesPath /custom/user-themes, got %s", config.UserThemesPath)

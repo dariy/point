@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,6 +85,7 @@ type Repository interface {
 	GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error)
 	ListPostLinkAuditRows(ctx context.Context) ([]PostLinkAuditRow, error)
 	GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
+	GetHierarchicalPostCountsInYearRange(ctx context.Context, publishedOnly bool, fromYear, toYear int) (map[int64]int64, error)
 	GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error)
 	SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error
 	SetPostMediaURL(ctx context.Context, postID int64, mediaURL string) error
@@ -182,6 +185,56 @@ func pragmaDSN(dbURL string, conns int) string {
 	return dbURL + sep + strings.Join(params, "&")
 }
 
+// coreTables are the tables whose presence tells an initialized database from
+// an empty file. All four are created by schema.sql and never dropped, so
+// finding some but not all of them means something is wrong — either an
+// initialization that died part way through, or a database that has lost a
+// table.
+var coreTables = []string{"users", "posts", "tags", "blog_settings"}
+
+// inspectCoreSchema reports which of coreTables exist, and whether any of the
+// ones that exist holds a row. "Holds a row" is what separates a real
+// installation from a half-built one, and therefore what separates a database
+// worth refusing to overwrite from a file with nothing in it.
+func inspectCoreSchema(db *sql.DB) (present []string, populated bool, err error) {
+	for _, name := range coreTables {
+		var found string
+		err := db.QueryRow(
+			`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`, name).Scan(&found)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		present = append(present, name)
+	}
+
+	for _, name := range present {
+		var any int
+		// The name comes from coreTables, never from input.
+		//nolint:gosec // G201: interpolating one of four compile-time constants
+		if err := db.QueryRow(fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s)`, name)).Scan(&any); err != nil {
+			return nil, false, err
+		}
+		if any == 1 {
+			return present, true, nil
+		}
+	}
+	return present, false, nil
+}
+
+// missingFrom returns the core tables absent from present.
+func missingFrom(present []string) []string {
+	var missing []string
+	for _, name := range coreTables {
+		if !slices.Contains(present, name) {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
 func NewRepository(dbURL string) (Repository, error) {
 	conns := maxOpenConns
 	if isMemoryDSN(dbURL) {
@@ -192,6 +245,16 @@ func NewRepository(dbURL string) (Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	// Every error below leaves the caller with no handle to close, so close the
+	// pool here instead of leaking it — and the file with it. A caller told to
+	// restore a backup needs nothing still holding the database open.
+	opened := false
+	defer func() {
+		if !opened {
+			_ = db.Close()
+		}
+	}()
 
 	db.SetMaxOpenConns(conns)
 	// Keep every connection warm: re-opening one means paying for the mmap and
@@ -218,14 +281,32 @@ func NewRepository(dbURL string) (Repository, error) {
 	}
 
 	// Check if the database needs initialization.
-	// We check for multiple core tables to detect partially-initialized databases.
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('users', 'posts', 'tags', 'blog_settings');").Scan(&count)
+	present, populated, err := inspectCoreSchema(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check database schema: %w", err)
 	}
+	initialized := len(present) == len(coreTables)
 
-	if count < 4 {
+	if !initialized {
+		// A database that holds data but is missing a core table is damaged,
+		// not new. Initializing over it would create the missing table empty
+		// and boot as if nothing had happened — every row that table held, and
+		// every relation into it, silently gone. Refuse instead: the file is
+		// still there, and a backup or a snapshot can still be put back.
+		if populated {
+			return nil, fmt.Errorf(
+				"database at %s is missing the core table(s) %v but is not empty — refusing to initialize over it, "+
+					"which would replace them with empty ones and lose whatever they held. "+
+					"Restore a backup (scripts/restore-db.sh), or move the file aside to start fresh",
+				dbURL, missingFrom(present))
+		}
+		if len(present) > 0 {
+			// No rows anywhere, so this is an initialization that died part way
+			// through rather than a database with something to lose. schema.sql
+			// is all IF NOT EXISTS, so re-running it completes the job.
+			slog.Warn("completing a partially initialized database",
+				"existing", present, "missing", missingFrom(present))
+		}
 		slog.Info("Initializing new database with schema...")
 		tx, err := db.Begin()
 		if err != nil {
@@ -268,7 +349,7 @@ func NewRepository(dbURL string) (Repository, error) {
 		db:      db,
 	}
 
-	if count >= 4 {
+	if initialized {
 		for _, m := range bootstrapMigrations {
 			if err := repo.ApplyMigration(context.Background(), m.name, m.sql); err != nil {
 				return nil, fmt.Errorf("migration failed (%s): %w", m.name, err)
@@ -281,6 +362,7 @@ func NewRepository(dbURL string) (Repository, error) {
 		}
 	}
 
+	opened = true
 	return repo, nil
 }
 

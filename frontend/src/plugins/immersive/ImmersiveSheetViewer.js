@@ -28,6 +28,7 @@ import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.j
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.js';
 import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.js';
 import { immersiveNavTargets } from '../../utils/immersiveNav.js';
+import { renderCopyright } from '../../utils/copyright.js';
 
 const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
 
@@ -110,11 +111,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
 
   _renderFooter(prev, next) {
     const settings = store.get('settings') || {};
-    const author = escapeHtml(settings.author_name || settings.blog_title || '');
-    const aboutHref = settings.about_post_id ? `/posts/${escapeHtml(settings.about_post_id)}` : '/light';
-    const copyright = `<p class="immersive-sheet-copyright">
-        <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>` : ''}
-      </p>`;
+    // Same renderer as the site footer — the admin-editable `footer_copyright`
+    // template, so the sheet can't show a different line than the home page.
+    const copyright = `<p class="immersive-sheet-copyright">${renderCopyright(settings)}</p>`;
 
     // Keep the footer's ‹ left / right › links pointing at the same posts the
     // on-photo nav panels do, under either reading direction — same resolver,

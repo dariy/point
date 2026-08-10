@@ -127,6 +127,21 @@ class Router {
   /** Intercept clicks on same-origin <a> elements. */
   _onLinkClick(event) {
     if (event.defaultPrevented) return;
+
+    // A modified click asks for a destination other than "here" — a new tab or
+    // window, or a download. Leave those to the browser: now that the admin's
+    // links to the public site are ordinary in-app links, this is the way to
+    // deliberately open one beside the admin instead of navigating away from it.
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
     const anchor = event.target.closest("a[href]");
     if (!anchor) return;
 
@@ -234,8 +249,16 @@ class Router {
       return;
     }
 
-    // Setup guard: if navigating to /light/* and setup is not complete, redirect to /setup.
-    // If already on /setup but setup is complete, redirect to /light.
+    // Setup guard, for in-app navigation. Document loads are already handled by
+    // the server, which redirects every path to /setup while the install has no
+    // owner (see the SPA fallback in cmd/api/main.go) — so a fresh install lands
+    // on the wizard from "/" too, without rendering a public shell first. That
+    // leaves this guard the SPA-side cases: navigating into /light/* before
+    // setup is complete, and landing on /setup once it is (→ /light). Public
+    // routes are deliberately not checked here: while setup is pending the only
+    // document that ever loads is /setup itself, so a status fetch on every
+    // public navigation would cost every visitor a request forever to cover a
+    // path that cannot be reached.
     if (pathname.startsWith("/light") || pathname === this._setupPath) {
       try {
         const res = await fetch("/api/setup/status", {

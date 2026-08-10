@@ -42,15 +42,17 @@ export default class DashboardPage extends Component {
 
     if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
     if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    // Omit the sidebar element entirely when it has nothing in it — an empty
+    // one still reserves its grid column and shrinks the stats grid.
+    const sidebar = this._renderContinueWriting(drafts);
+    //       ${this._renderComposeStrip()}
     return `
-      ${this._renderComposeStrip()}
+
       <div class="dashboard-grid">
         <div class="dashboard-main">
           ${this._renderStats(stats, analyticsStats, topPosts)}
         </div>
-        <div class="dashboard-sidebar">
-          ${this._renderContinueWriting(drafts)}
-        </div>
+        ${sidebar ? `<div class="dashboard-sidebar">${sidebar}</div>` : ''}
       </div>
     `;
   }
@@ -97,6 +99,8 @@ export default class DashboardPage extends Component {
   _renderStats(s, analytics, topPosts) {
     if (!s) return '';
 
+    // The quota is operator-set (STORAGE_QUOTA_MB) and absent from the stats
+    // response when unlimited — then we report bare usage with no bar to fill.
     const usagePercent = s.storage_quota_mb
       ? Math.min(100, Math.round((s.storage_used_mb / s.storage_quota_mb) * 100))
       : 0;
@@ -172,9 +176,10 @@ export default class DashboardPage extends Component {
             ${escapeHtml(formatFileSize((s.storage_used_mb ?? 0) * 1024 * 1024))}
             ${s.storage_quota_mb ? ` of ${escapeHtml(formatFileSize(s.storage_quota_mb * 1024 * 1024))} used (${escapeHtml(String(usagePercent))}%)` : ' used'}
           </p>
+          ${s.storage_quota_mb ? `
           <div class="storage-bar">
             <div class="storage-bar-fill ${barClass}" style="width: ${escapeHtml(String(usagePercent))}%"></div>
-          </div>
+          </div>` : ''}
         </div>
       </div>
       ${topPostsTable}`;
@@ -208,7 +213,8 @@ export default class DashboardPage extends Component {
           const post = await createPost({
             content,
             status: 'draft',
-            title: content.split('\n')[0].substring(0, 50) || 'Untitled'
+            // Blank first line: let the backend apply the date default.
+            title: content.split('\n')[0].substring(0, 50).trim()
           });
           navigate(`/light/posts/${post.id}/edit`);
         } catch (err) {

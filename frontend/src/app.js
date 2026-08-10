@@ -92,6 +92,17 @@ function applyTheme(theme) {
 }
 
 function loadTheme(settings) {
+  // The first-run wizard runs before any setting exists, and setup seeds
+  // default_theme: dark (api/internal/api/setup.go) — so render it in the theme
+  // the install is about to have, instead of filling in a white form and
+  // landing in a dark admin. Set on the element only, not through applyTheme():
+  // this is a seeded default, not a choice the owner made, so it must not be
+  // written to localStorage as if they had picked it. index.html's inline
+  // bootstrap does the same thing before first paint.
+  if (location.pathname === "/setup") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    return;
+  }
   const saved = localStorage.getItem("theme");
   applyTheme(saved || settings?.default_theme || "auto");
 }
@@ -204,10 +215,11 @@ async function bootstrap() {
 // (absent)      →  requires authentication (authGuard redirect)
 
 // The tag-viz plugins that may own /tags, in the order the backend resolves
-// them (registry order). At most one is enabled — the exclusive "tags-viz" area.
+// them (registry order). At most one is enabled — the `tags-route` slot takes a
+// single claimant (plugins.SlotCardinality on the backend).
 const TAGS_VIZ_PLUGINS = ["tags-atlas", "tags-map", "tags-graph"];
 
-// Resolve the lazy module for the /tags route. `/tags` is an exclusive slot
+// Resolve the lazy module for the /tags route. `/tags` is a single-claim slot
 // (`tags-route`): the single enabled tag-visualization plugin owns it — that
 // enabled plugin IS the selection (the old `tags_module` setting is gone).
 // Mirrors the backend gate in tagsModuleAccessible: no enabled viz (or

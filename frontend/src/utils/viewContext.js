@@ -114,8 +114,9 @@ export class ViewContext {
     const params = new URLSearchParams();
 
     // Tags module view (tag cloud / map / atlas are all served at /tags).
-    // Carries only the timeline year range as a query param.
-    if (this.path === '/tags' || this.path === '/tags/') {
+    // Carries only the timeline year range as a query param. A search leaves
+    // the module entirely, so it must not be short-circuited back to /tags.
+    if (!this.query && (this.path === '/tags' || this.path === '/tags/')) {
       if (this.years) {
         params.set('timeline', `${this.years[0]}-${this.years[1]}`);
       }
@@ -135,8 +136,10 @@ export class ViewContext {
       if (this.navPath) params.set('path', this.navPath);
     }
 
-    // Single post view (may be in context of a tag)
-    if (this.postSlug) {
+    // Single post view (may be in context of a tag). A search supersedes it:
+    // otherwise searching while a post is open re-serializes back to that post
+    // and the results never load.
+    if (this.postSlug && !this.query) {
       if (path.startsWith('/tags/')) {
         params.set('slug', this.postSlug);
       } else {

@@ -47,6 +47,26 @@ as the `comments` enhancer plugin (slot `post-comments`, routes `/comments`,
 - Plugin-gated like everything else: disabling `comments` 404s the routes and removes
   the widget from the manifest.
 
+## The slim image
+
+Every release publishes two flavours (the `flavor` matrix in
+`.github/workflows/release.yml`): the full image, and a `-slim` one built with
+`--build-arg IS_SLIM=true` that leaves the remark42 binary out entirely — the
+Dockerfile swaps the `remark42-<IS_SLIM>` stage for an empty alpine, saving the
+engine's footprint for installs that will never enable comments.
+
+`IS_SLIM` is baked into the image as an env var and is the single switch that
+flavour-aware code reads:
+
+- `listViews` (`api/internal/api/plugins.go`) drops `comments` from the admin
+  plugin catalog — the plugin cannot be enabled when its binary is absent.
+  `ENABLE_REMARK42=false` does the same for a local dev run.
+- `GetVersion` labels the reported versions `-slim`, matching the image tag the
+  admin would actually pull.
+
+The name is deliberately generic: it marks the flavour, not one feature, so a
+future omission can reuse it rather than adding a second `WITH_<thing>` arg.
+
 ## Out of scope
 
 - Point-native comment storage/threading — remark42 owns comment data (its own data

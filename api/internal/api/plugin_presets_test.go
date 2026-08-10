@@ -109,10 +109,11 @@ func TestUpdatePreset_UnknownPlugin400(t *testing.T) {
 	}
 }
 
-// TestApplyPreset_ExclusiveAreaKeepsFirst applies "fully-featured" (which
-// enables every plugin, including all three tag-viz alternatives) and verifies
-// the exclusive-area guard leaves only the first member (tags-atlas) enabled.
-func TestApplyPreset_ExclusiveAreaKeepsFirst(t *testing.T) {
+// TestApplyPreset_SingleClaimSlotKeepsFirst applies "fully-featured" (which
+// enables every plugin, including all candidates for the single-claim slots) and
+// verifies each such slot is trimmed to its first candidate: tags-atlas for
+// /tags, and the standard viewer for post-viewer.
+func TestApplyPreset_SingleClaimSlotKeepsFirst(t *testing.T) {
 	h, svc, e := newPluginsHandler(t)
 	ctx := context.Background()
 
@@ -129,8 +130,11 @@ func TestApplyPreset_ExclusiveAreaKeepsFirst(t *testing.T) {
 	}
 
 	all, _ := svc.GetAllSettings(ctx)
-	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 1 || got[0] != "tags-atlas" {
-		t.Errorf("exclusive area should keep only tags-atlas, got %v", got)
+	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-atlas" {
+		t.Errorf("tags-route should keep only tags-atlas, got %v", got)
+	}
+	if got := plugins.EnabledInSlot("post-viewer", all); len(got) != 1 || got[0] != "immersive" {
+		t.Errorf("post-viewer should keep only immersive, got %v", got)
 	}
 }
 

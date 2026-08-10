@@ -149,3 +149,139 @@ describe('AtlasPage lazy cloud loading', () => {
     assert.equal(spawned, false, 'superseded response is ignored');
   });
 });
+
+// The timeline scopes the map itself, not only the open place's cloud: the
+// graph is refetched for the range and the places redrawn from it.
+describe('AtlasPage timeline filtering', () => {
+  let AtlasPage;
+  let store;
+
+  // Only Berlin survives a narrow range, and with a smaller (in-range) count.
+  const SCOPED_GRAPH = {
+    tags: [
+      { id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4, post_count: 2 },
+    ],
+    hierarchyEdges: [],
+  };
+
+  before(async () => {
+    const mod = await import('../src/plugins/tags-atlas/index.js');
+    AtlasPage = mod.default;
+    ({ store } = await import('../src/store.js'));
+  });
+
+  afterEach(() => {
+    store.set('route', { pathname: '/atlas', query: {} });
+    delete global.fetch;
+  });
+
+  /** A page past its initial load, with a map and a container the DOM helpers can query. */
+  function mounted() {
+    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    page._buildIndexes(GRAPH);
+    page.state = { loading: false, data: GRAPH, error: null };
+    page._map = {};
+    return page;
+  }
+
+  test('a timeline change refetches the graph for the range and redraws', async () => {
+    store.set('route', { pathname: '/atlas', query: { timeline: '2018-2019' } });
+    const page = mounted();
+    let redrew = false;
+    page._redrawPlaces = () => { redrew = true; };
+    const calls = fakeFetch(SCOPED_GRAPH);
+
+    await page._applyYearScope();
+
+    assert.ok(calls[0].includes('year_from=2018'), 'year_from forwarded');
+    assert.ok(calls[0].includes('year_to=2019'), 'year_to forwarded');
+    assert.ok(calls[0].includes('posts=0'), 'still the lightweight marker request');
+    assert.deepEqual(page.state.data, SCOPED_GRAPH, 'places replaced by the scoped set');
+    assert.ok(redrew, 'the map is redrawn from the new payload');
+  });
+
+  test('the initial load carries a year range from the URL', async () => {
+    store.set('route', { pathname: '/atlas', query: { timeline: '2020-2021' } });
+    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    page.setState = (s) => Object.assign(page.state, s);
+    const calls = fakeFetch(SCOPED_GRAPH);
+
+    await page._load();
+
+    assert.ok(calls[0].includes('year_from=2020'), 'a shared link opens on its own range');
+    assert.ok(calls[0].includes('year_to=2021'));
+  });
+
+  test('a failed refetch leaves the drawn places alone', async () => {
+    const page = mounted();
+    let redrew = false;
+    page._redrawPlaces = () => { redrew = true; };
+    global.fetch = async () => { throw new Error('offline'); };
+
+    await page._applyYearScope();
+
+    assert.equal(redrew, false, 'no redraw');
+    assert.deepEqual(page.state.data, GRAPH, 'the previous places stay on the map');
+  });
+
+  test('drops a stale graph response when a newer range overtakes it', async () => {
+    const page = mounted();
+    let redrew = false;
+    page._redrawPlaces = () => { redrew = true; };
+
+    let release;
+    global.fetch = async () => {
+      await new Promise((r) => { release = r; });
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => SCOPED_GRAPH };
+    };
+
+    const pending = page._applyYearScope();
+    page._graphReq++; // a newer range supersedes this in-flight fetch
+    release();
+    await pending;
+
+    assert.equal(redrew, false, 'superseded payload never reaches the map');
+    assert.deepEqual(page.state.data, GRAPH);
+  });
+
+  test('a redraw reopens the selected place when the range still has it', async () => {
+    const page = mounted();
+    page._activeTag = page._tagsById.get(1);
+    page._activeKey = 'm1';
+    page._drawLayers = async () => {
+      page._placeActivators.set(1, { latLng: {}, setActive() {}, key: 'm1' });
+    };
+    const selected = [];
+    page._selectPlaceById = (id, opts) => selected.push([id, opts]);
+
+    await page._redrawPlaces();
+
+    assert.deepEqual(selected, [[1, { pan: false }]], 'reselected without moving the map');
+  });
+
+  test('a redraw drops a selection the range filtered out', async () => {
+    const page = mounted();
+    page._activeTag = page._tagsById.get(1);
+    page._activeKey = 'm1';
+    page._drawLayers = async () => {}; // the place is gone from the new payload
+    const selected = [];
+    page._selectPlaceById = (id, opts) => selected.push([id, opts]);
+
+    await page._redrawPlaces();
+
+    assert.deepEqual(selected, [], 'nothing to reselect');
+    assert.equal(page._activeTag, null, 'the stale selection is cleared');
+    assert.equal(page._activeKey, null);
+  });
+
+  test('a redraw rebuilds the tag index rather than accumulating', async () => {
+    const page = mounted();
+    page.state.data = SCOPED_GRAPH;
+    page._drawLayers = async () => {};
+
+    await page._redrawPlaces();
+
+    assert.equal(page._tagsById.size, 1, 'Paris is gone, not merely unselected');
+    assert.ok(page._tagsById.has(1));
+  });
+});

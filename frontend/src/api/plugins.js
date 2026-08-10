@@ -10,7 +10,9 @@ import { api } from './client.js';
 
 /**
  * List the full plugin catalog with each plugin's enabled state.
- * @returns {Promise<Array<{id:string,type:string,slot?:string,routes?:string[],enabled:boolean,default_enabled:boolean}>>}
+ * `slot_rule` is the cardinality of the plugin's slot ("0+", "0-1", "1", "1+"),
+ * and `locked` marks a plugin its slot may not be left without.
+ * @returns {Promise<Array<{id:string,type:string,slot?:string,slot_rule?:string,routes?:string[],enabled:boolean,default_enabled:boolean,locked?:boolean}>>}
  */
 export function getPlugins() {
   return api.get('/api/plugins');
@@ -45,8 +47,8 @@ export function updatePreset(id, pluginIds) {
 }
 
 /**
- * Apply a preset: set every plugin's enabled state from it (keeping core areas
- * non-empty) and mark it active. Returns the full plugin catalog post-apply.
+ * Apply a preset: set every plugin's enabled state from it (corrected to satisfy
+ * the slot rules) and mark it active. Returns the full plugin catalog post-apply.
  * @param {string} id Preset id
  * @returns {Promise<Array<object>>}
  */

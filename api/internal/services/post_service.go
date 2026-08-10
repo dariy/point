@@ -635,7 +635,7 @@ func classifyPostSaveError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug"):
+	case isSlugConflict(err):
 		return wrapKind(ErrConflict, err)
 	case errors.Is(err, sql.ErrNoRows):
 		return ErrPostNotFound
@@ -644,7 +644,35 @@ func classifyPostSaveError(err error) error {
 	}
 }
 
+func isSlugConflict(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug")
+}
+
+// autoTitle is the title given to a post saved without one: today's date, in
+// the pattern the admin chose in /light/settings.
+func (s *PostService) autoTitle(ctx context.Context) string {
+	format := DefaultPostTitleFormat
+	if s.settingsService != nil {
+		if v, err := s.settingsService.GetSetting(ctx, DefaultPostTitleFormatKey, DefaultPostTitleFormat); err == nil && strings.TrimSpace(v) != "" {
+			format = v
+		}
+	}
+	title := FormatTitleDate(format, time.Now())
+	if title == "" {
+		// A pattern of only whitespace would leave the post untitled again.
+		title = FormatTitleDate(DefaultPostTitleFormat, time.Now())
+	}
+	return title
+}
+
 func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, []string, error) {
+	// A post saved without a title is titled after the day it was written, so
+	// nothing is ever stored as an unnamed row.
+	autoTitled := strings.TrimSpace(p.Title) == ""
+	if autoTitled {
+		p.Title = s.autoTitle(ctx)
+	}
+
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Title)
 	}
@@ -655,7 +683,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		p.Type = "post"
 	}
 
-	post, err := s.repo.CreatePost(ctx, models.CreatePostParams{
+	params := models.CreatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
 		Content:         normalizeContent(p.Content),
@@ -671,7 +699,16 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
 		ScheduledAt:     toNullTime(p.ScheduledAt),
-	})
+	}
+	post, err := s.repo.CreatePost(ctx, params)
+	// Every untitled post written on the same day derives the same date slug
+	// (and a trashed post keeps its slug reserved), so suffix instead of
+	// failing a save the author was never asked to name.
+	baseSlug := params.Slug
+	for n := 2; n <= 100 && autoTitled && isSlugConflict(err); n++ {
+		params.Slug = fmt.Sprintf("%s-%d", baseSlug, n)
+		post, err = s.repo.CreatePost(ctx, params)
+	}
 	if err != nil {
 		return models.Post{}, strippedProps, classifyPostSaveError(err)
 	}
@@ -779,6 +816,13 @@ type UpdatePostParams struct {
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (models.Post, []string, error) {
+	// Clearing the title of an already-titled post keeps the old one (the
+	// handler merges it back in); this covers the rest — a post that reaches an
+	// update still untitled gets the same date title a new one would.
+	if strings.TrimSpace(p.Title) == "" {
+		p.Title = s.autoTitle(ctx)
+	}
+
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Title)
 	}

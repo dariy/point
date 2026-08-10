@@ -25,20 +25,23 @@ func NewSettingsHandler(settingsService *services.SettingsService, remarkSupervi
 
 // publicSettingKeys are settings safe to expose to unauthenticated users.
 var publicSettingKeys = map[string]bool{
-	"blog_title":              true,
-	"blog_subtitle":           true,
-	"logo_url":                true,
-	"author_name":             true,
-	"posts_per_page":          true,
-	"default_language":        true,
-	"default_theme":           true,
-	"active_css_theme":        true,
-	"show_view_counts":        true,
-	"google_analytics_id":     true,
-	"use_thumbnails":          true,
-	"about_post_id":           true,
-	"home_page_post_id":       true,
-	"multi_user_mode":         true,
+	"blog_title":          true,
+	"blog_subtitle":       true,
+	"logo_url":            true,
+	"author_name":         true,
+	"posts_per_page":      true,
+	"default_language":    true,
+	"default_theme":       true,
+	"active_css_theme":    true,
+	"show_view_counts":    true,
+	"google_analytics_id": true,
+	"about_post_id":       true,
+	"home_page_post_id":   true,
+
+	// Not read by the public site: the post editor shows the date a blank
+	// title would become, and the admin SPA only ever loads this endpoint.
+	// A date pattern discloses nothing — post titles are public anyway.
+	"default_post_title_format": true,
 
 	"tags_visibility":         true,
 	"timeline_mode":           true,
@@ -48,7 +51,9 @@ var publicSettingKeys = map[string]bool{
 	"nav_menu_mode":           true,
 	"nav_inline_max":          true,
 	"nav_more_title":          true,
-	"footer_copyright":        true,
+	// Root-tag dropdown on the site title (public-header plugin); absent = on.
+	"show_title_dropdown": true,
+	"footer_copyright":    true,
 
 	// Comments (remark42) embed appearance — read by the public widget config.
 	"remark_simple_view": true,

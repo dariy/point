@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"point-api/internal/config"
+	"point-api/internal/models"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -1233,6 +1234,179 @@ func TestToNullTime_NonNil(t *testing.T) {
 	}
 	if !post.ScheduledAt.Valid {
 		t.Error("expected ScheduledAt to be valid")
+	}
+}
+
+// jpegBytes encodes a blank JPEG of the given size, standing in for the frame a
+// browser captures off a <video> element.
+func jpegBytes(t *testing.T, w, h int) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h)), nil); err != nil {
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// uploadVideo stores a video media row. The service does not decode video, so
+// the bytes only need to be unique — MIME validation happens in the handler.
+func uploadVideo(t *testing.T, service *MediaService, name string) models.Medium {
+	t.Helper()
+	media, err := service.UploadFile(context.Background(), UploadFileParams{
+		Content:  []byte("fake mp4 " + name),
+		Filename: name,
+		MimeType: "video/mp4",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile video: %v", err)
+	}
+	if media.FileType != "video" {
+		t.Fatalf("expected file type video, got %s", media.FileType)
+	}
+	return media
+}
+
+func TestSaveVideoPoster(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+	ctx := context.Background()
+
+	video := uploadVideo(t, service, "clip.mp4")
+	if video.ThumbnailPath.Valid {
+		t.Fatal("a freshly uploaded video should have no thumbnail")
+	}
+
+	updated, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 640, 480))
+	if err != nil {
+		t.Fatalf("SaveVideoPoster: %v", err)
+	}
+	if !updated.ThumbnailPath.Valid {
+		t.Fatal("expected thumbnail_path to be set")
+	}
+
+	// The poster lands where an image upload's thumbnail would, so ?thumb and
+	// every other consumer of thumbnail_path finds it unchanged.
+	if !strings.HasPrefix(updated.ThumbnailPath.String, "thumbnails/") ||
+		!strings.HasSuffix(updated.ThumbnailPath.String, ".jpg") {
+		t.Errorf("unexpected thumbnail path %q", updated.ThumbnailPath.String)
+	}
+	thumbFull := filepath.Join(tmpDir, "media", updated.ThumbnailPath.String)
+	if _, err := os.Stat(thumbFull); err != nil {
+		t.Fatalf("poster file missing: %v", err)
+	}
+
+	// Stored at the configured thumbnail box, not at capture resolution.
+	f, err := os.Open(thumbFull)
+	if err != nil {
+		t.Fatalf("open poster: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	cfgImg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		t.Fatalf("decode poster: %v", err)
+	}
+	if cfgImg.Width != 400 || cfgImg.Height != 300 {
+		t.Errorf("expected poster resized to 400x300, got %dx%d", cfgImg.Width, cfgImg.Height)
+	}
+
+	// The row really was updated, not just the returned copy.
+	reloaded, err := service.repo.GetMedia(ctx, video.ID)
+	if err != nil {
+		t.Fatalf("GetMedia: %v", err)
+	}
+	if reloaded.ThumbnailPath.String != updated.ThumbnailPath.String {
+		t.Errorf("thumbnail_path not persisted: got %q", reloaded.ThumbnailPath.String)
+	}
+}
+
+func TestSaveVideoPoster_Rejects(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+	ctx := context.Background()
+
+	t.Run("undecodable poster", func(t *testing.T) {
+		video := uploadVideo(t, service, "bad-poster.mp4")
+		if _, err := service.SaveVideoPoster(ctx, video.ID, []byte("not an image")); !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+
+	t.Run("non-video media", func(t *testing.T) {
+		img, err := service.UploadFile(ctx, UploadFileParams{
+			Content:  jpegBytes(t, 10, 10),
+			Filename: "photo.jpg",
+			MimeType: "image/jpeg",
+		})
+		if err != nil {
+			t.Fatalf("UploadFile image: %v", err)
+		}
+		if _, err := service.SaveVideoPoster(ctx, img.ID, jpegBytes(t, 20, 20)); !errors.Is(err, ErrNotAVideo) {
+			t.Errorf("expected ErrNotAVideo, got %v", err)
+		}
+	})
+
+	t.Run("missing media", func(t *testing.T) {
+		if _, err := service.SaveVideoPoster(ctx, 99999, jpegBytes(t, 20, 20)); !errors.Is(err, ErrMediaNotFound) {
+			t.Errorf("expected ErrMediaNotFound, got %v", err)
+		}
+	})
+}
+
+func TestSquareThumbnail_Video(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+	ctx := context.Background()
+
+	video := uploadVideo(t, service, "atlas.mp4")
+
+	// Without a poster there is nothing to square: the server cannot decode the
+	// video itself.
+	if _, err := service.SquareThumbnail(ctx, video, AtlasThumbSize); !errors.Is(err, ErrNoPoster) {
+		t.Errorf("expected ErrNoPoster, got %v", err)
+	}
+
+	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 640, 480))
+	if err != nil {
+		t.Fatalf("SaveVideoPoster: %v", err)
+	}
+
+	sqPath, err := service.SquareThumbnail(ctx, withPoster, AtlasThumbSize)
+	if err != nil {
+		t.Fatalf("SquareThumbnail: %v", err)
+	}
+	f, err := os.Open(sqPath)
+	if err != nil {
+		t.Fatalf("open square thumb: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	cfgImg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		t.Fatalf("decode square thumb: %v", err)
+	}
+	if cfgImg.Width != AtlasThumbSize || cfgImg.Height != AtlasThumbSize {
+		t.Errorf("expected %dx%[1]d square, got %dx%d", AtlasThumbSize, cfgImg.Width, cfgImg.Height)
+	}
+
+	// A replacement poster must invalidate the cached square variant rather than
+	// leave the atlas showing the old frame.
+	before, err := os.Stat(sqPath)
+	if err != nil {
+		t.Fatalf("stat square thumb: %v", err)
+	}
+	if _, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 320, 240)); err != nil {
+		t.Fatalf("SaveVideoPoster (replace): %v", err)
+	}
+	if _, err := os.Stat(sqPath); !os.IsNotExist(err) {
+		t.Errorf("expected cached square variant to be dropped, stat err = %v (was modified %v)", err, before.ModTime())
 	}
 }
 

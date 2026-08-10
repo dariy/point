@@ -2,6 +2,7 @@ import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../core/gestures.js";
 import { renderTagLink } from "../../utils/tags.js";
+import { escapeHtml } from "../../utils/helpers.js";
 
 const EDGE_PAD = 48;
 
@@ -608,7 +609,7 @@ export class Timeline extends Component {
       const yearItem = `
         <li class="timeline-popover-year">
           ${renderTagLink(pill)}
-          <span class="count">${pill.post_count}</span>
+          <span class="count">${escapeHtml(pill.post_count)}</span>
         </li>
       `;
 
@@ -623,7 +624,7 @@ export class Timeline extends Component {
             (loc) => `
           <li>
             ${renderTagLink(loc)}
-            <span class="count">${loc.post_count}</span>
+            <span class="count">${escapeHtml(loc.post_count)}</span>
           </li>
         `,
           )
@@ -670,7 +671,7 @@ export class Timeline extends Component {
       .map(
         (p) => `
       <li>
-        <button class="timeline-pill-btn sub-pill" data-slug="${p.slug}">${p.name}</button>
+        <button class="timeline-pill-btn sub-pill" data-slug="${escapeHtml(p.slug)}">${escapeHtml(p.name)}</button>
       </li>
     `,
       )
@@ -1368,7 +1369,7 @@ export class Timeline extends Component {
         "aria-label",
         `${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.`,
       );
-      btn.innerHTML = label;
+      btn.textContent = label;
     } else {
       const p = info.data;
       let label = p.name;
@@ -1379,7 +1380,7 @@ export class Timeline extends Component {
       }
       btn.className = "timeline-pill-btn";
       btn.setAttribute("aria-label", `${p.name}, ${p.post_count} posts.`);
-      btn.innerHTML = label;
+      btn.textContent = label;
     }
 
     return btn;

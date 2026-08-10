@@ -38,8 +38,23 @@
         grid-template-columns: 1fr;
     }
 
+    /* The band between the last card row and the copyright line is four
+       stacked paddings — the paginator's top margin, main's bottom padding,
+       the footer's top padding and the stack's row gap. At desktop values that
+       is ~96px of a 667px phone viewport spent on nothing, so the grid (which
+       is sized to whatever is left over, see utils/gridFit.js) gets that much
+       less. Phone values are half that; the footer's own background is what
+       actually separates it from the page, not the whitespace. */
+    .main-container .pagination {
+        margin-top: var(--spacing-md);
+    }
+
+    .site-main {
+        padding-bottom: var(--spacing-sm);
+    }
+
     .site-footer {
-        padding-top: var(--spacing-lg);
+        padding-top: var(--spacing-md);
     }
 
     .footer-content {

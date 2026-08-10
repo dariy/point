@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"point-api/internal/config"
@@ -207,6 +209,175 @@ func TestMediaHandler_UploadFileErrors(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for missing file")
 	}
+}
+
+// makeTinyMP4 returns bytes that sniff as video/mp4: a size prefix, the "ftyp"
+// box marker, and the "isom" major brand. Nothing decodes them — the server has
+// no video decoder, which is the whole reason posters are captured client-side.
+func makeTinyMP4() []byte {
+	return append([]byte("\x00\x00\x00\x18ftypisom\x00\x00\x02\x00"), []byte("mp42isomavc1")...)
+}
+
+// newMediaHandler wires a handler over a scratch storage dir.
+func newMediaHandler(t *testing.T) (*MediaHandler, *echo.Echo) {
+	t.Helper()
+	repo := setupTestDB(t)
+	t.Cleanup(func() { _ = repo.Close() })
+
+	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	return NewMediaHandler(mediaSvc, settingsSvc), echo.New()
+}
+
+// uploadVideoWithPoster posts a video, optionally with a poster frame attached,
+// and returns the decoded response body.
+func uploadVideoWithPoster(t *testing.T, h *MediaHandler, e *echo.Echo, poster []byte) map[string]interface{} {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	p, _ := writer.CreateFormFile("file", "clip.mp4")
+	_, _ = p.Write(makeTinyMP4())
+	if poster != nil {
+		pf, _ := writer.CreateFormFile("poster", "poster.png")
+		_, _ = pf.Write(poster)
+	}
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.UploadFile(c); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return resp
+}
+
+func TestUploadFile_VideoPoster(t *testing.T) {
+	t.Run("poster becomes the video thumbnail", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		resp := uploadVideoWithPoster(t, h, e, makeTinyPNG(t))
+
+		if resp["file_type"] != "video" {
+			t.Fatalf("expected file_type video, got %v", resp["file_type"])
+		}
+		// The response exposes the thumbnail as the ?thumb variant of the media
+		// URL, which is what the admin grid and the atlas render.
+		thumb, _ := resp["thumbnail_path"].(string)
+		if thumb == "" || !strings.HasSuffix(thumb, ".mp4?thumb") {
+			t.Errorf("expected a ?thumb path for the video, got %q", thumb)
+		}
+	})
+
+	t.Run("video without a poster keeps none", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		resp := uploadVideoWithPoster(t, h, e, nil)
+
+		if resp["thumbnail_path"] != nil {
+			t.Errorf("expected no thumbnail, got %v", resp["thumbnail_path"])
+		}
+	})
+
+	t.Run("unusable poster does not fail the upload", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		// A poster the server cannot decode is dropped: the video still uploads,
+		// it just goes without a still. Losing the whole file over a bad frame
+		// would be a far worse trade.
+		resp := uploadVideoWithPoster(t, h, e, []byte("<html>not an image</html>"))
+
+		if resp["thumbnail_path"] != nil {
+			t.Errorf("expected no thumbnail, got %v", resp["thumbnail_path"])
+		}
+		if resp["file_type"] != "video" {
+			t.Errorf("expected the video to be stored anyway, got %v", resp["file_type"])
+		}
+	})
+}
+
+func TestSetVideoPoster(t *testing.T) {
+	post := func(t *testing.T, h *MediaHandler, e *echo.Echo, id string, poster []byte) (*httptest.ResponseRecorder, error) {
+		t.Helper()
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		if poster != nil {
+			pf, _ := writer.CreateFormFile("poster", "poster.png")
+			_, _ = pf.Write(poster)
+		}
+		_ = writer.Close()
+
+		req := httptest.NewRequest(http.MethodPost, "/", body)
+		req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(id)
+		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+		return rec, h.SetVideoPoster(c)
+	}
+
+	t.Run("backfills a video uploaded without one", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		uploaded := uploadVideoWithPoster(t, h, e, nil)
+		id := fmt.Sprintf("%v", int64(uploaded["id"].(float64)))
+
+		rec, err := post(t, h, e, id, makeTinyPNG(t))
+		if err != nil {
+			t.Fatalf("SetVideoPoster: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+		}
+		var resp map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if thumb, _ := resp["thumbnail_path"].(string); !strings.HasSuffix(thumb, ".mp4?thumb") {
+			t.Errorf("expected a ?thumb path for the video, got %q", thumb)
+		}
+	})
+
+	t.Run("rejects a missing poster", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		uploaded := uploadVideoWithPoster(t, h, e, nil)
+		id := fmt.Sprintf("%v", int64(uploaded["id"].(float64)))
+
+		_, err := post(t, h, e, id, nil)
+		var he *echo.HTTPError
+		if !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %v", err)
+		}
+	})
+
+	t.Run("rejects a non-image poster", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		uploaded := uploadVideoWithPoster(t, h, e, nil)
+		id := fmt.Sprintf("%v", int64(uploaded["id"].(float64)))
+
+		// An .mp4 in the poster slot must not be stored as a still.
+		_, err := post(t, h, e, id, makeTinyMP4())
+		var he *echo.HTTPError
+		if !errors.As(err, &he) || he.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("expected 415, got %v", err)
+		}
+	})
+
+	t.Run("rejects a non-numeric id", func(t *testing.T) {
+		h, e := newMediaHandler(t)
+		_, err := post(t, h, e, "abc", makeTinyPNG(t))
+		var he *echo.HTTPError
+		if !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %v", err)
+		}
+	})
 }
 
 func TestUploadMultiple_WithPostID(t *testing.T) {

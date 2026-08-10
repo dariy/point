@@ -19,6 +19,12 @@ outside this repo — see [Production](#production) below.
 - **run-remark42-local.sh**: Runs the bundled remark42 comments engine locally
   for dev, mirroring what `build/Dockerfile` + `entrypoint.sh` do in the
   container. Started automatically by `run.sh` when comments are enabled.
+- **run-old-version-check.sh**: `run.sh` with `APP_VERSION` pinned to an old
+  release (default `v0.1.35`), so the upstream tag always looks newer and the
+  `version-check` plugin's update paths render — the dashboard banner and the
+  plugin's settings drawer. `--reset-cache` also forgets the last upstream
+  answer, exercising the cold path. Manual test only; a dev build's "dev-…"
+  version is not semver and never compares as out of date.
 
 ## Quality Gate
 
@@ -31,6 +37,16 @@ outside this repo — see [Production](#production) below.
   (`-tags=integration`) by default; `--unit` for unit-only, `--race` for the race
   detector, `--html` for a coverage report. See
   [docs/testing.md](../docs/testing.md).
+
+## Recovery
+
+- **restore-db.sh**: Puts a known-good database back by hand, from either a
+  `.db` snapshot (what the pre-migration guard writes to
+  `data/backups/migrations/`) or a `.tar.gz` archive (what the admin UI and the
+  scheduler write). Use it when the automatic restore failed, when a migration
+  succeeded but was wrong, or when the container won't boot far enough to reach
+  the UI. `--list` shows what is available; the database it replaces is kept.
+  See [docs/plugins/backups.md](../docs/plugins/backups.md#pre-migration-snapshots).
 
 ## Docker / Podman Build
 

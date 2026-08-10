@@ -1,6 +1,6 @@
 # Tags Graph (`tags-graph`)
 
-**Type:** route · **Slot:** `tags-route` · **Routes:** `/tags` · **Area:** `tags-viz` (exclusive) · **Default:** disabled
+**Type:** route · **Slot:** `tags-route` (cardinality `0-1`) · **Routes:** `/tags` · **Default:** disabled
 
 A canvas force-directed graph alternative for the public `/tags` route
 (`frontend/src/plugins/tags-graph/tagGraph.js`). Makes two relationship types
@@ -10,8 +10,8 @@ because a shared post node sits between them. Node radius scales with degree; su
 drag, pan/zoom, hover highlighting, and click-to-navigate. A visually-hidden
 alphabetical tag list provides a keyboard/screen-reader fallback.
 
-Shares the `tags-viz` area with [`tags-atlas`](tags-atlas.md) (default) and
-[`tags-map`](tags-map.md) — `Exclusive: true` means enabling this plugin automatically
-disables its two siblings.
+Competes for the `tags-route` slot with [`tags-atlas`](tags-atlas.md) (default) and
+[`tags-map`](tags-map.md); the slot takes a single claimant, so enabling this plugin
+automatically disables its two siblings.
 
 See [Tags Visualization](../features/tags-visualization.md) for details.

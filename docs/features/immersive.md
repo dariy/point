@@ -9,8 +9,10 @@ Full-screen, distraction-free post viewing. The viewer is a plugin family around
   pinch-to-zoom and drag-to-pan on touch, slide indicators, chrome auto-hide
   (`body.ui-hidden` fades header/footer/close/dots), cross-post navigation (advancing
   past the last slide routes to the next post), and a per-slide URL hash.
-- **`immersive-sheet`** — an alternative sheet-style presentation; exclusive with
-  `immersive` (`Area: "immersive"` in the registry — exactly one is active).
+- **`immersive-sheet`** — an alternative sheet-style presentation. It and `immersive`
+  are the two candidates for the `post-viewer` slot, whose cardinality is `1`
+  (`SlotCardinality` in the registry): exactly one is active, and enabling one is what
+  switches the other off.
 - **`immersive-share`** — a small slot plugin injected into the viewer wrapper: native
   `navigator.share` where available, copy-link + toast fallback; shares the current
   slide URL.

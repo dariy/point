@@ -37,8 +37,12 @@ const MANAGE_ITEMS = [
 export class LightSidebar extends Component {
   constructor(container, props = {}) {
     super(container, props);
+    // null = never toggled, so the group follows the current page (expanded
+    // while you are on one of its items). Once toggled it is the answer, on
+    // every page — the group being open is not a fact about the route.
+    const stored = localStorage.getItem('sidebar_manage_expanded');
     this.state = {
-      manageExpanded: localStorage.getItem('sidebar_manage_expanded') === 'true',
+      manageExpanded: stored === null ? null : stored === 'true',
       collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
     };
   }
@@ -58,7 +62,8 @@ export class LightSidebar extends Component {
     const isManageActive = manageItems.some(item =>
        currentPath === item.href || currentPath.startsWith(item.href + '/')
     );
-    const manageExpanded = this.state.manageExpanded || isManageActive;
+    this._manageActive = isManageActive;
+    const manageExpanded = this.state.manageExpanded ?? isManageActive;
 
     const renderItem = (item) => {
       const isActive = item.href === '/light'
@@ -103,7 +108,7 @@ export class LightSidebar extends Component {
             <ul class="nav-group-items">${writeItems}</ul>
           </div>
 
-          <div class="nav-group ${manageExpanded ? 'is-expanded' : 'is-collapsed'}" id="manage-group">
+          <div class="nav-group ${manageExpanded ? 'is-expanded' : 'is-collapsed'}${isManageActive ? ' has-active' : ''}" id="manage-group">
             <button class="nav-group-toggle" id="manage-toggle" type="button" aria-expanded="${manageExpanded}" title="Manage" aria-label="Toggle Manage group">
               <span class="nav-group-title">Manage</span>
               <span class="toggle-icon">${CHEVRON_SVG}</span>
@@ -145,7 +150,9 @@ export class LightSidebar extends Component {
     }
 
     this.$('#manage-toggle')?.addEventListener('click', () => {
-      const next = !this.state.manageExpanded;
+      // Toggle away from what is on screen, which on an untoggled sidebar is
+      // whatever the current page implied — so the first click always moves.
+      const next = !(this.state.manageExpanded ?? this._manageActive);
       this.setState({ manageExpanded: next });
       localStorage.setItem('sidebar_manage_expanded', String(next));
     });

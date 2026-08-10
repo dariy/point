@@ -11,6 +11,8 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "eslint": "^10.8.0"
+    "eslint": "^10.8.0",
+    "linkedom": "^0.18.13",
+    "playwright": "^1.58.0"
   }
 }

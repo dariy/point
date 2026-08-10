@@ -163,7 +163,7 @@ class PluginHost {
 
   /**
    * Fill a slot with a single plugin: mount only the first enabled claimant that
-   * has a built chunk (registry/manifest order). Used for exclusive slots where
+   * has a built chunk (registry/manifest order). Used for single-claim slots where
    * multiple plugins are alternatives — e.g. `post-viewer`, claimed by either the
    * Standard or Sheet immersive plugin. Returns the mount result, or null when no
    * claimant has a chunk. A failing plugin is logged and yields null.

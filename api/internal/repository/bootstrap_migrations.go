@@ -11,6 +11,17 @@ package repository
 // Both lists are keyed by name and idempotent, and a failure in either is fatal
 // — see migrations.Run for why booting against an unexpected schema is worse
 // than not booting.
+//
+// KEEP BOTH LISTS ADDITIVE. Everything here runs before the boot can snapshot
+// the database (the snapshot needs an open repository, and this is what opens
+// it), so a failure in this file has no automatic way back. That is acceptable
+// only because every statement here is individually atomic: ADD COLUMN, CREATE
+// TABLE/INDEX IF NOT EXISTS, a per-row UPDATE. Nothing here may drop or rebuild
+// a table, and nothing here may need several statements to leave the schema
+// consistent — that work belongs in internal/migrations, which runs after the
+// snapshot exists and is rolled back to it on failure. bootstrapColumns in
+// particular are not recorded in migration_history at all, so the boot cannot
+// even tell whether they are outstanding.
 
 // bootstrapColumns are ALTER TABLE ... ADD COLUMN statements applied directly,
 // before the models.Queries wrapper exists. SQLite has no ADD COLUMN IF NOT

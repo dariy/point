@@ -159,8 +159,8 @@ export class PostContent extends Component {
       };
 
       // post-viewer slot (immersive). The Standard and Sheet immersive plugins
-      // are alternatives for this exclusive slot, so mount only one (the first
-      // enabled, registry order — Standard wins when both are on).
+      // are the two candidates for this single-claim slot, so mount only one
+      // (the first enabled, registry order — Standard wins when both are on).
       if (pluginHost.hasSlot('post-viewer')) {
         // Capture the mounted viewer so it's torn down on the next render/unmount
         // — otherwise the old MediaViewer (and any slot plugins it owns, e.g. the

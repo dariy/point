@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 
 	"point-api/internal/plugins"
@@ -37,17 +38,19 @@ type pluginView struct {
 	Routes         []string     `json:"routes,omitempty"`
 	Enabled        bool         `json:"enabled"`
 	DefaultEnabled bool         `json:"default_enabled"`
-	Area           string       `json:"area,omitempty"`
-	Core           bool         `json:"core,omitempty"`
-	Exclusive      bool         `json:"exclusive,omitempty"`
-	// Locked is true when the plugin may not be disabled because it is the sole
-	// enabled member of a core area. The frontend renders its toggle read-only.
+	// SlotRule is the cardinality of the plugin's slot ("0-1", "1", …), omitted
+	// for plugins that claim no slot. It tells the page which rows are
+	// alternatives for one region and which of them may be switched off.
+	SlotRule plugins.Cardinality `json:"slot_rule,omitempty"`
+	// Locked is true when the plugin may not be disabled because its slot
+	// requires a claimant and this is the only enabled one. The frontend renders
+	// its toggle read-only.
 	Locked bool `json:"locked,omitempty"`
 }
 
 // viewFor builds a pluginView from a descriptor and the resolved settings map.
 func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
-	return pluginView{
+	v := pluginView{
 		ID:             d.ID,
 		Title:          d.Title,
 		Type:           d.Type,
@@ -55,17 +58,26 @@ func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
 		Routes:         d.Routes,
 		Enabled:        plugins.IsEnabled(d.ID, settings),
 		DefaultEnabled: d.DefaultEnabled,
-		Area:           d.Area,
-		Core:           d.Core,
-		Exclusive:      d.Exclusive,
 		Locked:         plugins.IsLockedOff(d.ID, settings),
 	}
+	if d.Slot != "" {
+		v.SlotRule = plugins.SlotRule(d.Slot)
+	}
+	return v
 }
 
-// listViews returns the full catalog as views, in registry order.
+// listViews returns the full catalog as views, in registry order,
+// omitting plugins that are not available in the current build/environment.
 func listViews(settings map[string]string) []pluginView {
+	// remark42 is completely disabled in the slim image (IS_SLIM=true)
+	// or explicitly turned off in local dev (ENABLE_REMARK42=false).
+	hasRemark42 := os.Getenv("IS_SLIM") != "true" && os.Getenv("ENABLE_REMARK42") != "false"
+
 	out := make([]pluginView, 0, len(plugins.Registry))
 	for _, d := range plugins.Registry {
+		if d.ID == "comments" && !hasRemark42 {
+			continue
+		}
 		out = append(out, viewFor(d, settings))
 	}
 	return out
@@ -108,9 +120,10 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 		return MapError(err)
 	}
 
-	// Refuse to empty a core area: the sole enabled plugin there can't go off.
+	// Refuse to empty a slot that requires a claimant: its sole enabled plugin
+	// can't go off (the way to switch is to enable another candidate, below).
 	if !req.Enabled && plugins.IsLockedOff(id, all) {
-		return echo.NewHTTPError(http.StatusConflict, "at least one plugin must stay enabled in this area")
+		return echo.NewHTTPError(http.StatusConflict, "at least one plugin must stay enabled in this slot")
 	}
 
 	if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(id), strconv.FormatBool(req.Enabled), "string"); err != nil {
@@ -118,9 +131,11 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 	}
 	all[plugins.EnabledKey(id)] = strconv.FormatBool(req.Enabled)
 
-	// Exclusive area: enabling a member turns its peers off (radio semantics).
+	// Single-claim slot: enabling a candidate turns its peers off (radio
+	// semantics). This is also how a required slot switches claimant, since the
+	// outgoing one is locked against being disabled directly.
 	if req.Enabled {
-		for _, peer := range plugins.ExclusivePeers(id) {
+		for _, peer := range plugins.SlotPeers(id) {
 			if !plugins.IsEnabled(peer, all) {
 				continue
 			}

@@ -43,12 +43,55 @@ rest live under "More ▾". Items with children get breadcrumb-style dropdowns:
 hover-with-intent on fine pointers, tap-to-toggle on coarse. There are no
 hover-only surfaces.
 
+Which of the two a click gets is decided by `eventPointerType()`
+(`utils/pointerMode.js`), never by the click's own `pointerType`: **WebKit tags
+the compatibility click that follows a tap as `pointerType: "mouse"`** (Chrome
+reports `"touch"`), so reading the click directly made every tap on iPad take
+the mouse branch — the dropdown never opened and the tap just followed the
+link. The `pointerdown` that opened the gesture reports the real device in both
+engines, so that is what a click is judged by; keyboard activation has no
+pointer and falls back to the session verdict (`hasFinePointer()`).
+
+## The site title is a crumb, so it has a dropdown
+
+Every crumb opens what sits one level below it; the site crumb is the blog
+title, and below it are the root tags. Same trigger as the rest of the header
+(hover-with-intent / tap), same anchored panel.
+
+In `tags` mode that mirrors the menu's top level — deliberate duplication: the
+crumb trail reads as one navigable path from the site root down. In `custom`
+mode the two diverge, and the title becomes the only surface still exposing the
+tag tree, so `GET /api/pages/nav` ships it as a separate `tags` field next to
+the authored `menu` (in `tags` mode the field is omitted and the client falls
+back to `menu`). In `none` mode neither is offered — a menuless site stays
+menuless.
+
+The nav-menu plugin and the site crumb both load that payload through
+`frontend/src/api/nav.js`, which fetches once and publishes `navTags` (the menu)
+and `rootTags` (the tree) to the store. The crumb reads the store at open time
+and re-renders when it lands, so neither surface depends on the other existing.
+
+### Who renders the title
+
+The blog title is *site identity*, not page context, so the header owns it —
+`components/public/SiteCrumb.js`, mounted at the head of the context zone —
+while the breadcrumbs plugin renders the trail after it. Switch breadcrumbs off
+and the title and its dropdown stay; the trail is simply gone. The two render
+into sibling `display: contents` wrappers inside `.site-breadcrumb` (each
+Component owns its container's innerHTML), so every crumb remains a direct flex
+child and the fold stages see one list.
+
 ## Managing it
 
-`/light/menu` is the single management surface: mode picker, inline cap, the
-custom items editor (visual + markdown), and a live preview at three widths
-(900 / 640 / 360 px) laid out by the real fold engine — what folds in the
+`/light/menu` is the single management surface for the menu: mode picker, inline
+cap, the custom items editor (visual + markdown), and a live preview at three
+widths (900 / 640 / 360 px) laid out by the real fold engine — what folds in the
 preview is what folds on the site.
+
+The title dropdown belongs to the header, so it is toggled from the Public
+Header plugin's settings (Plugins → Public Header → Settings): `show_title_dropdown`,
+on unless explicitly saved off. Off, the title is a plain home link and the
+header makes no nav request of its own.
 
 ## History
 
@@ -56,4 +99,6 @@ Before this design the menu had no desktop surface: items lived in the mobile
 burger and in a hover-only flyout on the site title, and that flyout was
 attached once at first render — before the nav fetch resolved — so it never
 appeared on a fresh page load. The fold controller's re-measure-on-change
-contract removes that class of bug structurally.
+contract removes that class of bug structurally, and the title dropdown is back
+on those terms: it reads its list at open time and re-renders when the fetch
+lands, so late data re-flows the header instead of being invisible.

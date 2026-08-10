@@ -66,6 +66,50 @@ func TestBuildManifest_OmitsDisabledAndResolvesChunks(t *testing.T) {
 	}
 }
 
+// NormalizeSlots is the one place a whole desired configuration is bent to fit
+// the slot rules, so both corrections it can make are exercised per rule kind.
+func TestNormalizeSlots(t *testing.T) {
+	for slot, rule := range SlotCardinality {
+		members := SlotPlugins(slot)
+		if len(members) == 0 {
+			t.Fatalf("slot %q has a cardinality rule but no candidates", slot)
+		}
+
+		// Everything on: a single-claim slot keeps its first candidate only.
+		want := map[string]bool{}
+		for _, m := range members {
+			want[m.ID] = true
+		}
+		NormalizeSlots(want)
+		var on []string
+		for _, m := range members {
+			if want[m.ID] {
+				on = append(on, m.ID)
+			}
+		}
+		if rule.SingleClaim() && (len(on) != 1 || on[0] != members[0].ID) {
+			t.Errorf("slot %q (%s) with everything on = %v, want [%s]", slot, rule, on, members[0].ID)
+		}
+
+		// Nothing on: a slot that requires a claimant gets its default back, and
+		// one that does not stays empty.
+		want = map[string]bool{}
+		NormalizeSlots(want)
+		on = nil
+		for _, m := range members {
+			if want[m.ID] {
+				on = append(on, m.ID)
+			}
+		}
+		switch {
+		case rule.RequiresOne() && (len(on) != 1 || on[0] != DefaultClaimant(slot)):
+			t.Errorf("slot %q (%s) with nothing on = %v, want [%s]", slot, rule, on, DefaultClaimant(slot))
+		case !rule.RequiresOne() && len(on) != 0:
+			t.Errorf("slot %q (%s) with nothing on = %v, want none", slot, rule, on)
+		}
+	}
+}
+
 func TestBuildManifest_EmptyChunkMapLeavesEntryEmpty(t *testing.T) {
 	// Phase 1 state: no chunks built, every Entry empty, but all enabled plugins
 	// still present in the manifest.
@@ -158,84 +202,126 @@ func TestRegistry_UniqueIDs(t *testing.T) {
 		}
 		seen[d.ID] = true
 	}
-	// Every plugin defaults enabled except: the alternative immersive viewer,
-	// which ships off so the default public viewer stays Standard; the two
-	// non-default tags-viz alternatives (only Atlas is on by default in the
-	// exclusive area); and the external-service opt-ins (MCP server, remark42
-	// comments) admins must enable deliberately.
-	defaultOff := map[string]bool{"immersive-sheet": true, "tags-map": true, "tags-graph": true, "mcp": true, "comments": true}
-	for _, d := range Registry {
-		if !d.DefaultEnabled && !defaultOff[d.ID] {
-			t.Errorf("plugin %q unexpectedly defaults disabled", d.ID)
+}
+
+// Which plugins ship on is a product decision that gets retuned per release and
+// per deployment, so no test pins the individual flags — an enumerated list of
+// them only ever produces a red suite after a deliberate change. What must hold
+// for ANY tuning is that the shipped defaults already satisfy the slot rules the
+// toggle endpoint and IsLockedOff enforce afterwards: a single-claim slot starts
+// with at most one claimant, a required slot with at least one — otherwise a
+// fresh install boots with two viewers fighting over a post, or with none.
+func TestRegistry_SlotDefaultsSatisfyTheirRules(t *testing.T) {
+	fresh := map[string]string{} // no overrides → every plugin at DefaultEnabled
+
+	for slot, rule := range SlotCardinality {
+		if len(SlotPlugins(slot)) == 0 {
+			t.Errorf("slot %q has rule %s but no plugin claims it", slot, rule)
+			continue
+		}
+		enabled := EnabledInSlot(slot, fresh)
+		if rule.SingleClaim() && len(enabled) > 1 {
+			t.Errorf("slot %q (%s) ships %d claimants enabled (%v), want at most 1", slot, rule, len(enabled), enabled)
+		}
+		if rule.RequiresOne() && len(enabled) == 0 {
+			t.Errorf("slot %q (%s) ships with no claimant — the slot is empty on a fresh install", slot, rule)
 		}
 	}
 }
 
-func TestAreaPlugins_AndEnabledInArea(t *testing.T) {
-	members := AreaPlugins("immersive")
+// defaultSplit returns the default-enabled candidate of a two-candidate slot and
+// its default-disabled sibling. Tests use it instead of naming the two viewers
+// directly, so retuning which one ships on doesn't turn them red.
+func defaultSplit(t *testing.T, slot string) (on, off string) {
+	t.Helper()
+	for _, d := range SlotPlugins(slot) {
+		if d.DefaultEnabled {
+			on = d.ID
+		} else {
+			off = d.ID
+		}
+	}
+	if on == "" || off == "" {
+		t.Fatalf("slot %q needs exactly one default-on and one default-off candidate; got on=%q off=%q", slot, on, off)
+	}
+	return on, off
+}
+
+func TestSlotPlugins_AndEnabledInSlot(t *testing.T) {
+	members := SlotPlugins("post-viewer")
 	if len(members) != 2 {
-		t.Fatalf("immersive area should have 2 members, got %d", len(members))
+		t.Fatalf("post-viewer should have 2 candidates, got %d", len(members))
 	}
-	if AreaPlugins("") != nil {
-		t.Errorf("empty area should match nothing")
+	if SlotPlugins("") != nil {
+		t.Errorf("empty slot should match nothing")
+	}
+	on, off := defaultSplit(t, "post-viewer")
+
+	// Defaults: exactly the default-on viewer is enabled.
+	enabled := EnabledInSlot("post-viewer", map[string]string{})
+	if len(enabled) != 1 || enabled[0] != on {
+		t.Errorf("default enabled post-viewer = %v, want [%s]", enabled, on)
 	}
 
-	// Defaults: only Standard immersive is enabled.
-	enabled := EnabledInArea("immersive", map[string]string{})
-	if len(enabled) != 1 || enabled[0] != "immersive" {
-		t.Errorf("default enabled immersive = %v, want [immersive]", enabled)
-	}
-
-	// Both on.
-	enabled = EnabledInArea("immersive", map[string]string{EnabledKey("immersive-sheet"): "true"})
+	// EnabledInSlot reports the raw settings, rule or not: the slot is kept to
+	// one claimant by the toggle endpoint, not by this accessor.
+	enabled = EnabledInSlot("post-viewer", map[string]string{EnabledKey(off): "true"})
 	if len(enabled) != 2 {
 		t.Errorf("both immersive plugins should be enabled, got %v", enabled)
 	}
 }
 
 func TestIsLockedOff(t *testing.T) {
-	// Non-core plugin is never locked.
+	// A plugin whose slot tolerates none is never locked, however alone it is.
 	if IsLockedOff("timeline", map[string]string{}) {
-		t.Errorf("non-core plugin must never be locked")
+		t.Errorf("plugin in a slot with no minimum must never be locked")
 	}
-	// Immersive (Standard) is the only enabled member by default → locked.
-	if !IsLockedOff("immersive", map[string]string{}) {
-		t.Errorf("immersive should be locked when it is the only enabled viewer")
+	if got := EnabledInSlot("tags-route", map[string]string{}); len(got) == 1 && IsLockedOff(got[0], map[string]string{}) {
+		t.Errorf("sole tags viz %q must not be locked — /tags may be turned off entirely", got[0])
 	}
-	// With Sheet also enabled, neither is locked.
-	both := map[string]string{EnabledKey("immersive-sheet"): "true"}
-	if IsLockedOff("immersive", both) || IsLockedOff("immersive-sheet", both) {
+	// Whichever viewer ships on is the required slot's only claimant → locked.
+	on, off := defaultSplit(t, "post-viewer")
+	if !IsLockedOff(on, map[string]string{}) {
+		t.Errorf("%s should be locked when it is the only enabled viewer", on)
+	}
+	// With the sibling also enabled, neither is locked.
+	both := map[string]string{EnabledKey(off): "true"}
+	if IsLockedOff(on, both) || IsLockedOff(off, both) {
 		t.Errorf("with both viewers enabled, neither should be locked")
 	}
 	// A disabled plugin is never "locked off".
-	if IsLockedOff("immersive-sheet", map[string]string{}) {
+	if IsLockedOff(off, map[string]string{}) {
 		t.Errorf("disabled plugin must not be reported locked")
 	}
 }
 
-func TestExclusivePeers(t *testing.T) {
-	// tags-atlas is in the exclusive "tags-viz" area; its peers are the other two.
-	peers := ExclusivePeers("tags-atlas")
+func TestSlotPeers(t *testing.T) {
+	// tags-route takes one claimant; atlas's peers are the other two vizzes.
+	peers := SlotPeers("tags-atlas")
 	want := map[string]bool{"tags-map": true, "tags-graph": true}
 	if len(peers) != len(want) {
-		t.Fatalf("tags-atlas peers = %v, want %d members", peers, len(want))
+		t.Fatalf("tags-atlas peers = %v, want %d candidates", peers, len(want))
 	}
 	for _, p := range peers {
 		if !want[p] {
 			t.Errorf("unexpected peer %q", p)
 		}
 	}
-	// Non-exclusive plugin (core area) has no exclusive peers.
-	if got := ExclusivePeers("immersive"); got != nil {
-		t.Errorf("core-area plugin should have no exclusive peers, got %v", got)
+	// post-viewer takes one too, so each viewer's peer is the other: enabling
+	// one is what switches the public viewer over.
+	if got := SlotPeers("immersive"); len(got) != 1 || got[0] != "immersive-sheet" {
+		t.Errorf("immersive peers = %v, want [immersive-sheet]", got)
 	}
-	// Plain plugin with no area at all.
-	if got := ExclusivePeers("timeline"); got != nil {
-		t.Errorf("area-less plugin should have no exclusive peers, got %v", got)
+	if got := SlotPeers("immersive-sheet"); len(got) != 1 || got[0] != "immersive" {
+		t.Errorf("immersive-sheet peers = %v, want [immersive]", got)
+	}
+	// A slot that takes any number has no peers to switch off.
+	if got := SlotPeers("timeline"); got != nil {
+		t.Errorf("plugin in a many-slot should have no peers, got %v", got)
 	}
 	// Unknown id.
-	if got := ExclusivePeers("does-not-exist"); got != nil {
-		t.Errorf("unknown plugin should have no exclusive peers, got %v", got)
+	if got := SlotPeers("does-not-exist"); got != nil {
+		t.Errorf("unknown plugin should have no peers, got %v", got)
 	}
 }
 
@@ -246,8 +332,24 @@ func TestDefaultPresets(t *testing.T) {
 			t.Errorf("missing default preset %q", id)
 		}
 	}
-	if len(presets["fully-featured"]) != len(Registry) {
-		t.Errorf("fully-featured should include every plugin")
+	// fully-featured is "everything available": every plugin in the registry
+	// except tag-cloud, which no preset offers (it is filtered out of both
+	// fully-featured and standalone — see DefaultPresets).
+	inFull := map[string]bool{}
+	for _, id := range presets["fully-featured"] {
+		inFull[id] = true
+	}
+	if inFull["tag-cloud"] {
+		t.Errorf("fully-featured must not include tag-cloud")
+	}
+	for _, d := range Registry {
+		if d.ID != "tag-cloud" && !inFull[d.ID] {
+			t.Errorf("fully-featured is missing %q", d.ID)
+		}
+	}
+	if want := len(Registry) - 1; len(presets["fully-featured"]) != want {
+		t.Errorf("fully-featured has %d plugins, want %d (every plugin but tag-cloud)",
+			len(presets["fully-featured"]), want)
 	}
 	// Minimalistic enables only the sheet viewer among non-core public plugins.
 	if got := presets["minimalistic"]; len(got) != 1 || got[0] != "immersive-sheet" {

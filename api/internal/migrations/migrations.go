@@ -4,6 +4,9 @@
 // migration_history table via repository.ApplyMigration), then the multi-step
 // system-tag migrations run in sequence. Every step is idempotent, so Run is
 // safe to call on each boot.
+//
+// Run and Pending share one ordered list, steps(), so the set of migrations a
+// build declares and the set it reports as outstanding can never drift.
 package migrations
 
 import (
@@ -260,6 +263,130 @@ var schema = []struct{ name, sql string }{
 		"create_media_original_path_index",
 		`CREATE INDEX IF NOT EXISTS idx_media_original_path ON media(original_path)`,
 	},
+	{
+		// Retired settings. None of these was ever read: session TTL is
+		// SESSION_EXPIRY_HOURS, there is no cleanup job, no registration flow
+		// and no way to create a second user, and use_thumbnails only ever
+		// hid post-card images. storage_quota_mb moved to STORAGE_QUOTA_MB —
+		// a hosted install's quota belongs to the plan, not to the blog admin.
+		"drop_unused_blog_settings",
+		`DELETE FROM blog_settings WHERE key IN (
+				'session_ttl_days',
+				'cleanup_interval_days',
+				'multi_user_mode',
+				'require_registration_code',
+				'use_thumbnails',
+				'storage_quota_mb'
+			)`,
+	},
+	{
+		// The post-viewer slot takes exactly one plugin (plugins.SlotCardinality),
+		// which the toggle endpoint enforces from here on. Installs configured
+		// while both viewers could be on at once are reconciled to the standard
+		// viewer — the one the frontend already mounted when both were enabled
+		// (single-claim slots resolve in registry order), so nothing visibly
+		// changes for those blogs.
+		"reconcile_post_viewer_single_claim",
+		`UPDATE blog_settings SET value = 'false', updated_at = CURRENT_TIMESTAMP
+			 WHERE key = 'plugin.immersive-sheet.enabled' AND value = 'true'
+			   AND EXISTS (SELECT 1 FROM blog_settings
+			                WHERE key = 'plugin.immersive.enabled' AND value = 'true')`,
+	},
+	{
+		// ...and the same slot may not be left empty, which used to render an
+		// immersive post as a blank page. Only touches installs whose viewer
+		// settings were already seeded, so a fresh database still gets its
+		// defaults from the registry at setup time.
+		"reconcile_post_viewer_requires_one",
+		`INSERT OR REPLACE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.immersive.enabled', 'true', 'string', CURRENT_TIMESTAMP
+			  WHERE EXISTS (SELECT 1 FROM blog_settings
+			                 WHERE key IN ('plugin.immersive.enabled', 'plugin.immersive-sheet.enabled'))
+			    AND NOT EXISTS (SELECT 1 FROM blog_settings
+			                     WHERE key IN ('plugin.immersive.enabled', 'plugin.immersive-sheet.enabled')
+			                       AND value = 'true')`,
+	},
+}
+
+// step is one named unit of migration work. Every step gates on its own name in
+// migration_history and records that name once it succeeds, which is what makes
+// both Run and Pending exact: a name already in the table means the step is a
+// no-op, so an empty pending set means Run has nothing to do at all.
+type step struct {
+	name string
+	run  func(ctx context.Context, repo repository.Repository) error
+}
+
+// steps returns every migration this build declares, in the order they must be
+// applied. The order is historical, not arbitrary — the tag steps below assume
+// the schema list has already run, and the two renames assume the system tags
+// they rewrite exist. Appending is safe; reordering is not.
+func steps() []step {
+	out := make([]step, 0, len(schema)+6)
+
+	for _, m := range schema {
+		out = append(out, step{m.name, func(ctx context.Context, repo repository.Repository) error {
+			return repo.ApplyMigration(ctx, m.name, m.sql)
+		}})
+	}
+
+	return append(out,
+		// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
+		step{"system_tags_phase_a", func(ctx context.Context, repo repository.Repository) error {
+			return repo.MigrateFlagsToSystemTags(ctx)
+		}},
+		// Phase B: rebuild tags table to drop the now-migrated boolean columns.
+		step{"system_tags_phase_b", func(ctx context.Context, repo repository.Repository) error {
+			return repo.RebuildTagsTableDropBooleans(ctx)
+		}},
+		// Ensure all required system tags exist.
+		step{"ensure_system_tags", func(ctx context.Context, repo repository.Repository) error {
+			return repo.EnsureSystemTags(ctx)
+		}},
+		// Rename all system tags so that name == slug (e.g. "_root", "_pending").
+		// This was the first pass — kept so the migration_history entry is preserved.
+		step{"rename_system_tags_to_slug", func(ctx context.Context, repo repository.Repository) error {
+			return repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
+				`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`)
+		}},
+		// Strip the leading '_' from system tag display names so the UI shows
+		// "root", "pending", "hidden", etc. instead of "_root", "_pending".
+		step{"rename_system_tags_names_no_underscore", func(ctx context.Context, repo repository.Repository) error {
+			return repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
+				`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`)
+		}},
+		// Migrate tag system: translate system-tag graph edges to typed columns, fold
+		// tag_locations into tags, drop old columns, delete system tags.
+		step{"tag_flags_from_system_tags", func(ctx context.Context, repo repository.Repository) error {
+			return repo.MigrateTagFlagsFromSystemTags(ctx)
+		}},
+	)
+}
+
+// Pending returns the names of the steps not yet recorded in migration_history,
+// in declared order. It is what lets the caller decide whether this boot has any
+// schema work to do — and therefore whether the database is worth snapshotting
+// before that work starts (see cmd/api/migrations_guard.go).
+//
+// GetMigrations already reports an empty list for a database with no
+// migration_history table, so a fresh or very old database reports every step.
+func Pending(ctx context.Context, repo repository.Repository) ([]string, error) {
+	records, err := repo.GetMigrations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read migration history: %w", err)
+	}
+	applied := make(map[string]struct{}, len(records))
+	for _, r := range records {
+		applied[r.Name] = struct{}{}
+	}
+
+	var pending []string
+	for _, s := range steps() {
+		if _, ok := applied[s.name]; !ok {
+			pending = append(pending, s.name)
+		}
+	}
+	return pending, nil
 }
 
 // Run applies all pending schema migrations, then the special multi-step tag
@@ -274,41 +401,15 @@ var schema = []struct{ name, sql string }{
 //
 // Every step is attempted even after one fails, so the logs name every problem
 // rather than only the first; the errors are then joined and returned together.
+// That is also why the caller restores a snapshot rather than rolling back: by
+// the time Run returns, several steps may have written.
 func Run(ctx context.Context, repo repository.Repository) error {
 	var errs []error
-	// step runs one named migration, logging and collecting any failure.
-	step := func(name string, err error) {
-		if err != nil {
-			slog.Error("migration failed", "name", name, "error", err)
-			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+	for _, s := range steps() {
+		if err := s.run(ctx, repo); err != nil {
+			slog.Error("migration failed", "name", s.name, "error", err)
+			errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
 		}
 	}
-
-	for _, m := range schema {
-		step(m.name, repo.ApplyMigration(ctx, m.name, m.sql))
-	}
-
-	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
-	step("system_tags_phase_a", repo.MigrateFlagsToSystemTags(ctx))
-	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
-	step("system_tags_phase_b", repo.RebuildTagsTableDropBooleans(ctx))
-
-	// Ensure all required system tags exist.
-	step("ensure_system_tags", repo.EnsureSystemTags(ctx))
-
-	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
-	// This was the first pass — kept so the migration_history entry is preserved.
-	step("rename_system_tags_to_slug", repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
-		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`))
-
-	// Strip the leading '_' from system tag display names so the UI shows
-	// "root", "pending", "hidden", etc. instead of "_root", "_pending".
-	step("rename_system_tags_names_no_underscore", repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
-		`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`))
-
-	// Migrate tag system: translate system-tag graph edges to typed columns, fold
-	// tag_locations into tags, drop old columns, delete system tags.
-	step("tag_flags_from_system_tags", repo.MigrateTagFlagsFromSystemTags(ctx))
-
 	return errors.Join(errs...)
 }

@@ -176,10 +176,20 @@ export function getPhotoLibraryFileUrl(path) {
 /**
  * Check current and latest available version.
  * Result is cached server-side for 24 hours.
- * @returns {Promise<{current: string, latest: string, update_available: boolean}>}
+ * @returns {Promise<{current: string, latest: string, update_available: boolean, checked_at?: string, fetched: boolean, error?: string}>}
  */
 export function getVersion() {
   return api.get('/api/system/version');
+}
+
+/**
+ * Re-check the upstream version now, ignoring the 24h server-side cache.
+ * `fetched` says whether GitHub actually answered; `error` carries the reason
+ * when it didn't.
+ * @returns {Promise<{current: string, latest: string, update_available: boolean, checked_at?: string, fetched: boolean, error?: string}>}
+ */
+export function checkVersionNow() {
+  return api.post('/api/system/version/check');
 }
 
 /**
