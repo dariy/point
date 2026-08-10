@@ -24,7 +24,9 @@ export ADMIN_PASSWD
 # In some environments (like rootless Podman), su-exec might fail with
 # "setgroups: Operation not permitted". If so, we fall back to running as-is.
 if [ "$(id -u)" = '0' ]; then
-    chown -R appuser:appuser /data 2>/dev/null || true
+    # chown the root and all non-R2 mounts (skip media and backups to avoid FUSE hangs)
+    chown appuser:appuser /data 2>/dev/null || true
+    find /data -mindepth 1 -maxdepth 1 ! -name media ! -name backups -exec chown -R appuser:appuser {} + 2>/dev/null || true
     exec su-exec appuser "$@" 2>/dev/null || {
         echo "Warning: su-exec failed, running as $(id -u -n)"
         exec "$@"
