@@ -603,3 +603,44 @@ func TestServeSimplifiedMedia_NonSVGKeepsGlobalCSP(t *testing.T) {
 		t.Errorf("non-SVG media should not set its own CSP, got %q", csp)
 	}
 }
+
+// ── S3 Direct serving ──────────────────────────────────────────────────────
+
+func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+
+	year, month, filename := "2023", "10", "test-s3.jpg"
+	createPublicMedia(t, repo, year, month, filename)
+	makeMediaFile(t, storage, year, month, filename)
+
+	// Setup Presigner
+	s3p, _ := services.NewS3Presigner("http://localhost:9000", "us-east-1", "test", "test", "mybucket")
+
+	handler := serveSimplifiedMedia(storage, "", repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo), nil, nil)
+	e := echo.New()
+	
+	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
+	req.Header.Set("X-Point-Direct-S3", "1")
+	
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month", "filename")
+	c.SetParamValues(year, month, filename)
+
+	err := handler(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	presignedURL := rec.Header().Get("X-S3-Presigned-Url")
+	if presignedURL == "" {
+		t.Errorf("expected X-S3-Presigned-Url header to be set")
+	}
+	if !strings.Contains(presignedURL, filename) {
+		t.Errorf("presigned URL should contain filename, got %s", presignedURL)
+	}
+}
