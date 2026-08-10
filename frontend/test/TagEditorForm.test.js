@@ -203,8 +203,8 @@ describe('renderTagToggles', () => {
 
   test('escapes tag names', () => {
     const html = renderTagToggles('parent_ids', [tag(1, '<script>x</script>'), tag(2, 'b')], null, []);
-    assert.doesNotMatch(html, /<script>/);
-    assert.match(html, /&lt;script&gt;/);
+    assert.doesNotMatch(html, /<script>/i);
+    assert.match(html, /&lt;script&gt;/i);
   });
 });
 
@@ -311,9 +311,9 @@ describe('renderTagEditorForm', () => {
   test('escapes a hostile name everywhere it appears', () => {
     const t = tag(3, 'x', { name: '"><script>alert(1)</script>', slug: 'a"b', description: '</textarea><b>' });
     const html = renderTagEditorForm({ tag: t, allTags });
-    assert.doesNotMatch(html, /<script>alert/);
-    assert.doesNotMatch(html, /<\/textarea><b>/);
-    assert.match(html, /&lt;script&gt;/);
+    assert.doesNotMatch(html, /<script>alert/i);
+    assert.doesNotMatch(html, /<\/textarea><b>/i);
+    assert.match(html, /&lt;script&gt;/i);
     assert.match(html, /&quot;b/, 'the slug attribute is escaped too');
   });
 });

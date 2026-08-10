@@ -88,7 +88,11 @@ export async function captureVideoPoster(source) {
     video.playsInline = true;
     video.preload = "auto";
     video.crossOrigin = "anonymous";
-    video.src = objectUrl || source;
+    if (objectUrl) {
+      video.src = objectUrl;
+    } else if (typeof source === "string") {
+      video.src = source;
+    }
 
     await once(video, ["loadedmetadata"], CAPTURE_TIMEOUT_MS);
 
