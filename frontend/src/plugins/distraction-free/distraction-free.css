@@ -3,13 +3,43 @@
    which hides all chrome and portals the button to document.body as a fixed
    overlay. Auto-bundled to css/p/distraction-free.css by build-css.sh. */
 
-/* Hide all chrome. Ids match HomePage's mount points. */
+/* Hide all chrome. Ids match HomePage's mount points. The footer is the one
+   exception — it stays laid out so it can slide up as the overlay (below). */
 body.distraction-free #header-mount,
-body.distraction-free #footer-mount,
 body.distraction-free #tag-cloud-mount,
 body.distraction-free #timeline-mount,
 body.distraction-free #pagination-mount {
   display: none !important;
+}
+
+/* The swipe-up overlay: the site footer, parked below the viewport and slid up
+   by `distraction-overlay` (a flick up on the grid — see index.js). Moved by
+   transform rather than toggled with display so it can animate, and hidden by
+   `visibility` so while it is down it is out of the tab order and off screen
+   readers as well as off screen. */
+body.distraction-free #footer-mount {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  visibility: hidden;
+  transform: translateY(100%);
+  transition: transform 0.3s ease, visibility 0.3s;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.18);
+}
+
+body.distraction-free.distraction-overlay #footer-mount {
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Portrait phones normally leave the paginator to the in-flow copy below the
+   grid and hide the footer's (public/footer.css) — but that copy is chrome this
+   mode hides, so here the footer carries it in every orientation. */
+body.distraction-free .footer-pagination,
+body.distraction-free .footer-center:has(> .footer-pagination) {
+  display: block;
 }
 
 /* Button portalled to document.body — fixed to the image grid's top-right
@@ -23,44 +53,21 @@ body.distraction-free .distraction-toggle {
   top: var(--spacing-lg, 1.5rem);
   right: calc(max(0px, (100vw - var(--content-max-width)) / 2) + var(--spacing-md, 1rem));
   z-index: 200;
-  background: var(--color-accent, #4ea1ff);
-  color: #fff;
+  /* Same pairing as .page-nav-arrow (common/pagination.css) — the theme's main
+     colour rather than the fixed brand accent, and --text-inverted rather than
+     a hardcoded #fff that only cleared 2.77:1 against it. The two controls sit
+     on screen together in DF mode, so they have to be tinted from one token. */
+  background: var(--color-primary, #4ea1ff);
+  color: var(--text-inverted, #fff);
   border-color: transparent;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* Edge page-arrows (created by HomePage). Hidden everywhere by default; only
-   for a fine hover-capable pointer — touch users swipe, so they never see
-   them. Idle faint, lifting to full on hover; a disabled arrow at a list end
-   drops out entirely. Parked in the side gutter when the viewport is wider
-   than the content, tucked to the edge otherwise. */
-.df-nav-arrow { display: none; }
-@media (hover: hover) and (pointer: fine) {
-  .df-nav-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3rem;
-    height: 3rem;
-    z-index: 200;
-    border: none;
-    border-radius: 50%;
-    background: var(--color-accent, #4ea1ff);
-    color: #fff;
-    cursor: pointer;
-    opacity: 0.25;
-    transition: opacity 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
-  .df-nav-arrow:hover { opacity: 1; }
-  .df-nav-arrow:disabled { display: none; }
-  .df-nav-prev {
-    left: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
-  }
-  .df-nav-next {
-    right: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
-  }
+/* …but only where there is a pointer to click it with. On touch the flick down
+   is the way out (index.js), so the button would be a second exit floating over
+   the very grid the mode exists to clear. The header's enter button is
+   unaffected: this only matches once the mode is on. */
+html:not(.pointer-fine) body.distraction-free .distraction-toggle {
+  display: none;
 }
+

@@ -8,7 +8,7 @@
 
 import { Component } from "../../components/Component.js";
 import { Pagination } from "../../components/shared/Pagination.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { renderCopyright } from "../../utils/copyright.js";
 import {
   renderTagLink,
   buildTagIndex,
@@ -37,29 +37,11 @@ import {
 export class PublicFooter extends Component {
   render() {
     const { settings = {}, immersiveTags = [] } = this.props;
-    const author = escapeHtml(
-      settings.author_name || settings.blog_title || "",
-    );
-
-    const aboutHref = settings.about_post_id
-      ? `/posts/${escapeHtml(settings.about_post_id)}`
-      : "/light";
 
     // Copyright line: admin-editable template with {{author_name}} / {{engine}}
-    // tokens (point-62zu). Literal text is escaped; only known tokens emit HTML.
-    const tokens = {
-      author_name: author ? `<a href="${aboutHref}">${author}</a>` : "",
-      engine: `<a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>`,
-    };
-    const template = (settings.footer_copyright || "").trim()
-      || (author ? "© {{author_name}}, powered by {{engine}}" : "© powered by {{engine}}");
-    const copyright = template.replace(
-      /\{\{(\w+)\}\}|([^{]+|\{)/g,
-      (m, token, literal) =>
-        token !== undefined
-          ? (token in tokens ? tokens[token] : escapeHtml(m))
-          : escapeHtml(literal),
-    );
+    // tokens (point-62zu) and [text](url) links. Shared with the immersive
+    // sheet's footer so the two render the same line.
+    const copyright = renderCopyright(settings);
 
     let centerSlot = "";
     if (immersiveTags.length) {

@@ -145,6 +145,28 @@ td.updated-col {
     font-size: var(--font-size-base);
 }
 
+/* A video post's poster frame covers the play glyph sharing its box. When the
+   video has no poster the <img> 404s and is stripped (helpers.dropBrokenImages),
+   so the glyph and the empty-slot border come back on their own. */
+.post-preview-placeholder,
+.post-card-thumb {
+    position: relative;
+}
+
+.post-preview-placeholder:has(.post-preview-img--poster) {
+    border-color: transparent;
+}
+
+.post-preview-img--poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    border-radius: inherit;
+}
+
 /* No special padding for first header since we added a preview column */
 /* vertically align "Status" with "Published" */
 th.status-col {

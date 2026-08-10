@@ -1410,3 +1410,52 @@ func TestPostHandler_PublishToInstagram_FailureIsLogged(t *testing.T) {
 		t.Errorf("cross-post failure was not logged; log output: %q", got)
 	}
 }
+
+// A post created with no title at all is titled (and slugged) after today —
+// the editor lets an author save without ever naming the post.
+func TestPostHandler_CreateUntitledPost(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo, settingsSvc, nil, tagSvc, "")
+	handler := NewPostHandler(postSvc, settingsSvc, services.NewMediaService(repo, nil, settingsSvc, tagSvc), tagSvc)
+
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "untitled", Email: "u@e.com", PasswordHash: "h", DisplayName: "U",
+	})
+	session := models.GetSessionByTokenRow{UserID: user.ID, Username: user.Username}
+	today := time.Now().Format("2006-01-02")
+
+	create := func() map[string]interface{} {
+		t.Helper()
+		c, rec := echoCtx(http.MethodPost, "/posts", `{"content":"body","status":"draft"}`)
+		c.Set("user", session)
+		if err := handler.CreatePost(c); err != nil {
+			t.Fatalf("CreatePost failed: %v", err)
+		}
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var body map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return body
+	}
+
+	first := create()
+	if first["title"] != today {
+		t.Errorf("expected title %q, got %v", today, first["title"])
+	}
+	if first["slug"] != today {
+		t.Errorf("expected slug %q, got %v", today, first["slug"])
+	}
+
+	// A second untitled post the same day must not collide on the date slug.
+	second := create()
+	if second["slug"] != today+"-2" {
+		t.Errorf("expected slug %q, got %v", today+"-2", second["slug"])
+	}
+}

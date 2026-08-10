@@ -132,6 +132,36 @@ func TestExtractTarGz_RejectsAbsolutePath(t *testing.T) {
 	}
 }
 
+// A lexical "does the joined path start with destDir" check passes for an entry
+// like "link/x.txt" when data/link is a symlink pointing outside the data dir —
+// the write then lands wherever the link goes. Extraction must resolve names
+// against the data dir itself, not just compare strings.
+func TestExtractTarGz_RejectsWriteThroughEscapingSymlink(t *testing.T) {
+	root := t.TempDir()
+	dataPath := filepath.Join(root, "data")
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(dataPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dataPath, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	s := NewSystemService(nil, dataPath, "")
+
+	archive := filepath.Join(root, "symlink.tar.gz")
+	writeTarGz(t, archive, map[string]string{"link/escape.txt": "pwned"})
+
+	if err := s.extractTarGz(archive, dataPath); err == nil {
+		t.Fatal("expected write through an escaping symlink to be rejected")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "escape.txt")); !os.IsNotExist(err) {
+		t.Fatal("entry wrote through the symlink, outside the data dir")
+	}
+}
+
 // TestScheduleAndApplyRestore covers the deferred-restore flow: ScheduleRestore
 // only records the request (nothing is extracted while the server is live), and
 // ApplyPendingRestore extracts it and clears stale WAL/SHM sidecars.

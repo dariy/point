@@ -564,6 +564,24 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 		_ = gz.Close()
 	}()
 
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return err
+	}
+	// Security ("Zip Slip"): uploaded ("move in") archives are attacker-
+	// controlled, so no entry may be written outside destDir. Every write below
+	// goes through os.Root, which resolves each name inside destDir at the
+	// syscall level (openat2/RESOLVE_BENEATH where available) and refuses
+	// anything that leaves it — including a traversal hidden behind a symlink
+	// that already exists on disk, which a filepath.Join + prefix check cannot
+	// catch. Do not "simplify" this back to joining onto destDir by hand.
+	root, err := os.OpenRoot(destDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = root.Close()
+	}()
+
 	tr := tar.NewReader(gz)
 	for {
 		header, err := tr.Next()
@@ -574,34 +592,31 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 			return err
 		}
 
-		// Security: reject path traversal. Uploaded ("move in") archives are
-		// attacker-controlled, so an entry must resolve to destDir itself or a
-		// path strictly beneath it. The trailing separator is essential — without
-		// it, a sibling like "<dest>EVIL" would pass a bare prefix check, and
-		// filepath.Join collapses "../" so "../destEVIL/x" would escape.
-		cleanDest := filepath.Clean(destDir)
-		target := filepath.Join(cleanDest, header.Name) //nolint:gosec // G305: guarded by the check immediately below — do not "fix" by removing it
-		if filepath.IsAbs(header.Name) ||
-			(target != cleanDest && !strings.HasPrefix(target, cleanDest+string(os.PathSeparator))) {
+		// Reject the name before it reaches the filesystem at all: IsLocal is
+		// false for absolute paths, for anything starting with or escaping via
+		// "..", and (on Windows) for drive-relative and reserved names. os.Root
+		// would refuse these too; failing here gives the operator a clear error
+		// instead of a syscall one.
+		name := filepath.Clean(filepath.FromSlash(header.Name))
+		if name == "." {
+			continue // the archive root itself
+		}
+		if !filepath.IsLocal(name) {
 			return fmt.Errorf("restore: unsafe path in archive: %q", header.Name)
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			//nolint:gosec // G703: target passed the traversal check above
-			if mkErr := os.MkdirAll(target, 0755); mkErr != nil {
-				_ = os.Chmod(target, 0755)
+			if mkErr := root.MkdirAll(name, 0755); mkErr != nil {
+				_ = root.Chmod(name, 0755)
 			}
 		case tar.TypeReg:
-			// Every path below derives from target, which passed the traversal
-			// check above.
-			parentDir := filepath.Dir(target)
-			//nolint:gosec // G703: derived from the checked target
-			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
-				_ = os.Chmod(parentDir, 0755)
+			if parent := filepath.Dir(name); parent != "." {
+				if mkErr := root.MkdirAll(parent, 0755); mkErr != nil {
+					_ = root.Chmod(parent, 0755)
+				}
 			}
-			//nolint:gosec // G703: derived from the checked target
-			out, err := os.Create(target)
+			out, err := root.Create(name)
 			if err != nil {
 				return fmt.Errorf("restore: cannot write %s: %w", header.Name, err)
 			}

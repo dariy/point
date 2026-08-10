@@ -65,6 +65,26 @@ export function safeUrl(url) {
 }
 
 /**
+ * Viewports too short to spend height on optional chrome — a phone in
+ * landscape, or a desktop window squashed to the same shape.
+ *
+ * Declared here rather than inline so the CSS that acts on it and the JS that
+ * has to know it happened cannot drift: the string is the literal twin of the
+ * media query in css/public/timeline.css.
+ */
+export const SHORT_VIEWPORT_QUERY = '(max-height: 30em)';
+
+/**
+ * True when the viewport matches SHORT_VIEWPORT_QUERY.
+ *
+ * @returns {boolean} false where matchMedia is absent (SSR / test env), which
+ *   keeps the full-height layout as the assumption when we cannot measure.
+ */
+export function isShortViewport() {
+  return !!window.matchMedia?.(SHORT_VIEWPORT_QUERY).matches;
+}
+
+/**
  * Debounce a function — delays execution until `ms` milliseconds have passed
  * since the last call.
  *
@@ -126,6 +146,31 @@ export function clearElement(el) {
 }
 
 /**
+ * Drop any <img> under `root` that fails to load, revealing whatever markup
+ * sits behind it.
+ *
+ * Used where a thumbnail URL is optimistic: a video's ?thumb resolves to its
+ * captured poster frame, and the server 404s it when the video never got one
+ * (uploaded before poster capture, or ingested outside the admin UI). Rather
+ * than ask every caller to know which videos have posters, the image is
+ * rendered over a placeholder and removed if it does not arrive.
+ *
+ * `error` does not bubble, hence the capture-phase listener.
+ *
+ * @param {HTMLElement} root
+ */
+export function dropBrokenImages(root) {
+  if (!root) return;
+  root.addEventListener(
+    'error',
+    (e) => {
+      if (e.target instanceof HTMLImageElement) e.target.remove();
+    },
+    true,
+  );
+}
+
+/**
  * Programmatically navigate to a path using the history API.
  * Dispatches a custom 'navigate' event so the router can handle it without
  * coupling to the router module directly.
@@ -172,9 +217,9 @@ export function normalizeSettings(raw) {
   const result = { ...raw };
   for (const key in raw) {
     const value = raw[key];
-    if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
+    if (key.includes('per_page') || key.includes('posts_to_show')) {
       result[key] = parseInt(value, 10) || 0;
-    } else if (key.includes('enable') || key.includes('show') || key.includes('use') || key === 'multi_user_mode') {
+    } else if (key.includes('enable') || key.includes('show')) {
       result[key] = value === 'true' || value === '1' || value === true || value === 1;
     }
   }

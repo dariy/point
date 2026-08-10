@@ -327,6 +327,75 @@ func TestServeSimplifiedMedia_ThumbServed(t *testing.T) {
 	}
 }
 
+// TestServeSimplifiedMedia_ThumbVideoNoPoster covers the one case where ?thumb
+// must not degrade to the original: a video whose poster was never captured.
+// Streaming the .mp4 to an <img> would download the whole file to render a
+// broken image, so the request 404s and the UI falls back to its play glyph.
+func TestServeSimplifiedMedia_ThumbVideoNoPoster(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	ctx := context.Background()
+	m, err := repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:     "clip.mp4",
+		OriginalPath: "originals/2024/01/clip.mp4",
+		FileType:     "video",
+		MimeType:     "video/mp4",
+		Checksum:     "clip-chk",
+		UploadedAt:   time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("CreateMedia: %v", err)
+	}
+	if _, err := repo.DB().ExecContext(ctx, `UPDATE media SET is_public=1 WHERE id=?`, m.ID); err != nil {
+		t.Fatalf("set is_public: %v", err)
+	}
+	// The original is on disk — without the type check it would be served here.
+	makeMediaFile(t, storage, "2024", "01", "clip.mp4")
+
+	if rec := serveThumbRequest(t, storage, repo, "2024", "01", "clip.mp4"); rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for a posterless video, got %d", rec.Code)
+	}
+
+	// The original itself is still served untouched.
+	if rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "clip.mp4", true); rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for the video itself, got %d", rec.Code)
+	}
+}
+
+// TestServeSimplifiedMedia_ThumbVideoWithPoster is the payoff: once a poster is
+// stored, a video's ?thumb serves that still like any image thumbnail.
+func TestServeSimplifiedMedia_ThumbVideoWithPoster(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	ctx := context.Background()
+	thumbRel := "thumbnails/2024/01/clip.jpg"
+	m, err := repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:      "clip.mp4",
+		OriginalPath:  "originals/2024/01/clip.mp4",
+		ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
+		FileType:      "video",
+		MimeType:      "video/mp4",
+		Checksum:      "clip-poster-chk",
+		UploadedAt:    time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("CreateMedia: %v", err)
+	}
+	if _, err := repo.DB().ExecContext(ctx, `UPDATE media SET is_public=1 WHERE id=?`, m.ID); err != nil {
+		t.Fatalf("set is_public: %v", err)
+	}
+
+	thumbFile := filepath.Join(storage, "media", thumbRel)
+	_ = os.MkdirAll(filepath.Dir(thumbFile), 0755)
+	_ = os.WriteFile(thumbFile, []byte("poster-data"), 0644)
+
+	rec := serveThumbRequest(t, storage, repo, "2024", "01", "clip.mp4")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 serving the poster, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "poster-data" {
+		t.Errorf("expected the poster bytes, got %q", rec.Body.String())
+	}
+}
+
 // serveSizedThumbRequest issues an authenticated GET for ?thumb=<size>.
 func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, size string) *httptest.ResponseRecorder {
 	t.Helper()

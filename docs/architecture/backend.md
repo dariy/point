@@ -192,7 +192,32 @@ go run cmd/api/main.go
 ```
 
 ### Database Migrations
-Migrations are handled via SQL files in `api/sql/` and applied on startup.
+
+Migrations run on every startup, in two phases, both keyed by name in
+`migration_history` so each step runs once:
+
+1. **Bootstrap** (`api/internal/repository/bootstrap_migrations.go`), inside
+   `NewRepository`, for anything a query in that package needs before it can run
+   at all. Additive only — see the rule in that file's header.
+2. **Main** (`api/internal/migrations`), from `runMigrationsGuarded` in
+   `cmd/api`. One ordered list, `steps()`, shared by `Run` and `Pending` so the
+   two cannot drift. Fail-forward: every step is attempted and the errors are
+   joined, so the logs name every problem rather than only the first.
+
+A brand-new database skips both and is built from `api/sql/schema.sql` instead.
+"Brand-new" means none of the four core tables (`users`, `posts`, `tags`,
+`blog_settings`) exists. A database holding *some* of them is either an
+initialization that died part way through — completed, with a warning — or a
+real database that has lost a table, which refuses to start: `schema.sql` is all
+`IF NOT EXISTS`, so initializing over it would recreate the missing table empty
+and boot as if nothing were wrong.
+
+A failure in either phase is fatal — a server that boots against a schema the
+code does not expect fails later, somewhere unrelated. Before phase 2 applies
+anything, the boot snapshots the database with `VACUUM INTO` (only when
+something is actually pending) and restores that snapshot if the phase fails, so
+the process exits with the database at its pre-upgrade state. See
+[Pre-migration snapshots](../plugins/backups.md#pre-migration-snapshots).
 
 ### Generating Code
 ```bash

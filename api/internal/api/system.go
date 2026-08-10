@@ -48,12 +48,23 @@ type SystemHandler struct {
 	// health is the background-job outcome registry surfaced by GetHealth.
 	// Nil is valid: the endpoint then reports no jobs.
 	health *services.HealthRegistry
+	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
+	// reported by GetStats. 0 means unlimited and is omitted from the response.
+	storageQuotaMB int
 }
 
 // WithHealth attaches the background-job health registry. A setter rather than
 // another constructor parameter — NewSystemHandler already takes ten.
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
+	return h
+}
+
+// WithStorageQuotaMB attaches the operator-configured storage allowance. A
+// setter for the same reason as WithHealth, and because 0 (unlimited) is the
+// right behaviour for every caller that does not set one.
+func (h *SystemHandler) WithStorageQuotaMB(mb int) *SystemHandler {
+	h.storageQuotaMB = mb
 	return h
 }
 
@@ -131,8 +142,32 @@ type versionCheckCache struct {
 // GetVersion returns the running version and the latest available version from GitHub.
 // The GitHub response is cached in blog_settings for 24 hours to avoid hammering the API.
 func (h *SystemHandler) GetVersion(c echo.Context) error {
-	ctx := c.Request().Context()
+	return c.JSON(http.StatusOK, h.versionStatus(c.Request().Context(), false))
+}
+
+// CheckVersion is the manual "Check now" behind the Version Check plugin's
+// settings drawer: it ignores the 24h cache and calls GitHub on the spot.
+//
+// The point is verifiability. The cached endpoint answers identically whether
+// the upstream call succeeded a minute ago, failed silently, or never ran at
+// all, so an admin has no way to tell a working check from a dead one. This one
+// moves `checked_at` and reports the fetch error verbatim when there is one.
+func (h *SystemHandler) CheckVersion(c echo.Context) error {
+	return c.JSON(http.StatusOK, h.versionStatus(c.Request().Context(), true))
+}
+
+// versionStatus builds the version payload, refreshing the cached upstream tag
+// when it is missing, older than 24h, or when force is set (manual check).
+//
+// A failed fetch never clears a previously known `latest` — a flaky network
+// must not make the UI claim the running build is current — but it is surfaced
+// as `error` so the caller can say the check itself is broken.
+func (h *SystemHandler) versionStatus(ctx context.Context, force bool) map[string]interface{} {
+	isSlim := os.Getenv("IS_SLIM") == "true"
 	current := h.appVersion
+	if isSlim {
+		current = withSlimSuffix(current)
+	}
 
 	// Try to load cached GitHub release info.
 	var cache versionCheckCache
@@ -141,32 +176,73 @@ func (h *SystemHandler) GetVersion(c echo.Context) error {
 		_ = json.Unmarshal([]byte(cacheStr), &cache)
 	}
 
-	// Refresh if cache is missing or stale (>24h).
-	if cache.Latest == "" || time.Since(cache.CheckedAt) > 24*time.Hour {
-		latest, err := fetchLatestGitHubRelease()
-		if err == nil {
+	fetchErr := ""
+	fetched := false
+	if force || cache.Latest == "" || time.Since(cache.CheckedAt) > 24*time.Hour {
+		latest, err := fetchLatestTag()
+		if err != nil {
+			fetchErr = err.Error()
+		} else {
+			fetched = true
 			cache.Latest = latest
 			cache.CheckedAt = time.Now()
 			if b, marshalErr := json.Marshal(cache); marshalErr == nil {
 				_ = h.settingsService.SetSetting(ctx, "_version_check_cached", string(b), "string")
 			}
 		}
-		// On fetch failure: keep existing cache.Latest (may be empty string).
 	}
 
-	updateAvailable := cache.Latest != "" && semverGreaterThan(cache.Latest, current)
+	latest := cache.Latest
+	if isSlim {
+		latest = withSlimSuffix(latest)
+	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	out := map[string]interface{}{
 		"current":          current,
-		"latest":           cache.Latest,
-		"update_available": updateAvailable,
-	})
+		"latest":           latest,
+		"update_available": latest != "" && semverGreaterThan(latest, current),
+		// True when this very request reached GitHub, as opposed to answering
+		// from the cache — the difference the manual check exists to show.
+		"fetched": fetched,
+	}
+	if !cache.CheckedAt.IsZero() {
+		out["checked_at"] = cache.CheckedAt
+	}
+	if fetchErr != "" {
+		out["error"] = fetchErr
+	}
+	return out
 }
 
-// fetchLatestGitHubRelease calls the GitHub releases API and returns the tag_name.
-func fetchLatestGitHubRelease() (string, error) {
+// withSlimSuffix labels a version as the slim flavour, so what the admin sees
+// matches the container image tag actually published for it (v0.1.42-slim —
+// see the `flavor` matrix in .github/workflows/release.yml). Releases are
+// tagged once in git; the -slim split exists only at the image level.
+//
+// Empty, already-suffixed and unversioned ("dev") strings are left alone.
+func withSlimSuffix(v string) string {
+	if v == "" || v == "dev" || strings.HasSuffix(v, "-slim") {
+		return v
+	}
+	return v + "-slim"
+}
+
+// fetchLatestTag is the upstream lookup used by versionStatus, indirected
+// through a var so tests can exercise the caching/error paths without network.
+var fetchLatestTag = fetchLatestGitHubTag
+
+// githubTag is the single field of the GitHub tags API this needs.
+type githubTag struct {
+	Name string `json:"name"`
+}
+
+// fetchLatestGitHubTag returns the highest semver tag of the upstream repo.
+//
+// Tags rather than releases: the project ships git tags but creates no GitHub
+// Release objects, so /releases/latest answers 404 and is unusable here.
+func fetchLatestGitHubTag() (string, error) {
 	client := &http.Client{Timeout: 3 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/dariy/point/releases/latest", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/dariy/point/tags", nil)
 	if err != nil {
 		return "", err
 	}
@@ -182,34 +258,59 @@ func fetchLatestGitHubRelease() (string, error) {
 		return "", fmt.Errorf("GitHub API returned %d", resp.StatusCode)
 	}
 
-	var payload struct {
-		TagName string `json:"tag_name"`
-	}
+	var payload []githubTag
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return "", err
 	}
-	return payload.TagName, nil
+	latest := pickLatestSemverTag(payload)
+	if latest == "" {
+		return "", fmt.Errorf("no semver tags found")
+	}
+	return latest, nil
+}
+
+// pickLatestSemverTag returns the greatest semver tag in the list, ignoring
+// names that don't parse (the repo carries a legacy "v0.1" among them).
+//
+// The list is scanned rather than indexed at [0]: the GitHub API documents no
+// ordering guarantee for tags, and the order it does return is by commit date,
+// which a tag cut on an older branch would put ahead of the real latest.
+func pickLatestSemverTag(tags []githubTag) string {
+	latest := ""
+	for _, t := range tags {
+		if _, _, _, ok := parseSemver(t.Name); !ok {
+			continue
+		}
+		if latest == "" || semverGreaterThan(t.Name, latest) {
+			latest = t.Name
+		}
+	}
+	return latest
+}
+
+// parseSemver splits "v1.2.3" / "1.2.3-slim" into its numeric components.
+// The leading "v" and any pre-release/flavour suffix are optional; ok is false
+// when the string is not a three-part numeric version.
+func parseSemver(v string) (int, int, int, bool) {
+	v = strings.TrimPrefix(v, "v")
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) != 3 {
+		return 0, 0, 0, false
+	}
+	major, e1 := strconv.Atoi(parts[0])
+	minor, e2 := strconv.Atoi(parts[1])
+	patch, e3 := strconv.Atoi(strings.SplitN(parts[2], "-", 2)[0])
+	if e1 != nil || e2 != nil || e3 != nil {
+		return 0, 0, 0, false
+	}
+	return major, minor, patch, true
 }
 
 // semverGreaterThan returns true if version a is strictly greater than b.
 // Both strings may have an optional leading "v". Non-semver strings are treated as equal.
 func semverGreaterThan(a, b string) bool {
-	parse := func(v string) (int, int, int, bool) {
-		v = strings.TrimPrefix(v, "v")
-		parts := strings.SplitN(v, ".", 3)
-		if len(parts) != 3 {
-			return 0, 0, 0, false
-		}
-		major, e1 := strconv.Atoi(parts[0])
-		minor, e2 := strconv.Atoi(parts[1])
-		patch, e3 := strconv.Atoi(strings.SplitN(parts[2], "-", 2)[0])
-		if e1 != nil || e2 != nil || e3 != nil {
-			return 0, 0, 0, false
-		}
-		return major, minor, patch, true
-	}
-	aMaj, aMin, aPat, aOK := parse(a)
-	bMaj, bMin, bPat, bOK := parse(b)
+	aMaj, aMin, aPat, aOK := parseSemver(a)
+	bMaj, bMin, bPat, bOK := parseSemver(b)
 	if !aOK || !bOK {
 		return false
 	}
@@ -230,7 +331,7 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		return MapError(err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"published_posts":   stats.PublishedCount,
 		"total_posts":       stats.PostCount,
 		"total_tags":        stats.TagCount,
@@ -238,7 +339,14 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
 		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
 		"import_configured": h.settingsService.SecretIsSet(ctx, "photo_library_path"),
-	})
+	}
+	// Omitted when unset so the dashboard shows plain usage rather than a
+	// "0 MB of 0 MB" bar.
+	if h.storageQuotaMB > 0 {
+		resp["storage_quota_mb"] = h.storageQuotaMB
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // readLogLines returns every line of one log file. A file that vanished since

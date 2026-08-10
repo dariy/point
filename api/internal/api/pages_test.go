@@ -442,6 +442,115 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 	}
 }
 
+// TestPagesHandler_GetTagsGraph_YearFilter verifies the timeline scope the Atlas
+// sends: tags with no posts in range drop out of the graph, the survivors report
+// their in-range count (which is what sizes a marker), and the count rolls up the
+// hierarchy — a country whose posts are tagged only with its cities stays on the
+// map instead of vanishing the moment the timeline narrows.
+func TestPagesHandler_GetTagsGraph_YearFilter(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2023", Slug: "2023", Kind: "year"})
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2024", Slug: "2024", Kind: "year"})
+
+	// Germany → Berlin. Only the city is ever put on a post, which is the usual
+	// shape: the country's presence has to come from its descendants.
+	germany, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Germany", Slug: "germany"})
+	if err != nil {
+		t.Fatalf("Germany creation failed: %v", err)
+	}
+	berlin, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{
+		Name: "Berlin", Slug: "berlin", ParentIDs: []int64{germany.ID},
+	})
+	if err != nil {
+		t.Fatalf("Berlin creation failed: %v", err)
+	}
+	_ = h.repo.UpsertTagLocation(ctx, germany.ID, 51.1, 10.4)
+	_ = h.repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
+
+	paris, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Paris", Slug: "paris"})
+	_ = h.repo.UpsertTagLocation(ctx, paris.ID, 48.8, 2.3)
+
+	// Two Berlin posts in 2024, one Paris post in 2023.
+	for i := 0; i < 2; i++ {
+		p, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: fmt.Sprintf("Berlin %d", i), Status: "published", AuthorID: userID,
+		})
+		if err != nil {
+			t.Fatalf("berlin post %d creation failed: %v", i, err)
+		}
+		if err := h.postSvc.UpdatePostTags(ctx, p.ID, []string{"2024", "berlin"}); err != nil {
+			t.Fatalf("berlin post %d tagging failed: %v", i, err)
+		}
+	}
+	pParis, _, _ := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Paris", Status: "published", AuthorID: userID,
+	})
+	_ = h.postSvc.UpdatePostTags(ctx, pParis.ID, []string{"2023", "paris"})
+
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "true", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-map.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-graph.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
+
+	e := echo.New()
+	countsFor := func(url string) map[string]int64 {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		if err := ph.GetTagsGraph(e.NewContext(req, rec)); err != nil {
+			t.Fatalf("GetTagsGraph(%s) failed: %v", url, err)
+		}
+		var resp struct {
+			Tags []struct {
+				Slug      string `json:"slug"`
+				PostCount int64  `json:"post_count"`
+			} `json:"tags"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal(%s) failed: %v", url, err)
+		}
+		out := make(map[string]int64, len(resp.Tags))
+		for _, tag := range resp.Tags {
+			out[tag.Slug] = tag.PostCount
+		}
+		return out
+	}
+
+	// Unscoped: every place is present.
+	all := countsFor("/api/pages/graph?posts=0")
+	for _, slug := range []string{"germany", "berlin", "paris"} {
+		if _, ok := all[slug]; !ok {
+			t.Errorf("unscoped graph is missing %q: %v", slug, all)
+		}
+	}
+
+	// Scoped to 2024: Paris (and the 2023 tag) drop out; Berlin reports its two
+	// posts and Germany inherits that count from Berlin.
+	scoped := countsFor("/api/pages/graph?posts=0&year_from=2024&year_to=2024")
+	if _, ok := scoped["paris"]; ok {
+		t.Errorf("paris has no 2024 posts and should be absent: %v", scoped)
+	}
+	if _, ok := scoped["2023"]; ok {
+		t.Errorf("the 2023 year tag should be absent from a 2024 scope: %v", scoped)
+	}
+	if scoped["berlin"] != 2 {
+		t.Errorf("berlin post_count = %d, want 2 (its in-range posts)", scoped["berlin"])
+	}
+	if scoped["germany"] != 2 {
+		t.Errorf("germany post_count = %d, want 2 rolled up from berlin", scoped["germany"])
+	}
+
+	// A malformed range is no range at all rather than a filter to nothing.
+	if got := countsFor("/api/pages/graph?posts=0&year_from=2024&year_to=2023"); len(got) != len(all) {
+		t.Errorf("reversed range should not filter: got %v, want %v", got, all)
+	}
+}
+
 func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()
@@ -682,5 +791,78 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	m = byID(got[1])
 	if ht, ok := m[hush.ID]; !ok || !ht.Inherited {
 		t.Errorf("hidden ancestor should be included and inherited when publicOnly=false, got %+v (ok=%v)", ht, ok)
+	}
+}
+
+// TestPagesHandler_GetNavMenu covers the three menu modes and, with them, where
+// the root tag tree ends up: the site-title dropdown reads `tags` when the menu
+// is authored links, falls back to `menu` when the menu already is the tree,
+// and shows nothing on a deliberately menuless site.
+func TestPagesHandler_GetNavMenu(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	e := echo.New()
+	ctx := context.Background()
+
+	// nav_order makes the tag nav-visible without needing posts behind it.
+	navOrder := int64(1)
+	if _, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{
+		Name: "Travel", Slug: "travel", NavOrder: &navOrder,
+	}); err != nil {
+		t.Fatalf("CreateTag: %v", err)
+	}
+
+	getNav := func() map[string]interface{} {
+		req := httptest.NewRequest(http.MethodGet, "/api/pages/nav", nil)
+		rec := httptest.NewRecorder()
+		if err := ph.GetNavMenu(e.NewContext(req, rec)); err != nil {
+			t.Fatalf("GetNavMenu failed: %v", err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode nav response: %v", err)
+		}
+		return resp
+	}
+
+	names := func(v interface{}) []string {
+		items, _ := v.([]interface{})
+		out := make([]string, 0, len(items))
+		for _, it := range items {
+			m, _ := it.(map[string]interface{})
+			out = append(out, fmt.Sprint(m["name"]))
+		}
+		return out
+	}
+
+	// Tags mode (default): the menu is the tree, no separate `tags` field.
+	resp := getNav()
+	if got := names(resp["menu"]); len(got) != 1 || got[0] != "Travel" {
+		t.Errorf("tags mode: expected menu [Travel], got %v", got)
+	}
+	if _, ok := resp["tags"]; ok {
+		t.Error("tags mode: `tags` should be omitted — the menu already is the tree")
+	}
+
+	// Custom mode: authored links in the menu, root tags alongside them.
+	_ = h.settingsSvc.SetSetting(ctx, "nav_menu_mode", "custom", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "custom_nav_menu", `[{"name":"About","url":"/about"}]`, "string")
+	resp = getNav()
+	if got := names(resp["menu"]); len(got) != 1 || got[0] != "About" {
+		t.Errorf("custom mode: expected menu [About], got %v", got)
+	}
+	if got := names(resp["tags"]); len(got) != 1 || got[0] != "Travel" {
+		t.Errorf("custom mode: expected tags [Travel], got %v", got)
+	}
+
+	// None mode: no menu, and no tags either — the site is menuless on purpose.
+	_ = h.settingsSvc.SetSetting(ctx, "nav_menu_mode", "none", "string")
+	resp = getNav()
+	if got := names(resp["menu"]); len(got) != 0 {
+		t.Errorf("none mode: expected empty menu, got %v", got)
+	}
+	if _, ok := resp["tags"]; ok {
+		t.Error("none mode: `tags` should be omitted")
 	}
 }

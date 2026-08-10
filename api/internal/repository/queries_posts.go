@@ -1171,14 +1171,16 @@ WHERE p.deleted_at IS NULL`
 	return items, tagRows.Err()
 }
 
-// GetHierarchicalPostCounts returns a map of tagID → effective post count,
-// where the count includes posts from all descendant tags (not just the tag itself).
-// If publishedOnly is true, only published posts are counted (public context).
-// If false, published + hidden posts are counted (admin context).
-func (r *sqliteRepository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
+// hierarchicalPostCountsQuery builds the tagID → effective post count roll-up,
+// where a tag's count includes the posts of all its descendant tags.
+//
+// When yearScoped is true the counted set is narrowed to posts carrying a year
+// tag (kind='year') whose parsed slug falls inside a range; the range bounds are
+// the last two placeholders, after the two publishedOnly ones.
+func hierarchicalPostCountsQuery(yearScoped bool) string {
 	// UNION (not UNION ALL) deduplicates (root_id, tag_id) pairs, preventing
 	// infinite recursion if tag_relationships contains a cycle.
-	const q = `
+	q := `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
     UNION
@@ -1210,13 +1212,23 @@ AND (CASE WHEN ? THEN p.id NOT IN (
         )
         SELECT id FROM h
     )
-) ELSE 1=1 END)
-GROUP BY d.root_id`
+) ELSE 1=1 END)`
 
-	rows, err := r.db.QueryContext(ctx, q, publishedOnly, publishedOnly)
-	if err != nil {
-		return nil, err
+	if yearScoped {
+		q += `
+AND p.id IN (
+    SELECT pty.post_id FROM post_tags pty
+    JOIN tags yt ON yt.id = pty.tag_id
+    WHERE yt.kind = 'year' AND CAST(yt.slug AS INTEGER) BETWEEN ? AND ?
+)`
 	}
+
+	return q + `
+GROUP BY d.root_id`
+}
+
+// scanTagCounts drains a (tagID, count) result set into a map.
+func scanTagCounts(rows *sql.Rows) (map[int64]int64, error) {
 	defer func() {
 		_ = rows.Close()
 	}()
@@ -1230,6 +1242,34 @@ GROUP BY d.root_id`
 		result[tagID] = count
 	}
 	return result, rows.Err()
+}
+
+// GetHierarchicalPostCounts returns a map of tagID → effective post count,
+// where the count includes posts from all descendant tags (not just the tag itself).
+// If publishedOnly is true, only published posts are counted (public context).
+// If false, published + hidden posts are counted (admin context).
+func (r *sqliteRepository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
+	rows, err := r.db.QueryContext(ctx, hierarchicalPostCountsQuery(false), publishedOnly, publishedOnly)
+	if err != nil {
+		return nil, err
+	}
+	return scanTagCounts(rows)
+}
+
+// GetHierarchicalPostCountsInYearRange is GetHierarchicalPostCounts narrowed to
+// the posts a timeline range covers — those carrying a year tag in
+// [fromYear, toYear]. Tags with nothing left in range are absent from the map
+// (rather than present with a zero), so callers can filter on presence.
+//
+// The roll-up matters here: geo tags are commonly attached to a post's city
+// only, so a country's count — and its very presence — comes entirely from its
+// descendants.
+func (r *sqliteRepository) GetHierarchicalPostCountsInYearRange(ctx context.Context, publishedOnly bool, fromYear, toYear int) (map[int64]int64, error) {
+	rows, err := r.db.QueryContext(ctx, hierarchicalPostCountsQuery(true), publishedOnly, publishedOnly, fromYear, toYear)
+	if err != nil {
+		return nil, err
+	}
+	return scanTagCounts(rows)
 }
 
 // GetExistingInstagramIDs returns the subset of the supplied IDs that are

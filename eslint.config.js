@@ -71,7 +71,9 @@ const rules = {
 
 export default [
   {
-    files: ["frontend/src/**/*.js"],
+    // demo/mock/ is browser code too — it is bundled into the static demo in
+    // place of the normal entry point (demo/scripts/build.sh).
+    files: ["frontend/src/**/*.js", "demo/mock/**/*.js"],
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: "module",
@@ -85,6 +87,8 @@ export default [
         sessionStorage: "readonly",
         location: "readonly",
         fetch: "readonly",
+        Response: "readonly",
+        structuredClone: "readonly",
         XMLHttpRequest: "readonly",
         URL: "readonly",
         URLSearchParams: "readonly",
@@ -118,7 +122,9 @@ export default [
         DOMParser: "readonly",
         customElements: "readonly",
         HTMLElement: "readonly",
+        HTMLImageElement: "readonly",
         ResizeObserver: "readonly",
+        MutationObserver: "readonly",
         performance: "readonly",
         atob: "readonly",
         btoa: "readonly",
@@ -169,9 +175,10 @@ export default [
     },
     rules,
   },
-  // Node build scripts (e.g. scripts/build-plugin-manifest.mjs).
+  // Node build scripts (e.g. scripts/build-plugin-manifest.mjs) and the demo's
+  // content-generation and build tooling (demo/scripts/, demo/world.mjs).
   {
-    files: ["scripts/**/*.mjs"],
+    files: ["scripts/**/*.mjs", "demo/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -179,6 +186,38 @@ export default [
         process: "readonly",
         console: "readonly",
         JSON: "readonly",
+        // Node 18+ provides these as globals; the demo recorder, generator and
+        // acceptance test use them directly rather than pulling in a client.
+        fetch: "readonly",
+        FormData: "readonly",
+        Blob: "readonly",
+        URL: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+      },
+    },
+    rules,
+  },
+  // The demo's acceptance test drives a real browser: every callback it hands to
+  // Playwright's page.evaluate() is serialised and executed *in the page*, where
+  // the DOM globals exist. It is Node code that legitimately contains browser
+  // code, so it needs both sets.
+  {
+    files: ["demo/scripts/test.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        JSON: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        document: "readonly",
+        window: "readonly",
+        location: "readonly",
       },
     },
     rules,

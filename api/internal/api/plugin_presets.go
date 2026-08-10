@@ -137,45 +137,9 @@ func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
 		want[pid] = true
 	}
 
-	// Guarantee each core area keeps a member: if the preset enables none, fall
-	// back to the area's default plugin (or its first descriptor).
-	for _, d := range plugins.Registry {
-		if !d.Core || d.Area == "" {
-			continue
-		}
-		members := plugins.AreaPlugins(d.Area)
-		anyOn := false
-		for _, m := range members {
-			if want[m.ID] {
-				anyOn = true
-				break
-			}
-		}
-		if !anyOn {
-			want[coreAreaFallback(members)] = true
-		}
-	}
-
-	// Exclusive areas keep at most one member: if a preset enables several
-	// alternatives, keep the first (registry order) and drop the rest.
-	doneAreas := map[string]bool{}
-	for _, d := range plugins.Registry {
-		if !d.Exclusive || d.Area == "" || doneAreas[d.Area] {
-			continue
-		}
-		doneAreas[d.Area] = true
-		kept := false
-		for _, m := range plugins.AreaPlugins(d.Area) {
-			if !want[m.ID] {
-				continue
-			}
-			if kept {
-				want[m.ID] = false
-			} else {
-				kept = true
-			}
-		}
-	}
+	// A preset is a wish list, not a valid configuration: it may name several
+	// candidates for a single-claim slot, or none for a slot that needs one.
+	plugins.NormalizeSlots(want)
 
 	for _, d := range plugins.Registry {
 		if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(d.ID), strconv.FormatBool(want[d.ID]), "string"); err != nil {
@@ -191,17 +155,6 @@ func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
 		return MapError(err)
 	}
 	return c.JSON(http.StatusOK, listViews(all))
-}
-
-// coreAreaFallback picks the plugin to keep enabled for a core area that a
-// preset left empty: the descriptor marked DefaultEnabled, else the first.
-func coreAreaFallback(members []plugins.Descriptor) string {
-	for _, m := range members {
-		if m.DefaultEnabled {
-			return m.ID
-		}
-	}
-	return members[0].ID
 }
 
 // presetActive reads the active preset id, defaulting to custom.

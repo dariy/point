@@ -18,6 +18,12 @@
    (the horizontally-scrolling tag strip) stretch the card past the viewport. */
 .post-card-slot {
     min-width: 0;
+    /* A card is sized by its grid track, not by the viewport — the same 360px
+       box turns up on a phone in one column, on a tablet in two and on a
+       desktop in three. What the card can afford to show is a question about
+       the box, so the rules that trim it are container queries against this
+       slot rather than another viewport tier. */
+    container-type: inline-size;
 }
 
 /* ===========================
@@ -58,6 +64,22 @@
     /* Minimum height for image cards */
     color: var(--text-inverted);
     /* Default text color on image */
+}
+
+/* On a viewport too short to spend 13.75rem on one row, the floor stops being a
+   minimum and becomes the reason the page overflows: a phone on its side has
+   ~390px, of which the header and the footer band take ~200, and a single 220px
+   card row still ran 27px past the bottom edge — with no smaller row count left
+   for gridFit to fall back to. 10rem fits, and because the grid's rows are
+   minmax(min-content, 1fr) inside a flex:1 track the card still stretches to
+   take whatever room is actually there; this only lowers the floor, it does not
+   shrink a card that fits. Same 30em query as the timeline's own short-viewport
+   rule (css/public/timeline.css) — the two are answering the same shortage. */
+@media (max-height: 30em) {
+    .post-card.has-image,
+    .post-card.has-visual {
+        min-height: 10rem;
+    }
 }
 
 .post-card.type-audio {
@@ -135,7 +157,7 @@
             var(--color-black-alpha-0) 40%,
             var(--color-black-alpha-60) 70%,
             var(--color-black-alpha-90) 100%);
-    padding: var(--spacing-lg);
+    padding: var(--post-card-overlay-padding);
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -244,6 +266,7 @@
     color: var(--color-white-alpha-90);
     font-size: var(--font-size-sm);
     margin-bottom: var(--spacing-md);
+    padding-top: 0;
 }
 
 /* --- TEXT ONLY STYLE --- */
@@ -332,6 +355,41 @@
     margin-top: auto;               /* push tags to bottom of card flex */
 }
 
+/* A card's tags scroll on one row, like every other strip — the base
+   .tag-strip-scroll (nowrap / overflow-x:auto / touch-action:pan-x) is what we
+   want here, so there is deliberately no card-specific override. A previous
+   revision wrapped them instead, on the argument that an overflow arrow is
+   harder to find than a second row; that traded away the consistency of one
+   strip behaving one way everywhere, and the rows cost the photograph height
+   on exactly the cards where it matters most. */
+
+/* --- Narrow cards: tags before date --- */
+/* Below ~24rem the card cannot afford every row it is asked to draw, and the
+   date is the line it can most afford to lose: the tags say what the post is
+   about and each one is a way further into the archive, while the date is
+   still on the post itself. A view count, where the setting turns one on, is
+   the other thing the meta row is for, so the row only collapses when the date
+   was all of it. */
+@container (max-width: 24rem) {
+    .post-card-content .post-date {
+        display: none;
+    }
+
+    .post-card-meta:not(:has(.view-count)) {
+        display: none;
+    }
+
+    /* Card height is fixed and a narrow card has less of it to spend. Left at
+       three lines the excerpt is not dropped but *squeezed*: the flex item
+       shrinks below its clamp and the last line is cut through the middle of
+       the glyphs. Two lines end the preview on a whole one. */
+    .post-card-content.overlay .post-card-excerpt,
+    .featured-post .post-card-content.overlay .post-card-excerpt {
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
+}
+
 /* ===========================
    Post Card Tag Flyout
    (ancestor chain, upward flyout on first tap)
@@ -411,6 +469,40 @@ body.grid-zoom .posts-grid {
        allows rounding *up* — otherwise a 1.9-row fit collapses to one row of
        stretched sausages with the leftover dumped into their height. */
     grid-auto-rows: minmax(0, 1fr);
+    /* `--posts-grid-rows` is the row count the fit landed on (gridFit's
+       applyRowsVar). Pinning the tracks keeps the grid the same shape between a
+       zoom step and the refit that fills it — without it the cards still on
+       screen share the whole viewport height as one stretched row for the
+       length of the refetch, then snap back. Unset (no zoom yet, or an
+       unmeasurable grid) the repeat() is invalid at computed-value time and the
+       property falls back to `none`, i.e. auto rows as before. */
+    grid-template-rows: repeat(var(--posts-grid-rows), minmax(0, 1fr));
+}
+
+/* Cards past the pinned geometry's capacity — a zoom step that made the cards
+   bigger holds more than the new shape does. They are dropped by the refit
+   moments later; hiding them now means the grid never shows a state the refit
+   has to undo. */
+body.grid-zoom .post-card-slot.is-zoom-surplus {
+    display: none;
+}
+
+/* Cards the refit added, dropping into the space the pinned rows held open.
+   Only the arrivals animate: the cards already on screen are not re-rendered
+   at all (PostGrid.reconcile), so they have nothing to fade. */
+.post-card-slot.is-entering {
+    animation: post-card-in 0.22s ease-out both;
+}
+
+@keyframes post-card-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .post-card-slot.is-entering {
+        animation: none;
+    }
 }
 
 body.grid-zoom .post-card-slot {

@@ -41,12 +41,14 @@ fi
 # Comments engine: the in-process supervisor only manages the binary bundled
 # into the packaged container; locally remark42 runs as a sidecar container on
 # 127.0.0.1:8081 that Point's /comments proxy targets.
-if [ -n "${REMARK_SECRET:-}" ] && [ -n "${REMARK_URL:-}" ] && [ -n "${ADMIN_PASSWD:-}" ]; then
-    if curl -sf -o /dev/null --max-time 2 http://127.0.0.1:8081/ping; then
-        echo "==> remark42-local already running on :8081"
-    else
-        echo "==> Starting remark42-local sidecar..."
-        ./scripts/run-remark42-local.sh
+if [ "${ENABLE_REMARK42:-true}" != "false" ]; then
+    if [ -n "${REMARK_SECRET:-}" ] && [ -n "${REMARK_URL:-}" ] && [ -n "${ADMIN_PASSWD:-}" ]; then
+        if curl -sf -o /dev/null --max-time 2 http://127.0.0.1:8081/ping; then
+            echo "==> remark42-local already running on :8081"
+        else
+            echo "==> Starting remark42-local sidecar..."
+            ./scripts/run-remark42-local.sh
+        fi
     fi
 fi
 
@@ -101,7 +103,9 @@ export STORAGE_PATH=${STORAGE_PATH:-data}
 export FRONTEND_DIR=frontend
 export PORT=$PORT
 export HOST=${HOST:-127.0.0.1}
-export APP_VERSION=$DEV_VERSION
+# Normally the per-run dev stamp; an APP_VERSION set by the caller wins, which is
+# how scripts/run-old-version-check.sh makes the build look like an old release.
+export APP_VERSION=${APP_VERSION:-$DEV_VERSION}
 export FRONTEND_DEBUG=$DEBUG
 
 echo "DATABASE_URL: ", $DATABASE_URL

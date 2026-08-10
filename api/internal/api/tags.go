@@ -1,6 +1,11 @@
 package api
 
+// HTTP handlers for /api/tags. Each one parses its arguments, calls the tag
+// service and renders through a tagView; the visibility rules and payload
+// shaping live in tags_view.go, the partial-update decoding in tags_patch.go.
+
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -27,119 +32,38 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 
 func (h *TagHandler) ListTags(c echo.Context) error {
 	includeEmpty := c.QueryParam("include_empty") != "false"
-	publicOnly := c.Get("user") == nil
 	searchQuery := strings.ToLower(strings.TrimSpace(c.QueryParam("q")))
 
-	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	v, err := h.tagView(c)
 	if err != nil {
-		return MapError(err)
+		return err
 	}
 
-	// Fetch locations for all tags.
-	tagIDs := make([]int64, 0, len(g.ByID))
-	for id := range g.ByID {
+	tagIDs := make([]int64, 0, len(v.g.ByID))
+	for id := range v.g.ByID {
 		tagIDs = append(tagIDs, id)
 	}
-	locationMap, _ := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), tagIDs)
-
-	// Fetch min_tag_posts_to_show setting for guests.
-	var minPosts int64
-	if publicOnly {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
-		if minPosts < 0 {
-			minPosts = 0
-		}
-	}
+	locations, _ := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), tagIDs)
 
 	tagItems := make([]map[string]interface{}, 0)
-	for id, t := range g.ByID {
-		if searchQuery != "" {
-			if !strings.Contains(strings.ToLower(t.Name), searchQuery) && !strings.Contains(strings.ToLower(t.Slug), searchQuery) {
-				continue
-			}
+	for id, t := range v.g.ByID {
+		if searchQuery != "" &&
+			!strings.Contains(strings.ToLower(t.Name), searchQuery) &&
+			!strings.Contains(strings.ToLower(t.Slug), searchQuery) {
+			continue
 		}
-
-		if publicOnly {
-			if g.EffectiveHidden[id] {
-				continue
-			}
-			if minPosts > 0 && g.CountsPublic[id] < minPosts {
-				continue
-			}
-			if !includeEmpty && g.CountsPublic[id] == 0 {
-				continue
-			}
-		} else {
-			if !includeEmpty && g.CountsAdmin[id] == 0 {
-				continue
-			}
+		if v.hidden(id) {
+			continue
 		}
-
-		parents := make([]map[string]interface{}, 0)
-		for _, pid := range g.Parents[id] {
-			p := g.ByID[pid]
-			parents = append(parents, map[string]interface{}{
-				"id":   p.ID,
-				"name": p.Name,
-				"slug": p.Slug,
-			})
-		}
-
-		children := make([]map[string]interface{}, 0)
-		for _, cid := range g.Children[id] {
-			ch := g.ByID[cid]
-			children = append(children, map[string]interface{}{
-				"id":   ch.ID,
-				"name": ch.Name,
-				"slug": ch.Slug,
-			})
+		if !includeEmpty && v.count(id) == 0 {
+			continue
 		}
 
 		var loc *models.TagLocation
-		if l, ok := locationMap[id]; ok {
+		if l, ok := locations[id]; ok {
 			loc = &l
 		}
-
-		displayPath := g.GetDisplayPath(id)
-		namePath := t.Name
-		if displayPath != "" {
-			namePath += " — " + displayPath
-		}
-		count := g.CountsAdmin[id]
-		if publicOnly {
-			count = g.CountsPublic[id]
-		}
-		namePath += " · " + strconv.FormatInt(count, 10)
-
-		resp := map[string]interface{}{
-			"id":                    t.ID,
-			"name":                  t.Name,
-			"name_path":             namePath,
-			"slug":                  t.Slug,
-			"description":           nullString(t.Description),
-			"kind":                  t.Kind,
-			"hidden":                t.Hidden,
-			"hides_posts":           t.HidesPosts,
-			"nav_order":             nullInt64(t.NavOrder),
-			"in_breadcrumbs":        t.InBreadcrumbs,
-			"show_related":          t.ShowRelated,
-			"in_ancestor_flyout":    t.InAncestorFlyout,
-			"effective_hidden":      g.EffectiveHidden[id],
-			"effective_hides_posts": g.EffectiveHidesPosts[id],
-			"post_count":            g.CountsAdmin[id],
-			"parents":               parents,
-			"children":              children,
-			"locations":             tagLocationsResponse(loc),
-		}
-		if publicOnly {
-			resp["post_count"] = g.CountsPublic[id]
-		} else {
-			if via, ok := g.HiddenVia[id]; ok {
-				resp["hidden_via"] = via
-			}
-		}
-		tagItems = append(tagItems, resp)
+		tagItems = append(tagItems, v.listItem(t, loc))
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -155,17 +79,8 @@ func (h *TagHandler) GetTagCloud(c echo.Context) error {
 	}
 	publicOnly := c.Get("user") == nil
 
-	// Fetch min_tag_posts_to_show threshold for guests.
-	var minPosts int64
-	if publicOnly {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
-		if minPosts < 0 {
-			minPosts = 0
-		}
-	}
-
-	cloud, err := h.tagService.GetTagCloud(c.Request().Context(), limit, publicOnly, minPosts)
+	cloud, err := h.tagService.GetTagCloud(c.Request().Context(), limit, publicOnly,
+		h.minTagPosts(c.Request().Context(), publicOnly))
 	if err != nil {
 		return MapError(err)
 	}
@@ -179,136 +94,29 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 		return err
 	}
 
-	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	v, err := h.tagView(c)
 	if err != nil {
-		return MapError(err)
+		return err
+	}
+	tag, ok := v.g.ByID[id]
+	if !ok || v.hidden(id) {
+		return tagNotFound()
 	}
 
-	tag, ok := g.ByID[id]
-	if !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-	}
-
-	return h.renderTagResponse(c, g, tag)
+	return h.renderTag(c, v, tag, http.StatusOK)
 }
 
 func (h *TagHandler) GetTagBySlug(c echo.Context) error {
-	slug := c.Param("slug")
-	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	v, err := h.tagView(c)
 	if err != nil {
-		return MapError(err)
+		return err
+	}
+	tag, ok := v.g.BySlug[strings.ToLower(c.Param("slug"))]
+	if !ok || v.hidden(tag.ID) {
+		return tagNotFound()
 	}
 
-	tag, ok := g.BySlug[strings.ToLower(slug)]
-	if !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-	}
-
-	return h.renderTagResponse(c, g, tag)
-}
-
-func (h *TagHandler) renderTagResponse(c echo.Context, g *services.TagGraph, tag models.Tag) error {
-	publicOnly := c.Get("user") == nil
-	var minPosts int64
-	if publicOnly {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
-		if minPosts < 0 {
-			minPosts = 0
-		}
-
-		if g.EffectiveHidden[tag.ID] || (minPosts > 0 && g.CountsPublic[tag.ID] < minPosts) {
-			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-		}
-	}
-
-	parents := make([]models.Tag, 0)
-	for _, pid := range g.Parents[tag.ID] {
-		parents = append(parents, g.ByID[pid])
-	}
-	children := make([]models.Tag, 0)
-	for _, cid := range g.Children[tag.ID] {
-		if publicOnly {
-			if g.EffectiveHidden[cid] {
-				continue
-			}
-			if minPosts > 0 && g.CountsPublic[cid] < minPosts {
-				continue
-			}
-		}
-		children = append(children, g.ByID[cid])
-	}
-
-	loc := h.tagLocation(c, tag.ID)
-
-	excludeTagIDs := make(map[int64]bool)
-	if publicOnly {
-		for id := range g.EffectiveHidden {
-			excludeTagIDs[id] = true
-		}
-		if minPosts > 0 {
-			for id, count := range g.CountsPublic {
-				if count < minPosts {
-					excludeTagIDs[id] = true
-				}
-			}
-		}
-	}
-
-	resp := tagToFullResponse(tag, parents, children, loc, excludeTagIDs)
-	resp["effective_hidden"] = g.EffectiveHidden[tag.ID]
-	resp["effective_hides_posts"] = g.EffectiveHidesPosts[tag.ID]
-	resp["post_count"] = g.CountsAdmin[tag.ID]
-
-	displayPath := g.GetDisplayPath(tag.ID)
-	namePath := tag.Name
-	if displayPath != "" {
-		namePath += " — " + displayPath
-	}
-	namePath += " · " + strconv.FormatInt(g.CountsAdmin[tag.ID], 10)
-	resp["name_path"] = namePath
-
-	siblings := g.GetSiblings(tag.ID)
-	siblingItems := make([]map[string]interface{}, 0, len(siblings))
-	for _, s := range siblings {
-		if publicOnly {
-			if g.EffectiveHidden[s.ID] {
-				continue
-			}
-			if minPosts > 0 && g.CountsPublic[s.ID] < minPosts {
-				continue
-			}
-		}
-		siblingItems = append(siblingItems, tagToListItem(s))
-	}
-	resp["siblings"] = siblingItems
-
-	if publicOnly {
-		resp["post_count"] = g.CountsPublic[tag.ID]
-		resp["name_path"] = tag.Name
-		if displayPath != "" {
-			resp["name_path"] = tag.Name + " — " + displayPath
-		}
-		resp["name_path"] = resp["name_path"].(string) + " · " + strconv.FormatInt(g.CountsPublic[tag.ID], 10)
-	} else {
-		if via, ok := g.HiddenVia[tag.ID]; ok {
-			resp["hidden_via"] = via
-		}
-	}
-
-	return c.JSON(http.StatusOK, resp)
-}
-
-// tagLocation fetches the location for a single tag, returning nil if none.
-func (h *TagHandler) tagLocation(c echo.Context, tagID int64) *models.TagLocation {
-	locs, err := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), []int64{tagID})
-	if err != nil {
-		return nil
-	}
-	if l, ok := locs[tagID]; ok {
-		return &l
-	}
-	return nil
+	return h.renderTag(c, v, tag, http.StatusOK)
 }
 
 type TagLocationInput struct {
@@ -337,10 +145,11 @@ type CreateTagRequest struct {
 func (h *TagHandler) CreateTag(c echo.Context) error {
 	var req CreateTagRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+		return badTagRequest()
 	}
 
-	tag, err := h.tagService.CreateTag(c.Request().Context(), services.CreateTagParams{
+	ctx := c.Request().Context()
+	tag, err := h.tagService.CreateTag(ctx, services.CreateTagParams{
 		Name:             req.Name,
 		Slug:             req.Slug,
 		Description:      req.Description,
@@ -359,39 +168,51 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 		return MapError(err)
 	}
 
-	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
-
+	// Children and locations are separate writes; the tag itself is already
+	// saved, so a failure here must not fail the create.
+	_ = h.tagService.SetTagChildren(ctx, tag.ID, req.ChildIDs)
 	if len(req.Locations) > 0 {
-		_ = h.tagService.UpsertTagLocation(c.Request().Context(), tag.ID, req.Locations[0].Latitude, req.Locations[0].Longitude)
+		_ = h.tagService.UpsertTagLocation(ctx, tag.ID, req.Locations[0].Latitude, req.Locations[0].Longitude)
 	}
 
-	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
-	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
-	return h.renderTagResponseWithStatus(c, g, tag, http.StatusCreated)
+	return h.renderSavedTag(c, tag.ID, http.StatusCreated)
 }
 
-// UpdateTag handles PUT /api/tags/:id with partial-update semantics: only
-// fields present in the JSON body are changed; absent fields keep their
-// current values (parent_ids/child_ids included — an explicit empty array
-// removes all relationships, an omitted key leaves them untouched).
+// UpdateTag handles PUT /api/tags/:id: a partial update of the tag's own
+// fields plus its relationships and location.
 func (h *TagHandler) UpdateTag(c echo.Context) error {
+	return h.applyTagPatch(c, true)
+}
+
+// PatchTag handles PATCH /api/tags/:id: a partial update of the tag's scalar
+// fields only. Relationship keys in the body are ignored — the dedicated
+// parents/children endpoints own those.
+func (h *TagHandler) PatchTag(c echo.Context) error {
+	return h.applyTagPatch(c, false)
+}
+
+// applyTagPatch is the shared body of PUT and PATCH. Only fields present in
+// the JSON body are changed; absent fields keep their current values, and for
+// parent_ids/child_ids an explicit empty array removes all relationships while
+// an omitted key leaves them untouched.
+func (h *TagHandler) applyTagPatch(c echo.Context, withRelations bool) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
 	}
 
-	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	v, err := h.tagView(c)
 	if err != nil {
-		return MapError(err)
+		return err
 	}
-	current, ok := g.ByID[id]
+	current, ok := v.g.ByID[id]
 	if !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		return tagNotFound()
 	}
 
 	var fields map[string]json.RawMessage
 	if err := json.NewDecoder(c.Request().Body).Decode(&fields); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+		return badTagRequest()
 	}
 
 	tag, err := h.tagService.UpdateTag(c.Request().Context(), tagPatchParams(current, fields))
@@ -399,102 +220,32 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 		return MapError(err)
 	}
 
-	if raw, ok := fields["parent_ids"]; ok && string(raw) != "null" {
-		var ids []int64
-		if json.Unmarshal(raw, &ids) == nil {
-			_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, ids)
-		}
-	}
-	if raw, ok := fields["child_ids"]; ok && string(raw) != "null" {
-		var ids []int64
-		if json.Unmarshal(raw, &ids) == nil {
-			_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, ids)
-		}
+	if withRelations {
+		h.applyTagRelations(c, tag.ID, fields)
 	}
 
-	if raw, ok := fields["locations"]; ok && string(raw) != "null" {
-		var locs []TagLocationInput
-		if json.Unmarshal(raw, &locs) == nil && len(locs) > 0 {
-			_ = h.tagService.UpsertTagLocation(c.Request().Context(), tag.ID, locs[0].Latitude, locs[0].Longitude)
-		}
-	}
-
-	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
-	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
-	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+	return h.renderSavedTag(c, tag.ID, http.StatusOK)
 }
 
-func (h *TagHandler) renderTagResponseWithStatus(c echo.Context, g *services.TagGraph, tag models.Tag, status int) error {
-	publicOnly := c.Get("user") == nil
-	var minPosts int64
-	if publicOnly {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
-		if minPosts < 0 {
-			minPosts = 0
+// applyTagRelations applies the parent_ids/child_ids/locations keys of a PUT
+// body. Each is best-effort: the tag's own fields are already saved, so a
+// malformed or failing relationship write leaves that relationship as it was
+// rather than failing the whole request.
+func (h *TagHandler) applyTagRelations(c echo.Context, id int64, fields map[string]json.RawMessage) {
+	ctx := c.Request().Context()
+
+	if ids, ok := patchIDList(fields, "parent_ids"); ok {
+		_ = h.tagService.SetTagParents(ctx, id, ids)
+	}
+	if ids, ok := patchIDList(fields, "child_ids"); ok {
+		_ = h.tagService.SetTagChildren(ctx, id, ids)
+	}
+	if raw, ok := fields["locations"]; ok && !isJSONNull(raw) {
+		var locs []TagLocationInput
+		if json.Unmarshal(raw, &locs) == nil && len(locs) > 0 {
+			_ = h.tagService.UpsertTagLocation(ctx, id, locs[0].Latitude, locs[0].Longitude)
 		}
 	}
-
-	parents := make([]models.Tag, 0)
-	for _, pid := range g.Parents[tag.ID] {
-		parents = append(parents, g.ByID[pid])
-	}
-	children := make([]models.Tag, 0)
-	for _, cid := range g.Children[tag.ID] {
-		children = append(children, g.ByID[cid])
-	}
-
-	loc := h.tagLocation(c, tag.ID)
-
-	excludeTagIDs := make(map[int64]bool)
-	if publicOnly {
-		for id := range g.EffectiveHidden {
-			excludeTagIDs[id] = true
-		}
-	}
-
-	resp := tagToFullResponse(tag, parents, children, loc, excludeTagIDs)
-	resp["effective_hidden"] = g.EffectiveHidden[tag.ID]
-	resp["effective_hides_posts"] = g.EffectiveHidesPosts[tag.ID]
-	resp["post_count"] = g.CountsAdmin[tag.ID]
-
-	displayPath := g.GetDisplayPath(tag.ID)
-	namePath := tag.Name
-	if displayPath != "" {
-		namePath += " — " + displayPath
-	}
-	namePath += " · " + strconv.FormatInt(g.CountsAdmin[tag.ID], 10)
-	resp["name_path"] = namePath
-
-	siblings := g.GetSiblings(tag.ID)
-	siblingItems := make([]map[string]interface{}, 0, len(siblings))
-	for _, s := range siblings {
-		if publicOnly {
-			if g.EffectiveHidden[s.ID] {
-				continue
-			}
-			if minPosts > 0 && g.CountsPublic[s.ID] < minPosts {
-				continue
-			}
-		}
-		siblingItems = append(siblingItems, tagToListItem(s))
-	}
-	resp["siblings"] = siblingItems
-
-	if publicOnly {
-		resp["post_count"] = g.CountsPublic[tag.ID]
-		resp["name_path"] = tag.Name
-		if displayPath != "" {
-			resp["name_path"] = tag.Name + " — " + displayPath
-		}
-		resp["name_path"] = resp["name_path"].(string) + " · " + strconv.FormatInt(g.CountsPublic[tag.ID], 10)
-	} else {
-		if via, ok := g.HiddenVia[tag.ID]; ok {
-			resp["hidden_via"] = via
-		}
-	}
-
-	return c.JSON(status, resp)
 }
 
 func (h *TagHandler) DeleteTag(c echo.Context) error {
@@ -558,164 +309,21 @@ func (h *TagHandler) RecalculateCounts(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Tag counts recalculated successfully"})
 }
 
-// PatchTag applies a partial update to a tag's scalar fields.
-// Only fields present in the JSON body are changed; absent fields are untouched.
-func (h *TagHandler) PatchTag(c echo.Context) error {
-	id, err := parseIDParam(c)
-	if err != nil {
-		return err
-	}
-
-	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
-	if err != nil {
-		return MapError(err)
-	}
-	current, ok := g.ByID[id]
-	if !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-	}
-
-	var fields map[string]json.RawMessage
-	if err := json.NewDecoder(c.Request().Body).Decode(&fields); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
-	}
-
-	tag, err := h.tagService.UpdateTag(c.Request().Context(), tagPatchParams(current, fields))
-	if err != nil {
-		return MapError(err)
-	}
-
-	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
-	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
-	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
-}
-
-// tagPatchParams seeds UpdateTagParams from the tag's current values, then
-// overrides only the fields present in the JSON body.
-func tagPatchParams(current models.Tag, fields map[string]json.RawMessage) services.UpdateTagParams {
-	p := services.UpdateTagParams{
-		ID:               current.ID,
-		Name:             current.Name,
-		Slug:             current.Slug,
-		Kind:             current.Kind,
-		Hidden:           current.Hidden,
-		HidesPosts:       current.HidesPosts,
-		InBreadcrumbs:    current.InBreadcrumbs,
-		ShowRelated:      current.ShowRelated,
-		InAncestorFlyout: current.InAncestorFlyout,
-	}
-	if current.Description.Valid {
-		p.Description = current.Description.String
-	}
-	if current.NavOrder.Valid {
-		v := current.NavOrder.Int64
-		p.NavOrder = &v
-	}
-	if current.Latitude.Valid {
-		v := current.Latitude.Float64
-		p.Latitude = &v
-	}
-	if current.Longitude.Valid {
-		v := current.Longitude.Float64
-		p.Longitude = &v
-	}
-
-	// Override only present fields.
-	if raw, ok := fields["name"]; ok {
-		_ = json.Unmarshal(raw, &p.Name)
-	}
-	if raw, ok := fields["slug"]; ok {
-		_ = json.Unmarshal(raw, &p.Slug)
-	}
-	if raw, ok := fields["description"]; ok {
-		if string(raw) == "null" {
-			p.Description = ""
-		} else {
-			_ = json.Unmarshal(raw, &p.Description)
-		}
-	}
-	if raw, ok := fields["kind"]; ok {
-		_ = json.Unmarshal(raw, &p.Kind)
-	}
-	if raw, ok := fields["hidden"]; ok {
-		_ = json.Unmarshal(raw, &p.Hidden)
-	}
-	if raw, ok := fields["hides_posts"]; ok {
-		_ = json.Unmarshal(raw, &p.HidesPosts)
-	}
-	if raw, ok := fields["nav_order"]; ok {
-		if string(raw) == "null" {
-			p.NavOrder = nil
-		} else {
-			var v int64
-			if _ = json.Unmarshal(raw, &v); true {
-				p.NavOrder = &v
-			}
-		}
-	}
-	if raw, ok := fields["in_breadcrumbs"]; ok {
-		_ = json.Unmarshal(raw, &p.InBreadcrumbs)
-	}
-	if raw, ok := fields["show_related"]; ok {
-		_ = json.Unmarshal(raw, &p.ShowRelated)
-	}
-	if raw, ok := fields["in_ancestor_flyout"]; ok {
-		_ = json.Unmarshal(raw, &p.InAncestorFlyout)
-	}
-	if raw, ok := fields["latitude"]; ok {
-		if string(raw) == "null" {
-			p.Latitude = nil
-		} else {
-			var v float64
-			if _ = json.Unmarshal(raw, &v); true {
-				p.Latitude = &v
-			}
-		}
-	}
-	if raw, ok := fields["longitude"]; ok {
-		if string(raw) == "null" {
-			p.Longitude = nil
-		} else {
-			var v float64
-			if _ = json.Unmarshal(raw, &v); true {
-				p.Longitude = &v
-			}
-		}
-	}
-
-	return p
-}
-
 // SetTagParents replaces all parent relationships for a tag.
 // Accepts {"ids": [1, 2, 3]}. An empty array removes all parents (tag becomes unfiled).
 func (h *TagHandler) SetTagParents(c echo.Context) error {
-	id, err := parseIDParam(c)
-	if err != nil {
-		return err
-	}
-
-	var req struct {
-		IDs []int64 `json:"ids"`
-	}
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
-	}
-
-	if err := h.tagService.SetTagParents(c.Request().Context(), id, req.IDs); err != nil {
-		return MapError(err)
-	}
-
-	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
-	tag, err := h.tagService.GetTagByID(c.Request().Context(), id)
-	if err != nil {
-		return MapError(err)
-	}
-	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+	return h.setTagRelations(c, h.tagService.SetTagParents)
 }
 
 // SetTagChildren replaces all child relationships for a tag.
 // Accepts {"ids": [1, 2, 3]}. An empty array removes all children.
 func (h *TagHandler) SetTagChildren(c echo.Context) error {
+	return h.setTagRelations(c, h.tagService.SetTagChildren)
+}
+
+// setTagRelations is the shared body of the parents and children endpoints,
+// which differ only in the service call they make.
+func (h *TagHandler) setTagRelations(c echo.Context, set func(ctx context.Context, id int64, ids []int64) error) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -725,19 +333,14 @@ func (h *TagHandler) SetTagChildren(c echo.Context) error {
 		IDs []int64 `json:"ids"`
 	}
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+		return badTagRequest()
 	}
 
-	if err := h.tagService.SetTagChildren(c.Request().Context(), id, req.IDs); err != nil {
+	if err := set(c.Request().Context(), id, req.IDs); err != nil {
 		return MapError(err)
 	}
 
-	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
-	tag, err := h.tagService.GetTagByID(c.Request().Context(), id)
-	if err != nil {
-		return MapError(err)
-	}
-	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+	return h.renderSavedTag(c, id, http.StatusOK)
 }
 
 // MoveTagRequest is the body for POST /api/tags/:id/move.
@@ -757,7 +360,7 @@ func (h *TagHandler) MoveTag(c echo.Context) error {
 
 	var req MoveTagRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+		return badTagRequest()
 	}
 
 	if err := h.tagService.MoveTag(c.Request().Context(), services.MoveTagParams{
@@ -772,41 +375,26 @@ func (h *TagHandler) MoveTag(c echo.Context) error {
 }
 
 func (h *TagHandler) GetPostsByTag(c echo.Context) error {
-	slug := c.Param("slug")
-	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	ctx := c.Request().Context()
+
+	v, err := h.tagView(c)
 	if err != nil {
-		return MapError(err)
+		return err
+	}
+	tag, ok := v.g.BySlug[strings.ToLower(c.Param("slug"))]
+	if !ok || v.hidden(tag.ID) {
+		return tagNotFound()
+	}
+	// A tag can be visible itself while still withholding its posts.
+	if v.publicOnly && v.g.EffectiveHidesPosts[tag.ID] {
+		return tagNotFound()
 	}
 
-	tag, ok := g.BySlug[strings.ToLower(slug)]
-	if !ok {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-	}
+	perPageStr, _ := h.settingsService.GetSetting(ctx, "posts_per_page", "10")
+	defaultPerPage, _ := strconv.ParseInt(perPageStr, 10, 32)
+	page, perPage := ParsePaginationParams(c, int(defaultPerPage))
 
-	perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
-	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
-	defaultPerPage := int(defaultPerPage64)
-	page, perPage := ParsePaginationParams(c, defaultPerPage)
-
-	publicOnly := c.Get("user") == nil
-	var minPosts int64
-	if publicOnly {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
-		if minPosts < 0 {
-			minPosts = 0
-		}
-
-		if g.EffectiveHidden[tag.ID] || (minPosts > 0 && g.CountsPublic[tag.ID] < minPosts) {
-			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-		}
-
-		if g.EffectiveHidesPosts[tag.ID] {
-			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-		}
-	}
-
-	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, page, perPage, publicOnly, false, 0, 0)
+	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, v.publicOnly, false, 0, 0)
 	if err != nil {
 		return MapError(err)
 	}
@@ -815,48 +403,30 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	for i, p := range posts {
 		postIDs[i] = p.ID
 	}
-	postTagsMap, _ := h.tagService.GetTagsByPostIDs(c.Request().Context(), postIDs)
+	postTagsMap, _ := h.tagService.GetTagsByPostIDs(ctx, postIDs)
 
-	isAdmin := !publicOnly
-	excludeTagIDs := make(map[int64]bool)
-	if publicOnly {
-		for id := range g.EffectiveHidden {
-			excludeTagIDs[id] = true
-		}
-		if minPosts > 0 {
-			for id, count := range g.CountsPublic {
-				if count < minPosts {
-					excludeTagIDs[id] = true
-				}
-			}
-		}
-	}
-
+	excluded := v.excluded()
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		resp := postToListResponse(p, postTagsMap[p.ID], excludeTagIDs)
-		if isAdmin {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], g.EffectiveHidesPosts)
+		resp := postToListResponse(p, postTagsMap[p.ID], excluded)
+		if !v.publicOnly {
+			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], v.g.EffectiveHidesPosts)
 		}
 		postResponses[i] = resp
 	}
 
-	resp := map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]interface{}{
 		"id":          tag.ID,
 		"name":        tag.Name,
 		"slug":        tag.Slug,
 		"description": nullString(tag.Description),
-		"post_count":  g.CountsAdmin[tag.ID],
+		"post_count":  v.count(tag.ID),
 		"posts":       postResponses,
 		"total_posts": total,
 		"page":        page,
 		"per_page":    perPage,
 		"pages":       int(math.Ceil(float64(total) / float64(perPage))),
-	}
-	if publicOnly {
-		resp["post_count"] = g.CountsPublic[tag.ID]
-	}
-	return c.JSON(http.StatusOK, resp)
+	})
 }
 
 func (h *TagHandler) MergeTags(c echo.Context) error {
@@ -869,7 +439,7 @@ func (h *TagHandler) MergeTags(c echo.Context) error {
 		KeepRedirect bool  `json:"keep_redirect"`
 	}
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+		return badTagRequest()
 	}
 	if err := h.tagService.MergeTags(c.Request().Context(), req.WinnerID, loserID); err != nil {
 		return MapError(err)

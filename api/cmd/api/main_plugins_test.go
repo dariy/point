@@ -61,6 +61,12 @@ func TestPluginChunkGating(t *testing.T) {
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
 
+	// Enable the subject explicitly rather than leaning on its DefaultEnabled:
+	// this test is about the gate, not about which plugins happen to ship on.
+	if err := svcs.Settings.SetSetting(context.Background(), plugins.EnabledKey(id), "true", "boolean"); err != nil {
+		t.Fatal(err)
+	}
+
 	get := func(path string) int {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
@@ -117,8 +123,15 @@ func TestPluginManifestInjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = repo.Close() }()
+	seedOwner(t, repo)
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
+
+	// Enabled explicitly — the manifest's enabled-only contract is what's under
+	// test, not the registry's shipped defaults.
+	if err := svcs.Settings.SetSetting(context.Background(), plugins.EnabledKey(id), "true", "boolean"); err != nil {
+		t.Fatal(err)
+	}
 
 	body := func() string {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)

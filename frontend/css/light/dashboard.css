@@ -1,14 +1,16 @@
-/* Dashboard Layout Grid */
+/* Dashboard Layout Grid. The sidebar column is only reserved when a sidebar
+   is actually rendered — with nothing to continue writing, the main column
+   (and so the stats grid) gets the full width instead of two thirds of it. */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1fr;
     gap: var(--spacing-xl);
     align-items: start;
 }
 
-@media (max-width: 900px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
+@media (min-width: 901px) {
+    .dashboard-grid:has(.dashboard-sidebar) {
+        grid-template-columns: 1fr 300px;
     }
 }
 

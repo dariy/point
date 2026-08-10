@@ -585,4 +585,54 @@ describe('Timeline Component', () => {
       assert.strictEqual(new Set(positions).size, 4, 'zoomed bars track their year positions');
     });
   });
+
+  describe('Tag names are never parsed as markup', () => {
+    // Tag names and slugs come from user content, so any path that puts them on
+    // the page has to treat them as text — an injected <img onerror> in a tag
+    // name must render as characters, not run.
+    const XSS = '<img src=x onerror="alert(1)">';
+
+    test('pill labels go through textContent, not innerHTML', () => {
+      const timeline = new Timeline(container, props);
+      const btn = timeline._makePillBtn({
+        type: 'pill',
+        data: { year: 2020, name: XSS, slug: 'evil', post_count: 1 },
+      });
+
+      assert.strictEqual(btn.textContent, XSS, 'the name should land as literal text');
+      assert.strictEqual(btn.innerHTML, undefined, 'nothing may be written as markup');
+    });
+
+    test('cluster labels go through textContent, not innerHTML', () => {
+      const timeline = new Timeline(container, props);
+      const btn = timeline._makePillBtn({
+        type: 'cluster',
+        data: { label: XSS, minYear: 2018, maxYear: 2020, pills: [] },
+      });
+
+      assert.strictEqual(btn.textContent, XSS);
+      assert.strictEqual(btn.innerHTML, undefined);
+    });
+
+    test('the cluster popover escapes pill names and slugs', () => {
+      const timeline = new Timeline(container, props);
+      timeline.state.pills = [];
+      const trigger = global.document.createElement('button');
+
+      timeline._openClusterPopover(trigger, [
+        { name: XSS, slug: '" onclick="alert(1)', year: 2020, post_count: 1 },
+      ]);
+
+      const html = timeline.state.popover.innerHTML;
+      assert.ok(!html.includes('<img'), 'the tag name must not reach the DOM as a tag');
+      assert.ok(html.includes('&lt;img'), 'the name should still be shown, escaped');
+
+      const slugAttr = html.match(/data-slug="([^"]*)"/);
+      assert.ok(slugAttr, 'the slug should stay inside one quoted attribute');
+      assert.ok(
+        !slugAttr[1].includes('"') && slugAttr[1].includes('&quot;'),
+        'a quote in the slug must not break out of the attribute',
+      );
+    });
+  });
 });

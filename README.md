@@ -4,9 +4,9 @@
 [![Tests](https://github.com/dariy/point/actions/workflows/test.yml/badge.svg)](https://github.com/dariy/point/actions/workflows/test.yml)
 [![GHCR](https://ghcr-badge.egpl.dev/dariy/point/latest_tag?trim=major&label=ghcr.io%2Fdariy%2Fpoint)](https://github.com/dariy/point/pkgs/container/point)
 
-A self-hosted personal photo blog engine. Single container, SQLite storage, no external services required.
+A personal photo blog engine.
 
-Built with Go + Echo v4 backend and a plain JS SPA frontend.
+Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS SPA frontend.
 
 ## Quick start
 
@@ -48,6 +48,7 @@ The app is configured via environment variables (or a `.env` file in the working
 | `PHOTO_LIBRARY_PATH` | *(empty)* | Path to a read-only photo library to import from |
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
+| `STORAGE_QUOTA_MB` | `0` | Media storage allowance the dashboard reports usage against; `0` = unlimited (no usage bar) |
 | `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
 | `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` at serve time (analytics, verification tags) — public shell only, never served to admin/authenticated pages |
 | `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy `script-src`/`connect-src` directives, for use with `HEAD_HTML` |
@@ -57,8 +58,8 @@ The app is configured via environment variables (or a `.env` file in the working
 ### Run locally
 
 ```bash
-cd api && go run ./cmd/api
-# API starts at http://localhost:8000 (reads .env if present)
+./scripts/run.sh            # build + run locally (way faster than rebuild.sh)
+# runs at http://localhost:8001 (reads .env if present)
 ```
 
 ### Tests & CSS
@@ -72,7 +73,7 @@ cd api && go run ./cmd/api
 ### Build + deploy (Podman)
 
 ```bash
-scripts/rebuild.sh        # build + restart container
+./scripts/rebuild.sh        # build + restart container
 ```
 
 ### Prerequisites
@@ -97,13 +98,26 @@ data/         Runtime data (DB + media) — gitignored
 [`quickstart/docker-compose.yml`](quickstart/docker-compose.yml) and the published
 image. Pin a version tag rather than `latest` for production.
 
+### Don't want to run it yourself?
+
+[Point Hosting](https://point.photos/and/pizza) runs this same engine as a
+managed service — servers, TLS and backups handled, your data still exportable
+as one ordinary folder. It funds the engine's development. Self-hosting stays
+first-class and always will; if that's what you're here for, ignore this.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
 ## Built with
 
-[Go](https://golang.org/) · [Echo](https://echo.labstack.com/) · [SQLite](https://sqlite.org/) · [Docker](https://www.docker.com/) / [Podman](https://podman.io/)
+[Go](https://golang.org/) · [Echo](https://echo.labstack.com/) · [SQLite](https://sqlite.org/) · [Podman](https://podman.io/)
+
+### External projects in use
+
+- [leaflet](https://github.com/Leaflet/Leaflet) - map library for geo data representation.
+- [remark42](https://github.com/umputun/remark42) - comments engine sidecar.
+- [codejar](https://github.com/antonmedv/codejar) and [prismjs](https://github.com/PrismJS/prism) - highlighting in the post editor.
 
 ```
  _| _ ._oo ._  __|_

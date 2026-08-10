@@ -9,8 +9,11 @@
  *                          delete/copy actions, and scopes drag-drop to the
  *                          component container. Defaults to false.
  *
- * Public methods (picker mode):
- *   getSelectedItems()  Returns array of selected media objects.
+ * Public methods:
+ *   openFilePicker()    Opens the file chooser (used by the Upload buttons of
+ *                       MediaPage's admin header and MediaPickerDialog's modal
+ *                       header, both of which sit outside this container).
+ *   getSelectedItems()  Picker mode: array of selected media objects.
  */
 
 import { Component } from "../Component.js";
@@ -27,15 +30,19 @@ import {
   reextractMediaEXIF,
   updateMediaEXIF,
   revertMediaEXIF,
+  setVideoPoster,
 } from "../../api/media.js";
+import { captureVideoPoster } from "../../utils/videoPoster.js";
+import { MediaPager } from "../../core/mediaPager.js";
+import {
+  monthLabel,
+  folderChips,
+} from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import {
-  FOLDER_SVG,
-  CALENDAR_SVG,
-  CHEVRON_SVG,
   EDIT_SVG,
   LOCK_SVG,
   TRASH_SVG,
@@ -43,21 +50,6 @@ import {
   LINK_SVG,
   PLUS_SVG,
 } from "../../utils/icons.js";
-
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
 
 export class MediaBrowser extends Component {
   constructor(container, props = {}) {
@@ -69,20 +61,83 @@ export class MediaBrowser extends Component {
       typeFilter: "",
       selectedFolder: null,
       folders: [],
-      expandedYears: {},
       error: null,
       uploading: false,
       draggingOver: false,
       selectedIds: new Set(),
       selectMode: false,
+      capturingPosters: false,
       // per-item referring-posts panel: { [mediaId]: { loading, posts, error } }
       referringPostsState: {},
     };
     this._dragCount = 0;
     this._dragListeners = [];
     this._lightbox = this.props.pickerMode ? null : new MediaLightbox();
+    // Swipe-to-page and pinch-to-zoom on the grid, like the public post grids
+    // (core/mediaPager.js). Standalone only: the picker is a modal that owns its
+    // own dismiss gestures, and its host page has arrow keys of its own.
+    this._pager = this.props.pickerMode ? null : this._makePager();
     // Picker mode: persists selected media objects across page/folder changes
     this._selectedItemsById = {};
+  }
+
+  /** Wire the grid gesture layer to this browser's data and DOM. */
+  _makePager() {
+    return new MediaPager({
+      root: () => this.$(".media-browser"),
+      area: () => this.$("#mb-media-area"),
+      grid: () => this.$(".media-grid"),
+      fetchPage: (page) => this._pageMarkup(page),
+      gotoPage: (page) => {
+        // A page swipe that lands mid-list reads as a failed swipe; the new
+        // page starts at its top. (Desktop resets for free — the scrolling box
+        // is re-rendered — so this is really for the mobile document flow.)
+        window.scrollTo({ top: 0 });
+        this._load({ page });
+      },
+      onZoomCommit: () => this._refitToZoom(),
+      isAlive: () => !this._unmounted,
+    });
+  }
+
+  /**
+   * Identity of the listing currently on screen. The pager re-preloads the
+   * neighbouring pages only when this changes — without it every referring-posts
+   * lookup (one setState per image) would refetch both neighbours.
+   */
+  _listingKey() {
+    const { page } = this.state.pagination;
+    return [page, this.state.typeFilter, this.state.selectedFolder, this._lastPerPage].join("|");
+  }
+
+  /**
+   * Static markup for another page of the current listing — the pager's swipe
+   * ghost. Rendered by the same _renderItem as the live grid (so the neighbour
+   * that slides in is the real page, not a placeholder) but with no listeners
+   * bound: nothing in a ghost is ever clicked.
+   */
+  async _pageMarkup(page) {
+    const params = { page, per_page: this._lastPerPage || 24 };
+    if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+    if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
+    const data = await listMedia(params);
+    const items = data.media || [];
+    if (!items.length) return `<p class="empty-state">No media files.</p>`;
+    const none = new Set();
+    return `<div class="media-grid">${items.map((m) => this._renderItem(m, none)).join("")}</div>`;
+  }
+
+  /**
+   * A zoom step changed the column count, so the page no longer fills (or now
+   * overflows) the visible area — refetch at the capacity the new geometry
+   * implies. Deferred by the pager until the gesture is over, since this
+   * re-renders the grid the gesture is bound to.
+   */
+  _refitToZoom() {
+    const cap = this._gridCapacity();
+    if (!cap || cap === this._lastPerPage) return;
+    this._measuredPerPage = cap;
+    this._load({ page: this.state.pagination.page || 1 });
   }
 
   render() {
@@ -93,19 +148,9 @@ export class MediaBrowser extends Component {
       error,
       uploading,
       draggingOver,
-      folders,
-      selectedFolder,
-      expandedYears,
       selectedIds,
     } = this.state;
     const pickerMode = this.props.pickerMode;
-
-    const typeOptions = ["", "image", "video", "audio", "file"]
-      .map((t) => {
-        const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
-        return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
-      })
-      .join("");
 
     const grid = loading
       ? `<div class="loading-spinner" aria-label="Loading media…"></div>`
@@ -114,62 +159,6 @@ export class MediaBrowser extends Component {
         : !media.length
           ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`
           : `<div class="media-grid">${media.map((m) => this._renderItem(m, selectedIds)).join("")}</div>`;
-
-    // Group folders by year for the tree
-    const yearGroups = {};
-    for (const f of folders) {
-      if (!yearGroups[f.year]) yearGroups[f.year] = [];
-      yearGroups[f.year].push(f);
-    }
-    const sortedYears = Object.keys(yearGroups).sort((a, b) => b - a);
-
-    const folderTree = `
-      <nav class="media-folder-tree" aria-label="Media folders">
-        <button id="mb-upload-btn" class="btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
-        <select id="mb-type-filter" class="filter-select">${typeOptions}</select>
-
-        <button class="folder-tree-item folder-tree-all${!selectedFolder ? " active" : ""}" data-folder="">
-          <span class="folder-tree-icon">${FOLDER_SVG}</span>
-          <span class="folder-tree-label">All media</span>
-        </button>
-        ${sortedYears
-          .map((year) => {
-            const expanded = expandedYears[year] === true;
-            const months = yearGroups[year];
-            const isYearActive = selectedFolder === year;
-            const hasActiveMonth = months.some(
-              (f) => selectedFolder === f.path,
-            );
-
-            return `
-            <div class="folder-year-group${expanded ? " is-expanded" : ""}">
-              <div class="folder-year-row${isYearActive ? " active" : ""}${hasActiveMonth ? " has-active-child" : ""}">
-                <button class="folder-year-arrow${expanded ? " rotated" : ""}" data-year="${escapeHtml(year)}" aria-label="${expanded ? "Collapse" : "Expand"}">
-                  ${CHEVRON_SVG}
-                </button>
-                <button class="folder-tree-item folder-year-label${isYearActive ? " active" : ""}" data-folder="${escapeHtml(year)}">
-                  <span class="folder-tree-icon">${CALENDAR_SVG}</span>
-                  <span class="folder-tree-label">${escapeHtml(year)}</span>
-                </button>
-              </div>
-              <div class="folder-year-months${expanded ? "" : " hidden"}">
-                ${months
-                  .map((f) => {
-                    const monthName =
-                      MONTH_NAMES[parseInt(f.month, 10) - 1] || f.month;
-                    const isActive = selectedFolder === f.path;
-                    return `
-                    <button class="folder-tree-item folder-month-btn${isActive ? " active" : ""}"
-                            data-folder="${escapeHtml(f.path)}">
-                      <span class="folder-tree-label">${escapeHtml(monthName)}</span>
-                    </button>`;
-                  })
-                  .join("")}
-              </div>
-            </div>`;
-          })
-          .join("")}
-      </nav>`;
 
     const dropOverlay = pickerMode
       ? `<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
@@ -194,15 +183,8 @@ export class MediaBrowser extends Component {
 
         ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ""}
         ${selectionBar}
-        ${
-          pickerMode
-            ? `<div class="mb-top-bar mobile-only">
-          ${this._renderBreadcrumbs()}
-        </div>`
-            : ""
-        }
+        ${this._renderMobileBar(typeFilter)}
         <div class="media-layout">
-          ${folderTree}
           <div class="media-content">
             <div id="mb-media-area">${grid}</div>
             <div id="mb-pagination-mount"></div>
@@ -210,6 +192,137 @@ export class MediaBrowser extends Component {
         </div>
         ${dropOverlay}
       </div>`;
+  }
+
+  /**
+   * Poster-backfill row. Upload is not here in either mode: both hosts carry it
+   * on their own header line — the admin header on the standalone page, the
+   * dialog header in the picker — and reach the file input through
+   * openFilePicker(). Returns "" when nothing applies, so the row can be
+   * skipped.
+   *
+   * Controls use classes rather than ids, and $$ wiring in afterRender, since
+   * more than one copy may be in the DOM.
+   */
+  _renderControls() {
+    return this._renderPosterBackfill();
+  }
+
+  /** Media type filter — first control on the folder (media/year/month) line. */
+  _renderTypeFilter(typeFilter) {
+    const typeOptions = ["", "image", "video", "audio", "file"]
+      .map((t) => {
+        const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
+        return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
+      })
+      .join("");
+
+    return `<select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
+  }
+
+  /**
+   * Narrow-screen replacement for the folder tree (CSS decides which shows).
+   * A phone can't spare ~200px of width for a sidebar, so folders become a
+   * horizontally scrollable chip strip that drills down one level at a time.
+   * In picker mode it also carries the breadcrumbs; the standalone page puts
+   * those in the header <h1> instead (see afterRender).
+   */
+  _renderMobileBar(typeFilter) {
+    const chips = folderChips(this.state.folders, this.state.selectedFolder)
+      .map(
+        (c) =>
+          `<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${escapeHtml(c.folder)}">${escapeHtml(c.label)}</button>`,
+      )
+      .join("");
+
+    const controls = this._renderControls().trim();
+
+    return `
+      <div class="mb-mobile-bar">
+        ${this.props.pickerMode ? this._renderBreadcrumbs() : ""}
+        ${controls ? `<div class="mb-mobile-controls">${controls}</div>` : ""}
+        <div class="mb-folder-row">
+          ${this._renderTypeFilter(typeFilter)}
+          <div class="mb-folder-chips" role="group" aria-label="Media folders">${chips}</div>
+        </div>
+      </div>`;
+  }
+
+  /**
+   * Keep the selected folder chip in view after a re-render. scrollLeft is set
+   * directly rather than via scrollIntoView(), which would also scroll the
+   * sticky strip's ancestors and jump the page.
+   */
+  _centerActiveChip() {
+    const strip = this.$(".mb-folder-chips");
+    const active = strip?.querySelector(".mb-folder-chip.active");
+    if (!strip || !active) return;
+    strip.scrollLeft =
+      active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+  }
+
+  /** Videos on the current page that were never given a poster frame. */
+  _posterlessVideos() {
+    return this.state.media.filter(
+      (m) => (m.file_type || "").toLowerCase() === "video" && !m.thumbnail_path,
+    );
+  }
+
+  /**
+   * Offer to backfill poster frames for the videos on this page that lack one —
+   * anything uploaded before poster capture existed, or ingested over the API
+   * rather than through this browser. Capture needs a decoder, so it has to
+   * happen here; the button downloads each video to grab a single frame, which
+   * is why it is opt-in rather than automatic.
+   */
+  _renderPosterBackfill() {
+    if (this.props.pickerMode) return "";
+    const pending = this._posterlessVideos().length;
+    if (!pending) return "";
+    return `
+      <button class="mb-posters-btn btn btn-sm btn-secondary"
+              title="Download each video to capture a thumbnail frame"
+              ${this.state.capturingPosters ? "disabled" : ""}>
+        ▶ Poster ${pending} video${pending === 1 ? "" : "s"}
+      </button>`;
+  }
+
+  async _backfillPosters() {
+    const pending = this._posterlessVideos();
+    if (!pending.length || this.state.capturingPosters) return;
+
+    // Downloading each video to grab one frame is slow enough that starting
+    // silently reads as a dead button, so the run is announced up front and
+    // reported at the end — both through the toast store, like every other
+    // outcome in this component.
+    this.setState({ capturingPosters: true });
+    store.set("toast", {
+      message: `Capturing poster${pending.length === 1 ? "" : "s"} for ${pending.length} video${pending.length === 1 ? "" : "s"}…`,
+      type: "info",
+    });
+
+    let done = 0;
+    let failed = 0;
+    for (const m of pending) {
+      try {
+        const poster = await captureVideoPoster(m.path);
+        if (!poster) {
+          failed++;
+          continue;
+        }
+        await setVideoPoster(m.id, poster);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+
+    this.setState({ capturingPosters: false });
+    store.set("toast", {
+      message: `Captured ${done} poster${done === 1 ? "" : "s"}${failed ? `, ${failed} could not be decoded by this browser` : ""}.`,
+      type: failed ? "warning" : "success",
+    });
+    await this._load();
   }
 
   _renderBreadcrumbs() {
@@ -220,7 +333,7 @@ export class MediaBrowser extends Component {
     let currentPath = "";
     parts.forEach((p, i) => {
       currentPath += (currentPath ? "/" : "") + p;
-      const label = i === 1 ? MONTH_NAMES[parseInt(p, 10) - 1] || p : p;
+      const label = i === 1 ? monthLabel(p) : p;
       crumbs += ` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${escapeHtml(currentPath)}">${escapeHtml(label)}</button>`;
     });
     return `<div class="mb-breadcrumbs">${crumbs}</div>`;
@@ -247,14 +360,23 @@ export class MediaBrowser extends Component {
     const pickerMode = this.props.pickerMode;
     const fileType = (m.file_type || "").toLowerCase();
     const isImage = fileType === "image";
+    const isVideo = fileType === "video";
     const thumb = m.thumbnail_path || (isImage ? m.original_path : null);
     const isSelected = selectedIds.has(m.id);
 
+    // A video shows its captured poster frame when it has one, with the play
+    // glyph laid over it; without a poster it keeps the bare glyph. The <img>
+    // carries a load handler (see _bindPreviewFallback) so a poster that has
+    // gone missing on disk degrades to the glyph rather than a broken image.
     const preview =
-      isImage && thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">`
+      thumb && (isImage || isVideo)
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${
+            isVideo
+              ? `<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>`
+              : ""
+          }`
         : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${
-            fileType === "video" ? "▶" : fileType === "audio" ? "♫" : "📄"
+            isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"
           }</div>`;
 
     const publicStatus = m.is_public
@@ -653,8 +775,10 @@ export class MediaBrowser extends Component {
 
     const fileInput = this.$("#mb-file-input");
 
-    this.$("#mb-upload-btn")?.addEventListener("click", () =>
-      fileInput?.click(),
+    // Tree and mobile-bar copies of each control are both in the DOM (CSS shows
+    // one), so every listener binds across all matches.
+    this.$$(".mb-posters-btn").forEach((btn) =>
+      btn.addEventListener("click", () => this._backfillPosters()),
     );
 
     // Mobile capture buttons
@@ -699,27 +823,20 @@ export class MediaBrowser extends Component {
     });
 
     this._wireDragDrop(fileInput, pickerMode);
+    this._bindPreviewFallback();
 
-    this.$("#mb-type-filter")?.addEventListener("change", (e) => {
-      this.setState({ typeFilter: e.target.value });
-      this._load({ page: 1 });
-      this._loadFolders();
-    });
+    this.$$(".mb-type-filter").forEach((select) =>
+      select.addEventListener("change", (e) => {
+        this.setState({ typeFilter: e.target.value });
+        this._load({ page: 1 });
+        this._loadFolders();
+      }),
+    );
 
-    // Folder year expansion toggle (arrow only)
-    this.$$(".folder-year-arrow").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const year = btn.dataset.year;
-        const expanded = this.state.expandedYears[year] === true;
-        this.setState({
-          expandedYears: { ...this.state.expandedYears, [year]: !expanded },
-        });
-      });
-    });
-
-    // Folder / "all" / Year selection
-    this.$$(".folder-tree-item").forEach((btn) => {
+    // Folder / "all" / Year selection — mobile chips share the
+    // data-folder contract. (Not [data-folder]: that would also match the
+    // breadcrumb buttons wired above.)
+    this.$$(".mb-folder-chip").forEach((btn) => {
       btn.addEventListener("click", () => {
         const folder = btn.dataset.folder || null;
         this.setState({ selectedFolder: folder });
@@ -727,23 +844,7 @@ export class MediaBrowser extends Component {
       });
     });
 
-    // Toggle all years when clicking the "All media" icon
-    this.$(".folder-tree-all .folder-tree-icon")?.addEventListener(
-      "click",
-      (e) => {
-        e.stopPropagation();
-        const allYears = [...new Set(this.state.folders.map((f) => f.year))];
-        // A year is collapsed if not explicitly set to true (since default is now collapsed)
-        const anyCollapsed = allYears.some(
-          (y) => this.state.expandedYears[y] !== true,
-        );
-        const newExpanded = {};
-        allYears.forEach((y) => {
-          newExpanded[y] = anyCollapsed;
-        });
-        this.setState({ expandedYears: newExpanded });
-      },
-    );
+    this._centerActiveChip();
 
     if (pickerMode || this.state.selectMode) {
       // Picker/Select: toggle selection via checkbox or clicking the item
@@ -780,7 +881,11 @@ export class MediaBrowser extends Component {
       // Long-press to enter select mode (standalone only)
       this.$$(".media-item").forEach((item) => {
         let timer = null;
-        const start = () => {
+        let originX = 0;
+        let originY = 0;
+        const start = (e) => {
+          originX = e.clientX;
+          originY = e.clientY;
           timer = setTimeout(() => {
             if (!this.state.selectMode) {
               const id = parseInt(item.dataset.id, 10);
@@ -792,7 +897,15 @@ export class MediaBrowser extends Component {
           if (timer) clearTimeout(timer);
           timer = null;
         };
+        // A drag is a page swipe (or a scroll), not a long press — a slow one
+        // would otherwise sit still long enough to open select mode under the
+        // moving grid.
+        const moved = (e) => {
+          if (!timer) return;
+          if (Math.hypot(e.clientX - originX, e.clientY - originY) > 10) cancel();
+        };
         item.addEventListener("pointerdown", start);
+        item.addEventListener("pointermove", moved);
         item.addEventListener("pointerup", cancel);
         item.addEventListener("pointerleave", cancel);
         item.addEventListener("pointercancel", cancel);
@@ -878,6 +991,13 @@ export class MediaBrowser extends Component {
       }
 
       this._bindExifPanels();
+    }
+
+    // (Re)bind the grid gestures to the markup just written. Only over a real
+    // grid — there is nothing to swipe or zoom on a spinner, an error or an
+    // empty folder, and arming there would strip the page arrows.
+    if (this._pager && this.$(".media-grid")) {
+      this._pager.arm(this.state.pagination, this._listingKey());
     }
   }
 
@@ -994,12 +1114,48 @@ export class MediaBrowser extends Component {
   }
 
   /**
+   * Opens the hidden file input. Both Upload buttons — the standalone page's in
+   * the admin header, the picker's in the dialog header — live outside this
+   * component's container, so they can't reach the input directly.
+   */
+  openFilePicker() {
+    this.$("#mb-file-input")?.click();
+  }
+
+  /**
    * Returns the currently selected media objects (picker mode only).
    * Persists across page and folder changes.
    * @returns {object[]}
    */
   getSelectedItems() {
     return Object.values(this._selectedItemsById);
+  }
+
+  /**
+   * Swap a preview <img> for its file-type glyph when the image fails to load.
+   *
+   * A video's poster lives at the same ?thumb URL an image thumbnail does, and
+   * the server 404s that URL when no poster was ever captured — so a video that
+   * predates poster capture, or whose thumbnail file went missing, would
+   * otherwise render as a broken image. `error` does not bubble, hence the
+   * capture-phase listener on the grid.
+   */
+  _bindPreviewFallback() {
+    const grid = this.$(".media-grid");
+    if (!grid) return;
+    grid.addEventListener(
+      "error",
+      (e) => {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        const preview = img.closest(".media-item-preview");
+        if (!preview) return;
+        const overlay = preview.querySelector(".file-icon--overlay");
+        img.remove();
+        if (overlay) overlay.classList.remove("file-icon--overlay");
+      },
+      true,
+    );
   }
 
   _wireDragDrop(fileInput, pickerMode) {
@@ -1066,6 +1222,7 @@ export class MediaBrowser extends Component {
     }
     this._dragListeners = [];
     this._lightbox?.destroy();
+    this._pager?.destroy();
     this._dragCount = 0;
   }
 

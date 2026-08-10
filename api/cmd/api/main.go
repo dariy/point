@@ -21,13 +21,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/mcp"
-	"point-api/internal/migrations"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -77,6 +77,42 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 // on what counts as admin.
 func isAdminPath(p string) bool {
 	return strings.HasPrefix(p, "/light") || p == "/setup"
+}
+
+// newSetupGate returns a predicate reporting whether the install has an owner
+// user yet, i.e. whether first-run setup has been completed. Setup runs once and
+// never reverts, so the answer is latched the first time it comes back true and
+// the query only costs anything while the install is still unconfigured.
+func newSetupGate(repo repository.Repository) func(context.Context) bool {
+	var complete atomic.Bool
+	return func(ctx context.Context) bool {
+		if complete.Load() {
+			return true
+		}
+		if _, err := repo.GetFirstUser(ctx); err == nil {
+			complete.Store(true)
+			return true
+		}
+		return false
+	}
+}
+
+// noStoreBeforeSetup keeps the responses of an unconfigured install out of
+// caches. Listed AFTER visibilityCache on a route so it overrides the
+// `public, max-age=60` a guest GET is stamped with: everything a fresh install
+// returns is empty, and it stops being true the instant the wizard finishes.
+// The settings payload is the one that bites — the wizard's own page load puts
+// the empty version in the browser cache, and the admin, loading seconds later,
+// reads it back with no blog title and the wrong theme.
+func noStoreBeforeSetup(setupComplete func(context.Context) bool) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !setupComplete(c.Request().Context()) {
+				c.Response().Header().Set("Cache-Control", "private, no-store")
+			}
+			return next(c)
+		}
+	}
 }
 
 // hasSession reports whether the request carries a non-empty session cookie —
@@ -353,11 +389,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings, remarkSupervisor)
 	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithStorageQuotaMB(cfg.StorageQuotaMB)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
-	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
+	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo, &cfg)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings, svcs.Tag)
 	instagramImportService := services.NewInstagramImportService(svcs.Instagram, svcs.Media, svcs.Post)
 	instagramHandler := api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg)
@@ -461,10 +497,18 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		connectSrc += " " + extra
 	}
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; frame-ancestors 'none'",
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		// base-uri and form-action have no default-src fallback, so leaving them
+		// out means "anything goes": an injected <base> could repoint every
+		// relative script/form URL at an attacker origin, and an injected form
+		// could post credentials off-site. Both are 'self' — every form in the
+		// frontend targets a same-origin path (/search), and nothing sets <base>.
+		// object-src does fall back to default-src, but 'none' is stated outright
+		// so the plugin surface stays closed even if default-src is ever widened;
+		// no <object>/<embed>/<applet> exists in the frontend.
+		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		// HSTS: instruct browsers to only reach this origin over HTTPS for a year,
 		// including subdomains. Echo only emits the header when the request is
@@ -657,11 +701,16 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 
+	// Shared by the pre-setup no-store rule below and the SPA fallback's
+	// redirect to the wizard: one latch, so the "is this install configured yet"
+	// query stops running the moment it has an answer.
+	setupComplete := newSetupGate(repo)
+
 	// API route groups — registered per domain (see routes.go).
 	registerPostRoutes(e, postHandler, svcs)
 	registerTagRoutes(e, tagHandler, svcs)
 	registerMediaRoutes(e, mediaHandler, svcs)
-	registerSettingsRoutes(e, settingsHandler, svcs)
+	registerSettingsRoutes(e, settingsHandler, svcs, setupComplete)
 	registerPluginRoutes(e, pluginsHandler, svcs)
 	registerInstagramRoutes(e, instagramHandler, svcs)
 	registerThemeRoutes(e, themeHandler, svcs)
@@ -860,6 +909,19 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.GET("/*", func(c echo.Context) error {
 		if indexHTMLContent != "" {
 			path := c.Request().URL.Path
+
+			// Fresh install: every document lands on the first-run wizard, not
+			// just the admin section. A blog with no owner has nothing to show
+			// on "/" either, and doing it here (rather than only in the SPA's
+			// route guard) means the very first page load goes straight to
+			// /setup — no public shell rendered first, no JS required.
+			if path != "/setup" && !setupComplete(c.Request().Context()) {
+				// visibilityCache already stamped `public, max-age=60` on this
+				// guest GET; a cached redirect would outlive setup itself and
+				// bounce visitors to /setup after the blog is configured.
+				c.Response().Header().Set("Cache-Control", "private, no-store")
+				return c.Redirect(http.StatusFound, "/setup")
+			}
 			// Pick the shell: the admin one (no deployment-injected third-party
 			// markup) whenever the viewer is privileged — an admin route, or any
 			// request carrying a session. A logged-in admin shows admin controls
@@ -1044,10 +1106,22 @@ func main() {
 	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
 	// the database is opened: extracting a backup over an open SQLite file corrupts
 	// it, so the restore is deferred to here.
-	if applied, err := services.NewSystemService(nil, cfg.StoragePath, cfg.DatabaseURL).ApplyPendingRestore(); err != nil {
+	sysBoot := services.NewSystemService(nil, cfg.StoragePath, cfg.DatabaseURL)
+	if applied, err := sysBoot.ApplyPendingRestore(); err != nil {
 		slog.Error("failed to apply pending backup restore", "error", err)
 	} else if applied {
 		slog.Info("applied pending backup restore before opening database")
+	}
+
+	// Finish a pre-migration snapshot restore that a crash or a kill interrupted.
+	// Same rule as above — it swaps the database file, so it has to happen before
+	// anything opens it. Unlike a scheduled restore this one is not allowed to
+	// fail quietly: the file at point.db may be the one a failed migration left.
+	if applied, err := sysBoot.ApplyPendingMigrationRestore(); err != nil {
+		slog.Error("could not finish an interrupted pre-migration restore — refusing to start", "error", err)
+		os.Exit(1)
+	} else if applied {
+		slog.Warn("finished an interrupted pre-migration restore before opening database")
 	}
 
 	// Initialize repository
@@ -1083,9 +1157,12 @@ func main() {
 	// Apply DB schema + data migrations (see internal/migrations). A failure
 	// here means the database is not at the schema this build expects, so we
 	// stop rather than serve against it — the alternative is failing later,
-	// somewhere unrelated, on whatever the mismatch happens to break.
-	if err := migrations.Run(ctx, repo); err != nil {
-		slog.Error("database migrations failed — refusing to start", "error", err)
+	// somewhere unrelated, on whatever the mismatch happens to break. The guard
+	// snapshots the database first and puts it back on failure, so stopping
+	// leaves it at its pre-upgrade state rather than half-migrated.
+	if restored, err := runMigrationsGuarded(ctx, repo, svcs.System, cfg); err != nil {
+		slog.Error("database migrations failed — refusing to start",
+			"error", err, "database_restored", restored)
 		os.Exit(1)
 	}
 
@@ -1385,6 +1462,15 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 						return c.File(thumbFile)
 					}
 				}
+			}
+
+			// Falling through to the original is only a graceful degradation when
+			// the original is itself a still. For a video or audio file the caller
+			// asked for a thumbnail and would get an <img> pointed at a media
+			// stream — a broken image that costs a full download. 404 instead;
+			// the UI drops back to a type glyph on error.
+			if strings.EqualFold(media.FileType, "video") || strings.EqualFold(media.FileType, "audio") {
+				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail for this media")
 			}
 		}
 

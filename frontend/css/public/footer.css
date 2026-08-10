@@ -42,7 +42,12 @@
    so the footer copy stays hidden there and the in-flow one is hidden here
    (body.grid-zoomable marks the grid pages that publish the footer copy —
    search keeps its own in-flow paginator everywhere). */
-.footer-pagination {
+/* The cell goes with its contents: hidden, it is still a flex item on the
+   stacked phone layout and still takes a full row gap, which put dead space
+   above the copyright line for a paginator that isn't there. Only the cell
+   holding the paginator — an immersive post's tag cell stays. */
+.footer-pagination,
+.footer-center:has(> .footer-pagination) {
     display: none;
 }
 
@@ -51,7 +56,8 @@
 }
 
 @media (min-width: 769px), (orientation: landscape) {
-    .footer-pagination {
+    .footer-pagination,
+    .footer-center:has(> .footer-pagination) {
         display: block;
     }
 

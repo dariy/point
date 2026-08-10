@@ -733,6 +733,71 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 	return updated, nil
 }
 
+// SaveVideoPoster stores a client-captured frame as a video's thumbnail.
+//
+// The runtime image ships no ffmpeg (and the binary is CGO-free), so there is
+// no server-side video decoder: the admin browser draws a frame off a <video>
+// element onto a canvas and posts the resulting JPEG here. The frame lands on
+// the same media/thumbnails/YYYY/MM/ path an image upload would use, so every
+// existing consumer of ?thumb picks it up with no further changes.
+func (s *MediaService) SaveVideoPoster(ctx context.Context, id int64, poster []byte) (models.Medium, error) {
+	media, err := s.getMedia(ctx, id)
+	if err != nil {
+		return models.Medium{}, err
+	}
+	return s.storePoster(ctx, media, poster)
+}
+
+// storePoster resizes poster to the configured thumbnail box and records it as
+// media's thumbnail_path. It is the shared tail of SaveVideoPoster and the
+// poster field on upload.
+func (s *MediaService) storePoster(ctx context.Context, media models.Medium, poster []byte) (models.Medium, error) {
+	if !strings.EqualFold(media.FileType, "video") {
+		return models.Medium{}, ErrNotAVideo
+	}
+
+	src, err := safeImagingDecode(bytes.NewReader(poster))
+	if err != nil {
+		return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("poster frame is not a decodable image: %w", err))
+	}
+
+	// Thumbnails are switched off when either dimension is zeroed out; without a
+	// box to fill there is nothing to store.
+	thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
+	if thumbW <= 0 || thumbH <= 0 {
+		return models.Medium{}, wrapKind(ErrInvalidInput, errors.New("thumbnails are disabled"))
+	}
+
+	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
+	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
+	thumbRel := filepath.Join("thumbnails", filepath.Dir(relUnder), baseName)
+	thumbFull := filepath.Clean(filepath.Join(mediaBase, thumbRel))
+	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid thumbnail path")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
+		return models.Medium{}, err
+	}
+	thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
+	if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
+		return models.Medium{}, err
+	}
+
+	// Drop any square variant cached from an earlier poster; SquareThumbnail
+	// keys its freshness off the source file's mtime, and a replaced poster is
+	// written to the same path.
+	_ = os.Remove(s.squareThumbPath(media, AtlasThumbSize))
+
+	return s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{
+		ID:            media.ID,
+		Filename:      media.Filename,
+		OriginalPath:  media.OriginalPath,
+		ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
+	})
+}
+
 // AtlasThumbSize is the edge length (px) of the square thumbnail the atlas
 // cloud requests for image-post chips. It must be a member of the allowed set
 // below so SquareThumbnail will generate it.
@@ -750,42 +815,62 @@ func AllowedSquareThumbSize(size int) bool {
 	return allowedSquareThumbSizes[size]
 }
 
+// squareThumbPath returns the absolute path of the cached square variant of the
+// given edge size for a media item, whether or not it has been generated yet.
+func (s *MediaService) squareThumbPath(media models.Medium, size int) string {
+	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
+	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
+	thumbRel := filepath.Join("thumbnails", fmt.Sprintf("sq%d", size), filepath.Dir(relUnder), baseName)
+	return filepath.Clean(filepath.Join(mediaBase, thumbRel))
+}
+
 // SquareThumbnail returns the absolute path to a cached square JPEG thumbnail of
-// the given edge size for an image media item, generating it lazily on first
-// request. Variants live under media/thumbnails/sq<size>/YYYY/MM/, mirroring the
+// the given edge size for a media item, generating it lazily on first request.
+// Variants live under media/thumbnails/sq<size>/YYYY/MM/, mirroring the
 // original's date path, so no DB column or migration is needed. A cached file is
-// regenerated if the original has since changed.
+// regenerated if its source has since changed.
+//
+// Images are squared from the original. A video has no server-decodable still,
+// so it is squared from the stored poster frame instead (see SaveVideoPoster);
+// a video without one has no source at all and errors out.
 func (s *MediaService) SquareThumbnail(ctx context.Context, media models.Medium, size int) (string, error) {
 	if !AllowedSquareThumbSize(size) {
 		return "", wrapKind(ErrInvalidInput, fmt.Errorf("unsupported thumbnail size %d", size))
 	}
-	if !strings.EqualFold(media.FileType, "image") {
-		return "", ErrNotAnImage
-	}
 
 	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
 
-	origFull := filepath.Clean(filepath.Join(mediaBase, media.OriginalPath))
-	if !strings.HasPrefix(origFull, mediaBase+string(filepath.Separator)) {
+	// srcRel is the media-relative path of the file the square is cut from.
+	srcRel := media.OriginalPath
+	if !strings.EqualFold(media.FileType, "image") {
+		if !strings.EqualFold(media.FileType, "video") {
+			return "", ErrNotAnImage
+		}
+		if !media.ThumbnailPath.Valid || media.ThumbnailPath.String == "" {
+			return "", ErrNoPoster
+		}
+		srcRel = media.ThumbnailPath.String
+	}
+
+	srcFull := filepath.Clean(filepath.Join(mediaBase, srcRel))
+	if !strings.HasPrefix(srcFull, mediaBase+string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid media path")
 	}
 
-	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
-	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
-	thumbRel := filepath.Join("thumbnails", fmt.Sprintf("sq%d", size), filepath.Dir(relUnder), baseName)
-	thumbFull := filepath.Clean(filepath.Join(mediaBase, thumbRel))
+	thumbFull := s.squareThumbPath(media, size)
 	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid thumbnail path")
 	}
 
-	// Reuse the cached thumbnail unless the original is newer (e.g. replaced).
+	// Reuse the cached thumbnail unless the source is newer (e.g. replaced).
 	if ti, err := os.Stat(thumbFull); err == nil {
-		if oi, err := os.Stat(origFull); err == nil && !oi.ModTime().After(ti.ModTime()) {
+		if oi, err := os.Stat(srcFull); err == nil && !oi.ModTime().After(ti.ModTime()) {
 			return thumbFull, nil
 		}
 	}
 
-	data, err := os.ReadFile(origFull)
+	data, err := os.ReadFile(srcFull)
 	if err != nil {
 		return "", err
 	}
@@ -885,6 +970,10 @@ type AnalysisResponse struct {
 var (
 	ErrMediaNotFound = kindSentinel(ErrNotFound, "media not found")
 	ErrNotAnImage    = kindSentinel(ErrInvalidInput, "media item is not an image")
+	ErrNotAVideo     = kindSentinel(ErrInvalidInput, "media item is not a video")
+	// A video whose poster frame was never captured — there is no still to
+	// serve or derive a square variant from.
+	ErrNoPoster = kindSentinel(ErrNotFound, "video has no poster frame")
 	// The analysis upstream answered, but not with something we can use.
 	ErrResponseUnusable = kindSentinel(ErrUpstream, "the response cannot be used")
 )

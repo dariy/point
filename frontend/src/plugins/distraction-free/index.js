@@ -4,8 +4,17 @@
 // chrome (header, footer, timeline, tag cloud, pagination) leaving only the
 // post grid. The choice persists in localStorage but the body class is scoped
 // to the list page — unmount removes it so post/other pages are unaffected.
+//
+// On touch the button is the *entrance* only: once inside, the mode is worked
+// by vertical flicks (the CSS hides the exit button for a coarse pointer).
+// Flick up raises the overlay — the site footer, carrying the paginator in
+// every orientation — and flick down puts it away again; a flick down with
+// nothing raised leaves the mode. The gestures come from GridPager, which owns
+// the recogniser for every grid page (see core/gridPager.js).
 
 const KEY = 'distraction-free';
+const MODE_CLASS = 'distraction-free';
+const OVERLAY_CLASS = 'distraction-overlay';
 
 const ENTER_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>`;
 const EXIT_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>`;
@@ -36,9 +45,14 @@ export function mount(el) {
   btn.className = 'header-action-btn distraction-toggle';
 
   let on = readPref();
+  let overlay = false; // never persisted — every entry starts with a clean grid
+
+  const applyOverlay = () => {
+    document.body.classList.toggle(OVERLAY_CLASS, on && overlay);
+  };
 
   const apply = () => {
-    document.body.classList.toggle('distraction-free', on);
+    document.body.classList.toggle(MODE_CLASS, on);
     // In DF mode the button is portalled to body so the header can be hidden
     // entirely (no dead space). On exit it returns to its slot in the nav.
     if (on) {
@@ -49,13 +63,33 @@ export function mount(el) {
     btn.innerHTML = on ? EXIT_SVG : ENTER_SVG;
     btn.setAttribute('aria-label', on ? 'Exit full-screen mode' : 'Full-screen mode');
     btn.setAttribute('aria-pressed', String(on));
+    applyOverlay();
   };
 
   const toggle = () => {
     on = !on;
+    overlay = false; // leaving takes the overlay with it; entering starts bare
     writePref(on);
     apply();
   };
+
+  // Flick up raises the overlay, flick down lowers it, and a flick down with the
+  // overlay already down leaves the mode — so the two directions are never
+  // ambiguous and one gesture only ever does one thing.
+  const onVerticalSwipe = (e) => {
+    if (!on) return;
+    const dir = e.detail?.dir;
+    if (dir === 'up') {
+      if (overlay) return;
+      overlay = true;
+      applyOverlay();
+    } else if (dir === 'down') {
+      if (!overlay) return toggle();
+      overlay = false;
+      applyOverlay();
+    }
+  };
+  window.addEventListener('point:grid-swipe-vertical', onVerticalSwipe);
 
   // apply() already parks the button in the right place (holder when off,
   // portalled to body when on). Don't append it to el again afterwards — in DF
@@ -66,8 +100,9 @@ export function mount(el) {
   return {
     unmount() {
       btn.removeEventListener('click', toggle);
+      window.removeEventListener('point:grid-swipe-vertical', onVerticalSwipe);
       btn.remove();
-      document.body.classList.remove('distraction-free');
+      document.body.classList.remove(MODE_CLASS, OVERLAY_CLASS);
     },
   };
 }

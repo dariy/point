@@ -350,6 +350,22 @@ body {
 
 /* Posts list: fixed-viewport layout — table scrolls, pagination stays visible */
 .posts-list-main {
+    /* .light-main is a column flex item, and two flexbox defaults have to be
+       undone before a height on it means anything. `flex: 1` above sets
+       flex-basis to 0%, which supersedes `height` on the main axis; and the
+       item's automatic minimum size (min-height: auto, i.e. its content's
+       height) then stops it shrinking to the window regardless. Until both were
+       cleared the height below was inert: .light-main sized to its content, the
+       inner scroller never clipped, and the whole admin page scrolled — so the
+       pagination this layout exists to pin sat at the bottom of a very long
+       document instead of on the bottom edge. `flex: 0 0 auto` hands the sizing
+       back to `height`, and `min-height: 0` lets it hold.
+       (light/media.css does the same for the media library, above its own
+       breakpoint — the media page keeps document flow on narrow screens.)
+       The mobile bottom-bar reserve is padding on .light-main, and box-sizing
+       is border-box, so it stays inside this clamp rather than adding to it. */
+    flex: 0 0 auto;
+    min-height: 0;
     height: 100vh;
     height: 100dvh;
     overflow: hidden;
@@ -372,6 +388,18 @@ body {
 .posts-list-main .light-content .filters,
 .posts-list-main .light-content #pagination-mount {
     flex-shrink: 0;
+}
+
+/* Post list navigation arrows. Position only — visibility (including the
+   mobile hide) belongs to .page-nav-arrow in common/pagination.css, which is
+   bundled ahead of this file. Admin has no content gutter to park them in, so
+   they clear the sidebar instead of the default centred-content offset. */
+.admin-page-nav-arrow.page-nav-prev {
+    left: calc(var(--sidebar-width) + var(--spacing-md));
+}
+
+.admin-page-nav-arrow.page-nav-next {
+    right: var(--spacing-md);
 }
 
 /* Theme Toggle (admin overrides) */
@@ -409,35 +437,68 @@ body {
 }
 
 /* ===========================
-   Setup Page
-   =========================== */
+   Setup / Password-reset Pages
+   ===========================
+   Full-screen single-card screens shown before there is an admin shell to sit
+   in. They follow the login modal (common/login-overlay.css) — the project's
+   other standalone credential screen — rather than the admin content cards:
+   same bordered surface, radius and entry animation, no header band and no
+   collapse affordance, neither of which means anything here. */
 .setup-page-container {
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    /* dvh tracks the mobile toolbar so the card stays optically centred. */
+    min-height: 100dvh;
     padding: var(--spacing-lg);
-    background-color: var(--bg-primary);
+    background-color: var(--bg-secondary);
 }
 
 .setup-page-container .card {
     width: 100%;
     max-width: var(--card-max-width);
+    margin-bottom: 0;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-xl);
     box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    animation: setupCardIn 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
+/* `display: block` is load-bearing: the global .card-header rule (light/system.css)
+   lays admin card headers out as a space-between row, which would put the
+   subtitle beside the title instead of under it. */
 .setup-page-container .card-header {
+    display: block;
+    padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
     text-align: center;
-    padding: var(--spacing-xl) var(--spacing-lg);
+    background: none;
+    border-bottom: none;
     cursor: default;
+}
+
+/* Bigger than the sidebar mark (--app-logo-width): here it is the only branding
+   on screen. */
+.setup-page-container .app-logo {
+    width: var(--size-2-5);
+    margin-bottom: var(--spacing-md);
+    color: var(--color-primary);
+    fill: currentColor;
 }
 
 .setup-page-container .card-header h2 {
     margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-xl);
 }
 
 .setup-page-container .card-body {
-    padding: var(--spacing-xl);
+    padding: 0 var(--spacing-xl) var(--spacing-xl);
+}
+
+.setup-page-container .form-group {
+    margin-bottom: var(--spacing-lg);
 }
 
 .setup-page-container .error-message {
@@ -446,6 +507,17 @@ body {
 
 .setup-page-container .setup-submit-wrapper {
     margin-top: var(--spacing-xl);
+}
+
+@keyframes setupCardIn {
+    from { opacity: 0; transform: translateY(var(--from-transform)) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .setup-page-container .card {
+        animation: none;
+    }
 }
 
 .setup-page-container .setup-submit-btn {
@@ -554,6 +626,16 @@ body {
 
 .nav-group.is-collapsed .nav-group-items {
     display: none;
+}
+
+/* Collapsed over the page you are on. The active item is the usual trace of
+   where you are and it is hidden now, so the group header carries it instead —
+   otherwise collapsing Manage while inside it leaves the nav showing nothing
+   as current. */
+.nav-group.is-collapsed.has-active .nav-group-title,
+.nav-group.is-collapsed.has-active .toggle-icon {
+    opacity: 0.9;
+    color: var(--sidebar-text-hover);
 }
 
 /* ===========================

@@ -28,12 +28,44 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import { defaultPostTitle } from "../../utils/formatters.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
+import { attachPointerReorder } from "../../utils/pointerReorder.js";
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
+
+/**
+ * Every post property is one pinnable group. A pinned group sits on the canvas
+ * (`.editor-main` → `#pinned-fields`), an unpinned one in the Details panel;
+ * the pin button in each group's header row moves it between the two.
+ *
+ * Two preferences describe the editor's layout, both persisted globally because
+ * they are how this user works, not something about one post:
+ *   - the pinned set  (`point:editor:pinned`)      — which side a field is on
+ *   - the field order (`point:editor:field-order`) — one sequence spanning both
+ *     sides, so a field pinned and unpinned again lands back where it belongs
+ *
+ * DEFAULT_ORDER seeds the order and orders anything missing from a stored one —
+ * a future plugin section rendering through `_renderGroup()` sorts last and is
+ * pinnable and movable like the rest, with no extra wiring.
+ */
+const DEFAULT_ORDER = ["title", "tags", "content", "status", "schedule", "slug", "excerpt", "immersive", "css", "instagram"];
+
+/** Canvas layout before pinning existed: title and tags, everything else in Details. */
+const DEFAULT_PINNED = ["title", "tags"];
+
+/**
+ * The content editor is a block like the others — it can be moved among them —
+ * but it is what the page is for, so it can never leave the canvas: no pin, and
+ * a drop into the Details panel is refused.
+ */
+const FIXED_TO_CANVAS = "content";
+
+const PINNED_STORAGE_KEY = "point:editor:pinned";
+const ORDER_STORAGE_KEY = "point:editor:field-order";
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
@@ -112,8 +144,11 @@ export default class PostEditPage extends Component {
       detailsOpen: this._readDetailsPref(),
       showLivePreview: this._readLivePreviewPref(),
       menuOpen: false,
+      arranging: false,
       hasPendingEdits: false,
     };
+    this._pinned = this._readPinned();
+    this._order = this._readOrder();
     this._tags = [];
     this._nodes = [];
     this._unmounted = false;
@@ -154,6 +189,7 @@ export default class PostEditPage extends Component {
           <hr>
           ${pluginHost.isEnabled("ai-analysis") ? `<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${SPARKLE_SVG} Analyze media</button>` : ''}
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${LINK_SVG} Preview link</button>
+          <button class="menu-item" type="button" data-action="arrange">${GRIP_SVG} Arrange fields</button>
           ${this._isWide() ? `<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
           ${!isNew ? `<button class="menu-item" type="button" data-action="view-on-site">${EXTERNAL_LINK_SVG} View on site</button>` : ''}
           <hr>
@@ -223,29 +259,139 @@ export default class PostEditPage extends Component {
     const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
     const cssSummary = (p.css || "").trim() ? "custom" : "none";
     const cssEnabled = pluginHost.isEnabled("custom-css");
+    const tagNames = toTagNames(p.tags);
+
+    // Every property is a group; `_renderGroup` decides where it goes from the
+    // pin set, so the markup for a field exists once regardless of placement.
+    const groups = {
+      title: {
+        label: "Post title",
+        summary: title ? escapeHtml(this._truncate(p.title)) : "auto",
+        body: `
+          <div class="title-row">
+            <div class="title-input-wrapper">
+              <input type="text" id="title-input" class="form-input editor-title" placeholder="${escapeHtml(defaultPostTitle(store.get("settings")))}" title="Leave blank to title this post with today's date" value="${title}">
+              ${aiBtn("title")}
+            </div>
+          </div>`,
+      },
+      tags: {
+        label: "Tags",
+        summary: tagNames.length ? escapeHtml(this._truncate(tagNames.join(", "))) : "none",
+        body: `
+          <div class="tags-row">
+            <div class="tags-input-wrapper">
+              <div id="tags-input-mount" class="tags-row-input"></div>
+              ${aiBtn("tags")}
+            </div>
+          </div>`,
+      },
+      status: {
+        label: "Status &amp; visibility",
+        summary: statusSummary,
+        body: `
+          <div class="details-split-row">
+            <div class="form-group">
+              <label class="form-label" for="status-select">Status</label>
+              <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
+                ${statusOpts}
+              </select>
+            </div>
+            <div class="form-group featured-toggle-group">
+              <label class="form-label">Featured</label>
+              <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
+                ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
+              </button>
+              <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
+            </div>
+          </div>`,
+      },
+      // Only relevant while the post is scheduled; the group hides itself
+      // otherwise, wherever it currently sits (see `_setScheduleVisible`).
+      schedule: {
+        label: "Schedule",
+        summary: this._scheduleSummary(p.scheduled_at),
+        hidden: status !== "scheduled",
+        body: `
+          <div class="schedule-row" id="schedule-row">
+            <div class="schedule-input-wrapper">
+              <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
+              <span class="schedule-input-hint" id="schedule-hint" style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
+            </div>
+          </div>`,
+      },
+      slug: {
+        label: "Slug",
+        summary: escapeHtml(slugSummary),
+        body: `
+          <div class="slug-row">
+            <div class="slug-input-wrapper">
+              <span class="slug-prefix">/posts/</span>
+              <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
+            </div>
+          </div>`,
+      },
+      excerpt: {
+        label: "Excerpt",
+        summary: excerptSummary,
+        body: `
+          <div class="form-group excerpt-row">
+            <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+            ${aiBtn("excerpt")}
+          </div>`,
+      },
+      content: {
+        label: "Content",
+        summary: "",
+        fixed: true,
+        body: `${modeToggle}${contentArea}`,
+      },
+      immersive: {
+        label: "Immersive mode",
+        summary: immersiveSummary,
+        body: `
+          <div class="form-group">
+            <select id="immersive-mode-select" class="form-input immersive-mode-select">
+              <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
+              <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
+              <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
+            </select>
+          </div>`,
+      },
+    };
+
+    if (cssEnabled) {
+      groups.css = {
+        label: "Custom CSS",
+        summary: cssSummary,
+        body: `<div class="form-group"><div id="css-editor-mount"></div></div>`,
+      };
+    }
+    if (pluginHost.isEnabled("instagram") && igStatus?.enabled) {
+      groups.instagram = this._instagramGroup(p, igStatus, publishingToInstagram, anyActionInProgress, isNew);
+    }
+
+    const keys = Object.keys(groups).sort((a, b) => this._orderIndex(a) - this._orderIndex(b));
+    const renderWhere = (pinned) =>
+      keys.filter((k) => this._pinned.has(k) === pinned)
+          .map((k) => this._renderGroup(k, groups[k], pinned))
+          .join("");
+    const pinnedHtml = renderWhere(true);
+    const detailsHtml = renderWhere(false);
 
     return `
             <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
+              <div class="arrange-bar" id="arrange-bar" role="region" aria-label="Arrange fields" hidden>
+                <span class="arrange-bar-hint">
+                  <strong>Arranging fields</strong>
+                  <span class="arrange-bar-hint-detail">Drag a field to reorder it, or across to the other list to move it there.</span>
+                </span>
+                <button id="arrange-done" class="btn btn-primary btn-sm" type="button">Done</button>
+              </div>
+
               <div class="editor-main">
-                <div class="title-row">
-                  <div class="title-input-wrapper">
-                    <input type="text" id="title-input" class="form-input editor-title" placeholder="Post title" value="${title}" required>
-                    ${aiBtn("title")}
-                  </div>
-                </div>
-
-
-                <div class="tags-row">
-                  <div class="tags-input-wrapper">
-                    <div id="tags-input-mount" class="tags-row-input"></div>
-                    ${aiBtn("tags")}
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  ${modeToggle}
-                  ${contentArea}
-                </div>
+                <p class="arrange-list-label">Shown in the editor</p>
+                <div class="pinned-fields" id="pinned-fields">${pinnedHtml}</div>
               </div>
 
               <div class="editor-live-preview" id="live-preview-mount">
@@ -260,100 +406,36 @@ export default class PostEditPage extends Component {
                   <span class="details-panel-title">Details</span>
                   <button id="details-close-btn" class="details-panel-close" type="button" aria-label="Close details">&times;</button>
                 </div>
-                <div class="details-panel-body">
-                  <details class="details-group" data-group="status">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Status &amp; visibility</span>
-                      <span class="details-group-summary" id="summary-status">${statusSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="details-split-row">
-                        <div class="form-group">
-                          <label class="form-label" for="status-select">Status</label>
-                          <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
-                            ${statusOpts}
-                          </select>
-                        </div>
-                        <div class="form-group featured-toggle-group">
-                          <label class="form-label">Featured</label>
-                          <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
-                            ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
-                          </button>
-                          <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
-                        </div>
-                      </div>
-
-                      <div class="schedule-row" id="schedule-row" style="display:${status === "scheduled" ? "flex" : "none"}">
-                        <div class="schedule-input-wrapper">
-                          <label class="form-label" for="schedule-input">Schedule</label>
-                          <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
-                          <span class="schedule-input-hint" id="schedule-hint" style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="slug">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Slug</span>
-                      <span class="details-group-summary" id="summary-slug">${escapeHtml(slugSummary)}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="slug-row">
-                        <div class="slug-input-wrapper">
-                          <span class="slug-prefix">/posts/</span>
-                          <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="excerpt">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Excerpt</span>
-                      <span class="details-group-summary" id="summary-excerpt">${excerptSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group excerpt-row">
-                        <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
-                        ${aiBtn("excerpt")}
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="immersive">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Immersive mode</span>
-                      <span class="details-group-summary" id="summary-immersive">${immersiveSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group">
-                        <select id="immersive-mode-select" class="form-input immersive-mode-select">
-                          <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
-                          <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
-                          <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
-                        </select>
-                      </div>
-                    </div>
-                  </details>
-
-                  ${cssEnabled ? `
-                  <details class="details-group" data-group="css">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Custom CSS</span>
-                      <span class="details-group-summary" id="summary-css">${cssSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group">
-                        <div id="css-editor-mount"></div>
-                      </div>
-                    </div>
-                  </details>` : ''}
-
-                  ${(pluginHost.isEnabled("instagram") && igStatus?.enabled) ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
+                <div class="details-panel-body${detailsHtml ? " has-groups" : ""}">
+                  <!-- Kept first so a group unpinned back into an empty panel can
+                       simply be appended and still land after this note. -->
+                  <p class="details-panel-empty">Every field is shown in the editor. Move one back here from Arrange fields.</p>
+                  ${detailsHtml}
                 </div>
               </aside>
             </div>`;
+  }
+
+  /**
+   * One editor block as a collapsible group. On the canvas it renders with
+   * `is-pinned` and forced open — the body is the field itself, so which side a
+   * block is on is purely a question of which parent the element hangs off.
+   *
+   * That is what lets arrange mode *move* the live element instead of
+   * re-rendering, keeping unsaved input values, focus and listeners.
+   */
+  _renderGroup(key, group, pinned) {
+    const plain = group.label.replace(/&amp;/g, "&");
+    return `
+      <details class="details-group${pinned ? " is-pinned" : ""}${group.fixed ? " is-fixed" : ""}${group.hidden ? " is-hidden" : ""}" data-group="${key}"${pinned ? " open" : ""}>
+        <summary class="details-group-summary-row">
+          <button type="button" class="details-group-handle" data-handle="${key}"
+                  aria-label="Move ${escapeHtml(plain)}" title="Drag to reorder, or across the lists to move it — arrow keys do both">${GRIP_SVG}</button>
+          <span class="details-group-title">${group.label}</span>
+          <span class="details-group-summary" id="summary-${key}">${group.summary}</span>
+        </summary>
+        <div class="details-group-body">${group.body}</div>
+      </details>`;
   }
 
   /** Trim a value to a one-line summary length. */
@@ -361,35 +443,216 @@ export default class PostEditPage extends Component {
     return str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
   }
 
-  _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
+  /** Position of a group in the user's order; anything unknown sorts last. */
+  _orderIndex(key) {
+    const i = this._order.indexOf(key);
+    if (i !== -1) return i;
+    const d = DEFAULT_ORDER.indexOf(key);
+    return this._order.length + (d === -1 ? DEFAULT_ORDER.length : d);
+  }
+
+  /** The stored order, with any key it doesn't mention appended in default order. */
+  _readOrder() {
+    let raw = null;
+    try { raw = localStorage.getItem(ORDER_STORAGE_KEY); } catch { /* ignore */ }
+    let stored = [];
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) stored = parsed.filter((k) => typeof k === "string");
+    } catch { /* fall through to the default */ }
+    return [...stored, ...DEFAULT_ORDER.filter((k) => !stored.includes(k))];
+  }
+
+  _persistOrder() {
+    try { localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(this._order)); } catch { /* ignore */ }
+  }
+
+  /**
+   * Move `key` to sit directly after `afterKey` (or first, when null) in the one
+   * order shared by both sides. Everything else keeps its relative position, so
+   * a drag inside the Details panel doesn't disturb the canvas and vice versa.
+   */
+  _moveInOrder(key, afterKey) {
+    const rest = this._order.filter((k) => k !== key);
+    const at = afterKey ? rest.indexOf(afterKey) + 1 : 0;
+    rest.splice(at < 0 ? rest.length : at, 0, key);
+    this._order = rest;
+    this._persistOrder();
+  }
+
+  /** The pinned set, persisted across posts and sessions (an editor preference, not post data). */
+  _readPinned() {
+    let raw = null;
+    try { raw = localStorage.getItem(PINNED_STORAGE_KEY); } catch { /* ignore */ }
+    let keys = DEFAULT_PINNED;
+    if (raw !== null) {
+      try {
+        const parsed = JSON.parse(raw);
+        // An empty array is a real choice (everything in Details), so only a
+        // malformed value falls back to the defaults.
+        if (Array.isArray(parsed)) keys = parsed.filter((k) => typeof k === "string");
+      } catch { /* keep the defaults */ }
+    }
+    // Content lives on the canvas by definition — being "pinned" is what puts a
+    // block there, so it is always in the set whatever was stored.
+    return new Set([...keys, FIXED_TO_CANVAS]);
+  }
+
+  _persistPinned() {
+    try { localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...this._pinned])); } catch { /* ignore */ }
+  }
+
+  /**
+   * Arrange mode: the fields collapse to labelled bars with a drag handle, so
+   * the whole layout — order on both sides, and which side each field is on —
+   * can be rearranged without the field bodies getting in the way of a drag.
+   *
+   * A mode rather than always-on handles because the editor is for writing:
+   * handles next to every field would be permanent clutter around the one thing
+   * the page is actually for.
+   */
+  _toggleArrange(on) {
+    const arranging = typeof on === "boolean" ? on : !this.state.arranging;
+    this.state.arranging = arranging;
+    this.container.querySelector(".editor-layout")?.classList.toggle("is-arranging", arranging);
+    const bar = this.container.querySelector("#arrange-bar");
+    if (bar) bar.hidden = !arranging;
+    // Both lists have to be on screen to move fields between them.
+    if (arranging) this._toggleDetails(true);
+    if (arranging) this.container.querySelector("#arrange-done")?.focus();
+  }
+
+  /** Wire dragging and keyboard reordering. Bound once; gated on arrange mode. */
+  _setupArrange() {
+    this._detachReorder?.();
+    this._detachReorder = attachPointerReorder({
+      handleSelector: ".details-group-handle",
+      itemSelector: ".details-group",
+      containers: () => [
+        this.container.querySelector("#pinned-fields"),
+        this.container.querySelector(".details-panel-body"),
+      ],
+      isEnabled: () => this.state.arranging,
+      onDrop: ({ item, to, afterEl }) => this._dropGroup(item, to, afterEl),
+    });
+
+    // Keyboard equivalent: the handle is a button, so arrows are free. Up/down
+    // reorders within a list, left/right moves the block to the other one —
+    // dragging is the only other way to cross lists, so without this half the
+    // feature would be pointer-only.
+    this.container.querySelector(".editor-layout")?.addEventListener("keydown", (e) => {
+      if (!this.state.arranging) return;
+      const handle = e.target.closest?.(".details-group-handle");
+      if (!handle) return;
+      const group = handle.closest(".details-group");
+      const host = group.parentElement;
+
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const sibs = [...host.querySelectorAll(":scope > .details-group")];
+        const i = sibs.indexOf(group);
+        const j = e.key === "ArrowUp" ? i - 1 : i + 1;
+        if (j < 0 || j >= sibs.length) return;
+        this._dropGroup(group, host, e.key === "ArrowUp" ? sibs[j].previousElementSibling : sibs[j]);
+        handle.focus();
+        return;
+      }
+
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      // The canvas is the left-hand list on a wide screen and the upper one on a
+      // narrow screen; either way left means "into the editor".
+      const canvas = this.container.querySelector("#pinned-fields");
+      const panel = this.container.querySelector(".details-panel-body");
+      const to = e.key === "ArrowLeft" ? canvas : panel;
+      if (!to || to === host) return;
+      e.preventDefault();
+      // Land at the position the shared order asks for, not at the end.
+      const idx = this._orderIndex(group.dataset.group);
+      const sibs = [...to.querySelectorAll(":scope > .details-group")];
+      const after = sibs.filter((s) => this._orderIndex(s.dataset.group) < idx).pop() || null;
+      this._dropGroup(group, to, after);
+      handle.focus();
+    });
+  }
+
+  /**
+   * Commit a move: `item` lands in `to`, directly after `afterEl`.
+   *
+   * Landing in the other list is what puts a block on the canvas or back in
+   * Details, so the move updates the stored sides too — one gesture says both
+   * where a block sits and which list it belongs to.
+   */
+  _dropGroup(item, to, afterEl) {
+    const key = item.dataset.group;
+    if (!key || !to) return;
+
+    const pinnedHost = this.container.querySelector("#pinned-fields");
+    const pinned = to === pinnedHost;
+    // Content can be moved among the canvas blocks but never into Details.
+    if (!pinned && key === FIXED_TO_CANVAS) return;
+    if (this._pinned.has(key) !== pinned) {
+      if (pinned) this._pinned.add(key); else this._pinned.delete(key);
+      this._persistPinned();
+      item.classList.toggle("is-pinned", pinned);
+      // A block on the canvas *is* the field, so it is never collapsed there;
+      // back in Details it returns to being a summary row.
+      item.open = pinned;
+    }
+
+    let after = afterEl;
+    while (after && !after.classList?.contains("details-group")) after = after.previousElementSibling;
+    to.insertBefore(item, after ? after.nextSibling : to.firstChild);
+    this._moveInOrder(key, after?.dataset.group || null);
+    this._updatePanelEmpty();
+  }
+
+  /** Show the "everything is on the canvas" note only when the panel has no groups left. */
+  _updatePanelEmpty() {
+    const body = this.container.querySelector(".details-panel-body");
+    body?.classList.toggle("has-groups", !!body.querySelector(".details-group"));
+  }
+
+  /** The Schedule group is only meaningful for scheduled posts — hide it elsewhere. */
+  _setScheduleVisible(on) {
+    this.container.querySelector('.details-group[data-group="schedule"]')?.classList.toggle("is-hidden", !on);
+  }
+
+  _scheduleSummary(scheduledAt) {
+    if (!scheduledAt) return "not set";
+    const d = new Date(scheduledAt);
+    return isNaN(d) ? "not set" : escapeHtml(d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+  }
+
+  /** Bring a group into view wherever it lives: expanded, and with the panel open if unpinned. */
+  _revealGroup(key) {
+    if (!this._pinned.has(key)) this._toggleDetails(true);
+    this.container.querySelector(`.details-group[data-group="${key}"]`)?.setAttribute("open", "");
+  }
+
+  _instagramGroup(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
     const igShare = isNew ? (igStatus.default_share ?? false) : (post.instagram_share ?? false);
     const igSt = post.instagram_status || "none";
     const igError = post.instagram_error || "";
     const igStatusBadgeClass = { published: "badge-success", error: "badge-danger", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
     const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
-    const igSummary = igShare ? "on" : "off";
 
-    return `
-      <details class="details-group" data-group="instagram">
-        <summary class="details-group-summary-row">
-          <span class="details-group-title">Instagram</span>
-          <span class="details-group-summary" id="summary-instagram">${igSummary}</span>
-        </summary>
-        <div class="details-group-body">
-          <div class="form-group ig-post-section">
-            <div class="ig-controls">
-              <label class="setting-pill">
-                <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
-                <span class="setting-pill-label">Share to Instagram</span>
-              </label>
-              ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
-              ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
-            </div>
-            ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
-            <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
+    return {
+      label: "Instagram",
+      summary: igShare ? "on" : "off",
+      body: `
+        <div class="form-group ig-post-section">
+          <div class="ig-controls">
+            <label class="setting-pill">
+              <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
+              <span class="setting-pill-label">Share to Instagram</span>
+            </label>
+            ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
+            ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
           </div>
-        </div>
-      </details>`;
+          ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
+          <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
+        </div>`,
+    };
   }
 
   /** True on ultrawide viewports where the live-preview pane is available (≥112em, per admin-ux C5). */
@@ -442,6 +705,12 @@ export default class PostEditPage extends Component {
     const q = (sel) => this.container.querySelector(sel);
     const set = (id, text) => { const el = this.container.querySelector(`#${id}`); if (el) el.textContent = text; };
 
+    const title = (q("#title-input")?.value || "").trim();
+    set("summary-title", title ? this._truncate(title) : "auto");
+
+    const tags = this._tagsInputRef?.getTags?.() ?? this._tags ?? [];
+    set("summary-tags", tags.length ? this._truncate(tags.join(", ")) : "none");
+
     const status = q("#status-select")?.value || "draft";
     const featured = q("#featured-check")?.checked;
     const scheduledAt = q("#schedule-input")?.value;
@@ -452,6 +721,11 @@ export default class PostEditPage extends Component {
     }
     if (featured) statusSummary += " · ★";
     set("summary-status", statusSummary);
+
+    const scheduleDate = scheduledAt ? new Date(scheduledAt) : null;
+    set("summary-schedule", scheduleDate && !isNaN(scheduleDate)
+      ? scheduleDate.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "not set");
 
     set("summary-slug", q("#slug-input")?.value.trim() || "auto");
 
@@ -482,6 +756,17 @@ export default class PostEditPage extends Component {
     this.container.querySelector("#details-toggle")?.addEventListener("click", () => this._toggleDetails());
     this.container.querySelector("#details-close-btn")?.addEventListener("click", () => this._toggleDetails(false));
     this.container.querySelector("#details-backdrop")?.addEventListener("click", () => this._toggleDetails(false));
+
+    // A block on the canvas is the field itself — its header row is a label, not
+    // a disclosure control, so clicking it must not collapse it. While
+    // arranging, every row is a bar to be dragged, not opened. Delegated on the
+    // layout so a group added later (a plugin section rendered through
+    // `_renderGroup`) behaves the same with no extra wiring.
+    this.container.querySelector(".editor-layout")?.addEventListener("click", (e) => {
+      const summary = e.target.closest?.("summary.details-group-summary-row");
+      if (!summary) return;
+      if (this.state.arranging || summary.parentElement?.classList.contains("is-pinned")) e.preventDefault();
+    });
 
     // Header overflow menu — toggle a class rather than setState. A full
     // re-render here would rebuild the editor from state.post and discard any
@@ -572,6 +857,9 @@ export default class PostEditPage extends Component {
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); this._save(); }
+      // Escape leaves arrange mode — the drag itself cancels on Escape too, and
+      // pointerReorder handles that first while one is in progress.
+      if (e.key === "Escape" && this.state.arranging) this._toggleArrange(false);
     };
     document.addEventListener("keydown", onKeyDown);
     this._onKeyDown = onKeyDown;
@@ -593,26 +881,20 @@ export default class PostEditPage extends Component {
     });
 
     const statusSelect = this.container.querySelector("#status-select");
-    const scheduleRow = this.container.querySelector("#schedule-row");
     const scheduleInput = this.container.querySelector("#schedule-input");
     statusSelect?.addEventListener("change", () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
-      if (newStatus === "scheduled") {
-        if (scheduleRow) scheduleRow.style.display = "flex";
-      } else {
-        if (scheduleRow) scheduleRow.style.display = "none";
-        if (scheduleInput) scheduleInput.value = "";
-      }
+      this._setScheduleVisible(newStatus === "scheduled");
+      if (newStatus !== "scheduled" && scheduleInput) scheduleInput.value = "";
       this._onInput();
     });
 
-    if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
-      this._toggleDetails(true);
-      this.container.querySelector('.details-group[data-group="status"]')?.setAttribute("open", "");
-      scheduleRow.style.display = "flex";
+    if (this.props.query?.openSchedule && statusSelect && scheduleInput) {
       statusSelect.value = "scheduled";
       statusSelect.className = "status-select badge-scheduled";
+      this._setScheduleVisible(true);
+      this._revealGroup("schedule");
       setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
     }
 
@@ -658,7 +940,13 @@ export default class PostEditPage extends Component {
 
     if (this.state.showLivePreview) this._debouncedPreview();
 
+    this.container.querySelector("#arrange-done")?.addEventListener("click", () => this._toggleArrange(false));
+    this._setupArrange();
+    // A re-render rebuilds the layout with the bar hidden; restore the mode.
+    if (this.state.arranging) this._toggleArrange(true);
+
     this._updateDetailsSummaries();
+    this._updatePanelEmpty();
     this._setupWindowDragAndDrop();
   }
 
@@ -666,25 +954,42 @@ export default class PostEditPage extends Component {
     switch (action) {
       case "publish-now": this._save({ status: "published" }); break;
       case "schedule": {
-        this._toggleDetails(true);
-        this.container.querySelector('.details-group[data-group="status"]')?.setAttribute("open", "");
         const sel = this.container.querySelector("#status-select");
         if (sel) { sel.value = "scheduled"; sel.dispatchEvent(new Event("change")); }
+        this._revealGroup("schedule");
         setTimeout(() => this.container.querySelector("#schedule-input")?.focus(), 10);
         break;
       }
       case "mark-hidden": this._save({ status: "hidden" }); break;
       case "unpublish": this._save({ status: "draft" }); break;
       case "analyze": this._analyzeNow(); break;
+      case "arrange": this._toggleArrange(true); break;
       case "toggle-preview": this._toggleLivePreview(); break;
       case "preview-link": this._generatePreviewLink(); break;
-      case "view-on-site": window.open(this.props.publicUrl, "_blank"); break;
+      // Same tab, like every other public-site link in the admin. The editor is
+      // the one place where leaving can cost something — edits typed inside the
+      // autosave idle window are still only in the form — so flush them first
+      // and let the navigation follow the save.
+      case "view-on-site": this._viewOnSite(); break;
       case "delete": {
         const title = this.container.querySelector("#title-input")?.value || this.state.post?.title || "this post";
         this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash", "danger", () => this._deletePost(this.state.postId));
         break;
       }
     }
+  }
+
+  /**
+   * Open the post on the public site, in this tab.
+   *
+   * The slug can have changed under an unflushed edit, so the destination is
+   * re-read from the saved post afterwards rather than from the props rendered
+   * before the save.
+   */
+  async _viewOnSite() {
+    if (this.state.hasPendingEdits) await this._autosave();
+    const slug = this.state.post?.slug;
+    navigate(slug ? `/posts/${slug}` : this.props.publicUrl || "/");
   }
 
   _analyzeNow() {
@@ -718,7 +1023,9 @@ export default class PostEditPage extends Component {
     if (this._unmounted || this.state.saving || this.state.deleting || !this.state.hasPendingEdits) return;
 
     const data = this._applyPageType(this._collectFormData());
-    if (!data.title) return;
+    // An untitled post is fine — the backend titles it after today. A brand new
+    // one with nothing in it at all is not worth a draft row yet.
+    if (this.state.isNew && !data.title && !data.content.trim()) return;
 
     store.set('autosave_status', { status: 'saving' });
     
@@ -728,6 +1035,10 @@ export default class PostEditPage extends Component {
          this.state.isNew = false;
          this.state.postId = result.id;
          this.state.post = result;
+         // Show the date title the backend assigned to an untitled post — a
+         // re-render here would wipe the caret, so write the field directly.
+         const titleEl = this.container.querySelector("#title-input");
+         if (titleEl && !titleEl.value.trim() && result.title) titleEl.value = result.title;
          history.replaceState(null, "", `/light/posts/${result.id}/edit`);
       } else {
          const result = await updatePost(this.state.postId, data);
@@ -763,7 +1074,6 @@ export default class PostEditPage extends Component {
 
   async _save(overrides = {}) {
     const data = this._applyPageType({ ...this._collectFormData(), ...overrides });
-    if (!data.title) { store.set("toast", { message: "Title is required.", type: "error" }); return; }
 
     this.setState({ saving: true });
     store.set('autosave_status', { status: 'saving' });
@@ -791,6 +1101,7 @@ export default class PostEditPage extends Component {
 
   beforeUnmount() {
     this._cleanupAdminLayout?.();
+    this._detachReorder?.();
     this._unmounted = true;
     if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
     clearTimeout(this._idleTimer);
