@@ -466,7 +466,7 @@ func parseInstagramTimestamp(s string) time.Time {
 type InstagramMedia struct {
 	ID           string                `json:"id"`
 	Caption      string                `json:"caption"`
-	MediaType    string                `json:"media_type"`   // IMAGE | VIDEO | CAROUSEL_ALBUM
+	MediaType    string                `json:"media_type"` // IMAGE | VIDEO | CAROUSEL_ALBUM
 	MediaURL     string                `json:"media_url"`
 	Permalink    string                `json:"permalink"`
 	Timestamp    time.Time             `json:"timestamp"`

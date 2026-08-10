@@ -363,4 +363,3 @@ func parseUserAgent(ua string) (browser, os string) {
 
 	return browser, os
 }
-
