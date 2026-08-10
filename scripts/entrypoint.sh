@@ -27,6 +27,8 @@ if [ "$(id -u)" = '0' ]; then
     # chown the root and all non-R2 mounts (skip media and backups to avoid FUSE hangs)
     chown appuser:appuser /data 2>/dev/null || true
     find /data -mindepth 1 -maxdepth 1 ! -name media ! -name backups -exec chown -R appuser:appuser {} + 2>/dev/null || true
+    # explicitly chown the roots of skipped dirs without -R so local setups can write to them
+    chown appuser:appuser /data/media /data/media/originals /data/media/thumbnails /data/backups 2>/dev/null || true
     exec su-exec appuser "$@" 2>/dev/null || {
         echo "Warning: su-exec failed, running as $(id -u -n)"
         exec "$@"
