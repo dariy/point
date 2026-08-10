@@ -173,8 +173,8 @@ describe('renderRowBadges', () => {
     const html = renderRowBadges(tag(1, 'X', {
       parents: [{ id: 2, name: 'ok' }, { id: 3, name: '"><script>alert(1)</script>' }],
     }));
-    assert.doesNotMatch(html, /<script>/);
-    assert.match(html, /&lt;script&gt;/);
+    assert.doesNotMatch(html, /<script>/i);
+    assert.match(html, /&lt;script&gt;/i);
   });
 });
 
