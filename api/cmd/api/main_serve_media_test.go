@@ -85,7 +85,7 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 
 func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
@@ -249,7 +249,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 
 func serveThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb", nil)
 	rec := httptest.NewRecorder()
@@ -399,7 +399,7 @@ func TestServeSimplifiedMedia_ThumbVideoWithPoster(t *testing.T) {
 // serveSizedThumbRequest issues an authenticated GET for ?thumb=<size>.
 func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, size string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb="+size, nil)
 	rec := httptest.NewRecorder()

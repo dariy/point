@@ -416,6 +416,7 @@ func TestGenerateToken_Success(t *testing.T) {
 		t.Fatalf("Login failed: %v", err)
 	}
 }
+
 // sessionCookieSecure logs in and reports the Secure flag on the session cookie.
 func sessionCookieSecure(t *testing.T, cfg *config.Config, mutate func(*http.Request)) bool {
 	t.Helper()

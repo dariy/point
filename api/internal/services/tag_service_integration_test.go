@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"point-api/internal/models"
-
 )
 
 func TestTagService_CRUD(t *testing.T) {

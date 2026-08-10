@@ -95,7 +95,7 @@ func TestScheduler_RefreshInstagramToken_NotConnected(t *testing.T) {
 func TestScheduler_RefreshInstagramToken_FarFromExpiry(t *testing.T) {
 	expiresAt := time.Now().Add(30 * 24 * time.Hour).UTC().Format(time.RFC3339)
 	store := newSettingsStore(map[string]string{
-		"instagram_access_token":    "old-token",
+		"instagram_access_token":     "old-token",
 		"instagram_token_expires_at": expiresAt,
 	})
 	sched := newTestScheduler(store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func TestScheduler_RefreshInstagramToken_FarFromExpiry(t *testing.T) {
 func TestScheduler_RefreshInstagramToken_WithinWindow(t *testing.T) {
 	expiresAt := time.Now().Add(3 * 24 * time.Hour).UTC().Format(time.RFC3339) // 3 days — within 7-day window
 	store := newSettingsStore(map[string]string{
-		"instagram_access_token":    "old-token",
+		"instagram_access_token":     "old-token",
 		"instagram_token_expires_at": expiresAt,
 	})
 
@@ -147,7 +147,7 @@ func TestScheduler_RefreshInstagramToken_ExactlyAtWindow(t *testing.T) {
 	// Token expires in exactly 7 days — should trigger refresh (≤ window)
 	expiresAt := time.Now().Add(igTokenRefreshWindow).UTC().Format(time.RFC3339)
 	store := newSettingsStore(map[string]string{
-		"instagram_access_token":    "token",
+		"instagram_access_token":     "token",
 		"instagram_token_expires_at": expiresAt,
 	})
 

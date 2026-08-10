@@ -26,7 +26,7 @@ func TestNormalizeAndValidateThemeName(t *testing.T) {
 		{"normalization: uppercase to lowercase", "Modern", "modern", false},
 		{"normalization: spaces", "  modern  ", "modern", false},
 		{"normalization: mixed case and spaces", "  Dark-Mode  ", "dark-mode", false},
-		
+
 		{"invalid: empty string", "", "", true},
 		{"invalid: just spaces", "   ", "", true},
 		{"invalid: path traversal forward slash", "themes/dark", "", true},

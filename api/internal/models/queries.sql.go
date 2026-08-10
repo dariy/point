@@ -105,7 +105,7 @@ func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error)
 			&i.InstagramMediaID,
 			&i.InstagramPublishedAt,
 			&i.InstagramError,
-		&i.InstagramID,
+			&i.InstagramID,
 		); err != nil {
 			return nil, err
 		}
@@ -1053,7 +1053,7 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 			&i.InstagramMediaID,
 			&i.InstagramPublishedAt,
 			&i.InstagramError,
-		&i.InstagramID,
+			&i.InstagramID,
 		); err != nil {
 			return nil, err
 		}
@@ -1654,7 +1654,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 			&i.InstagramMediaID,
 			&i.InstagramPublishedAt,
 			&i.InstagramError,
-		&i.InstagramID,
+			&i.InstagramID,
 		); err != nil {
 			return nil, err
 		}
@@ -1755,7 +1755,7 @@ func (q *Queries) ListPostsByViews(ctx context.Context, arg ListPostsByViewsPara
 			&i.InstagramMediaID,
 			&i.InstagramPublishedAt,
 			&i.InstagramError,
-		&i.InstagramID,
+			&i.InstagramID,
 		); err != nil {
 			return nil, err
 		}
@@ -1896,7 +1896,7 @@ func (q *Queries) ListTrashedPosts(ctx context.Context, arg ListTrashedPostsPara
 			&i.InstagramMediaID,
 			&i.InstagramPublishedAt,
 			&i.InstagramError,
-		&i.InstagramID,
+			&i.InstagramID,
 		); err != nil {
 			return nil, err
 		}
