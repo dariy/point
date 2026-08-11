@@ -83,7 +83,7 @@ export function renderBulkToolbar() {
         <label class="select-all-label"><input type="checkbox" id="tm-select-all-cb"> Select all</label>
         <div class="tm-bulk-actions">
           <span id="tm-bulk-count">0 selected</span>
-          <select id="tm-bulk-visibility-select" aria-label="Visibility to apply">
+          <select id="tm-bulk-visibility-select" class="filter-select" aria-label="Visibility to apply">
             <option value="hidden">Hidden</option>
             <option value="visible">Visible</option>
           </select>

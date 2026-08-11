@@ -139,7 +139,7 @@ function watchForLogin() {
     if (form && !form.parentElement.querySelector(".demo-login-hint")) {
       const hint = document.createElement("p");
       hint.className = "demo-login-hint";
-      hint.textContent = `Demo password: ${CREDENTIAL} — already filled in. Any value works.`;
+      hint.textContent = `Demo password. Any value works.`;
       form.insertAdjacentElement("afterend", hint);
     }
   };

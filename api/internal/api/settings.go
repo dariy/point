@@ -58,6 +58,10 @@ var publicSettingKeys = map[string]bool{
 	// Comments (remark42) embed appearance — read by the public widget config.
 	"remark_simple_view": true,
 	"remark_no_footer":   true,
+
+	// Admin UI preferences — read by the post editor.
+	"editor_field_order": true,
+	"editor_pinned":      true,
 }
 
 // writableSecretKeys are secrets the admin may set through the API.

@@ -447,10 +447,10 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "new_filename is required")
 	}
 
-	// Validate: only letters, digits, hyphens and underscores allowed in the base name.
-	validName := regexp.MustCompile(`^[a-zA-Z0-9_\-\.]+$`)
+	// Validate: only letters, digits, hyphens, underscores and spaces allowed in the base name.
+	validName := regexp.MustCompile(`^[a-zA-Z0-9_\-\.\s]+$`)
 	if !validName.MatchString(req.NewFilename) {
-		return echo.NewHTTPError(http.StatusBadRequest, "filename may only contain letters, digits, hyphens and underscores")
+		return echo.NewHTTPError(http.StatusBadRequest, "filename may only contain letters, digits, hyphens, underscores and spaces")
 	}
 
 	media, err := h.mediaService.RenameMedia(c.Request().Context(), id, req.NewFilename)

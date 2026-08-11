@@ -9,7 +9,7 @@
 
 import { Component } from '../../components/Component.js';
 
-import { PostGrid } from '../../components/public/PostGrid.js';
+
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 
 import { Pagination } from '../../components/shared/Pagination.js';
@@ -127,7 +127,7 @@ export default class HomePage extends Component {
     // here — the grid keeps its cards and the paginator is re-pointed in place.
     if (refit && this._applyRefit()) return;
     this._clearPostContent();
-    this._mountPostContent();
+    await this._mountPostContent();
     this._timeline?.setScope(vc.years ? { from: vc.years[0], to: vc.years[1] } : null);
     this._timeline?.setCount(this.state.data?.pagination?.total ?? this.state.data?.total ?? 0);
 
@@ -359,7 +359,7 @@ export default class HomePage extends Component {
   // Mounts the filter-dependent content (post grid, filter chips, pagination,
   // swipe gestures). Kept separate from the page chrome so a timeline-scope or
   // page change can refresh just this in place — see _refreshPostContent.
-  _mountPostContent() {
+  async _mountPostContent() {
     const settings = store.get('settings') || {};
     const { posts = [], pagination = {} } = this.state.data;
 
@@ -369,12 +369,32 @@ export default class HomePage extends Component {
     // the refreshed grid isn't left offset.
     this._pager.resetGridStyles();
 
-    this._postChildren.push(
-      this.mountChild(PostGrid, '#grid-mount', {
+    let active = 'simple-post-list';
+    if (pluginHost.isEnabled('dynamic-post-list')) active = 'dynamic-post-list';
+
+    let gridComp = null;
+    if (pluginHost.hasSlot('post-list')) {
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), {
         posts,
         showViewCount: !!settings.show_view_counts,
-      }),
-    );
+      });
+    } else {
+      const mod = active === 'dynamic-post-list'
+        ? await import('../../plugins/dynamic-post-list/index.js')
+        : await import('../../plugins/simple-post-list/index.js');
+      gridComp = mod.mount(this.$('#grid-mount'), {
+        posts,
+        showViewCount: !!settings.show_view_counts,
+      });
+    }
+
+    if (this._unmounted) {
+      if (gridComp) gridComp.unmount();
+      return;
+    }
+
+    this._postChildren.push(gridComp);
+    this._children.push(gridComp);
 
     this._syncPagination(pagination);
     this._pager.arm(pagination);

@@ -96,6 +96,36 @@ export function storeThemeName(name) {
 }
 
 /**
+ * The plugins the visitor activated, kept for the same reason.
+ * 
+ * When a plugin's state changes, the UI reloads the page. Without storing
+ * the active plugins in sessionStorage, the mock state would reset to the
+ * fixtures on reload, and the change would be lost.
+ */
+const PLUGINS_KEY = "demo-active-plugins";
+
+export function storedPlugins() {
+  try {
+    const val = sessionStorage.getItem(PLUGINS_KEY);
+    return val ? JSON.parse(val) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storePlugins(plugins) {
+  try {
+    if (plugins) {
+      sessionStorage.setItem(PLUGINS_KEY, JSON.stringify(plugins.filter((p) => p.enabled).map((p) => p.id)));
+    } else {
+      sessionStorage.removeItem(PLUGINS_KEY);
+    }
+  } catch {
+    /* private browsing */
+  }
+}
+
+/**
  * Seed plugin presets, mirroring plugins.DefaultPresets()
  * (api/internal/plugins/registry.go), which the real backend derives from its
  * registry the first time the Plugins page is opened. Deriving them from the
@@ -199,6 +229,14 @@ function initialTheme(themes, fx) {
  */
 function seed(fx, catalog) {
   const plugins = structuredClone(fx.plugins || []);
+  const storedPluginIds = storedPlugins();
+  if (storedPluginIds) {
+    const activeSet = new Set(storedPluginIds);
+    plugins.forEach((p) => {
+      p.enabled = activeSet.has(p.id);
+    });
+  }
+
   const themes = structuredClone(catalog?.length ? catalog : fx.themes || []);
   const activeTheme = initialTheme(themes, fx);
   const s = {
@@ -217,7 +255,7 @@ function seed(fx, catalog) {
     pluginPresets: defaultPresets(plugins),
     // No preset has been applied to the recorded catalog, so it starts diverged
     // — the same "custom" the backend reports before the first apply.
-    activePreset: "custom",
+    activePreset: storedPluginIds ? "custom" : "custom", // keep it as custom
     themes,
     activeTheme: structuredClone(activeTheme),
     customCss: structuredClone(fx.customCss || { css: "" }),
@@ -303,6 +341,7 @@ export async function resetState() {
   setAuthenticated(false);
   // Reset means the recorded state, and the theme is part of it.
   storeThemeName(null);
+  storePlugins(null);
   return getState();
 }
 

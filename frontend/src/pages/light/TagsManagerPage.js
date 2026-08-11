@@ -33,17 +33,16 @@ export default class TagsManagerPage extends Component {
       loading: true,
       tags: [],
       error: null,
-      view: 'tree',
       expanded: new Set(),
       unfiledExpanded: false,
       sortField: 'sort_order',
       sortOrder: 'asc',
       selectMode: false,
       selectedIds: new Set(),
+      view: store.get('tags_view') || 'tree',
     };
     this._modal = null;
     this._modalKeyHandler = null;
-    this._didPushUrl = false;
     this._listSearch = '';
     this._listFilterParents = [];
     // Track initial structure for change detection in modal
@@ -455,7 +454,6 @@ export default class TagsManagerPage extends Component {
     const targetPath = `/light/tags/${urlSlug}`;
     if (!fromUrl && location.pathname !== targetPath) {
       history.pushState(null, '', targetPath);
-      this._didPushUrl = true;
     }
 
     // Auto-slug from name
@@ -549,15 +547,15 @@ export default class TagsManagerPage extends Component {
   }
 
   _closeModal() {
+    const wasOpen = !!this._modal;
     if (this._modal) { this._modal.remove(); this._modal = null; }
     if (this._modalKeyHandler) {
       document.removeEventListener('keydown', this._modalKeyHandler);
       this._modalKeyHandler = null;
     }
-    if (location.pathname.startsWith('/light/tags/')) {
+    if (wasOpen && location.pathname.startsWith('/light/tags/')) {
       history.replaceState(null, '', '/light/tags');
     }
-    this._didPushUrl = false;
   }
 
   // ── Data operations ──────────────────────────────────────────────────────────
@@ -580,7 +578,7 @@ export default class TagsManagerPage extends Component {
     } catch (err) {
       console.error('[TagsManagerPage] load error:', err);
       store.set('toast', { message: 'Could not load tags.', type: 'error' });
-      this.setState({ loading: false, tags: [] });
+      this.setState({ loading: false, tags: [], error: err.message || 'Could not load tags.' });
     }
   }
 

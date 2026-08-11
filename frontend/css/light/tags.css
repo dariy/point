@@ -549,6 +549,54 @@
     padding: var(--spacing-xs) 0;
 }
 
+.tm-unfiled-group {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+.tm-unfiled-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: left;
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-unfiled-toggle:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-unfiled-toggle:active {
+    scale: 1 !important;
+}
+
+.tm-unfiled-toggle svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+}
+
+.tm-unfiled-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.tm-unfiled-count {
+    color: var(--text-muted);
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+}
+
 .tm-tree {
     list-style: none;
     margin: 0;

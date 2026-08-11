@@ -161,6 +161,10 @@ export default class PluginsPage extends Component {
   render() {
     return adminLayoutTemplate({
       title: "Plugins",
+      actions: `
+        <button type="button" class="btn btn-sm btn-secondary" id="expand-all-groups" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
+        <button type="button" class="btn btn-sm btn-secondary" id="collapse-all-groups" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>
+      `,
       content: this._renderContent(),
     });
   }
@@ -203,7 +207,9 @@ export default class PluginsPage extends Component {
         ${headerRow(this._mr("distraction-free", "Focus"))}
         ${this._mr("tag-cloud", "Tag cloud", "pmap-band")}
         ${this._mr("timeline", "Timeline", "pmap-band")}
-        ${this._ms("Post grid", "pmap-main")}
+        <div class="pmap-main pmap-choice" aria-label="One post list plugin is active">
+          ${this._mr("simple-post-list", "Simple")}${this._mr("dynamic-post-list", "Dynamic")}
+        </div>
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
       post: `
         ${headerRow()}
@@ -323,6 +329,36 @@ export default class PluginsPage extends Component {
     if (items.length === 0) return "";
     const collapsed = !!this.state.collapsed[group.type];
 
+    const TARGET_SLOTS = ["post-list", "post-viewer", "tags-route"];
+    const grouped = [];
+    const slotMap = new Map();
+
+    items.forEach(p => {
+      if (TARGET_SLOTS.includes(p.slot)) {
+        if (!slotMap.has(p.slot)) {
+          const arr = [];
+          slotMap.set(p.slot, arr);
+          grouped.push({ type: 'slot-group', slot: p.slot, items: arr });
+        }
+        slotMap.get(p.slot).push(p);
+      } else {
+        grouped.push({ type: 'single', plugin: p });
+      }
+    });
+
+    const renderItem = (item) => {
+      if (item.type === 'slot-group') {
+        return `
+          <div class="plugins-slot-group">
+            <div class="plugins-slot-group-title">Alternatives for <code>${escapeHtml(item.slot)}</code></div>
+            <div class="plugins-slot-group-items">
+              ${item.items.map(p => this._renderPlugin(p)).join("")}
+            </div>
+          </div>`;
+      }
+      return this._renderPlugin(item.plugin);
+    };
+
     return `
       <section class="card plugins-group${collapsed ? " collapsed" : ""}" data-group="${escapeHtml(group.type)}">
         <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
@@ -334,7 +370,7 @@ export default class PluginsPage extends Component {
         </div>
         <div class="card-body">
           <div class="plugins-list">
-            ${items.map((p) => this._renderPlugin(p)).join("")}
+            ${grouped.map(renderItem).join("")}
           </div>
         </div>
       </section>`;
@@ -384,23 +420,24 @@ export default class PluginsPage extends Component {
       settingsLink = `<a class="plugin-settings-link" href="${escapeHtml(SETTINGS_PAGE_PATHS[plugin.id])}">Settings</a>`;
     }
 
-    if (plugin.locked) {
-      // The lock is not a dead end when the slot has other candidates (the
-      // immersive pair): enabling one of them switches over and unlocks this row.
-      const switchable = this._slotSize(plugin.slot) > 1;
-      const lockHint = switchable
-        ? "In use — enable another plugin for this slot to switch to it"
-        : "Required — this slot must keep an enabled plugin";
+    const isAlternative = SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1;
+
+    if (plugin.locked && !isAlternative) {
+      // Required slot with NO alternatives: dead end.
+      const lockHint = "Required — this slot must keep an enabled plugin";
       return `${settingsLink}
         <span class="plugin-pill plugin-pill-locked" title="${escapeHtml(lockHint)}">
           <span class="plugin-lock" aria-hidden="true">🔒</span>
-          <span class="setting-pill-label">${switchable ? "In use" : "Required"}</span>
+          <span class="setting-pill-label">Required</span>
         </span>`;
     }
 
+    const inputType = isAlternative ? "radio" : "checkbox";
+    const nameAttr = isAlternative ? ` name="slot-${escapeHtml(plugin.slot)}"` : "";
+
     return `${settingsLink}
       <label class="setting-pill plugin-pill">
-        <input type="checkbox" class="setting-pill-input plugin-toggle"
+        <input type="${inputType}"${nameAttr} class="setting-pill-input plugin-toggle"
           data-id="${escapeHtml(plugin.id)}" ${plugin.enabled ? "checked" : ""} ${pending ? "disabled" : ""}>
         <span class="setting-pill-label">${plugin.enabled ? "Enabled" : "Disabled"}</span>
       </label>`;
@@ -427,6 +464,9 @@ export default class PluginsPage extends Component {
     });
 
     if (this.state.loading || this.state.error) return;
+
+    this.container.querySelector("#expand-all-groups")?.addEventListener("click", () => this._setAllCollapsed(false));
+    this.container.querySelector("#collapse-all-groups")?.addEventListener("click", () => this._setAllCollapsed(true));
 
     // Collapse/expand group cards (header click, ignoring the presets header).
     this.container.querySelectorAll(".plugins-group-header").forEach((header) => {
@@ -455,6 +495,16 @@ export default class PluginsPage extends Component {
     // Enable/disable toggles.
     this.container.querySelectorAll(".plugin-toggle").forEach((input) => {
       input.addEventListener("change", () => this._handleToggle(input.dataset.id, input.checked));
+      if (input.type === "radio") {
+        input.addEventListener("click", (e) => {
+          const id = input.dataset.id;
+          const p = this.state.plugins.find(x => x.id === id);
+          if (p && p.slot_rule === "0-1" && p.enabled) {
+            e.preventDefault();
+            this._handleToggle(id, false);
+          }
+        });
+      }
     });
 
     // Per-plugin settings drawer triggers.
@@ -567,6 +617,15 @@ export default class PluginsPage extends Component {
     this._settingsCache = null;
   }
 
+  _setAllCollapsed(isCollapsed) {
+    const collapsed = { ...this.state.collapsed };
+    collapsed.map = isCollapsed;
+    TYPE_GROUPS.forEach(g => {
+      collapsed[g.type] = isCollapsed;
+    });
+    this.setState({ collapsed });
+  }
+
   async _load() {
     try {
       const [plugins, presetData] = await Promise.all([getPlugins(), getPresets()]);
@@ -614,6 +673,10 @@ export default class PluginsPage extends Component {
         message: `${humanize(id)} ${enabled ? "enabled" : "disabled"}. Reload the public site to see the change.`,
         type: "success",
       });
+
+      if (window.__DEMO__) {
+        window.location.reload();
+      }
     } catch (err) {
       // Revert the optimistic checkbox state on failure (e.g. a locked claimant).
       const pending = { ...this.state.pending };
@@ -664,6 +727,10 @@ export default class PluginsPage extends Component {
         message: `Applied “${PRESET_TITLES[id] || id}” preset. Reload the public site to see the change.`,
         type: "success",
       });
+
+      if (window.__DEMO__) {
+        window.location.reload();
+      }
     } catch (err) {
       store.set("toast", { message: err.message || "Failed to apply preset.", type: "error" });
     }

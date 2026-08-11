@@ -1382,12 +1382,12 @@ export class MediaBrowser extends Component {
       onConfirm: (newName) => {
         dialog.unmount();
         mountEl.remove();
-        // Sanitise: keep only letters, digits, hyphens and underscores.
-        const safe = (newName || "").trim().replace(/[^a-zA-Z0-9\-_]/g, "");
+        // Sanitise: keep only letters, digits, hyphens, underscores and spaces.
+        const safe = (newName || "").trim().replace(/[^a-zA-Z0-9\-_ ]/g, "");
         if (!safe) {
           store.set("toast", {
             message:
-              "Name must contain letters, digits, hyphens or underscores only.",
+              "Name must contain letters, digits, hyphens, underscores or spaces only.",
             type: "error",
           });
           return;

@@ -117,9 +117,6 @@
         background-color: var(--surface-hover);
     }
 
-    .stats-grid {
-        grid-template-columns: 1fr 1fr;
-    }
 
     .system-grid {
         grid-template-columns: 1fr;
@@ -371,9 +368,6 @@
 }
 
 @media (max-width: 30em) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
 
     .filters {
         flex-direction: column;
