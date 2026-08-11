@@ -58,10 +58,15 @@ export default class LoginPage extends Component {
           </button>
           <div class="login-divider"><span>or</span></div>` : ''}
           <form id="login-form" class="login-modal-form" novalidate>
-            <input type="password" id="password-input" name="password"
-                   class="login-input" autocomplete="current-password"
-                   required placeholder="${loading ? 'Signing in…' : 'Password'}"
-                   ${loading ? 'disabled' : ''}>
+            <div class="login-input-group">
+              <input type="password" id="password-input" name="password"
+                     class="login-input" autocomplete="current-password"
+                     required placeholder="${loading ? 'Signing in…' : 'Password'}"
+                     ${loading ? 'disabled' : ''}>
+              <button type="submit" class="login-submit-btn" ${loading ? 'disabled' : ''}>
+                Go
+              </button>
+            </div>
           </form>
           <p class="login-forgot">
             <a id="forgot-password-link" href="/light/pss">Forgot / Restore password?</a>

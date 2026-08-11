@@ -58,25 +58,37 @@
     padding: var(--login-modal-form-padding);
 }
 
+/* Input Group */
+.login-input-group {
+    display: flex;
+    align-items: stretch;
+    background: var(--bg-input, var(--surface-elevated, var(--bg-primary)));
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius, var(--border-radius));
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+    width: 100%;
+    overflow: hidden;
+}
+
+.login-input-group:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 var(--login-input-box-shadow) var(--color-primary-alpha-15);
+}
+
 /* Input */
 .login-input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: var(--login-input-padding-y) var(--login-input-padding-x);
     font-size: var(--login-input-font-size);
     line-height: 1.5;
     color: var(--text-primary);
-    background: var(--bg-input, var(--surface-elevated, var(--bg-primary)));
-    border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--border-radius, var(--border-radius));
+    background: transparent;
+    border: none;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
     box-sizing: border-box;
     font-family: inherit;
-}
-
-.login-input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 var(--login-input-box-shadow) var(--color-primary-alpha-15);
 }
 
 .login-input::placeholder {
@@ -84,6 +96,32 @@
 }
 
 .login-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Submit Button */
+.login-submit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--login-input-padding-x, 1rem);
+    background: transparent;
+    border: none;
+    border-left: var(--border-width) solid var(--border-primary);
+    color: var(--text-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    font-family: inherit;
+    font-size: var(--login-input-font-size);
+}
+
+.login-submit-btn:hover:not(:disabled) {
+    background: var(--border-primary);
+}
+
+.login-submit-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }

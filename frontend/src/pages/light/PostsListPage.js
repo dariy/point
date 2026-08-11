@@ -843,9 +843,18 @@ export default class PostsListPage extends Component {
       // Reload only when it changes what we'd fetch — and never re-request a
       // size we've already asked for (guards the total < fit case from looping).
       if (fit !== rows && fit !== this._perPage) {
+        const oldPerPage = this._perPage || 20;
         this._perPage = fit;
-        this._load({ page: 1 });
+        
+        let newPage = this.state.page;
+        if (this._hasFitToViewport) {
+          const firstItem = (this.state.page - 1) * oldPerPage;
+          newPage = Math.floor(firstItem / fit) + 1;
+        }
+        
+        this._load({ page: newPage });
       }
+      this._hasFitToViewport = true;
     });
   }
 
