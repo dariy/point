@@ -165,7 +165,7 @@ func NewPostService(repo repository.Repository, settingsService *SettingsService
 }
 
 // bareImageRe matches a line containing only a bare image path like /2026/02/file.jpg
-var bareImageRe = regexp.MustCompile(`(?m)^(/\d{4}/\d{2}/\S+)$`)
+var bareImageRe = regexp.MustCompile(`(?m)^(/\d{4}/\d{2}/[^\n\r]+)$`)
 var imageExtRe = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|gif|webp|avif|svg|heic|heif|bmp)$`)
 var videoExtRe = regexp.MustCompile(`(?i)\.(mp4|webm|mov|ogv|m4v|avi|mkv)$`)
 var audioExtRe = regexp.MustCompile(`(?i)\.(mp3|m4a|ogg|wav|flac|aac|opus)$`)
@@ -191,7 +191,7 @@ func preprocessContent(content string) string {
 	})
 	return bareImageRe.ReplaceAllStringFunc(content, func(p string) string {
 		if imageExtRe.MatchString(p) {
-			return fmt.Sprintf("![%s](%s)", path.Base(p), p)
+			return fmt.Sprintf("![%s](<%s>)", path.Base(p), p)
 		}
 		if videoExtRe.MatchString(p) {
 			return fmt.Sprintf("<video src=\"%s\" controls></video>", p)

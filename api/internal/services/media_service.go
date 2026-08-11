@@ -1241,7 +1241,7 @@ func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filena
 // mediaPathRe matches media paths embedded in post content.
 // Paths can appear as bare lines (/YYYY/MM/file) or inside markdown/HTML
 // (![alt](/YYYY/MM/file) or src="/YYYY/MM/file"). Trailing markup chars are excluded.
-var mediaPathRe = regexp.MustCompile(`(/\d{4}/\d{2}/[^\s)"'>]+)`)
+var mediaPathRe = regexp.MustCompile(`(/\d{4}/\d{2}/[^\s)"'>]+(?:[ \t]+[^\s)"'>]+)*)`)
 
 // ExtractMediaPaths returns the distinct set of original_paths (in the DB
 // format "originals/YYYY/MM/file") referenced in content and thumbnailPath.

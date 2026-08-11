@@ -515,8 +515,8 @@ export class VisualEditor extends Component {
         cancel();
       } else if (e.key === "Enter") {
         e.preventDefault();
-        // Sanitise: keep only letters, digits, hyphens and underscores.
-        const newBase = input.value.trim().replace(/[^a-zA-Z0-9\-_]/g, "");
+        // Sanitise: keep only letters, digits, hyphens, underscores and spaces.
+        const newBase = input.value.trim().replace(/[^a-zA-Z0-9\-_ ]/g, "");
         if (!newBase || newBase === base) {
           cancel();
           return;
