@@ -23,6 +23,13 @@
 import { routes } from "./routes.js";
 import { getState, resetState } from "./store.js";
 
+const state = await getState();
+
+if (window.__ALL_PLUGINS__) {
+  const enabledIds = new Set(state.plugins.filter((p) => p.enabled).map((p) => p.id));
+  window.__PLUGINS__ = window.__ALL_PLUGINS__.filter((p) => enabledIds.has(p.id));
+}
+
 const nativeFetch = window.fetch.bind(window);
 const NativeXHR = window.XMLHttpRequest;
 

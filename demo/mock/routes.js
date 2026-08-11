@@ -23,6 +23,7 @@ import {
   paginatedPage,
   setAuthenticated,
   storeThemeName,
+  storePlugins,
   toListShape,
   visiblePosts,
   withinYears,
@@ -363,9 +364,10 @@ function presetsView(state) {
  * store has to keep the flag true.
  */
 function relockPlugins(state) {
+  const REQUIRED_SLOT = new Set(["1", "1+"]);
   for (const p of state.plugins) {
-    if (!p.core) continue;
-    const enabled = state.plugins.filter((q) => q.area === p.area && q.enabled);
+    if (!REQUIRED_SLOT.has(p.slot_rule)) continue;
+    const enabled = state.plugins.filter((q) => q.slot === p.slot && q.enabled);
     p.locked = !!p.enabled && enabled.length === 1;
   }
 }
@@ -383,21 +385,24 @@ function relockPlugins(state) {
  */
 function applyPluginPreset(state, list) {
   const want = new Set(list);
-  const membersOf = (area) => state.plugins.filter((p) => p.area === area);
+  const REQUIRED_SLOT = new Set(["1", "1+"]);
+  const SINGLE_CLAIM_SLOT = new Set(["0-1", "1"]);
+
+  const membersOf = (slot) => state.plugins.filter((p) => p.slot === slot);
 
   for (const p of state.plugins) {
-    if (!p.core || !p.area) continue;
-    const members = membersOf(p.area);
+    if (!REQUIRED_SLOT.has(p.slot_rule) || !p.slot) continue;
+    const members = membersOf(p.slot);
     if (members.some((m) => want.has(m.id))) continue;
     want.add((members.find((m) => m.default_enabled) || members[0]).id);
   }
 
-  const seenAreas = new Set();
+  const seenSlots = new Set();
   for (const p of state.plugins) {
-    if (!p.exclusive || !p.area || seenAreas.has(p.area)) continue;
-    seenAreas.add(p.area);
+    if (!SINGLE_CLAIM_SLOT.has(p.slot_rule) || !p.slot || seenSlots.has(p.slot)) continue;
+    seenSlots.add(p.slot);
     let kept = false;
-    for (const m of membersOf(p.area)) {
+    for (const m of membersOf(p.slot)) {
       if (!want.has(m.id)) continue;
       if (kept) want.delete(m.id);
       else kept = true;
@@ -1034,6 +1039,7 @@ export const routes = [
       if (!list) return notFound("unknown preset");
       applyPluginPreset(state, list);
       state.activePreset = params.id;
+      storePlugins(state.plugins);
       return ok(state.plugins);
     },
   ],
@@ -1045,17 +1051,18 @@ export const routes = [
       const plugin = state.plugins.find((p) => p.id === params.id);
       if (!plugin) return notFound("plugin not found");
       plugin.enabled = !!body.enabled;
-      // Exclusive areas (tags-viz) allow only one member enabled at a time —
+      // Single-claim slots allow only one member enabled at a time —
       // mirroring that here keeps the Plugins page's radio behaviour honest.
-      if (plugin.enabled && plugin.exclusive && plugin.area) {
+      if (plugin.enabled && plugin.slot_rule && (plugin.slot_rule === "0-1" || plugin.slot_rule === "1") && plugin.slot) {
         for (const other of state.plugins) {
-          if (other !== plugin && other.area === plugin.area) other.enabled = false;
+          if (other !== plugin && other.slot === plugin.slot) other.enabled = false;
         }
       }
       relockPlugins(state);
       // An individual toggle diverges from whatever preset was applied — the
       // backend rewrites plugins.active_preset to "custom" for the same reason.
       state.activePreset = "custom";
+      storePlugins(state.plugins);
       return ok(plugin);
     },
   ],

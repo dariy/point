@@ -420,23 +420,24 @@ export default class PluginsPage extends Component {
       settingsLink = `<a class="plugin-settings-link" href="${escapeHtml(SETTINGS_PAGE_PATHS[plugin.id])}">Settings</a>`;
     }
 
-    if (plugin.locked) {
-      // The lock is not a dead end when the slot has other candidates (the
-      // immersive pair): enabling one of them switches over and unlocks this row.
-      const switchable = this._slotSize(plugin.slot) > 1;
-      const lockHint = switchable
-        ? "In use — enable another plugin for this slot to switch to it"
-        : "Required — this slot must keep an enabled plugin";
+    const isAlternative = SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1;
+
+    if (plugin.locked && !isAlternative) {
+      // Required slot with NO alternatives: dead end.
+      const lockHint = "Required — this slot must keep an enabled plugin";
       return `${settingsLink}
         <span class="plugin-pill plugin-pill-locked" title="${escapeHtml(lockHint)}">
           <span class="plugin-lock" aria-hidden="true">🔒</span>
-          <span class="setting-pill-label">${switchable ? "In use" : "Required"}</span>
+          <span class="setting-pill-label">Required</span>
         </span>`;
     }
 
+    const inputType = isAlternative ? "radio" : "checkbox";
+    const nameAttr = isAlternative ? ` name="slot-${escapeHtml(plugin.slot)}"` : "";
+
     return `${settingsLink}
       <label class="setting-pill plugin-pill">
-        <input type="checkbox" class="setting-pill-input plugin-toggle"
+        <input type="${inputType}"${nameAttr} class="setting-pill-input plugin-toggle"
           data-id="${escapeHtml(plugin.id)}" ${plugin.enabled ? "checked" : ""} ${pending ? "disabled" : ""}>
         <span class="setting-pill-label">${plugin.enabled ? "Enabled" : "Disabled"}</span>
       </label>`;
@@ -494,6 +495,16 @@ export default class PluginsPage extends Component {
     // Enable/disable toggles.
     this.container.querySelectorAll(".plugin-toggle").forEach((input) => {
       input.addEventListener("change", () => this._handleToggle(input.dataset.id, input.checked));
+      if (input.type === "radio") {
+        input.addEventListener("click", (e) => {
+          const id = input.dataset.id;
+          const p = this.state.plugins.find(x => x.id === id);
+          if (p && p.slot_rule === "0-1" && p.enabled) {
+            e.preventDefault();
+            this._handleToggle(id, false);
+          }
+        });
+      }
     });
 
     // Per-plugin settings drawer triggers.
@@ -662,6 +673,10 @@ export default class PluginsPage extends Component {
         message: `${humanize(id)} ${enabled ? "enabled" : "disabled"}. Reload the public site to see the change.`,
         type: "success",
       });
+
+      if (window.__DEMO__) {
+        window.location.reload();
+      }
     } catch (err) {
       // Revert the optimistic checkbox state on failure (e.g. a locked claimant).
       const pending = { ...this.state.pending };
@@ -712,6 +727,10 @@ export default class PluginsPage extends Component {
         message: `Applied “${PRESET_TITLES[id] || id}” preset. Reload the public site to see the change.`,
         type: "success",
       });
+
+      if (window.__DEMO__) {
+        window.location.reload();
+      }
     } catch (err) {
       store.set("toast", { message: err.message || "Failed to apply preset.", type: "error" });
     }
