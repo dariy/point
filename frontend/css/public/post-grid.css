@@ -391,8 +391,7 @@
        three lines the excerpt is not dropped but *squeezed*: the flex item
        shrinks below its clamp and the last line is cut through the middle of
        the glyphs. One line leaves enough room for a two-line title and the tags. */
-    .post-card-content.overlay .post-card-excerpt,
-    .featured-post .post-card-content.overlay .post-card-excerpt {
+    .post-card-content.overlay .post-card-excerpt {
         -webkit-line-clamp: 1;
         line-clamp: 1;
     }
@@ -450,14 +449,12 @@
     }
 }
 
-/* Reset grid for featured post if using new card style */
-/* If featured post has image, it behaves like a big card now */
-.featured-post .post-card.has-image {
-    min-height: var(--post-cardhas-image-min-height-alt1);
+.featured-post .post-card {
+    box-shadow: 0 0 15px var(--color-primary);
 }
 
-.featured-post .post-card-content.overlay .post-card-title {
-    font-size: var(--font-size-3xl);
+:where(html.pointer-fine) .featured-post .post-card:hover {
+    box-shadow: var(--shadow-lg), 0 0 15px var(--color-primary);
 }
 
 /* ===========================
@@ -529,34 +526,7 @@ body.grid-zoom .featured-post .post-card.has-image {
     min-height: 0;
 }
 
-.featured-post .post-card-content.overlay .post-card-excerpt {
-    font-size: var(--font-size-base);
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
-}
 
-/* If text only, we can keep it as a flexible card */
-.featured-post .post-card.text-only {
-    padding: var(--spacing-md);
-}
-
-.featured-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
-}
-
-/* Override badge for overlay */
-.post-card-content.overlay .featured-badge {
-    color: var(--color-accent);
-    /* Brighter blue for dark bg */
-}
 
 /* ===========================
    Grid Preview (Swipe)
