@@ -242,20 +242,12 @@ describe('TagsManagerPage — loading and data operations', () => {
     assert.equal(editor(), null);
   });
 
-  test('arriving by URL opens the editor but erases the URL it arrived at', async () => {
-    // BUG point-tags-deeplink-url-erased-993i, asserted as it behaves today.
-    //
-    // fromUrl:true was meant to mean "the address bar already says this, leave
-    // it alone", and it does skip the pushState. But _openModal opens with
-    // _closeModal(), which rewrites any /light/tags/<slug> back to /light/tags
-    // first — so the skipped push is the one that would have restored what the
-    // close just wiped. The deep link therefore works exactly once: reload, or
-    // copy the address to send to someone, and you get the plain list.
+  test('arriving by URL opens the editor and preserves the URL', async () => {
     await mountPage({ slug: 'kyoto', path: '/light/tags/kyoto' });
 
     assert.ok(editor(), 'the editor does open');
-    assert.deepEqual(dom.history.entries, [['replace', '/light/tags']], 'nothing was pushed');
-    assert.equal(dom.location.pathname, '/light/tags', 'and the tag is gone from the URL');
+    assert.deepEqual(dom.history.entries, [], 'nothing was pushed');
+    assert.equal(dom.location.pathname, '/light/tags/kyoto', 'and the tag stays in the URL');
   });
 
   test('opening the editor from the page does push, and closing puts the URL back', async () => {

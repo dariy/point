@@ -33,7 +33,6 @@ export default class TagsManagerPage extends Component {
       loading: true,
       tags: [],
       error: null,
-      view: 'tree',
       expanded: new Set(),
       unfiledExpanded: false,
       sortField: 'sort_order',
@@ -579,7 +578,7 @@ export default class TagsManagerPage extends Component {
     } catch (err) {
       console.error('[TagsManagerPage] load error:', err);
       store.set('toast', { message: 'Could not load tags.', type: 'error' });
-      this.setState({ loading: false, tags: [] });
+      this.setState({ loading: false, tags: [], error: err.message || 'Could not load tags.' });
     }
   }
 
