@@ -25,7 +25,7 @@ import { ViewContext } from "../../utils/viewContext.js";
 
 export class PostCard extends Component {
   render() {
-    const { post, showViewCount = false, isHero = false } = this.props;
+    const { post, showViewCount = false } = this.props;
     if (!post) return "";
 
     const mediaUrl = post.media_url || null;
@@ -68,17 +68,12 @@ export class PostCard extends Component {
         ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>`
         : "";
 
-    const featured = isHero
-      ? `<span class="featured-badge" aria-label="Featured">Featured</span>`
-      : "";
-
     return `
       <article class="${cardClass}" role="button" tabindex="0"
                data-post-slug="${escapeHtml(post.slug)}">
         <div class="post-card-background"${bgStyle}>${bgVideo}</div>
         ${playIndicator}
         <div class="post-card-content${hasMedia ? " overlay" : ""}">
-          ${featured}
           <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
           ${post.excerpt ? `<p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ""}
           <div class="post-card-meta">

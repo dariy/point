@@ -47,8 +47,8 @@
   --pt-colors-sidebar-border: #3a2847;
   --footer-link: #7b2d6b;
   --font-family: Inter, -apple-system, sans-serif;
-  /* Not part of the usual theme set, but the page arrows, the
-     distraction-free toggle and the featured badge all paint from it — left
+  /* Not part of the usual theme set, but the page arrows and the
+     distraction-free toggle all paint from it — left
      alone it stays the stock sky blue over a plum wall. */
   --color-accent: #7b2d6b;
 }
@@ -168,6 +168,11 @@ html[data-section="public"] .main-container:has(.posts-grid) .grid-preview-place
   box-shadow: none;
 }
 
+.featured-post .post-card {
+  z-index: 1;
+  box-shadow: 0 0 30px var(--color-primary);
+}
+
 /* Photographs tile seamlessly; cards drawn on --surface-card would otherwise
    run together into a single undivided block. Inset so the hairline costs no
    layout and never doubles up between two neighbours. */
@@ -179,8 +184,7 @@ html[data-section="public"] .main-container:has(.posts-grid) .grid-preview-place
 /* Hover stays inside the tile: a lift or an outer shadow would break the wall
    open at exactly the card the pointer is on. */
 :where(html.pointer-fine) .post-card:hover {
-  box-shadow: inset 0 0 0 var(--size-0-125) var(--color-primary);
-  transform: none;
+  box-shadow: inset 0 0 0 var(--size-0-125) var(--color-primary), 0 0 30px 10px rgba(255, 255, 255, 0.2);
 }
 
 /* An image card's hover overlay is a child at inset:0 / z-index:10, so it
@@ -208,8 +212,7 @@ html[data-section="public"] .site-footer {
 .post-card-content .post-card-title,
 .post-card-content .post-card-meta,
 .post-card-content .post-card-excerpt,
-.post-card-content .post-card-text-preview,
-.post-card-content .featured-badge {
+.post-card-content .post-card-text-preview {
   padding: calc(var(--spacing-md) + var(--border-width));
 }
 

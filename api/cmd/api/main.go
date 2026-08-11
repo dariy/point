@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -302,19 +303,20 @@ func siteNameFromHost(host string) string {
 }
 
 type AppServices struct {
-	Settings  *services.SettingsService
-	Auth      *services.AuthService
-	ApiKey    *services.ApiKeyService
-	Tag       *services.TagService
-	Post      *services.PostService
-	Media     *services.MediaService
-	System    *services.SystemService
-	Cache     *services.CacheService
-	Scheduler *services.SchedulerService
-	Health    *services.HealthRegistry
-	Theme     *services.ThemeService
-	Timeline  *services.TimelineService
-	Instagram *services.InstagramService
+	Settings    *services.SettingsService
+	Auth        *services.AuthService
+	ApiKey      *services.ApiKeyService
+	Tag         *services.TagService
+	Post        *services.PostService
+	Media       *services.MediaService
+	System      *services.SystemService
+	Cache       *services.CacheService
+	Scheduler   *services.SchedulerService
+	Health      *services.HealthRegistry
+	Theme       *services.ThemeService
+	Timeline    *services.TimelineService
+	Instagram   *services.InstagramService
+	S3Presigner *services.S3Presigner
 }
 
 func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
@@ -336,20 +338,32 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	timelineService := services.NewTimelineService(repo)
 	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry)
 
+	s3Presigner, err := services.NewS3Presigner(
+		os.Getenv("S3_ENDPOINT"),
+		os.Getenv("S3_REGION"),
+		os.Getenv("S3_ACCESS_KEY_ID"),
+		os.Getenv("S3_SECRET_ACCESS_KEY"),
+		os.Getenv("S3_BUCKET"),
+	)
+	if err != nil {
+		log.Printf("Warning: failed to initialize S3 presigner: %v", err)
+	}
+
 	return &AppServices{
-		Settings:  settingsService,
-		Auth:      authService,
-		ApiKey:    apiKeyService,
-		Tag:       tagService,
-		Post:      postService,
-		Media:     mediaService,
-		System:    systemService,
-		Cache:     cacheService,
-		Scheduler: schedulerService,
-		Health:    healthRegistry,
-		Theme:     themeService,
-		Timeline:  timelineService,
-		Instagram: instagramService,
+		Settings:    settingsService,
+		Auth:        authService,
+		ApiKey:      apiKeyService,
+		Tag:         tagService,
+		Post:        postService,
+		Media:       mediaService,
+		System:      systemService,
+		Cache:       cacheService,
+		Scheduler:   schedulerService,
+		Health:      healthRegistry,
+		Theme:       themeService,
+		Timeline:    timelineService,
+		Instagram:   instagramService,
+		S3Presigner: s3Presigner,
 	}
 }
 
@@ -809,7 +823,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTMLContent, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTMLContent, repo, svcs.Media, svcs.S3Presigner, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
 		imagesDir := filepath.Join(frontendDir, "images")
@@ -1341,7 +1355,7 @@ const immutableCacheControl = "public, max-age=31536000, immutable"
 //   - No query param serves the original (media/originals/…).
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.Repository, mediaSvc *services.MediaService, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
+func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -1485,6 +1499,31 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 
 		if _, err := os.Stat(origFile); err == nil {
 			neutralizeSVG(c, origFile)
+
+			s3Enabled := c.Request().Header.Get("X-Point-Direct-S3") == "1"
+			if s3Enabled && s3Presigner != nil {
+				relPath, err := filepath.Rel(storagePath, origFile)
+				if err == nil {
+					// filepath.Rel uses os-specific separators, but S3 requires forward slashes.
+					// We can assume Linux here since point runs on Linux in Docker, but let's be safe.
+					relPath = filepath.ToSlash(relPath)
+
+					url, presignErr := s3Presigner.PresignGetObject(c.Request().Context(), relPath)
+					if presignErr == nil {
+						c.Response().Header().Set("X-S3-Presigned-Url", url)
+						// Determine the correct Content-Type before bypassing
+						contentType := mime.TypeByExtension(filepath.Ext(origFile))
+						if contentType != "" {
+							c.Response().Header().Set("Content-Type", contentType)
+						}
+						return c.NoContent(http.StatusOK)
+					} else {
+						// log error, fall back to disk
+						log.Printf("S3 presign error: %v", presignErr)
+					}
+				}
+			}
+
 			return c.File(origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {

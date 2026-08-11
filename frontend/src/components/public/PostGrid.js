@@ -33,11 +33,11 @@ export class PostGrid extends Component {
 
   afterRender() {
     const { posts = [] } = this.props;
-    const heroIndex = posts.findIndex((p) => p.is_featured);
+
 
     this._cards = posts.map((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
-      return slot ? this.mountChild(PostCard, slot, this._cardProps(post, i, heroIndex)) : null;
+      return slot ? this.mountChild(PostCard, slot, this._cardProps(post)) : null;
     });
 
     const grid = this.container.querySelector('.posts-grid');
@@ -60,9 +60,9 @@ export class PostGrid extends Component {
     if (this._gridKeyHandler) document.removeEventListener('keydown', this._gridKeyHandler);
   }
 
-  _cardProps(post, i, heroIndex) {
+  _cardProps(post) {
     const { showViewCount = false, tagSlug, tagPage } = this.props;
-    return { post, showViewCount, isHero: i === heroIndex, tagSlug, tagPage };
+    return { post, showViewCount, tagSlug, tagPage };
   }
 
   /**
@@ -103,7 +103,7 @@ export class PostGrid extends Component {
       slot.dataset.index = String(i);
       slot.addEventListener('animationend', () => slot.classList.remove('is-entering'), { once: true });
       grid.appendChild(slot);
-      this._cards[i] = this.mountChild(PostCard, slot, this._cardProps(posts[i], i, heroIndex));
+      this._cards[i] = this.mountChild(PostCard, slot, this._cardProps(posts[i]));
     }
     // A step that shrank the grid may have hidden cards it was about to drop;
     // whatever survived the refit belongs on screen (see .is-zoom-surplus).

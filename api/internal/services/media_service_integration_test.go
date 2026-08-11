@@ -910,7 +910,7 @@ func TestPreprocessContent(t *testing.T) {
 		input   string
 		contain string
 	}{
-		{"bare jpg → markdown image", "/2024/01/photo.jpg", "![photo.jpg](/2024/01/photo.jpg)"},
+		{"bare jpg → markdown image", "/2024/01/photo.jpg", "![photo.jpg](</2024/01/photo.jpg>)"},
 		{"bare mp4 → video tag", "/2024/01/clip.mp4", "<video src="},
 		{"bare mp3 → audio tag", "/2024/01/song.mp3", "<audio src="},
 		{"plain text unchanged", "Hello, world!", "Hello, world!"},

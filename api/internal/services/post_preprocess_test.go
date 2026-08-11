@@ -59,7 +59,7 @@ func TestPreprocessContent_Media(t *testing.T) {
 		{
 			name:     "image extension",
 			input:    "/2026/02/photo.jpg",
-			expected: "![photo.jpg](/2026/02/photo.jpg)",
+			expected: "![photo.jpg](</2026/02/photo.jpg>)",
 		},
 		{
 			name:     "video extension",

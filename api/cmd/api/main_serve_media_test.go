@@ -85,7 +85,7 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 
 func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
@@ -249,7 +249,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 
 func serveThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb", nil)
 	rec := httptest.NewRecorder()
@@ -399,7 +399,7 @@ func TestServeSimplifiedMedia_ThumbVideoWithPoster(t *testing.T) {
 // serveSizedThumbRequest issues an authenticated GET for ?thumb=<size>.
 func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, size string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb="+size, nil)
 	rec := httptest.NewRecorder()
@@ -601,5 +601,46 @@ func TestServeSimplifiedMedia_NonSVGKeepsGlobalCSP(t *testing.T) {
 	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo.jpg", false)
 	if csp := rec.Header().Get("Content-Security-Policy"); csp != "" {
 		t.Errorf("non-SVG media should not set its own CSP, got %q", csp)
+	}
+}
+
+// ── S3 Direct serving ──────────────────────────────────────────────────────
+
+func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+
+	year, month, filename := "2023", "10", "test-s3.jpg"
+	createPublicMedia(t, repo, year, month, filename)
+	makeMediaFile(t, storage, year, month, filename)
+
+	// Setup Presigner
+	s3p, _ := services.NewS3Presigner("http://localhost:9000", "us-east-1", "test", "test", "mybucket")
+
+	handler := serveSimplifiedMedia(storage, "", repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo), nil, nil)
+	e := echo.New()
+	
+	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
+	req.Header.Set("X-Point-Direct-S3", "1")
+	
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month", "filename")
+	c.SetParamValues(year, month, filename)
+
+	err := handler(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	presignedURL := rec.Header().Get("X-S3-Presigned-Url")
+	if presignedURL == "" {
+		t.Errorf("expected X-S3-Presigned-Url header to be set")
+	}
+	if !strings.Contains(presignedURL, filename) {
+		t.Errorf("presigned URL should contain filename, got %s", presignedURL)
 	}
 }

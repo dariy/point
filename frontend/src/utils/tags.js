@@ -508,11 +508,14 @@ export function setupScrollableStrip(trackEl, scrollEl) {
   btnLeft?.addEventListener('click',  onLeft);
   btnRight?.addEventListener('click', onRight);
   scrollEl.addEventListener('scroll', update, { passive: true });
+  const ro = new ResizeObserver(update);
+  ro.observe(scrollEl);
   requestAnimationFrame(update);
   return () => {
     btnLeft?.removeEventListener('click',  onLeft);
     btnRight?.removeEventListener('click', onRight);
     scrollEl.removeEventListener('scroll', update);
+    ro.disconnect();
   };
 }
 

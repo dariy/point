@@ -51,8 +51,8 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 
-	"tags_visibility":        true,
-	"timeline_mode":          true,
+	"tags_visibility": true,
+	"timeline_mode":   true,
 }
 
 // parseYearRangeParams reads the timeline scope the public views send as

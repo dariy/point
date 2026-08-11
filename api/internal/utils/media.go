@@ -11,10 +11,10 @@ var (
 	videoTagRe = regexp.MustCompile(`(?i)<(?:video|source)[^>]*\ssrc="([^"]+)"`)
 
 	// markdownImageRe matches standard markdown image syntax ![alt](url).
-	markdownImageRe = regexp.MustCompile(`!\[.*\]\(([^)]+)\)`)
+	markdownImageRe = regexp.MustCompile(`!\[.*\]\([<]?([^>)]+?)[>]?(?:[ \t]+["'].*["'])?\)`)
 
 	// bareMediaRe matches a line containing only a media file path or URL.
-	bareMediaRe = regexp.MustCompile(`(?im)^[ \t]*((?:https?://|/)\S+\.(?:mp4|webm|mov|ogv|m4v|avi|mkv|mp3|m4a|ogg|wav|flac|aac|opus|jpg|jpeg|png|gif|webp|svg))[ \t]*$`)
+	bareMediaRe = regexp.MustCompile(`(?im)^[ \t]*((?:https?://|/)[^\r\n]+?\.(?:mp4|webm|mov|ogv|m4v|avi|mkv|mp3|m4a|ogg|wav|flac|aac|opus|jpg|jpeg|png|gif|webp|svg))[ \t]*$`)
 )
 
 // DeriveMediaURL returns a single normalized preview URL for list responses:

@@ -35,13 +35,14 @@
     overflow: hidden;
     box-shadow: var(--shadow);
     transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal),
-        background-color var(--transition-theme), scale var(--transition-normal);
+        background-color var(--transition-theme), scale var(--transition-normal), width var(--transition-normal), height var(--transition-normal);
     text-decoration: none;
     /* Make sure links inside look clean */
     display: block;
     /* Ensure it behaves as a block element */
     position: relative;
     height: 100%;
+    width: 100%;
     /* Ensure uniform height in grid if possible, though grid-items stretch */
     display: flex;
     flex-direction: column;
@@ -52,9 +53,18 @@
    — see utils/pointerMode.js. A laptop with a touchscreen answers that media
    query "no", which left every mouse user on such a machine with a completely
    inert grid. */
-:where(html.pointer-fine) .post-card:hover {
-    box-shadow: var(--shadow-lg);
-    transform: translateY(calc(var(--post-card-transform) * -1));
+:where(html.pointer-fine) .post-card-slot:hover {
+    position: relative;
+    z-index: 1000;
+}
+
+:where(html.pointer-fine) .post-card:hover,
+:where(html.pointer-fine) .post-card.has-flyout-open {
+    box-shadow: var(--shadow-lg), 0 0 30px 10px rgba(255, 255, 255, 0.2);
+}
+
+:where(html.pointer-fine) .post-card-content > * {
+    transition: transform var(--transition-normal);
 }
 
 /* --- HAS IMAGE/VISUAL STYLE --- */
@@ -121,7 +131,8 @@
     transition: background-color var(--transition-theme), color var(--transition-theme);
 }
 
-:where(html.pointer-fine) .post-card:hover .audio-placeholder {
+:where(html.pointer-fine) .post-card:hover .audio-placeholder,
+:where(html.pointer-fine) .post-card.has-flyout-open .audio-placeholder {
     background-color: var(--surface-hover);
     color: var(--color-primary);
 }
@@ -138,11 +149,14 @@
 }
 
 :where(html.pointer-fine) .post-card:hover .post-card-background img,
-:where(html.pointer-fine) .post-card:hover .post-card-background video {
+:where(html.pointer-fine) .post-card:hover .post-card-background video,
+:where(html.pointer-fine) .post-card.has-flyout-open .post-card-background img,
+:where(html.pointer-fine) .post-card.has-flyout-open .post-card-background video {
     transform: scale(1.05);
 }
 
-:where(html.pointer-fine) .post-card:hover .video-play-indicator {
+:where(html.pointer-fine) .post-card:hover .video-play-indicator,
+:where(html.pointer-fine) .post-card.has-flyout-open .video-play-indicator {
     opacity: 0.8;
 }
 
@@ -164,20 +178,23 @@
     opacity: 0;
     transition: opacity var(--transition-normal);
     color: white;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 .post-card.is-touched .post-card-content.overlay,
 .post-card.has-flyout-open .post-card-content.overlay {
     opacity: 1;
+    pointer-events: auto;
 }
 
 /* Hover-reveal only where a mouse is actually driving. On touch the overlay is
    revealed by the JS two-tap (.is-touched); keeping :hover out of play there
    stops the browser's sticky-hover from leaving a card looking revealed while
    the JS still wants its first tap (the old 3-tap regression). */
-:where(html.pointer-fine) .post-card:hover .post-card-content.overlay {
+:where(html.pointer-fine) .post-card:hover .post-card-content.overlay,
+:where(html.pointer-fine) .post-card.has-flyout-open .post-card-content.overlay {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .post-card-edit-btn {
@@ -212,7 +229,8 @@
     }
 }
 
-:where(html.pointer-fine) .post-card:hover .post-card-edit-btn {
+:where(html.pointer-fine) .post-card:hover .post-card-edit-btn,
+:where(html.pointer-fine) .post-card.has-flyout-open .post-card-edit-btn {
     opacity: 1;
 }
 
@@ -379,14 +397,21 @@
         display: none;
     }
 
+    .post-card-title {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
     /* Card height is fixed and a narrow card has less of it to spend. Left at
        three lines the excerpt is not dropped but *squeezed*: the flex item
        shrinks below its clamp and the last line is cut through the middle of
-       the glyphs. Two lines end the preview on a whole one. */
-    .post-card-content.overlay .post-card-excerpt,
-    .featured-post .post-card-content.overlay .post-card-excerpt {
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
+       the glyphs. One line leaves enough room for a two-line title and the tags. */
+    .post-card-content.overlay .post-card-excerpt {
+        -webkit-line-clamp: 1;
+        line-clamp: 1;
     }
 }
 
@@ -442,14 +467,13 @@
     }
 }
 
-/* Reset grid for featured post if using new card style */
-/* If featured post has image, it behaves like a big card now */
-.featured-post .post-card.has-image {
-    min-height: var(--post-cardhas-image-min-height-alt1);
+.featured-post .post-card {
+    box-shadow: 0 0 15px var(--color-primary);
 }
 
-.featured-post .post-card-content.overlay .post-card-title {
-    font-size: var(--font-size-3xl);
+:where(html.pointer-fine) .featured-post .post-card:hover,
+:where(html.pointer-fine) .featured-post .post-card.has-flyout-open {
+    box-shadow: var(--shadow-lg), 0 0 15px var(--color-primary);
 }
 
 /* ===========================
@@ -521,34 +545,7 @@ body.grid-zoom .featured-post .post-card.has-image {
     min-height: 0;
 }
 
-.featured-post .post-card-content.overlay .post-card-excerpt {
-    font-size: var(--font-size-base);
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
-}
 
-/* If text only, we can keep it as a flexible card */
-.featured-post .post-card.text-only {
-    padding: var(--spacing-md);
-}
-
-.featured-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
-}
-
-/* Override badge for overlay */
-.post-card-content.overlay .featured-badge {
-    color: var(--color-accent);
-    /* Brighter blue for dark bg */
-}
 
 /* ===========================
    Grid Preview (Swipe)

@@ -70,8 +70,9 @@ async function main() {
   // optional CSS attached. The recorded /api/plugins response already carries
   // the enabled state from the source instance.
   const manifest = [];
+  const allManifest = [];
   for (const p of fx.plugins || []) {
-    if (!p.enabled || EXCLUDE.has(p.id)) continue;
+    if (EXCLUDE.has(p.id)) continue;
     const entry = {
       id: p.id,
       type: p.type,
@@ -85,7 +86,11 @@ async function main() {
     // pathname, so the query is invisible to interception.
     if (chunks[p.id]) entry.entry = `/assets/js/p/${chunks[p.id]}?v=${VERSION}`;
     if (cssIds.has(p.id)) entry.css = `/assets/css/p/${p.id}.css?v=${VERSION}`;
-    manifest.push(entry);
+    
+    allManifest.push(entry);
+    if (p.enabled) {
+      manifest.push(entry);
+    }
   }
 
   const withEntries = manifest.filter((e) => e.entry).length;
@@ -102,7 +107,8 @@ async function main() {
   // appear in the data (ids and slots are slugs), but escape the sequence
   // defensively so a future fixture can never break out of the element.
   const json = JSON.stringify(manifest).replace(/<\//g, "<\\/");
-  const script = `  <script>window.__PLUGINS__=${json};</script>`;
+  const allJson = JSON.stringify(allManifest).replace(/<\//g, "<\\/");
+  const script = `  <script>window.__PLUGINS__=${json}; window.__ALL_PLUGINS__=${allJson};</script>`;
 
   let out = html
     .replaceAll("__BUILD_VERSION__", VERSION)

@@ -454,7 +454,12 @@ export default class PostEditPage extends Component {
   /** The stored order, with any key it doesn't mention appended in default order. */
   _readOrder() {
     let raw = null;
-    try { raw = localStorage.getItem(ORDER_STORAGE_KEY); } catch { /* ignore */ }
+    const settings = store.get("settings") || {};
+    if (settings.editor_field_order) {
+      raw = settings.editor_field_order;
+    } else {
+      try { raw = localStorage.getItem(ORDER_STORAGE_KEY); } catch { /* ignore */ }
+    }
     let stored = [];
     try {
       const parsed = raw ? JSON.parse(raw) : null;
@@ -464,7 +469,15 @@ export default class PostEditPage extends Component {
   }
 
   _persistOrder() {
-    try { localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(this._order)); } catch { /* ignore */ }
+    const raw = JSON.stringify(this._order);
+    try { localStorage.setItem(ORDER_STORAGE_KEY, raw); } catch { /* ignore */ }
+    import("../../api/settings.js").then(({ updateSettings }) => {
+      updateSettings({ editor_field_order: raw }).catch((err) => {
+        console.error("Failed to save field order to global set:", err);
+      });
+      const settings = store.get("settings") || {};
+      store.set("settings", { ...settings, editor_field_order: raw });
+    });
   }
 
   /**
@@ -483,7 +496,12 @@ export default class PostEditPage extends Component {
   /** The pinned set, persisted across posts and sessions (an editor preference, not post data). */
   _readPinned() {
     let raw = null;
-    try { raw = localStorage.getItem(PINNED_STORAGE_KEY); } catch { /* ignore */ }
+    const settings = store.get("settings") || {};
+    if (settings.editor_pinned) {
+      raw = settings.editor_pinned;
+    } else {
+      try { raw = localStorage.getItem(PINNED_STORAGE_KEY); } catch { /* ignore */ }
+    }
     let keys = DEFAULT_PINNED;
     if (raw !== null) {
       try {
@@ -499,7 +517,15 @@ export default class PostEditPage extends Component {
   }
 
   _persistPinned() {
-    try { localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...this._pinned])); } catch { /* ignore */ }
+    const raw = JSON.stringify([...this._pinned]);
+    try { localStorage.setItem(PINNED_STORAGE_KEY, raw); } catch { /* ignore */ }
+    import("../../api/settings.js").then(({ updateSettings }) => {
+      updateSettings({ editor_pinned: raw }).catch((err) => {
+        console.error("Failed to save pinned fields to global set:", err);
+      });
+      const settings = store.get("settings") || {};
+      store.set("settings", { ...settings, editor_pinned: raw });
+    });
   }
 
   /**

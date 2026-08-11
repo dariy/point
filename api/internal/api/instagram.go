@@ -25,12 +25,12 @@ type instagramConnector interface {
 
 // importState tracks a single in-flight (or recently finished) import run.
 type importState struct {
-	mu       sync.Mutex
-	running  bool
-	progress services.ImportProgress
-	result   *services.ImportResult
-	err      string
-	startedAt time.Time
+	mu         sync.Mutex
+	running    bool
+	progress   services.ImportProgress
+	result     *services.ImportResult
+	err        string
+	startedAt  time.Time
 	finishedAt time.Time
 }
 
@@ -182,15 +182,15 @@ func (h *InstagramHandler) Status(c echo.Context) error {
 
 // importStatusResponse is the JSON shape for GET /api/instagram/import/status.
 type importStatusResponse struct {
-	Running    bool                    `json:"running"`
-	Imported   int                     `json:"imported"`
-	Skipped    int                     `json:"skipped"`
-	Errors     int                     `json:"errors"`
-	StartedAt  string                  `json:"started_at,omitempty"`
-	FinishedAt string                  `json:"finished_at,omitempty"`
+	Running    bool                     `json:"running"`
+	Imported   int                      `json:"imported"`
+	Skipped    int                      `json:"skipped"`
+	Errors     int                      `json:"errors"`
+	StartedAt  string                   `json:"started_at,omitempty"`
+	FinishedAt string                   `json:"finished_at,omitempty"`
 	Progress   *services.ImportProgress `json:"progress,omitempty"`
-	ErrorMsg   string                  `json:"error,omitempty"`
-	Messages   []string                `json:"messages,omitempty"`
+	ErrorMsg   string                   `json:"error,omitempty"`
+	Messages   []string                 `json:"messages,omitempty"`
 }
 
 // triggerAuthorID returns the first admin user ID (1) for posts created during import.

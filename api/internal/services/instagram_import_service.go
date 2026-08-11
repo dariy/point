@@ -384,4 +384,3 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 
 	return result, nil
 }
-

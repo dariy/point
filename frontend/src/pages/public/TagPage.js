@@ -13,7 +13,7 @@
 
 import { Component } from "../../components/Component.js";
 
-import { PostGrid } from "../../components/public/PostGrid.js";
+
 import {
   PostContent,
   shouldUseImmersive,
@@ -161,7 +161,7 @@ export default class TagPage extends Component {
     // here — the grid keeps its cards and the paginator is re-pointed in place.
     if (refit && this._applyRefit()) return;
     this._clearPostContent();
-    this._mountPostContent();
+    await this._mountPostContent();
     this._timeline?.setScope(
       vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
     );
@@ -475,7 +475,7 @@ export default class TagPage extends Component {
   // pagination, swipe gestures). Tracked separately from page chrome so a
   // timeline-scope or page change can refresh just this in place — see
   // _refreshPostContent — without remounting the timeline.
-  _mountPostContent() {
+  async _mountPostContent() {
     const settings = store.get("settings") || {};
     const slug = this.props.params?.slug || "";
     const page = parseInt(this.props.query?.page || "1", 10);
@@ -487,15 +487,38 @@ export default class TagPage extends Component {
     // the refreshed grid isn't left offset.
     this._pager.resetGridStyles();
 
-    this._postChildren.push(
-      this.mountChild(PostGrid, "#grid-mount", {
+    let active = 'simple-post-list';
+    if (pluginHost.isEnabled('dynamic-post-list')) active = 'dynamic-post-list';
+
+    let gridComp = null;
+    if (pluginHost.hasSlot('post-list')) {
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), {
         posts,
         showViewCount: !!settings.show_view_counts,
         tagSlug: slug,
         tagPage: page,
         emptyMessage: "No posts in this tag yet.",
-      }),
-    );
+      });
+    } else {
+      const mod = active === 'dynamic-post-list'
+        ? await import('../../plugins/dynamic-post-list/index.js')
+        : await import('../../plugins/simple-post-list/index.js');
+      gridComp = mod.mount(this.$('#grid-mount'), {
+        posts,
+        showViewCount: !!settings.show_view_counts,
+        tagSlug: slug,
+        tagPage: page,
+        emptyMessage: "No posts in this tag yet.",
+      });
+    }
+
+    if (this._unmounted) {
+      if (gridComp) gridComp.unmount();
+      return;
+    }
+
+    this._postChildren.push(gridComp);
+    this._children.push(gridComp);
 
     this._syncPagination(pagination);
     this._pager.arm(pagination);

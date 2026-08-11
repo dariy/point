@@ -66,18 +66,15 @@ describe('PluginsPage slot rules', () => {
 
   const rowOf = (p, id) => p._renderPlugin(p.state.plugins.find((x) => x.id === id));
 
-  test('the active claimant of a required slot is read-only, its alternative is not', () => {
+  test('alternatives for a slot are rendered as radio buttons, replacing the lock behavior', () => {
     const p = page();
 
     const active = rowOf(p, 'immersive-sheet');
-    assert.ok(active.includes('plugin-pill-locked'), 'the viewer in use must not be switchable off');
-    assert.ok(!active.includes('plugin-toggle'), 'no enable/disable checkbox for the locked viewer');
-    assert.ok(
-      active.includes('enable another plugin for this slot'),
-      'the lock must point at the way to switch viewers',
-    );
+    assert.ok(!active.includes('plugin-pill-locked'), 'alternatives no longer use the locked pill');
+    assert.ok(active.includes('type="radio"'), 'the active alternative is a radio button');
 
-    assert.ok(rowOf(p, 'immersive').includes('plugin-toggle'), 'the other viewer stays togglable');
+    const inactive = rowOf(p, 'immersive');
+    assert.ok(inactive.includes('type="radio"'), 'the inactive alternative is a radio button');
   });
 
   test('a 0-1 slot never locks its sole claimant — "none" is a valid state there', () => {

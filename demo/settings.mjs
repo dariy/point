@@ -59,8 +59,7 @@ export const ADD_SETTINGS = {
   // escaped and shown as the markup they are, which is what the paragraph
   // above warns about.
   footer_copyright:
-    "© UI showcase of {{engine}}" +
-    ", [hosting](https://point.photos/and/sushi)" +
+    "© UI showcase of {{engine}}"  +
     ", photos are from\u00a0[picsum.photos](https://picsum.photos)",
 };
 

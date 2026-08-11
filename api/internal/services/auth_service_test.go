@@ -10,11 +10,11 @@ import (
 
 func TestAuthService_Authenticate_Mock(t *testing.T) {
 	ctx := context.Background()
-	
+
 	t.Run("Successful authentication", func(t *testing.T) {
 		password := "correct-password"
 		hashed, _ := HashPassword(password)
-		
+
 		mockRepo := &mockRepository{
 			MockGetUserByUsername: func(ctx context.Context, username string) (models.User, error) {
 				if username == "testuser" {
@@ -33,10 +33,10 @@ func TestAuthService_Authenticate_Mock(t *testing.T) {
 				return nil
 			},
 		}
-		
+
 		svc := NewAuthService(mockRepo)
 		user, err := svc.Authenticate(ctx, "testuser", password)
-		
+
 		if err != nil {
 			t.Fatalf("Authenticate failed: %v", err)
 		}
@@ -47,7 +47,7 @@ func TestAuthService_Authenticate_Mock(t *testing.T) {
 
 	t.Run("Invalid password", func(t *testing.T) {
 		hashed, _ := HashPassword("correct-password")
-		
+
 		mockRepo := &mockRepository{
 			MockGetUserByUsername: func(ctx context.Context, username string) (models.User, error) {
 				return models.User{
@@ -57,10 +57,10 @@ func TestAuthService_Authenticate_Mock(t *testing.T) {
 				}, nil
 			},
 		}
-		
+
 		svc := NewAuthService(mockRepo)
 		_, err := svc.Authenticate(ctx, "testuser", "wrong-password")
-		
+
 		if err == nil || err.Error() != "invalid username or password" {
 			t.Errorf("expected invalid password error, got %v", err)
 		}
