@@ -379,14 +379,22 @@
         display: none;
     }
 
+    .post-card-title {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
     /* Card height is fixed and a narrow card has less of it to spend. Left at
        three lines the excerpt is not dropped but *squeezed*: the flex item
        shrinks below its clamp and the last line is cut through the middle of
-       the glyphs. Two lines end the preview on a whole one. */
+       the glyphs. One line leaves enough room for a two-line title and the tags. */
     .post-card-content.overlay .post-card-excerpt,
     .featured-post .post-card-content.overlay .post-card-excerpt {
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
+        -webkit-line-clamp: 1;
+        line-clamp: 1;
     }
 }
 
