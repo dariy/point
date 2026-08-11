@@ -21,3 +21,70 @@ func TestMarkdownImageRe(t *testing.T) {
 		}
 	}
 }
+
+func TestDeriveMediaURL(t *testing.T) {
+	cases := []struct {
+		name          string
+		thumbnailPath string
+		content       string
+		want          string
+	}{
+		{
+			name:          "Thumbnail provided",
+			thumbnailPath: "/media/originals/thumb.jpg",
+			content:       "Some content",
+			want:          "/thumb.jpg",
+		},
+		{
+			name:          "Thumbnail provided absolute",
+			thumbnailPath: "http://example.com/thumb.jpg",
+			content:       "http://example.com/thumb.jpg",
+			want:          "http://example.com/thumb.jpg",
+		},
+		{
+			name:          "Markdown image match",
+			thumbnailPath: "",
+			content:       "Hello ![alt](/media/originals/image.jpg)",
+			want:          "/image.jpg",
+		},
+		{
+			name:          "Video tag match",
+			thumbnailPath: "",
+			content:       `<video src="/media/originals/video.mp4"></video>`,
+			want:          "/video.mp4",
+		},
+		{
+			name:          "Source tag match",
+			thumbnailPath: "",
+			content:       `<video><source src="originals/video.mp4"></video>`,
+			want:          "/video.mp4",
+		},
+		{
+			name:          "Bare media match",
+			thumbnailPath: "",
+			content:       "\n/media/originals/bare.mp3\n",
+			want:          "/bare.mp3",
+		},
+		{
+			name:          "No match",
+			thumbnailPath: "",
+			content:       "Just some text",
+			want:          "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := DeriveMediaURL(c.thumbnailPath, c.content)
+			if got != c.want {
+				t.Errorf("DeriveMediaURL() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestMustMatch(t *testing.T) {
+	if got := mustMatch(bareMediaRe, "no match"); got != "" {
+		t.Errorf("mustMatch() = %q, want empty", got)
+	}
+}

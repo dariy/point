@@ -84,3 +84,77 @@ func TestGenerateSessionKey(t *testing.T) {
 		t.Error("separator should prevent field-boundary collisions")
 	}
 }
+
+func TestWebAuthnService_HasAndDeleteCredential(t *testing.T) {
+	repo := &mockRepository{
+		MockGetWebAuthnCredentialsByUserID: func(_ context.Context, id int64) ([]repository.WebAuthnCredential, error) {
+			if id == 1 {
+				return []repository.WebAuthnCredential{{CredentialID: []byte("cred")}}, nil
+			}
+			return nil, nil
+		},
+		MockDeleteWebAuthnCredentialByUserID: func(_ context.Context, id int64) error {
+			return nil
+		},
+	}
+
+	svc, err := NewWebAuthnService(repo, "example.com", "Test Blog", "https://example.com")
+	if err != nil {
+		t.Fatalf("NewWebAuthnService: %v", err)
+	}
+
+	has, err := svc.HasCredential(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("HasCredential: %v", err)
+	}
+	if !has {
+		t.Error("expected true")
+	}
+
+	has, err = svc.HasCredential(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("HasCredential: %v", err)
+	}
+	if has {
+		t.Error("expected false")
+	}
+
+	err = svc.DeleteCredential(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("DeleteCredential: %v", err)
+	}
+}
+
+func TestWebAuthnService_SessionNotFound(t *testing.T) {
+	repo := &mockRepository{}
+	svc, err := NewWebAuthnService(repo, "example.com", "Test", "https://example.com")
+	if err != nil {
+		t.Fatalf("NewWebAuthnService: %v", err)
+	}
+
+	err = svc.FinishRegistration(context.Background(), 1, "invalid-key", nil)
+	if err == nil {
+		t.Error("expected error for missing session")
+	}
+
+	_, err = svc.FinishLogin(context.Background(), "invalid-key", nil)
+	if err == nil {
+		t.Error("expected error for missing session")
+	}
+}
+
+func TestWebAuthnService_BeginLoginWithoutUser(t *testing.T) {
+	repo := &mockRepository{}
+	svc, err := NewWebAuthnService(repo, "example.com", "Test", "https://example.com")
+	if err != nil {
+		t.Fatalf("NewWebAuthnService: %v", err)
+	}
+
+	_, key, err := svc.BeginLoginWithoutUser(context.Background())
+	if err != nil {
+		t.Fatalf("BeginLoginWithoutUser: %v", err)
+	}
+	if key == "" {
+		t.Error("expected a session key")
+	}
+}
