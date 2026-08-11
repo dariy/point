@@ -84,7 +84,7 @@ export function attachHoverEffect() {
         var translateX = -(targetWidth - slotWidth) / 2;
         var translateY = -(targetHeight - slotHeight) / 2;
         
-        var rect = slot.getBoundingClientRect();
+        rect = slot.getBoundingClientRect();
         
         if (rect.left - minLeft <= slotWidth * ((scaleFactor - 1) / 2) + 5) translateX = 0;
         else if (maxRight - rect.right <= slotWidth * ((scaleFactor - 1) / 2) + 5) translateX = -(targetWidth - slotWidth);

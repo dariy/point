@@ -33,7 +33,7 @@ export class PostGrid extends Component {
 
   afterRender() {
     const { posts = [] } = this.props;
-    const heroIndex = posts.findIndex((p) => p.is_featured);
+
 
     this._cards = posts.map((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
