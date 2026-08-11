@@ -96,6 +96,8 @@ var SlotCardinality = map[string]Cardinality{
 	// An immersive post renders the viewer and nothing else, so it needs one —
 	// the Standard and Sheet viewers are the two candidates for it.
 	"post-viewer": CardExactlyOne,
+	// The post list is the core view of the home, search, and tag pages.
+	"post-list": CardExactlyOne,
 }
 
 // SlotRule returns the cardinality of a slot; unlisted slots accept any number.
@@ -117,6 +119,10 @@ var Registry = []Descriptor{
 	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true},
 	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: false},
 	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: false},
+
+	// ── Post Lists: candidates for the post-list slot ────────────────────────
+	{ID: "simple-post-list", Title: "Simple Post List", Type: TypeSlot, Slot: "post-list", EntryName: "simple-post-list", DefaultEnabled: false},
+	{ID: "dynamic-post-list", Title: "Dynamic Post List", Type: TypeSlot, Slot: "post-list", EntryName: "dynamic-post-list", DefaultEnabled: true},
 
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},

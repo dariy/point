@@ -161,6 +161,10 @@ export default class PluginsPage extends Component {
   render() {
     return adminLayoutTemplate({
       title: "Plugins",
+      actions: `
+        <button type="button" class="btn btn-sm btn-secondary" id="expand-all-groups" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
+        <button type="button" class="btn btn-sm btn-secondary" id="collapse-all-groups" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>
+      `,
       content: this._renderContent(),
     });
   }
@@ -203,7 +207,9 @@ export default class PluginsPage extends Component {
         ${headerRow(this._mr("distraction-free", "Focus"))}
         ${this._mr("tag-cloud", "Tag cloud", "pmap-band")}
         ${this._mr("timeline", "Timeline", "pmap-band")}
-        ${this._ms("Post grid", "pmap-main")}
+        <div class="pmap-main pmap-choice" aria-label="One post list plugin is active">
+          ${this._mr("simple-post-list", "Simple")}${this._mr("dynamic-post-list", "Dynamic")}
+        </div>
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
       post: `
         ${headerRow()}
@@ -323,6 +329,36 @@ export default class PluginsPage extends Component {
     if (items.length === 0) return "";
     const collapsed = !!this.state.collapsed[group.type];
 
+    const TARGET_SLOTS = ["post-list", "post-viewer", "tags-route"];
+    const grouped = [];
+    const slotMap = new Map();
+
+    items.forEach(p => {
+      if (TARGET_SLOTS.includes(p.slot)) {
+        if (!slotMap.has(p.slot)) {
+          const arr = [];
+          slotMap.set(p.slot, arr);
+          grouped.push({ type: 'slot-group', slot: p.slot, items: arr });
+        }
+        slotMap.get(p.slot).push(p);
+      } else {
+        grouped.push({ type: 'single', plugin: p });
+      }
+    });
+
+    const renderItem = (item) => {
+      if (item.type === 'slot-group') {
+        return `
+          <div class="plugins-slot-group">
+            <div class="plugins-slot-group-title">Alternatives for <code>${escapeHtml(item.slot)}</code></div>
+            <div class="plugins-slot-group-items">
+              ${item.items.map(p => this._renderPlugin(p)).join("")}
+            </div>
+          </div>`;
+      }
+      return this._renderPlugin(item.plugin);
+    };
+
     return `
       <section class="card plugins-group${collapsed ? " collapsed" : ""}" data-group="${escapeHtml(group.type)}">
         <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
@@ -334,7 +370,7 @@ export default class PluginsPage extends Component {
         </div>
         <div class="card-body">
           <div class="plugins-list">
-            ${items.map((p) => this._renderPlugin(p)).join("")}
+            ${grouped.map(renderItem).join("")}
           </div>
         </div>
       </section>`;
@@ -427,6 +463,9 @@ export default class PluginsPage extends Component {
     });
 
     if (this.state.loading || this.state.error) return;
+
+    this.container.querySelector("#expand-all-groups")?.addEventListener("click", () => this._setAllCollapsed(false));
+    this.container.querySelector("#collapse-all-groups")?.addEventListener("click", () => this._setAllCollapsed(true));
 
     // Collapse/expand group cards (header click, ignoring the presets header).
     this.container.querySelectorAll(".plugins-group-header").forEach((header) => {
@@ -565,6 +604,15 @@ export default class PluginsPage extends Component {
     this._panel = null;
     // Settings may have changed; drop the cache so the next open re-fetches.
     this._settingsCache = null;
+  }
+
+  _setAllCollapsed(isCollapsed) {
+    const collapsed = { ...this.state.collapsed };
+    collapsed.map = isCollapsed;
+    TYPE_GROUPS.forEach(g => {
+      collapsed[g.type] = isCollapsed;
+    });
+    this.setState({ collapsed });
   }
 
   async _load() {

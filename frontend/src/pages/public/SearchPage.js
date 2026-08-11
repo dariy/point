@@ -14,7 +14,7 @@
 import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
 
-import { PostGrid } from '../../components/public/PostGrid.js';
+
 import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
@@ -160,7 +160,7 @@ export default class SearchPage extends Component {
   // Mounts the page-dependent content (results grid, pagination, gestures).
   // Kept separate from the page chrome so a page change can refresh just this in
   // place — see _refreshPostContent.
-  _mountPostContent() {
+  async _mountPostContent() {
     const settings = store.get('settings') || {};
     const { posts = [], page, pages, total } = this.state.data;
 
@@ -170,13 +170,34 @@ export default class SearchPage extends Component {
     // the refreshed grid isn't left offset.
     this._pager.resetGridStyles();
 
-    this._postChildren.push(
-      this.mountChild(PostGrid, '#grid-mount', {
+    let active = 'simple-post-list';
+    if (pluginHost.isEnabled('dynamic-post-list')) active = 'dynamic-post-list';
+
+    let gridComp = null;
+    if (pluginHost.hasSlot('post-list')) {
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), {
         posts,
         showViewCount: !!settings.show_view_counts,
         emptyMessage: 'No posts matched your search.',
-      }),
-    );
+      });
+    } else {
+      const mod = active === 'dynamic-post-list'
+        ? await import('../../plugins/dynamic-post-list/index.js')
+        : await import('../../plugins/simple-post-list/index.js');
+      gridComp = mod.mount(this.$('#grid-mount'), {
+        posts,
+        showViewCount: !!settings.show_view_counts,
+        emptyMessage: 'No posts matched your search.',
+      });
+    }
+
+    if (this._unmounted) {
+      if (gridComp) gridComp.unmount();
+      return;
+    }
+
+    this._postChildren.push(gridComp);
+    this._children.push(gridComp);
 
     this._syncPagination({ page, pages, total });
     this._pager.arm({ page, pages, total });
@@ -283,7 +304,7 @@ export default class SearchPage extends Component {
     // rebuilding the grid to add or drop the tail of the list.
     if (refit && this._applyRefit()) return;
     this._clearPostContent();
-    this._mountPostContent();
+    await this._mountPostContent();
 
     const newGrid = this.$('#grid-mount');
     if (seamless) {
