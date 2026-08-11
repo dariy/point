@@ -376,7 +376,7 @@ export default class PostsListPage extends Component {
               <label class="select-all-label"><input type="checkbox" id="select-all-cb"> Select all</label>
               <div class="bulk-actions">
                 <span id="bulk-count">0 selected</span>
-                <select id="bulk-status-select">
+                <select id="bulk-status-select" class="filter-select">
                   <option value="draft">Draft</option>
                   <option value="published">Published</option>
                   <option value="hidden">Hidden</option>
