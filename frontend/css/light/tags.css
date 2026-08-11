@@ -575,6 +575,10 @@
     background-color: var(--surface-hover);
 }
 
+.tm-unfiled-toggle:active {
+    scale: 1 !important;
+}
+
 .tm-unfiled-toggle svg {
     width: 16px;
     height: 16px;
