@@ -31,7 +31,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire, type } from './helpers/dom.js';
+import { setupDOM, click, check, fire, type } from './helpers/dom.js';
 import { store } from '../src/store.js';
 
 /** Home, About > Team, Blog — one nested branch, roots either side of it. */
@@ -570,6 +570,71 @@ describe('MenuPage', () => {
       assert.equal(store.get('toast').type, 'success');
     });
 
+    // Saving must not repaint the editor. `state.items` is stale by exactly
+    // the edits being saved — typing never calls setState — so a re-render
+    // here hands the owner back the list as of the last structural change,
+    // wiping on screen the very text the request just carried correctly.
+    test('a row typed into after being added keeps its text once saved', async () => {
+      await mountPage();
+      click(q('#add-item-btn'));
+      type(rows()[4].querySelector('.item-label'), 'Contact');
+      type(rows()[4].querySelector('.item-url'), '/contact');
+
+      click(q('#save-menu-btn'));
+      await settle();
+
+      assert.deepEqual(savedBody().items.at(-1), { name: 'Contact', url: '/contact', children: [] });
+      assert.deepEqual(visual().at(-1), ['Contact', '/contact', 0], 'the editor blanked the saved row');
+    });
+
+    test('saving does not revert an edit to an existing row', async () => {
+      await mountPage();
+      type(rows()[1].querySelector('.item-label'), 'About Us');
+      click(q('#save-menu-btn'));
+      await settle();
+      assert.deepEqual(visual().map(r => r[0]), ['Home', 'About Us', 'Team', 'Blog']);
+    });
+
+    test('saving leaves the markdown the owner authored exactly as typed', async () => {
+      await mountPage();
+      click(q('#mode-markdown-btn'));
+      const authored = '- [A](/a)\n\n    - [B](/b)\n- [C](/c)';
+      q('#menu-markdown-input').value = authored;
+
+      click(q('#save-menu-btn'));
+      await settle();
+
+      assert.equal(markdown(), authored, 'the textarea was rewritten by saving');
+      assert.deepEqual(savedBody().items.map(i => i.name), ['A', 'C']);
+    });
+
+    test('the editor survives a save that fails', async () => {
+      await mountPage();
+      type(rows()[0].querySelector('.item-label'), 'Homepage');
+      globalThis.fetch = async () => { throw new Error('nope'); };
+      click(q('#save-menu-btn'));
+      await settle();
+      assert.equal(visual()[0][0], 'Homepage');
+    });
+
+    test('the button reports progress in place, without a re-render', async () => {
+      await mountPage();
+      const btn = q('#save-menu-btn');
+      let inFlight;
+      globalThis.fetch = async () => {
+        inFlight = { disabled: btn.disabled, text: btn.textContent.trim() };
+        return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({}) };
+      };
+
+      click(btn);
+      await settle();
+
+      assert.deepEqual(inFlight, { disabled: true, text: 'Saving…' });
+      assert.equal(q('#save-menu-btn'), btn, 'the button was re-rendered rather than updated');
+      assert.equal(btn.disabled, false);
+      assert.equal(btn.textContent.trim(), 'Save Menu Configuration');
+    });
+
     test('a failed save reports it and leaves the button usable', async () => {
       await mountPage();
       globalThis.fetch = async () => { throw new Error('nope'); };
@@ -597,6 +662,18 @@ describe('MenuPage', () => {
       await mountPage();
       click(q('#add-item-btn'));
       assert.deepEqual(page._previewItems().map(i => i.name), ['Home', 'About', 'Blog']);
+    });
+
+    test('flipping the mode away and back keeps unsaved edits', async () => {
+      await mountPage();
+      type(rows()[0].querySelector('.item-label'), 'Homepage');
+
+      const pick = value => check([...page.container.querySelectorAll('input[name="menu-mode"]')]
+        .find(r => r.value === value));
+      pick('none');
+      pick('custom');
+
+      assert.deepEqual(visual().map(r => r[0]), ['Homepage', 'About', 'Team', 'Blog']);
     });
 
     test('tags mode previews the tag tree, and none previews nothing', async () => {
