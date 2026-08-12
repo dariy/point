@@ -164,9 +164,15 @@ chrome-less list of posts, a post page, and navigation by tag — and nothing el
 
 Because disabled slots render empty rather than hidden, and no frame-busting
 header is set by default, this bare configuration can be embedded directly into an
-existing static site: dropped into an `<iframe>` as a self-updating photo section,
-or reverse-proxied under a subpath (`example.com/blog/`) so it inherits the parent
-site's own header and footer. A hand-built static site keeps its design while
-Point quietly supplies the dynamic media-and-tag backend behind one element or one
-nginx `location` block. If you ship this publicly, set a `frame-ancestors`
-allowlist rather than leaving framing open.
+existing static site: dropped into an `<iframe>` as a self-updating photo section
+on its own hostname, so it inherits the surrounding page's chrome. A hand-built
+static site keeps its design while Point quietly supplies the dynamic
+media-and-tag backend behind one element. If you ship this publicly, set a
+`frame-ancestors` allowlist rather than leaving framing open.
+
+**Not under a subpath.** Serving this at `example.com/blog/` does not work: the
+shell's asset tags and every API call are root-absolute (`/assets/js/app.js`,
+`/api/posts`), so a proxy that only forwards `/blog/` returns the parent site's
+404 for all of them. Give Point a hostname of its own and iframe it, or forward
+`/assets`, `/api`, `/media` and the post/tag routes at the root alongside
+`/blog/` — at which point the subpath buys nothing.
