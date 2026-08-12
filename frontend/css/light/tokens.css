@@ -115,7 +115,8 @@
     --featured-btn-padding: var(--size-0-125);
     --field-ai-btn-padding: var(--size-0-125);
     --slug-prefix-padding: var(--size-0-125);
-    --editor-excerpt-padding-right: var(--size-1-75);
+    --editor-excerpt-gutter: var(--size-2);
+    --editor-excerpt-btn-stack-top: var(--size-1-5);
     --button-padding: var(--size-0-75);
     --ve-list-gap: var(--size-0-125);
     --ve-list-min-height: var(--size-5);

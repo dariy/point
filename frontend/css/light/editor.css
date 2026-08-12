@@ -154,14 +154,19 @@ body.drag-active::after {
     transform: translateY(-50%) scale(1.2);
 }
 
-/* Excerpt row: positions the AI btn in the top-right corner */
+/* Excerpt row: [textarea] [button gutter]
+   The AI and maximize buttons sit in a gutter reserved to the right of the
+   textarea instead of floating over it — overlaid, they collide with the
+   textarea's scrollbar as soon as the excerpt outgrows its visible rows. */
 .excerpt-row {
     position: relative;
+    padding-right: var(--editor-excerpt-gutter);
 }
 
+/* Same right offset as the title/tags stars, so all three line up in a column */
 .excerpt-row .field-ai-btn {
     position: absolute;
-    top: var(--spacing-xs);
+    top: 0;
     right: var(--spacing-xs);
 }
 
@@ -223,9 +228,15 @@ body.drag-active::after {
     min-width: 0;
 }
 
-/* Give the excerpt textarea padding so text doesn't slide under the AI btn */
+/* Lock the width to the row's content box (the buttons have their own gutter):
+   horizontal dragging used to widen the textarea past its row and break the
+   layout. Vertical resize stays on, so the controls below shift down as the
+   field grows. */
 .editor-excerpt {
-    padding-right: var(--editor-excerpt-padding-right);
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    resize: vertical;
 }
 
 /* Full-width editor page — use the whole window, overriding .light-content's
@@ -642,10 +653,15 @@ body.drag-active::after {
 }
 
 /* If there is an AI button in the same container, shift the maximize button to the left */
-.excerpt-row .textarea-maximize-btn,
 .title-input-wrapper .textarea-maximize-btn,
 .tags-input-wrapper .textarea-maximize-btn {
     right: calc(var(--spacing-xs) + var(--size-1-75, 1.75rem));
+}
+
+/* The excerpt has a gutter, so both buttons stack in it, AI star on top */
+.excerpt-row .textarea-maximize-btn {
+    top: var(--editor-excerpt-btn-stack-top);
+    right: var(--spacing-xs);
 }
 
 textarea.is-maximized,
