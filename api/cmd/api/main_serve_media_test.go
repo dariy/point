@@ -211,14 +211,31 @@ func TestServeSimplifiedMedia_PrivateMedia_Unauthenticated_NoStore(t *testing.T)
 	}
 }
 
-func TestServeSimplifiedMedia_NotFound_NoStore(t *testing.T) {
+func TestServeSimplifiedMedia_NotFound_ShortCache(t *testing.T) {
 	repo, storage := newMediaRepo(t)
 	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "ghost.jpg", false)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}
-	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
-		t.Errorf("expected Cache-Control: no-store on 404, got %q", cc)
+	if cc := rec.Header().Get("Cache-Control"); cc != notFoundCacheControl {
+		t.Errorf("expected Cache-Control: %q on 404, got %q", notFoundCacheControl, cc)
+	}
+}
+
+// A public media record whose bytes are missing from disk — the shape of a
+// stale or unmounted media volume. The hit TTL is set before the file is
+// touched, so the 404 must overwrite it: inheriting s-maxage=86400 here once
+// let a transient mount fault keep a site's images 404ing at the edge for the
+// rest of the day, long after the volume was healthy again.
+func TestServeSimplifiedMedia_FileMissingOnDisk_DoesNotInheritHitTTL(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "vanished.jpg") // record, but no file
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "vanished.jpg", false)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != notFoundCacheControl {
+		t.Errorf("expected Cache-Control: %q on 404, got %q", notFoundCacheControl, cc)
 	}
 }
 

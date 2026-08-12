@@ -1,0 +1,92 @@
+/* ===========================
+   Toasts
+   =========================== */
+
+#toasts {
+    position: fixed;
+    bottom: var(--spacing-xl);
+    right: var(--spacing-xl);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 250px;
+    max-width: 350px;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--border-radius-lg);
+    background-color: var(--surface-card);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-lg);
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity var(--transition-normal), transform var(--transition-normal);
+    border: var(--border-width) solid transparent;
+}
+
+.toast.toast-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast-message {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.toast-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: var(--font-size-lg);
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 var(--spacing-xs);
+    margin-left: var(--spacing-md);
+    transition: color var(--transition-fast);
+}
+
+.toast-close:hover {
+    color: var(--text-primary);
+}
+
+/* Types */
+.toast-success {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border-color: var(--color-success-light);
+}
+.toast-success .toast-close {
+    color: var(--color-success);
+}
+.toast-error {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+    border-color: var(--color-danger-light);
+}
+.toast-error .toast-close {
+    color: var(--color-danger);
+}
+.toast-warning {
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
+    border-color: var(--color-warning-light);
+}
+.toast-warning .toast-close {
+    color: var(--color-warning);
+}
+.toast-info {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border-color: var(--color-primary-light);
+}
+.toast-info .toast-close {
+    color: var(--color-primary);
+}

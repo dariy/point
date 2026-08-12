@@ -41,6 +41,7 @@ bundle "$CSS_DIR"/light.css \
     "$CSS_DIR"/common/forms.css \
     "$CSS_DIR"/common/badges.css \
     "$CSS_DIR"/common/modals.css \
+    "$CSS_DIR"/common/toasts.css \
     "$CSS_DIR"/common/empty-state.css \
     "$CSS_DIR"/common/pagination.css \
     "$CSS_DIR"/common/theme-toggle.css \
@@ -78,6 +79,7 @@ bundle "$CSS_DIR"/main.css \
     "$CSS_DIR"/common/utilities.css \
     "$CSS_DIR"/common/login-overlay.css \
     "$CSS_DIR"/common/prism.css \
+    "$CSS_DIR"/common/toasts.css \
     "$CSS_DIR"/public/layout.css \
     "$CSS_DIR"/public/header.css \
     "$CSS_DIR"/public/header-tags.css \

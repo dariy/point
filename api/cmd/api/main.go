@@ -1341,6 +1341,21 @@ func loadCSSManifest(cssDir string) map[string]string {
 // browsers honour.
 const immutableCacheControl = "public, max-age=31536000, immutable"
 
+// notFoundCacheControl is the header for media 404s. A 404 is never cached on
+// the same terms as a hit: the reasons a media URL 404s are all transient
+// (bytes not yet written, a stale or unmounted media volume, a post not yet
+// published), so a long TTL outlives the cause and keeps serving 404s from the
+// edge after the origin recovers — an s-maxage=86400 404 cached during a
+// storage fault once kept a site's images broken for the rest of the day.
+//
+// A short shared TTL still collapses a repeated hammering of one dead URL (a
+// hotlinked image, a retrying crawler) into one origin hit per colo per
+// minute, while bounding post-recovery staleness to that same minute. Note it
+// buys nothing against a flood of *distinct* nonexistent paths — each is its
+// own cache key and misses to the origin — which is a rate-limiting problem,
+// not a caching one.
+const notFoundCacheControl = "public, max-age=30, s-maxage=60"
+
 // serveSimplifiedMedia handles /YYYY/MM/filename for media files.
 //
 // Access rules:
@@ -1409,17 +1424,24 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 				}
 			}
 			if err != nil {
-				// no-store so the edge never caches a 404 keyed on the .jpg
-				// extension and then serves it stale after the file appears.
-				c.Response().Header().Set("Cache-Control", "no-store")
+				// Briefly cacheable: this is the branch a scan of nonexistent
+				// paths lands in, so repeated hits on one dead URL should not
+				// each reach the DB. The short TTL bounds how long a 404 keyed
+				// on the .jpg extension is served stale after the file appears.
+				c.Response().Header().Set("Cache-Control", notFoundCacheControl)
 				return echo.NewHTTPError(http.StatusNotFound, "media not found")
 			}
 		}
 
 		// Enforce visibility: unauthenticated clients cannot access private media.
 		if media.IsPublic == 0 && !isAuthenticated {
-			// no-store so publishing a previously-hidden post is not masked by
-			// a cached 404 at the edge (see the DB-miss branch above).
+			// The one 404 that stays uncacheable. Unlike the others, this
+			// response is authentication-dependent: the same URL serves the
+			// bytes to a logged-in owner. A shared cache does not vary on
+			// cookies for image extensions, so letting an anonymous 404 into
+			// the edge would serve it back to the owner and black out their own
+			// private media. no-store also keeps publishing a hidden post from
+			// being masked by a stale 404 (see the DB-miss branch above).
 			c.Response().Header().Set("Cache-Control", "no-store")
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
@@ -1484,6 +1506,10 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 			// stream — a broken image that costs a full download. 404 instead;
 			// the UI drops back to a type glyph on error.
 			if strings.EqualFold(media.FileType, "video") || strings.EqualFold(media.FileType, "audio") {
+				// Replace the hit TTL set above, which for a content-addressed
+				// filename is immutable — a year of cached 404 for a thumbnail
+				// that a later reupload could well make available.
+				c.Response().Header().Set("Cache-Control", notFoundCacheControl)
 				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail for this media")
 			}
 		}
@@ -1494,6 +1520,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 
 		// Security: ensure the resolved file is within the expected originals directory.
 		if !strings.HasPrefix(origFile, filepath.Join(storagePath, "media", "originals")) {
+			c.Response().Header().Set("Cache-Control", notFoundCacheControl)
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
@@ -1538,6 +1565,14 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 			}
 		}
 
+		// The DB record exists and is public, so the long hit TTL (up to
+		// immutable) was already set above — but the bytes are missing from
+		// disk. That is a transient storage fault (an unmounted or stale media
+		// volume), not a property of the URL, so the hit TTL must be replaced
+		// rather than inherited: left alone it outlives the fault by up to a
+		// day and keeps serving 404s from the edge long after the file is
+		// readable again.
+		c.Response().Header().Set("Cache-Control", notFoundCacheControl)
 		return echo.NewHTTPError(http.StatusNotFound, "media not found")
 	}
 }
