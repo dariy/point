@@ -23,15 +23,29 @@ import {
 } from "../../utils/tags.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
+const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
+
+// Touch previews are exclusive across the grid: the reveal tap on one card
+// closes every other card's overlay, so the card that lost its overlay must
+// lose its video with it. Cards are separate component instances, so the
+// running preview is tracked here rather than on any one of them.
+let touchPreview = null;
+
 export class PostCard extends Component {
   render() {
     const { post, showViewCount = false } = this.props;
     if (!post) return "";
 
     const mediaUrl = post.media_url || null;
-    const isVideo =
-      mediaUrl && /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
+    const isVideo = mediaUrl && VIDEO_RE.test(mediaUrl);
     const hasMedia = !!mediaUrl;
+    // Cards paint the thumbnail variant, never the original: a grid of
+    // full-size photos runs to tens of megabytes a page. `?thumb` serves the
+    // stored thumbnail for a still and the stored poster frame for a video, so
+    // a card costs the same either way and no video streams unasked. A video
+    // with no stored poster 404s here and simply leaves the card unpainted —
+    // the play indicator below still marks it as playable.
+    const posterUrl = hasMedia ? `${mediaUrl}?thumb` : null;
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     const cardClass = [
       "post-card",
@@ -42,13 +56,8 @@ export class PostCard extends Component {
       .join(" ");
     const lockIcon = isHidden ? LOCK_SVG : "";
 
-    const bgStyle =
-      hasMedia && !isVideo
-        ? ` style="background-image: url('${safeUrl(mediaUrl)}')"`
-        : "";
-
-    const bgVideo = isVideo
-      ? `<video src="${safeUrl(mediaUrl)}" autoplay muted loop playsinline></video>`
+    const bgStyle = hasMedia
+      ? ` style="background-image: url('${safeUrl(posterUrl)}')"`
       : "";
 
     const playIndicator = isVideo
@@ -71,7 +80,7 @@ export class PostCard extends Component {
     return `
       <article class="${cardClass}" role="button" tabindex="0"
                data-post-slug="${escapeHtml(post.slug)}">
-        <div class="post-card-background"${bgStyle}>${bgVideo}</div>
+        <div class="post-card-background"${bgStyle}></div>
         ${playIndicator}
         <div class="post-card-content${hasMedia ? " overlay" : ""}">
           <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
@@ -95,6 +104,18 @@ export class PostCard extends Component {
     if (!card) return;
 
     this._cleanupStrip?.();
+    this._stopHoverVideo?.();
+    this._stopHoverVideo = null;
+    this._startTouchVideo = null;
+
+    // Hover-to-play is opt-in per site (post-list plugin setting). Off, a video
+    // card stays a poster frame until the reader opens the post.
+    const mediaUrl = post.media_url || null;
+    const hoverAutoplay = !!(store.get("settings") || {})
+      .enable_video_hover_autoplay;
+    if (hoverAutoplay && mediaUrl && VIDEO_RE.test(mediaUrl)) {
+      this._setupHoverVideo(card, mediaUrl);
+    }
 
     if (!this._subscribed) {
       this.subscribeStore(store, "navTags", () => this._rerender());
@@ -102,6 +123,7 @@ export class PostCard extends Component {
     }
 
     const go = () => {
+      this._stopHoverVideo?.();
       if (tagSlug) {
         ViewContext.update({ postSlug: post.slug });
       } else {
@@ -143,9 +165,16 @@ export class PostCard extends Component {
 
           card.classList.add("is-touched");
 
+          // The reveal tap is the touch equivalent of hovering in: it is the
+          // reader asking for this card, and the only gesture before the tap
+          // that opens the post. Playing here keeps the preview reachable on
+          // touch without ever loading video for a card merely scrolled past.
+          this._startTouchVideo?.();
+
           const dismiss = (ev) => {
             if (!card.contains(ev.target)) {
               card.classList.remove("is-touched");
+              this._stopHoverVideo?.();
               document.removeEventListener("click", dismiss, true);
             }
           };
@@ -183,7 +212,74 @@ export class PostCard extends Component {
     }, card);
   }
 
+  /**
+   * Attach hover-to-play to a video card.
+   *
+   * The <video> is built on the first hover and torn down on leave, so a grid
+   * the reader merely scrolls past never opens a media connection — the whole
+   * point of defaulting to a poster frame.
+   *
+   * Touch has no hover, so the reveal tap stands in for it: the card's click
+   * handler calls `_startTouchVideo` when it reveals the overlay, and stops on
+   * the dismissing tap outside. Pointer enter/leave stay mouse-only — a touch
+   * fires both around a single tap, which would start and stop the video in
+   * the same gesture.
+   *
+   * @param {HTMLElement} card      the .post-card element
+   * @param {string}      mediaUrl  original media path (not the poster)
+   */
+  _setupHoverVideo(card, mediaUrl) {
+    const bg = card.querySelector(".post-card-background");
+    if (!bg) return;
+
+    const start = () => {
+      if (this._hoverVideo) return;
+      const v = document.createElement("video");
+      v.src = safeUrl(mediaUrl);
+      v.muted = true;
+      v.loop = true;
+      v.playsInline = true;
+      bg.appendChild(v);
+      this._hoverVideo = v;
+      // Autoplay policy or a decode failure leaves the poster showing, which is
+      // the same thing the reader sees with the setting off — nothing to report.
+      v.play?.().catch(() => {});
+    };
+
+    const stop = () => {
+      if (touchPreview === this) touchPreview = null;
+      const v = this._hoverVideo;
+      if (!v) return;
+      this._hoverVideo = null;
+      v.pause();
+      // Drop the buffered stream rather than leaving it parked in memory for
+      // every card the reader has passed over.
+      v.removeAttribute("src");
+      v.load();
+      v.remove();
+    };
+
+    card.addEventListener("pointerenter", (e) => {
+      if (e.pointerType === "mouse") start();
+    });
+    card.addEventListener("pointerleave", (e) => {
+      if (e.pointerType === "mouse") stop();
+    });
+
+    this._stopHoverVideo = stop;
+    this._startTouchVideo = () => {
+      // Revealing this card closed the previously revealed one; take its video
+      // down too, so a reader tapping along a grid never leaves clips playing
+      // behind them.
+      if (touchPreview && touchPreview !== this) touchPreview._stopHoverVideo?.();
+      touchPreview = this;
+      start();
+    };
+  }
+
   beforeUnmount() {
     this._cleanupStrip?.();
+    this._stopHoverVideo?.();
+    if (touchPreview === this) touchPreview = null;
   }
 }

@@ -47,6 +47,15 @@ const STYLE = `
     color: inherit; opacity: .85;
     border: 1px dashed currentColor; border-radius: 6px;
   }
+  /* The admin header's sync pill reports two things the demo does not have: a
+     pending offline mutation queue, and a post autosave round trip. Every write
+     here is answered by the mock in this tab, so the pill can only ever state
+     something untrue about machinery that is not running — and its click target
+     either kicks a sync that does nothing or routes to a System page with no
+     queue behind it. Hidden rather than unmounted because AdminLayout puts it
+     back on every store update (updateSyncPill); an id beats the .sync-pill
+     class it is styled by, so this holds without !important. */
+  #sync-pill-btn { display: none; }
   @media (max-width: 30rem) { .demo-banner { font-size: .75rem; } }
 `;
 
