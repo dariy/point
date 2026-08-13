@@ -8,7 +8,15 @@ A personal photo blog engine.
 
 Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS SPA frontend.
 
-![Post list](docs/images/post-list-post.png)
+## Quick showcase
+[UI Demo](https://demo.point.photos)
+
+### Post list
+<img src="./docs/images/post-list-post.png" height="500"> <img src="./docs/images/mobile-post-list.png" height="500">
+
+### Post datails
+<img src="./docs/images/post-details.png" height="500"> <img src="./docs/images/mobile-post-details.png" height="500">
+
 
 ## Quick start
 
