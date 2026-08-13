@@ -21,6 +21,8 @@ export const LABEL_OVERRIDES = {
   // Not a second "enable the plugin" switch — the plugin list owns that. This
   // gates cross-posting on publish, so label it for what it does.
   enable_instagram: "Cross-post new photos to Instagram",
+  // Cards show a poster frame by default; this trades bandwidth for motion.
+  enable_video_hover_autoplay: "Play videos on hover",
   gemini_prompt_title: "Title guidance",
   gemini_prompt_tags: "Tags guidance",
   gemini_prompt_excerpt: "Excerpt guidance",

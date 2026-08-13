@@ -55,6 +55,9 @@ var publicSettingKeys = map[string]bool{
 	"show_title_dropdown": true,
 	"footer_copyright":    true,
 
+	// Post-list cards play video on hover instead of holding the poster frame.
+	"enable_video_hover_autoplay": true,
+
 	// Comments (remark42) embed appearance — read by the public widget config.
 	"remark_simple_view": true,
 	"remark_no_footer":   true,
