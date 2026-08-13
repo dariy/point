@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -213,6 +215,64 @@ func TestAuthorizeGET(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestLoginPageCSPAllowsRedirectOrigin guards the fix for a silent failure that
+// only shows up in a real browser: the site-wide CSP sets form-action 'self',
+// browsers apply form-action to the redirect that the login POST returns, and so
+// the 302 to the client's callback is blocked with no visible error — the user
+// enters the right password and nothing happens. The login page must therefore
+// send its own CSP naming the (already validated) redirect_uri origin.
+func TestLoginPageCSPAllowsRedirectOrigin(t *testing.T) {
+	_, srv := newTestProvider(t, Config{})
+	clientID := registerClient(t, srv, "https://app.test/cb")
+	_, challenge := pkcePair()
+
+	q := url.Values{
+		"response_type":         {"code"},
+		"client_id":             {clientID},
+		"redirect_uri":          {"https://app.test/cb"},
+		"code_challenge":        {challenge},
+		"code_challenge_method": {"S256"},
+	}
+	resp, err := http.Get(srv.URL + "/oauth/authorize?" + q.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	csp := resp.Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Fatal("login page sent no Content-Security-Policy, so the site-wide form-action 'self' applies and blocks the callback redirect")
+	}
+	if !strings.Contains(csp, "form-action 'self' https://app.test") {
+		t.Errorf("form-action does not permit the callback origin: %q", csp)
+	}
+	// The widening must stay scoped to that one origin, not become a blanket allow.
+	if strings.Contains(csp, "form-action *") {
+		t.Errorf("form-action too permissive: %q", csp)
+	}
+	if !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Errorf("page-level CSP dropped frame-ancestors from the site policy: %q", csp)
+	}
+}
+
+func TestFormActionOrigin(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"https://claude.ai/api/mcp/auth_callback", "https://claude.ai"},
+		{"http://127.0.0.1:8765/cb", "http://127.0.0.1:8765"},
+		{"https://app.test/cb?x=1#f", "https://app.test"},
+		// Custom schemes are valid CSP source expressions and carry a host.
+		{"vscode://anthropic.mcp/cb", "vscode://anthropic.mcp"},
+		// No expressible origin: caller falls back to form-action 'self' alone.
+		{"urn:ietf:wg:oauth:2.0:oob", ""},
+		{"/relative/cb", ""},
+	}
+	for _, tc := range cases {
+		if got := formActionOrigin(tc.in); got != tc.want {
+			t.Errorf("formActionOrigin(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
 
@@ -677,7 +737,7 @@ func TestValidateToken(t *testing.T) {
 		{"", false},
 	}
 	for _, tc := range cases {
-		if got := p.ValidateToken(tc.token); got != tc.want {
+		if got := p.ValidateToken(t.Context(), tc.token); got != tc.want {
 			t.Errorf("ValidateToken(%q) = %v, want %v", tc.token, got, tc.want)
 		}
 	}
@@ -774,7 +834,7 @@ func TestFullFlow(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "secret" {
 		t.Errorf("protected route: status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if !p.ValidateToken(access) {
+	if !p.ValidateToken(t.Context(), access) {
 		t.Error("issued access token failed ValidateToken")
 	}
 }
@@ -800,7 +860,7 @@ func TestSweepExpired(t *testing.T) {
 	p.tokens["eternal-token"] = &tokenRecord{ClientID: "c"}
 	p.mu.Unlock()
 
-	p.sweepExpired(time.Now())
+	p.sweepExpired(t.Context(), time.Now())
 
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -859,5 +919,245 @@ func TestExpiredCodeRejectedBeforeSweep(t *testing.T) {
 	p.mu.RUnlock()
 	if still {
 		t.Error("expired code was left in the map after rejection")
+	}
+}
+
+// --- persistence across restarts ---
+
+// fakeStore is an in-process stand-in for the SQLite-backed Store. It is shared
+// between two Providers in the tests below to model a process restart: the maps
+// survive, the Provider does not.
+type fakeStore struct {
+	mu      sync.Mutex
+	clients map[string]struct {
+		uris []string
+		at   time.Time
+	}
+	tokens map[string]struct {
+		clientID string
+		expires  time.Time
+	}
+	failSaves bool // when true, every write fails — models a broken database
+	saveCalls int
+}
+
+func newFakeStore() *fakeStore {
+	return &fakeStore{
+		clients: map[string]struct {
+			uris []string
+			at   time.Time
+		}{},
+		tokens: map[string]struct {
+			clientID string
+			expires  time.Time
+		}{},
+	}
+}
+
+func (s *fakeStore) SaveClient(_ context.Context, clientID string, uris []string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failSaves {
+		return errors.New("store down")
+	}
+	s.clients[clientID] = struct {
+		uris []string
+		at   time.Time
+	}{uris, at}
+	return nil
+}
+
+func (s *fakeStore) LoadClient(_ context.Context, clientID string) ([]string, time.Time, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.clients[clientID]
+	return c.uris, c.at, ok, nil
+}
+
+func (s *fakeStore) SaveToken(_ context.Context, hash, clientID string, expires time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.saveCalls++
+	if s.failSaves {
+		return errors.New("store down")
+	}
+	s.tokens[hash] = struct {
+		clientID string
+		expires  time.Time
+	}{clientID, expires}
+	return nil
+}
+
+func (s *fakeStore) LoadToken(_ context.Context, hash string) (string, time.Time, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tok, ok := s.tokens[hash]
+	return tok.clientID, tok.expires, ok, nil
+}
+
+func (s *fakeStore) DeleteToken(_ context.Context, hash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.tokens, hash)
+	return nil
+}
+
+func (s *fakeStore) DeleteExpiredTokens(_ context.Context, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range s.tokens {
+		if !v.expires.IsZero() && now.After(v.expires) {
+			delete(s.tokens, k)
+		}
+	}
+	return nil
+}
+
+// TestTokenSurvivesRestart is the whole point of the Store: an access token
+// issued by one process must still authenticate against the next one. Without
+// it, every redeploy silently signed out every connected MCP client.
+func TestTokenSurvivesRestart(t *testing.T) {
+	store := newFakeStore()
+	verifier, challenge := pkcePair()
+
+	_, srv := newTestProvider(t, Config{Store: store})
+	clientID, code := getCode(t, srv, challenge)
+	out, status := postToken(t, srv, url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://app.test/cb"},
+		"code_verifier": {verifier},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("token exchange failed: %d", status)
+	}
+	access := out["access_token"].(string)
+	refresh := out["refresh_token"].(string)
+
+	// The restart: a brand new Provider with empty maps over the same Store.
+	restarted := New(Config{Store: store})
+	if !restarted.ValidateToken(t.Context(), access) {
+		t.Error("access token rejected after restart")
+	}
+	if _, ok := restarted.lookupClient(t.Context(), clientID); !ok {
+		t.Error("client unknown after restart, so re-authorization would be forced")
+	}
+
+	// And the refresh grant still works, which is what a long-idle client uses.
+	mux := http.NewServeMux()
+	restarted.Register(mux)
+	srv2 := httptest.NewServer(mux)
+	t.Cleanup(srv2.Close)
+	out2, status2 := postToken(t, srv2, url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refresh},
+	})
+	if status2 != http.StatusOK {
+		t.Fatalf("refresh after restart failed: %d", status2)
+	}
+	if out2["access_token"] == "" {
+		t.Error("refresh returned no access token")
+	}
+	// Rotation must reach the Store too, or the consumed refresh token would
+	// come back to life at the next restart.
+	if _, _, found, _ := store.LoadToken(t.Context(), hashToken(refresh)); found {
+		t.Error("rotated refresh token still in store")
+	}
+}
+
+// TestUnknownTokenAfterRestart guards the other direction: the Store fallback
+// must not turn an unknown or expired token into a valid one.
+func TestUnknownTokenAfterRestart(t *testing.T) {
+	store := newFakeStore()
+	p := New(Config{Store: store})
+
+	if p.ValidateToken(t.Context(), "never-issued") {
+		t.Error("unknown token accepted")
+	}
+	if err := store.SaveToken(t.Context(), hashToken("stale"), "c", time.Now().Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if p.ValidateToken(t.Context(), "stale") {
+		t.Error("expired token loaded from store was accepted")
+	}
+}
+
+// TestStoreFailureDoesNotBreakAuthorization: a database write failure must not
+// fail an authorization that has otherwise succeeded. The provider degrades to
+// its old in-memory behaviour — the token works now, and is lost on restart.
+func TestStoreFailureDoesNotBreakAuthorization(t *testing.T) {
+	store := newFakeStore()
+	store.failSaves = true
+	verifier, challenge := pkcePair()
+
+	p, srv := newTestProvider(t, Config{Store: store})
+	clientID, code := getCode(t, srv, challenge)
+	out, status := postToken(t, srv, url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://app.test/cb"},
+		"code_verifier": {verifier},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("token exchange failed despite the failure being the store's: %d", status)
+	}
+	if store.saveCalls == 0 {
+		t.Error("store was never asked to save the token")
+	}
+	if !p.ValidateToken(t.Context(), out["access_token"].(string)) {
+		t.Error("token unusable in the issuing process after a store write failure")
+	}
+}
+
+// TestSweepExpiredReachesStore keeps the janitor from leaving rows behind: the
+// database is the tier that actually accumulates them across restarts.
+func TestSweepExpiredReachesStore(t *testing.T) {
+	store := newFakeStore()
+	p := New(Config{Store: store})
+
+	now := time.Now()
+	if err := store.SaveToken(t.Context(), hashToken("stale"), "c", now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveToken(t.Context(), hashToken("eternal"), "c", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+
+	p.sweepExpired(t.Context(), now)
+
+	if _, _, found, _ := store.LoadToken(t.Context(), hashToken("stale")); found {
+		t.Error("expired token left in store")
+	}
+	if _, _, found, _ := store.LoadToken(t.Context(), hashToken("eternal")); !found {
+		t.Error("never-expiring token swept from store")
+	}
+}
+
+// TestStoreNeverSeesRawTokens: the Store is handed hashes only, so a database
+// copy is not a set of usable bearer credentials.
+func TestStoreNeverSeesRawTokens(t *testing.T) {
+	store := newFakeStore()
+	verifier, challenge := pkcePair()
+
+	_, srv := newTestProvider(t, Config{Store: store})
+	clientID, code := getCode(t, srv, challenge)
+	out, _ := postToken(t, srv, url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://app.test/cb"},
+		"code_verifier": {verifier},
+	})
+	access := out["access_token"].(string)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if _, raw := store.tokens[access]; raw {
+		t.Fatal("token stored under its raw value")
+	}
+	if _, hashed := store.tokens[hashToken(access)]; !hashed {
+		t.Fatal("token not stored under its hash")
 	}
 }

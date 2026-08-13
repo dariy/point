@@ -10,6 +10,7 @@ import (
 	"point-api/internal/api"
 	"point-api/internal/mcp/oauth"
 	"point-api/internal/models"
+	"point-api/internal/repository"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -34,6 +35,11 @@ type Deps struct {
 	ApiKey          *services.ApiKeyService
 	SettingsService *services.SettingsService
 
+	// Repo backs the OAuth provider's durable state (registered clients, issued
+	// tokens). Nil keeps that state in memory, so a restart forces every MCP
+	// client to re-authorize.
+	Repo repository.Repository
+
 	// OwnerUserID is the user OAuth-authenticated callers act as: OAuth tokens
 	// carry no point identity, so writes are attributed to the blog owner.
 	OwnerUserID int64
@@ -49,8 +55,13 @@ type principalKey struct{}
 // endpoint at /mcp on e, all gated by the "mcp" plugin so the surface 404s when
 // disabled. The endpoint accepts point's API-key/session auth or an OAuth bearer.
 func Register(e *echo.Echo, d Deps) {
+	var store oauth.Store
+	if d.Repo != nil {
+		store = repoOAuthStore{d.Repo}
+	}
 	provider := oauth.New(oauth.Config{
 		BaseURL: d.BaseURL,
+		Store:   store,
 		// OAuth login validates against point's admin password: empty username
 		// resolves to the first/owner user, the same identity OAuth tokens act as.
 		ValidatePassword: func(ctx context.Context, pw string) bool {
@@ -121,7 +132,7 @@ func (d Deps) authMiddleware(provider *oauth.Provider) echo.MiddlewareFunc {
 				token := strings.TrimPrefix(h, "Bearer ")
 				if key, err := d.ApiKey.ValidateAPIKey(ctx, token); err == nil {
 					principal = key
-				} else if provider.ValidateToken(token) {
+				} else if provider.ValidateToken(ctx, token) {
 					principal = models.GetAPIKeyByHashRow{UserID: d.OwnerUserID}
 				}
 			}

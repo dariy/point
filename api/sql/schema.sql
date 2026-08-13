@@ -181,3 +181,22 @@ CREATE TABLE IF NOT EXISTS api_keys (
     revoked_at  DATETIME
 );
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+
+-- MCP OAuth authorization server state.
+-- Persisted so a restart does not invalidate every issued token and force each
+-- connected MCP client through the browser login flow again. Authorization
+-- codes are deliberately absent: they live two minutes and are redeemed within
+-- seconds, so the provider keeps them in memory.
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id     VARCHAR(64) PRIMARY KEY,        -- issued by dynamic registration
+    redirect_uris TEXT NOT NULL,                  -- JSON array, matched exactly at authorize time
+    registered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+    token_hash VARCHAR(64) PRIMARY KEY,           -- sha256(token), hex — never the token itself
+    client_id  VARCHAR(64) NOT NULL,
+    expires_at DATETIME,                          -- NULL = never
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON oauth_tokens(expires_at);
