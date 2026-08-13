@@ -91,6 +91,14 @@ type Repository interface {
 	SetPostMediaURL(ctx context.Context, postID int64, mediaURL string) error
 	BackfillPostMediaURLs(ctx context.Context) error
 
+	// OAuth (MCP authorization server state that must survive a restart)
+	SaveOAuthClient(ctx context.Context, clientID string, redirectURIs []string, registeredAt time.Time) error
+	GetOAuthClient(ctx context.Context, clientID string) (redirectURIs []string, registeredAt time.Time, found bool, err error)
+	SaveOAuthToken(ctx context.Context, tokenHash, clientID string, expiresAt time.Time) error
+	GetOAuthToken(ctx context.Context, tokenHash string) (clientID string, expiresAt time.Time, found bool, err error)
+	DeleteOAuthToken(ctx context.Context, tokenHash string) error
+	DeleteExpiredOAuthTokens(ctx context.Context, now time.Time) error
+
 	// System
 	GetSystemStats(ctx context.Context) (SystemStats, error)
 	BackupDB(ctx context.Context, destPath string) error
