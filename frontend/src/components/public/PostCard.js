@@ -25,6 +25,12 @@ import { ViewContext } from "../../utils/viewContext.js";
 
 const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
 
+// Touch previews are exclusive across the grid: the reveal tap on one card
+// closes every other card's overlay, so the card that lost its overlay must
+// lose its video with it. Cards are separate component instances, so the
+// running preview is tracked here rather than on any one of them.
+let touchPreview = null;
+
 export class PostCard extends Component {
   render() {
     const { post, showViewCount = false } = this.props;
@@ -100,6 +106,7 @@ export class PostCard extends Component {
     this._cleanupStrip?.();
     this._stopHoverVideo?.();
     this._stopHoverVideo = null;
+    this._startTouchVideo = null;
 
     // Hover-to-play is opt-in per site (post-list plugin setting). Off, a video
     // card stays a poster frame until the reader opens the post.
@@ -116,6 +123,7 @@ export class PostCard extends Component {
     }
 
     const go = () => {
+      this._stopHoverVideo?.();
       if (tagSlug) {
         ViewContext.update({ postSlug: post.slug });
       } else {
@@ -157,9 +165,16 @@ export class PostCard extends Component {
 
           card.classList.add("is-touched");
 
+          // The reveal tap is the touch equivalent of hovering in: it is the
+          // reader asking for this card, and the only gesture before the tap
+          // that opens the post. Playing here keeps the preview reachable on
+          // touch without ever loading video for a card merely scrolled past.
+          this._startTouchVideo?.();
+
           const dismiss = (ev) => {
             if (!card.contains(ev.target)) {
               card.classList.remove("is-touched");
+              this._stopHoverVideo?.();
               document.removeEventListener("click", dismiss, true);
             }
           };
@@ -202,8 +217,13 @@ export class PostCard extends Component {
    *
    * The <video> is built on the first hover and torn down on leave, so a grid
    * the reader merely scrolls past never opens a media connection — the whole
-   * point of defaulting to a poster frame. Only a real mouse arms it: on touch
-   * there is no hover, and the first tap is already the overlay reveal.
+   * point of defaulting to a poster frame.
+   *
+   * Touch has no hover, so the reveal tap stands in for it: the card's click
+   * handler calls `_startTouchVideo` when it reveals the overlay, and stops on
+   * the dismissing tap outside. Pointer enter/leave stay mouse-only — a touch
+   * fires both around a single tap, which would start and stop the video in
+   * the same gesture.
    *
    * @param {HTMLElement} card      the .post-card element
    * @param {string}      mediaUrl  original media path (not the poster)
@@ -227,6 +247,7 @@ export class PostCard extends Component {
     };
 
     const stop = () => {
+      if (touchPreview === this) touchPreview = null;
       const v = this._hoverVideo;
       if (!v) return;
       this._hoverVideo = null;
@@ -241,12 +262,24 @@ export class PostCard extends Component {
     card.addEventListener("pointerenter", (e) => {
       if (e.pointerType === "mouse") start();
     });
-    card.addEventListener("pointerleave", stop);
+    card.addEventListener("pointerleave", (e) => {
+      if (e.pointerType === "mouse") stop();
+    });
+
     this._stopHoverVideo = stop;
+    this._startTouchVideo = () => {
+      // Revealing this card closed the previously revealed one; take its video
+      // down too, so a reader tapping along a grid never leaves clips playing
+      // behind them.
+      if (touchPreview && touchPreview !== this) touchPreview._stopHoverVideo?.();
+      touchPreview = this;
+      start();
+    };
   }
 
   beforeUnmount() {
     this._cleanupStrip?.();
     this._stopHoverVideo?.();
+    if (touchPreview === this) touchPreview = null;
   }
 }

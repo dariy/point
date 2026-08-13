@@ -75,7 +75,8 @@ export default [
     // place of the normal entry point (demo/scripts/build.sh).
     files: ["frontend/src/**/*.js", "demo/mock/**/*.js"],
     languageOptions: {
-      ecmaVersion: 2021,
+      // 2022 for top-level await (demo/mock/shim.js) — the bundles are --format=esm.
+      ecmaVersion: 2022,
       sourceType: "module",
       globals: {
         // Browser globals
