@@ -277,7 +277,7 @@ async function createOne(photo, index) {
 
   const post = await api("POST", "/api/posts", {
     title: text.title,
-    content: `![${text.title}](${mediaPath})`,
+    content: `${mediaPath}`,
     excerpt: [text.excerpt.trim(), text.body.trim().replace(/\s*\n+\s*/g, " ")]
       .filter(Boolean)
       .join(" "),
