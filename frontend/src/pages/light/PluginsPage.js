@@ -92,6 +92,8 @@ const PLUGIN_SETTINGS = {
   "tags-map": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
   "tags-graph": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
   "tag-cloud": { keys: ["min_tag_posts_to_show"] },
+  "simple-post-list": { keys: ["enable_video_hover_autoplay"] },
+  "dynamic-post-list": { keys: ["enable_video_hover_autoplay"] },
   "public-header": { keys: ["show_title_dropdown"] },
   "public-footer": { keys: ["footer_copyright"] },
   backups: { sections: ["backups"] },

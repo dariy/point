@@ -46,12 +46,21 @@ function parseMarkdown(text) {
 
 /**
  * Serialise flat item list to markdown text.
+ *
+ * Label-less rows are dropped: they exist only as a half-filled row in the
+ * visual editor (see _collectVisualItems) and have no markdown spelling — a
+ * bare `- ` or `- [](url)` does not round-trip back through parseMarkdown.
  */
 function serializeMarkdown(items) {
-  return items.map(({ label, url, depth }) => {
+  return namedItems(items).map(({ label, url, depth }) => {
     const prefix = '  '.repeat(depth) + '- ';
     return url ? `${prefix}[${label}](${url})` : `${prefix}${label}`;
   }).join('\n');
+}
+
+/** The items that are actually a menu entry — i.e. have a label. */
+function namedItems(items) {
+  return items.filter((i) => i.label);
 }
 
 export default class MenuPage extends Component {
@@ -173,9 +182,14 @@ export default class MenuPage extends Component {
       </div>`;
   }
 
+  // Rows are NOT draggable in the markup: a draggable ancestor swallows
+  // mousedown on the inputs it contains, so drag-selecting the text of a label
+  // starts a row drag instead of a selection and the field cannot be edited by
+  // mouse at all. Dragging is armed on mousedown over the handle (afterRender)
+  // and disarmed on dragend, mirroring VisualEditor's card list.
   _renderVisualEditor(items) {
     const rows = items.map((item, index) => `
-      <div class="menu-row" data-index="${index}" draggable="true" style="margin-left: ${item.depth * 24}px">
+      <div class="menu-row" data-index="${index}" data-depth="${item.depth}" style="margin-left: ${item.depth * 24}px">
         <span class="drag-handle" style="cursor: grab;">\u22ee\u22ee</span>
         <div class="menu-row-inputs">
           <input type="text" class="form-input menu-label-input item-label" placeholder="Label" value="${escapeHtml(item.label)}">
@@ -224,15 +238,28 @@ export default class MenuPage extends Component {
       </section>`;
   }
 
+  /**
+   * The menu as it stands on screen right now, in whichever format is open.
+   *
+   * `state.items` is NOT that: typing deliberately never calls setState (a
+   * re-render would take the focus out of the field being typed in), so state
+   * holds the list as of the last structural change and the DOM holds the
+   * truth. Anything that reads the current menu — the preview, a save, a
+   * re-render that has to survive unsaved edits — has to come through here.
+   */
+  _currentItems() {
+    if (this.state.mode !== 'custom') return this.state.items;
+    return this.state.editFormat === 'visual'
+      ? this._collectVisualItems()
+      : parseMarkdown(this.container.querySelector('#menu-markdown-input')?.value || '');
+  }
+
   /** Menu items to preview, as {name, hasChildren} — depends on the mode. */
   _previewItems() {
     const { mode } = this.state;
     if (mode === 'none') return [];
     if (mode === 'custom') {
-      const flat = this.state.editFormat === 'visual'
-        ? this._collectVisualItems()
-        : parseMarkdown(this.container.querySelector('#menu-markdown-input')?.value || '');
-      return flat.filter((i) => i.depth === 0 && i.label)
+      return namedItems(this._currentItems()).filter((i) => i.depth === 0)
         .map((i) => ({ name: i.label }));
     }
     return this._tagItems.map((t) => ({ name: t.name }));
@@ -322,7 +349,9 @@ export default class MenuPage extends Component {
 
     this.container.querySelectorAll('input[name="menu-mode"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
-        this.setState({ mode: e.target.value });
+        // Carry the unsaved editor contents across, so flipping to None to see
+        // the preview and back does not discard what has been typed.
+        this.setState({ mode: e.target.value, items: this._currentItems() });
       });
     });
 
@@ -365,7 +394,19 @@ export default class MenuPage extends Component {
         this.setState({ items });
       });
 
+      // Arm the row for dragging only while the pointer went down on the
+      // handle; anywhere else (the label and URL inputs, above all) must stay
+      // an ordinary mousedown so text selection works.
+      row.querySelector('.drag-handle').addEventListener('mousedown', () => {
+        row.setAttribute('draggable', 'true');
+        // A press that never becomes a drag ends in mouseup and no dragend, so
+        // without this a plain click on the handle would leave the row armed
+        // for good — and an armed row is one whose inputs cannot be edited.
+        document.addEventListener('mouseup', () => row.removeAttribute('draggable'), { once: true });
+      });
+
       row.addEventListener('dragstart', (e) => {
+        if (row.getAttribute('draggable') !== 'true') return;
         dragSrcIndex = index;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', index.toString());
@@ -373,12 +414,13 @@ export default class MenuPage extends Component {
       });
 
       row.addEventListener('dragover', (e) => {
+        if (dragSrcIndex === -1) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        return false;
       });
 
       row.addEventListener('dragenter', (e) => {
+        if (dragSrcIndex === -1) return;
         e.preventDefault();
         row.classList.add('drag-over');
       });
@@ -388,20 +430,28 @@ export default class MenuPage extends Component {
       });
 
       row.addEventListener('drop', (e) => {
+        if (dragSrcIndex === -1) return;
+        // preventDefault, not `return false`: a listener's return value does
+        // not cancel the default action, and the default drop handler would
+        // paste the dragged payload into whatever it landed on.
+        e.preventDefault();
         e.stopPropagation();
         row.classList.remove('drag-over');
-        if (dragSrcIndex !== -1 && dragSrcIndex !== index) {
+        if (dragSrcIndex !== index) {
           const items = this._collectVisualItems();
           const [movedItem] = items.splice(dragSrcIndex, 1);
           items.splice(index, 0, movedItem);
           this.setState({ items });
         }
-        return false;
       });
 
       row.addEventListener('dragend', () => {
+        dragSrcIndex = -1;
         row.classList.remove('dragging');
-        this.container.querySelectorAll('.menu-row').forEach(r => r.classList.remove('drag-over'));
+        this.container.querySelectorAll('.menu-row').forEach(r => {
+          r.classList.remove('drag-over');
+          r.removeAttribute('draggable');
+        });
       });
     });
 
@@ -439,14 +489,26 @@ export default class MenuPage extends Component {
     this._cleanupAdminLayout?.();
   }
 
+  /**
+   * Read the visual editor back out of the DOM, one entry per row.
+   *
+   * Every row is returned, including ones whose label is still empty. That is
+   * load-bearing: the row handlers index this array with the row's own
+   * data-index, so dropping a row here shifts every index after it — clearing
+   * a label (step one of retyping it) used to make the NEXT edit delete or
+   * indent the wrong row, or throw on an index past the end. Rows without a
+   * label are filtered where they actually mean something instead: the
+   * preview, the markdown serialiser and the save payload.
+   */
   _collectVisualItems() {
     const rows = this.container.querySelectorAll('.menu-row');
     const items = [];
     rows.forEach(row => {
-      const label = row.querySelector('.item-label').value.trim();
-      const url = row.querySelector('.item-url').value.trim();
-      const depth = Math.floor(parseInt(row.style.marginLeft || '0', 10) / 24);
-      if (label) items.push({ label, url, depth });
+      items.push({
+        label: row.querySelector('.item-label').value.trim(),
+        url: row.querySelector('.item-url').value.trim(),
+        depth: parseInt(row.dataset.depth, 10) || 0,
+      });
     });
     return items;
   }
@@ -475,33 +537,49 @@ export default class MenuPage extends Component {
     }
   }
 
+  /**
+   * Reflect the in-flight save on the button, in place.
+   *
+   * Deliberately not setState: re-rendering would rebuild the editor from
+   * `state.items`, which is stale by exactly the edits being saved — the owner
+   * would watch a row they just typed into come back empty (and the markdown
+   * they authored come back as the last-parsed text), even though the request
+   * that left carried the right thing.
+   */
+  _setSaving(saving) {
+    this.state.saving = saving;
+    const btn = this.container.querySelector('#save-menu-btn');
+    if (!btn) return;
+    btn.disabled = saving;
+    btn.textContent = saving ? 'Saving…' : 'Save Menu Configuration';
+  }
+
   async _handleSave() {
     let markdown = '';
     let apiItems = [];
     if (this.state.mode === 'custom') {
-      const items = this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown(this.container.querySelector('#menu-markdown-input').value);
+      // A row the owner never named is not a menu entry — it is an empty row
+      // they left behind. It must not reach the API, nor the markdown.
+      const items = namedItems(this._currentItems());
       markdown = serializeMarkdown(items);
 
+      // Flat list → tree, by the depth each row carries. The open-ancestor
+      // stack is popped down to the item's own level first, so a branch that
+      // has been closed cannot adopt a later item: in A > B, then C, then a
+      // deeper row, the deeper row belongs to C — indexing the stack by depth
+      // alone would hand it to B, which is no longer on the path.
       const stack = [];
       for (const item of items) {
         const node = { name: item.label, url: item.url, children: [] };
-        if (item.depth === 0) {
-          apiItems.push(node);
-          stack[0] = node;
-        } else {
-          const parent = stack[item.depth - 1] || stack[stack.length - 1] || apiItems[apiItems.length - 1];
-          if (parent) {
-            parent.children.push(node);
-            stack[item.depth] = node;
-          } else {
-            apiItems.push(node);
-            stack[0] = node;
-          }
-        }
+        while (stack.length && stack[stack.length - 1].depth >= item.depth) stack.pop();
+        const parent = stack[stack.length - 1];
+        if (parent) parent.node.children.push(node);
+        else apiItems.push(node);
+        stack.push({ depth: item.depth, node });
       }
     }
 
-    this.setState({ saving: true });
+    this._setSaving(true);
     try {
       await updateAdminNavMenu({
         mode: this.state.mode,
@@ -523,10 +601,10 @@ export default class MenuPage extends Component {
       document.dispatchEvent(new CustomEvent('nav-changed'));
 
       store.set('toast', { message: 'Menu saved.', type: 'success' });
-      this.setState({ saving: false });
     } catch (err) {
       store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
-      this.setState({ saving: false });
+    } finally {
+      this._setSaving(false);
     }
   }
 }
