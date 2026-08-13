@@ -8,6 +8,8 @@ A personal photo blog engine.
 
 Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS SPA frontend.
 
+![Post list](docs/images/post-list-post.png)
+
 ## Quick start
 
 ```bash
