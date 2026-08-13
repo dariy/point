@@ -753,6 +753,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		Auth:            svcs.Auth,
 		ApiKey:          svcs.ApiKey,
 		SettingsService: svcs.Settings,
+		Repo:            repo,
 		OwnerUserID:     mcpOwnerID,
 		BaseURL:         mcpBaseURL,
 		Version:         cfg.AppVersion,

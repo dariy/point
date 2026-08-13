@@ -25,6 +25,30 @@ type Config struct {
 	ValidatePassword func(ctx context.Context, password string) bool
 	AccessTokenTTL   time.Duration // default: 1 hour
 	RefreshTokenTTL  time.Duration // 0 = never expires
+	// Store persists clients and tokens across restarts. Nil keeps everything in
+	// memory, which means a restart invalidates every issued token.
+	Store Store
+}
+
+// Store is the durable half of the provider's state. It exists because the
+// in-memory maps below do not survive a redeploy: without it, every restart
+// silently signs out every connected MCP client, and the user has to walk the
+// browser login flow again.
+//
+// Authorization codes are deliberately absent. They expire in two minutes and
+// are redeemed seconds after issuance, so a restart mid-handshake costs one
+// retry — persisting them would add write traffic to buy nothing.
+//
+// Tokens are keyed by hash, never by value (see hashToken).
+type Store interface {
+	SaveClient(ctx context.Context, clientID string, redirectURIs []string, registeredAt time.Time) error
+	// LoadClient returns found=false with a nil error when the id is unknown.
+	LoadClient(ctx context.Context, clientID string) (redirectURIs []string, registeredAt time.Time, found bool, err error)
+	// SaveToken records a token; a zero expiresAt means it never expires.
+	SaveToken(ctx context.Context, tokenHash, clientID string, expiresAt time.Time) error
+	LoadToken(ctx context.Context, tokenHash string) (clientID string, expiresAt time.Time, found bool, err error)
+	DeleteToken(ctx context.Context, tokenHash string) error
+	DeleteExpiredTokens(ctx context.Context, now time.Time) error
 }
 
 type clientRecord struct {
@@ -75,15 +99,15 @@ func New(cfg Config) *Provider {
 // (Expired access tokens are otherwise never removed, only rejected on use.)
 func (p *Provider) janitor() {
 	for range time.Tick(10 * time.Minute) {
-		p.sweepExpired(time.Now())
+		p.sweepExpired(context.Background(), time.Now())
 	}
 }
 
-// sweepExpired drops every code and token that expired at or before now. Split
-// out of janitor so the eviction policy is testable without waiting on a ticker.
-func (p *Provider) sweepExpired(now time.Time) {
+// sweepExpired drops every code and token that expired at or before now, in the
+// in-memory maps and in the Store. Split out of janitor so the eviction policy
+// is testable without waiting on a ticker.
+func (p *Provider) sweepExpired(ctx context.Context, now time.Time) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	for k, c := range p.codes {
 		if now.After(c.ExpiresAt) {
 			delete(p.codes, k)
@@ -95,6 +119,106 @@ func (p *Provider) sweepExpired(now time.Time) {
 		if !t.ExpiresAt.IsZero() && now.After(t.ExpiresAt) {
 			delete(p.tokens, k)
 		}
+	}
+	p.mu.Unlock()
+
+	if p.cfg.Store != nil {
+		if err := p.cfg.Store.DeleteExpiredTokens(ctx, now); err != nil {
+			slog.Error("mcp-oauth: sweep expired tokens", "err", err)
+		}
+	}
+}
+
+// hashToken is how a token is keyed in the Store. Tokens carry 256 bits of
+// entropy, so a bare SHA-256 — no salt, no stretching — is enough to make the
+// stored form useless as a credential. This mirrors how point stores API keys.
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// lookupClient resolves a client_id, falling back to the Store so a client that
+// registered before the last restart still authorizes. Hits are cached in the
+// map, so the fallback costs one read per client per process lifetime.
+func (p *Provider) lookupClient(ctx context.Context, clientID string) (*clientRecord, bool) {
+	p.mu.RLock()
+	rec, ok := p.clients[clientID]
+	p.mu.RUnlock()
+	if ok {
+		return rec, true
+	}
+	if p.cfg.Store == nil || clientID == "" {
+		return nil, false
+	}
+	uris, registeredAt, found, err := p.cfg.Store.LoadClient(ctx, clientID)
+	if err != nil {
+		slog.Error("mcp-oauth: load client", "client_id", clientID, "err", err)
+		return nil, false
+	}
+	if !found {
+		return nil, false
+	}
+	rec = &clientRecord{ClientID: clientID, RedirectURIs: uris, RegisteredAt: registeredAt}
+	p.mu.Lock()
+	p.clients[clientID] = rec
+	p.mu.Unlock()
+	return rec, true
+}
+
+// lookupToken resolves a bearer token the same way, so tokens issued before the
+// last restart keep working. Expiry is not judged here — callers do that, since
+// the refresh grant treats an expired token differently from an unknown one.
+func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord, bool) {
+	p.mu.RLock()
+	rec, ok := p.tokens[token]
+	p.mu.RUnlock()
+	if ok {
+		return rec, true
+	}
+	if p.cfg.Store == nil || token == "" {
+		return nil, false
+	}
+	clientID, expiresAt, found, err := p.cfg.Store.LoadToken(ctx, hashToken(token))
+	if err != nil {
+		slog.Error("mcp-oauth: load token", "err", err)
+		return nil, false
+	}
+	if !found {
+		return nil, false
+	}
+	rec = &tokenRecord{ClientID: clientID, ExpiresAt: expiresAt}
+	p.mu.Lock()
+	p.tokens[token] = rec
+	p.mu.Unlock()
+	return rec, true
+}
+
+// saveToken records a token in memory and, if configured, in the Store. A Store
+// failure is logged and otherwise tolerated: the token still works for this
+// process, which degrades to the old in-memory-only behaviour instead of
+// failing an authorization that has otherwise succeeded.
+func (p *Provider) saveToken(ctx context.Context, token string, rec *tokenRecord) {
+	p.mu.Lock()
+	p.tokens[token] = rec
+	p.mu.Unlock()
+	if p.cfg.Store == nil {
+		return
+	}
+	if err := p.cfg.Store.SaveToken(ctx, hashToken(token), rec.ClientID, rec.ExpiresAt); err != nil {
+		slog.Error("mcp-oauth: persist token", "client_id", rec.ClientID, "err", err)
+	}
+}
+
+// dropToken removes a token from both tiers (refresh rotation, expiry).
+func (p *Provider) dropToken(ctx context.Context, token string) {
+	p.mu.Lock()
+	delete(p.tokens, token)
+	p.mu.Unlock()
+	if p.cfg.Store == nil {
+		return
+	}
+	if err := p.cfg.Store.DeleteToken(ctx, hashToken(token)); err != nil {
+		slog.Error("mcp-oauth: delete token", "err", err)
 	}
 }
 
@@ -112,14 +236,7 @@ func (p *Provider) Register(mux *http.ServeMux) {
 func (p *Provider) RequireBearer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || token == "" {
-			p.tokenError(w)
-			return
-		}
-		p.mu.RLock()
-		rec, exists := p.tokens[token]
-		p.mu.RUnlock()
-		if !exists || (!rec.ExpiresAt.IsZero() && time.Now().After(rec.ExpiresAt)) {
+		if !ok || !p.ValidateToken(r.Context(), token) {
 			p.tokenError(w)
 			return
 		}
@@ -129,13 +246,11 @@ func (p *Provider) RequireBearer(next http.Handler) http.Handler {
 
 // ValidateToken reports whether token is a currently valid (unexpired) bearer
 // token issued by this provider (or a configured static token).
-func (p *Provider) ValidateToken(token string) bool {
+func (p *Provider) ValidateToken(ctx context.Context, token string) bool {
 	if token == "" {
 		return false
 	}
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	rec, ok := p.tokens[token]
+	rec, ok := p.lookupToken(ctx, token)
 	if !ok {
 		return false
 	}
@@ -183,6 +298,14 @@ func (p *Provider) handleRegister(w http.ResponseWriter, r *http.Request) {
 	p.mu.Lock()
 	p.clients[id] = &clientRecord{ClientID: id, RedirectURIs: body.RedirectURIs, RegisteredAt: now}
 	p.mu.Unlock()
+	if p.cfg.Store != nil {
+		// Tolerate a write failure: registration still succeeds for this process,
+		// so the client can complete the flow now and simply re-registers after a
+		// restart — the pre-Store behaviour.
+		if err := p.cfg.Store.SaveClient(r.Context(), id, body.RedirectURIs, now); err != nil {
+			slog.Error("mcp-oauth: persist client", "client_id", id, "err", err)
+		}
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"client_id":                  id,
 		"client_id_issued_at":        now.Unix(),
@@ -200,9 +323,7 @@ func (p *Provider) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clientID := q.Get("client_id")
-	p.mu.RLock()
-	client, exists := p.clients[clientID]
-	p.mu.RUnlock()
+	client, exists := p.lookupClient(r.Context(), clientID)
 	if !exists {
 		http.Error(w, "unknown client_id", http.StatusBadRequest)
 		return
@@ -231,9 +352,7 @@ func (p *Provider) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clientID := r.FormValue("client_id")
-	p.mu.RLock()
-	client, exists := p.clients[clientID]
-	p.mu.RUnlock()
+	client, exists := p.lookupClient(r.Context(), clientID)
 	if !exists {
 		http.Error(w, "unknown client_id", http.StatusBadRequest)
 		return
@@ -311,6 +430,11 @@ func (p *Provider) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		qs.Set("state", state)
 	}
 	dest.RawQuery = qs.Encode()
+	// G710: redirectURI is not the submitted value. It was replaced above with
+	// the registered URI it matched exactly (matchedRedirectURI), and a request
+	// that matches none is rejected before reaching here — so the destination is
+	// always one of the URIs this client registered, per OAuth 2.1 §2.3.1.
+	//nolint:gosec // G710: destination is a registered redirect_uri, matched exactly above
 	http.Redirect(w, r, dest.String(), http.StatusFound)
 }
 
@@ -335,32 +459,12 @@ func (p *Provider) tokenFromCode(w http.ResponseWriter, r *http.Request) {
 	redirectURI := r.FormValue("redirect_uri")
 	verifier := r.FormValue("code_verifier")
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	if !p.consumeCode(code, clientID, redirectURI, verifier) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+		return
+	}
 
-	rec, exists := p.codes[code]
-	if !exists {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
-		return
-	}
-	if time.Now().After(rec.ExpiresAt) {
-		delete(p.codes, code)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
-		return
-	}
-	if rec.ClientID != clientID || rec.RedirectURI != redirectURI {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
-		return
-	}
-	if s256(verifier) != rec.CodeChallenge {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
-		return
-	}
-	delete(p.codes, code)
-
-	access, refresh := randHex(32), randHex(32)
-	p.tokens[access] = &tokenRecord{ClientID: clientID, ExpiresAt: time.Now().Add(p.cfg.AccessTokenTTL)}
-	p.tokens[refresh] = &tokenRecord{ClientID: clientID, ExpiresAt: p.refreshExpiry()}
+	access, refresh := p.issueTokenPair(r.Context(), clientID)
 	slog.Info("mcp-oauth: issued token pair", "client_id", clientID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -372,27 +476,23 @@ func (p *Provider) tokenFromCode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Provider) tokenFromRefresh(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	refreshToken := r.FormValue("refresh_token")
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	rec, exists := p.tokens[refreshToken]
+	rec, exists := p.lookupToken(ctx, refreshToken)
 	if !exists {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
 		return
 	}
 	if !rec.ExpiresAt.IsZero() && time.Now().After(rec.ExpiresAt) {
-		delete(p.tokens, refreshToken)
+		p.dropToken(ctx, refreshToken)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
 		return
 	}
 	clientID := rec.ClientID
-	delete(p.tokens, refreshToken)
+	p.dropToken(ctx, refreshToken) // rotation: a refresh token is single-use
 
-	access, newRefresh := randHex(32), randHex(32)
-	p.tokens[access] = &tokenRecord{ClientID: clientID, ExpiresAt: time.Now().Add(p.cfg.AccessTokenTTL)}
-	p.tokens[newRefresh] = &tokenRecord{ClientID: clientID, ExpiresAt: p.refreshExpiry()}
+	access, newRefresh := p.issueTokenPair(ctx, clientID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token":  access,
@@ -400,6 +500,40 @@ func (p *Provider) tokenFromRefresh(w http.ResponseWriter, r *http.Request) {
 		"expires_in":    int(p.cfg.AccessTokenTTL.Seconds()),
 		"refresh_token": newRefresh,
 	})
+}
+
+// consumeCode validates an authorization code against the grant request and
+// deletes it in the same critical section, so a code can be redeemed exactly
+// once even if two requests race for it. Codes are memory-only, so no Store
+// round-trip belongs inside this lock.
+func (p *Provider) consumeCode(code, clientID, redirectURI, verifier string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	rec, exists := p.codes[code]
+	if !exists {
+		return false
+	}
+	if time.Now().After(rec.ExpiresAt) {
+		delete(p.codes, code)
+		return false
+	}
+	if rec.ClientID != clientID || rec.RedirectURI != redirectURI {
+		return false
+	}
+	if s256(verifier) != rec.CodeChallenge {
+		return false
+	}
+	delete(p.codes, code)
+	return true
+}
+
+// issueTokenPair mints and records a fresh access/refresh pair for clientID.
+func (p *Provider) issueTokenPair(ctx context.Context, clientID string) (access, refresh string) {
+	access, refresh = randHex(32), randHex(32)
+	p.saveToken(ctx, access, &tokenRecord{ClientID: clientID, ExpiresAt: time.Now().Add(p.cfg.AccessTokenTTL)})
+	p.saveToken(ctx, refresh, &tokenRecord{ClientID: clientID, ExpiresAt: p.refreshExpiry()})
+	return access, refresh
 }
 
 // refreshExpiry returns the expiry time for refresh tokens (zero = never).
@@ -479,7 +613,33 @@ button:hover{background:#d4b87a}
 </body>
 </html>`))
 
+// formActionOrigin reduces an already-validated redirect URI to the
+// "scheme://host" form a CSP source expression takes. It returns "" for URIs
+// CSP can't express as an origin (custom schemes, opaque callbacks), in which
+// case the caller falls back to the narrower policy.
+func formActionOrigin(redirectURI string) string {
+	u, err := url.Parse(redirectURI)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
 func renderLogin(w http.ResponseWriter, data loginData) {
+	// This page needs its own CSP, overriding the site-wide one. The site policy
+	// says form-action 'self', and browsers enforce form-action against every hop
+	// of the redirect chain a form submission produces — so the 302 this form's
+	// POST returns, pointing at the client's callback on another origin, is
+	// blocked. Nothing is shown when that happens: the user submits the password,
+	// the server issues the code, and the browser silently stays on this page.
+	// Widening form-action to the redirect_uri's origin is safe because that URI
+	// was already matched exactly against the client's registered URIs before we
+	// got here — the CSP is not what keeps the code from going somewhere else.
+	csp := "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+	if origin := formActionOrigin(data.RedirectURI); origin != "" {
+		csp += " " + origin
+	}
+	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = loginTmpl.Execute(w, data)
 }

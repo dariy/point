@@ -57,6 +57,32 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 `},
+	// MCP OAuth server state. It lives here rather than in internal/migrations
+	// because queries_oauth.go is in this package and the provider reads these
+	// tables on the first request after boot. Both tables were added because the
+	// provider kept clients and tokens in memory only, so every redeploy silently
+	// invalidated them and every connected MCP client had to re-authorize.
+	// Authorization codes are deliberately not stored: they live two minutes and
+	// are redeemed within seconds.
+	{"add_oauth_clients", `
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id     VARCHAR(64) PRIMARY KEY,
+    redirect_uris TEXT NOT NULL,
+    registered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+`},
+	// token_hash is SHA-256 of the token, never the token itself, so a copy of
+	// the database is not a set of bearer credentials. A NULL expires_at means
+	// "never expires" — refresh tokens when no refresh TTL is configured.
+	{"add_oauth_tokens", `
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+    token_hash VARCHAR(64) PRIMARY KEY,
+    client_id  VARCHAR(64) NOT NULL,
+    expires_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON oauth_tokens(expires_at);
+`},
 	{"posts_instagram_id_unique_idx",
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_instagram_id ON posts(instagram_id) WHERE instagram_id IS NOT NULL`},
 	// Denormalized list-preview URL so list/grid queries no longer read the

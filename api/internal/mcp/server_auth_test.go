@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -326,4 +327,45 @@ func TestAuthMiddleware_RejectsRevokedAPIKey(t *testing.T) {
 	if seen != nil {
 		t.Error("revoked API key produced a principal")
 	}
+}
+
+// TestRepoOAuthStoreSurvivesRestart exercises the adapter against a real
+// database rather than a fake: a token issued by one provider must still
+// authenticate against a second provider built over the same repository, which
+// is what a redeploy looks like from the client's side.
+func TestRepoOAuthStoreSurvivesRestart(t *testing.T) {
+	_, repo := newAuthTestDeps(t)
+	ctx := context.Background()
+	store := repoOAuthStore{repo}
+
+	expires := time.Now().Add(time.Hour)
+	before := oauth.New(oauth.Config{Store: store})
+	if err := store.SaveClient(ctx, "client-1", []string{"https://claude.ai/api/mcp/auth_callback"}, time.Now()); err != nil {
+		t.Fatalf("SaveClient: %v", err)
+	}
+	if err := store.SaveToken(ctx, sha256Hex("live-token"), "client-1", expires); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+	if !before.ValidateToken(ctx, "live-token") {
+		t.Fatal("token rejected by the provider that stored it")
+	}
+
+	after := oauth.New(oauth.Config{Store: store})
+	if !after.ValidateToken(ctx, "live-token") {
+		t.Error("token rejected after restart — the store round-trip is broken")
+	}
+	if after.ValidateToken(ctx, "other-token") {
+		t.Error("unrelated token accepted")
+	}
+
+	uris, _, found, err := store.LoadClient(ctx, "client-1")
+	if err != nil || !found || len(uris) != 1 {
+		t.Errorf("LoadClient after restart: uris=%v found=%v err=%v", uris, found, err)
+	}
+}
+
+// sha256Hex mirrors how the provider keys tokens in the store.
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }

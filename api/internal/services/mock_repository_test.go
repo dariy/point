@@ -1122,6 +1122,32 @@ func (m *mockRepository) GetHierarchicalPostCountsInYearRange(ctx context.Contex
 	return nil, fmt.Errorf("GetHierarchicalPostCountsInYearRange not implemented")
 }
 
+// OAuth state is exercised through the real repository (see queries_oauth_test.go);
+// no service under test here touches it.
+func (m *mockRepository) SaveOAuthClient(ctx context.Context, clientID string, redirectURIs []string, registeredAt time.Time) error {
+	return fmt.Errorf("SaveOAuthClient not implemented")
+}
+
+func (m *mockRepository) GetOAuthClient(ctx context.Context, clientID string) ([]string, time.Time, bool, error) {
+	return nil, time.Time{}, false, fmt.Errorf("GetOAuthClient not implemented")
+}
+
+func (m *mockRepository) SaveOAuthToken(ctx context.Context, tokenHash, clientID string, expiresAt time.Time) error {
+	return fmt.Errorf("SaveOAuthToken not implemented")
+}
+
+func (m *mockRepository) GetOAuthToken(ctx context.Context, tokenHash string) (string, time.Time, bool, error) {
+	return "", time.Time{}, false, fmt.Errorf("GetOAuthToken not implemented")
+}
+
+func (m *mockRepository) DeleteOAuthToken(ctx context.Context, tokenHash string) error {
+	return fmt.Errorf("DeleteOAuthToken not implemented")
+}
+
+func (m *mockRepository) DeleteExpiredOAuthTokens(ctx context.Context, now time.Time) error {
+	return fmt.Errorf("DeleteExpiredOAuthTokens not implemented")
+}
+
 func (m *mockRepository) GetSystemStats(ctx context.Context) (repository.SystemStats, error) {
 	if m.MockGetSystemStats != nil {
 		return m.MockGetSystemStats(ctx)
