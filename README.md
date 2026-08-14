@@ -108,13 +108,6 @@ data/         Runtime data (DB + media) — gitignored
 [`quickstart/docker-compose.yml`](quickstart/docker-compose.yml) and the published
 image. Pin a version tag rather than `latest` for production.
 
-### Don't want to run it yourself?
-
-[Point Hosting](https://point.photos/and/pizza) runs this same engine as a
-managed service — servers, TLS and backups handled, your data still exportable
-as one ordinary folder. It funds the engine's development. Self-hosting stays
-first-class and always will; if that's what you're here for, ignore this.
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
