@@ -125,12 +125,27 @@ describe("GET /api/tags?q=", () => {
     assert.ok(!search({ include_empty: "false" }).includes("empty"));
   });
 
-  test("hides hidden tags from a guest but not from an admin", () => {
-    const hidden = { ...state, tags: [tag(9, "Secret", "secret", { effective_hidden: true })] };
+  // `hidden` is the flag an author sets; `effective_hidden` is what the backend
+  // works out from it and the tag graph, and the mock recomputes rather than
+  // trusting the recorded value — so a tag hidden inside the demo takes its
+  // descendants with it. The child here is only hidden by inheritance.
+  test("hides hidden tags, and their children, from a guest but not from an admin", () => {
+    const hidden = {
+      ...state,
+      tags: [
+        tag(9, "Secret", "secret", { hidden: true, children: [{ id: 10 }] }),
+        tag(10, "Under it", "under-it"),
+      ],
+    };
     assert.deepEqual(call("GET", "/api/tags", { state: hidden, query: {} }).tags, []);
-    assert.deepEqual(
-      call("GET", "/api/tags", { state: { ...hidden, authenticated: true }, query: {} }).tags.map((t) => t.slug),
-      ["secret"],
-    );
+
+    const admin = call("GET", "/api/tags", {
+      state: { ...hidden, authenticated: true },
+      query: {},
+    }).tags;
+    assert.deepEqual(admin.map((t) => t.slug), ["secret", "under-it"]);
+    // The inherited flags come back computed, with the ancestor named.
+    assert.equal(admin[1].effective_hidden, true);
+    assert.equal(admin[1].hidden_via, 9);
   });
 });

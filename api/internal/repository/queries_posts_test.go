@@ -163,6 +163,32 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 	}
 }
 
+// A post waiting in the scheduled queue has no published_at, so it has no place
+// in the sequence prev/next walks. It must come back with no neighbours — the
+// NULL used to be scanned into a string, failing the whole call, which is a 500
+// from the navigation endpoint for every scheduled post.
+func TestRepository_GetPostNavigation_Unpublished(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, live := insertUserAndPost(t, repo, "nav-live", "published")
+	_, queued := insertUserAndPost(t, repo, "nav-queued", "scheduled")
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01' WHERE id=?`, live)
+	_, _ = repo.DB().Exec(
+		`UPDATE posts SET published_at=NULL, scheduled_at='2030-01-01 10:00:00' WHERE id=?`, queued)
+
+	prev, next, err := repo.GetPostNavigation(ctx, queued, false, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation on a scheduled post failed: %v", err)
+	}
+	if prev != nil || next != nil {
+		t.Errorf("scheduled post got neighbours prev=%v next=%v, want none", prev, next)
+	}
+}
+
 // TestRepository_GetPostNavigation_TagScoped verifies the optional tag argument
 // restricts adjacency to posts under that tag (skipping untagged neighbours),
 // while pages are always excluded.

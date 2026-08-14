@@ -102,8 +102,7 @@ fallback; `prefers-reduced-motion` is respected.
 
 - **Canvas, not SVG** — hundreds of nodes plus thousands of membership edges make SVG
   DOM too slow for dragging.
-- **Vendored force layout, lazy-loaded** (`frontend/vendor/d3-force/`), mirroring the
-  Leaflet pattern — keeps heavy viz code out of `app.js`.
+- **Hand-rolled force layout** — dependency-free, meaning no D3 to vendor or lazy-load.
 - **All posts are shadow nodes** — single-tag posts are rare; a toggle to hide them is
   a supported-by-data future option, deliberately not built.
 - **Year nodes are only explicit `kind='year'` tags** — never derived from a post's

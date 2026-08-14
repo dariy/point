@@ -566,10 +566,19 @@ type PostNavItem struct {
 // is no adjacent post.
 func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *PostNavItem, err error) {
 	const qDate = `SELECT CAST(published_at AS TEXT) FROM posts WHERE id = ? LIMIT 1`
-	var publishedAt string
-	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
+	var anchor sql.NullString
+	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&anchor); err != nil {
 		return nil, nil, err
 	}
+	// A post that has never been published — a draft, or one waiting in the
+	// scheduled queue — has no position in the sequence these queries walk, so
+	// it has no neighbours. Scanning the NULL into a plain string failed the
+	// whole request instead, which is a 500 on the navigation endpoint for
+	// every scheduled post.
+	if !anchor.Valid {
+		return nil, nil, nil
+	}
+	publishedAt := anchor.String
 
 	statusFilter := "LOWER(status) = 'published'"
 	if !publicOnly {

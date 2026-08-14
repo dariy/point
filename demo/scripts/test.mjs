@@ -11,6 +11,10 @@
  *   3. Being bounced to /light/login while authenticated, which is what happens
  *      when a handler returns 401: client.js raises api:unauthorized and app.js
  *      escalates it to a hard navigation.
+ *   4. Behaviour the route walk cannot see: an edit surviving the walk out of
+ *      the admin (and a reload still resetting it), the scheduled queue left of
+ *      page 1, and the hidden posts and place staying hidden — from a guest,
+ *      and from the owner with revelio off.
  *
  * Run against a served build with the backend STOPPED:
  *   npx serve -s demo/dist -l 3000
@@ -47,6 +51,39 @@ const IGNORED_CONSOLE = [
   /Failed to load resource.*404/i, // media intentionally absent from the build
   /favicon/i,
 ];
+
+/** The demo's hidden place — demo/world.mjs PRIVATE_LOCATION. */
+const HIDDEN_TAG = "mirandela";
+
+/** What the client adds to every request with revelio off (utils/revelio.js). */
+const REVELIO_OFF = { headers: { "X-Point-Revelio": "off" } };
+
+/**
+ * Call the mocked API from inside the page.
+ *
+ * The mock answers `fetch`, so this exercises the same interception the app
+ * does. `withStatus` returns the status alongside the body, for the checks
+ * where a 404 is the correct answer rather than a failure.
+ */
+async function api(page, path, init = {}, withStatus = false) {
+  return page.evaluate(
+    async ([p, i, s]) => {
+      const res = await fetch(p, i);
+      const text = await res.text();
+      let body = {};
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = {};
+      }
+      return s ? { status: res.status, ...body } : body;
+    },
+    [path, init, withStatus],
+  );
+}
+
+const pageHasText = (page, text) =>
+  page.evaluate((t) => document.body.innerText.includes(t), text);
 
 const failures = [];
 const apiCalls = [];
@@ -299,6 +336,193 @@ async function main() {
     failures.push(`themes shipped but not listed: ${absent.join(", ")}`);
   } else {
     console.log(`  ✓ all ${shipped.length} shipped themes offered`);
+  }
+
+  // ── Edits outlive a page load ──────────────────────────────────────────
+  //
+  // The store is module state, and the walk from the admin out to the public
+  // site is a full page load. Without the content snapshot the visitor's own
+  // edit is undone by the very navigation taken to go and look at it — while a
+  // reload still has to reset, because that is the demo's way back to pristine.
+  console.log(`\nEdit persistence`);
+  const target = await api(page, "/api/pages/home");
+  const post = target.posts?.[0];
+  if (!post) {
+    failures.push("home feed returned no post to edit");
+  } else {
+    const EDITED = "Edited Inside The Demo";
+    await api(page, `/api/posts/${post.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: EDITED }),
+    });
+
+    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(900);
+    if (!(await pageHasText(page, EDITED))) {
+      failures.push(
+        `a post renamed in the admin reverted on the walk out to the public site — the edit did not survive the page load`,
+      );
+    } else {
+      console.log(`  ✓ renamed post #${post.id} held across a full load`);
+    }
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(900);
+    if (await pageHasText(page, EDITED)) {
+      failures.push("a reload left the edit in place — the demo no longer resets");
+    } else {
+      console.log(`  ✓ reload re-seeded from the fixture`);
+    }
+  }
+
+  // ── Hidden content, and the switch that conceals it ────────────────────
+  //
+  // The archive carries posts a guest may not have — hidden ones, ones filed
+  // under the hidden place, and the scheduled queue. Three things have to hold
+  // at once: the owner sees them, a guest does not, and the owner can put
+  // themselves in the guest's position without logging out (revelio).
+  console.log(`\nVisibility`);
+
+  // From pristine. Everything above this point has been logging in, applying a
+  // plugin preset and activating themes, and all three outlive a page load on
+  // purpose — so the demo's own reset control is what puts a guest back in the
+  // browser, with the full plugin set the footer's revelio button lives in.
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => window.__DEMO_RESET__?.());
+  await page.waitForTimeout(1600);
+  const guest = {
+    home: await api(page, "/api/pages/home"),
+    tags: await api(page, "/api/tags"),
+    hiddenTag: await api(page, `/api/pages/tags/${HIDDEN_TAG}`, {}, true),
+    graph: await api(page, "/api/pages/graph"),
+  };
+  const guestSees = (payload) =>
+    (payload.tags || []).some((t) => t.slug === HIDDEN_TAG);
+
+  if (guest.home.pagination?.min_page !== 1) {
+    failures.push(
+      `a guest's feed reaches page ${guest.home.pagination?.min_page} — the scheduled queue must not exist for them`,
+    );
+  }
+  if (guest.home.posts?.some((p) => p.status !== "published")) {
+    failures.push("a guest's feed carried a post that is not published");
+  }
+  if (guestSees(guest.tags) || guestSees(guest.graph)) {
+    failures.push(`the hidden place is listed for a guest (tags or atlas)`);
+  }
+  if (guest.hiddenTag.status !== 404) {
+    failures.push(
+      `/tags/${HIDDEN_TAG} answered ${guest.hiddenTag.status} to a guest, want 404`,
+    );
+  }
+  console.log(
+    `  ✓ guest: ${guest.home.pagination?.total} post(s), no queue, no hidden place`,
+  );
+
+  // Logged in.
+  await page.goto(`${BASE}/light/login`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  await page.locator("#password-input").press("Enter");
+  await page.waitForTimeout(1200);
+
+  const owner = {
+    home: await api(page, "/api/pages/home"),
+    queue: await api(page, "/api/pages/home?page=0"),
+    tags: await api(page, "/api/tags"),
+    graph: await api(page, "/api/pages/graph"),
+  };
+  if (!(owner.home.pagination?.total > guest.home.pagination?.total)) {
+    failures.push(
+      `the owner's feed holds ${owner.home.pagination?.total} post(s) and a guest's ${guest.home.pagination?.total} — the hidden ones are not being revealed`,
+    );
+  }
+  if (owner.home.pagination?.min_page !== 0) {
+    failures.push(
+      `the owner's feed reports min_page ${owner.home.pagination?.min_page}, so the paginator cannot reach the queue`,
+    );
+  }
+  if (!owner.queue.pagination?.scheduled || !owner.queue.posts?.length) {
+    failures.push("page 0 did not return the scheduled queue");
+  } else {
+    const dates = owner.queue.posts.map((p) => p.scheduled_at);
+    const sorted = [...dates].sort();
+    if (dates.join() !== sorted.join()) {
+      failures.push(`the queue is not soonest-first: ${dates.join(" ")}`);
+    }
+    if (dates.some((d) => !d)) {
+      failures.push("a queued post has no scheduled_at, so its card cannot be dated");
+    }
+    console.log(`  ✓ owner: queue of ${owner.queue.posts.length} on page 0, soonest first`);
+  }
+  if (!guestSees(owner.tags) || !guestSees(owner.graph)) {
+    failures.push("the hidden place is missing from the owner's own tag list or atlas");
+  }
+
+  // Revelio: the owner asking to be answered as a guest. The switch lives in
+  // the public footer, so drive the real control rather than the header — the
+  // header is this test's own doing, the button is the visitor's.
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(900);
+  // The footer's actions live in a drawer behind "More Actions", collapsed to
+  // zero width until it is opened — so this is two clicks for a visitor and has
+  // to be two here.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(300);
+  await page.locator("#footer-slider-btn").click().catch(() => {});
+  await page.waitForTimeout(500);
+  const toggle = page.locator("#revelio-toggle");
+  const lockedCards = () =>
+    page.evaluate(() => document.querySelectorAll(".post-card.is-hidden").length);
+  const revealedLocks = await lockedCards();
+  if ((await toggle.count()) === 0) {
+    failures.push("no revelio control in the public footer while signed in");
+  } else {
+    await toggle.click();
+    await page.waitForTimeout(1200);
+
+    // The switch re-renders in the same document (router.refresh()), so the
+    // page in front of the visitor has to change — not just the answers to the
+    // requests made after it.
+    if ((await toggle.getAttribute("aria-pressed")) !== "false") {
+      failures.push("the revelio button did not flip to the concealed state");
+    }
+    const concealedLocks = await lockedCards();
+    if (revealedLocks === 0) {
+      failures.push(
+        "no hidden post on the owner's first page, so concealing it proves nothing — check the fixture's visibility mix",
+      );
+    } else if (concealedLocks !== 0) {
+      failures.push(
+        `${concealedLocks} hidden post(s) still on the page after concealing (was ${revealedLocks})`,
+      );
+    }
+    const concealed = {
+      home: await api(page, "/api/pages/home", REVELIO_OFF),
+      tags: await api(page, "/api/tags", REVELIO_OFF),
+      me: await api(page, "/api/auth/me", REVELIO_OFF, true),
+    };
+    if (concealed.home.pagination?.total !== guest.home.pagination?.total) {
+      failures.push(
+        `with revelio off the feed holds ${concealed.home.pagination?.total} post(s), but a real guest gets ${guest.home.pagination?.total}`,
+      );
+    }
+    if (guestSees(concealed.tags)) {
+      failures.push("revelio off still lists the hidden place");
+    }
+    // The admin API is behind AuthMiddleware, which the header never reaches.
+    // If this 401s the app concludes the visitor is signed out and the control
+    // that turns revelio back on goes with the rest of the admin UI.
+    if (concealed.me.status !== 200) {
+      failures.push(
+        `revelio off returned ${concealed.me.status} from /api/auth/me — it narrowed the admin API, which is one-way`,
+      );
+    }
+    if (!(await pageHasText(page, "Reveal"))) {
+      // The button's own label flips; not a failure on its own, just noted.
+    }
+    console.log(`  ✓ revelio off renders the guest's site, admin API still answers`);
   }
 
   await browser.close();

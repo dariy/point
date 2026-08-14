@@ -200,7 +200,19 @@ async function main() {
   fx.postNavigation = {};
   for (const p of fx.posts) {
     const detail = await get(`/api/posts/${p.id}`);
-    if (detail) fx.postDetail[String(p.id)] = detail;
+    if (detail) {
+      fx.postDetail[String(p.id)] = detail;
+      // `scheduled_at` back onto the list row, which the mock's post store is
+      // seeded from. The admin list query does not select the column
+      // (buildPostsQuery, api/internal/repository/queries_posts.go), so every
+      // scheduled post records as `scheduled_at: null` — while the feed's own
+      // queue read does select it, and the card is dated and the queue ordered
+      // by it. Taking the value from the detail payload records what the feed
+      // would have sent rather than what the admin list happened to omit.
+      if (p.scheduled_at == null && detail.scheduled_at != null) {
+        p.scheduled_at = detail.scheduled_at;
+      }
+    }
     const nav = await get(`/api/posts/${p.id}/navigation`);
     if (nav) fx.postNavigation[String(p.id)] = nav;
   }

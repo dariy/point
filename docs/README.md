@@ -13,7 +13,7 @@ Technical documentation per feature: what is implemented, key architectural
 decisions, out-of-scope notes, and gotchas for future development.
 
 - [Plugin System](./features/plugin-system.md) — enabled-only manifest, registry, build pipeline
-- [MCP Server](./features/mcp.md) — 28 tools at `/mcp`, OAuth 2.1 + API-key auth
+- [MCP Server](./features/mcp.md) — 27 tools at `/mcp`, OAuth 2.1 + API-key auth
 - [Instagram Integration](./features/instagram-integration.md) — cross-posting and import
 - [Tag System](./features/tag-system.md) — multi-parent DAG, typed flags, TagGraph snapshot
 - [Hidden Posts & Tags](./features/hidden-visibility.md) — visibility rules and guest filtering

@@ -62,7 +62,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 | Feature | Description |
 |---|---|
 | Markdown editor | Posts are written in Markdown with GitHub-flavored extensions (tables, strikethrough, autolinks). |
-| Syntax highlighting | Fenced code blocks are highlighted server-side via Chroma, supporting dozens of languages. |
+| Syntax highlighting | Fenced code blocks are highlighted client-side via Prism.js in rendered Markdown and in the post editor. |
 | HTML formatter | Authors can switch to raw HTML for full layout control when Markdown isn't enough. |
 | Post scheduling | Set a future publish date/time; the background scheduler auto-publishes within one minute of the target. |
 | Post statuses | Four lifecycle states — draft, scheduled, published, hidden — with clean status transitions. |
@@ -169,7 +169,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 
 | Feature | Description |
 |---|---|
-| bcrypt password hashing | Passwords are hashed with bcrypt at the default cost factor — never stored in plaintext. |
+| Argon2id password hashing | Passwords are hashed with Argon2id — never stored in plaintext. (Legacy bcrypt hashes are upgraded on login). |
 | HTTP-only session cookies | Session tokens are set as HTTP-only cookies, invisible to JavaScript and immune to XSS token theft. |
 | Configurable session TTL | Session lifetime defaults to 30 days and is adjustable per deployment via environment variable. |
 | One-time password reset tokens | Reset tokens are hashed before storage, single-use, and expire after one hour. |
