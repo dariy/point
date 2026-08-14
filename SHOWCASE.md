@@ -2,17 +2,9 @@
 This is brief visual showcase of the UI. There is playable [UI demo](https://demo.point.photos).
 
 # Public part
-## Post list
-<img src="./docs/images/post-list-post.png" height="400" /> <img src="./docs/images/mobile-post-list.png" height="400" />
-
-## Post page
-<img src="./docs/images/post.png" height="300" /> <img src="./docs/images/post-pure.png" height="300" />
-
-## Post page — details
-<img src="./docs/images/post-details.png" height="400" /> <img src="./docs/images/mobile-post-details.png" height="400" />
-
-## Map
-<img src="./docs/images/map-post.png" height="400" />
+![Post list with post details](./docs/images/post-list-post-details.gif)
+![Post list with zoom and scheduled posts](./docs/images/post-list-zoom-and-scheduled-posts.gif)
+![map](./docs/images/map.gif)
 
 # Admin part
 ## Posts
