@@ -328,12 +328,18 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	// One registry, shared by everything that runs work outside a request, so
 	// the admin health view has a single source rather than one per service.
 	healthRegistry := services.NewHealthRegistry()
-	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).WithHealth(healthRegistry)
+	// Built before the post/tag services so both can be handed it: a write to
+	// either invalidates the rendered public pages (see onPostsChanged /
+	// TagService.Invalidate).
+	cacheService := services.NewCacheService(cfg.StoragePath)
+	tagService.WithCache(cacheService)
+	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).
+		WithHealth(healthRegistry).
+		WithCache(cacheService)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
 	systemService.CleanupPartialBackups()
-	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
 	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry)

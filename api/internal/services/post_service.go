@@ -45,12 +45,24 @@ type PostService struct {
 	// health records background cross-post outcomes for the admin health
 	// view. Nil is valid and records nothing.
 	health *HealthRegistry
+	// cache is the public page cache a post write invalidates. Nil is valid
+	// and simply skips the invalidation.
+	cache *CacheService
 }
 
 // WithHealth attaches a health registry so background cross-post outcomes are
 // visible to the admin health endpoint.
 func (s *PostService) WithHealth(h *HealthRegistry) *PostService {
 	s.health = h
+	return s
+}
+
+// WithCache attaches the public page cache so a post write can drop it — see
+// onPostsChanged. Without it the cache is only aged out by its TTL, and a post
+// that has just been hidden keeps appearing in a cached feed for minutes after
+// it stops being readable.
+func (s *PostService) WithCache(c *CacheService) *PostService {
+	s.cache = c
 	return s
 }
 
@@ -557,6 +569,56 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	return posts, total, nil
 }
 
+// ListScheduledPosts returns one page of the scheduled queue (soonest first)
+// along with the queue's total length. `page` is 1-based within the queue —
+// the home feed maps its non-positive page numbers onto it (see the
+// scheduledPageOffset comment in api/pages.go).
+//
+// It is a deliberately separate read rather than a flag on ListPostsParams:
+// the ordering is the opposite of the feed's, and the two lists are never
+// interleaved on one page.
+func (s *PostService) ListScheduledPosts(ctx context.Context, page, perPage int32) ([]models.Post, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	offset := int64(page-1) * int64(perPage)
+	posts, err := s.repo.ListScheduledPosts(ctx, int64(perPage), offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountScheduledPosts(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if posts == nil {
+		posts = []models.Post{}
+	}
+	return posts, total, nil
+}
+
+// CountScheduledPosts is the queue length on its own — the home feed needs it
+// on every page to know how far left the reader may swipe.
+func (s *PostService) CountScheduledPosts(ctx context.Context) (int64, error) {
+	return s.repo.CountScheduledPosts(ctx)
+}
+
+// CountPostsOnly is the total ListPosts would report for the same filters
+// without reading a page of rows. The home feed needs it while rendering a
+// scheduled page, where the posts come from the queue but the paginator still
+// has to describe the published feed behind it. It covers the unfiltered
+// branch only — the one the home feed uses — since a year scope or a search
+// never coexists with the scheduled queue.
+func (s *PostService) CountPostsOnly(ctx context.Context, p ListPostsParams) (int64, error) {
+	return s.repo.CountPosts(ctx, models.CountPostsParams{
+		StatusFilter:   p.Status != "",
+		Status:         p.Status,
+		FeaturedFilter: p.FeaturedOnly,
+		IncludeDrafts:  p.IncludeDrafts,
+		IncludeHidden:  p.IncludeHidden,
+		IncludePages:   p.IncludePages,
+	})
+}
+
 func (s *PostService) GetPostAnalytics(ctx context.Context) (models.GetPostAnalyticsRow, error) {
 	return s.repo.GetPostAnalytics(ctx)
 }
@@ -751,7 +813,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		})
 	}
 
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 
 	return post, strippedProps, nil
 }
@@ -871,7 +933,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: tag.ID})
 	}
 
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 
 	return post, strippedProps, nil
 }
@@ -891,7 +953,7 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID})
 	}
 
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 	return nil
 }
 
@@ -944,7 +1006,7 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 	// published_at logic handled in repository.UpdatePost based on status
 	post, err = s.repo.UpdatePost(ctx, params)
 	if err == nil {
-		s.refreshTagCounts(ctx)
+		s.onPostsChanged(ctx)
 	}
 	return post, err
 }
@@ -953,7 +1015,7 @@ func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) er
 	if err := s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 	return nil
 }
 
@@ -961,7 +1023,7 @@ func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error
 	if err := s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 	return nil
 }
 
@@ -969,7 +1031,7 @@ func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID in
 	if err := s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID}); err != nil {
 		return err
 	}
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 	return nil
 }
 
@@ -1000,7 +1062,7 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 		}
 		return post, err
 	}
-	s.refreshTagCounts(ctx)
+	s.onPostsChanged(ctx)
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
@@ -1035,7 +1097,7 @@ func (s *PostService) crossPostToInstagramAsync(postID int64) {
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
 	post, err := s.repo.WithdrawPost(ctx, id)
 	if err == nil {
-		s.refreshTagCounts(ctx)
+		s.onPostsChanged(ctx)
 	}
 	return post, err
 }
@@ -1096,7 +1158,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 		return nil, err
 	}
 	if len(published) > 0 {
-		s.refreshTagCounts(ctx)
+		s.onPostsChanged(ctx)
 		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
@@ -1340,15 +1402,24 @@ func (s *PostService) AuditPublicPostLinks(ctx context.Context) ([]PostLinkIssue
 	return issues, scanned, nil
 }
 
-// refreshTagCounts recomputes the denormalized per-tag post counts and drops the
-// tag-graph cache, which caches hierarchical counts derived from them.
+// onPostsChanged is the single after-write hook for posts: every path that
+// creates, edits, publishes, hides, schedules, trashes or restores a post ends
+// here. It exists so the derived state that a post write invalidates is dropped
+// in one place rather than being remembered at each of those call sites.
 //
-// Every post mutation has to do both, and doing only one leaves the tag pages
-// showing stale numbers. Collapsing the pair into one call is what keeps that
-// from being ten independent chances to forget the second half.
-func (s *PostService) refreshTagCounts(ctx context.Context) {
+// Two things go stale on a post write:
+//
+//   - the tag counts and the in-memory tag graph built from them;
+//   - the public page cache, which is what a guest (and the owner with revelio
+//     off) is actually served. Without this, a post switched to hidden stayed
+//     in the cached feed for the rest of the 15-minute TTL while opening it
+//     already 404'd — the list and the post disagreeing about whether it exists.
+func (s *PostService) onPostsChanged(ctx context.Context) {
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
 		s.tagService.Invalidate()
+	}
+	if s.cache != nil {
+		_ = s.cache.InvalidatePublicPages(ctx)
 	}
 }

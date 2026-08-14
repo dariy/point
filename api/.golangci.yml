@@ -4,10 +4,7 @@
 version: "2"
 
 run:
-  # The test suite (and check.sh) builds with the integration tag; lint the
-  # same code CI tests.
-  build-tags:
-    - integration
+  # The test suite runs all tests including integration by default.
 
 linters:
   # The standard set: errcheck, govet, ineffassign, staticcheck, unused.

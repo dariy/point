@@ -97,6 +97,22 @@ Key services include:
 - `PostService`: Markdown to HTML conversion, publishing workflows.
 - `MediaService`: Image resizing, Exif extraction, file storage.
 - `TagService`: Hierarchical tag management, post count recalculation.
+- `CacheService`: on-disk cache of rendered public payloads (`<storage>/cache`) —
+  home feed pages, tag archives, `feed.xml`, `sitemap.xml`.
+
+### Invalidating the public page cache
+
+`CacheService` entries are only *read* for anonymous requests (and for the owner
+with revelio off, which is the same thing), so the owner never sees them and a
+stale entry is invisible during authoring — it is the reader who gets served a
+feed listing a post that already 404s.
+
+Every post write funnels through `PostService.onPostsChanged` and every tag
+write through `TagService.Invalidate`; both drop the whole cache. It is
+all-or-nothing on purpose: keys are per page *and* per `per_page` (device-fit,
+so effectively unbounded), and there is no way to map a changed post back to the
+keys that mention it. New mutation paths must go through those two hooks rather
+than invalidating by hand.
 
 ---
 

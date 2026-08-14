@@ -346,8 +346,9 @@ export default class MapPage extends Component {
           return {
             color: highlighted ? "#e05c00" : "#888",
             weight: highlighted ? 1.5 : 0.5,
+            dashArray: tag?.is_hidden ? "5 4" : null,
             fillColor: countryColor,
-            fillOpacity: highlighted ? 0.35 : 0.1,
+            fillOpacity: highlighted ? (tag.is_hidden ? 0.2 : 0.35) : 0.1,
             opacity: highlighted ? 0.8 : 0.3,
           };
         },
@@ -394,12 +395,15 @@ export default class MapPage extends Component {
     tags.forEach((tag) => {
       if (tag.type === "country") return;
       const r = markerRadius(tag.post_count);
+      // A hidden place is drawn hollow and dashed (the marker equivalent of the
+      // lock its popup already carries), so revelio visibly changes the map
+      // rather than quietly dropping a marker or two out of hundreds.
       const markerHtml = `<span style="
             display:block;
             width:${r}px;height:${r}px;
             border-radius:50%;
-            background:rgba(224,92,0,0.75);
-            border:2px solid rgba(224,92,0,1);
+            background:rgba(224,92,0,${tag.is_hidden ? "0.18" : "0.75"});
+            border:2px ${tag.is_hidden ? "dashed" : "solid"} rgba(224,92,0,1);
             box-shadow:0 1px 4px rgba(0,0,0,0.3);
           "></span>`;
       const icon = L.divIcon({

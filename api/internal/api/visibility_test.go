@@ -28,3 +28,19 @@ func TestIsPostVisibleToPublic(t *testing.T) {
 		})
 	}
 }
+
+// A direct fetch by slug or id bypasses the listing queries' status filter, so
+// this gate is the only thing standing between a guessed URL and an
+// unpublished post.
+func TestIsPubliclyReadableStatus(t *testing.T) {
+	for _, status := range []string{"draft", "hidden", "scheduled", "Scheduled", "DRAFT"} {
+		if isPubliclyReadableStatus(status) {
+			t.Errorf("%q must not be readable by a guest", status)
+		}
+	}
+	for _, status := range []string{"published", "Published", "page"} {
+		if !isPubliclyReadableStatus(status) {
+			t.Errorf("%q is live and must stay readable", status)
+		}
+	}
+}

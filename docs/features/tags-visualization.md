@@ -36,6 +36,35 @@ load-bearing rather than a nicety: posts are usually tagged with a city and not 
 country, so counting only direct tags would drop every country polygon the moment the
 timeline narrowed — emptying the Atlas of the shapes it is built around.
 
+**Owner-only nodes are marked.** Both endpoints have always scoped themselves to the
+viewer, so [revelio](hidden-visibility.md#revelio--viewing-the-site-as-a-guest) already
+takes hidden places off the map — but losing one marker out of hundreds reads as
+nothing happening. So the revealed view says which nodes a guest would not get: a
+hidden place is drawn as a hollow dashed dot (dashed outline for a country shape), and
+a hidden co-tag or a draft/hidden/scheduled post chip carries the site-wide lock icon
+plus a dashed ring. The flags behind it (`is_hidden` on a tag node, `status` on a post
+node) are sent only to a viewer who may see hidden items and only when true, so a guest
+payload never carries them — with revelio off the marking disappears along with the
+nodes. There is no `hidden_via`: hiding is not inherited (see
+[hidden-visibility.md](hidden-visibility.md)), so it could only ever name the tag itself.
+
+**The "Hidden" legend filter.** Marking is not enough on its own, because a hidden
+*location* changes the map's shape and not just its marker count: a hidden country
+stops matching its boundary feature, so its fill reverts to a plain untagged outline —
+the guest's map is a different picture, not a shorter list. The legend therefore carries
+a fifth toggle that drops every owner-only node from the drawn layers (markers, country
+shapes and cloud chips alike), flipping between the owner's map and the guest's in one
+click, with no reload and without leaving revelio. Unlike the type filters it redraws
+the place layer (`_redrawPlaces`) rather than only the open cloud — filtering a place
+out of `_drawLayers`' geo-tag set is exactly what un-matches its shape. It is rendered
+only when the viewer can actually be sent hidden nodes (signed in, revelio on);
+otherwise it would be a control that does nothing.
+
+With `tags_visibility` at its default (`hidden`) the Atlas is owner-only, so concealing
+404s the graph endpoint — the honest guest answer. The page names that ("the Atlas is
+not public") instead of showing the raw `tags not found` error, which reads as a broken
+page to the owner who just flipped the switch.
+
 ### `tags-map` (Leaflet)
 
 World map of geo-tags (tags with `latitude`/`longitude`): country polygon fills for
@@ -43,6 +72,10 @@ country-type tags, proportional circle markers for cities; clicking a marker nav
 to the tag archive. Supports year filtering via the timeline. Leaflet is vendored and
 lazy-loaded per page (`frontend/src/utils/leaflet.js`) so it never enters the core
 bundle. A fetch failure must render a visible error state, not a silent empty map.
+
+Hidden places are marked the same way as on the Atlas — hollow dashed marker, dashed
+country outline — alongside the lock its popups already carried (`is_hidden` /
+`hidden_via` from `GET /api/pages/map`, admin-only).
 
 ### `tags-graph` (force graph)
 
@@ -69,8 +102,7 @@ fallback; `prefers-reduced-motion` is respected.
 
 - **Canvas, not SVG** — hundreds of nodes plus thousands of membership edges make SVG
   DOM too slow for dragging.
-- **Vendored force layout, lazy-loaded** (`frontend/vendor/d3-force/`), mirroring the
-  Leaflet pattern — keeps heavy viz code out of `app.js`.
+- **Hand-rolled force layout** — dependency-free, meaning no D3 to vendor or lazy-load.
 - **All posts are shadow nodes** — single-tag posts are rare; a toggle to hide them is
   a supported-by-data future option, deliberately not built.
 - **Year nodes are only explicit `kind='year'` tags** — never derived from a post's

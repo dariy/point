@@ -5,6 +5,12 @@
  *   posts          {object[]}  Array of post list items
  *   showViewCount  {boolean}   Passed through to PostCard
  *   emptyMessage   {string}    Optional text when posts is empty
+ *   reversed       {boolean}   Fill right-to-left instead of left-to-right.
+ *                              The home feed's scheduled ("future") pages read
+ *                              outward from page 1: the post about to go live
+ *                              sits top-right, next to where the newest
+ *                              published post would be, and the queue runs
+ *                              leftwards and down from there.
  */
 
 import { Component } from '../Component.js';
@@ -13,7 +19,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 
 export class PostGrid extends Component {
   render() {
-    const { posts = [], emptyMessage = 'No posts yet.' } = this.props;
+    const { posts = [], emptyMessage = 'No posts yet.', reversed = false } = this.props;
 
     if (!posts.length) {
       return `<p class="empty-state">${escapeHtml(emptyMessage)}</p>`;
@@ -28,7 +34,7 @@ export class PostGrid extends Component {
       return `<div class="post-card-slot${cls}" data-index="${i}"></div>`;
     }).join('');
 
-    return `<div class="posts-grid">${slots}</div>`;
+    return `<div class="posts-grid${reversed ? ' posts-grid-reversed' : ''}">${slots}</div>`;
   }
 
   afterRender() {

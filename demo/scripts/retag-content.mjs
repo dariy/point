@@ -131,14 +131,14 @@ async function listAll(path, key) {
 /**
  * Splits a generated body into its photograph and its prose.
  *
- * Generated bodies are `![title](path)` followed by paragraphs. Anything that
+ * Generated bodies are `path` followed by paragraphs. Anything that
  * does not match that shape is left alone — a hand-edited post should not be
  * silently rewritten.
  */
 function splitBody(content) {
   const lines = content.split("\n");
   const first = lines.findIndex((l) => l.trim() !== "");
-  if (first === -1 || !/^!\[.*\]\(.*\)$/.test(lines[first].trim())) return null;
+  if (first === -1 || !/^\/.+$/.test(lines[first].trim())) return null;
 
   const prose = lines
     .slice(first + 1)

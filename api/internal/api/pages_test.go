@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -864,5 +865,423 @@ func TestPagesHandler_GetNavMenu(t *testing.T) {
 	}
 	if _, ok := resp["tags"]; ok {
 		t.Error("none mode: `tags` should be omitted")
+	}
+}
+
+// The home feed extends to the left of page 1 into the owner's scheduled
+// queue: page 0 is the first future page, then -1, and so on. Guests see none
+// of it — for them the feed still starts and ends at page 1.
+func TestPagesHandler_HomePageScheduledPages(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+	if err := h.settingsSvc.SetSetting(ctx, "posts_per_page", "2", "string"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+
+	for i := 1; i <= 2; i++ {
+		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: fmt.Sprintf("Live %d", i), Status: "published", AuthorID: userID,
+		}); err != nil {
+			t.Fatalf("CreatePost: %v", err)
+		}
+	}
+	// Three scheduled posts at 2 per page = two future pages (0 and -1), the
+	// soonest one first.
+	base := time.Now().Add(24 * time.Hour)
+	for i := 1; i <= 3; i++ {
+		at := base.Add(time.Duration(i) * time.Hour)
+		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: fmt.Sprintf("Soon %d", i), Status: "scheduled", AuthorID: userID,
+			ScheduledAt: &at,
+		}); err != nil {
+			t.Fatalf("CreatePost scheduled: %v", err)
+		}
+	}
+
+	e := echo.New()
+	get := func(page string, asOwner bool) map[string]interface{} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/?page="+page, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if asOwner {
+			c.Set("user", "test-user")
+		}
+		if err := ph.GetHomePage(c); err != nil {
+			t.Fatalf("GetHomePage(page=%s): %v", page, err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return resp
+	}
+	titles := func(resp map[string]interface{}) []string {
+		var out []string
+		for _, p := range resp["posts"].([]interface{}) {
+			out = append(out, p.(map[string]interface{})["title"].(string))
+		}
+		return out
+	}
+	pag := func(resp map[string]interface{}) map[string]interface{} {
+		return resp["pagination"].(map[string]interface{})
+	}
+
+	// Owner, page 1: the published feed, with the queue advertised to its left.
+	owner1 := get("1", true)
+	if got := pag(owner1)["min_page"]; got != float64(-1) {
+		t.Errorf("owner min_page = %v, want -1 (3 scheduled posts at 2 per page)", got)
+	}
+	if got := len(titles(owner1)); got != 2 {
+		t.Errorf("owner page 1: %d posts, want 2 published", got)
+	}
+	if pag(owner1)["scheduled"] != false {
+		t.Error("page 1 must not be flagged as a scheduled page")
+	}
+
+	// Page 0: the head of the queue, soonest first.
+	page0 := get("0", true)
+	if got := titles(page0); len(got) != 2 || got[0] != "Soon 1" || got[1] != "Soon 2" {
+		t.Errorf("page 0 = %v, want [Soon 1 Soon 2]", got)
+	}
+	if pag(page0)["scheduled"] != true {
+		t.Error("page 0 must be flagged scheduled so the grid renders reversed and faded")
+	}
+	// `total`/`pages` keep describing the published feed — the paginator spans
+	// both halves and has to know how far right it can go.
+	if got := pag(page0)["total"]; got != float64(2) {
+		t.Errorf("page 0 total = %v, want 2 (the published feed)", got)
+	}
+
+	// Page -1: the tail of the queue.
+	if got := titles(get("-1", true)); len(got) != 1 || got[0] != "Soon 3" {
+		t.Errorf("page -1 = %v, want [Soon 3]", got)
+	}
+
+	// Past the end of the queue clamps to its first page rather than 404ing.
+	if got := titles(get("-9", true)); len(got) != 1 || got[0] != "Soon 3" {
+		t.Errorf("page -9 = %v, want the clamp to page -1 ([Soon 3])", got)
+	}
+
+	// A guest has no queue: min_page stays 1 and a negative page is just page 1.
+	guest := get("0", false)
+	if got := pag(guest)["min_page"]; got != float64(1) {
+		t.Errorf("guest min_page = %v, want 1", got)
+	}
+	if got := titles(guest); len(got) != 2 || got[0] == "Soon 1" {
+		t.Errorf("guest page 0 = %v, want the published feed", got)
+	}
+	if pag(guest)["scheduled"] != false {
+		t.Error("a guest must never be handed a scheduled page")
+	}
+}
+
+// A tag page runs into its own queue the same way the home feed does: page 0
+// and below hold the posts carrying this tag (or one below it) that are still
+// waiting to publish. Everything else about the page — `total`, `pages`, the
+// tag itself — keeps describing the published half.
+func TestPagesHandler_TagPageScheduledPages(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+	if err := h.settingsSvc.SetSetting(ctx, "posts_per_page", "2", "string"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+
+	// travel → japan, so the parent tag's queue must include the child's post.
+	travel, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", Slug: "travel"})
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Japan", Slug: "japan", ParentIDs: []int64{travel.ID}})
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Food", Slug: "food"})
+
+	create := func(title, status, tag string, at *time.Time) {
+		t.Helper()
+		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: title, Status: status, AuthorID: userID, Tags: []string{tag}, ScheduledAt: at,
+		}); err != nil {
+			t.Fatalf("CreatePost(%s): %v", title, err)
+		}
+	}
+
+	create("Live 1", "published", "Travel", nil)
+	create("Live 2", "published", "Travel", nil)
+	// Three queued under travel — two directly, one through its child tag — at
+	// 2 per page, so two future pages (0 and -1), soonest first.
+	base := time.Now().Add(24 * time.Hour)
+	at1, at2, at3 := base.Add(time.Hour), base.Add(2*time.Hour), base.Add(3*time.Hour)
+	create("Soon 1", "scheduled", "Travel", &at1)
+	create("Soon 2", "scheduled", "Japan", &at2)
+	create("Soon 3", "scheduled", "Travel", &at3)
+	// Another tag's queue must not leak into this one.
+	elsewhere := base.Add(30 * time.Minute)
+	create("Elsewhere", "scheduled", "Food", &elsewhere)
+
+	e := echo.New()
+	get := func(slug, page string, asOwner bool) map[string]interface{} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/tags/"+slug+"?page="+page, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("slug")
+		c.SetParamValues(slug)
+		if asOwner {
+			c.Set("user", "test-user")
+		}
+		if err := ph.GetTagPage(c); err != nil {
+			t.Fatalf("GetTagPage(%s, page=%s): %v", slug, page, err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return resp
+	}
+	titles := func(resp map[string]interface{}) []string {
+		var out []string
+		for _, p := range resp["posts"].([]interface{}) {
+			out = append(out, p.(map[string]interface{})["title"].(string))
+		}
+		return out
+	}
+	pag := func(resp map[string]interface{}) map[string]interface{} {
+		return resp["pagination"].(map[string]interface{})
+	}
+
+	// Owner, page 1: the published posts, with the queue advertised to the left.
+	owner1 := get("travel", "1", true)
+	if got := pag(owner1)["min_page"]; got != float64(-1) {
+		t.Errorf("min_page = %v, want -1 (3 queued under travel at 2 per page)", got)
+	}
+	if got := titles(owner1); len(got) != 2 || got[0] == "Soon 1" {
+		t.Errorf("page 1 = %v, want the tag's published posts", got)
+	}
+	if pag(owner1)["scheduled"] != false {
+		t.Error("page 1 must not be flagged as a scheduled page")
+	}
+
+	// Page 0: the head of this tag's queue, soonest first, descendants included.
+	page0 := get("travel", "0", true)
+	if got := titles(page0); len(got) != 2 || got[0] != "Soon 1" || got[1] != "Soon 2" {
+		t.Errorf("page 0 = %v, want [Soon 1 Soon 2] (Soon 2 arrives through the child tag)", got)
+	}
+	if pag(page0)["scheduled"] != true {
+		t.Error("page 0 must be flagged scheduled so the grid renders reversed and faded")
+	}
+	if got := pag(page0)["total"]; got != float64(2) {
+		t.Errorf("page 0 total = %v, want 2 (the tag's published posts)", got)
+	}
+
+	// Page -1: the tail. Past the end clamps to it rather than 404ing.
+	if got := titles(get("travel", "-1", true)); len(got) != 1 || got[0] != "Soon 3" {
+		t.Errorf("page -1 = %v, want [Soon 3]", got)
+	}
+	if got := titles(get("travel", "-9", true)); len(got) != 1 || got[0] != "Soon 3" {
+		t.Errorf("page -9 = %v, want the clamp to page -1 ([Soon 3])", got)
+	}
+
+	// A tag with nothing queued has no left half at all.
+	if got := pag(get("japan", "1", true))["min_page"]; got != float64(0) {
+		t.Errorf("japan min_page = %v, want 0 (one queued post)", got)
+	}
+
+	// A guest has no queue: min_page stays 1 and a negative page is just page 1.
+	guest := get("travel", "0", false)
+	if got := pag(guest)["min_page"]; got != float64(1) {
+		t.Errorf("guest min_page = %v, want 1", got)
+	}
+	if got := titles(guest); len(got) != 2 || got[0] == "Soon 1" {
+		t.Errorf("guest page 0 = %v, want the published posts", got)
+	}
+	if pag(guest)["scheduled"] != false {
+		t.Error("a guest must never be handed a scheduled page")
+	}
+}
+
+// TestPagesHandler_GetTagsGraph_HiddenMarking covers the owner's half of the
+// revelio switch on the Atlas. Concealing already drops hidden places from the
+// payload, but a map that loses 1 marker out of 500 reads as unchanged — so the
+// revealed view marks what a guest would not get. Guests must never see the
+// flag (they don't get the tags either, but the absence is the contract the
+// frontend reads: undefined → not hidden).
+func TestPagesHandler_GetTagsGraph_HiddenMarking(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+
+	// Ural is hidden; Taganay hangs off it but is not — hiding is not inherited
+	// (see TagGraph), which is exactly why the map marks tags one by one rather
+	// than shading a whole sub-tree.
+	ural, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Ural", Slug: "ural", Hidden: true})
+	if err != nil {
+		t.Fatalf("Ural creation failed: %v", err)
+	}
+	taganay, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{
+		Name: "Taganay", Slug: "taganay", ParentIDs: []int64{ural.ID},
+	})
+	if err != nil {
+		t.Fatalf("Taganay creation failed: %v", err)
+	}
+	berlin, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Berlin", Slug: "berlin"})
+	_ = h.repo.UpsertTagLocation(ctx, taganay.ID, 55.3, 59.8)
+	_ = h.repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
+
+	p, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Rocks", Status: "published", AuthorID: userID,
+	})
+	if err != nil {
+		t.Fatalf("post creation failed: %v", err)
+	}
+	_ = h.postSvc.UpdatePostTags(ctx, p.ID, []string{"taganay", "berlin"})
+
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "true", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-map.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-graph.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
+
+	e := echo.New()
+	nodesFor := func(admin bool) map[string]map[string]interface{} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/pages/graph?posts=0", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if admin {
+			c.Set("user", "test-user")
+		}
+		if err := ph.GetTagsGraph(c); err != nil {
+			t.Fatalf("GetTagsGraph(admin=%v) failed: %v", admin, err)
+		}
+		var resp struct {
+			Tags []map[string]interface{} `json:"tags"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal(admin=%v) failed: %v", admin, err)
+		}
+		out := make(map[string]map[string]interface{}, len(resp.Tags))
+		for _, node := range resp.Tags {
+			out[node["slug"].(string)] = node
+		}
+		return out
+	}
+
+	adminNodes := nodesFor(true)
+	if adminNodes["ural"]["is_hidden"] != true {
+		t.Errorf("ural is_hidden = %v, want true", adminNodes["ural"]["is_hidden"])
+	}
+	// A visible place carries no flag at all — the payload lists every tag on the
+	// site, so the field is emitted only when true.
+	for _, slug := range []string{"berlin", "taganay"} {
+		if _, ok := adminNodes[slug]["is_hidden"]; ok {
+			t.Errorf("%s should carry no is_hidden key, got %v", slug, adminNodes[slug]["is_hidden"])
+		}
+	}
+
+	guestNodes := nodesFor(false)
+	if _, ok := guestNodes["ural"]; ok {
+		t.Error("guest payload must not contain the hidden tag \"ural\"")
+	}
+	if _, ok := guestNodes["berlin"]["is_hidden"]; ok {
+		t.Error("guest payload must never carry is_hidden")
+	}
+}
+
+// TestPagesHandler_GetTagCloud_HiddenMarking is the same contract one level in:
+// a tapped place's cloud marks the co-tags and the posts that only exist for the
+// owner, so the chips that vanish with revelio off are identifiable while it is on.
+func TestPagesHandler_GetTagCloud_HiddenMarking(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+
+	place, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Berlin", Slug: "berlin"})
+	if err != nil {
+		t.Fatalf("place creation failed: %v", err)
+	}
+	if _, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "fog", Slug: "fog", Hidden: true}); err != nil {
+		t.Fatalf("hidden co-tag creation failed: %v", err)
+	}
+
+	pub, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Published", Status: "published", AuthorID: userID,
+	})
+	if err != nil {
+		t.Fatalf("published post creation failed: %v", err)
+	}
+	_ = h.postSvc.UpdatePostTags(ctx, pub.ID, []string{"berlin", "fog"})
+
+	draft, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Draft", Status: "draft", AuthorID: userID,
+	})
+	if err != nil {
+		t.Fatalf("draft creation failed: %v", err)
+	}
+	_ = h.postSvc.UpdatePostTags(ctx, draft.ID, []string{"berlin"})
+
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "true", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-map.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-graph.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
+
+	e := echo.New()
+	cloudFor := func(admin bool) (map[string]map[string]interface{}, map[string]map[string]interface{}) {
+		t.Helper()
+		id := strconv.FormatInt(place.ID, 10)
+		req := httptest.NewRequest(http.MethodGet, "/api/pages/graph/tag/"+id, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(id)
+		if admin {
+			c.Set("user", "test-user")
+		}
+		if err := ph.GetTagCloud(c); err != nil {
+			t.Fatalf("GetTagCloud(admin=%v) failed: %v", admin, err)
+		}
+		var resp struct {
+			Tags  []map[string]interface{} `json:"tags"`
+			Posts []map[string]interface{} `json:"posts"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal(admin=%v) failed: %v", admin, err)
+		}
+		tags := make(map[string]map[string]interface{}, len(resp.Tags))
+		for _, n := range resp.Tags {
+			tags[n["slug"].(string)] = n
+		}
+		posts := make(map[string]map[string]interface{}, len(resp.Posts))
+		for _, n := range resp.Posts {
+			posts[n["title"].(string)] = n
+		}
+		return tags, posts
+	}
+
+	adminTags, adminPosts := cloudFor(true)
+	if adminTags["fog"]["is_hidden"] != true {
+		t.Errorf("hidden co-tag fog is_hidden = %v, want true", adminTags["fog"]["is_hidden"])
+	}
+	if adminPosts["Draft"]["status"] != "draft" {
+		t.Errorf("draft post chip status = %v, want draft", adminPosts["Draft"]["status"])
+	}
+	// A published post is what every viewer gets, so it carries no status at all.
+	if _, ok := adminPosts["Published"]["status"]; ok {
+		t.Errorf("published post chip should carry no status key, got %v", adminPosts["Published"]["status"])
+	}
+
+	guestTags, guestPosts := cloudFor(false)
+	if _, ok := guestTags["fog"]; ok {
+		t.Error("guest cloud must not contain the hidden co-tag")
+	}
+	if _, ok := guestPosts["Draft"]; ok {
+		t.Error("guest cloud must not contain the draft post")
+	}
+	if _, ok := guestPosts["Published"]["status"]; ok {
+		t.Error("guest cloud must never carry status")
 	}
 }

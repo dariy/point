@@ -427,6 +427,13 @@ export const RSS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" heigh
 
 export const EXPAND_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
 
+// Revelio — the owner's reveal/conceal switch in the public footer. The open
+// eye is the revealing state (hidden items shown); the struck-through eye is
+// the site as a guest sees it.
+export const EYE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+
+export const EYE_OFF_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.19"></path><path d="M6.6 6.6A17.6 17.6 0 0 0 2 11s3.5 7 10 7a9.1 9.1 0 0 0 4.5-1.1"></path><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>';
+
 export const INFO_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"

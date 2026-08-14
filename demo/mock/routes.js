@@ -20,12 +20,10 @@ import {
   findTheme,
   nextId,
   paginate,
-  paginatedPage,
   setAuthenticated,
   storeThemeName,
   storePlugins,
   toListShape,
-  visiblePosts,
   withinYears,
 } from "./store.js";
 
@@ -51,9 +49,254 @@ function inlineMaxOrDefault(raw) {
   return Number.isInteger(n) && n >= 1 && n <= 10 ? n : 4;
 }
 
-/** Posts visible to the current principal — admins additionally see drafts. */
-function readablePosts(state) {
-  return state.authenticated ? state.posts.slice() : visiblePosts(state);
+// ── Visibility ────────────────────────────────────────────────────────────
+//
+// Point hides things two ways, and they compose: a post can be withheld by its
+// own `status`, or by carrying a tag whose `hides_posts` is set — the tag's own
+// or one inherited from an ancestor. A tag can itself be `hidden`, likewise
+// inherited. docs/features/hidden-visibility.md is the model; this is that
+// model over the demo's stores.
+//
+// Computed rather than read off the recorded rows. The fixture carries the
+// `effective_*` flags the backend worked out at record time, which is fine
+// until a visitor opens /light/tags and hides something — at which point the
+// recording describes a tree that no longer exists. Recomputing means the
+// demo's own edits propagate the way a real one's would, and the revelio switch
+// has something true to show.
+
+/**
+ * The inherited visibility flags, by tag id.
+ *
+ * Both flags propagate to every descendant (TagGraph's BFS, api/internal/
+ * services/tag_graph.go) — the graph is a DAG, so `seen` is what terminates a
+ * walk that can reach the same tag by more than one path. `via` records which
+ * ancestor set a tag hidden, which is what the admin tag list reports as
+ * `hidden_via`.
+ */
+export function hiddenSets(state) {
+  const byId = new Map(state.tags.map((t) => [t.id, t]));
+  const hidden = new Set();
+  const hidesPosts = new Set();
+  const via = new Map();
+
+  const spread = (rootId, into, mark) => {
+    const queue = [rootId];
+    const seen = new Set();
+    while (queue.length) {
+      const id = queue.shift();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      into.add(id);
+      if (mark && id !== rootId && !via.has(id)) via.set(id, rootId);
+      for (const child of byId.get(id)?.children || []) queue.push(child.id);
+    }
+  };
+
+  for (const tag of state.tags) {
+    if (tag.hidden) spread(tag.id, hidden, true);
+    if (tag.hides_posts) spread(tag.id, hidesPosts, false);
+  }
+
+  // Slugs as well as ids: a post carries its tags by slug, not by id.
+  const hidesPostsSlugs = new Set(
+    state.tags.filter((t) => hidesPosts.has(t.id)).map((t) => t.slug),
+  );
+
+  return { hidden, hidesPosts, hidesPostsSlugs, via };
+}
+
+/** Is this post withheld from the public by one of its tags? */
+function hiddenByTag(post, sets) {
+  return (post.tags || []).some((t) => sets.hidesPostsSlugs.has(t.slug));
+}
+
+/** The statuses a direct fetch will answer with for a guest — visibility.go. */
+const PUBLIC_STATUS = new Set(["published", "page"]);
+
+/**
+ * Can a guest read this post at all?
+ *
+ * `draft`, `hidden` and `scheduled` are all withheld, and so is a published
+ * post filed under a tag that hides its posts.
+ */
+function publiclyReadable(post, sets) {
+  return PUBLIC_STATUS.has(post.status) && !hiddenByTag(post, sets);
+}
+
+/**
+ * The posts a feed page is drawn from: published, plus the hidden ones for the
+ * owner. Never drafts, never the scheduled queue — that lives left of page 1
+ * and is read separately (see scheduledQueue).
+ *
+ * This is ListPosts with `IncludeDrafts: false, IncludeHidden: !publicOnly`,
+ * which is what both the home feed and the tag pages ask for.
+ */
+export function feedPosts(state, sets = hiddenSets(state)) {
+  return state.posts.filter((p) => {
+    if (p.status === "draft" || p.status === "scheduled" || p.status === "trashed") {
+      return false;
+    }
+    if (state.authenticated) return p.status === "published" || p.status === "hidden";
+    return publiclyReadable(p, sets);
+  });
+}
+
+/** The queue: posts waiting to be published, soonest first. Owner-only. */
+export function scheduledQueue(state) {
+  if (!state.authenticated) return [];
+  return state.posts
+    .filter((p) => p.status === "scheduled")
+    .sort((a, b) => {
+      // A scheduled post with no date sorts last rather than first, matching
+      // the queue's own ORDER BY (`scheduled_at IS NULL` first in SQL).
+      const at = Date.parse(a.scheduled_at || "") || Infinity;
+      const bt = Date.parse(b.scheduled_at || "") || Infinity;
+      return at - bt || Date.parse(a.created_at || 0) - Date.parse(b.created_at || 0);
+    });
+}
+
+/**
+ * Posts a *list* endpoint returns — the admin post manager, which unlike a feed
+ * shows drafts and the scheduled queue because managing them is what it is for.
+ * A guest gets the public set.
+ */
+function readablePosts(state, sets = hiddenSets(state)) {
+  return state.authenticated
+    ? state.posts.slice()
+    : state.posts.filter((p) => publiclyReadable(p, sets));
+}
+
+/**
+ * Strip the owner-only visibility fields from a post on its way to a guest.
+ *
+ * The backend never puts them there in the first place (they are injected only
+ * for an authenticated viewer), and the frontend keys the lock icon off their
+ * mere presence — so leaving them in would mark a guest's own feed with locks
+ * for posts that are not hidden from them at all.
+ */
+function projectPost(state, post, sets) {
+  if (state.authenticated) {
+    return { ...post, is_hidden: post.status === "hidden", is_hidden_by_tag: hiddenByTag(post, sets) };
+  }
+  const { is_hidden, is_hidden_by_tag, ...rest } = post;
+  return rest;
+}
+
+/** The same, for a list of posts. */
+function projectPosts(state, posts, sets) {
+  return posts.map((p) => projectPost(state, p, sets));
+}
+
+/**
+ * A tag as this viewer may see it: the owner gets the computed inheritance, a
+ * guest gets neither the flags nor the tags they describe (filtered upstream).
+ */
+function projectTag(state, tag, sets) {
+  if (!state.authenticated) {
+    const { hidden, hides_posts, effective_hidden, effective_hides_posts, hidden_via, ...rest } = tag;
+    return rest;
+  }
+  const out = {
+    ...tag,
+    effective_hidden: sets.hidden.has(tag.id),
+    effective_hides_posts: sets.hidesPosts.has(tag.id),
+  };
+  if (sets.via.has(tag.id)) out.hidden_via = sets.via.get(tag.id);
+  else delete out.hidden_via;
+  return out;
+}
+
+/**
+ * A recorded tag cloud, minus what this viewer may not follow.
+ *
+ * The cloud is a flat weighted list of `{id, name, slug, count, weight}`; the
+ * real one is filtered at the source (TagGraph skips effectively-hidden tags
+ * before building it), so this is the same cut applied to the recording.
+ */
+function visibleCloud(state, cloud, sets = hiddenSets(state)) {
+  if (state.authenticated) return cloud;
+  return (cloud || []).filter((t) => !sets.hidden.has(t.id));
+}
+
+/**
+ * A recorded nav tree, minus what this viewer may not follow.
+ *
+ * Recursive because the menu is the tag hierarchy: hiding a country has to take
+ * its cities with it, and the flags inherit the same way (hiddenSets has
+ * already worked out which ids that leaves).
+ */
+function visibleNavTree(state, nodes, sets = hiddenSets(state)) {
+  if (state.authenticated) return nodes;
+  return (nodes || [])
+    .filter((n) => !n.id || !sets.hidden.has(n.id))
+    .map((n) => ({ ...n, children: visibleNavTree(state, n.children, sets) }));
+}
+
+/** Tags this viewer may see at all. */
+function readableTags(state, sets = hiddenSets(state)) {
+  const rows = state.authenticated
+    ? state.tags
+    : state.tags.filter((t) => !sets.hidden.has(t.id));
+  return rows.map((t) => projectTag(state, t, sets));
+}
+
+// ── Feed pagination ───────────────────────────────────────────────────────
+
+/**
+ * One page of a feed, from either half of it.
+ *
+ * The owner's feed extends *left* of page 1 into the scheduled queue: page 0 is
+ * the first future page, then -1, -2 … `min_page` reports how far left it goes
+ * (1 for everyone else) and `scheduled` says which half the returned page came
+ * from, which is what lets GridPager and the paginator treat page 0 as the
+ * first page instead of hard-coding 1. See resolveScheduledPage
+ * (api/internal/api/pages.go) and docs/features/publishing.md.
+ *
+ * `total` and `pages` keep describing the *published* half on both sides, so
+ * the paginator spans the whole range and a swipe back right lands on page 1
+ * knowing what follows it.
+ *
+ * A timeline scope turns the left half off: an unpublished post has no year to
+ * be scoped by, and one that has not happened yet cannot be in range.
+ */
+export function feedPage(state, rows, queue, query, perPageDefault) {
+  const perPage = Number(query.per_page) || perPageDefault;
+  const scoped = withinYears(rows, query);
+  const hasYearFilter = Number(query.year_from) > 0 && Number(query.year_to) > 0;
+
+  const queued = hasYearFilter ? [] : queue;
+  const minPage = queued.length ? 1 - Math.ceil(queued.length / perPage) : 1;
+
+  const asked = query.page === undefined || query.page === "" ? 1 : Number(query.page);
+  let page = Number.isFinite(asked) ? asked : 1;
+  // A page past the end of the queue clamps to its last one rather than 404ing
+  // — the same forgiveness the right-hand side of the feed gets.
+  if (page < minPage) page = minPage;
+
+  const total = scoped.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+
+  let posts;
+  if (page < 1) {
+    // Page 0 is the queue's first page, -1 its second, and so on.
+    const start = -page * perPage;
+    posts = queued.slice(start, start + perPage);
+  } else {
+    const start = (page - 1) * perPage;
+    posts = scoped.slice(start, start + perPage);
+  }
+
+  return {
+    posts,
+    pagination: {
+      page,
+      pages,
+      per_page: perPage,
+      total,
+      min_page: minPage,
+      scheduled: page < 1,
+    },
+  };
 }
 
 function findPost(state, idOrSlug) {
@@ -133,12 +376,22 @@ function taggedWithAny(post, slugs) {
   return (post.tags || []).some((t) => slugs.has(t.slug));
 }
 
-/** Posts filed under a tag or any of its descendants, newest first. */
-function postsForTag(state, slug) {
+/** Feed posts filed under a tag or any of its descendants, newest first. */
+function postsForTag(state, slug, sets = hiddenSets(state)) {
   const slugs = tagFilterSlugs(state, slug);
-  return readablePosts(state)
+  return feedPosts(state, sets)
     .filter((p) => taggedWithAny(p, slugs))
     .sort(byNewest);
+}
+
+/**
+ * The queue for one tag page: the same tag-plus-descendants set the published
+ * list is drawn from, so a parent tag shows its children's queue too
+ * (TagService.GetScheduledPostsByTag).
+ */
+function queueForTag(state, slug) {
+  const slugs = tagFilterSlugs(state, slug);
+  return scheduledQueue(state).filter((p) => taggedWithAny(p, slugs));
 }
 
 /**
@@ -199,19 +452,31 @@ function atlasThumbUrl(url) {
 function atlasCloud(state, tag, query) {
   // atlasCloudLimit, which is also the atlas_post_limit default.
   const LIMIT = 10;
+  const sets = hiddenSets(state);
 
   const inSubtree = new Set(tagSubtree(state, tag).map((t) => t.slug));
-  const subtreePosts = readablePosts(state).filter((p) =>
+  const subtreePosts = feedPosts(state, sets).filter((p) =>
     (p.tags || []).some((t) => inSubtree.has(t.slug)),
   );
 
   const recent = withinYears(subtreePosts, query).sort(byNewest).slice(0, LIMIT);
-  const posts = recent.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.title,
-    media_url: atlasThumbUrl(p.media_url),
-  }));
+  const posts = recent.map((p) => {
+    const node = {
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      media_url: atlasThumbUrl(p.media_url),
+    };
+    // The owner's marking for what a guest would not get: the Atlas draws a
+    // node as concealed when it carries a non-public status or `is_hidden`
+    // (isConcealed, frontend/src/plugins/tags-atlas/index.js), and the backend
+    // only sends either to a viewer allowed to see hidden items.
+    if (state.authenticated) {
+      node.status = p.status;
+      if (p.status === "published" && hiddenByTag(p, sets)) node.is_hidden = true;
+    }
+    return node;
+  });
 
   // Related tags, ranked by how many of the place's posts carry them and tied
   // on name. The place itself is dropped; its descendants stay, since a
@@ -228,6 +493,9 @@ function atlasCloud(state, tag, query) {
   const tags = [...counts]
     .map(([slug, count]) => ({ tag: bySlug.get(slug), count }))
     .filter((row) => row.tag)
+    // A hidden tag is not offered to a guest — the cloud is public navigation
+    // like any other, and a chip leading to a 404 is worse than an absence.
+    .filter((row) => state.authenticated || !sets.hidden.has(row.tag.id))
     .sort((a, b) => b.count - a.count || a.tag.name.localeCompare(b.tag.name))
     .slice(0, LIMIT)
     .map(({ tag: t }) => {
@@ -239,6 +507,7 @@ function atlasCloud(state, tag, query) {
         node.latitude = at.latitude;
         node.longitude = at.longitude;
       }
+      if (state.authenticated && sets.hidden.has(t.id)) node.is_hidden = true;
       return node;
     });
 
@@ -285,11 +554,21 @@ function atlasCloud(state, tag, query) {
  */
 function scopedGraph(state, query) {
   const graph = state.pages.graph || {};
-  const from = Number(query.year_from);
-  const to = Number(query.year_to);
-  if (!(from > 0 && to > 0 && from <= to)) return graph;
+  const sets = hiddenSets(state);
 
-  const inRange = withinYears(readablePosts(state), query);
+  // The blob was recorded as the owner, so it holds the hidden place and the
+  // marking that says so. Both come off for a guest — the point of the switch
+  // is that the map redraws without them, and `is_hidden` is exactly what the
+  // Atlas keys its concealed styling off.
+  const visibleTags = (graph.tags || [])
+    .filter((t) => state.authenticated || !sets.hidden.has(t.id))
+    .map((t) => {
+      if (state.authenticated) return { ...t, is_hidden: sets.hidden.has(t.id) };
+      const { is_hidden, ...rest } = t;
+      return rest;
+    });
+
+  const inRange = withinYears(feedPosts(state, sets), query);
   const inRangeIds = new Set(inRange.map((p) => p.id));
 
   const counts = new Map();
@@ -301,7 +580,7 @@ function scopedGraph(state, query) {
     if (n > 0) counts.set(tag.id, n);
   }
 
-  const tags = (graph.tags || [])
+  const tags = visibleTags
     .filter((t) => counts.has(t.id))
     .map((t) => ({ ...t, post_count: counts.get(t.id) }));
   const kept = new Set(tags.map((t) => t.id));
@@ -315,9 +594,17 @@ function scopedGraph(state, query) {
   };
 
   // The force-graph's post nodes, when the blob carries them (the Atlas asks
-  // for `posts=0` and never sees these). Edges only ever join surviving nodes.
+  // for `posts=0` and never sees these). Edges only ever join surviving nodes,
+  // and `inRangeIds` is already the viewer's own set of posts — so a concealed
+  // one takes its edges with it.
   if (graph.posts) {
-    scoped.posts = graph.posts.filter((p) => inRangeIds.has(p.id));
+    scoped.posts = graph.posts
+      .filter((p) => inRangeIds.has(p.id))
+      .map((p) => {
+        if (state.authenticated) return p;
+        const { status, is_hidden, ...rest } = p;
+        return rest;
+      });
     scoped.membershipEdges = (graph.membershipEdges || []).filter(
       (e) => inRangeIds.has(e.post) && kept.has(e.tag),
     );
@@ -498,16 +785,38 @@ export const routes = [
     "GET",
     "/api/pages/home",
     ({ state, query }) => {
+      const sets = hiddenSets(state);
       const perPage = Number(state.publicSettings?.posts_per_page) || 6;
-      const rows = readablePosts(state).sort(byNewest);
+      const rows = feedPosts(state, sets).sort(byNewest);
+      const page = feedPage(state, rows, scheduledQueue(state), query, perPage);
       return ok({
         ...state.pages.home,
-        ...paginatedPage(rows, query, perPage),
+        ...page,
+        posts: projectPosts(state, page.posts, sets),
+        // The recorded cloud is the owner's. A guest gets the tags they may
+        // actually follow — the same filtering GetTagCloud does at the source.
+        ...(state.pages.home?.tag_cloud
+          ? { tag_cloud: visibleCloud(state, state.pages.home.tag_cloud, sets) }
+          : {}),
       });
     },
   ],
 
-  ["GET", "/api/pages/tags", ({ state }) => ok(state.pages.tags)],
+  // The tags index. Recorded as the owner, so a guest's copy has the hidden
+  // tags taken out of it — otherwise the one page whose whole job is to list
+  // the archive's tags would be the one place concealment did not reach.
+  [
+    "GET",
+    "/api/pages/tags",
+    ({ state }) => {
+      const page = state.pages.tags || {};
+      const sets = hiddenSets(state);
+      const tags = (page.tags || [])
+        .filter((t) => state.authenticated || !sets.hidden.has(t.id))
+        .map((t) => projectTag(state, t, sets));
+      return ok({ ...page, tags, total: tags.length });
+    },
+  ],
   ["GET", "/api/pages/graph", ({ state, query }) => ok(scopedGraph(state, query))],
   [
     "GET",
@@ -526,7 +835,22 @@ export const routes = [
   // falls back to `menu` when `tags` is absent, which is what the server sends
   // in the default "tags" mode. The empty fallback has to use the same key —
   // `{items: []}` would leave navTags undefined and refetch on every mount.
-  ["GET", "/api/pages/nav", ({ state }) => ok(state.pages.nav ?? { menu: [] })],
+  //
+  // Both trees are cut to what the viewer may follow: the header is the first
+  // place a hidden place would leak, and it is on every page of the site.
+  [
+    "GET",
+    "/api/pages/nav",
+    ({ state }) => {
+      const nav = state.pages.nav ?? { menu: [] };
+      const sets = hiddenSets(state);
+      return ok({
+        ...nav,
+        menu: visibleNavTree(state, nav.menu, sets),
+        ...(nav.tags ? { tags: visibleNavTree(state, nav.tags, sets) } : {}),
+      });
+    },
+  ],
 
   // Admin menu editor (/light/menu). Mirrors NavMenuHandler in
   // api/internal/api/nav_menu.go: the config lives in settings rows, and
@@ -575,27 +899,58 @@ export const routes = [
     "GET",
     "/api/pages/tags/:slug",
     ({ state, params, query }) => {
+      const sets = hiddenSets(state);
       const tag = state.tags.find((t) => t.slug === params.slug);
-      if (!tag) return notFound("tag not found");
+      // A hidden tag is a 404 for a guest, not an empty page: GetTagPage checks
+      // EffectiveHidden before anything else, so the page does not exist rather
+      // than existing and holding nothing.
+      if (!tag || (!state.authenticated && sets.hidden.has(tag.id))) {
+        return notFound("tag not found");
+      }
       const perPage = Number(state.publicSettings?.posts_per_page) || 6;
-      const rows = postsForTag(state, params.slug);
+      const rows = postsForTag(state, params.slug, sets);
+      // Tag pages have the same left half as the home feed, holding the queued
+      // posts filed under this tag or one below it.
+      const page = feedPage(state, rows, queueForTag(state, params.slug), query, perPage);
       return ok({
-        tag,
-        menu: state.pages.home?.menu ?? [],
+        tag: projectTag(state, tag, sets),
+        menu: visibleNavTree(state, state.pages.home?.menu ?? [], sets),
         breadcrumbs: breadcrumbsFor(state, tag),
-        nav_children: (tag.children || []).map((c) => ({
-          id: c.id,
-          name: c.name,
-          slug: c.slug,
-        })),
-        ...paginatedPage(rows, query, perPage),
+        nav_children: (tag.children || [])
+          .filter((c) => state.authenticated || !sets.hidden.has(c.id))
+          .map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+        ...page,
+        posts: projectPosts(state, page.posts, sets),
       });
     },
   ],
 
   // ── Timeline ────────────────────────────────────────────────────────────
 
-  ["GET", "/api/timeline", ({ state }) => ok(state.timeline)],
+  // The pills are recorded, their counts are not: they are a count of posts,
+  // and how many posts there are is exactly what concealment changes. Rescoring
+  // from the store keeps the histogram agreeing with the feed underneath it in
+  // both views.
+  [
+    "GET",
+    "/api/timeline",
+    ({ state }) => {
+      const timeline = state.timeline || {};
+      const rows = feedPosts(state);
+      const counts = new Map();
+      for (const post of rows) {
+        for (const t of post.tags || []) {
+          if (t.kind === "year") counts.set(t.slug, (counts.get(t.slug) || 0) + 1);
+        }
+      }
+      const pills = (timeline.pills || [])
+        .map((pill) => ({ ...pill, post_count: counts.get(pill.slug) ?? 0 }))
+        // A decade pill sums its years rather than carrying a tag of its own,
+        // so it is left as recorded rather than counted to zero.
+        .filter((pill) => pill.is_decade || pill.post_count > 0);
+      return ok({ ...timeline, pills });
+    },
+  ],
   [
     "GET",
     "/api/timeline/locations",
@@ -610,8 +965,14 @@ export const routes = [
     "GET",
     "/api/posts/slug/:slug",
     ({ state, params }) => {
+      const sets = hiddenSets(state);
       const post = state.posts.find((p) => p.slug === params.slug);
-      return post ? ok(postDetail(state, post)) : notFound("post not found");
+      // The same gate as the by-id read: this is the URL a guessed or shared
+      // slug arrives on, which is exactly what the status check is for.
+      if (!post || (!state.authenticated && !publiclyReadable(post, sets))) {
+        return notFound("post not found");
+      }
+      return ok(projectPost(state, postDetail(state, post), sets));
     },
   ],
 
@@ -623,7 +984,7 @@ export const routes = [
     "/api/posts/:slug/page",
     ({ state, params }) => {
       const perPage = Number(state.publicSettings?.posts_per_page) || 6;
-      const rows = readablePosts(state).sort(byNewest);
+      const rows = feedPosts(state).sort(byNewest);
       const idx = rows.findIndex((p) => p.slug === params.slug);
       if (idx === -1) return notFound("post not found");
       return ok({ page: Math.floor(idx / perPage) + 1, per_page: perPage });
@@ -647,13 +1008,17 @@ export const routes = [
     "GET",
     "/api/posts/:id",
     ({ state, params }) => {
+      const sets = hiddenSets(state);
       const post = findPost(state, params.id);
-      // A logged-out visitor gets a 404 for drafts and hidden posts, the way
-      // PostHandler.GetPostByID does — readablePosts holds the same references.
-      if (!post || !readablePosts(state).includes(post)) {
+      // A logged-out visitor gets a 404 for a draft, a hidden or scheduled
+      // post, and for one filed under a tag that hides its posts — the checks
+      // PostHandler.GetPostByID makes before it builds a response. A scheduled
+      // post is finished writing and only waiting for its time; withholding it
+      // is the whole reason isPubliclyReadableStatus exists.
+      if (!post || (!state.authenticated && !publiclyReadable(post, sets))) {
         return notFound("post not found");
       }
-      return ok(postDetail(state, post));
+      return ok(projectPost(state, postDetail(state, post), sets));
     },
   ],
 
@@ -796,14 +1161,29 @@ export const routes = [
 
   // ── Tags ────────────────────────────────────────────────────────────────
 
-  ["GET", "/api/tags/cloud", ({ state }) => ok(state.tagCloud)],
+  [
+    "GET",
+    "/api/tags/cloud",
+    ({ state }) => {
+      const cloud = state.tagCloud;
+      // Recorded as `{tags: [...]}`, but an older bundle recorded the bare
+      // array — both are filtered rather than one of them silently passing a
+      // hidden tag through to a guest.
+      if (Array.isArray(cloud)) return ok(visibleCloud(state, cloud));
+      return ok({ ...cloud, tags: visibleCloud(state, cloud?.tags || []) });
+    },
+  ],
 
   [
     "GET",
     "/api/tags/slug/:slug",
     ({ state, params }) => {
+      const sets = hiddenSets(state);
       const tag = state.tags.find((t) => t.slug === params.slug);
-      return tag ? ok(tag) : notFound("tag not found");
+      if (!tag || (!state.authenticated && sets.hidden.has(tag.id))) {
+        return notFound("tag not found");
+      }
+      return ok(projectTag(state, tag, sets));
     },
   ],
 
@@ -811,8 +1191,12 @@ export const routes = [
     "GET",
     "/api/tags/:id",
     ({ state, params }) => {
+      const sets = hiddenSets(state);
       const tag = state.tags.find((t) => t.id === Number(params.id));
-      return tag ? ok(tag) : notFound("tag not found");
+      if (!tag || (!state.authenticated && sets.hidden.has(tag.id))) {
+        return notFound("tag not found");
+      }
+      return ok(projectTag(state, tag, sets));
     },
   ],
 
@@ -820,7 +1204,10 @@ export const routes = [
     "GET",
     "/api/tags",
     ({ state, query }) => {
-      let rows = state.tags.slice();
+      // readableTags drops what this viewer may not see and computes the
+      // inherited flags for the owner, so a tag hidden inside the demo takes
+      // its descendants with it the way the backend's TagGraph would.
+      let rows = readableTags(state);
       if (query.q) {
         // Name *and* slug, like TagHandler.ListTags: "reykjavik" has to find
         // Reykjavík, which is exactly the query a visitor without the accent
@@ -832,10 +1219,8 @@ export const routes = [
             (t.slug || "").toLowerCase().includes(q),
         );
       }
-      // A logged-out visitor never sees a hidden tag; `include_empty=false` (the
-      // search page and the header typeahead, which offer tags as links) drops
-      // the ones that would lead to an empty page.
-      if (!state.authenticated) rows = rows.filter((t) => !t.effective_hidden);
+      // `include_empty=false` (the search page and the header typeahead, which
+      // offer tags as links) drops the ones that would lead to an empty page.
       if (query.include_empty === "false") rows = rows.filter((t) => t.post_count > 0);
       // The real endpoint returns the full set; the admin page paginates client
       // side. Matching that keeps the tag manager's counts honest.

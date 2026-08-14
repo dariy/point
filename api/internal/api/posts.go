@@ -278,7 +278,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
-		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
+		if !isPubliclyReadableStatus(post.Status) {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
@@ -288,7 +288,9 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		}
 	}
 
-	if !isAdmin && strings.EqualFold(post.Status, "published") {
+	// The owner reading their own site with revelio off is not a visitor; don't
+	// let previewing the guest view inflate the post's view count.
+	if !isAdmin && !IsGuestView(c) && strings.EqualFold(post.Status, "published") {
 		_ = h.postService.IncrementViewCount(ctx, post.ID)
 	}
 
@@ -439,7 +441,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
-		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
+		if !isPubliclyReadableStatus(post.Status) {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {

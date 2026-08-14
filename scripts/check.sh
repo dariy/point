@@ -49,7 +49,7 @@ run_step() {
 run_step "Go lint" bash -c "
     set -eo pipefail
     cd '$ROOT_DIR/api'
-    golangci-lint run --timeout 5m $FIX_FLAG --build-tags integration
+    golangci-lint run --timeout 5m $FIX_FLAG
 "
 
 # ── JS lint ───────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ fi
 run_step "Go vet" bash -c "
     set -eo pipefail
     cd '$ROOT_DIR/api'
-    go vet -tags=integration ./...
+    go vet ./...
 "
 
 # ── Go tests ──────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ run_step "Go vet" bash -c "
 run_step "Go tests" bash -c "
     set -eo pipefail
     cd '$ROOT_DIR/api'
-    go test -tags=integration $SHORT_FLAG -coverprofile=coverage.out ./...
+    go test $SHORT_FLAG -coverprofile=coverage.out ./...
     go tool cover -func=coverage.out | tail -1
 "
 

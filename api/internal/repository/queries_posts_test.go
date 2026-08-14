@@ -163,6 +163,32 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 	}
 }
 
+// A post waiting in the scheduled queue has no published_at, so it has no place
+// in the sequence prev/next walks. It must come back with no neighbours — the
+// NULL used to be scanned into a string, failing the whole call, which is a 500
+// from the navigation endpoint for every scheduled post.
+func TestRepository_GetPostNavigation_Unpublished(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, live := insertUserAndPost(t, repo, "nav-live", "published")
+	_, queued := insertUserAndPost(t, repo, "nav-queued", "scheduled")
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01' WHERE id=?`, live)
+	_, _ = repo.DB().Exec(
+		`UPDATE posts SET published_at=NULL, scheduled_at='2030-01-01 10:00:00' WHERE id=?`, queued)
+
+	prev, next, err := repo.GetPostNavigation(ctx, queued, false, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation on a scheduled post failed: %v", err)
+	}
+	if prev != nil || next != nil {
+		t.Errorf("scheduled post got neighbours prev=%v next=%v, want none", prev, next)
+	}
+}
+
 // TestRepository_GetPostNavigation_TagScoped verifies the optional tag argument
 // restricts adjacency to posts under that tag (skipping untagged neighbours),
 // while pages are always excluded.
@@ -345,6 +371,144 @@ func TestRepository_GetHierarchicalPostCounts(t *testing.T) {
 	}
 	if counts2[1] != 1 {
 		t.Errorf("expected parent count=1 (admin), got %d", counts2[1])
+	}
+}
+
+// A scheduled post is written and tagged; it just hasn't gone live. The admin
+// count includes it (that is the badge in /light/tags), the public one does not.
+func TestRepository_GetHierarchicalPostCounts_Scheduled(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, pubID := insertUserAndPost(t, repo, "hpcs-live", "published")
+	_, schedID := insertUserAndPost(t, repo, "hpcs-soon", "scheduled")
+	_, draftID := insertUserAndPost(t, repo, "hpcs-draft", "draft")
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,1),(?,1),(?,1)`, pubID, schedID, draftID)
+
+	public, err := repo.GetHierarchicalPostCounts(ctx, true)
+	if err != nil {
+		t.Fatalf("GetHierarchicalPostCounts(true) failed: %v", err)
+	}
+	if public[1] != 1 {
+		t.Errorf("public count = %d, want 1 (published only)", public[1])
+	}
+
+	admin, err := repo.GetHierarchicalPostCounts(ctx, false)
+	if err != nil {
+		t.Fatalf("GetHierarchicalPostCounts(false) failed: %v", err)
+	}
+	if admin[1] != 2 {
+		t.Errorf("admin count = %d, want 2 (published + scheduled, never the draft)", admin[1])
+	}
+}
+
+// The scheduled queue reads soonest-first, which is what puts the post about to
+// go live next to the newest published one on the feed's first future page.
+func TestRepository_ListScheduledPosts(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, later := insertUserAndPost(t, repo, "sched-later", "scheduled")
+	_, sooner := insertUserAndPost(t, repo, "sched-sooner", "scheduled")
+	insertUserAndPost(t, repo, "sched-live", "published")
+	insertUserAndPost(t, repo, "sched-draft", "draft")
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-06-01 10:00:00", later)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-01-01 10:00:00", sooner)
+
+	total, err := repo.CountScheduledPosts(ctx)
+	if err != nil {
+		t.Fatalf("CountScheduledPosts failed: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("CountScheduledPosts = %d, want 2", total)
+	}
+
+	posts, err := repo.ListScheduledPosts(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("ListScheduledPosts failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("got %d scheduled posts, want 2", len(posts))
+	}
+	if posts[0].ID != sooner || posts[1].ID != later {
+		t.Errorf("order = [%d %d], want soonest first [%d %d]", posts[0].ID, posts[1].ID, sooner, later)
+	}
+	if !posts[0].ScheduledAt.Valid {
+		t.Error("scheduled_at must be selected — the card renders the publish time from it")
+	}
+
+	// Paging walks further into the queue.
+	page2, err := repo.ListScheduledPosts(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("ListScheduledPosts(offset) failed: %v", err)
+	}
+	if len(page2) != 1 || page2[0].ID != later {
+		t.Errorf("second page = %v, want [%d]", page2, later)
+	}
+}
+
+// A tag page shows its own slice of the queue. The tag IDs it passes are the
+// tag plus its descendants (the service resolves those), so this only has to
+// hold the narrowing itself: same ordering, nothing from another tag.
+func TestRepository_ListScheduledPostsByTagIDs(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, later := insertUserAndPost(t, repo, "tsched-later", "scheduled")
+	_, sooner := insertUserAndPost(t, repo, "tsched-sooner", "scheduled")
+	_, elsewhere := insertUserAndPost(t, repo, "tsched-elsewhere", "scheduled")
+	_, live := insertUserAndPost(t, repo, "tsched-live", "published")
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t'), (2,'Other','other')`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,1),(?,1),(?,1),(?,2)`,
+		later, sooner, live, elsewhere)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-06-01 10:00:00", later)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-01-01 10:00:00", sooner)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2029-01-01 10:00:00", elsewhere)
+
+	total, err := repo.CountScheduledPostsByTagIDs(ctx, []int64{1})
+	if err != nil {
+		t.Fatalf("CountScheduledPostsByTagIDs failed: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("count = %d, want 2 (the published post and the other tag's are not queued here)", total)
+	}
+
+	posts, err := repo.ListScheduledPostsByTagIDs(ctx, []int64{1}, 10, 0)
+	if err != nil {
+		t.Fatalf("ListScheduledPostsByTagIDs failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("got %d posts, want 2", len(posts))
+	}
+	if posts[0].ID != sooner || posts[1].ID != later {
+		t.Errorf("order = [%d %d], want soonest first [%d %d]", posts[0].ID, posts[1].ID, sooner, later)
+	}
+
+	// Paging walks further into the tag's queue.
+	page2, err := repo.ListScheduledPostsByTagIDs(ctx, []int64{1}, 1, 1)
+	if err != nil {
+		t.Fatalf("ListScheduledPostsByTagIDs(offset) failed: %v", err)
+	}
+	if len(page2) != 1 || page2[0].ID != later {
+		t.Errorf("second page = %v, want [%d]", page2, later)
+	}
+
+	// No tags is no queue, not the whole one.
+	if n, err := repo.CountScheduledPostsByTagIDs(ctx, nil); err != nil || n != 0 {
+		t.Errorf("count for no tags = (%d, %v), want (0, nil)", n, err)
+	}
+	if got, err := repo.ListScheduledPostsByTagIDs(ctx, nil, 10, 0); err != nil || len(got) != 0 {
+		t.Errorf("list for no tags = (%v, %v), want empty", got, err)
 	}
 }
 

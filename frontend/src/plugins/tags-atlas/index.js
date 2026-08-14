@@ -27,6 +27,8 @@ import {
   removeCanonical,
 } from "../../utils/helpers.js";
 import { tagKind } from "../../utils/tags.js";
+import { LOCK_SVG } from "../../utils/icons.js";
+import { isRevelioOn } from "../../utils/revelio.js";
 
 import {
   COUNTRIES_GEOJSON,
@@ -63,6 +65,25 @@ function isDarkTheme() {
 function truncate(s, n) {
   s = s || "";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+/**
+ * Owner-only marking: everything on this map that a guest would not get.
+ *
+ * The backend sends `is_hidden` on a tag node (and a non-public `status` on a
+ * post node) only when the viewer may see hidden items — i.e. never with
+ * revelio off — so these are undefined for a guest and the marking disappears
+ * along with the nodes themselves. Without it, concealing drops a handful of
+ * markers out of hundreds and the map looks unchanged.
+ */
+export function isConcealed(node) {
+  return !!node.is_hidden || (!!node.status && node.status !== "published");
+}
+
+/** Tooltip naming why a node is owner-only: "(hidden)", "(draft)", "(scheduled)". */
+export function concealedTitle(node, name) {
+  if (!isConcealed(node)) return name;
+  return `${name} (${node.status || "hidden"})`;
 }
 
 /**
@@ -168,6 +189,8 @@ export default class AtlasPage extends Component {
               <button type="button" class="atlas-toggle" data-type="tag" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--tag"></span>Tag</button>
               <button type="button" class="atlas-toggle" data-type="year" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--year"></span>Year</button>
               <button type="button" class="atlas-toggle" data-type="post" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--post"></span>Post</button>
+              ${this._canFilterHidden() ? `<button type="button" class="atlas-toggle atlas-toggle--hidden" data-type="concealed" aria-pressed="true"
+                        title="Hidden places and posts — switch off to see the map a guest gets"><span class="atlas-legend__dot atlas-legend__dot--concealed"></span>Hidden</button>` : ""}
             </div>
           </div>
         </main>
@@ -307,6 +330,16 @@ export default class AtlasPage extends Component {
     }
   }
 
+  /**
+   * Whether to offer the "Hidden" legend filter: only to a viewer the backend
+   * will actually mark hidden nodes for. A guest — and the owner with revelio
+   * off — receives a payload with nothing hidden in it, where the toggle would
+   * be a control that does nothing.
+   */
+  _canFilterHidden() {
+    return !!store.get("user") && isRevelioOn();
+  }
+
   /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */
   _wireToggles() {
     this.container.querySelectorAll(".atlas-toggle").forEach((btn) => {
@@ -317,9 +350,24 @@ export default class AtlasPage extends Component {
         btn.classList.toggle("is-off", turnOff);
         if (turnOff) this._hiddenTypes.add(type);
         else this._hiddenTypes.delete(type);
-        this._refreshCloud();
+        // "Hidden" is the one filter that changes the map itself and not just
+        // the open cloud: a hidden place must lose its marker *and* stop
+        // matching its boundary shape, which is the whole point — the country
+        // falls back to an untagged outline, so the owner sees the map's real
+        // guest shape. That means a redraw of the place layer, not a chip
+        // refresh (the redraw re-opens the cloud on its way out).
+        if (type === "concealed" && this._map && this.state.data) {
+          this._redrawPlaces();
+        } else {
+          this._refreshCloud();
+        }
       });
     });
+  }
+
+  /** True when the legend's "Hidden" filter is off and this node is owner-only. */
+  _filteredOut(node) {
+    return this._hiddenTypes.has("concealed") && isConcealed(node);
   }
 
   async _load() {
@@ -339,9 +387,22 @@ export default class AtlasPage extends Component {
       this.setState({
         loading: false,
         data: null,
-        error: err.message || "Failed to load atlas.",
+        error: this._loadErrorMessage(err),
       });
     }
+  }
+
+  /**
+   * With `tags_visibility` at its default ("hidden") the Atlas is owner-only, so
+   * turning revelio off 404s the graph endpoint — the honest guest answer, but
+   * "tags not found" reads as a broken page to the owner who just flipped the
+   * switch. Name what actually happened instead.
+   */
+  _loadErrorMessage(err) {
+    if (err?.status === 404 && !isRevelioOn()) {
+      return "The Atlas is not public — a guest sees nothing here. Turn off guest view to bring it back.";
+    }
+    return err?.message || "Failed to load atlas.";
   }
 
   /** Index the tag (marker) nodes; the graph payload no longer carries posts. */
@@ -445,8 +506,14 @@ export default class AtlasPage extends Component {
     // leaving the map holding two scopes at once — so only the newest pass draws.
     const seq = ++this._drawSeq;
 
+    // Dropping a filtered-out place here is what reshapes the map: it takes its
+    // marker with it and, because the boundary features match on this set, its
+    // country shape reverts to a plain untagged outline.
     const geoTags = (this.state.data.tags || []).filter(
-      (t) => typeof t.latitude === "number" && typeof t.longitude === "number",
+      (t) =>
+        typeof t.latitude === "number" &&
+        typeof t.longitude === "number" &&
+        !this._filteredOut(t),
     );
 
     // name (lowercased) → geo-tag, for matching against GeoJSON features.
@@ -499,11 +566,26 @@ export default class AtlasPage extends Component {
       const baseStyle = (feature) => {
         const props = feature.properties || {};
         const fill = getCountryColor(props.name || "");
-        return matchTag(props)
+        const tag = matchTag(props);
+        // A hidden place keeps its fill (so it still reads as tagged) but takes
+        // a dashed outline — the shape equivalent of the lock the rest of the
+        // site puts on owner-only items.
+        if (tag && isConcealed(tag)) {
+          return {
+            color: "#e05c00",
+            weight: 1.5,
+            opacity: 0.85,
+            dashArray: "5 4",
+            fillColor: fill,
+            fillOpacity: 0.22,
+          };
+        }
+        return tag
           ? {
               color: "#e05c00",
               weight: 1.5,
               opacity: 0.85,
+              dashArray: null,
               fillColor: fill,
               fillOpacity: 0.4,
             }
@@ -585,15 +667,16 @@ export default class AtlasPage extends Component {
     geoTags.forEach((tag) => {
       if (shapeTagIds.has(tag.id)) return;
       const r = markerRadius(tag.post_count);
+      const concealed = isConcealed(tag);
       const icon = L.divIcon({
         className: "atlas-marker",
-        html: `<span class="atlas-marker__dot" style="width:${r}px;height:${r}px;"></span>`,
+        html: `<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span>`,
         iconSize: [r, r],
         iconAnchor: [r / 2, r / 2],
       });
       const marker = L.marker([tag.latitude, tag.longitude], {
         icon,
-        title: tag.name,
+        title: concealedTitle(tag, tag.name),
       }).addTo(this._markerLayer);
 
       const setActive = (on) =>
@@ -778,25 +861,30 @@ export default class AtlasPage extends Component {
     (cloudData.tags || []).forEach((t) => {
       if (t.id === tag.id) return;
       const kind = this._kindOf(t);
-      if (hidden.has(kind)) return;
+      if (hidden.has(kind) || this._filteredOut(t)) return;
       tagSats.push({
         key: "t" + t.id,
         kind,
         label: t.name,
         href: `/tags/${t.slug}`,
         max: 26,
+        concealed: isConcealed(t),
+        title: concealedTitle(t, t.name),
       });
     });
 
     const postSats = [];
     if (!hidden.has("post")) {
       (cloudData.posts || []).forEach((p) => {
+        if (this._filteredOut(p)) return;
         postSats.push({
           key: "p" + p.id,
           kind: "post",
           label: p.title || p.slug,
           href: `/posts/${p.slug}`,
           max: 24,
+          concealed: isConcealed(p),
+          title: concealedTitle(p, p.title || p.slug),
           // Media posts reveal a thumbnail when their place is selected. The
           // server hands back a ?thumb=128 URL (atlasThumbURL), which for a
           // video resolves to a square crop of its poster frame.
@@ -860,9 +948,13 @@ export default class AtlasPage extends Component {
           ? `<img class="atlas-node__thumb" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" decoding="async" />`
           : "";
       const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
+      // Owner-only chips carry the site-wide lock plus a dashed ring, so a cloud
+      // read with revelio on shows which of its nodes a guest would not get.
+      const hiddenClass = node.concealed ? " atlas-node--hidden" : "";
+      const lockHtml = node.concealed ? LOCK_SVG : "";
       const icon = L.divIcon({
         className: "atlas-node-wrap",
-        html: `<span class="atlas-node atlas-node--${node.kind}${thumbClass}" style="animation-delay:${i * 16}ms" title="${escapeHtml(node.label)}">${thumbHtml}${escapeHtml(truncate(node.label, node.max))}</span>`,
+        html: `<span class="atlas-node atlas-node--${node.kind}${thumbClass}${hiddenClass}" style="animation-delay:${i * 16}ms" title="${escapeHtml(node.title || node.label)}">${thumbHtml}${lockHtml}${escapeHtml(truncate(node.label, node.max))}</span>`,
         iconSize: [0, 0],
       });
       const marker = L.marker(ll, { icon, keyboard: false, riseOnHover: true });
@@ -879,9 +971,10 @@ export default class AtlasPage extends Component {
     // It's pinned to the anchor latlng, so it stays put across zoom without
     // needing repositioning, and is the sole click target that opens the tag page.
     const centerKind = this._kindOf(tag);
+    const centerConcealed = isConcealed(tag);
     const centerIcon = L.divIcon({
       className: "atlas-node-wrap",
-      html: `<span class="atlas-node atlas-node--${centerKind} atlas-node--center" title="${escapeHtml(tag.name)}">${escapeHtml(truncate(tag.name, 30))}</span>`,
+      html: `<span class="atlas-node atlas-node--${centerKind} atlas-node--center${centerConcealed ? " atlas-node--hidden" : ""}" title="${escapeHtml(concealedTitle(tag, tag.name))}">${centerConcealed ? LOCK_SVG : ""}${escapeHtml(truncate(tag.name, 30))}</span>`,
       iconSize: [0, 0],
     });
     const centerMarker = L.marker(anchorLatLng, {

@@ -23,6 +23,9 @@ type TagService struct {
 	nominatimReverseURL string
 	// cache owns the tag graph and its lock; see tag_graph_cache.go.
 	cache *tagGraphCache
+	// pageCache is the rendered public page cache, dropped alongside the graph
+	// on any tag write. Nil is valid and skips that.
+	pageCache *CacheService
 }
 
 func NewTagService(repo repository.Repository) *TagService {
@@ -32,6 +35,13 @@ func NewTagService(repo repository.Repository) *TagService {
 		nominatimReverseURL: "https://nominatim.openstreetmap.org/reverse",
 	}
 	s.cache = newTagGraphCache(s.buildGraph)
+	return s
+}
+
+// WithCache attaches the public page cache invalidated on every tag write —
+// see Invalidate.
+func (s *TagService) WithCache(c *CacheService) *TagService {
+	s.pageCache = c
 	return s
 }
 

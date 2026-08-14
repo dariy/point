@@ -229,6 +229,61 @@ describe('PostCard video preview', () => {
     });
   });
 
+  describe('the play glyph', () => {
+    // The glyph marks a card as playable. Once the clip is genuinely running it
+    // is a label over moving footage, so the card is marked `is-playing` and the
+    // stylesheet fades it out — but only on the element's own `playing` event,
+    // since a call to play() is a request the browser is free to refuse.
+    const startedPlaying = (card) => fire(videoIn(card), 'playing');
+
+    test('a running preview marks the card, hiding the glyph', () => {
+      const { card } = mount();
+      hoverIn(card);
+      assert.equal(card.classList.contains('is-playing'), false,
+        'not until frames are actually running');
+
+      startedPlaying(card);
+      assert.ok(card.classList.contains('is-playing'));
+    });
+
+    test('a clip the browser refused to play keeps its glyph', () => {
+      const { card } = mount();
+      hoverIn(card);
+      // No `playing` event: autoplay policy blocked it, or the decode failed.
+      assert.equal(card.classList.contains('is-playing'), false,
+        'the card is still a poster frame and needs its marker');
+    });
+
+    test('hovering out brings the glyph back', () => {
+      const { card } = mount();
+      hoverIn(card);
+      startedPlaying(card);
+      hoverOut(card);
+
+      assert.equal(card.classList.contains('is-playing'), false);
+    });
+
+    test('the tap that opens the post brings the glyph back', () => {
+      const { card } = mount();
+      tap(card);
+      startedPlaying(card);
+      tap(card);
+
+      assert.equal(card.classList.contains('is-playing'), false);
+    });
+
+    test('a card closed by another card revealing brings its glyph back', () => {
+      const first = mount();
+      const second = mount({ ...POST, id: 2, slug: 'other-post' });
+
+      tap(first.card);
+      startedPlaying(first.card);
+      tap(second.card);
+
+      assert.equal(first.card.classList.contains('is-playing'), false);
+    });
+  });
+
   describe('when the card should stay a still', () => {
     test('the setting off means no clip on hover or on tap', () => {
       const { card } = mount(POST, {});

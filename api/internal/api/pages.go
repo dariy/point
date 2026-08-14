@@ -68,6 +68,30 @@ func parseYearRangeParams(c echo.Context) (from, to int, ok bool) {
 	return from, to, true
 }
 
+// resolveScheduledPage opens a feed to the left of page 1, where the owner's
+// scheduled posts live: page 0 is the first "future" page, then -1, -2 … for a
+// queue of `count` posts. It returns the page to serve and the feed's left edge
+// (`min_page`), which is 1 whenever the queue is empty.
+//
+// ParsePaginationParams has already clamped a non-positive page away by the
+// time a handler gets here, so the raw query value is read back rather than
+// loosening the parse for every caller. A page past the end of the queue clamps
+// to its last one instead of 404ing — the same forgiveness the right-hand side
+// of the feed gets.
+func resolveScheduledPage(c echo.Context, page, perPage int32, count int64) (int32, int32) {
+	minPage := int32(1)
+	if count > 0 {
+		minPage = 1 - int32(math.Ceil(float64(count)/float64(perPage)))
+	}
+	if p, err := strconv.ParseInt(c.QueryParam("page"), 10, 32); err == nil && p < 1 {
+		page = int32(p)
+		if page < minPage {
+			page = minPage
+		}
+	}
+	return page, minPage
+}
+
 // GetHomePage returns all data needed to render the public homepage.
 func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -83,6 +107,16 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
 	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
+
+	// Scheduled posts extend the feed to the left of page 1 — see
+	// resolveScheduledPage. Only the owner has them, and only outside a timeline
+	// scope: an unpublished post has no year to be scoped by.
+	minPage := int32(1)
+	if !publicOnly && !hasYearFilter {
+		n, _ := h.postService.CountScheduledPosts(ctx)
+		page, minPage = resolveScheduledPage(c, page, perPage, n)
+	}
+	scheduledView := page < 1
 
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
@@ -175,7 +209,23 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		listParams.YearFrom = yearFrom
 		listParams.YearTo = yearTo
 	}
-	posts, total, err := h.postService.ListPosts(ctx, listParams)
+
+	var posts []models.Post
+	var total int64
+	var err error
+	if scheduledView {
+		// The queue, not the feed. `total` still describes the published feed:
+		// the paginator spans both halves, and swiping right has to land back
+		// on page 1 knowing how many pages follow it.
+		total, err = h.postService.CountPostsOnly(ctx, listParams)
+		if err != nil {
+			return MapError(err)
+		}
+		// Page 0 is the queue's first page, -1 its second, and so on.
+		posts, _, err = h.postService.ListScheduledPosts(ctx, 1-page, perPage)
+	} else {
+		posts, total, err = h.postService.ListPosts(ctx, listParams)
+	}
 	if err != nil {
 		return MapError(err)
 	}
@@ -232,6 +282,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			"per_page": perPage,
 			"total":    total,
 			"pages":    pages,
+			// How far left the feed extends: 1 for everyone but an owner with a
+			// non-empty scheduled queue, for whom it drops to 0 or below.
+			// `scheduled` says which half the page being returned came from.
+			"min_page":  minPage,
+			"scheduled": scheduledView,
 		},
 		"settings": publicSettings,
 	}
@@ -420,8 +475,31 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Root-level nav tags for global navigation
 	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
-	// Posts for this tag (published only)
-	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
+	// Posts for this tag. Like the home feed, an owner's tag page runs left of
+	// page 1 into the posts tagged this way that are still waiting to publish —
+	// see resolveScheduledPage. The queue is read separately (the ordering is
+	// the opposite of the feed's and the two never share a page), but `total`
+	// and `pages` keep describing the published half so the paginator still
+	// spans both.
+	minPage := int32(1)
+	if !publicOnly && !hasYearFilter {
+		n, _ := h.tagService.CountScheduledPostsByTag(ctx, tag.ID)
+		page, minPage = resolveScheduledPage(c, page, perPage, n)
+	}
+	scheduledView := page < 1
+
+	var posts []models.Post
+	var total int64
+	if scheduledView {
+		total, err = h.tagService.CountPostsByTag(ctx, tag.ID, publicOnly, yearFrom, yearTo)
+		if err != nil {
+			return MapError(err)
+		}
+		// Page 0 is the queue's first page, -1 its second, and so on.
+		posts, err = h.tagService.GetScheduledPostsByTag(ctx, tag.ID, 1-page, perPage)
+	} else {
+		posts, total, err = h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
+	}
 	if err != nil {
 		return MapError(err)
 	}
@@ -510,6 +588,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 			"per_page": perPage,
 			"total":    total,
 			"pages":    pages,
+			// How far left this tag's feed extends, and which half the page
+			// being returned came from — as on the home feed.
+			"min_page":  minPage,
+			"scheduled": scheduledView,
 		},
 	}
 
@@ -683,6 +765,16 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		if t.Latitude.Valid && t.Longitude.Valid {
 			node["latitude"] = t.Latitude.Float64
 			node["longitude"] = t.Longitude.Float64
+		}
+		// Admins see hidden places on the map; the flag is what lets the Atlas
+		// mark them, so revelio reads as a visible change rather than a silently
+		// shorter marker list. Emitted only when true (absent → falsy, the
+		// frontend contract in docs/features/hidden-visibility.md) — this payload
+		// carries every tag on the site and most of them are not hidden. No
+		// hidden_via companion: hiding is not inherited (see TagGraph), so for a
+		// hidden tag it can only ever name the tag itself.
+		if !publicOnly && g.EffectiveHidden[id] {
+			node["is_hidden"] = true
 		}
 		switch {
 		case scopedCounts != nil:
@@ -883,6 +975,12 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 		if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
 			node["media_url"] = atlasThumbURL(*mediaURL)
 		}
+		// A post chip only the owner can see (draft, hidden or still scheduled)
+		// is marked, so the cloud shows *why* it thins out with revelio off.
+		// Guests are never sent a non-published post in the first place.
+		if !publicOnly && !isPubliclyReadableStatus(p.Status) {
+			node["status"] = p.Status
+		}
 		posts = append(posts, node)
 	}
 
@@ -909,6 +1007,11 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 		if t.Latitude.Valid && t.Longitude.Valid {
 			node["latitude"] = t.Latitude.Float64
 			node["longitude"] = t.Longitude.Float64
+		}
+		// Same marking as GetTagsGraph: a co-tag chip an admin only sees because
+		// revelio is on says so (see the node build there).
+		if !publicOnly && g.EffectiveHidden[t.ID] {
+			node["is_hidden"] = true
 		}
 		tags = append(tags, node)
 		tagSet[t.ID] = true

@@ -1,4 +1,4 @@
-//go:build integration
+//go:build !unit
 
 package services
 
@@ -86,6 +86,42 @@ func TestCacheService_Clear(t *testing.T) {
 	_, err := svc.Get(ctx, "a")
 	if err == nil {
 		t.Error("expected error after Clear")
+	}
+
+	// Clear must empty the directory, not remove it: callers discard Set's
+	// error, so a missing cache dir would silently disable caching until the
+	// next restart.
+	if err := svc.Set(ctx, "c", []byte("3")); err != nil {
+		t.Fatalf("Set after Clear failed: %v", err)
+	}
+	got, err := svc.Get(ctx, "c")
+	if err != nil || string(got) != "3" {
+		t.Errorf("cache is dead after Clear: got %q, err %v", got, err)
+	}
+}
+
+// InvalidatePublicPages is the write-side entry point: any post or tag write
+// drops every rendered page, because the keys cannot be mapped back to the post
+// that changed.
+func TestCacheService_InvalidatePublicPages(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx := context.Background()
+
+	_ = svc.Set(ctx, "homepage_p1_pp12.json", []byte("{}"))
+	_ = svc.Set(ctx, "tagpage_kyiv_path-_p1_pp12.json", []byte("{}"))
+	_ = svc.Set(ctx, "feed.xml", []byte("<rss/>"))
+
+	if err := svc.InvalidatePublicPages(ctx); err != nil {
+		t.Fatalf("InvalidatePublicPages failed: %v", err)
+	}
+	for _, k := range []string{"homepage_p1_pp12.json", "tagpage_kyiv_path-_p1_pp12.json", "feed.xml"} {
+		if _, err := svc.Get(ctx, k); err == nil {
+			t.Errorf("%s survived invalidation", k)
+		}
+	}
+	if err := svc.Set(ctx, "homepage_p1_pp12.json", []byte("{}")); err != nil {
+		t.Fatalf("cache must still be writable afterwards: %v", err)
 	}
 }
 
