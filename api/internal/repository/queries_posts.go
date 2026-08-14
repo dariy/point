@@ -174,23 +174,47 @@ FROM posts p`, contentCol)
 	return items, rows.Err()
 }
 
-// ListScheduledPosts returns the posts waiting to be published, soonest first.
+// scheduledQueueWhere is what makes a row part of the publishing queue, shared
+// by the reads below so a tag-scoped queue can never disagree with the whole
+// one about what is in it.
+const scheduledQueueWhere = `
+WHERE p.deleted_at IS NULL
+  AND p.type != 'page'
+  AND LOWER(p.status) = 'scheduled'`
+
+// scheduledQueueTagFilter narrows the queue to posts carrying one of tagIDs,
+// returning the WHERE fragment and the values it binds. A tag page passes the
+// tag plus its descendants — the same set its published list is drawn from.
+func scheduledQueueTagFilter(tagIDs []int64) (string, []interface{}) {
+	placeholders := make([]string, len(tagIDs))
+	args := make([]interface{}, len(tagIDs))
+	for i, id := range tagIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	return `
+  AND p.id IN (SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` +
+		strings.Join(placeholders, ",") + `))`, args
+}
+
+// listScheduledPosts runs the queue read with an optional extra WHERE fragment
+// (constant SQL; every value is bound through args).
 //
-// Ordering is the point: the home feed shows these on its "future" pages (the
+// Ordering is the point: the feed shows these on its "future" pages (the
 // non-positive page numbers), so the post that is about to go live must be the
 // one nearest the newest published post. A scheduled row with no scheduled_at
 // cannot happen through the API, but sorts last rather than first if it does.
-func (r *sqliteRepository) ListScheduledPosts(ctx context.Context, limit, offset int64) ([]models.Post, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *sqliteRepository) listScheduledPosts(ctx context.Context, filter string, args []interface{}, limit, offset int64) ([]models.Post, error) {
+	//nolint:gosec // G202: constant clause fragments only, values are bound
+	q := `
 SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
-FROM posts p
-WHERE p.deleted_at IS NULL
-  AND p.type != 'page'
-  AND LOWER(p.status) = 'scheduled'
+FROM posts p` + scheduledQueueWhere + filter + `
 ORDER BY p.scheduled_at IS NULL, p.scheduled_at ASC, p.created_at ASC
-LIMIT ? OFFSET ?`, limit, offset)
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q, append(append([]interface{}{}, args...), limit, offset)...)
 	if err != nil {
 		return nil, err
 	}
@@ -212,15 +236,45 @@ LIMIT ? OFFSET ?`, limit, offset)
 	return items, rows.Err()
 }
 
+// countScheduledPosts counts the posts listScheduledPosts pages through, under
+// the same optional filter.
+func (r *sqliteRepository) countScheduledPosts(ctx context.Context, filter string, args []interface{}) (int64, error) {
+	//nolint:gosec // G202: constant clause fragments only, values are bound
+	q := `SELECT COUNT(*) FROM posts p` + scheduledQueueWhere + filter
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
+	return count, err
+}
+
+// ListScheduledPosts returns the posts waiting to be published, soonest first —
+// the home feed's queue.
+func (r *sqliteRepository) ListScheduledPosts(ctx context.Context, limit, offset int64) ([]models.Post, error) {
+	return r.listScheduledPosts(ctx, "", nil, limit, offset)
+}
+
 // CountScheduledPosts counts the posts ListScheduledPosts pages through.
 func (r *sqliteRepository) CountScheduledPosts(ctx context.Context) (int64, error) {
-	var count int64
-	err := r.db.QueryRowContext(ctx, `
-SELECT COUNT(*) FROM posts p
-WHERE p.deleted_at IS NULL
-  AND p.type != 'page'
-  AND LOWER(p.status) = 'scheduled'`).Scan(&count)
-	return count, err
+	return r.countScheduledPosts(ctx, "", nil)
+}
+
+// ListScheduledPostsByTagIDs is ListScheduledPosts narrowed to one tag page's
+// queue: the posts waiting to be published that carry one of these tags.
+func (r *sqliteRepository) ListScheduledPostsByTagIDs(ctx context.Context, tagIDs []int64, limit, offset int64) ([]models.Post, error) {
+	if len(tagIDs) == 0 {
+		return []models.Post{}, nil
+	}
+	filter, args := scheduledQueueTagFilter(tagIDs)
+	return r.listScheduledPosts(ctx, filter, args, limit, offset)
+}
+
+// CountScheduledPostsByTagIDs counts the posts ListScheduledPostsByTagIDs pages
+// through — how far left of page 1 that tag's feed reaches.
+func (r *sqliteRepository) CountScheduledPostsByTagIDs(ctx context.Context, tagIDs []int64) (int64, error) {
+	if len(tagIDs) == 0 {
+		return 0, nil
+	}
+	filter, args := scheduledQueueTagFilter(tagIDs)
+	return r.countScheduledPosts(ctx, filter, args)
 }
 
 func (r *sqliteRepository) ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error) {

@@ -145,6 +145,8 @@ type mockRepository struct {
 	MockListPublishedPostStubs               func(ctx context.Context) ([]repository.PostStub, error)
 	MockListScheduledPosts                   func(ctx context.Context, limit, offset int64) ([]models.Post, error)
 	MockCountScheduledPosts                  func(ctx context.Context) (int64, error)
+	MockListScheduledPostsByTagIDs           func(ctx context.Context, tagIDs []int64, limit, offset int64) ([]models.Post, error)
+	MockCountScheduledPostsByTagIDs          func(ctx context.Context, tagIDs []int64) (int64, error)
 	MockListPostNodesForGraph                func(ctx context.Context, publishedOnly bool) ([]repository.GraphPostNode, error)
 	MockGetPostsByTagIDs                     func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
 	MockCountPostsByTagIDs                   func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
@@ -1073,6 +1075,20 @@ func (m *mockRepository) CountScheduledPosts(ctx context.Context) (int64, error)
 		return m.MockCountScheduledPosts(ctx)
 	}
 	return 0, fmt.Errorf("CountScheduledPosts not implemented")
+}
+
+func (m *mockRepository) ListScheduledPostsByTagIDs(ctx context.Context, tagIDs []int64, limit, offset int64) ([]models.Post, error) {
+	if m.MockListScheduledPostsByTagIDs != nil {
+		return m.MockListScheduledPostsByTagIDs(ctx, tagIDs, limit, offset)
+	}
+	return nil, fmt.Errorf("ListScheduledPostsByTagIDs not implemented")
+}
+
+func (m *mockRepository) CountScheduledPostsByTagIDs(ctx context.Context, tagIDs []int64) (int64, error) {
+	if m.MockCountScheduledPostsByTagIDs != nil {
+		return m.MockCountScheduledPostsByTagIDs(ctx, tagIDs)
+	}
+	return 0, fmt.Errorf("CountScheduledPostsByTagIDs not implemented")
 }
 
 func (m *mockRepository) ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]repository.GraphPostNode, error) {

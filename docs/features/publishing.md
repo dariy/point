@@ -65,6 +65,17 @@ lives in the **Details** rail/sheet.
   `scheduled_at` rather than `created_at`. Guests never see any of it, and
   neither does the owner with [revelio](hidden-visibility.md#revelio--viewing-the-site-as-a-guest)
   off. Scheduled posts count towards a tag's admin post count.
+
+  **Tag pages have the same left half** (`/tags/:slug`), holding the queued
+  posts carrying that tag or one below it — the same tag-plus-descendants set
+  the published list is drawn from, so a parent tag shows its children's queue
+  too. `resolveScheduledPage` (`api/internal/api/pages.go`) resolves the page
+  window for both feeds; the reads behind them differ only in scope
+  (`PostService.ListScheduledPosts` vs `TagService.GetScheduledPostsByTag`).
+  `total` and `pages` keep describing the *published* half on both, so the
+  paginator spans the whole range and a swipe right lands back on page 1
+  knowing what follows it. A timeline scope turns the left half off — an
+  unpublished post has no year to be scoped by.
 - **Preview links**: time-limited shareable token URLs (`/preview/:token`,
   `point_generate_preview_link`) for reviewing unpublished posts without auth.
 - **Soft delete / trash** with restore; view counts per post; featured flag; SEO meta

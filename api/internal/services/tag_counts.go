@@ -124,15 +124,21 @@ func (s *TagService) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map
 	return s.repo.GetTagsByPostIDs(ctx, postIDs)
 }
 
-func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool, yearFrom, yearTo int) ([]models.Post, int64, error) {
-	// Collect the tag itself plus all descendants so that a parent tag page
-	// (e.g. /tags/countries) shows posts from all nested sub-tags.
+// tagWithDescendantIDs is the set of tags a tag page draws its posts from: the
+// tag itself plus everything below it, so a parent tag page (e.g.
+// /tags/countries) shows posts from all nested sub-tags.
+func (s *TagService) tagWithDescendantIDs(ctx context.Context, tagID int64) []int64 {
 	descendants, _ := s.GetTagDescendants(ctx, tagID)
 	tagIDs := make([]int64, 0, 1+len(descendants))
 	tagIDs = append(tagIDs, tagID)
 	for _, d := range descendants {
 		tagIDs = append(tagIDs, d.ID)
 	}
+	return tagIDs
+}
+
+func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool, yearFrom, yearTo int) ([]models.Post, int64, error) {
+	tagIDs := s.tagWithDescendantIDs(ctx, tagID)
 
 	includeHidden := !publicOnly
 	offset := (page - 1) * perPage
@@ -159,4 +165,43 @@ func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPa
 	}
 
 	return posts, total, nil
+}
+
+// CountPostsByTag is the total GetPostsByTag would report for the same scope
+// without reading a page of rows. The tag page needs it while rendering a
+// scheduled page, where the rows come from the queue but the paginator still
+// has to describe the published list behind it.
+func (s *TagService) CountPostsByTag(ctx context.Context, tagID int64, publicOnly bool, yearFrom, yearTo int) (int64, error) {
+	tagIDs := s.tagWithDescendantIDs(ctx, tagID)
+	includeHidden := !publicOnly
+	if yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo {
+		return s.repo.CountPostsByTagIDsInYearRange(ctx, tagIDs, yearFrom, yearTo, publicOnly, false, includeHidden)
+	}
+	return s.repo.CountPostsByTagIDs(ctx, tagIDs, publicOnly, false, includeHidden)
+}
+
+// GetScheduledPostsByTag returns one page of this tag's publishing queue,
+// soonest first — the tag page's counterpart to PostService.ListScheduledPosts,
+// scoped to the same tag-plus-descendants set as GetPostsByTag. `page` is
+// 1-based within the queue; the tag page maps its non-positive page numbers
+// onto it (see resolveScheduledPage in api/pages.go).
+func (s *TagService) GetScheduledPostsByTag(ctx context.Context, tagID int64, page, perPage int32) ([]models.Post, error) {
+	if page < 1 {
+		page = 1
+	}
+	offset := int64(page-1) * int64(perPage)
+	posts, err := s.repo.ListScheduledPostsByTagIDs(ctx, s.tagWithDescendantIDs(ctx, tagID), int64(perPage), offset)
+	if err != nil {
+		return nil, err
+	}
+	if posts == nil {
+		posts = []models.Post{}
+	}
+	return posts, nil
+}
+
+// CountScheduledPostsByTag is the tag's queue length on its own — the tag page
+// needs it on every page to know how far left the reader may swipe.
+func (s *TagService) CountScheduledPostsByTag(ctx context.Context, tagID int64) (int64, error) {
+	return s.repo.CountScheduledPostsByTagIDs(ctx, s.tagWithDescendantIDs(ctx, tagID))
 }

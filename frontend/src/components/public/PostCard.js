@@ -250,6 +250,9 @@ export class PostCard extends Component {
       v.muted = true;
       v.loop = true;
       v.playsInline = true;
+      // Drop the play glyph only once frames are actually running: if autoplay
+      // is blocked the card stays a poster frame and still needs its marker.
+      v.addEventListener("playing", () => card.classList.add("is-playing"));
       bg.appendChild(v);
       this._hoverVideo = v;
       // Autoplay policy or a decode failure leaves the poster showing, which is
@@ -259,6 +262,7 @@ export class PostCard extends Component {
 
     const stop = () => {
       if (touchPreview === this) touchPreview = null;
+      card.classList.remove("is-playing");
       const v = this._hoverVideo;
       if (!v) return;
       this._hoverVideo = null;

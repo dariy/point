@@ -41,8 +41,8 @@ targeted consistency and legibility.
   rendered on coarse pointers); safe-area insets.
 - **Pagination, not infinite scroll** — URL-addressable, footer reachable — with
   rubber-band swipe navigation; `per_page` is device-fit and URL-persisted. For the
-  owner the home feed also runs *backwards* past page 1 into the scheduled queue
-  (pages 0, -1, …) — see [publishing.md](publishing.md).
+  owner the home feed and each tag page also run *backwards* past page 1 into the
+  scheduled queue (pages 0, -1, …) — see [publishing.md](publishing.md).
 - **Owner controls in the footer**: theme, card-size slider, RSS, admin entrance, and
   **revelio** — the switch between what the owner can see and what a guest sees
   (see [hidden-visibility.md](hidden-visibility.md#revelio--viewing-the-site-as-a-guest)).

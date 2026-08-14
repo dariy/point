@@ -20,7 +20,7 @@ import { escapeHtml, isShortViewport, normalizeSettings } from '../../utils/help
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, refitPage } from '../../utils/gridFit.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -188,19 +188,9 @@ export default class HomePage extends Component {
     const current = this._loadedPerPage || fit;
     const next = this._fitLatch.accept(current, fit);
     if (next === null) return;
-    // Keep the first post currently on screen on the resized page. The two
-    // halves of the feed are indexed from their shared boundary in opposite
-    // directions: page 1 is offset 0 into the published list, page 0 is offset
-    // 0 into the scheduled queue, so a non-positive page counts outwards from
-    // there rather than continuing the same run.
-    let newPage;
-    if (vc.page < 1) {
-      const firstIndex = -vc.page * current;
-      newPage = -Math.floor(firstIndex / next);
-    } else {
-      const firstIndex = (vc.page - 1) * current;
-      newPage = Math.floor(firstIndex / next) + 1;
-    }
+    // Keep the first post currently on screen on the resized page — including
+    // on the scheduled pages, which count the other way (see refitPage).
+    const newPage = refitPage(vc.page, current, next);
     this._fitOwned = true;
     // Tells the refresh this update provokes that it is a refit, not a
     // navigation — see _refreshPostContent.

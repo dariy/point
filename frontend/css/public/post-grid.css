@@ -161,6 +161,13 @@
     opacity: 0.8;
 }
 
+/* Once the hover preview is actually running, the glyph is only a label over
+   moving footage saying it can play. Set by JS on the video's `playing` event,
+   so a card whose autoplay was blocked keeps its marker. */
+.post-card.is-playing .video-play-indicator {
+    opacity: 0;
+}
+
 /* Overlay Content for Image Cards */
 .post-card-content.overlay {
     position: absolute;

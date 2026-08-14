@@ -37,7 +37,7 @@ The `TagGraph` is built lazily on first read and invalidated by any tag write or
 |---|---|---|
 | `status="draft"` post | 404 | Included |
 | `status="hidden"` post | 404 | Included + `is_hidden: true` |
-| `status="scheduled"` post | 404 | Included (feed's negative pages — see [Content & Publishing](publishing.md)) |
+| `status="scheduled"` post | 404 | Included (the negative pages of the home and tag feeds — see [Content & Publishing](publishing.md)) |
 | Post with `hides_posts` tag (direct or inherited) | 404 | Included + `is_hidden_by_tag: true` |
 | Published, public post | Included (no hidden fields) | Included + `is_hidden: false, is_hidden_by_tag: false` |
 
@@ -172,6 +172,10 @@ It is implemented as a *narrowing* of the request, not a second rendering mode:
   switch be turned back on.
 - `IsGuestView(c)` reports that a real principal was dropped, so the owner
   previewing the guest view does not inflate post view counts.
+- The tag visualisations scope themselves the same way, and the revealed view
+  marks the places, co-tags and posts a guest would not get — otherwise
+  concealing drops a marker or two out of hundreds and the map looks unchanged.
+  See [tags-visualization.md](tags-visualization.md).
 - Flipping the switch re-renders in the same document (`router.refresh()`) after
   dropping the client read caches and re-fetching the auth-scoped nav — no page
   reload, so the reader stays where they were and the footer drawer the button

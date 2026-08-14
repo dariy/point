@@ -428,6 +428,64 @@ func TestRepository_ListScheduledPosts(t *testing.T) {
 	}
 }
 
+// A tag page shows its own slice of the queue. The tag IDs it passes are the
+// tag plus its descendants (the service resolves those), so this only has to
+// hold the narrowing itself: same ordering, nothing from another tag.
+func TestRepository_ListScheduledPostsByTagIDs(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, later := insertUserAndPost(t, repo, "tsched-later", "scheduled")
+	_, sooner := insertUserAndPost(t, repo, "tsched-sooner", "scheduled")
+	_, elsewhere := insertUserAndPost(t, repo, "tsched-elsewhere", "scheduled")
+	_, live := insertUserAndPost(t, repo, "tsched-live", "published")
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t'), (2,'Other','other')`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,1),(?,1),(?,1),(?,2)`,
+		later, sooner, live, elsewhere)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-06-01 10:00:00", later)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-01-01 10:00:00", sooner)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2029-01-01 10:00:00", elsewhere)
+
+	total, err := repo.CountScheduledPostsByTagIDs(ctx, []int64{1})
+	if err != nil {
+		t.Fatalf("CountScheduledPostsByTagIDs failed: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("count = %d, want 2 (the published post and the other tag's are not queued here)", total)
+	}
+
+	posts, err := repo.ListScheduledPostsByTagIDs(ctx, []int64{1}, 10, 0)
+	if err != nil {
+		t.Fatalf("ListScheduledPostsByTagIDs failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("got %d posts, want 2", len(posts))
+	}
+	if posts[0].ID != sooner || posts[1].ID != later {
+		t.Errorf("order = [%d %d], want soonest first [%d %d]", posts[0].ID, posts[1].ID, sooner, later)
+	}
+
+	// Paging walks further into the tag's queue.
+	page2, err := repo.ListScheduledPostsByTagIDs(ctx, []int64{1}, 1, 1)
+	if err != nil {
+		t.Fatalf("ListScheduledPostsByTagIDs(offset) failed: %v", err)
+	}
+	if len(page2) != 1 || page2[0].ID != later {
+		t.Errorf("second page = %v, want [%d]", page2, later)
+	}
+
+	// No tags is no queue, not the whole one.
+	if n, err := repo.CountScheduledPostsByTagIDs(ctx, nil); err != nil || n != 0 {
+		t.Errorf("count for no tags = (%d, %v), want (0, nil)", n, err)
+	}
+	if got, err := repo.ListScheduledPostsByTagIDs(ctx, nil, 10, 0); err != nil || len(got) != 0 {
+		t.Errorf("list for no tags = (%v, %v), want empty", got, err)
+	}
+}
+
 func TestRepository_ListPostsWithSearchStatusFilters(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
