@@ -160,6 +160,20 @@ body.grid-zoomable .footer-zoom {
     height: var(--svg-height);
 }
 
+/* Revelio (owner only): the switch between "everything I can see" and "what a
+   guest sees". Revealing is the loud state — it says the page in front of you
+   is not the published one — so it carries the accent; concealed is a plain
+   footer button like its neighbours. */
+.revelio-toggle.is-revealing {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.revelio-toggle.is-revealing:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
 .footer-link {
     font-size: var(--font-size-sm);
     color: var(--footer-text);

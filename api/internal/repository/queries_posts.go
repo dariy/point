@@ -174,6 +174,109 @@ FROM posts p`, contentCol)
 	return items, rows.Err()
 }
 
+// scheduledQueueWhere is what makes a row part of the publishing queue, shared
+// by the reads below so a tag-scoped queue can never disagree with the whole
+// one about what is in it.
+const scheduledQueueWhere = `
+WHERE p.deleted_at IS NULL
+  AND p.type != 'page'
+  AND LOWER(p.status) = 'scheduled'`
+
+// scheduledQueueTagFilter narrows the queue to posts carrying one of tagIDs,
+// returning the WHERE fragment and the values it binds. A tag page passes the
+// tag plus its descendants — the same set its published list is drawn from.
+func scheduledQueueTagFilter(tagIDs []int64) (string, []interface{}) {
+	placeholders := make([]string, len(tagIDs))
+	args := make([]interface{}, len(tagIDs))
+	for i, id := range tagIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	return `
+  AND p.id IN (SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` +
+		strings.Join(placeholders, ",") + `))`, args
+}
+
+// listScheduledPosts runs the queue read with an optional extra WHERE fragment
+// (constant SQL; every value is bound through args).
+//
+// Ordering is the point: the feed shows these on its "future" pages (the
+// non-positive page numbers), so the post that is about to go live must be the
+// one nearest the newest published post. A scheduled row with no scheduled_at
+// cannot happen through the API, but sorts last rather than first if it does.
+func (r *sqliteRepository) listScheduledPosts(ctx context.Context, filter string, args []interface{}, limit, offset int64) ([]models.Post, error) {
+	//nolint:gosec // G202: constant clause fragments only, values are bound
+	q := `
+SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+       p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+FROM posts p` + scheduledQueueWhere + filter + `
+ORDER BY p.scheduled_at IS NULL, p.scheduled_at ASC, p.created_at ASC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q, append(append([]interface{}{}, args...), limit, offset)...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.ScheduledAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// countScheduledPosts counts the posts listScheduledPosts pages through, under
+// the same optional filter.
+func (r *sqliteRepository) countScheduledPosts(ctx context.Context, filter string, args []interface{}) (int64, error) {
+	//nolint:gosec // G202: constant clause fragments only, values are bound
+	q := `SELECT COUNT(*) FROM posts p` + scheduledQueueWhere + filter
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
+	return count, err
+}
+
+// ListScheduledPosts returns the posts waiting to be published, soonest first —
+// the home feed's queue.
+func (r *sqliteRepository) ListScheduledPosts(ctx context.Context, limit, offset int64) ([]models.Post, error) {
+	return r.listScheduledPosts(ctx, "", nil, limit, offset)
+}
+
+// CountScheduledPosts counts the posts ListScheduledPosts pages through.
+func (r *sqliteRepository) CountScheduledPosts(ctx context.Context) (int64, error) {
+	return r.countScheduledPosts(ctx, "", nil)
+}
+
+// ListScheduledPostsByTagIDs is ListScheduledPosts narrowed to one tag page's
+// queue: the posts waiting to be published that carry one of these tags.
+func (r *sqliteRepository) ListScheduledPostsByTagIDs(ctx context.Context, tagIDs []int64, limit, offset int64) ([]models.Post, error) {
+	if len(tagIDs) == 0 {
+		return []models.Post{}, nil
+	}
+	filter, args := scheduledQueueTagFilter(tagIDs)
+	return r.listScheduledPosts(ctx, filter, args, limit, offset)
+}
+
+// CountScheduledPostsByTagIDs counts the posts ListScheduledPostsByTagIDs pages
+// through — how far left of page 1 that tag's feed reaches.
+func (r *sqliteRepository) CountScheduledPostsByTagIDs(ctx context.Context, tagIDs []int64) (int64, error) {
+	if len(tagIDs) == 0 {
+		return 0, nil
+	}
+	filter, args := scheduledQueueTagFilter(tagIDs)
+	return r.countScheduledPosts(ctx, filter, args)
+}
+
 func (r *sqliteRepository) ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error) {
 	selectClause := `SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
@@ -463,10 +566,19 @@ type PostNavItem struct {
 // is no adjacent post.
 func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *PostNavItem, err error) {
 	const qDate = `SELECT CAST(published_at AS TEXT) FROM posts WHERE id = ? LIMIT 1`
-	var publishedAt string
-	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
+	var anchor sql.NullString
+	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&anchor); err != nil {
 		return nil, nil, err
 	}
+	// A post that has never been published — a draft, or one waiting in the
+	// scheduled queue — has no position in the sequence these queries walk, so
+	// it has no neighbours. Scanning the NULL into a plain string failed the
+	// whole request instead, which is a 500 on the navigation endpoint for
+	// every scheduled post.
+	if !anchor.Valid {
+		return nil, nil, nil
+	}
+	publishedAt := anchor.String
 
 	statusFilter := "LOWER(status) = 'published'"
 	if !publicOnly {
@@ -1199,7 +1311,7 @@ JOIN post_tags pt ON pt.tag_id = d.tag_id
 JOIN posts p ON pt.post_id = p.id
 WHERE p.deleted_at IS NULL
 AND (CASE WHEN ? THEN LOWER(p.status) = 'published'
-           ELSE LOWER(p.status) IN ('published', 'hidden')
+           ELSE LOWER(p.status) IN ('published', 'hidden', 'scheduled')
       END)
 
 AND (CASE WHEN ? THEN p.id NOT IN (
@@ -1247,7 +1359,9 @@ func scanTagCounts(rows *sql.Rows) (map[int64]int64, error) {
 // GetHierarchicalPostCounts returns a map of tagID → effective post count,
 // where the count includes posts from all descendant tags (not just the tag itself).
 // If publishedOnly is true, only published posts are counted (public context).
-// If false, published + hidden posts are counted (admin context).
+// If false, published + hidden + scheduled posts are counted (admin context) —
+// a scheduled post is already written and tagged, so leaving it out made the
+// badge in /light/tags disagree with the tag's own post list.
 func (r *sqliteRepository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
 	rows, err := r.db.QueryContext(ctx, hierarchicalPostCountsQuery(false), publishedOnly, publishedOnly)
 	if err != nil {

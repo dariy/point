@@ -34,7 +34,7 @@ outside this repo — see [Production](#production) below.
   - `--short` — skip long-running integration tests
   - `--lint` — lint only, skipping vet/tests/vuln scan (this is `npm run lint`)
 - **run-tests.sh**: Go test runner. Runs unit + integration tests
-  (`-tags=integration`) by default; `--unit` for unit-only, `--race` for the race
+  by default; `--unit` for unit-only, `--race` for the race
   detector, `--html` for a coverage report. See
   [docs/testing.md](../docs/testing.md).
 

@@ -38,6 +38,7 @@ import {
   applyZoomVar,
   watchChromeFit,
   createFitLatch,
+  refitPage,
 } from "../../utils/gridFit.js";
 
 export default class TagPage extends Component {
@@ -223,8 +224,9 @@ export default class TagPage extends Component {
     const current = this._loadedPerPage || fit;
     const next = this._fitLatch.accept(current, fit);
     if (next === null) return;
-    const firstIndex = (vc.page - 1) * current;
-    const newPage = Math.floor(firstIndex / next) + 1;
+    // Keep the first post currently on screen on the resized page — including
+    // on this tag's scheduled pages, which count the other way (see refitPage).
+    const newPage = refitPage(vc.page, current, next);
     this._fitOwned = true;
     // Tells the refresh this update provokes that it is a refit, not a
     // navigation — see _refreshPostContent.
@@ -490,26 +492,27 @@ export default class TagPage extends Component {
     let active = 'simple-post-list';
     if (pluginHost.isEnabled('dynamic-post-list')) active = 'dynamic-post-list';
 
+    // A scheduled ("future") page of this tag's queue is laid out backwards —
+    // see PostGrid's `reversed` prop. The server flags the page it returned
+    // rather than the client inferring it from the page number, so a tag with
+    // nothing queued can never render one by accident.
+    const gridProps = {
+      posts,
+      showViewCount: !!settings.show_view_counts,
+      tagSlug: slug,
+      tagPage: page,
+      reversed: !!pagination.scheduled,
+      emptyMessage: "No posts in this tag yet.",
+    };
+
     let gridComp = null;
     if (pluginHost.hasSlot('post-list')) {
-      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), {
-        posts,
-        showViewCount: !!settings.show_view_counts,
-        tagSlug: slug,
-        tagPage: page,
-        emptyMessage: "No posts in this tag yet.",
-      });
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), gridProps);
     } else {
       const mod = active === 'dynamic-post-list'
         ? await import('../../plugins/dynamic-post-list/index.js')
         : await import('../../plugins/simple-post-list/index.js');
-      gridComp = mod.mount(this.$('#grid-mount'), {
-        posts,
-        showViewCount: !!settings.show_view_counts,
-        tagSlug: slug,
-        tagPage: page,
-        emptyMessage: "No posts in this tag yet.",
-      });
+      gridComp = mod.mount(this.$('#grid-mount'), gridProps);
     }
 
     if (this._unmounted) {
@@ -538,10 +541,20 @@ export default class TagPage extends Component {
    */
   _syncPagination(pagination) {
     const existing = this._postChildren[1];
-    if (pagination.pages > 1) {
+    // min_page is 1 for everyone but the owner of a tag with posts queued
+    // behind it, whose feed runs 0, -1, … to the left of page 1. A single
+    // published page plus a queue is still worth a paginator, so the "is there
+    // more than one page" test spans the whole range rather than counting up
+    // from 1 — as on the home feed.
+    const minPage = Number.isInteger(pagination.min_page) && pagination.min_page < 1
+      ? pagination.min_page
+      : 1;
+    const multiPage = pagination.pages - minPage >= 1;
+    if (multiPage) {
       const props = {
         page: pagination.page,
         pages: pagination.pages,
+        minPage,
         total: pagination.total,
         onPage: (p) => ViewContext.update({ page: p }),
       };
@@ -554,8 +567,8 @@ export default class TagPage extends Component {
       this._postChildren.length = 1;
     }
 
-    store.set("pagination", pagination.pages > 1
-      ? { page: pagination.page, pages: pagination.pages, total: pagination.total }
+    store.set("pagination", multiPage
+      ? { page: pagination.page, pages: pagination.pages, minPage, total: pagination.total }
       : null);
   }
 

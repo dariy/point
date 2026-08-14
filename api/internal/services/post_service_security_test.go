@@ -6,7 +6,7 @@ import (
 )
 
 // containsStr reports whether slice contains s exactly. Defined here (untagged)
-// so both the default and `integration` builds see a single definition.
+// so both unit and integration test runs see a single definition.
 func containsStr(slice []string, s string) bool {
 	for _, v := range slice {
 		if v == s {

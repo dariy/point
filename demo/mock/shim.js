@@ -21,7 +21,7 @@
  */
 
 import { routes } from "./routes.js";
-import { getState, resetState } from "./store.js";
+import { getState, resetState, storeContent } from "./store.js";
 
 const state = await getState();
 
@@ -111,6 +111,85 @@ function match(method, pathname) {
   return null;
 }
 
+// ── Revelio ───────────────────────────────────────────────────────────────
+
+/**
+ * Read one header out of whatever form the caller passed.
+ *
+ * `fetch` accepts a Headers, a plain object or an array of pairs, and the app
+ * uses more than one of them — client.js builds an object, other callers hand
+ * over a Request. Normalising here keeps the check below to one line.
+ */
+function headerValue(headers, name) {
+  if (!headers) return null;
+  const wanted = name.toLowerCase();
+  if (typeof headers.get === "function") return headers.get(name);
+  if (Array.isArray(headers)) {
+    const hit = headers.find(([k]) => String(k).toLowerCase() === wanted);
+    return hit ? hit[1] : null;
+  }
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === wanted) return v;
+  }
+  return null;
+}
+
+/**
+ * The reads the revelio switch is allowed to narrow: the ones the real server
+ * puts behind OptionalAuthMiddleware (api/cmd/api/routes.go, main.go).
+ *
+ * The client sends `X-Point-Revelio: off` on *every* request, so this list —
+ * not the header — is what keeps the switch from reaching the admin API. That
+ * matters in both directions: `/api/auth/me` is behind AuthMiddleware and must
+ * keep answering with the user, or the app concludes the visitor is logged out
+ * and the footer control that turns revelio back on goes with the admin UI.
+ *
+ * `/api/posts/analytics` is the one path under these prefixes that is
+ * admin-only, so it is named as an exception rather than the prefixes being
+ * split around it.
+ */
+const NARROWABLE = [/^\/api\/pages\//, /^\/api\/posts(\/|$)/, /^\/api\/tags(\/|$)/, /^\/api\/timeline(\/|$)/];
+const NOT_NARROWABLE = ["/api/posts/analytics"];
+
+/**
+ * The owner's "show me what a guest sees" switch (frontend/src/utils/revelio.js).
+ *
+ * `X-Point-Revelio: off` asks a read to be answered as if nobody were signed
+ * in. The backend implements it in OptionalAuthMiddleware, which resolves the
+ * principal and then withholds it, so every downstream visibility test takes
+ * the public branch.
+ *
+ * Writes are never narrowed — a request that changes something is behind
+ * AuthMiddleware, which the header does not reach.
+ */
+function isGuestView(method, pathname, headers) {
+  if (method !== "GET") return false;
+  if (String(headerValue(headers, "X-Point-Revelio") || "").toLowerCase() !== "off") {
+    return false;
+  }
+  if (NOT_NARROWABLE.includes(pathname)) return false;
+  return NARROWABLE.some((re) => re.test(pathname));
+}
+
+/**
+ * The store as this request may see it.
+ *
+ * Prototype delegation rather than a copy: every collection is the live one, so
+ * a handler reads exactly what it would have read, and only the flag the
+ * visibility tests branch on is shadowed. Nothing writes through it — writes
+ * are never narrowed (see isGuestView).
+ */
+function guestView(state) {
+  return Object.create(state, {
+    authenticated: { value: false, enumerable: true },
+    // Handlers that answer differently for a real guest and for the owner
+    // *previewing* one — the demo has none today, but the backend keeps the
+    // same distinction (IsGuestView, api/internal/api/middleware.go) and a
+    // handler reaching for it should find the truth rather than nothing.
+    guestView: { value: true, enumerable: true },
+  });
+}
+
 // ── Dispatch ──────────────────────────────────────────────────────────────
 
 /**
@@ -122,10 +201,11 @@ function match(method, pathname) {
  * would eject a visitor from the demo mid-click. An empty body just renders an
  * empty section.
  */
-async function dispatch(method, url, rawBody) {
+async function dispatch(method, url, rawBody, headers) {
   const parsed = new URL(url, window.location.origin);
   const query = Object.fromEntries(parsed.searchParams.entries());
   const state = await getState();
+  const view = isGuestView(method, parsed.pathname, headers) ? guestView(state) : state;
 
   let body = rawBody;
   if (typeof rawBody === "string") {
@@ -145,7 +225,12 @@ async function dispatch(method, url, rawBody) {
   }
 
   try {
-    const result = await found.handler({ state, params: found.params, query, body });
+    const result = await found.handler({ state: view, params: found.params, query, body });
+    // Anything but a read may have changed the posts or the tags, so the
+    // snapshot is refreshed here rather than inside each handler that writes —
+    // the same reasoning as patching `fetch` instead of client.js. A handler
+    // added later is covered without knowing this exists.
+    if (method !== "GET") storeContent(state);
     // Handlers may return a bare value or an explicit {status, body}.
     if (result && typeof result === "object" && "status" in result && "body" in result) {
       return result;
@@ -178,8 +263,9 @@ window.fetch = async function mockFetch(input, init = {}) {
   if (!INTERCEPT.test(pathname)) return nativeFetch(input, init);
 
   const method = (init.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
+  const headers = init.headers || (typeof input === "object" ? input.headers : null);
   await sleep(LATENCY_MS);
-  return toResponse(await dispatch(method, url, init.body));
+  return toResponse(await dispatch(method, url, init.body, headers));
 };
 
 // ── XMLHttpRequest ────────────────────────────────────────────────────────
@@ -194,6 +280,7 @@ window.XMLHttpRequest = function MockXHR() {
   let intercepted = false;
   let method = "GET";
   let url = "";
+  const headers = {};
 
   const self = {
     upload: {},
@@ -214,6 +301,9 @@ window.XMLHttpRequest = function MockXHR() {
 
     setRequestHeader(...args) {
       if (!intercepted) return native.setRequestHeader(...args);
+      // Kept so an intercepted upload is answered under the same rules as the
+      // fetch path — the revelio header included.
+      headers[String(args[0])] = args[1];
     },
 
     async send(payload) {
@@ -228,7 +318,7 @@ window.XMLHttpRequest = function MockXHR() {
       }
       await sleep(LATENCY_MS);
 
-      const { status, body } = await dispatch(method, url, payload);
+      const { status, body } = await dispatch(method, url, payload, headers);
       self.status = status === 204 ? 200 : status;
       self.responseText = JSON.stringify(body ?? {});
       self.response = self.responseText;

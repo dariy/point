@@ -6,10 +6,19 @@
  * the UI shows. A reload re-seeds from the fixture and the demo is pristine
  * again. That is the whole reset story — there is no server to roll back.
  *
- * Two things are held in sessionStorage across that reload rather than being
- * re-seeded, because both are site-wide state that a page load would otherwise
- * silently undo: whether the visitor is logged in, and which theme they
- * activated. Both end with the tab, and the reset control clears them.
+ * Four things are held in sessionStorage rather than being re-seeded, because
+ * the store is module state that dies on every full page load and the demo does
+ * plenty of those — the admin's login redirects, and the walk from /light back
+ * out to the public site. Without them an edit is undone by the very navigation
+ * taken to go and look at it:
+ *
+ *   demo-authenticated  whether the visitor is logged in
+ *   demo-active-theme   the theme they activated
+ *   demo-active-plugins the plugins they turned on
+ *   demo-content        their edits to the posts and tags
+ *
+ * The first three outlive a reload; the content does not — see storeContent.
+ * All four end with the tab, and the reset control clears them.
  *
  * The theme catalogue is the one collection that does not come from the fixture
  * at all: the backend derives it from the theme files on every request, so the
@@ -126,6 +135,117 @@ export function storePlugins(plugins) {
 }
 
 /**
+ * The visitor's own edits to the content: the post and tag stores as they stand
+ * after every write the demo has answered.
+ *
+ * Everything else in the demo survives a page load because it is a *setting* —
+ * one flag, one theme name, one list of plugin ids. Content is the collection
+ * itself, so there is nothing smaller to keep: this holds the two stores whole,
+ * which at demo size is a hundred kilobytes or so and re-seeds in one parse.
+ *
+ * `postDetail` travels with `posts` because they are two shapes of the same
+ * thing (see toListShape): keeping one without the other produces a post that
+ * reads correctly on the feed and reverts the moment it is opened.
+ *
+ * **A full page reload still resets it.** That is the demo's promise — a reload
+ * re-seeds the store and the next visitor gets a pristine archive — and it is
+ * the reason this is scoped to a page *load* rather than the tab: the edit has
+ * to survive the navigation out of the admin to the public site, which is the
+ * only way to see what the edit did, and it has to not survive the reload
+ * people reach for to start over. `performance`'s navigation entry is what
+ * separates the two; the reset control drops the key outright.
+ */
+const CONTENT_KEY = "demo-content";
+
+/**
+ * Bumped when the shape below changes. A snapshot from an older build is
+ * dropped rather than merged — it re-seeds from the fixture, which is the same
+ * thing a reload does.
+ */
+const CONTENT_VERSION = 1;
+
+/**
+ * Was this page load a reload, as opposed to a navigation?
+ *
+ * `back_forward` counts as a navigation: stepping back into the demo is not a
+ * request to start it over. A browser too old for the Navigation Timing entry
+ * falls back to the deprecated enum, and one with neither keeps its edits —
+ * the failure that leaves the demo working.
+ */
+function isReload() {
+  try {
+    const [nav] = performance.getEntriesByType("navigation");
+    if (nav) return nav.type === "reload";
+    return performance.navigation?.type === 1;
+  } catch {
+    return false;
+  }
+}
+
+export function clearContent() {
+  try {
+    sessionStorage.removeItem(CONTENT_KEY);
+  } catch {
+    /* private browsing — there was nothing stored to clear */
+  }
+}
+
+// Module evaluation is the earliest the mock runs in a document's life, and
+// this has to happen before the first handler can write a snapshot back.
+if (isReload()) clearContent();
+
+/**
+ * The snapshot for this fixture bundle, or null.
+ *
+ * Rejected when it came from a different recording: a rebuilt bundle is a
+ * different archive, and restoring the old posts over it would show content the
+ * build no longer has the photographs for.
+ */
+function storedContent(fx) {
+  try {
+    const raw = sessionStorage.getItem(CONTENT_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (saved?.v !== CONTENT_VERSION) return null;
+    if (saved.recordedAt !== (fx.recordedAt ?? null)) return null;
+    if (!Array.isArray(saved.posts) || !Array.isArray(saved.tags)) return null;
+    if (!saved.postDetail || typeof saved.postDetail !== "object") return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write the content stores back, called after every request that could have
+ * changed them (shim.js dispatch).
+ *
+ * Serialising the whole of both on each write rather than tracking a diff:
+ * a hundred kilobytes of JSON.stringify is a fraction of a millisecond and the
+ * demo has already spent 90ms pretending to be a network. Every write path —
+ * including any handler added later — is covered without having to remember to
+ * call anything.
+ */
+export function storeContent(s) {
+  if (!s) return;
+  try {
+    sessionStorage.setItem(
+      CONTENT_KEY,
+      JSON.stringify({
+        v: CONTENT_VERSION,
+        recordedAt: fixtures?.recordedAt ?? null,
+        posts: s.posts,
+        postDetail: s.postDetail,
+        tags: s.tags,
+      }),
+    );
+  } catch {
+    // Quota or private browsing: the edit still stands in this document, it
+    // just will not survive the next navigation. Nothing to tell the visitor.
+  }
+}
+
+/**
  * Seed plugin presets, mirroring plugins.DefaultPresets()
  * (api/internal/plugins/registry.go), which the real backend derives from its
  * registry the first time the Plugins page is opened. Deriving them from the
@@ -228,6 +348,11 @@ function initialTheme(themes, fx) {
  * fixture's own list is the fallback for a build that predates it.
  */
 function seed(fx, catalog) {
+  // The visitor's edits, if this document was navigated to rather than
+  // reloaded. Replaces the recorded collections wholesale: the snapshot *is*
+  // the fixture as edited, so there is nothing to merge.
+  const edited = storedContent(fx);
+
   const plugins = structuredClone(fx.plugins || []);
   const storedPluginIds = storedPlugins();
   if (storedPluginIds) {
@@ -246,10 +371,10 @@ function seed(fx, catalog) {
     // Fresh tabs start logged out, so visitors meet the public site first and
     // logging in is a real step rather than a detail they skip past.
     authenticated: isAuthenticated(),
-    posts: structuredClone(fx.posts || []),
-    postDetail: structuredClone(fx.postDetail || {}),
+    posts: edited?.posts ?? structuredClone(fx.posts || []),
+    postDetail: edited?.postDetail ?? structuredClone(fx.postDetail || {}),
     postNavigation: structuredClone(fx.postNavigation || {}),
-    tags: structuredClone(fx.tags || []),
+    tags: edited?.tags ?? structuredClone(fx.tags || []),
     media: structuredClone(fx.media || []),
     plugins,
     pluginPresets: defaultPresets(plugins),
@@ -342,6 +467,7 @@ export async function resetState() {
   // Reset means the recorded state, and the theme is part of it.
   storeThemeName(null);
   storePlugins(null);
+  clearContent();
   return getState();
 }
 
@@ -351,12 +477,10 @@ export function nextId(collection) {
   return collection.reduce((max, row) => Math.max(max, row.id || 0), 0) + 1;
 }
 
-/** Posts a logged-out visitor may see. */
-export function visiblePosts(s) {
-  return s.posts.filter(
-    (p) => p.status === "published" && !p.is_hidden && !p.is_hidden_by_tag,
-  );
-}
+// Who may see which posts and tags is worked out in routes.js (hiddenSets and
+// friends), not here: it is a walk over the tag graph rather than a property of
+// a row, and the same walk answers for tags, for posts, and for the scheduled
+// queue.
 
 /**
  * Sort newest-first by publish date, falling back to creation date.
@@ -410,22 +534,9 @@ export function withinYears(rows, query) {
   );
 }
 
-/** `{posts, pagination:{...}}` — the shape the public page payloads use. */
-export function paginatedPage(rows, query, perPageDefault) {
-  const matching = withinYears(rows, query);
-  const perPage = Number(query.per_page) || perPageDefault;
-  const page = Number(query.page) || 1;
-  const start = (page - 1) * perPage;
-  return {
-    posts: matching.slice(start, start + perPage),
-    pagination: {
-      page,
-      pages: Math.max(1, Math.ceil(matching.length / perPage)),
-      per_page: perPage,
-      total: matching.length,
-    },
-  };
-}
+// The feed's own pagination lives in routes.js (feedPage): it spans both halves
+// of the feed — the published pages and the scheduled queue left of page 1 —
+// which needs the queue, and the queue is a visibility question.
 
 /**
  * Project a detail-shaped post back onto the list shape.

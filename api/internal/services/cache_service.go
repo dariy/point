@@ -66,8 +66,39 @@ func (s *CacheService) Invalidate(ctx context.Context, key string) error {
 	return os.Remove(path)
 }
 
+// Clear empties the cache, keeping the directory itself. Removing the
+// directory would leave every subsequent Set writing into a path that no longer
+// exists — and since callers discard Set's error, caching would silently stay
+// off until the next restart.
 func (s *CacheService) Clear(ctx context.Context) error {
-	return os.RemoveAll(s.cacheDir)
+	entries, err := os.ReadDir(s.cacheDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(s.cacheDir, 0755)
+		}
+		return err
+	}
+	var firstErr error
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(s.cacheDir, e.Name())); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// InvalidatePublicPages drops every cached public payload after a write that
+// could change what a guest sees.
+//
+// It is deliberately all-or-nothing. Every entry in this cache — the home feed
+// pages, the tag archives, feed.xml, sitemap.xml — is derived from which posts
+// are publicly visible, and the keys are per page *and* per `per_page` (which
+// is device-fit, so the key space is effectively unbounded). There is no way to
+// map "post 244 became hidden" back to the handful of keys that mentioned it,
+// and serving a post in a list that 404s when opened is a worse outcome than
+// re-rendering a few pages.
+func (s *CacheService) InvalidatePublicPages(ctx context.Context) error {
+	return s.Clear(ctx)
 }
 
 func (s *CacheService) GetWithTTL(ctx context.Context, key string, ttl time.Duration) ([]byte, error) {

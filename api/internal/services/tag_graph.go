@@ -17,9 +17,18 @@ import (
 
 // Invalidate clears the cached tag graph, forcing a rebuild on the next read.
 // Callers outside this package need it because mutating posts changes the
-// hierarchical post counts the graph caches (see PostService.refreshTagCounts).
+// hierarchical post counts the graph caches (see PostService.onPostsChanged).
+//
+// It also drops the public page cache. Every tag write reaches this method, and
+// a tag write can change what a guest sees — flipping `hidden` or `hides_posts`
+// (on the tag or any ancestor) adds or removes posts from the public feed, and
+// a rename changes the pills on every card carrying it. Leaving the rendered
+// pages behind would serve posts that no longer exist for that reader.
 func (s *TagService) Invalidate() {
 	s.cache.invalidate()
+	if s.pageCache != nil {
+		_ = s.pageCache.InvalidatePublicPages(context.Background())
+	}
 }
 
 // getGraph returns the cached tag graph, building it on a cold cache.

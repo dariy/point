@@ -73,6 +73,13 @@
     box-shadow: 0 0 0 5px rgba(224, 92, 0, 0.28);
 }
 
+/* Owner-only place: hollow, dashed dot instead of a solid one, so the markers
+   revelio removes are the ones that stand out while it is on. */
+.atlas-marker__dot--hidden {
+    background: color-mix(in srgb, var(--atlas-geo, #1f9e8e) 18%, transparent);
+    border-style: dashed;
+}
+
 /* A place unconnected to the current selection fades back (mirrors /tags). */
 .leaflet-marker-icon.atlas-marker--dim {
     opacity: 0.2;
@@ -141,6 +148,22 @@
         0 2px 9px rgba(0, 0, 0, 0.3);
     z-index: 1001;
     max-width: none;
+}
+
+/* Owner-only chip (hidden tag, or a draft / hidden / scheduled post): the
+   site-wide lock plus a dashed ring. `--related` also uses a dash, but the two
+   never describe the same thing — related is a focus state that comes and goes
+   with a click, this is a property of the node itself. */
+.atlas-node--hidden {
+    border-style: dashed;
+}
+
+.atlas-node .locker-icon {
+    flex: 0 0 auto;
+    width: 11px;
+    height: 11px;
+    margin-right: 3px;
+    opacity: 0.85;
 }
 
 /* A "second-wave" tag reached through a shared post: dashed ring, like the
@@ -341,6 +364,22 @@
 }
 .atlas-legend__dot--post {
     color: var(--atlas-post, #5b6678);
+}
+
+/* The owner-only filter: a hollow dashed swatch, matching how a hidden place is
+   drawn on the map. Switching it off is the fastest way to see the guest's map
+   shape — hidden places lose their markers *and* their country fills. */
+.atlas-legend__dot--concealed {
+    background: transparent;
+    border-style: dashed;
+    color: var(--atlas-geo, #1f9e8e);
+}
+
+/* Separated from the node-type filters above: this one cuts across all of them. */
+.atlas-toggle--hidden {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
 }
 
 /* The legend custom props live on .atlas-map; mirror them here for the dots. */

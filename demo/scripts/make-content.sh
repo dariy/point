@@ -12,6 +12,14 @@
 #
 # Usage:
 #   GEMINI_API_KEY=... demo/scripts/make-content.sh [--count=28] [--port=8002]
+#   GEMINI_API_KEY=... demo/scripts/make-content.sh --add=20
+#
+# --add grows the archive instead of replacing it. The scratch instance is
+# rebuilt from the recorded fixtures first (import-fixtures.mjs) when it is
+# missing, so the posts already in demo/mock/fixtures/fixtures.json come back
+# with their own photographs and prose, and only the new ones are generated.
+# That is what makes the scratch directory disposable: the fixture bundle plus
+# the originals is the archive, and the database is a working copy of it.
 #
 # Then:  demo/scripts/build.sh
 set -euo pipefail
@@ -25,6 +33,8 @@ COUNT=28
 PORT=8002
 KEEP=0
 RETAG=0
+ADD=0
+MEDIA_SRC_DEFAULT=""
 for arg in "$@"; do
   case "$arg" in
     --count=*) COUNT="${arg#*=}" ;;
@@ -34,9 +44,20 @@ for arg in "$@"; do
     # Reuse the existing scratch instance: restructure its tags and re-record,
     # generating nothing. No Gemini key, no new photographs, same prose.
     --retag) RETAG=1 ;;
+    # Append N posts to the archive already in the fixtures, leaving every
+    # existing post exactly as it was recorded.
+    --add=*) ADD="${arg#*=}" ;;
+    # Where import-fixtures.mjs reads the recorded photographs from. Defaults to
+    # the scratch instance's own originals, which survive its database.
+    --media=*) MEDIA_SRC_DEFAULT="${arg#*=}" ;;
     *) echo "unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
+
+if [ "$RETAG" = "1" ] && [ "$ADD" != "0" ]; then
+  echo "--retag and --add do different things to the same instance; pick one." >&2
+  exit 1
+fi
 
 if [ "$RETAG" = "0" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
   echo "GEMINI_API_KEY is not set." >&2
@@ -52,6 +73,7 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
+  if [ -n "${STAGED_MEDIA:-}" ]; then rm -rf "$STAGED_MEDIA"; fi
 }
 trap cleanup EXIT INT TERM
 
@@ -62,6 +84,8 @@ echo "==> Building point binary"
 
 # ── Scratch instance ──────────────────────────────────────────────────────
 
+IMPORT=0
+
 if [ "$RETAG" = "1" ]; then
   if [ ! -f "$SCRATCH/point.db" ]; then
     echo "--retag needs an existing scratch instance at $SCRATCH." >&2
@@ -69,7 +93,26 @@ if [ "$RETAG" = "1" ]; then
     exit 1
   fi
   echo "==> Reusing scratch instance at $SCRATCH"
+elif [ "$ADD" != "0" ] && [ -f "$SCRATCH/point.db" ]; then
+  echo "==> Reusing scratch instance at $SCRATCH ($ADD post(s) to add)"
 else
+  # Adding to an archive whose database is gone: rebuild it from the recording.
+  # The photographs are not in the fixture — it holds paths, not pixels — so the
+  # originals have to survive the wipe below, which is what the staging copy is
+  # for. Without them the import would restore 28 posts with no images.
+  if [ "$ADD" != "0" ]; then
+    MEDIA_SRC="${MEDIA_SRC_DEFAULT:-$SCRATCH/media/originals}"
+    if [ ! -d "$MEDIA_SRC" ]; then
+      echo "--add needs the recorded photographs, but $MEDIA_SRC does not exist." >&2
+      echo "Pass --media=/path/to/originals, or run without --add to regenerate." >&2
+      exit 1
+    fi
+    STAGED_MEDIA="$(mktemp -d)"
+    cp -a "$MEDIA_SRC/." "$STAGED_MEDIA/"
+    echo "==> Staged $(find "$STAGED_MEDIA" -type f | wc -l | tr -d ' ') original(s) from $MEDIA_SRC"
+    IMPORT=1
+  fi
+
   echo "==> Preparing scratch instance at $SCRATCH"
   rm -rf "$SCRATCH"
   mkdir -p "$SCRATCH"/{media/originals,media/thumbnails,logs,backups,themes}
@@ -120,6 +163,17 @@ print(token)
 PY
 )
 
+# ── Restore ───────────────────────────────────────────────────────────────
+
+if [ "$IMPORT" = "1" ]; then
+  echo "==> Restoring the recorded archive"
+  node "$SCRIPT_DIR/import-fixtures.mjs" \
+    --base="$BASE" \
+    --session="$SESSION" \
+    --db="$SCRATCH/point.db" \
+    --media="$STAGED_MEDIA"
+fi
+
 # ── Generate ──────────────────────────────────────────────────────────────
 
 if [ "$RETAG" = "1" ]; then
@@ -128,6 +182,14 @@ if [ "$RETAG" = "1" ]; then
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db"
+elif [ "$ADD" != "0" ]; then
+  echo "==> Adding $ADD posts"
+  node "$SCRIPT_DIR/generate-content.mjs" \
+    --base="$BASE" \
+    --session="$SESSION" \
+    --db="$SCRATCH/point.db" \
+    --gemini-key="$GEMINI_API_KEY" \
+    --add="$ADD"
 else
   echo "==> Generating $COUNT posts"
   node "$SCRIPT_DIR/generate-content.mjs" \

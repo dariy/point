@@ -8,11 +8,12 @@
  *
  * Shape of the tree:
  *
- *   country ─┬ Portugal ── Lisbon        cities are children of their country
- *            ├ Iceland ─── Reykjavík     *and* of the `city` root, so the tree
- *            ├ Japan ───── Kyoto         reads as geography while `city` stays
- *            └ Argentina ─ El Chaltén    a flat index of every place
- *   city ────┬ Lisbon, Reykjavík, Kyoto, El Chaltén
+ *   country ─┬ Portugal ─┬ Lisbon       cities are children of their country
+ *            │           └ Mirandela ○    *and* of the `city` root, so the tree
+ *            ├ Iceland ─── Reykjavík    reads as geography while `city` stays
+ *            ├ Japan ───── Kyoto        a flat index of every place
+ *            └ Argentina ─ El Chaltén   ○ = hidden, and hides its posts
+ *   city ────┬ Lisbon, Mirandela ○, Reykjavík, Kyoto, El Chaltén
  *   date ────┬ 2020 … 2026               kind: "year" — what the timeline reads
  *   subject ─┬ terrain ─┬ mountains, forest, coastline, valley, flora
  *            ├ water ───┬ ocean, waves, still-water, droplets
@@ -24,6 +25,11 @@
  *
  * Every post carries its country, its city, its year, and 2–4 subject topics,
  * so no branch of the tree is decorative.
+ *
+ * Not every post is public: `visibilityPlan` deals a batch across the four
+ * states a Point archive can hold — published, scheduled, hidden, and hidden by
+ * a tag — so the demo has something to conceal when the revelio switch is
+ * thrown. See docs/features/hidden-visibility.md.
  */
 
 /**
@@ -65,6 +71,34 @@ export const COUNTRY_COORDS = {
   Iceland: { latitude: 64.9631, longitude: -19.0208 },
   Japan: { latitude: 36.2048, longitude: 138.2529 },
   Argentina: { latitude: -38.4161, longitude: -63.6167 },
+};
+
+/**
+ * The one place the archive keeps to itself.
+ *
+ * A fifth location, deliberately outside LOCATIONS so the round-robin above
+ * never lands on it: its posts are dealt explicitly (see `visibilityPlan`). It
+ * carries both visibility flags at once, which is what makes it worth having —
+ * they do different things and the demo shows both from one tag:
+ *
+ *   hidden      → the tag itself leaves public navigation: the header menu, the
+ *                 tags index, the tag cloud, and the Atlas, whose marker simply
+ *                 is not there for a guest.
+ *   hides_posts → the posts filed under it leave the public feed, while staying
+ *                 in the owner's with a lock on the card.
+ *
+ * Mirandela is a child of Portugal, so the concealment is visible *within*
+ * a branch a guest can still see — a hidden root would only prove that
+ * an absent subtree is absent. See docs/features/hidden-visibility.md.
+ */
+export const PRIVATE_LOCATION = {
+  name: "Mirandela",
+  country: "Portugal",
+  latitude: 41.4781,
+  longitude: -7.1986,
+  years: [2022, 2023, 2024, 2025],
+  hidden: true,
+  hidesPosts: true,
 };
 
 export const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
@@ -220,6 +254,13 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
         patch.latitude = body.latitude;
         patch.longitude = body.longitude;
       }
+      // The visibility flags, for the same reason: the private place is
+      // adopted, not created, on the second pass (its first post tagged it
+      // into existence), and an adopted tag that stays public is the one
+      // failure this whole branch of the demo would not survive.
+      for (const flag of ["hidden", "hides_posts"]) {
+        if (body[flag] != null && tag[flag] !== body[flag]) patch[flag] = body[flag];
+      }
       if (Object.keys(patch).length) {
         tag = await api("PUT", `/api/tags/${tag.id}`, patch);
         existing.set(tag.name.toLowerCase(), tag);
@@ -267,7 +308,11 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
     });
   }
 
-  for (const loc of LOCATIONS) {
+  // The private place is filed exactly like the public ones — same two parents,
+  // same coordinates — so nothing but its two flags separates it. That is the
+  // point: what a guest loses is decided by the flags, not by the tag having
+  // been kept out of the tree.
+  for (const loc of [...LOCATIONS, PRIVATE_LOCATION]) {
     // Two parents: its country (the geographic path) and the `city` index.
     // Point's tag graph is a DAG, so this is a supported shape rather than a
     // trick — breadcrumbs pick the first path and the flyout offers the other.
@@ -277,6 +322,8 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
       description: `${loc.name}, ${loc.country}`,
       latitude: loc.latitude,
       longitude: loc.longitude,
+      hidden: !!loc.hidden,
+      hides_posts: !!loc.hidesPosts,
       parent_ids: [created[loc.country].id, cityRoot.id],
     });
   }
@@ -328,4 +375,65 @@ export function placementFor(index) {
   const location = LOCATIONS[index % LOCATIONS.length];
   const round = Math.floor(index / LOCATIONS.length);
   return { location, year: location.years[round % location.years.length] };
+}
+
+/**
+ * How many posts of each non-ordinary kind a batch carries.
+ *
+ * The demo has to show more than "published": Point's whole visibility model —
+ * and the revelio switch that previews it — is invisible on an archive where
+ * every post is public. These are the three states a guest is not shown:
+ *
+ *   scheduled → the queue left of page 1 on the home feed and on the tag pages
+ *               it belongs to (docs/features/publishing.md)
+ *   private   → published, but filed under the hidden place, so withheld by its
+ *               tag rather than by its own status
+ *   hidden    → status `hidden`: withheld on its own account, in an otherwise
+ *               public place
+ *
+ * Six scheduled is one queue page at the demo's ten-per-page and a little over,
+ * so the paginator's left edge lands on page 0 with the queue partly filled —
+ * a full page would read as a coincidence of the count.
+ */
+export const SPECIAL_MIX = { scheduled: 6, private: 5, hidden: 3 };
+
+/**
+ * The role of each post in a batch of `count`: one of `published`, `scheduled`,
+ * `private`, `hidden`.
+ *
+ * Specials are dealt first so an interrupted run still leaves an archive worth
+ * looking at — the ordinary posts are the ones the demo already has plenty of.
+ * A batch smaller than the mix keeps the roles in SPECIAL_MIX order rather than
+ * silently dropping one kind to zero.
+ */
+export function visibilityPlan(count) {
+  const roles = [];
+  for (const [role, n] of Object.entries(SPECIAL_MIX)) {
+    for (let i = 0; i < n && roles.length < count; i++) roles.push(role);
+  }
+  while (roles.length < count) roles.push("published");
+  return roles;
+}
+
+/**
+ * Where a post of each role is taken.
+ *
+ * `private` posts go to the hidden place and nowhere else — a place with no
+ * photographs is a tag a visitor can only ever meet as an empty page. Scheduled
+ * posts are dated in the near future, so their year tag has to be the current
+ * one; that narrows them to the places whose window reaches it. Everything else
+ * follows the ordinary round-robin.
+ */
+export function placementForRole(role, index, now = new Date()) {
+  if (role === "private") {
+    const years = PRIVATE_LOCATION.years;
+    return { location: PRIVATE_LOCATION, year: years[index % years.length] };
+  }
+  if (role === "scheduled") {
+    const year = now.getUTCFullYear();
+    const current = LOCATIONS.filter((l) => l.years.includes(year));
+    const pool = current.length ? current : LOCATIONS;
+    return { location: pool[index % pool.length], year };
+  }
+  return placementFor(index);
 }

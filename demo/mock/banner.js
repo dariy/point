@@ -26,6 +26,25 @@ const STYLE = `
   /* The immersive viewers are full-bleed, and the Sheet viewer puts its
      swipe-up hint at the bottom centre — exactly where this bar sits. */
   .demo-banner.is-immersive { display: none; }
+  /* The bar is fixed to the bottom, so it lands on top of the last strip of the
+     document — which is the public footer, where RSS and the revelio switch
+     live. They were behind it and unclickable.
+
+     Two rules, because the footer reaches the bottom of the window two
+     different ways. On a long page it is simply the end of the document, so
+     padding the body moves it up. On a short one the site wrapper's
+     min-height of 100dvh (frontend/css/public/layout.css) holds it against the
+     viewport whatever the body's padding is, so the wrapper has to lose the
+     bar's height too.
+
+     The class comes off when the bar is dismissed or steps aside for an
+     immersive viewer, so nothing is left reserving space for something that is
+     not there. */
+  body.has-demo-banner { padding-bottom: 4rem; }
+  body.has-demo-banner .site-wrapper {
+    min-height: calc(100vh - 4rem);
+    min-height: calc(100dvh - 4rem);
+  }
   .demo-banner p { margin: 0; }
   .demo-banner strong { font-weight: 650; }
   .demo-banner button {
@@ -81,6 +100,7 @@ function buildBanner() {
   });
   bar.querySelector("[data-demo-dismiss]").addEventListener("click", () => {
     bar.hidden = true;
+    document.body.classList.remove("has-demo-banner");
     try {
       sessionStorage.setItem("demo-banner-hidden", "1");
     } catch {
@@ -126,6 +146,11 @@ function syncBannerVisibility() {
   const immersive = !!document.querySelector(".immersive-layout");
   if (bar.classList.contains("is-immersive") !== immersive) {
     bar.classList.toggle("is-immersive", immersive);
+  }
+  // Reserve the strip the bar occupies only while it is actually occupying it.
+  const showing = !bar.hidden && !immersive;
+  if (document.body.classList.contains("has-demo-banner") !== showing) {
+    document.body.classList.toggle("has-demo-banner", showing);
   }
 }
 

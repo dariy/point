@@ -21,8 +21,8 @@ A read-only backend was the obvious alternative and is strictly worse here:
 - A static bundle has no origin to exhaust, so denial-of-service protection is
   structural rather than configured.
 - There is nothing to reset. A reload re-seeds the store; the demo is pristine
-  again, bar the two things held for the tab on purpose (being logged in, and
-  the theme the visitor activated) which the reset control drops.
+  again, bar the things held for the tab on purpose (being logged in, the theme
+  and plugins the visitor chose) which the reset control drops.
 
 ## How it works
 
@@ -43,6 +43,7 @@ demo/
     generate-content.mjs picsum photos + Gemini prose
     retag-content.mjs    restructure tags without regenerating prose
     record-fixtures.mjs  record an instance's API responses
+    import-fixtures.mjs  the inverse: a recorded bundle → a live instance
     fill-excerpts.mjs    synthetic excerpt prose for posts recorded without one
     build.sh             fixtures + frontend → demo/dist/
     build-html.mjs       index.html templating the Go server normally does
@@ -75,6 +76,81 @@ handling and caching instead of a parallel implementation of it.
 |---|---|---|
 | Entities | posts, tags, media, settings, plugins | Seed a mutable store — create/edit/delete really take effect |
 | Derived views | tag graph, timeline | Served as recorded blobs; recomputing them in the browser would duplicate real backend work for no visible gain |
+
+### Edits outlive a page load
+
+The store is module state, so it dies on every full page load — and the demo
+does plenty of those, because the admin sends login-required signals through
+`window.location.assign` and the walk from `/light` out to the public site is a
+hard navigation. An edit was therefore undone by the very navigation taken to go
+and look at it: renaming a post, unpublishing it or hiding a tag changed the
+admin screen and nothing else.
+
+`demo-content` in `sessionStorage` holds the post and tag stores whole (about a
+hundred kilobytes at demo size), written by `shim.js` after every request that
+is not a GET and re-seeded by `store.js` on load. It sits at the dispatch
+boundary rather than inside each handler that writes, for the same reason the
+mock patches `fetch` rather than `client.js`: a handler added later is covered
+without knowing it exists.
+
+**A reload still resets it.** That is the demo's promise — the next visitor gets
+a pristine archive — so the snapshot is scoped to a page *load*, not to the tab:
+`performance`'s navigation entry separates a reload from a navigation, and the
+reset control drops the key outright. It is also keyed to the fixture bundle it
+came from, so a rebuilt demo never restores posts the build no longer has the
+photographs for.
+
+`postDetail` travels with `posts` because they are two shapes of the same thing;
+keeping one without the other gives a post that reads correctly on the feed and
+reverts the moment it is opened.
+
+### Hidden, scheduled, and the revelio switch
+
+The archive is not uniformly public — an archive where every post is visible
+makes Point's whole visibility model invisible with it. The demo carries all
+four states (`demo/world.mjs`, `visibilityPlan`):
+
+| State | In the demo | What a guest gets |
+|---|---|---|
+| published | 34 posts | all of them |
+| `hidden` | 3 posts | 404, and no card on the feed |
+| hidden by tag | 5 posts, filed in **Mirandela** | 404 — the place's tag carries `hides_posts` |
+| `scheduled` | 6 posts, dated over the coming weeks | nothing; the queue is owner-only |
+
+Mirandela is the hidden place: a real city, 25km from Lisbon, filed under Portugal
+and the `city` index exactly like the four public ones, and carrying both flags
+at once — `hidden` takes the tag itself out of the header, the tags index, the
+cloud and the Atlas; `hides_posts` takes its photographs out of the public feed.
+Concealment is worth watching *inside* a branch a guest can still see; a hidden
+root would only prove that an absent subtree is absent.
+
+Three pieces of mock support stand behind that:
+
+- **Inheritance is computed, not read.** The fixture carries the `effective_*`
+  flags the backend worked out at record time, which stops being true the moment
+  a visitor hides something in `/light/tags`. `routes.js hiddenSets` walks the
+  tag DAG the way `TagGraph` does, so the demo's own edits propagate and
+  `hidden_via` names the ancestor responsible.
+- **The scheduled queue** extends the feed *left* of page 1 — page 0, then -1 —
+  on the home feed and on the tag pages the queued posts belong to, reported as
+  `pagination.min_page` and `pagination.scheduled` and read soonest-first. See
+  `feedPage` and [publishing.md](../docs/features/publishing.md).
+- **Revelio**, the owner's "show me what a guest sees" switch in the public
+  footer, sends `X-Point-Revelio: off` on every request. `shim.js` answers a
+  narrowed *view* of the store — prototype delegation with `authenticated`
+  shadowed, so handlers read the live collections and only the flag they branch
+  on changes. Crucially it narrows only the paths the real server puts behind
+  `OptionalAuthMiddleware`: `/api/auth/me` is behind `AuthMiddleware` and must
+  keep answering, or the app concludes the visitor is signed out and the control
+  that turns revelio back on disappears with the admin UI.
+
+Because the recorded blobs were recorded *as the owner*, the ones that describe
+the archive get the same cut applied on the way out: the tags index, the tag
+cloud, the nav trees, the Atlas graph (nodes, their `is_hidden` marking and the
+edges that would dangle), and the timeline's per-year counts, which are a count
+of posts and so change with who is counting. `build-feeds.mjs` applies it too —
+without that the static `feed.xml` and `sitemap.xml` would publish the URLs of
+the very posts the demo conceals everywhere else.
 
 Tag pages are **synthesized** from the entity stores rather than recorded, so a
 tag created inside the demo gets a working page too. So is the Atlas's on-tap
@@ -148,6 +224,9 @@ just an input. Everything after it is local and repeatable:
 GEMINI_API_KEY=... demo/scripts/make-content.sh
 node demo/scripts/fill-excerpts.mjs   # fill any excerpt the recording left empty
 
+# Later: grow the archive without touching what is already in it
+GEMINI_API_KEY=... demo/scripts/make-content.sh --add=20
+
 # Every time: build and serve, with the backend STOPPED
 demo/scripts/run.sh                                       # http://localhost:8002
 node demo/scripts/test.mjs --base=http://localhost:8002
@@ -164,6 +243,37 @@ no re-recording. A warm build is a second or two; media is transcoded into
 
 `test.mjs` drives a real browser: `npm install`, then `npx playwright
 install chromium` if the browser is not already cached.
+
+### Adding to the archive rather than replacing it
+
+`--add=N` appends N posts and leaves every existing one exactly as recorded —
+same photographs, same prose, same slugs and dates. Growing the demo used to
+mean a full `make-content.sh` run, which regenerates *everything*: new pictures
+and new Gemini prose for posts that were already good.
+
+It works because the fixture bundle is a complete description of the archive,
+and `import-fixtures.mjs` is the inverse of the recorder — it stands the whole
+thing back up in an empty instance through the REST API, so the scratch database
+is genuinely a working copy rather than the master. Given a scratch instance the
+run reuses it; given none, it rebuilds one from `fixtures.json` plus the
+originals on disk and carries on from there.
+
+Two things do not go in through the API, for the same reason the generator
+backdates in SQL: `published_at` is set server-side at publish time, and
+`view_count` is only ever incremented. Both are restored directly afterwards —
+without that, importing a 2020–2026 archive would date all of it today and flatten
+the timeline, the year tags and the Atlas's scoping along with it.
+
+The photographs are the one thing the bundle does not hold (it records paths,
+not pixels), so `--add` needs them on disk. `make-content.sh` stages
+`demo/.scratch/media/originals` aside before it wipes the scratch directory;
+`--media=/path/to/originals` points it somewhere else.
+
+What the added batch is *made of* is `visibilityPlan` in `demo/world.mjs` — the
+scheduled, hidden and privately-filed posts described above. New photographs are
+picked with the ones already in the archive excluded, by picsum id and by
+photographer, so an add run widens the archive instead of revisiting the same
+afternoon.
 
 ### Changing what the demo says
 
@@ -212,11 +322,12 @@ shared by the generator and the restructuring script so the two cannot describe
 different worlds:
 
 ```
-country ─┬ Portugal ── Lisbon      cities are children of their country *and*
-         ├ Iceland ─── Reykjavík   of the `city` root, so the tree reads as
-         ├ Japan ───── Kyoto       geography while `city` stays a flat index
-         └ Argentina ─ El Chaltén
-city ────┬ Lisbon, Reykjavík, Kyoto, El Chaltén
+country ─┬ Portugal ─┬ Lisbon     cities are children of their country *and*
+         │           └ Mirandela  of the `city` root, so the tree reads as
+         ├ Iceland ─── Reykjavík  geography while `city` stays a flat index
+         ├ Japan ───── Kyoto
+         └ Argentina ─ El Chaltén  ○ = hidden, and hides its posts
+city ────┬ Lisbon, Mirandela, Reykjavík, Kyoto, El Chaltén
 date ────┬ 2020 … 2026             kind: "year" — what the timeline reads
 subject ─┬ terrain ─┬ mountains, forest, coastline, valley, flora
          ├ water ───┬ ocean, waves, still-water, droplets
@@ -246,12 +357,21 @@ that can never drop a place from the map is indistinguishable from one that does
 nothing. Now 2020 is Lisbon alone and 2026 is Kyoto and El Chaltén, while every
 year still holds at least one place so the timeline's histogram has no gap.
 
+Mirandela sits outside `LOCATIONS`, in `PRIVATE_LOCATION`, so the round-robin never
+lands on it — its posts are dealt to it deliberately. Everything else about it is
+ordinary: same two parents, same coordinates, its own photographs. Only the two
+flags separate it, which is the point of having it (see *Hidden, scheduled, and
+the revelio switch* above).
+
 The topical vocabulary is **closed**. Letting the model invent keywords per
 photo produced ~100 tags of which roughly 80 named exactly one post — a flat
 list that exercises the tag *page* but not the hierarchy, the breadcrumbs or the
 flyout, and every click on which lands on an archive of one. Twenty-five terms
-over 28 posts keeps every tag a facet that narrows the archive to more than one
-entry, which both scripts assert before finishing.
+over 48 posts keeps every tag a facet that narrows the archive to more than one
+entry, which both scripts assert before finishing — an `--add` run counting the
+posts already carrying a topic, so a term used once in the new batch and five
+times in the archive is left alone rather than stripped off posts the run was
+told not to touch.
 
 Each post carries its country, its city, its year and 2–4 topics, so no branch
 of the tree is decorative.
@@ -272,6 +392,10 @@ it down. Your real instance is never touched.
    Gemini choose clustered almost everything onto one city, leaving the map with
    a single pin. With 28 posts over 4 locations and 7 years the two cycles are
    coprime, so every combination appears exactly once: 7 per location, 4 per year.
+   A post's *role* comes first, though (`visibilityPlan`): the private ones go to
+   the hidden place and nowhere else, and the scheduled ones are dated in the
+   coming weeks, which pins them to the current year and so to the places whose
+   window reaches it.
 3. Sends each image to Gemini (`gemini-2.5-flash`, structured output) with its
    assigned place and year, asking for a title, excerpt, body and topical tags.
    The text describes the actual photograph rather than reading as filler. Tags
@@ -290,6 +414,9 @@ it down. Your real instance is never touched.
    cannot do: it sets the timestamp server-side at publish time, and a past
    `scheduled_at` publishes immediately instead of backdating. Timestamps are
    clamped to an hour ago so the current year never produces future-dated posts.
+   The scheduled posts are left out of it — they are dated by `scheduled_at`, in
+   the future, and backdating one would drop it out of the queue it exists to
+   fill.
 
 Photo selection and date jitter run off a seeded PRNG, so a re-run reproduces the
 same layout — a demo that reshuffles on every rebuild makes screenshots and bug
@@ -324,6 +451,14 @@ MEDIA_SRC=/path/to/data/media/originals demo/scripts/build.sh
 `<token>` is a raw value from the `sessions` table; any admin session works.
 Nothing is written back to the source instance. Note that this publishes that
 instance's content — see Scrubbing below.
+
+The recorder makes one correction as it goes: it copies `scheduled_at` from each
+post's detail payload onto the list row it recorded. The admin list query does
+not select that column, so every scheduled post would otherwise record as
+`scheduled_at: null` — while the feed's own queue read *does* select it, and the
+card is dated and the queue ordered by it. Taking the value from the detail
+payload records what the feed would have sent rather than what the admin list
+happened to omit.
 
 ### What the build reproduces
 

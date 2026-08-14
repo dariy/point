@@ -22,7 +22,7 @@ import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, refitPage } from '../../utils/gridFit.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
@@ -355,8 +355,8 @@ export default class SearchPage extends Component {
     const current = this._loadedPerPage || fit;
     const next = this._fitLatch.accept(current, fit);
     if (next === null) return;
-    const firstIndex = (vc.page - 1) * current;
-    const newPage = Math.floor(firstIndex / next) + 1;
+    // Keep the first result currently on screen on the resized page.
+    const newPage = refitPage(vc.page, current, next);
     this._fitOwned = true;
     // Tells the refresh this update provokes that it is a refit, not a
     // navigation — see _refreshPostContent.

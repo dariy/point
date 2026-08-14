@@ -51,6 +51,31 @@ lives in the **Details** rail/sheet.
   posts within a minute (`PublishDueScheduledPosts`) and hosts other periodic tasks
   (Instagram token refresh, etc.). Scheduled publish triggers the same hooks as manual
   publish (Instagram cross-post, cache/RSS invalidation).
+- **The queue on the feed**: the owner's home feed extends *left* of page 1 into
+  the scheduled posts — page 0 is the first future page, then -1, -2 … The
+  server reports the left edge as `pagination.min_page` (1 for everyone else)
+  and flags the page it returned with `pagination.scheduled`; the client
+  (`GridPager`, `Pagination`, `ViewContext`) treats that as the first page
+  instead of hard-coding 1, so swipe, arrow keys and the paginator all reach it.
+
+  The queue reads **outward from the present**: soonest-first, laid out
+  right-to-left and then down (`.posts-grid-reversed`, `direction: rtl`), so the
+  post about to go live sits top-right — where it will land once page 1 shifts
+  along. Cards are drawn faded (`.post-card.is-scheduled`) and dated by
+  `scheduled_at` rather than `created_at`. Guests never see any of it, and
+  neither does the owner with [revelio](hidden-visibility.md#revelio--viewing-the-site-as-a-guest)
+  off. Scheduled posts count towards a tag's admin post count.
+
+  **Tag pages have the same left half** (`/tags/:slug`), holding the queued
+  posts carrying that tag or one below it — the same tag-plus-descendants set
+  the published list is drawn from, so a parent tag shows its children's queue
+  too. `resolveScheduledPage` (`api/internal/api/pages.go`) resolves the page
+  window for both feeds; the reads behind them differ only in scope
+  (`PostService.ListScheduledPosts` vs `TagService.GetScheduledPostsByTag`).
+  `total` and `pages` keep describing the *published* half on both, so the
+  paginator spans the whole range and a swipe right lands back on page 1
+  knowing what follows it. A timeline scope turns the left half off — an
+  unpublished post has no year to be scoped by.
 - **Preview links**: time-limited shareable token URLs (`/preview/:token`,
   `point_generate_preview_link`) for reviewing unpublished posts without auth.
 - **Soft delete / trash** with restore; view counts per post; featured flag; SEO meta

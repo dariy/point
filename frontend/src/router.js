@@ -107,6 +107,33 @@ class Router {
     this._render(location.pathname + location.search + location.hash);
   }
 
+  /**
+   * Re-render the current location from scratch, without touching history.
+   *
+   * navigate() to the same URL takes the same-route path and only calls
+   * onRouteUpdate, which refreshes the page's content but leaves the chrome
+   * (header, footer, tag cloud) as it was. This drops the page instance first,
+   * so everything is rebuilt — for when what changed is not *where* the reader
+   * is but *what they may see* there, i.e. the revelio switch.
+   *
+   * Still an in-document re-render: no document reload, so no white flash.
+   *
+   * @param {string} [path] Optional URL to render instead of the current one,
+   *   replacing the history entry (the scheduled feed pages do not exist on the
+   *   guest side of the switch, so concealing has to leave them).
+   */
+  refresh(path) {
+    if (path && path !== location.pathname + location.search + location.hash) {
+      history.replaceState(null, "", path);
+    }
+    if (this._currentPage) {
+      this._currentPage.unmount();
+      this._currentPage = null;
+      this._currentRoute = null;
+    }
+    this._render(location.pathname + location.search + location.hash);
+  }
+
   // ── Private ───────────────────────────────────────────────────────────────
 
   _onPopState() {

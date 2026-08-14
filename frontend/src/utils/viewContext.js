@@ -22,8 +22,12 @@ export class ViewContext {
     this.years = null;
     /** @type {string|null} */
     this.query = query.q || null;
-    /** @type {number} */
-    this.page = parseInt(query.page, 10) || 1;
+    /** @type {number} Feed page. 1 is the newest published posts; 0 and below
+     *  are the owner's scheduled queue extending to the left of it, so this is
+     *  parsed as a signed integer rather than defaulted through `|| 1`. */
+    this.page = Number.isInteger(parseInt(query.page, 10))
+      ? parseInt(query.page, 10)
+      : 1;
     /** @type {number|null} Posts per page — device-fit, persisted in the URL. */
     this.perPage = parseInt(query.per_page, 10) || null;
     /** @type {string|null} Post slug */
@@ -152,7 +156,9 @@ export class ViewContext {
       params.set('timeline', `${this.years[0]}-${this.years[1]}`);
     }
 
-    if (this.page > 1) {
+    // Page 1 is the default and stays out of the URL; every other page —
+    // including the scheduled queue's 0, -1, -2 … — is serialized.
+    if (this.page !== 1) {
       params.set('page', this.page.toString());
     }
 

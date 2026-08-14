@@ -8,6 +8,14 @@ A personal photo blog engine.
 
 Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS SPA frontend.
 
+## Quick showcase
+[UI Demo](https://demo.point.photos)
+
+![Post list + post details](./docs/images/post-list-post-details.gif) <img src="./docs/images/mobile-post-list.png" height="540"> 
+![Post list + zoom + scheduled posts](./docs/images/post-list-zoom-and-scheduled-posts.gif) <img src="./docs/images/mobile-post-details.png" height="540">
+
+![Map](./docs/images/map.gif)
+
 ## Quick start
 
 ```bash
@@ -97,13 +105,6 @@ data/         Runtime data (DB + media) — gitignored
 [QUICKSTART.md](QUICKSTART.md) covers the full install in a few commands, using
 [`quickstart/docker-compose.yml`](quickstart/docker-compose.yml) and the published
 image. Pin a version tag rather than `latest` for production.
-
-### Don't want to run it yourself?
-
-[Point Hosting](https://point.photos/and/pizza) runs this same engine as a
-managed service — servers, TLS and backups handled, your data still exportable
-as one ordinary folder. It funds the engine's development. Self-hosting stays
-first-class and always will; if that's what you're here for, ignore this.
 
 ## License
 

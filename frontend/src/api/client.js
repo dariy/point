@@ -16,6 +16,7 @@
  */
 
 import { enqueue } from '../utils/mutationQueue.js';
+import { revelioHeaders } from '../utils/revelio.js';
 
 class ApiClient {
   /**
@@ -42,6 +43,9 @@ class ApiClient {
       credentials: 'include',
       headers: {
         Accept: 'application/json',
+        // Owner browsing as a guest — see utils/revelio.js. Merged before the
+        // caller's own headers so an explicit one still wins.
+        ...revelioHeaders(),
         ...init.headers,
       },
       ...init,

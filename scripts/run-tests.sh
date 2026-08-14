@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 #   --race          Enable race detector
 #   --short         Skip long running tests
 #   --bench         Run benchmarks
-#   --unit          Run unit tests only (exclude -tags=integration)
+#   --unit          Run unit tests only (excludes integration tests)
 
 TARGET="./..."
 if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
@@ -30,7 +30,7 @@ VERBOSE=""
 RACE=""
 SHORT=""
 BENCH=""
-TAGS="-tags=integration" # Run all tests by default
+TAGS="" # Run all tests by default (integration runs unless -tags=unit is passed)
 
 # Parse additional arguments
 while [[ $# -gt 0 ]]; do
@@ -56,12 +56,12 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --unit)
-            TAGS=""
+            TAGS="-tags=unit"
             shift
             ;;
         --integration)
             # Already default, but keep for backward compatibility
-            TAGS="-tags=integration"
+            TAGS=""
             shift
             ;;
         *)

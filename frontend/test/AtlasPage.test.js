@@ -285,3 +285,139 @@ describe('AtlasPage timeline filtering', () => {
     assert.ok(page._tagsById.has(1));
   });
 });
+
+// Revelio already scoped the Atlas server-side (concealing drops hidden places
+// from the payload), but dropping 1 marker in 500 looks like nothing happened.
+// The revealed view therefore marks what a guest would not get.
+describe('AtlasPage owner-only marking', () => {
+  let isConcealed, concealedTitle, AtlasPage, setRevelio;
+
+  before(async () => {
+    // revelio keeps its state in localStorage, which node has no notion of —
+    // without this the switch silently stays on (its reads fall back to the
+    // default) and the concealed-404 case below could never be reached.
+    const mem = new Map();
+    global.localStorage = {
+      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => mem.set(k, String(v)),
+      removeItem: (k) => mem.delete(k),
+    };
+    global.window.localStorage = global.localStorage;
+    const mod = await import('../src/plugins/tags-atlas/index.js');
+    ({ isConcealed, concealedTitle } = mod);
+    AtlasPage = mod.default;
+    ({ setRevelio } = await import('../src/utils/revelio.js'));
+  });
+
+  afterEach(() => {
+    setRevelio(true);
+    delete global.fetch;
+  });
+
+  test('marks hidden tags and non-public posts, nothing else', () => {
+    assert.equal(isConcealed({ id: 1, name: 'fog', is_hidden: true }), true);
+    assert.equal(isConcealed({ id: 2, slug: 'p', status: 'draft' }), true);
+    assert.equal(isConcealed({ id: 3, slug: 'p', status: 'scheduled' }), true);
+    // A guest's payload carries neither field, so nothing is ever marked there.
+    assert.equal(isConcealed({ id: 4, name: 'Berlin' }), false);
+    assert.equal(isConcealed({ id: 5, slug: 'p', status: 'published' }), false);
+  });
+
+  test('the tooltip names why a node is owner-only', () => {
+    assert.equal(concealedTitle({ is_hidden: true }, 'Taganay'), 'Taganay (hidden)');
+    assert.equal(concealedTitle({ status: 'draft' }, 'Rocks'), 'Rocks (draft)');
+    assert.equal(concealedTitle({}, 'Berlin'), 'Berlin', 'a public node keeps its plain name');
+  });
+
+  test('a 404 while concealing explains itself instead of reading as a broken page', async () => {
+    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    page.setState = (s) => Object.assign(page.state, s);
+    setRevelio(false); // owner viewing as a guest
+    global.fetch = async () => ({
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ detail: 'tags not found' }),
+    });
+
+    await page._load();
+
+    assert.match(page.state.error, /not public/, 'names the tags_visibility gate');
+    assert.doesNotMatch(page.state.error, /not found/);
+  });
+
+  test('an ordinary failure still surfaces the real error', async () => {
+    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    page.setState = (s) => Object.assign(page.state, s);
+    global.fetch = async () => { throw new Error('offline'); };
+
+    await page._load();
+
+    assert.match(page.state.error, /Network error/);
+  });
+});
+
+// The "Hidden" legend filter: the owner's way to see the guest's map *shape*
+// without leaving revelio on. It differs from the other legend toggles in that
+// it redraws the place layer — a hidden country must lose its fill, not just
+// its marker.
+describe('AtlasPage hidden-node filter', () => {
+  let AtlasPage, isConcealed, store, setRevelio;
+
+  const MIXED = {
+    tags: [
+      { id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4 },
+      { id: 2, name: 'Italy', slug: 'italy', kind: 'place', latitude: 42.8, longitude: 12.5, is_hidden: true },
+    ],
+    hierarchyEdges: [],
+  };
+
+  before(async () => {
+    const mod = await import('../src/plugins/tags-atlas/index.js');
+    AtlasPage = mod.default;
+    ({ isConcealed } = mod);
+    ({ store } = await import('../src/store.js'));
+    ({ setRevelio } = await import('../src/utils/revelio.js'));
+  });
+
+  afterEach(() => {
+    store.set('user', null);
+    setRevelio(true);
+  });
+
+  function page() {
+    const p = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    p.state = { loading: false, data: MIXED, error: null };
+    p._buildIndexes(MIXED);
+    return p;
+  }
+
+  test('the filter is offered only to a viewer who can be sent hidden nodes', () => {
+    const p = page();
+    store.set('user', null);
+    assert.equal(p._canFilterHidden(), false, 'a guest gets a payload with nothing hidden in it');
+    store.set('user', { id: 1 });
+    assert.equal(p._canFilterHidden(), true);
+    setRevelio(false);
+    assert.equal(p._canFilterHidden(), false, 'concealing already removed the hidden nodes');
+  });
+
+  test('filtering drops hidden places and keeps the rest', () => {
+    const p = page();
+    const geo = () => (p.state.data.tags || []).filter((t) => !p._filteredOut(t)).map((t) => t.slug);
+
+    assert.deepEqual(geo(), ['berlin', 'italy'], 'unfiltered, the owner sees both');
+    p._hiddenTypes.add('concealed');
+    assert.deepEqual(geo(), ['berlin'], 'the hidden country leaves the drawn set entirely');
+    // Leaving the set is what reverts its boundary shape to an untagged outline:
+    // the GeoJSON features match against exactly these tags.
+    assert.equal(isConcealed(MIXED.tags[1]), true);
+  });
+
+  test('a draft post chip is filtered by the same switch', () => {
+    const p = page();
+    p._hiddenTypes.add('concealed');
+    assert.equal(p._filteredOut({ id: 9, slug: 'p', status: 'draft' }), true);
+    assert.equal(p._filteredOut({ id: 10, slug: 'q', status: 'published' }), false);
+  });
+});

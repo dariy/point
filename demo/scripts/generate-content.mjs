@@ -14,10 +14,20 @@
  * server-side at publish time and a past `scheduled_at` publishes immediately,
  * so backdating is applied directly to the database at the end.
  *
+ * Not every post comes out published. `visibilityPlan` (demo/world.mjs) deals
+ * the batch across the four states an archive can hold — published, scheduled,
+ * hidden, and hidden by its tag — so the demo has something to conceal when the
+ * revelio switch is thrown.
+ *
  * Usage:
  *   node demo/scripts/generate-content.mjs \
  *     --base=http://localhost:8002 --session=<token> \
  *     --db=/path/to/scratch/point.db --gemini-key=<key> [--count=28]
+ *
+ *   --add=20   append to an instance that already holds posts, rather than
+ *              filling an empty one: photographs already used are skipped, the
+ *              placement round-robin carries on where the archive left off, and
+ *              nothing existing is touched. See make-content.sh --add.
  *
  * Intended to run against a SCRATCH instance — see demo/scripts/make-content.sh.
  */
@@ -29,9 +39,10 @@ import {
   YEARS,
   TOPICS,
   buildTagScaffold,
-  placementFor,
+  placementForRole,
   postTags,
   toTopic,
+  visibilityPlan,
 } from "../world.mjs";
 
 const args = Object.fromEntries(
@@ -45,7 +56,8 @@ const BASE = args.base || "http://localhost:8002";
 const SESSION = args.session || "";
 const DB_PATH = args.db || "";
 const GEMINI_KEY = args["gemini-key"] || process.env.GEMINI_API_KEY || "";
-const COUNT = Number(args.count) || 28;
+const ADD = Number(args.add) || 0;
+const COUNT = ADD || Number(args.count) || 28;
 const MODEL = args.model || "gemini-2.5-flash";
 const CONCURRENCY = Number(args.concurrency) || 4;
 
@@ -199,7 +211,27 @@ async function generateText(photo, imageBase64, location, year) {
 
 // ── Picsum ────────────────────────────────────────────────────────────────
 
-async function fetchPhotoList(count) {
+/**
+ * The picsum ids the instance already holds.
+ *
+ * Uploads keep the generator's `demo-<picsum id>.jpg` filename under the
+ * server's own timestamp prefix, so the archive itself records which
+ * photographs have been used. Without this an `--add` run re-picks from the
+ * same shuffled catalogue and the demo gains a second copy of a photo it
+ * already shows — with different prose, which reads as a bug rather than a
+ * repetition.
+ */
+async function usedPhotoIds() {
+  const res = await api("GET", "/api/media?per_page=500");
+  const ids = new Set();
+  for (const item of res?.media || []) {
+    const hit = /demo-(\d+)\./.exec(item.filename || "");
+    if (hit) ids.add(hit[1]);
+  }
+  return ids;
+}
+
+async function fetchPhotoList(count, exclude = new Set()) {
   const candidates = [];
   for (let page = 1; page <= 6; page++) {
     const res = await fetch(`https://picsum.photos/v2/list?page=${page}&limit=100`);
@@ -220,15 +252,20 @@ async function fetchPhotoList(count) {
     .map((entry) => entry.photo);
 
   // One photo per author where possible — the catalogue repeats contributors,
-  // and near-duplicate scenes read as padding.
-  const seenAuthors = new Set();
-  const varied = shuffled.filter((p) => {
+  // and near-duplicate scenes read as padding. On an `--add` run the authors
+  // already in the archive count as seen: the point of adding is a wider
+  // archive, not a second visit to the same photographer's afternoon.
+  const seenAuthors = new Set(
+    candidates.filter((p) => exclude.has(String(p.id))).map((p) => p.author),
+  );
+  const fresh = shuffled.filter((p) => !exclude.has(String(p.id)));
+  const varied = fresh.filter((p) => {
     if (seenAuthors.has(p.author)) return false;
     seenAuthors.add(p.author);
     return true;
   });
 
-  return (varied.length >= count ? varied : shuffled).slice(0, count);
+  return (varied.length >= count ? varied : fresh).slice(0, count);
 }
 
 async function download(url) {
@@ -242,7 +279,24 @@ async function download(url) {
 
 // ── Post creation ─────────────────────────────────────────────────────────
 
-async function createOne(photo, index) {
+/**
+ * When a scheduled post goes live.
+ *
+ * Spread over the coming three weeks rather than clustered: the queue is
+ * ordered by this column and dated by it on the card, so identical timestamps
+ * would leave the reader looking at a page of posts all going live at once.
+ * Deterministic, like everything else the generator lays out.
+ */
+function scheduleAt(nth, now = new Date()) {
+  const when = new Date(now.getTime());
+  when.setUTCDate(when.getUTCDate() + 2 + nth * 3);
+  when.setUTCHours(9 + (nth % 3) * 4, 0, 0, 0);
+  return when.toISOString();
+}
+
+async function createOne(photo, job) {
+  const { index, role, location, year, scheduledAt, featured } = job;
+
   // Two sizes: a wide one for the blog, and a small one for Gemini — sending a
   // 1600px image would cost tokens and latency for no gain in description
   // quality.
@@ -251,11 +305,6 @@ async function createOne(photo, index) {
     download(`https://picsum.photos/id/${photo.id}/1600/${blogHeight}`),
     download(`https://picsum.photos/id/${photo.id}/640/${Math.round((640 * photo.height) / photo.width)}`),
   ]);
-
-  // Location and year are assigned by the world's own schedule rather than
-  // chosen by the model — see placementFor, which also explains why they are not
-  // a full location × year grid.
-  const { location, year } = placementFor(index);
 
   const text = await generateText(photo, small.toString("base64"), location, year);
 
@@ -275,23 +324,30 @@ async function createOne(photo, index) {
   // article page is prose nobody in the demo reads.
   const topics = [...new Set((text.tags || []).map(toTopic).filter(Boolean))].slice(0, 4);
 
+  // `private` is not a status — the post is published like any other and is
+  // withheld by the place it was taken in, whose tag carries `hides_posts`.
+  // That is the distinction worth demonstrating: the same post is public or not
+  // depending on a tag someone else can flip.
+  const status = role === "scheduled" || role === "hidden" ? role : "published";
+
   const post = await api("POST", "/api/posts", {
     title: text.title,
-    content: `![${text.title}](${mediaPath})`,
+    content: `${mediaPath}`,
     excerpt: [text.excerpt.trim(), text.body.trim().replace(/\s*\n+\s*/g, " ")]
       .filter(Boolean)
       .join(" "),
-    status: "published",
+    status,
     formatter: "markdown",
     thumbnail_path: mediaPath,
     // Country, city and year are tags, which is how Point models all three —
     // the timeline reads `kind: "year"` tags and the map reads coordinates off
     // the city tags.
     tags: postTags(location.name, year, topics),
-    is_featured: index === 0,
+    is_featured: featured,
+    ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
   });
 
-  return { post, year, location, topics, title: text.title };
+  return { post, index, role, year, location, topics, title: text.title };
 }
 
 /** Run `worker` over `items` with a bounded number in flight. */
@@ -366,8 +422,13 @@ function backdate(assignments) {
  * Removal rather than invention — padding an unrelated post to make the count
  * would put a tag on a photograph that does not show it. Mutates `results` so
  * the caller's topic set matches what the instance now holds.
+ *
+ * `baseline` is how many posts already carry each topic, which is what makes
+ * this safe on an `--add` run: a topic used once in the new batch and four
+ * times in the archive is a facet, not a dead end, and stripping it would edit
+ * posts the run was told not to touch.
  */
-async function balanceTopics(results) {
+async function balanceTopics(results, baseline = new Map()) {
   const holders = new Map();
   for (const r of results) {
     for (const topic of r.topics) {
@@ -376,7 +437,9 @@ async function balanceTopics(results) {
     }
   }
 
-  const singletons = [...holders].filter(([, rs]) => rs.length < 2).map(([t]) => t);
+  const singletons = [...holders]
+    .filter(([topic, rs]) => rs.length + (baseline.get(topic) || 0) < 2)
+    .map(([t]) => t);
   if (!singletons.length) return;
 
   const touched = new Set(singletons.flatMap((t) => holders.get(t)));
@@ -394,8 +457,57 @@ async function balanceTopics(results) {
 
 // ── Main ──────────────────────────────────────────────────────────────────
 
+/** Topic → how many posts already carry it, for the topic balance. */
+async function existingTopicCounts() {
+  const listed = await api("GET", "/api/tags");
+  const counts = new Map();
+  for (const tag of listed?.tags || []) {
+    if (TOPICS.includes(tag.name)) counts.set(tag.name, tag.post_count || 0);
+  }
+  return counts;
+}
+
+/**
+ * Zip the photographs with the roles the visibility plan dealt.
+ *
+ * The index each placement is drawn from depends on the role: an ordinary post
+ * carries on the archive's own round-robin (so an `--add` run does not restart
+ * at Lisbon and pile the new posts onto one city), while the private and
+ * scheduled posts count within themselves — they draw from pools of their own
+ * and know nothing about how long the archive already is.
+ */
+function planJobs(photos, offset) {
+  const roles = visibilityPlan(photos.length);
+  const nth = new Map();
+
+  return photos.map((photo, i) => {
+    const role = roles[i];
+    const seen = nth.get(role) || 0;
+    nth.set(role, seen + 1);
+
+    const ordinary = role === "published" || role === "hidden";
+    const { location, year } = placementForRole(role, ordinary ? offset + i : seen);
+
+    return {
+      photo,
+      index: offset + i,
+      role,
+      location,
+      year,
+      scheduledAt: role === "scheduled" ? scheduleAt(seen) : null,
+      // The archive's one featured post is its first; an `--add` run inherits
+      // whichever post already holds the flag rather than moving it.
+      featured: !ADD && i === 0,
+    };
+  });
+}
+
 async function main() {
-  console.log(`Generating ${COUNT} demo posts into ${BASE}`);
+  console.log(
+    ADD
+      ? `Adding ${ADD} demo post(s) to ${BASE}`
+      : `Generating ${COUNT} demo posts into ${BASE}`,
+  );
 
   // Geography and dates first, so the city tags carry their coordinates before
   // any post references them. The subject tree is built afterwards, once the
@@ -403,14 +515,32 @@ async function main() {
   console.log("· tag scaffold (geography, dates)");
   await buildTagScaffold(api, { topics: [] });
 
+  // What the instance already holds. All three are empty on a fresh run, which
+  // is what makes the rest of this function one code path rather than two.
+  const listed = ADD ? await api("GET", "/api/posts?per_page=1") : null;
+  const offset = listed?.total || 0;
+  const used = ADD ? await usedPhotoIds() : new Set();
+  const baseline = ADD ? await existingTopicCounts() : new Map();
+  if (ADD) console.log(`  ${offset} existing post(s), ${used.size} photograph(s) already used`);
+
   console.log("· fetching picsum catalogue");
-  const photos = await fetchPhotoList(COUNT);
+  const photos = await fetchPhotoList(COUNT, used);
   console.log(`  ${photos.length} landscape photo(s)`);
+  if (photos.length < COUNT) {
+    console.warn(`  ! only ${photos.length} unused photo(s) available for ${COUNT} post(s)`);
+  }
+
+  const jobs = planJobs(photos, offset);
+  const mix = jobs.reduce((acc, j) => ({ ...acc, [j.role]: (acc[j.role] || 0) + 1 }), {});
+  console.log(`  mix: ${Object.entries(mix).map(([k, v]) => `${v} ${k}`).join(", ")}`);
 
   console.log(`· generating posts (Gemini ${MODEL}, ${CONCURRENCY} at a time)`);
-  const results = await pool(photos, CONCURRENCY, async (photo, i) => {
-    const out = await createOne(photo, i);
-    console.log(`  [${String(i + 1).padStart(2)}/${photos.length}] ${out.year} ${out.location.name.padEnd(11)} ${out.title}`);
+  const results = await pool(jobs, CONCURRENCY, async (job, i) => {
+    const out = await createOne(job.photo, job);
+    console.log(
+      `  [${String(i + 1).padStart(2)}/${jobs.length}] ${out.year} ` +
+        `${out.location.name.padEnd(11)} ${out.role.padEnd(9)} ${out.title}`,
+    );
     return out;
   });
 
@@ -418,15 +548,25 @@ async function main() {
   const failed = results.filter((r) => r && r.error);
   for (const f of failed) console.warn(`  ! ${f.error.message}`);
 
-  await balanceTopics(ok);
+  await balanceTopics(ok, baseline);
 
   console.log("· tag scaffold (subjects)");
   await buildTagScaffold(api, {
-    topics: [...new Set(ok.flatMap((r) => r.topics))],
+    topics: [
+      ...new Set([
+        ...ok.flatMap((r) => r.topics),
+        ...[...baseline].filter(([, n]) => n > 0).map(([topic]) => topic),
+      ]),
+    ],
   });
 
-  console.log(`· backdating ${ok.length} post(s) across ${YEARS[0]}–${YEARS.at(-1)}`);
-  backdate(ok.map((r) => ({ postId: r.post.id, year: r.year })));
+  // Scheduled posts are excluded: they are dated by `scheduled_at`, in the
+  // future, and backdating one would drop it out of the queue it exists to
+  // fill — the queue reads `status = 'scheduled'`, but the card is dated and
+  // the feed's left half ordered by that column.
+  const dated = ok.filter((r) => r.role !== "scheduled");
+  console.log(`· backdating ${dated.length} post(s) across ${YEARS[0]}–${YEARS.at(-1)}`);
+  backdate(dated.map((r) => ({ postId: r.post.id, year: r.year })));
 
   // Recompute what the backdating invalidated: cached page payloads hold the
   // old ordering, and media visibility is derived from post state.

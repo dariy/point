@@ -400,3 +400,23 @@ export function cachedPerPage(minPerPage) {
   const floor = Math.max(1, minPerPage || 1);
   return Math.max(floor, _cache || 0);
 }
+
+/**
+ * The page to land on when per_page changes from `current` to `next`, chosen so
+ * the first post currently on screen is still on it.
+ *
+ * The feed's two halves are indexed from their shared boundary in opposite
+ * directions: page 1 is offset 0 into the published list, page 0 is offset 0
+ * into the scheduled queue running the other way (see publishing.md). A
+ * non-positive page is therefore re-fitted on its own side rather than as a
+ * continuation of the same run. Feeds without a queue (search) never pass one.
+ *
+ * @param {number} page     Current page — 1-based, or 0/negative in the queue.
+ * @param {number} current  per_page the page was loaded at.
+ * @param {number} next     per_page it is being re-fitted to.
+ * @returns {number}
+ */
+export function refitPage(page, current, next) {
+  if (page < 1) return -Math.floor((-page * current) / next);
+  return Math.floor(((page - 1) * current) / next) + 1;
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"point-api/internal/models"
 	"point-api/internal/plugins"
@@ -76,9 +77,52 @@ func AuthMiddleware(authService *services.AuthService, apiKeyService *services.A
 	}
 }
 
+// RevelioHeader is the request header the public SPA sends to turn the
+// admin's "revelio" switch off: `X-Point-Revelio: off` asks every public read
+// to answer as if the request were anonymous, so the owner can see the site the
+// way a guest sees it. Anything else (absent, "on") leaves the request alone.
+const RevelioHeader = "X-Point-Revelio"
+
+// guestViewRequested reports whether the caller asked to be treated as an
+// anonymous visitor for this read. It is a *narrowing* of what the principal
+// may see and never grants anything, so honouring an unauthenticated client's
+// header costs nothing — a guest is already a guest.
+func guestViewRequested(c echo.Context) bool {
+	return strings.EqualFold(c.Request().Header.Get(RevelioHeader), "off")
+}
+
+// IsGuestView reports whether this request is an authenticated principal
+// deliberately browsing as a guest (see RevelioHeader). Handlers use it for the
+// side effects a real guest would cause but the owner should not — currently
+// the post view counter.
+func IsGuestView(c echo.Context) bool {
+	v, _ := c.Get(guestViewKey).(bool)
+	return v
+}
+
+// guestViewKey is the echo-context key IsGuestView reads. Set only by
+// OptionalAuthMiddleware, and only when a genuine principal was dropped.
+const guestViewKey = "guest_view"
+
 func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *services.ApiKeyService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// Revelio off: resolve the principal as usual, then withhold it, so
+			// every downstream `c.Get("user") == nil` visibility test takes the
+			// public branch. Only the routes behind OptionalAuth are affected —
+			// the admin API (AuthMiddleware) keeps working, which is what lets
+			// the switch be turned back on.
+			guestView := guestViewRequested(c)
+			// Records that a real principal was withheld, so handlers can skip
+			// the side effects a guest would cause but the owner should not.
+			setUser := func(v interface{}) {
+				if guestView {
+					c.Set(guestViewKey, true)
+					return
+				}
+				c.Set("user", v)
+			}
+
 			// 1. Try Bearer token (API Key)
 			if h := c.Request().Header.Get("Authorization"); h != "" {
 				const prefix = "Bearer "
@@ -86,7 +130,7 @@ func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *se
 					key := h[len(prefix):]
 					apiKey, err := apiKeyService.ValidateAPIKey(c.Request().Context(), key)
 					if err == nil {
-						c.Set("user", apiKey)
+						setUser(apiKey)
 						return next(c)
 					}
 				}
@@ -100,7 +144,7 @@ func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *se
 
 			session, err := authService.ValidateSession(c.Request().Context(), cookie.Value)
 			if err == nil {
-				c.Set("user", session)
+				setUser(session)
 			}
 			return next(c)
 		}
