@@ -7,7 +7,7 @@ surface admins must consciously enable from `/light/plugins`).
 
 ## What is implemented
 
-- **27 tools** (`api/internal/mcp/tools.go`): posts (list/get/create/update/publish/
+- **28 tools** (`api/internal/mcp/tools.go` and `content.go`): posts (list/get/create/update/publish/
   withdraw/delete, `point_replace_in_post`, `point_set_post_tags`,
   `point_generate_preview_link`), tags (CRUD + `point_geocode_tag`), media
   (list/upload/analyze), themes (list/get CSS/set active), settings (get/update),
