@@ -40,7 +40,7 @@ jobs:
       - name: Run Go tests
         run: |
           cd api
-          go test -tags=integration ./... -coverprofile=coverage.txt -covermode=atomic
+          go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7

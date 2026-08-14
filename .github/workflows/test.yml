@@ -111,11 +111,11 @@ jobs:
         run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
 
       - name: Run Go tests
-        # -tags=integration matches scripts/check.sh — the integration suite
-        # runs on in-memory sqlite and needs no external services.
+        # The integration suite runs by default and requires a functioning
+        # SQLite environment (which ubuntu-latest provides).
         run: |
           cd api
-          go test -tags=integration ./... -coverprofile=coverage.txt -covermode=atomic
+          go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       # The build-failing half of the coverage gate. codecov's status checks
       # only report; this is what actually turns the job red.

@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 #   --race          Enable race detector
 #   --short         Skip long running tests
 #   --bench         Run benchmarks
-#   --unit          Run unit tests only (exclude via -tags=unit)
+#   --unit          Run unit tests only (excludes integration tests)
 
 TARGET="./..."
 if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
