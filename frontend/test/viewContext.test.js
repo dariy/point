@@ -48,4 +48,21 @@ describe('ViewContext.toUrl', () => {
     assert.strictEqual(url('/posts/some-post'), '/posts/some-post');
     assert.strictEqual(url('/tags/kyiv', { slug: 'some-post' }), '/tags/kyiv?slug=some-post');
   });
+
+  // The owner's feed runs 0, -1, -2 … to the left of page 1 (the scheduled
+  // queue), so page has to survive a round trip as a signed integer. Read
+  // through `|| 1` and through `page > 1`, both of those collapse to page 1.
+  test('scheduled pages survive the round trip', () => {
+    assert.strictEqual(new ViewContext('/', { page: '0' }).page, 0);
+    assert.strictEqual(new ViewContext('/', { page: '-2' }).page, -2);
+    assert.strictEqual(url('/', { page: '0' }), '/?page=0');
+    assert.strictEqual(url('/', { page: '-2' }), '/?page=-2');
+  });
+
+  test('page 1 and a missing page both stay out of the URL', () => {
+    assert.strictEqual(new ViewContext('/', {}).page, 1);
+    assert.strictEqual(new ViewContext('/', { page: 'nonsense' }).page, 1);
+    assert.strictEqual(url('/', { page: '1' }), '/');
+    assert.strictEqual(url('/'), '/');
+  });
 });

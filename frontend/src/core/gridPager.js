@@ -54,6 +54,16 @@ export class GridPager {
     this._pageGhosts = { prev: null, next: null };
   }
 
+  /**
+   * The leftmost page of a paginated feed. Normally 1; the home feed hands the
+   * owner a lower bound (0, -1, …) so the scheduled queue can be swiped into
+   * from page 1 as if it were simply more of the same deck.
+   */
+  static minPage(pagination) {
+    const m = pagination?.minPage ?? pagination?.min_page;
+    return Number.isInteger(m) && m < 1 ? m : 1;
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /**
@@ -64,6 +74,7 @@ export class GridPager {
   arm(pagination) {
     this._teardown(); // also releases the swipe lock a commit armed
     this._pagination = pagination || {};
+    this._pagination.minPage = GridPager.minPage(this._pagination);
     this._setupGestures();
     this._setupPageControls();
     if (this._o.zoom) this._setupZoomInputs();
@@ -155,7 +166,7 @@ export class GridPager {
     const pag = this._pagination;
     const vw = () => window.innerWidth || 500;
     const atEnd = () => pag.page >= pag.pages;
-    const atStart = () => pag.page <= 1;
+    const atStart = () => pag.page <= GridPager.minPage(pag);
 
     this._gesture = new GestureController(root, {
       // Engage the drag a touch sooner than the immersive default so the grid
@@ -224,7 +235,7 @@ export class GridPager {
       onHorizontal: (dir) => {
         if (this._pageNavPending) return;
         if (dir === 'left' && pag.page < pag.pages) this._o.gotoPage(pag.page + 1);
-        else if (dir === 'right' && pag.page > 1) this._o.gotoPage(pag.page - 1);
+        else if (dir === 'right' && pag.page > GridPager.minPage(pag)) this._o.gotoPage(pag.page - 1);
       },
     });
 
@@ -266,7 +277,8 @@ export class GridPager {
   _setupPageControls() {
     const pag = this._pagination;
     const pages = pag.pages || 1;
-    const goPrev = () => { if (pag.page > 1) this._o.gotoPage(pag.page - 1); };
+    const minPage = GridPager.minPage(pag);
+    const goPrev = () => { if (pag.page > minPage) this._o.gotoPage(pag.page - 1); };
     const goNext = () => { if (pag.page < pages) this._o.gotoPage(pag.page + 1); };
 
     this._onKeyNav = (e) => {
@@ -289,7 +301,7 @@ export class GridPager {
       b.className = `page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
       b.innerHTML = CHEVRON(d);
-      b.disabled = dir === 'prev' ? pag.page <= 1 : pag.page >= pages;
+      b.disabled = dir === 'prev' ? pag.page <= minPage : pag.page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);
       return b;
@@ -492,7 +504,8 @@ export class GridPager {
     const pag = this._pagination;
     const liveGrid = this._o.gridMount();
     const container = liveGrid?.parentElement;
-    if (!container || !pag || pag.pages <= 1) return;
+    const minPage = GridPager.minPage(pag);
+    if (!container || !pag || pag.pages - minPage < 1) return;
     // The live grid stretches its cards to fill the viewport when content is
     // short (grid-expand). The ghost sits outside that flex, so pin it to the
     // live grid's box — height, and the offset of the grid within the container,
@@ -503,7 +516,7 @@ export class GridPager {
 
     const build = async (dir) => {
       const page = dir === 'next' ? pag.page + 1 : pag.page - 1;
-      if (page < 1 || page > pag.pages) return;
+      if (page < minPage || page > pag.pages) return;
       let posts;
       try {
         posts = await this._o.fetchPosts(page);
@@ -577,7 +590,10 @@ export class GridPager {
       }).render();
       return `<div class="post-card-slot${cls}">${card}</div>`;
     }).join('');
-    return `<div class="posts-grid">${slots}</div>`;
+    // The scheduled pages run the other way (see PostGrid) — a peek at one has
+    // to already be reversed, or the ghost re-flows the moment it lands.
+    const gridCls = page < 1 ? 'posts-grid posts-grid-reversed' : 'posts-grid';
+    return `<div class="${gridCls}">${slots}</div>`;
   }
 
   /** Remove the off-screen ghost grids and invalidate any in-flight preload. */

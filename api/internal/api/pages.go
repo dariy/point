@@ -84,6 +84,25 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
 	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
 
+	// Scheduled posts extend the feed to the left of page 1: page 0 is the first
+	// "future" page, then -1, -2 … Only the owner has them, and only outside a
+	// timeline scope — an unpublished post has no year to be scoped by.
+	// ParsePaginationParams clamps a non-positive page away, so read the raw
+	// value back here rather than loosening it for every caller.
+	minPage := int32(1)
+	if !publicOnly && !hasYearFilter {
+		if n, err := h.postService.CountScheduledPosts(ctx); err == nil && n > 0 {
+			minPage = 1 - int32(math.Ceil(float64(n)/float64(perPage)))
+		}
+		if p, err := strconv.ParseInt(c.QueryParam("page"), 10, 32); err == nil && p < 1 {
+			page = int32(p)
+			if page < minPage {
+				page = minPage
+			}
+		}
+	}
+	scheduledView := page < 1
+
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
 	// same page at a different post count must not serve a stale-sized blob.
@@ -175,7 +194,23 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		listParams.YearFrom = yearFrom
 		listParams.YearTo = yearTo
 	}
-	posts, total, err := h.postService.ListPosts(ctx, listParams)
+
+	var posts []models.Post
+	var total int64
+	var err error
+	if scheduledView {
+		// The queue, not the feed. `total` still describes the published feed:
+		// the paginator spans both halves, and swiping right has to land back
+		// on page 1 knowing how many pages follow it.
+		total, err = h.postService.CountPostsOnly(ctx, listParams)
+		if err != nil {
+			return MapError(err)
+		}
+		// Page 0 is the queue's first page, -1 its second, and so on.
+		posts, _, err = h.postService.ListScheduledPosts(ctx, 1-page, perPage)
+	} else {
+		posts, total, err = h.postService.ListPosts(ctx, listParams)
+	}
 	if err != nil {
 		return MapError(err)
 	}
@@ -232,6 +267,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			"per_page": perPage,
 			"total":    total,
 			"pages":    pages,
+			// How far left the feed extends: 1 for everyone but an owner with a
+			// non-empty scheduled queue, for whom it drops to 0 or below.
+			// `scheduled` says which half the page being returned came from.
+			"min_page":  minPage,
+			"scheduled": scheduledView,
 		},
 		"settings": publicSettings,
 	}

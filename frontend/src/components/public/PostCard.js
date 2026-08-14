@@ -47,14 +47,25 @@ export class PostCard extends Component {
     // the play indicator below still marks it as playable.
     const posterUrl = hasMedia ? `${mediaUrl}?thumb` : null;
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
+    // A post waiting on its publish time. Only the owner is ever handed one
+    // (the server keeps them off every public payload), and it is drawn faded
+    // so a page of them is never mistaken for the live feed.
+    const isScheduled = post.status === "scheduled";
     const cardClass = [
       "post-card",
       hasMedia ? "has-image" : "text-only",
       isHidden ? "is-hidden" : "",
+      isScheduled ? "is-scheduled" : "",
     ]
       .filter(Boolean)
       .join(" ");
     const lockIcon = isHidden ? LOCK_SVG : "";
+    // Scheduled posts have no published_at yet, and their created_at is when
+    // the draft was started — neither is the date the card is about. Show the
+    // time it goes live instead.
+    const cardDate = isScheduled
+      ? post.scheduled_at
+      : post.published_at || post.created_at;
 
     const bgStyle = hasMedia
       ? ` style="background-image: url('${safeUrl(posterUrl)}')"`
@@ -86,9 +97,9 @@ export class PostCard extends Component {
           <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
           ${post.excerpt ? `<p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ""}
           <div class="post-card-meta">
-            <time datetime="${escapeHtml(post.published_at || post.created_at || "")}"
-                  class="post-date">
-              ${escapeHtml(formatDateShort(post.published_at || post.created_at))}
+            <time datetime="${escapeHtml(cardDate || "")}"
+                  class="post-date${isScheduled ? " post-date-scheduled" : ""}">
+              ${isScheduled ? "⏱ " : ""}${escapeHtml(formatDateShort(cardDate))}
             </time>
             ${viewCount}
           </div>

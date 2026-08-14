@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -864,5 +865,116 @@ func TestPagesHandler_GetNavMenu(t *testing.T) {
 	}
 	if _, ok := resp["tags"]; ok {
 		t.Error("none mode: `tags` should be omitted")
+	}
+}
+
+// The home feed extends to the left of page 1 into the owner's scheduled
+// queue: page 0 is the first future page, then -1, and so on. Guests see none
+// of it — for them the feed still starts and ends at page 1.
+func TestPagesHandler_HomePageScheduledPages(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+	if err := h.settingsSvc.SetSetting(ctx, "posts_per_page", "2", "string"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+
+	for i := 1; i <= 2; i++ {
+		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: fmt.Sprintf("Live %d", i), Status: "published", AuthorID: userID,
+		}); err != nil {
+			t.Fatalf("CreatePost: %v", err)
+		}
+	}
+	// Three scheduled posts at 2 per page = two future pages (0 and -1), the
+	// soonest one first.
+	base := time.Now().Add(24 * time.Hour)
+	for i := 1; i <= 3; i++ {
+		at := base.Add(time.Duration(i) * time.Hour)
+		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: fmt.Sprintf("Soon %d", i), Status: "scheduled", AuthorID: userID,
+			ScheduledAt: &at,
+		}); err != nil {
+			t.Fatalf("CreatePost scheduled: %v", err)
+		}
+	}
+
+	e := echo.New()
+	get := func(page string, asOwner bool) map[string]interface{} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/?page="+page, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if asOwner {
+			c.Set("user", "test-user")
+		}
+		if err := ph.GetHomePage(c); err != nil {
+			t.Fatalf("GetHomePage(page=%s): %v", page, err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return resp
+	}
+	titles := func(resp map[string]interface{}) []string {
+		var out []string
+		for _, p := range resp["posts"].([]interface{}) {
+			out = append(out, p.(map[string]interface{})["title"].(string))
+		}
+		return out
+	}
+	pag := func(resp map[string]interface{}) map[string]interface{} {
+		return resp["pagination"].(map[string]interface{})
+	}
+
+	// Owner, page 1: the published feed, with the queue advertised to its left.
+	owner1 := get("1", true)
+	if got := pag(owner1)["min_page"]; got != float64(-1) {
+		t.Errorf("owner min_page = %v, want -1 (3 scheduled posts at 2 per page)", got)
+	}
+	if got := len(titles(owner1)); got != 2 {
+		t.Errorf("owner page 1: %d posts, want 2 published", got)
+	}
+	if pag(owner1)["scheduled"] != false {
+		t.Error("page 1 must not be flagged as a scheduled page")
+	}
+
+	// Page 0: the head of the queue, soonest first.
+	page0 := get("0", true)
+	if got := titles(page0); len(got) != 2 || got[0] != "Soon 1" || got[1] != "Soon 2" {
+		t.Errorf("page 0 = %v, want [Soon 1 Soon 2]", got)
+	}
+	if pag(page0)["scheduled"] != true {
+		t.Error("page 0 must be flagged scheduled so the grid renders reversed and faded")
+	}
+	// `total`/`pages` keep describing the published feed — the paginator spans
+	// both halves and has to know how far right it can go.
+	if got := pag(page0)["total"]; got != float64(2) {
+		t.Errorf("page 0 total = %v, want 2 (the published feed)", got)
+	}
+
+	// Page -1: the tail of the queue.
+	if got := titles(get("-1", true)); len(got) != 1 || got[0] != "Soon 3" {
+		t.Errorf("page -1 = %v, want [Soon 3]", got)
+	}
+
+	// Past the end of the queue clamps to its first page rather than 404ing.
+	if got := titles(get("-9", true)); len(got) != 1 || got[0] != "Soon 3" {
+		t.Errorf("page -9 = %v, want the clamp to page -1 ([Soon 3])", got)
+	}
+
+	// A guest has no queue: min_page stays 1 and a negative page is just page 1.
+	guest := get("0", false)
+	if got := pag(guest)["min_page"]; got != float64(1) {
+		t.Errorf("guest min_page = %v, want 1", got)
+	}
+	if got := titles(guest); len(got) != 2 || got[0] == "Soon 1" {
+		t.Errorf("guest page 0 = %v, want the published feed", got)
+	}
+	if pag(guest)["scheduled"] != false {
+		t.Error("a guest must never be handed a scheduled page")
 	}
 }

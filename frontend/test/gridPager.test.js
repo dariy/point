@@ -139,6 +139,29 @@ describe('GridPager', () => {
     assert.deepEqual(last.fetched, [2]);
   });
 
+  // The owner's home feed extends left of page 1 into the scheduled queue, so
+  // "the first page" is whatever min_page says — 0, -1, … — not a hard 1.
+  test('min_page opens the feed to the left of page 1', async () => {
+    const { pager, fetched, nav } = setup({ page: 1, pages: 3 });
+    pager.arm({ page: 1, pages: 3, min_page: -1 });
+    await flush();
+    assert.deepEqual(fetched.sort((a, b) => a - b), [0, 2],
+      'page 1 must preload the queue page beside it, not just page 2');
+
+    keyHandlers.keydown.forEach((fn) => fn({ key: 'ArrowLeft', preventDefault() {} }));
+    assert.deepEqual(nav, [0], 'left from page 1 should land on the queue');
+  });
+
+  test('min_page still stops the feed at its real left edge', async () => {
+    const { pager, fetched, nav } = setup({ page: -1, pages: 3 });
+    pager.arm({ page: -1, pages: 3, min_page: -1 });
+    await flush();
+    assert.deepEqual(fetched, [0], 'nothing exists past the end of the queue');
+
+    keyHandlers.keydown.forEach((fn) => fn({ key: 'ArrowLeft', preventDefault() {} }));
+    assert.deepEqual(nav, [], 'left from the last queue page goes nowhere');
+  });
+
   test('a single-page list arms gestures but preloads nothing', async () => {
     const { pager, fetched } = setup({ page: 1, pages: 1 });
     pager.arm({ page: 1, pages: 1 });

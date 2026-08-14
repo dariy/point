@@ -68,7 +68,10 @@ export default class HomePage extends Component {
   _isStaticHome() {
     const settings = store.get('settings') || {};
     const data = this.state.data;
-    return !!(data && settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1);
+    // A scheduled page is never the static home page, however the counts
+    // happen to line up — it is a page of the queue, not the site's front door.
+    return !!(data && !data.pagination?.scheduled && settings.home_page_post_id
+      && data.pagination?.total === 1 && data.posts?.length === 1);
   }
 
   // Eligible when only the year scope and/or page differ: the post grid, filter
@@ -185,8 +188,19 @@ export default class HomePage extends Component {
     const current = this._loadedPerPage || fit;
     const next = this._fitLatch.accept(current, fit);
     if (next === null) return;
-    const firstIndex = (vc.page - 1) * current;
-    const newPage = Math.floor(firstIndex / next) + 1;
+    // Keep the first post currently on screen on the resized page. The two
+    // halves of the feed are indexed from their shared boundary in opposite
+    // directions: page 1 is offset 0 into the published list, page 0 is offset
+    // 0 into the scheduled queue, so a non-positive page counts outwards from
+    // there rather than continuing the same run.
+    let newPage;
+    if (vc.page < 1) {
+      const firstIndex = -vc.page * current;
+      newPage = -Math.floor(firstIndex / next);
+    } else {
+      const firstIndex = (vc.page - 1) * current;
+      newPage = Math.floor(firstIndex / next) + 1;
+    }
     this._fitOwned = true;
     // Tells the refresh this update provokes that it is a refit, not a
     // navigation — see _refreshPostContent.
@@ -237,7 +251,7 @@ export default class HomePage extends Component {
 
     const settings = store.get('settings') || {};
     const { data } = this.state;
-    const isStaticHomePage = data && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
+    const isStaticHomePage = data && !data.pagination?.scheduled && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
 
     return `
       <div class="site-wrapper">
@@ -260,7 +274,7 @@ export default class HomePage extends Component {
     store.set('pagination', null);
     const settings = store.get('settings') || {};
     const { data, forceImmersive, startIndex } = this.state;
-    const isStaticHomePage = data && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
+    const isStaticHomePage = data && !data.pagination?.scheduled && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
     const post = isStaticHomePage ? data.posts[0] : null;
     const immersive = forceImmersive || (isStaticHomePage && shouldUseImmersive(post));
 
@@ -372,20 +386,24 @@ export default class HomePage extends Component {
     let active = 'simple-post-list';
     if (pluginHost.isEnabled('dynamic-post-list')) active = 'dynamic-post-list';
 
+    // A scheduled ("future") page is laid out backwards — see PostGrid's
+    // `reversed` prop. The server flags the page it returned rather than the
+    // client inferring it from the page number, so a feed with no queue behind
+    // it can never render one by accident.
+    const gridProps = {
+      posts,
+      showViewCount: !!settings.show_view_counts,
+      reversed: !!pagination.scheduled,
+    };
+
     let gridComp = null;
     if (pluginHost.hasSlot('post-list')) {
-      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), {
-        posts,
-        showViewCount: !!settings.show_view_counts,
-      });
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), gridProps);
     } else {
       const mod = active === 'dynamic-post-list'
         ? await import('../../plugins/dynamic-post-list/index.js')
         : await import('../../plugins/simple-post-list/index.js');
-      gridComp = mod.mount(this.$('#grid-mount'), {
-        posts,
-        showViewCount: !!settings.show_view_counts,
-      });
+      gridComp = mod.mount(this.$('#grid-mount'), gridProps);
     }
 
     if (this._unmounted) {
@@ -414,10 +432,20 @@ export default class HomePage extends Component {
    */
   _syncPagination(pagination) {
     const existing = this._postChildren[1];
-    if (pagination.pages > 1) {
+    // min_page is 1 for everyone but the owner of a site with a scheduled
+    // queue, whose feed runs 0, -1, … to the left of page 1. A single
+    // published page plus a queue is still worth a paginator, so the "is there
+    // more than one page" test spans the whole range rather than counting up
+    // from 1.
+    const minPage = Number.isInteger(pagination.min_page) && pagination.min_page < 1
+      ? pagination.min_page
+      : 1;
+    const multiPage = pagination.pages - minPage >= 1;
+    if (multiPage) {
       const props = {
         page: pagination.page,
         pages: pagination.pages,
+        minPage,
         total: pagination.total,
         onPage: (p) => ViewContext.update({ page: p }),
       };
@@ -430,8 +458,8 @@ export default class HomePage extends Component {
       this._postChildren.length = 1;
     }
 
-    store.set('pagination', pagination.pages > 1
-      ? { page: pagination.page, pages: pagination.pages, total: pagination.total }
+    store.set('pagination', multiPage
+      ? { page: pagination.page, pages: pagination.pages, minPage, total: pagination.total }
       : null);
   }
 

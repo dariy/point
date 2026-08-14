@@ -377,6 +377,74 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	}
 }
 
+// Revelio off: the owner's session still validates, but the principal is
+// withheld so every downstream visibility test takes the public branch. The
+// flag IsGuestView reads is what separates that from a genuine guest.
+func TestOptionalAuthMiddleware_RevelioOff(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	authSvc := services.NewAuthService(repo)
+	apiKeySvc := services.NewApiKeyService(repo)
+	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
+
+	e := echo.New()
+	handler := func(c echo.Context) error { return c.String(http.StatusOK, "ok") }
+
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "u3", Email: "u3@t.com", PasswordHash: "h", DisplayName: "U3",
+	})
+	token := "valid-token-revelio"
+	expiresAt := time.Now().Add(1 * time.Hour).UTC().Round(0)
+	_, _ = authSvc.CreateSession(context.Background(), user.ID, "1.1.1.1", "agent", expiresAt, token)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	req.Header.Set(RevelioHeader, "off")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if err := middleware(handler)(c); err != nil {
+		t.Fatalf("middleware failed: %v", err)
+	}
+	if c.Get("user") != nil {
+		t.Error("revelio off must withhold the principal — the owner would still see hidden items")
+	}
+	if !IsGuestView(c) {
+		t.Error("a withheld principal must be recorded as a guest view (view counts depend on it)")
+	}
+
+	// An API key is dropped the same way — the MCP/API clients share this route.
+	plain, _, err := apiKeySvc.GenerateAPIKey(context.Background(), user.ID, "revelio", nil)
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+plain)
+	req.Header.Set(RevelioHeader, "off")
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	if err := middleware(handler)(c); err != nil {
+		t.Fatalf("middleware failed: %v", err)
+	}
+	if c.Get("user") != nil {
+		t.Error("revelio off must withhold an API-key principal too")
+	}
+
+	// Without the header nothing changes, and a plain guest is not a "guest
+	// view" — only a dropped principal is.
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	if err := middleware(handler)(c); err != nil {
+		t.Fatalf("middleware failed: %v", err)
+	}
+	if IsGuestView(c) {
+		t.Error("an anonymous request is not a revelio guest view")
+	}
+}
+
 func TestCustomHTTPErrorHandler(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = CustomHTTPErrorHandler

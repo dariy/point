@@ -89,3 +89,56 @@ describe('PublicFooter copyright template', () => {
     assert.match(out, /\[not a link\] \(x\) \{/);
   });
 });
+
+/**
+ * Revelio — the owner's switch between "everything I can see" and the guest's
+ * view of the site. It only exists for a signed-in owner: a guest has nothing
+ * to conceal, and a stray reveal button in a visitor's footer would advertise
+ * that there is something to see.
+ */
+describe('PublicFooter revelio toggle', () => {
+  let PublicFooter, store, setRevelio;
+
+  before(async () => {
+    // The suite above stubs localStorage as a black hole (it only renders the
+    // copyright line); revelio actually stores its state there, so swap in one
+    // that remembers.
+    const mem = new Map();
+    global.localStorage = {
+      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => mem.set(k, String(v)),
+      removeItem: (k) => mem.delete(k),
+    };
+    global.window.localStorage = global.localStorage;
+    ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.js'));
+    ({ store } = await import('../src/store.js'));
+    ({ setRevelio } = await import('../src/utils/revelio.js'));
+  });
+
+  const render = () => new PublicFooter(null, { settings: {} }).render();
+
+  test('a guest never sees the switch', () => {
+    store.set('user', null);
+    setRevelio(true);
+    assert.ok(!render().includes('revelio-toggle'));
+  });
+
+  test('the owner gets it, reading as "revealing" by default', () => {
+    store.set('user', { id: 1 });
+    setRevelio(true);
+    const html = render();
+    assert.match(html, /id="revelio-toggle"/);
+    assert.match(html, /class="footer-action-btn revelio-toggle is-revealing"/);
+    assert.match(html, /aria-pressed="true"/);
+  });
+
+  test('switched off, it offers to reveal again', () => {
+    store.set('user', { id: 1 });
+    setRevelio(false);
+    const html = render();
+    assert.match(html, /aria-pressed="false"/);
+    assert.ok(!/revelio-toggle is-revealing/.test(html), 'not marked as revealing');
+    assert.match(html, /aria-label="Reveal hidden items"/);
+    setRevelio(true);
+  });
+});

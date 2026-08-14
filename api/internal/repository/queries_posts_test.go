@@ -348,6 +348,86 @@ func TestRepository_GetHierarchicalPostCounts(t *testing.T) {
 	}
 }
 
+// A scheduled post is written and tagged; it just hasn't gone live. The admin
+// count includes it (that is the badge in /light/tags), the public one does not.
+func TestRepository_GetHierarchicalPostCounts_Scheduled(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, pubID := insertUserAndPost(t, repo, "hpcs-live", "published")
+	_, schedID := insertUserAndPost(t, repo, "hpcs-soon", "scheduled")
+	_, draftID := insertUserAndPost(t, repo, "hpcs-draft", "draft")
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,1),(?,1),(?,1)`, pubID, schedID, draftID)
+
+	public, err := repo.GetHierarchicalPostCounts(ctx, true)
+	if err != nil {
+		t.Fatalf("GetHierarchicalPostCounts(true) failed: %v", err)
+	}
+	if public[1] != 1 {
+		t.Errorf("public count = %d, want 1 (published only)", public[1])
+	}
+
+	admin, err := repo.GetHierarchicalPostCounts(ctx, false)
+	if err != nil {
+		t.Fatalf("GetHierarchicalPostCounts(false) failed: %v", err)
+	}
+	if admin[1] != 2 {
+		t.Errorf("admin count = %d, want 2 (published + scheduled, never the draft)", admin[1])
+	}
+}
+
+// The scheduled queue reads soonest-first, which is what puts the post about to
+// go live next to the newest published one on the feed's first future page.
+func TestRepository_ListScheduledPosts(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, later := insertUserAndPost(t, repo, "sched-later", "scheduled")
+	_, sooner := insertUserAndPost(t, repo, "sched-sooner", "scheduled")
+	insertUserAndPost(t, repo, "sched-live", "published")
+	insertUserAndPost(t, repo, "sched-draft", "draft")
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-06-01 10:00:00", later)
+	_, _ = repo.DB().Exec(`UPDATE posts SET scheduled_at = ? WHERE id = ?`, "2030-01-01 10:00:00", sooner)
+
+	total, err := repo.CountScheduledPosts(ctx)
+	if err != nil {
+		t.Fatalf("CountScheduledPosts failed: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("CountScheduledPosts = %d, want 2", total)
+	}
+
+	posts, err := repo.ListScheduledPosts(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("ListScheduledPosts failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("got %d scheduled posts, want 2", len(posts))
+	}
+	if posts[0].ID != sooner || posts[1].ID != later {
+		t.Errorf("order = [%d %d], want soonest first [%d %d]", posts[0].ID, posts[1].ID, sooner, later)
+	}
+	if !posts[0].ScheduledAt.Valid {
+		t.Error("scheduled_at must be selected — the card renders the publish time from it")
+	}
+
+	// Paging walks further into the queue.
+	page2, err := repo.ListScheduledPosts(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("ListScheduledPosts(offset) failed: %v", err)
+	}
+	if len(page2) != 1 || page2[0].ID != later {
+		t.Errorf("second page = %v, want [%d]", page2, later)
+	}
+}
+
 func TestRepository_ListPostsWithSearchStatusFilters(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {

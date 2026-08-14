@@ -174,6 +174,55 @@ FROM posts p`, contentCol)
 	return items, rows.Err()
 }
 
+// ListScheduledPosts returns the posts waiting to be published, soonest first.
+//
+// Ordering is the point: the home feed shows these on its "future" pages (the
+// non-positive page numbers), so the post that is about to go live must be the
+// one nearest the newest published post. A scheduled row with no scheduled_at
+// cannot happen through the API, but sorts last rather than first if it does.
+func (r *sqliteRepository) ListScheduledPosts(ctx context.Context, limit, offset int64) ([]models.Post, error) {
+	rows, err := r.db.QueryContext(ctx, `
+SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+       p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+FROM posts p
+WHERE p.deleted_at IS NULL
+  AND p.type != 'page'
+  AND LOWER(p.status) = 'scheduled'
+ORDER BY p.scheduled_at IS NULL, p.scheduled_at ASC, p.created_at ASC
+LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.ScheduledAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountScheduledPosts counts the posts ListScheduledPosts pages through.
+func (r *sqliteRepository) CountScheduledPosts(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM posts p
+WHERE p.deleted_at IS NULL
+  AND p.type != 'page'
+  AND LOWER(p.status) = 'scheduled'`).Scan(&count)
+	return count, err
+}
+
 func (r *sqliteRepository) ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error) {
 	selectClause := `SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
@@ -1199,7 +1248,7 @@ JOIN post_tags pt ON pt.tag_id = d.tag_id
 JOIN posts p ON pt.post_id = p.id
 WHERE p.deleted_at IS NULL
 AND (CASE WHEN ? THEN LOWER(p.status) = 'published'
-           ELSE LOWER(p.status) IN ('published', 'hidden')
+           ELSE LOWER(p.status) IN ('published', 'hidden', 'scheduled')
       END)
 
 AND (CASE WHEN ? THEN p.id NOT IN (
@@ -1247,7 +1296,9 @@ func scanTagCounts(rows *sql.Rows) (map[int64]int64, error) {
 // GetHierarchicalPostCounts returns a map of tagID → effective post count,
 // where the count includes posts from all descendant tags (not just the tag itself).
 // If publishedOnly is true, only published posts are counted (public context).
-// If false, published + hidden posts are counted (admin context).
+// If false, published + hidden + scheduled posts are counted (admin context) —
+// a scheduled post is already written and tagged, so leaving it out made the
+// badge in /light/tags disagree with the tag's own post list.
 func (r *sqliteRepository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
 	rows, err := r.db.QueryContext(ctx, hierarchicalPostCountsQuery(false), publishedOnly, publishedOnly)
 	if err != nil {

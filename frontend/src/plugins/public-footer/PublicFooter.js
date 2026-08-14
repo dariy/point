@@ -23,7 +23,10 @@ import {
   LOGOUT_SVG,
   DASHBOARD_SVG,
   SLIDERS_SVG,
+  EYE_SVG,
+  EYE_OFF_SVG,
 } from "../../utils/icons.js";
+import { isRevelioOn, setRevelio } from "../../utils/revelio.js";
 import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -33,6 +36,16 @@ import {
   gridCols,
   maxZoomCols,
 } from "../../utils/gridFit.js";
+
+/**
+ * Whether the actions drawer behind the sliders button is open.
+ *
+ * Module-level rather than per-instance: the footer is re-created on every page
+ * render, and a drawer the reader opened to reach RSS or revelio should still
+ * be open on the page they land on — closing it on each navigation made those
+ * buttons feel like they had to be re-found every time.
+ */
+let drawerOpen = false;
 
 export class PublicFooter extends Component {
   render() {
@@ -81,6 +94,17 @@ export class PublicFooter extends Component {
       ? `<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
       : "";
 
+    // Revelio (owner only): reveal or conceal everything a guest can't see —
+    // hidden posts and tags, private media, and the scheduled queue on the
+    // feed's negative pages. Concealed is the guest's own view of the site.
+    const revelioOn = isRevelioOn();
+    const revelioButton = store.get("user")
+      ? `<button class="footer-action-btn revelio-toggle${revelioOn ? " is-revealing" : ""}" id="revelio-toggle" type="button"
+                aria-pressed="${revelioOn}"
+                title="${revelioOn ? "Revelio: showing hidden items — click to view as a guest" : "Viewing as a guest — click to reveal hidden items"}"
+                aria-label="${revelioOn ? "View as a guest" : "Reveal hidden items"}">${revelioOn ? EYE_SVG : EYE_OFF_SVG}</button>`
+      : "";
+
     const themeToggle = `<button class="footer-action-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
                 <span class="icon-sun">${SUN_SVG}</span>
                 <span class="icon-moon">${MOON_SVG}</span>
@@ -106,9 +130,10 @@ export class PublicFooter extends Component {
             </div>
             <div class="footer-right">
               <div class="footer-actions">
-                <div class="footer-sliding-actions">
+                <div class="footer-sliding-actions${drawerOpen ? " is-expanded" : ""}">
                   ${zoomSlider}
                   ${rssButton}
+                  ${revelioButton}
                   ${authButton}
                 </div>
                 <button class="footer-action-btn footer-slider-btn" id="footer-slider-btn" type="button" aria-label="Toggle actions" title="More Actions">
@@ -170,8 +195,12 @@ export class PublicFooter extends Component {
     });
 
     this.$("#footer-slider-btn")?.addEventListener("click", () => {
-      this.$(".footer-sliding-actions")?.classList.toggle("is-expanded");
+      const el = this.$(".footer-sliding-actions");
+      if (!el) return;
+      drawerOpen = el.classList.toggle("is-expanded");
     });
+
+    this.$("#revelio-toggle")?.addEventListener("click", () => this._toggleRevelio());
 
     this.$("#footer-logout")?.addEventListener("click", async () => {
       try {
@@ -195,6 +224,38 @@ export class PublicFooter extends Component {
       const { tag, navPath } = parseTagUrl(url);
       ViewContext.update({ tag, navPath, postSlug: null, query: null });
     });
+  }
+
+  /**
+   * Flip revelio and re-render the site under the new visibility scope.
+   *
+   * Everything the switch changes is fetched, so all of it has to be dropped:
+   * the list-page read cache, and the nav tree (auth-scoped — hidden tags come
+   * and go with it). The router then rebuilds the current view in the same
+   * document, which keeps the reader where they were with no page flash. The
+   * drawer this button lives in survives because its open state outlives the
+   * footer instance (see drawerOpen).
+   */
+  async _toggleRevelio() {
+    setRevelio(!isRevelioOn());
+
+    // A scheduled feed page has no counterpart on the guest side of the
+    // switch — leave it for the newest published page rather than rendering an
+    // empty one.
+    const url = new URL(window.location.href);
+    if (!isRevelioOn() && Number(url.searchParams.get("page") ?? 1) < 1) {
+      url.searchParams.delete("page");
+    }
+
+    const [{ clearPostReadCache }, { loadNav }, { router }] = await Promise.all([
+      import("../../api/posts.js"),
+      import("../../api/nav.js"),
+      import("../../router.js"),
+    ]);
+    clearPostReadCache(); // post reads *and* the list pages behind them
+    store.set("tagCloud", null);
+    await loadNav({ force: true });
+    router.refresh(url.pathname + url.search + url.hash);
   }
 
   beforeRender() {
