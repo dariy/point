@@ -32,6 +32,7 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
+| Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
 | Regenerate SQL layer | `cd api && sqlc generate` <!-- verify:skip needs the sqlc binary, which is not part of the documented toolchain --> |
@@ -113,3 +114,21 @@ Do not stop at "it compiles". Prove the change:
   `./scripts/run.sh` for anything HTTP-facing.
 - **Frontend** — a test in `frontend/test/`, plus loading the page on :8001.
 - **Anything user-visible** — say in the PR what you actually ran and what you saw.
+
+If you are an agent, "loading the page" is something you can do too. `npm ci` puts `playwright-cli`
+in `node_modules/.bin`, and one command makes it usable:
+
+<!-- verify:skip downloads a browser; the Commands table checks that the CLI itself is installed -->
+```bash
+npx playwright-cli install                       # once: downloads Chromium, writes .playwright/
+npx playwright-cli open http://localhost:8001    # then drive the page: snapshot, click, fill, console
+```
+
+Without that first command the CLI looks for Google Chrome at a system path and fails on a machine
+that has none. `.claude/skills/playwright-cli/` ships in this repository so the whole command set is
+documented where an agent will read it.
+
+That directory is written by the tool itself and is not edited by hand, which is why `package.json`
+pins `@playwright/cli` to an exact version rather than a range. If the two ever drift — after a
+dependency bump, say — the CLI prints a warning on every run, and `npx playwright-cli install
+--skills` rewrites the skill to match.

@@ -205,6 +205,25 @@ else
         "go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest"
 fi
 
+# ── playwright-cli ───────────────────────────────────────────────────────────
+# Optional like sqlc, and for a related reason: no check.sh step needs it. It
+# is what makes a frontend change verifiable by whoever wrote it instead of by
+# the reviewer — .claude/skills/playwright-cli/ documents the commands.
+if [ -x "$ROOT_DIR/node_modules/.bin/playwright-cli" ]; then
+    # --version prepends a box when the committed skill and the tool disagree.
+    pw_found="$("$ROOT_DIR/node_modules/.bin/playwright-cli" --version 2>/dev/null | tail -1)"
+    row pass playwright-cli "playwright-cli" "${pw_found:-installed}" "" \
+        "\`npx --no-install playwright-cli\` can drive a browser at ./scripts/run.sh"
+elif command -v playwright-cli >/dev/null 2>&1; then
+    pw_found="$(playwright-cli --version 2>/dev/null | tail -1)"
+    row pass playwright-cli "playwright-cli" "${pw_found:-installed}" "" \
+        "installed globally — not the version this repo pins"
+else
+    row warn playwright-cli "playwright-cli" "not installed" "" \
+        "optional — looking at a UI change yourself needs it" \
+        "npm ci"
+fi
+
 # ── Port 8001 ────────────────────────────────────────────────────────────────
 # Bash's /dev/tcp, so this needs no ss/lsof/netstat and behaves the same on
 # every platform that can run this script.
