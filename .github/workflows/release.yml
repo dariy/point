@@ -180,3 +180,117 @@ jobs:
             images+="${tag}@${DIGEST} "
           done
           cosign sign --yes ${images}
+
+  # quickstart/install.sh --method=native downloads
+  # point-linux-${arch}.tar.gz from the release for the latest tag. Nothing
+  # produced that file, so the documented native install died on a 404 with a
+  # misleading "check your internet connection". scripts/build-tarball.sh owns
+  # the archive layout (see its header); this job just runs it.
+  tarballs:
+    needs: [test, vulnerability-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Pin to the tag being released. On the workflow_call path from
+          # tag-release.yml the default ref is the branch, which has usually
+          # moved on by the time this runs.
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Build tarballs
+        run: ./scripts/build-tarball.sh --version="${{ inputs.tag || github.ref_name }}"
+
+      # A tarball that unpacks but does not run is worse than no tarball: the
+      # user has already added a systemd unit and a system account by the time
+      # it fails. Unpack exactly the way install.sh does and boot the thing.
+      - name: Smoke-test the amd64 tarball
+        run: |
+          set -euo pipefail
+          tar -xzf dist/point-linux-amd64.tar.gz -C /tmp
+          app=/tmp/point-linux-amd64
+          test "$("$app/point" --version)" = "${{ inputs.tag || github.ref_name }}"
+          mkdir -p /tmp/point-data
+          DATABASE_URL=/tmp/point-data/point.db \
+          STORAGE_PATH=/tmp/point-data \
+          FRONTEND_DIR="$app/frontend" \
+          HOST=127.0.0.1 PORT=8123 \
+            "$app/point" > /tmp/point-native.log 2>&1 &
+          srv=$!
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8123/health >/dev/null && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8123/health | tee /dev/stderr | grep -q '"status":"ok"'
+          # Serving the app shell and the bundles is the half that a missing or
+          # half-built frontend/ would break silently. A fresh database
+          # redirects / to the setup wizard, hence -L.
+          curl -fsSL http://127.0.0.1:8123/ | grep -q '<div id="app"'
+          curl -fsS -o /dev/null http://127.0.0.1:8123/assets/js/app.js
+          curl -fsS -o /dev/null http://127.0.0.1:8123/assets/css/main.css
+          kill "$srv" 2>/dev/null || true
+
+      - name: Native smoke log on failure
+        if: failure()
+        run: cat /tmp/point-native.log || true
+
+      - name: Upload tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarballs
+          path: dist/
+          retention-days: 7
+
+  # 47 tags, 0 releases: the Releases page was empty, so a visitor had no notes
+  # to skim and install.sh had nothing to download. Created after the images
+  # and tarballs both exist, so a release never advertises artifacts that a
+  # later step failed to publish.
+  github-release:
+    needs: [build-and-push, tarballs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # release-notes.sh walks back to the previous tag for the commit range.
+          fetch-depth: 0
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          name: tarballs
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          ./scripts/release-notes.sh "$TAG" > /tmp/notes.md
+          cat /tmp/notes.md
+          # Idempotent: a re-run of a released tag refreshes notes and assets
+          # rather than failing on "release already exists".
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file /tmp/notes.md
+            gh release upload "$TAG" dist/point-linux-*.tar.gz dist/checksums.txt --clobber
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md \
+              dist/point-linux-*.tar.gz dist/checksums.txt
+          fi

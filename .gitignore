@@ -50,6 +50,9 @@ frontend/css/asset-manifest.json
 frontend/css/common/theme.css
 frontend/css/p/
 
+# Release tarballs (scripts/build-tarball.sh) — build output.
+dist/
+
 # Static UI demo (demo/scripts/build.sh) — build output.
 demo/dist/
 # Throwaway instance used to generate demo content (demo/scripts/make-content.sh).

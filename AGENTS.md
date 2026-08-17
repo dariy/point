@@ -34,6 +34,7 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
 | Regenerate SQL layer | `cd api && sqlc generate` <!-- verify:skip needs the sqlc binary, which is not part of the documented toolchain --> |
+| Release tarball | `./scripts/build-tarball.sh` — `dist/point-linux-{amd64,arm64}.tar.gz`, what `install.sh --method=native` downloads <!-- verify:skip cross-compiles both arches; the release workflow builds and boots it on every tag --> |
 
 `check.sh` also needs `golangci-lint` and `govulncheck` on your `PATH`; everything else in this
 table runs with just Go and Node.

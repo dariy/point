@@ -285,8 +285,11 @@ jobs:
         if: failure()
         run: cat /tmp/run-sh.log || true
 
+      # The runner, plus the two release-path scripts — they only execute on a
+      # tag, so a syntax error in them would otherwise surface as a broken
+      # release rather than a failed PR.
       - name: Shellcheck the runner
-        run: shellcheck scripts/check-docs.sh
+        run: shellcheck scripts/check-docs.sh scripts/build-tarball.sh scripts/release-notes.sh
 
       # Extracts the fenced bash blocks and the AGENTS.md command table from the
       # three docs and runs them. Anything that cannot run unattended carries a
