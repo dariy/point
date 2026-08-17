@@ -240,3 +240,56 @@ jobs:
           # The uninstaller ships alongside and is equally untested; at minimum
           # it must parse and its --help must succeed.
           bash uninstall.sh --help >/dev/null
+
+  # Instructions rot silently. AGENTS.md used to tell agents to ALWAYS build the
+  # tests with -tags=integration and warned that a bare `go test ./...` skipped
+  # them — both false for as long as the `//go:build !unit` convention has been
+  # in place, and nothing caught it. This job runs what the docs say to run.
+  docs-commands:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # ./scripts/run.sh is the first command AGENTS.md and CONTRIBUTING.md give
+      # a newcomer, and the one command the runner below cannot execute: it
+      # serves until interrupted. It runs first, on an untouched checkout, so
+      # that the documented promises are tested as stated — no configuration, no
+      # prior build, port 8001, and loopback unless LOCAL_RUN says otherwise.
+      - name: Dev server smoke (./scripts/run.sh)
+        run: |
+          set -euo pipefail
+          ./scripts/run.sh > /tmp/run-sh.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8001/health >/dev/null && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8001/health | tee /dev/stderr | grep -q '"status":"ok"'
+          # A fresh clone must reach the setup wizard; a server that boots into
+          # nothing you can set up is not a working dev loop.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/setup/status)" = "200"
+          pkill -f '^\./point$' || true
+
+      - name: Dev server log on failure
+        if: failure()
+        run: cat /tmp/run-sh.log || true
+
+      - name: Shellcheck the runner
+        run: shellcheck scripts/check-docs.sh
+
+      # Extracts the fenced bash blocks and the AGENTS.md command table from the
+      # three docs and runs them. Anything that cannot run unattended carries a
+      # `<!-- verify:skip … -->` marker in the doc itself.
+      - name: Run every documented command
+        run: ./scripts/check-docs.sh

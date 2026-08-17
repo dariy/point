@@ -9,6 +9,7 @@ is meant to be true and runnable; if a command here does not work, that is a bug
 
 ## Start here
 
+<!-- verify:skip run.sh serves until interrupted (CI smokes it separately); check.sh is the gate CI already runs -->
 ```bash
 ./scripts/run.sh      # build everything, serve on http://localhost:8001
 ./scripts/check.sh    # the quality gate: lint, vet, tests, coverage floors, vuln scan
@@ -25,14 +26,22 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 
 | Task | Command |
 |---|---|
-| Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle |
-| Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 |
-| Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) |
+| Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
+| Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 <!-- verify:skip needs Docker; the image is built by the docker-smoke job --> |
+| Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
-| Regenerate SQL layer | `cd api && sqlc generate` |
+| Regenerate SQL layer | `cd api && sqlc generate` <!-- verify:skip needs the sqlc binary, which is not part of the documented toolchain --> |
+
+`check.sh` also needs `golangci-lint` and `govulncheck` on your `PATH`; everything else in this
+table runs with just Go and Node.
+
+Every command in this file, in [CONTRIBUTING.md](CONTRIBUTING.md) and in [QUICKSTART.md](QUICKSTART.md)
+is executed on every PR by the `docs-commands` job — locally, that is `./scripts/check-docs.sh`. If a
+command you add cannot run unattended, mark it in the source with
+`<!-- verify:skip reason -->` rather than teaching the runner about it.
 
 ## Conventions that will bite you
 

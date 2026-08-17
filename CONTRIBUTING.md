@@ -10,6 +10,7 @@ change easy to verify: state what you ran, and what you saw.
 You need Go (the version in `api/go.mod`), Node 22+, and `git`. Nothing else — no database to
 install, no services to configure.
 
+<!-- verify:skip clones the repository over the network, then serves until interrupted -->
 ```bash
 git clone https://github.com/dariy/point.git
 cd point
@@ -23,6 +24,7 @@ extras (AI analysis, comments, SMTP, photo-library import) if you want them.
 
 ## The change loop
 
+<!-- verify:skip run.sh serves until interrupted (CI smokes it separately); check.sh is the gate CI already runs -->
 ```bash
 ./scripts/run.sh          # develop against localhost:8001
 ./scripts/check.sh        # the full gate — run this before you push
@@ -32,6 +34,10 @@ extras (AI analysis, comments, SMTP, photo-library import) if you want them.
 floor, frontend tests with a coverage floor, and a vulnerability scan. It keeps going after a
 failure and prints a PASS/FAIL summary at the end. `--short` skips the slow tests while you iterate,
 and `--fix` applies the lint autofixes; run it once without either before opening a PR.
+
+It is the one command that needs more than Go and Node: `golangci-lint` (the v2 module path) and
+`govulncheck` have to be on your `PATH` — `.github/workflows/test.yml` pins the versions CI uses.
+Without them the gate reports those steps as failures.
 
 For a tighter loop, `./scripts/run-tests.sh` takes `--unit`, `--race`, `--bench` and `--html`, and
 `npm run test:frontend` runs just the frontend suite.
