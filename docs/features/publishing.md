@@ -1,8 +1,11 @@
 # Content & Publishing
 
 The post lifecycle: authoring, saving, scheduling, previewing, and the editor model.
-Backend core is `PostService` (`api/internal/services/post_service.go`); the editor is
-`frontend/src/pages/light/PostEditPage.js`.
+Backend core is `PostService`, split by concern across `api/internal/services/`:
+`post_service.go` (CRUD, queries, tags, trash), `post_render.go` (the goldmark
+pipeline and the bluemonday allowlist), `post_css.go` (per-post and site-wide CSS
+sanitization), `post_publish.go` (publish, withdraw, the scheduled queue, Instagram
+cross-posting). The editor is `frontend/src/pages/light/PostEditPage.js`.
 
 ## Authoring
 
