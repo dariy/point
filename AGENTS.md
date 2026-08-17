@@ -83,7 +83,7 @@ you need to reach the dev server from another device.
 
 | To change… | Start at |
 |---|---|
-| An HTTP route | `api/cmd/api/routes.go` — but note some routes are still registered inline in `api/cmd/api/main.go` (health, feeds, setup, auth, webauthn, comments, nav-menu, pages, timeline, MCP, static/SPA) |
+| An HTTP route | `api/cmd/api/routes.go` — every route, no exceptions; one `register*Routes` function per domain, called from `setupEcho` in registration order |
 | Request handling / validation | `api/internal/api/` |
 | Business logic | `api/internal/services/` |
 | Database access | `api/internal/repository/` (hand-written) and `api/internal/models/` (sqlc-generated) |

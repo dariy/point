@@ -1,16 +1,122 @@
 package main
 
-// Route registration split out of setupEcho, one function per API
-// domain (see point-main-go-decompose). Each takes the echo instance, its
-// domain handler, and the shared services for auth/plugin middleware.
+// routes.go is the one place every HTTP route on this server is registered.
+//
+// One register*Routes function per domain. Each takes the echo instance, the
+// handler(s) it serves, and the shared services the auth/plugin middleware
+// needs. setupEcho (main.go) builds the handlers and the global middleware
+// chain, then calls these in the order they appear below — and that order is
+// load-bearing: `/:year/:month/:filename` has to come after the /api routes,
+// the gated plugin-chunk route before the broad /assets/js static route, and
+// the `/*` SPA fallback last of all. Keep new registrations in the section
+// they belong to rather than appending at the end.
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"html"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"point-api/internal/api"
+	"point-api/internal/config"
+	"point-api/internal/mcp"
+	"point-api/internal/plugins"
+	"point-api/internal/repository"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 )
+
+// ── Public, unauthenticated ────────────────────────────────────────────────
+
+// registerHealthRoutes exposes the liveness probe. Ungated on purpose:
+// container health checks and uptime monitors hit it before the install is
+// configured, and publicLimiter skips it by path (see main.go).
+func registerHealthRoutes(e *echo.Echo, cfg config.Config) {
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{
+			"status":  "ok",
+			"version": cfg.AppVersion,
+		})
+	})
+}
+
+// registerFeedRoutes serves crawlers and feed readers. The two feed URLs are
+// gated by the rss plugin; sitemap.xml and robots.txt are always on.
+func registerFeedRoutes(e *echo.Echo, h *api.FeedsHandler, svcs *AppServices) {
+	rssGate := api.RequirePlugin(svcs.Settings, "rss")
+	e.GET("/feed.xml", h.RSSFeed, rssGate)
+	e.GET("/feed", h.RSSFeed, rssGate) // alias used by the public footer link
+	e.GET("/sitemap.xml", h.Sitemap)
+	e.GET("/robots.txt", h.RobotsTxt)
+}
+
+// registerSetupRoutes is the first-run wizard — unauthenticated, because there
+// is no owner to authenticate against yet.
+func registerSetupRoutes(e *echo.Echo, h *api.SetupHandler) {
+	e.GET("/api/setup/status", h.SetupStatus)
+	e.POST("/api/setup", h.Setup)
+}
+
+// ── Auth, sessions, passkeys ───────────────────────────────────────────────
+
+// newCredentialLimiter builds the brute-force throttle for credential
+// endpoints, keyed by client IP (the default identifier). One shared store →
+// the bucket is spent across all of login/forgot/reset/passkey, so an attacker
+// can't fan out across them. ~10 burst, refilling 1 every 6s (≈10/min
+// sustained).
+//
+// Pass one instance to both registerAuthRoutes and registerWebAuthnRoutes:
+// giving the passkey login its own limiter would hand an attacker a second,
+// independent bucket for the same secret.
+func newCredentialLimiter() echo.MiddlewareFunc {
+	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(6 * time.Second),
+			Burst:     10,
+			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+}
+
+func registerAuthRoutes(e *echo.Echo, h *api.AuthHandler, keys *api.ApiKeyHandler, svcs *AppServices, credLimiter echo.MiddlewareFunc) {
+	authGroup := e.Group("/api/auth")
+	authGroup.POST("/login", h.Login, credLimiter)
+	authGroup.POST("/logout", h.Logout)
+	authGroup.GET("/me", h.Me, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	authGroup.POST("/change-password", h.ChangePassword, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.POST("/change-email", h.ChangeEmail, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.GET("/sessions", h.ListSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.DELETE("/sessions/:id", h.DeleteSession, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.DELETE("/sessions", h.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.POST("/forgot-password", h.ForgotPassword, credLimiter)
+	authGroup.POST("/reset-password", h.ResetPassword, credLimiter)
+
+	// API Key Management — session-only: minting a key is not itself a key action.
+	authGroup.GET("/api-keys", keys.ListKeys, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+	authGroup.POST("/api-keys", keys.CreateKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+	authGroup.POST("/api-keys/:id/revoke", keys.RevokeKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+	authGroup.DELETE("/api-keys/:id", keys.DeleteKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+}
+
+func registerWebAuthnRoutes(e *echo.Echo, h *api.WebAuthnHandler, svcs *AppServices, credLimiter echo.MiddlewareFunc) {
+	webauthnGroup := e.Group("/api/auth/webauthn", api.RequirePlugin(svcs.Settings, "passkeys"))
+	webauthnGroup.POST("/register/begin", h.BeginRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	webauthnGroup.POST("/register/finish", h.FinishRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	webauthnGroup.POST("/login/begin", h.BeginLogin, credLimiter)
+	webauthnGroup.POST("/login/finish", h.FinishLogin, credLimiter)
+	webauthnGroup.GET("/status", h.GetStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	webauthnGroup.DELETE("/credential", h.DeleteCredential, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+}
+
+// ── Content APIs ───────────────────────────────────────────────────────────
 
 func registerPostRoutes(e *echo.Echo, h *api.PostHandler, svcs *AppServices) {
 	// Public read endpoints carry visibilityCache so an anonymous GET is
@@ -159,4 +265,360 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup.POST("/version/check", h.CheckVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "version-check"))
 	// Restart the process in place (re-exec). Session-only: not an API-key action.
 	systemGroup.POST("/restart", h.RestartServer, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+}
+
+// ── Plugin surfaces and sidecars ───────────────────────────────────────────
+
+// mcpHandlers is the set of REST handlers the MCP server reuses for all data
+// access — it has no data path of its own (see mcp.Register / mcpServiceClient).
+type mcpHandlers struct {
+	Post     *api.PostHandler
+	Tag      *api.TagHandler
+	Media    *api.MediaHandler
+	Theme    *api.ThemeHandler
+	Settings *api.SettingsHandler
+	System   *api.SystemHandler
+}
+
+// registerMCPRoutes mounts the in-process Model Context Protocol server: the
+// streamable /mcp endpoint plus the OAuth 2.1 discovery and token routes. Gated
+// by the "mcp" plugin inside mcp.Register.
+func registerMCPRoutes(e *echo.Echo, cfg config.Config, repo repository.Repository, svcs *AppServices, h mcpHandlers) {
+	mcpBaseURL := cfg.MCPBaseURL
+	if mcpBaseURL == "" {
+		mcpBaseURL = cfg.AppURL
+	}
+	var mcpOwnerID int64
+	if owner, err := repo.GetFirstUser(context.Background()); err == nil {
+		mcpOwnerID = owner.ID
+	}
+	mcp.Register(e, mcp.Deps{
+		Echo:            e,
+		Post:            h.Post,
+		Tag:             h.Tag,
+		Media:           h.Media,
+		Theme:           h.Theme,
+		Settings:        h.Settings,
+		System:          h.System,
+		Auth:            svcs.Auth,
+		ApiKey:          svcs.ApiKey,
+		SettingsService: svcs.Settings,
+		Repo:            repo,
+		OwnerUserID:     mcpOwnerID,
+		BaseURL:         mcpBaseURL,
+		Version:         cfg.AppVersion,
+		UploadRoot:      cfg.PhotoLibraryPath,
+	})
+}
+
+// registerCommentRoutes wires the comments plugin to the remark42 sidecar that
+// entrypoint.sh starts on loopback: a gated reverse proxy at /comments — its
+// only external access path — plus the moderation endpoints the
+// /light/comments admin page calls. ADMIN_PASSWD is generated and exported by
+// entrypoint.sh when the sidecar is configured.
+func registerCommentRoutes(e *echo.Echo, svcs *AppServices) {
+	remark42URL, _ := url.Parse("http://127.0.0.1:8081")
+	api.RegisterCommentsProxy(e, svcs.Settings, remark42URL)
+
+	commentsAdmin := api.NewCommentsAdminHandler(remark42URL, os.Getenv("ADMIN_PASSWD"))
+	commentsAdminGroup := e.Group("/api/admin/comments", api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "comments"))
+	commentsAdminGroup.GET("/recent", commentsAdmin.Recent)
+	commentsAdminGroup.GET("/blocked", commentsAdmin.Blocked)
+	commentsAdminGroup.DELETE("/comment/:id", commentsAdmin.DeleteComment)
+	commentsAdminGroup.PUT("/user/:id/block", commentsAdmin.SetBlock)
+}
+
+// registerNavMenuRoutes is the admin editor for the menu. The public read is
+// GET /api/pages/nav (see registerPageRoutes).
+func registerNavMenuRoutes(e *echo.Echo, h *api.NavMenuHandler, svcs *AppServices) {
+	e.GET("/api/nav-menu", h.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
+	e.PUT("/api/nav-menu", h.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
+}
+
+func registerUtilRoutes(e *echo.Echo, svcs *AppServices) {
+	utilGroup := e.Group("/api/util")
+	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+}
+
+// ── Compound page payloads for the SPA ─────────────────────────────────────
+
+// registerPageRoutes serves the compound payloads the public SPA fetches to
+// render a page in one call.
+func registerPageRoutes(e *echo.Echo, h *api.PagesHandler, svcs *AppServices) {
+	// The tag graph walks the whole tag/post relation set to build its payload,
+	// so it is the one public read where a modest request rate is still a real
+	// load. ~1/s sustained, 20 burst — well above what rendering the graph page
+	// needs, far below what makes it a cheap way to pin a CPU.
+	graphLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(time.Second),
+			Burst:     20,
+			ExpiresIn: 3 * time.Minute,
+		}),
+	})
+
+	// visibilityCache is group-level: every route here is an OptionalAuth public
+	// read, so an anonymous GET is edge-cacheable (authenticated reads and any
+	// write get private,no-store). These are the compound payloads the public SPA
+	// fetches to render a page, so caching them offloads the flood's follow-on
+	// /api traffic alongside the HTML shell.
+	pagesGroup := e.Group("/api/pages", visibilityCache)
+	pagesGroup.GET("/home", h.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/tags/:slug", h.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/tags", h.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/graph", h.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), graphLimiter)
+	pagesGroup.GET("/graph/tag/:id", h.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), graphLimiter)
+	pagesGroup.GET("/map", h.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/nav", h.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
+}
+
+func registerTimelineRoutes(e *echo.Echo, h *api.TimelineHandler, svcs *AppServices) {
+	// Both routes are OptionalAuth public reads — group-level visibilityCache.
+	timelineGroup := e.Group("/api/timeline", visibilityCache)
+	timelineGroup.GET("", h.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	timelineGroup.GET("/locations", h.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+}
+
+// ── Media bytes, static assets, PWA, SPA fallback ──────────────────────────
+//
+// Everything below matches on paths that are not under /api, so it must be
+// registered after every /api route (see registerMediaFileRoutes) and the `/*`
+// fallback must be registered last of all.
+
+// frontendAssets is the startup-computed frontend state these routes close
+// over: the two index.html shells, the resolved JS bundle directory, and the
+// plugin chunk/CSS maps. setupEcho builds it once; nothing here changes at
+// runtime.
+type frontendAssets struct {
+	// Dir is cfg.FrontendDir — the root the static trees hang off.
+	Dir string
+	// JSDir is the bundle actually being served: frontend/js, or frontend/js-debug
+	// under FRONTEND_DEBUG. Empty when the frontend was never built.
+	JSDir string
+	// Shell is the public index.html, version-stamped and with the CSS bundle
+	// links rewritten to their content-addressed URLs. Empty when unbuilt, which
+	// is what makes the SPA fallback answer 503.
+	Shell string
+	// AdminShell is the same shell minus the deployment-injected <head> markup.
+	AdminShell string
+	// ChunkMap maps a plugin id to its hashed chunk filename; CSSMap is the set
+	// of plugin ids with a CSS partial on disk.
+	ChunkMap map[string]string
+	CSSMap   map[string]bool
+}
+
+// registerMediaFileRoutes serves the stored originals and thumbnails at
+// /YYYY/MM/filename[?thumb]. Auth-gated: unauthenticated clients see 404 for
+// non-public media. Registered after the /api routes to avoid collisions
+// (e.g. /api/settings/public would otherwise match /:year/:month/:filename).
+func registerMediaFileRoutes(e *echo.Echo, cfg config.Config, repo repository.Repository, svcs *AppServices, fe frontendAssets) {
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, fe.Shell, repo, svcs.Media, svcs.S3Presigner, svcs.Settings, fe.ChunkMap, fe.CSSMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
+}
+
+// registerStaticRoutes mounts the built frontend's asset trees. Each is guarded
+// by its own stat: a partial build serves what exists rather than 500ing, and a
+// missing frontend registers nothing at all.
+func registerStaticRoutes(e *echo.Echo, svcs *AppServices, fe frontendAssets) {
+	if fi, err := os.Stat(fe.Dir); err != nil || !fi.IsDir() {
+		return
+	}
+	cssDir := filepath.Join(fe.Dir, "css")
+	imagesDir := filepath.Join(fe.Dir, "images")
+	vendorDir := filepath.Join(fe.Dir, "vendor")
+
+	if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
+		// Serves the whole tree: the bundles at the top level plus the
+		// subdirectories under it, notably common/theme.css, which the
+		// theme service rewrites at runtime. Content-addressed bundle URLs
+		// (light.<hash>.css) have already been rewritten to the plain
+		// on-disk name by the Pre middleware in setupEcho.
+		e.Static("/assets/css", cssDir)
+	}
+	if fe.JSDir != "" {
+		// Gated plugin-chunk handler: serves /assets/js/p/* only for ENABLED
+		// plugins, so disabled code 404s even if a filename is guessed.
+		// Registered before the broad /assets/js static route so the more
+		// specific prefix wins. Chunks live under <jsDir>/p/.
+		pluginChunkDir := filepath.Join(fe.JSDir, "p")
+		e.GET("/assets/js/p/*", func(c echo.Context) error {
+			name := filepath.Base(filepath.Clean("/" + c.Param("*")))
+			if name == "." || name == "/" || name == "" {
+				return echo.NewHTTPError(http.StatusNotFound, "not found")
+			}
+			// Named entry chunks (a plugin id in plugin-manifest.json) are
+			// gated: a disabled plugin's entry 404s even if its filename is
+			// guessed. Shared code-split chunks (chunk-*.js) are not entries —
+			// they carry common code imported by multiple plugin entries and
+			// must be served so enabled plugins can resolve their imports.
+			if id, ok := plugins.PluginForChunk(fe.ChunkMap, name); ok {
+				all, err := svcs.Settings.GetAllSettings(c.Request().Context())
+				if err != nil {
+					return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
+				}
+				if !plugins.IsEnabled(id, all) {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+			}
+			return c.File(filepath.Join(pluginChunkDir, name))
+		})
+		e.Static("/assets/js", fe.JSDir)
+	}
+	if fi, err := os.Stat(imagesDir); err == nil && fi.IsDir() {
+		e.Static("/assets/images", imagesDir)
+	}
+	if fi, err := os.Stat(vendorDir); err == nil && fi.IsDir() {
+		e.Static("/assets/vendor", vendorDir)
+	}
+}
+
+// registerPWARoutes serves the web app manifest and the service worker at root
+// scope. These must be real files (not index.html) and must be registered
+// before the /* SPA fallback that would otherwise intercept them.
+func registerPWARoutes(e *echo.Echo, cfg config.Config) {
+	manifestPath := filepath.Join(cfg.FrontendDir, "manifest.webmanifest")
+	if fi, err := os.Stat(manifestPath); err == nil && !fi.IsDir() {
+		e.GET("/manifest.webmanifest", func(c echo.Context) error {
+			c.Response().Header().Set("Content-Type", "application/manifest+json")
+			// One image can serve several sites, so the installed-app name comes
+			// from the host the manifest was fetched from rather than the file's
+			// placeholder name.
+			raw, err := os.ReadFile(manifestPath)
+			if err != nil {
+				return c.File(manifestPath)
+			}
+			var m map[string]any
+			if err := json.Unmarshal(raw, &m); err != nil {
+				return c.Blob(http.StatusOK, "application/manifest+json", raw)
+			}
+			if name := siteNameFromHost(c.Request().Host); name != "" {
+				m["name"] = name
+				m["short_name"] = name
+			}
+			out, err := json.Marshal(m)
+			if err != nil {
+				return c.Blob(http.StatusOK, "application/manifest+json", raw)
+			}
+			return c.Blob(http.StatusOK, "application/manifest+json", out)
+		})
+	}
+	swPath := filepath.Join(cfg.FrontendDir, "sw.js")
+	if fi, err := os.Stat(swPath); err == nil && !fi.IsDir() {
+		e.GET("/sw.js", func(c echo.Context) error {
+			c.Response().Header().Set("Cache-Control", "no-cache")
+			// Stamp the build version into the SW's cache name (CACHE_VERSION
+			// in sw.js) so each deploy retires the previous shell cache; the
+			// byte change is also what triggers the browser's SW update.
+			b, err := os.ReadFile(swPath)
+			if err != nil {
+				return c.File(swPath)
+			}
+			js := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+			return c.Blob(http.StatusOK, "text/javascript; charset=utf-8", []byte(js))
+		})
+	}
+}
+
+// registerSPAFallback serves the single-page app shell for every path no route
+// above claimed. MUST be registered last — it matches everything.
+func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, setupComplete func(context.Context) bool) {
+	e.GET("/*", func(c echo.Context) error {
+		if fe.Shell != "" {
+			path := c.Request().URL.Path
+
+			// Fresh install: every document lands on the first-run wizard, not
+			// just the admin section. A blog with no owner has nothing to show
+			// on "/" either, and doing it here (rather than only in the SPA's
+			// route guard) means the very first page load goes straight to
+			// /setup — no public shell rendered first, no JS required.
+			if path != "/setup" && !setupComplete(c.Request().Context()) {
+				// visibilityCache already stamped `public, max-age=60` on this
+				// guest GET; a cached redirect would outlive setup itself and
+				// bounce visitors to /setup after the blog is configured.
+				c.Response().Header().Set("Cache-Control", "private, no-store")
+				return c.Redirect(http.StatusFound, "/setup")
+			}
+			// Pick the shell: the admin one (no deployment-injected third-party
+			// markup) whenever the viewer is privileged — an admin route, or any
+			// request carrying a session. A logged-in admin shows admin controls
+			// on public pages too, so the injected script must not run there
+			// either; keeping it out of every authenticated DOM shrinks the blast
+			// radius if that origin is compromised (it can't ride the session).
+			shell := fe.Shell
+			if isAdminPath(path) || hasSession(c) {
+				shell = fe.AdminShell
+			}
+			if slug, ok := strings.CutPrefix(path, "/posts/"); ok {
+				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
+				if err == nil && strings.EqualFold(post.Status, "published") {
+					{
+						htmlStr := shell
+						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
+
+						var sb strings.Builder
+						desc := post.MetaDescription.String
+						if !post.MetaDescription.Valid || desc == "" {
+							desc = post.Excerpt.String
+						}
+
+						fmt.Fprintf(&sb, "\n  <title>%s</title>", html.EscapeString(post.Title))
+						if desc != "" {
+							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
+							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
+							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:description\" content=\"%s\">", html.EscapeString(desc))
+						}
+
+						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
+						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
+						fmt.Fprintf(&sb, "\n  <meta name=\"twitter:title\" content=\"%s\">", html.EscapeString(post.Title))
+
+						scheme := c.Scheme()
+						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
+							scheme = fwd
+						}
+						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
+						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
+
+						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
+						if len(media) > 0 {
+							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
+							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
+							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
+							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
+						} else {
+							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
+						}
+
+						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
+						sb.WriteString(script)
+						sb.WriteString("\n</head>")
+						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
+
+						csp := c.Response().Header().Get("Content-Security-Policy")
+						csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+						c.Response().Header().Set("Content-Security-Policy", csp)
+
+						return c.HTML(http.StatusOK, htmlStr)
+					}
+				}
+			}
+			// Generic SPA route: serve index.html with the enabled-only plugin
+			// manifest injected so the client bootstrap always sees __PLUGINS__.
+			// shell (chosen above) already omits third-party markup for admin
+			// routes and authenticated viewers.
+			{
+				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
+				htmlStr := strings.Replace(shell, "</head>", script+"\n</head>", 1)
+
+				csp := c.Response().Header().Get("Content-Security-Policy")
+				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+				c.Response().Header().Set("Content-Security-Policy", csp)
+
+				return c.HTML(http.StatusOK, htmlStr)
+			}
+		}
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{
+			"detail": "Frontend not available — build the frontend first",
+		})
+	}, visibilityCache)
 }
