@@ -128,6 +128,38 @@ Without that first command the CLI looks for Google Chrome at a system path and 
 that has none. `.claude/skills/playwright-cli/` ships in this repository so the whole command set is
 documented where an agent will read it.
 
+A clean clone has nothing to look at, though: the server 302s every path to `/setup` until an owner
+exists, and an empty archive hides most of the public site. Get past both over the API, then drive
+the page:
+
+<!-- verify:skip drives a browser against a server this runner does not start -->
+```bash
+./scripts/run.sh &                                                          # :8001
+PW=$(node -e 'console.log(require("crypto").createHash("sha256").update("devpassword").digest("hex"))')
+curl -s -X POST http://localhost:8001/api/setup -H 'Content-Type: application/json' \
+  -d "{\"name\":\"$PW\",\"blog_title\":\"Dev Blog\",\"author_name\":\"Dev\",\"email\":\"dev@example.com\"}"
+curl -s -c cookies.txt -X POST http://localhost:8001/api/auth/login -H 'Content-Type: application/json' \
+  -d "{\"username\":\"the_owner\",\"name\":\"$PW\"}"
+curl -s -b cookies.txt -X POST http://localhost:8001/api/posts -H 'Content-Type: application/json' \
+  -d '{"title":"A post","content":"Body text.","excerpt":"Card text.","status":"published"}'
+
+npx playwright-cli open http://localhost:8001
+npx playwright-cli screenshot --filename=before.png
+```
+
+The password field is named `name` and holds a SHA-256 hex digest — the browser hashes before
+sending, and both endpoints expect what the browser would send. For the admin UI, hand the browser
+that session instead of driving the login form:
+`npx playwright-cli cookie-set session "$(awk '/session/{print $7}' cookies.txt)" --domain=localhost`.
+
+**After editing CSS or JS, re-run `./scripts/run.sh` before reloading.** Assets are served at
+content-hashed URLs read from `asset-manifest.json` at startup, so a rebuild alone leaves the page
+pointing at the old hash it has already cached, and your change appears to have done nothing.
+
+The full recipe — seeding media, which console errors are normal, and how to tell "my CSS did not
+apply" from "that text comes from a different element" — is in
+[docs/testing.md](docs/testing.md#verifying-a-ui-change).
+
 That directory is written by the tool itself and is not edited by hand, which is why `package.json`
 pins `@playwright/cli` to an exact version rather than a range. If the two ever drift — after a
 dependency bump, say — the CLI prints a warning on every run, and `npx playwright-cli install
