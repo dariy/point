@@ -13,9 +13,9 @@ cross-posting). The editor is `frontend/src/pages/light/PostEditPage.js`.
   rendered server-side; fenced code blocks highlighted via Chroma. A raw **HTML**
   formatter is available for full layout control.
 - **Text / Visual editor modes**: the Visual mode is a node model
-  (`parseNodes`/`serializeNodes`) over image sequences + text blocks — deliberately not
-  a WYSIWYG rewrite; media references serialize as bare paths matched by
-  `IMAGE_PATH_RE`.
+  (`parseNodes`/`serializeNodes` in `frontend/src/utils/postNodes.js`) over image
+  sequences + text blocks — deliberately not a WYSIWYG rewrite; media references
+  serialize as bare paths matched by `IMAGE_PATH_RE`.
 - **Per-post custom CSS** (via the `custom-css` plugin): a CSS textarea in the editor;
   `SanitizePostCSS` enforces an explicit safe-property allowlist (excluded: `position`,
   `z-index`, `background-image`, `content`, `transform`, `animation`, `transition`),
