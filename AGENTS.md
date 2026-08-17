@@ -84,6 +84,10 @@ you need to reach the dev server from another device.
 | To change… | Start at |
 |---|---|
 | An HTTP route | `api/cmd/api/routes.go` — every route, no exceptions; one `register*Routes` function per domain, called from `setupEcho` in registration order |
+| Global middleware, CSP, the HTML shells | `api/cmd/api/server.go` — `setupEcho`: Echo's own config, the `e.Use`/`e.Pre` chain, handler construction |
+| Startup, shutdown, migrations | `api/cmd/api/main.go` — process lifecycle only; services are wired in `wiring.go`, subcommands dispatched in `cli.go` |
+| A CLI subcommand (`setup`, `reset-password`, …) | `api/cmd/api/cli.go` decides which one the args name; the command itself gets its own file |
+| Serving media bytes / frontend assets | `api/cmd/api/media.go`, `api/cmd/api/assets.go`; cache headers for HTML and API responses in `api/cmd/api/cache.go` |
 | Request handling / validation | `api/internal/api/` |
 | Business logic | `api/internal/services/` |
 | Database access | `api/internal/repository/` (hand-written) and `api/internal/models/` (sqlc-generated) |

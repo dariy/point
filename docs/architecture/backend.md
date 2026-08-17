@@ -204,7 +204,7 @@ The `SchedulerService` manages recurring and deferred tasks:
 ### Running the API
 ```bash
 cd api
-go run cmd/api/main.go
+go run ./cmd/api
 ```
 
 ### Database Migrations

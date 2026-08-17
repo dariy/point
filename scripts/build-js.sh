@@ -2,7 +2,8 @@
 # Bundles and minifies JS with esbuild.
 #
 # Produces TWO complete bundle sets so the backend can serve either without a
-# rebuild (selected by the FRONTEND_DEBUG env — see api/cmd/api/main.go):
+# rebuild (selected by the FRONTEND_DEBUG env — see resolveJSDir in
+# api/cmd/api/assets.go):
 #
 #   frontend/js/        release build — minified, __DEBUG__=false. Debug logging
 #                       (utils/debug.js) collapses to no-ops and is stripped.
@@ -26,7 +27,7 @@
 # app.js and plugin chunks, and no globalThis singleton anchors needed.
 #
 # Entry names are deliberately unhashed: the server sends
-# `Cache-Control: no-cache` for everything under /assets/js (see main.go), so
+# `Cache-Control: no-cache` for everything under /assets/js (see server.go), so
 # entries revalidate on every load; hashed chunk names keep cross-chunk import
 # graphs consistent within a build.
 #
@@ -90,7 +91,7 @@ build_set() {
   manifest="$js_dir/plugin-manifest.json"
   # The esbuild metafile is a build intermediate: build-plugin-manifest.mjs is
   # its only consumer. It must NOT live in $js_dir — the server exposes that
-  # whole directory at /assets/js (main.go: e.Static), and the metafile spells
+  # whole directory at /assets/js (routes.go: e.Static), and the metafile spells
   # out the full module graph. Keep it outside the served tree.
   meta_dir="$ROOT_DIR/.build-meta"
   meta="$meta_dir/$(basename "$js_dir").json"
