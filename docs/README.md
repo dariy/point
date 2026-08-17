@@ -4,6 +4,7 @@ Welcome to the Point documentation.
 
 ## Architecture
 
+- [Repository Map](./architecture/map.md) — start here: which file do I edit?
 - [Frontend Architecture](./architecture/frontend.md) — Vanilla JS Component System
 - [Backend Architecture](./architecture/backend.md) — Go & SQLC Service Layer
 

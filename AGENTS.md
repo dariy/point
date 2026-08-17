@@ -98,6 +98,8 @@ you need to reach the dev server from another device.
 | A plugin | `api/internal/plugins/registry.go` + `frontend/src/plugins/<id>/` |
 | Themes | `frontend/themes/*.css` — a theme is a CSS custom-property file, not a template |
 
+The fuller version of this table — the whole request path, where plugins, themes, migrations and MCP
+attach, and which files are generated — is [docs/architecture/map.md](docs/architecture/map.md).
 Architecture in depth: [docs/architecture/backend.md](docs/architecture/backend.md),
 [docs/architecture/frontend.md](docs/architecture/frontend.md). Every significant feature has a doc
 under [docs/features/](docs/features/) that records what was built **and what was considered and
