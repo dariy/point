@@ -26,6 +26,7 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 
 | Task | Command |
 |---|---|
+| Environment check | `./scripts/doctor.sh` — PASS/WARN/FAIL per tool, `--json` for machine use; exits non-zero only when a build is impossible |
 | Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
 | Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 <!-- verify:skip needs Docker; the image is built by the docker-smoke job --> |
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
@@ -37,7 +38,10 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 | Release tarball | `./scripts/build-tarball.sh` — `dist/point-linux-{amd64,arm64}.tar.gz`, what `install.sh --method=native` downloads <!-- verify:skip cross-compiles both arches; the release workflow builds and boots it on every tag --> |
 
 `check.sh` also needs `golangci-lint` and `govulncheck` on your `PATH`; everything else in this
-table runs with just Go and Node.
+table runs with just Go and Node. `doctor.sh` is where that becomes visible before a failing run
+does it for you — it reports every version this repo requires against what you have, reading them
+from `api/go.mod` and `.github/workflows/test.yml` so it cannot disagree with CI, and prints the
+install line for whatever is missing.
 
 Every command in this file, in [CONTRIBUTING.md](CONTRIBUTING.md) and in [QUICKSTART.md](QUICKSTART.md)
 is executed on every PR by the `docs-commands` job — locally, that is `./scripts/check-docs.sh`. If a

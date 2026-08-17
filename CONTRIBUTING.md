@@ -8,7 +8,8 @@ change easy to verify: state what you ran, and what you saw.
 ## Getting the project running
 
 You need Go (the version in `api/go.mod`), Node 22+, and `git`. Nothing else — no database to
-install, no services to configure.
+install, no services to configure. `./scripts/doctor.sh` checks all of that on your machine and
+says what to install if something is missing or too old.
 
 <!-- verify:skip clones the repository over the network, then serves until interrupted -->
 ```bash
@@ -37,7 +38,8 @@ and `--fix` applies the lint autofixes; run it once without either before openin
 
 It is the one command that needs more than Go and Node: `golangci-lint` (the v2 module path) and
 `govulncheck` have to be on your `PATH` — `.github/workflows/test.yml` pins the versions CI uses.
-Without them the gate reports those steps as failures.
+Without them the gate reports those steps as failures; `./scripts/doctor.sh` warns you about that
+in advance and prints the `go install` line for each.
 
 For a tighter loop, `./scripts/run-tests.sh` takes `--unit`, `--race`, `--bench` and `--html`, and
 `npm run test:frontend` runs just the frontend suite.

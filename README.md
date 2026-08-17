@@ -91,6 +91,10 @@ The app is configured via environment variables (or a `.env` file in the working
   dependencies itself on first run
 - Docker or Podman for container builds
 
+`./scripts/doctor.sh` checks all of the above against your machine — versions, the tools
+`./scripts/check.sh` needs, port 8001, and whether `data/` is writable — and prints the install
+line for anything missing (`--json` for machine use).
+
 Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md) for the change loop, and
 [AGENTS.md](AGENTS.md) for the project's conventions and a map of where things live.
 
