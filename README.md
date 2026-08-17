@@ -86,14 +86,19 @@ The app is configured via environment variables (or a `.env` file in the working
 
 ### Prerequisites
 
-- Go 1.26.3+ for local backend development
+- Go 1.26.6+ (the version in `api/go.mod`) for local backend development
+- Node 22+ for the frontend bundles — `scripts/run.sh` installs the npm dev
+  dependencies itself on first run
 - Docker or Podman for container builds
+
+Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md) for the change loop, and
+[AGENTS.md](AGENTS.md) for the project's conventions and a map of where things live.
 
 ## Project structure
 
 ```
 api/          Go backend (Echo v4, sqlc, SQLite)
-frontend/     Vanilla JS SPA (no build step for development)
+frontend/     Vanilla JS SPA (no framework; esbuild bundles src/ into js/)
 build/        Dockerfile, compose file, rebuild script
 scripts/      Dev scripts (run, checks, tests, CSS/JS bundling)
 quickstart/   Quickstart docker-compose and install script

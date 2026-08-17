@@ -27,9 +27,11 @@ jobs:
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 
       - name: golangci-lint
-        # --build-tags integration matches scripts/check.sh; without it the
-        # integration-tagged test files are not linted at all.
-        run: golangci-lint run --timeout=5m --build-tags integration
+        # No build tags, matching scripts/check.sh. Integration test files are
+        # constrained with `//go:build !unit`, so the default build already
+        # includes them — it is `-tags=unit` that excludes them, and no file in
+        # this repo declares an `integration` tag.
+        run: golangci-lint run --timeout=5m
         working-directory: api
 
   js:

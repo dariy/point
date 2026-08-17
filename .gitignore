@@ -1,6 +1,18 @@
 # Environments
 .env
 .env.*
+# …but the template is meant to be read. A negation only works after the pattern
+# that ignored the file, so keep this line below `.env.*`.
+!.env.example
+
+# Agent instructions ship with this repo. Many developers ignore these names
+# globally (~/.gitignore_global); patterns here take precedence over that file,
+# which is what keeps AGENTS.md tracked for everyone who clones.
+!AGENTS.md
+!CLAUDE.md
+# Maintainer-only overrides stay local.
+CLAUDE.local.md
+GEMINI.md
 
 # IDE
 *~
