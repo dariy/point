@@ -41,6 +41,8 @@ const SETTING_GROUPS = [
       "default_theme",
       "show_view_counts",
       "exif_visibility",
+      "thumbnail_width",
+      "thumbnail_height",
     ],
   },
 ];
@@ -91,12 +93,24 @@ export default class SettingsPage extends Component {
       ? `<div class="settings-toggles">${toggles}</div>`
       : "";
 
+    let extra = "";
+    if (group.title === "Display") {
+      extra = `
+        <div class="form-group" style="margin-top: 2rem;">
+          <label class="form-label">Maintenance</label>
+          <button type="button" class="btn btn-secondary" id="rebuild-thumbnails-btn">Rebuild Thumbnails</button>
+          <p class="form-hint" style="margin-top: 0.5rem;">Regenerate thumbnails for all images with the current dimensions (this will bust the Cloudflare cache because the filenames change to match the dimensions).</p>
+        </div>
+      `;
+    }
+
     return `
       <section class="settings-group" id="group-${group.title.toLowerCase().replace(/\s+/g, "-")}">
         <h2 class="settings-group-title">${group.title}</h2>
         <div class="settings-group-body">
           ${inputs}
           ${toggleSection}
+          ${extra}
         </div>
       </section>`;
   }
@@ -122,6 +136,28 @@ export default class SettingsPage extends Component {
       setTimeout(() => {
         this.container.querySelector(`#${id}`)?.scrollIntoView({ behavior: "smooth" });
       }, 100);
+    }
+
+    const rebuildBtn = this.container.querySelector("#rebuild-thumbnails-btn");
+    if (rebuildBtn) {
+      rebuildBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const btn = e.target;
+        btn.disabled = true;
+        const ogText = btn.textContent;
+        btn.textContent = "Rebuilding…";
+        try {
+          const { rebuildThumbnails } = await import('../../api/media.js');
+          const stats = await rebuildThumbnails(false);
+          store.set("toast", { message: `Rebuilt thumbnails. Processed: ${stats.processed}, Skipped: ${stats.skipped}, Errors: ${stats.errors}`, type: "success" });
+        } catch (err) {
+          console.error("[SettingsPage] rebuild thumbnails error:", err);
+          store.set("toast", { message: err.message || "Failed to rebuild thumbnails.", type: "error" });
+        } finally {
+          btn.disabled = false;
+          btn.textContent = ogText;
+        }
+      });
     }
   }
 
