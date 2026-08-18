@@ -60,8 +60,12 @@ sh update.sh
 Alternatively, you can update manually using standard Compose commands:
 
 ```bash
-docker compose pull && docker compose up -d
+docker compose pull && docker compose up -d --force-recreate
 ```
+
+`--force-recreate` matters on Podman: `podman compose up -d` keeps the existing
+container running even when `pull` has fetched a newer image, so without the flag
+the update silently does nothing. Your data in `./data` is untouched either way.
 
 *Note: Point will show a notification in the admin panel whenever a new version is available.*
 
@@ -71,7 +75,7 @@ You can customize Point by editing the `.env` file.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `DEPLOY_PORT` | `8000` | The host port Point listens on |
+| `APP_PORT` | `8000` | The host port Point listens on |
 | `APP_URL` | (None) | The external URL of your blog (e.g., https://blog.example.com) |
 | `DATA_PATH` | `./data` | Directory where the database, photos, and backups are stored |
 | `PHOTO_LIBRARY_PATH` | (None) | Path to your existing photo library (mounted read-only) |
@@ -202,8 +206,8 @@ For full details, including carousel publishing and caption templates, see
 
 ## Troubleshooting
 
-1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
-2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `DEPLOY_PORT`.
+1. **Port already in use:** Change `APP_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
+2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `APP_PORT`.
 3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container: download
    [`change-password.sh`](quickstart/cli/change-password.sh) into your install directory
    (next to `docker-compose.yml`) and run:

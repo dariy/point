@@ -25,6 +25,9 @@ fi
 echo "Updating Point..."
 
 $COMPOSE pull
-$COMPOSE up -d
+# --force-recreate is required: podman-compose leaves an existing container
+# running even after `pull` fetched a newer image, so the update would silently
+# do nothing. Docker Compose recreates on its own, and the flag is a no-op there.
+$COMPOSE up -d --force-recreate
 
 echo "Done! Point has been updated."
