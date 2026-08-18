@@ -11,10 +11,11 @@ Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS
 ## Quick showcase
 [UI Demo](https://demo.point.photos)
 
-![Post list + post details](./docs/images/post-list-post-details.gif) <img src="./docs/images/mobile-post-list.png" height="540"> 
-![Post list + zoom + scheduled posts](./docs/images/post-list-zoom-and-scheduled-posts.gif) <img src="./docs/images/mobile-post-details.png" height="540">
+### Post list
+<img src="./docs/images/post-list-post.png" height="400"> <img src="./docs/images/mobile-post-list.png" height="400">
 
-![Map](./docs/images/map.gif)
+### Post datails
+<img src="./docs/images/post-details.png" height="400"> <img src="./docs/images/mobile-post-details.png" height="400">
 
 ## Quick start
 
