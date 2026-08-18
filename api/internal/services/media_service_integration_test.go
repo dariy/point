@@ -326,6 +326,33 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 	if updatedPath != barePath+"?thumb" {
 		t.Errorf("expected post thumbnail_path updated to %s, got %s", barePath+"?thumb", updatedPath)
 	}
+
+	// 4. Update dimensions in config and rebuild
+	service.cfg.ThumbnailWidth = 200
+	service.cfg.ThumbnailHeight = 200
+	// Re-fetch media to get its current ThumbnailPath
+	mediaAfterRebuild, _ := service.GetMediaByID(ctx, media.ID)
+
+	stats, err = service.RebuildThumbnails(ctx, false)
+	if err != nil {
+		t.Fatalf("RebuildThumbnails with new dimensions failed: %v", err)
+	}
+	if stats["processed"] != 1 {
+		t.Errorf("expected 1 processed after dimension change, got %d", stats["processed"])
+	}
+
+	// Verify old thumbnail file was deleted
+	if mediaAfterRebuild.ThumbnailPath.Valid {
+		oldThumbFull := filepath.Join(tmpDir, "media", mediaAfterRebuild.ThumbnailPath.String)
+		if _, err := os.Stat(oldThumbFull); !os.IsNotExist(err) {
+			t.Errorf("expected old thumbnail %s to be deleted from disk", oldThumbFull)
+		}
+	}
+
+	mediaFinal, _ := service.GetMediaByID(ctx, media.ID)
+	if mediaFinal.ThumbnailPath.String == mediaAfterRebuild.ThumbnailPath.String {
+		t.Errorf("expected thumbnail path to change, got %s", mediaFinal.ThumbnailPath.String)
+	}
 }
 
 func TestMediaService_BulkDelete(t *testing.T) {
@@ -1402,11 +1429,24 @@ func TestSquareThumbnail_Video(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat square thumb: %v", err)
 	}
+
+	// Change dimensions so the base name changes, testing deletion of the old poster
+	service.cfg.ThumbnailWidth = 200
+	service.cfg.ThumbnailHeight = 200
+
 	if _, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 320, 240)); err != nil {
 		t.Fatalf("SaveVideoPoster (replace): %v", err)
 	}
 	if _, err := os.Stat(sqPath); !os.IsNotExist(err) {
 		t.Errorf("expected cached square variant to be dropped, stat err = %v (was modified %v)", err, before.ModTime())
+	}
+
+	// Verify old poster thumbnail file was deleted
+	if withPoster.ThumbnailPath.Valid {
+		oldPosterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
+		if _, err := os.Stat(oldPosterFull); !os.IsNotExist(err) {
+			t.Errorf("expected old poster thumbnail %s to be deleted from disk", oldPosterFull)
+		}
 	}
 }
 
