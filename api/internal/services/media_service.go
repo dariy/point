@@ -186,11 +186,10 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
 
-			// Generate thumbnail (skip if either dimension is 0 — use original instead)
 			thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
 			if thumbW > 0 && thumbH > 0 {
 				thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
-				thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
+				thumbFilename := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)), thumbW, thumbH)
 				thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
 				thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
 				if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
@@ -320,13 +319,16 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
 
-			thumb := imaging.Fill(src, s.cfg.ThumbnailWidth, s.cfg.ThumbnailHeight, imaging.Center, imaging.Lanczos)
-			thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
-			thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
-			thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
+			thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
+			if thumbW > 0 && thumbH > 0 {
+				thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
+				thumbFilename := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)), thumbW, thumbH)
+				thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
+				thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
 
-			if err := imaging.Save(thumb, thumbFull); err == nil {
-				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+				if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
+					thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+				}
 			}
 		}
 		// Extract EXIF
@@ -770,7 +772,7 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 
 	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
 	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
-	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
+	baseName := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)), thumbW, thumbH)
 	thumbRel := filepath.Join("thumbnails", filepath.Dir(relUnder), baseName)
 	thumbFull := filepath.Clean(filepath.Join(mediaBase, thumbRel))
 	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
@@ -789,6 +791,10 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 	// keys its freshness off the source file's mtime, and a replaced poster is
 	// written to the same path.
 	_ = os.Remove(s.squareThumbPath(media, AtlasThumbSize))
+
+	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != thumbRel {
+		_ = os.Remove(filepath.Join(mediaBase, media.ThumbnailPath.String))
+	}
 
 	return s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{
 		ID:            media.ID,
@@ -923,13 +929,14 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			continue
 		}
 
-		thumb := imaging.Fill(src, s.thumbnailWidth(ctx), s.thumbnailHeight(ctx), imaging.Center, imaging.Lanczos)
+		thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
+		thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
 
 		// Derive thumbnail path from original
 		origRel := m.OriginalPath
 		relUnder := strings.TrimPrefix(origRel, "originals/")
 		relDir := filepath.Dir(relUnder)
-		baseName := strings.TrimSuffix(filepath.Base(origRel), filepath.Ext(origRel)) + ".jpg"
+		baseName := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(filepath.Base(origRel), filepath.Ext(origRel)), thumbW, thumbH)
 		thumbRel := filepath.Join("thumbnails", relDir, baseName)
 		thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
 
@@ -940,6 +947,10 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 		if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
 			stats["errors"]++
 			continue
+		}
+
+		if m.ThumbnailPath.Valid && m.ThumbnailPath.String != thumbRel {
+			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
 		}
 
 		_, _ = s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{

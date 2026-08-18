@@ -91,12 +91,15 @@ export default class SettingsPage extends Component {
       ? `<div class="settings-toggles">${toggles}</div>`
       : "";
 
+    let extra = "";
+
     return `
       <section class="settings-group" id="group-${group.title.toLowerCase().replace(/\s+/g, "-")}">
         <h2 class="settings-group-title">${group.title}</h2>
         <div class="settings-group-body">
           ${inputs}
           ${toggleSection}
+          ${extra}
         </div>
       </section>`;
   }
@@ -123,6 +126,7 @@ export default class SettingsPage extends Component {
         this.container.querySelector(`#${id}`)?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
+
   }
 
   beforeUnmount() {

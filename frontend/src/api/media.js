@@ -186,3 +186,13 @@ export function updateMediaEXIF(id, fields) {
 export function revertMediaEXIF(id) {
   return api.post(`/api/media/${id}/revert-exif`, {});
 }
+
+/**
+ * Rebuild thumbnails for all images.
+ * @param {boolean} onlyMissing
+ * @returns {Promise<{ processed: number, skipped: number, errors: number }>}
+ */
+export function rebuildThumbnails(onlyMissing = false) {
+  return api.post(`/api/media/thumbnails/rebuild?only_missing=${onlyMissing}`);
+}
+
