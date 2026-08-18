@@ -36,6 +36,7 @@ import { ApiKeysSection } from "./sections/ApiKeysSection.js";
 import { OfflineDataSection } from "./sections/OfflineDataSection.js";
 import { SyncQueueSection } from "./sections/SyncQueueSection.js";
 import { VersionCheckSection } from "./sections/VersionCheckSection.js";
+import { RebuildThumbnailsSection } from "./sections/RebuildThumbnailsSection.js";
 
 // Section key → component class. Referenced by PLUGIN_SETTINGS in PluginsPage.
 const SECTIONS = {
@@ -46,6 +47,7 @@ const SECTIONS = {
   "offline-data": OfflineDataSection,
   "sync-queue": SyncQueueSection,
   "version-check": VersionCheckSection,
+  "rebuild-thumbnails": RebuildThumbnailsSection,
 };
 
 export class PluginSettingsPanel extends Component {
