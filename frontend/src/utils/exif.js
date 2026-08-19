@@ -101,15 +101,22 @@ export function buildExifMap(media = []) {
   return map;
 }
 
-/** Normalise an <img> src to the public media path used as the map key. */
+/**
+ * Normalise an <img> src to the public media path used as the map key.
+ *
+ * The map is keyed by bare media path, while the src on the page names a rung of
+ * the thumbnail ladder — `/2026/03/p.jpg?s=512&v=…`. `pathname` drops the query
+ * along with the origin, which is the whole of the work; the hand-rolled branch
+ * is only for a caller with no document to resolve against (node tests).
+ */
 export function normalizeSrc(src = "") {
-  let s = src;
   try {
-    s = new URL(src, window.location.origin).pathname;
+    return new URL(src, window.location.origin).pathname;
   } catch {
-    /* already a relative path */
+    const s = String(src);
+    const q = s.indexOf("?");
+    return q >= 0 ? s.slice(0, q) : s;
   }
-  return s.replace(/\?(?:thumb)$/, "");
 }
 
 /** Resolve the metadata object for an image src, or null. */

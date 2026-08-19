@@ -113,6 +113,19 @@ describe('exif', () => {
       assert.strictEqual(normalizeSrc('/2026/03/p.jpg'), '/2026/03/p.jpg');
     });
 
+    // The map is keyed by bare media path; the src on the page names a rung of
+    // the thumbnail ladder. Every query shape has to normalise to the same key,
+    // or a variant image quietly loses its EXIF affordance.
+    test('strips a ladder rung and its generation token', () => {
+      assert.strictEqual(
+        normalizeSrc('https://example.com/2026/03/p.jpg?s=512&v=c0ffee01'),
+        '/2026/03/p.jpg',
+      );
+      assert.strictEqual(normalizeSrc('/2026/03/p.jpg?s=1024&v=c0ffee01'), '/2026/03/p.jpg');
+      assert.strictEqual(normalizeSrc('/2026/03/p.jpg?s=128'), '/2026/03/p.jpg');
+      assert.strictEqual(normalizeSrc('/2026/03/p.jpg#exif'), '/2026/03/p.jpg');
+    });
+
     test('resolves metadata by normalized path', () => {
       const map = buildExifMap([
         { path: '/2026/03/p.jpg', metadata: META },
@@ -121,6 +134,15 @@ describe('exif', () => {
       assert.strictEqual(metadataForSrc(map, 'https://example.com/2026/03/p.jpg?thumb'), META);
       assert.strictEqual(metadataForSrc(map, '/2026/03/noexif.jpg'), null);
       assert.strictEqual(metadataForSrc(map, '/missing.jpg'), null);
+    });
+
+    test('resolves metadata for a ladder rung', () => {
+      const map = buildExifMap([{ path: '/2026/03/p.jpg', metadata: META }]);
+      assert.strictEqual(
+        metadataForSrc(map, 'https://example.com/2026/03/p.jpg?s=512&v=c0ffee01'),
+        META,
+      );
+      assert.strictEqual(metadataForSrc(map, '/2026/03/p.jpg?s=256&v=c0ffee01'), META);
     });
   });
 
