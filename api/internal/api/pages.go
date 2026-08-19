@@ -1057,9 +1057,9 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	})
 }
 
-// atlasThumbURL rewrites a preview media URL to request the small square
-// thumbnail the atlas cloud chips display. Local media paths get a `?thumb=N`
-// query (replacing any existing thumb marker, e.g. a post whose thumbnail_path
+// atlasThumbURL rewrites a preview media URL to request the smallest ladder
+// rung, which is what the atlas cloud chips display. Local media paths get a
+// `?s=N` query (replacing any existing query, e.g. a post whose thumbnail_path
 // already carries `?thumb`); external URLs are returned unchanged since the
 // server can't resize media it doesn't host.
 func atlasThumbURL(u string) string {
@@ -1069,7 +1069,7 @@ func atlasThumbURL(u string) string {
 	if i := strings.IndexByte(u, '?'); i >= 0 {
 		u = u[:i]
 	}
-	return fmt.Sprintf("%s?thumb=%d", u, services.AtlasThumbSize)
+	return fmt.Sprintf("%s?s=%d", u, services.AtlasVariantSize)
 }
 
 // GetMapPage returns all tags that have coordinates, categorised by type

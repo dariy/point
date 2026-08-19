@@ -1520,8 +1520,8 @@ func TestSaveVideoPoster(t *testing.T) {
 		t.Fatal("expected thumbnail_path to be set")
 	}
 
-	// The poster lands where an image upload's thumbnail would, so ?thumb and
-	// every other consumer of thumbnail_path finds it unchanged.
+	// The poster lands in the poster tree, which is a different root from the
+	// derived variants — purging those must never reach it.
 	if !strings.HasPrefix(updated.ThumbnailPath.String, "thumbnails/") ||
 		!strings.HasSuffix(updated.ThumbnailPath.String, ".jpg") {
 		t.Errorf("unexpected thumbnail path %q", updated.ThumbnailPath.String)
@@ -1531,18 +1531,11 @@ func TestSaveVideoPoster(t *testing.T) {
 		t.Fatalf("poster file missing: %v", err)
 	}
 
-	// Stored at the configured thumbnail box, not at capture resolution.
-	f, err := os.Open(thumbFull)
-	if err != nil {
-		t.Fatalf("open poster: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	cfgImg, _, err := image.DecodeConfig(f)
-	if err != nil {
-		t.Fatalf("decode poster: %v", err)
-	}
-	if cfgImg.Width != 400 || cfgImg.Height != 300 {
-		t.Errorf("expected poster resized to 400x300, got %dx%d", cfgImg.Width, cfgImg.Height)
+	// A capture below the poster box is stored as captured: Fit never upscales,
+	// and cropping it to a fixed box is what used to make video thumbnails
+	// silently non-aspect-preserving.
+	if w, h := imageDims(t, thumbFull); w != 640 || h != 480 {
+		t.Errorf("expected poster stored at 640x480, got %dx%d", w, h)
 	}
 
 	// The row really was updated, not just the returned copy.
@@ -1591,7 +1584,7 @@ func TestSaveVideoPoster_Rejects(t *testing.T) {
 	})
 }
 
-func TestSquareThumbnail_Video(t *testing.T) {
+func TestVariant_Video(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
 	defer func() {
 		_ = os.RemoveAll(tmpDir)
@@ -1601,59 +1594,181 @@ func TestSquareThumbnail_Video(t *testing.T) {
 
 	video := uploadVideo(t, service, "atlas.mp4")
 
-	// Without a poster there is nothing to square: the server cannot decode the
-	// video itself.
-	if _, err := service.SquareThumbnail(ctx, video, AtlasThumbSize); !errors.Is(err, ErrNoPoster) {
+	// Without a poster there is nothing to derive from: the server cannot
+	// decode the video itself.
+	if _, err := service.Variant(ctx, video, AtlasVariantSize); !errors.Is(err, ErrNoPoster) {
 		t.Errorf("expected ErrNoPoster, got %v", err)
 	}
 
-	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 640, 480))
+	// A 16:9 frame. The stored poster used to be a 4:3 centre crop of this,
+	// which made every video's thumbnails silently non-aspect-preserving.
+	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 1920, 1080))
 	if err != nil {
 		t.Fatalf("SaveVideoPoster: %v", err)
 	}
 
-	sqPath, err := service.SquareThumbnail(ctx, withPoster, AtlasThumbSize)
-	if err != nil {
-		t.Fatalf("SquareThumbnail: %v", err)
-	}
-	f, err := os.Open(sqPath)
-	if err != nil {
-		t.Fatalf("open square thumb: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	cfgImg, _, err := image.DecodeConfig(f)
-	if err != nil {
-		t.Fatalf("decode square thumb: %v", err)
-	}
-	if cfgImg.Width != AtlasThumbSize || cfgImg.Height != AtlasThumbSize {
-		t.Errorf("expected %dx%[1]d square, got %dx%d", AtlasThumbSize, cfgImg.Width, cfgImg.Height)
+	posterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
+	if w, h := imageDims(t, posterFull); w != posterMaxSide || h != posterMaxSide*1080/1920 {
+		t.Errorf("stored poster = %dx%d, want %dx%d — it must not be cropped",
+			w, h, posterMaxSide, posterMaxSide*1080/1920)
 	}
 
-	// A replacement poster must invalidate the cached square variant rather than
-	// leave the atlas showing the old frame.
-	before, err := os.Stat(sqPath)
+	rung, err := service.Variant(ctx, withPoster, AtlasVariantSize)
 	if err != nil {
-		t.Fatalf("stat square thumb: %v", err)
+		t.Fatalf("Variant: %v", err)
+	}
+	if w, h := imageDims(t, rung); w != 128 || h != 72 {
+		t.Errorf("video rung = %dx%d, want 128x72 (16:9 preserved)", w, h)
 	}
 
-	// Change dimensions so the base name changes, testing deletion of the old poster
-	service.cfg.ThumbnailWidth = 200
-	service.cfg.ThumbnailHeight = 200
-
+	// A replacement poster must invalidate the cached rungs rather than leave
+	// the grid showing the old frame.
 	if _, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 320, 240)); err != nil {
 		t.Fatalf("SaveVideoPoster (replace): %v", err)
 	}
-	if _, err := os.Stat(sqPath); !os.IsNotExist(err) {
-		t.Errorf("expected cached square variant to be dropped, stat err = %v (was modified %v)", err, before.ModTime())
+	if _, err := os.Stat(rung); !os.IsNotExist(err) {
+		t.Errorf("expected cached rung to be dropped after a re-capture, stat err = %v", err)
+	}
+}
+
+// imageDims decodes just the header of an image file.
+func imageDims(t *testing.T, path string) (int, int) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
+	}
+	defer func() { _ = f.Close() }()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	return cfg.Width, cfg.Height
+}
+
+// Purging the derived tree — what a thumbnail rebuild does — must not touch a
+// video's poster frame. There is no server-side video decoder, so a lost
+// poster can only be recovered by an admin re-capturing the frame in a browser
+// for every video on the install. The two trees are separate roots precisely
+// so this cannot happen by accident.
+func TestPurgingVariantsLeavesVideoPostersIntact(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+	ctx := context.Background()
+
+	video := uploadVideo(t, service, "keepme.mp4")
+	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 640, 480))
+	if err != nil {
+		t.Fatalf("SaveVideoPoster: %v", err)
+	}
+	if _, err := service.Variant(ctx, withPoster, AtlasVariantSize); err != nil {
+		t.Fatalf("Variant: %v", err)
 	}
 
-	// Verify old poster thumbnail file was deleted
-	if withPoster.ThumbnailPath.Valid {
-		oldPosterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
-		if _, err := os.Stat(oldPosterFull); !os.IsNotExist(err) {
-			t.Errorf("expected old poster thumbnail %s to be deleted from disk", oldPosterFull)
+	posterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
+	if _, err := os.Stat(posterFull); err != nil {
+		t.Fatalf("poster missing before purge: %v", err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(tmpDir, "media", VariantsRoot)); err != nil {
+		t.Fatalf("purge variants: %v", err)
+	}
+
+	if _, err := os.Stat(posterFull); err != nil {
+		t.Errorf("poster destroyed by a variant purge: %v", err)
+	}
+	// And the poster is still enough to rebuild the ladder from.
+	if _, err := service.Variant(ctx, withPoster, AtlasVariantSize); err != nil {
+		t.Errorf("Variant after purge: %v", err)
+	}
+}
+
+// Every lifecycle path that destroys or moves a source must sweep all four
+// rungs. A rung has no DB row, so one left behind is invisible and permanent.
+func TestLifecycleSweepsAllVariants(t *testing.T) {
+	ctx := context.Background()
+
+	rungPaths := func(tmpDir string, m models.Medium) []string {
+		var paths []string
+		for _, size := range VariantSizes {
+			paths = append(paths, filepath.Join(tmpDir, "media", VariantRelPath(m.OriginalPath, size)))
+		}
+		return paths
+	}
+	assertGone := func(t *testing.T, paths []string) {
+		t.Helper()
+		for _, p := range paths {
+			if _, err := os.Stat(p); !os.IsNotExist(err) {
+				t.Errorf("variant %s survived, stat err = %v", p, err)
+			}
 		}
 	}
+	upload := func(t *testing.T, service *MediaService, name string) models.Medium {
+		t.Helper()
+		m, err := service.UploadFile(ctx, UploadFileParams{
+			Content:  jpegBytes(t, 2000, 1500),
+			Filename: name,
+			MimeType: "image/jpeg",
+		})
+		if err != nil {
+			t.Fatalf("UploadFile: %v", err)
+		}
+		for _, size := range VariantSizes {
+			if _, err := service.Variant(ctx, m, size); err != nil {
+				t.Fatalf("Variant(%d): %v", size, err)
+			}
+		}
+		return m
+	}
+
+	t.Run("delete", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "del.jpg")
+		paths := rungPaths(tmpDir, m)
+		if err := service.DeleteMedia(ctx, m.ID); err != nil {
+			t.Fatalf("DeleteMedia: %v", err)
+		}
+		assertGone(t, paths)
+	})
+
+	t.Run("bulk delete", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "bulk.jpg")
+		paths := rungPaths(tmpDir, m)
+		if _, err := service.BulkDeleteMedia(ctx, []int64{m.ID}); err != nil {
+			t.Fatalf("BulkDeleteMedia: %v", err)
+		}
+		assertGone(t, paths)
+	})
+
+	t.Run("orphan cleanup", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "orphan.jpg")
+		paths := rungPaths(tmpDir, m)
+		if _, _, err := service.CleanupOrphaned(ctx); err != nil {
+			t.Fatalf("CleanupOrphaned: %v", err)
+		}
+		assertGone(t, paths)
+	})
+
+	t.Run("rename", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "before.jpg")
+		paths := rungPaths(tmpDir, m)
+		renamed, err := service.RenameMedia(ctx, m.ID, "after.jpg")
+		if err != nil {
+			t.Fatalf("RenameMedia: %v", err)
+		}
+		// The rungs were keyed on the old path, so they are orphans now.
+		assertGone(t, paths)
+		// And the new name regenerates on demand.
+		if _, err := service.Variant(ctx, renamed, AtlasVariantSize); err != nil {
+			t.Errorf("Variant after rename: %v", err)
+		}
+	})
 }
 
 func TestSanitizeOrigin_InvalidURL(t *testing.T) {

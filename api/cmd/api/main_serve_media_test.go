@@ -264,11 +264,17 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 
 // ── Thumbnail serving ──────────────────────────────────────────────────────
 
-func serveThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
+// serveQueryRequest issues an authenticated GET for a media path with an
+// arbitrary query string (no leading "?").
+func serveQueryRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, query string) *httptest.ResponseRecorder {
 	t.Helper()
 	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb", nil)
+	url := "/" + year + "/" + month + "/" + filename
+	if query != "" {
+		url += "?" + query
+	}
+	req := httptest.NewRequest(http.MethodGet, url, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("year", "month", "filename")
@@ -283,12 +289,51 @@ func serveThumbRequest(t *testing.T, storagePath string, repo repository.Reposit
 	return rec
 }
 
-func TestServeSimplifiedMedia_ThumbNoThumbnail(t *testing.T) {
+// serveThumbRequest issues an authenticated GET for a bare `?thumb`.
+func serveThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
+	t.Helper()
+	return serveQueryRequest(t, storagePath, repo, year, month, filename, "thumb")
+}
+
+// writeJPEG puts a real, decodable original on disk so variants can be
+// generated from it, and returns its path.
+func writeJPEG(t *testing.T, storagePath, year, month, filename string, w, h int) string {
+	t.Helper()
+	dir := filepath.Join(storagePath, "media", "originals", year, month)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, filename)
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := jpeg.Encode(f, image.NewRGBA(image.Rect(0, 0, w, h)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// publicImage inserts a public image row and writes a real original for it.
+func publicImage(t *testing.T, repo repository.Repository, storage, year, month, filename string, w, h int) {
+	t.Helper()
+	createPublicMedia(t, repo, year, month, filename)
+	if _, err := repo.DB().Exec(`UPDATE media SET file_type='image' WHERE original_path=?`,
+		"originals/"+year+"/"+month+"/"+filename); err != nil {
+		t.Fatal(err)
+	}
+	writeJPEG(t, storage, year, month, filename, w, h)
+}
+
+func TestServeSimplifiedMedia_ThumbNoSource(t *testing.T) {
 	repo, storage := newMediaRepo(t)
 	createPublicMedia(t, repo, "2024", "01", "no-thumb.jpg")
 	rec := serveThumbRequest(t, storage, repo, "2024", "01", "no-thumb.jpg")
 	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected 404 when no thumbnail, got %d", rec.Code)
+		t.Errorf("expected 404 when there is nothing to derive a thumbnail from, got %d", rec.Code)
 	}
 }
 
@@ -317,30 +362,20 @@ func TestServeSimplifiedMedia_ThumbFileMissing(t *testing.T) {
 
 func TestServeSimplifiedMedia_ThumbServed(t *testing.T) {
 	repo, storage := newMediaRepo(t)
-	ctx := context.Background()
-	thumbRel := "thumbnails/2024/01/photo_thumb.jpg"
-	m, err := repo.CreateMedia(ctx, models.CreateMediaParams{
-		Filename:      "photo.jpg",
-		OriginalPath:  "originals/2024/01/photo.jpg",
-		ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
-		Checksum:      "photo-thumb-chk",
-		UploadedAt:    time.Now().UTC(),
-	})
-	if err != nil {
-		t.Fatalf("CreateMedia: %v", err)
-	}
-	if _, err := repo.DB().ExecContext(ctx, `UPDATE media SET is_public=1 WHERE id=?`, m.ID); err != nil {
-		t.Fatalf("set is_public: %v", err)
-	}
-
-	// Create the thumbnail file on disk.
-	thumbFile := filepath.Join(storage, "media", thumbRel)
-	_ = os.MkdirAll(filepath.Dir(thumbFile), 0755)
-	_ = os.WriteFile(thumbFile, []byte("thumb-data"), 0644)
+	publicImage(t, repo, storage, "2024", "01", "photo.jpg", 1200, 800)
 
 	rec := serveThumbRequest(t, storage, repo, "2024", "01", "photo.jpg")
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 serving thumbnail, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 200 serving thumbnail, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// A bare `?thumb` predates the ladder and has no size in it, so it resolves
+	// to the default rung — the URL is in published post content and cannot be
+	// migrated.
+	cached := filepath.Join(storage, "media",
+		services.VariantRelPath("originals/2024/01/photo.jpg", services.DefaultVariantSize))
+	if _, err := os.Stat(cached); err != nil {
+		t.Errorf("expected the default rung at %s: %v", cached, err)
 	}
 }
 
@@ -379,7 +414,7 @@ func TestServeSimplifiedMedia_ThumbVideoNoPoster(t *testing.T) {
 }
 
 // TestServeSimplifiedMedia_ThumbVideoWithPoster is the payoff: once a poster is
-// stored, a video's ?thumb serves that still like any image thumbnail.
+// stored, a video's thumbnail request derives its rungs from that still.
 func TestServeSimplifiedMedia_ThumbVideoWithPoster(t *testing.T) {
 	repo, storage := newMediaRepo(t)
 	ctx := context.Background()
@@ -400,76 +435,216 @@ func TestServeSimplifiedMedia_ThumbVideoWithPoster(t *testing.T) {
 		t.Fatalf("set is_public: %v", err)
 	}
 
+	// A real poster frame, since the ladder is now cut from it.
 	thumbFile := filepath.Join(storage, "media", thumbRel)
-	_ = os.MkdirAll(filepath.Dir(thumbFile), 0755)
-	_ = os.WriteFile(thumbFile, []byte("poster-data"), 0644)
-
-	rec := serveThumbRequest(t, storage, repo, "2024", "01", "clip.mp4")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 serving the poster, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec.Body.String() != "poster-data" {
-		t.Errorf("expected the poster bytes, got %q", rec.Body.String())
-	}
-}
-
-// serveSizedThumbRequest issues an authenticated GET for ?thumb=<size>.
-func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, size string) *httptest.ResponseRecorder {
-	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb="+size, nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("year", "month", "filename")
-	c.SetParamValues(year, month, filename)
-	c.Set("user", struct{ ID int64 }{ID: 1})
-	if err := handler(c); err != nil {
-		var he *echo.HTTPError
-		if errors.As(err, &he) {
-			rec.Code = he.Code
-		}
-	}
-	return rec
-}
-
-func TestServeSimplifiedMedia_SquareThumbGenerated(t *testing.T) {
-	repo, storage := newMediaRepo(t)
-	createPublicMedia(t, repo, "2024", "01", "square.jpg")
-	if _, err := repo.DB().Exec(`UPDATE media SET file_type='image' WHERE original_path=?`, "originals/2024/01/square.jpg"); err != nil {
+	if err := os.MkdirAll(filepath.Dir(thumbFile), 0755); err != nil {
 		t.Fatal(err)
 	}
-	// A real, decodable JPEG so the square thumbnail can be generated on demand.
-	dir := filepath.Join(storage, "media", "originals", "2024", "01")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(filepath.Join(dir, "square.jpg"))
+	f, err := os.Create(thumbFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := jpeg.Encode(f, image.NewRGBA(image.Rect(0, 0, 300, 200)), nil); err != nil {
+	if err := jpeg.Encode(f, image.NewRGBA(image.Rect(0, 0, 640, 480)), nil); err != nil {
 		t.Fatal(err)
 	}
 	_ = f.Close()
 
-	rec := serveSizedThumbRequest(t, storage, repo, "2024", "01", "square.jpg", "128")
+	rec := serveThumbRequest(t, storage, repo, "2024", "01", "clip.mp4")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for ?thumb=128, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 200 serving the poster rung, got %d: %s", rec.Code, rec.Body.String())
 	}
-	// The generated thumbnail is cached under thumbnails/sq128/.
-	cached := filepath.Join(storage, "media", "thumbnails", "sq128", "2024", "01", "square.jpg")
+
+	// The rung is keyed on the original's path even though it was cut from the
+	// poster, so one media item has one variant key.
+	cached := filepath.Join(storage, "media",
+		services.VariantRelPath("originals/2024/01/clip.mp4", services.DefaultVariantSize))
 	if _, err := os.Stat(cached); err != nil {
-		t.Errorf("expected cached thumbnail at %s: %v", cached, err)
+		t.Errorf("expected the video's rung at %s: %v", cached, err)
 	}
 }
 
-func TestServeSimplifiedMedia_SquareThumbBadSize(t *testing.T) {
+func TestServeSimplifiedMedia_VariantGenerated(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2024", "01", "square.jpg", 300, 200)
+
+	rec := serveQueryRequest(t, storage, repo, "2024", "01", "square.jpg", "s=128")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for ?s=128, got %d: %s", rec.Code, rec.Body.String())
+	}
+	cached := filepath.Join(storage, "media", "variants", "128", "2024", "01", "square.jpg")
+	if _, err := os.Stat(cached); err != nil {
+		t.Errorf("expected cached variant at %s: %v", cached, err)
+	}
+}
+
+func TestServeSimplifiedMedia_VariantBadSize(t *testing.T) {
 	repo, storage := newMediaRepo(t)
 	createPublicMedia(t, repo, "2024", "01", "square.jpg")
-	rec := serveSizedThumbRequest(t, storage, repo, "2024", "01", "square.jpg", "999")
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for unsupported ?thumb=999, got %d", rec.Code)
+
+	for _, q := range []string{"s=999", "thumb=999", "s=abc", "s="} {
+		rec := serveQueryRequest(t, storage, repo, "2024", "01", "square.jpg", q)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for ?%s, got %d", q, rec.Code)
+		}
+	}
+}
+
+// The legacy query forms must resolve to exactly the rungs the new form does.
+// There is no data migration behind them: posts.thumbnail_path rows and
+// published post content already carry `?thumb` and `?thumb=128`.
+func TestServeSimplifiedMedia_LegacyThumbMatchesExplicitSize(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2024", "01", "compat.jpg", 1200, 800)
+
+	for _, tc := range []struct{ legacy, explicit string }{
+		{"thumb", "s=512"},
+		{"thumb=128", "s=128"},
+	} {
+		legacy := serveQueryRequest(t, storage, repo, "2024", "01", "compat.jpg", tc.legacy)
+		explicit := serveQueryRequest(t, storage, repo, "2024", "01", "compat.jpg", tc.explicit)
+		if legacy.Code != http.StatusOK || explicit.Code != http.StatusOK {
+			t.Fatalf("?%s = %d, ?%s = %d; want 200 for both",
+				tc.legacy, legacy.Code, tc.explicit, explicit.Code)
+		}
+		if legacy.Body.String() != explicit.Body.String() {
+			t.Errorf("?%s and ?%s served different bytes", tc.legacy, tc.explicit)
+		}
+	}
+}
+
+// A rung at or above the source's longest side is never generated — Fit does
+// not upscale — so the request falls through to the original rather than
+// serving a re-encoded copy of it.
+func TestServeSimplifiedMedia_RungAboveSourceServesOriginal(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2024", "01", "small.jpg", 300, 200)
+
+	rec := serveQueryRequest(t, storage, repo, "2024", "01", "small.jpg", "s=512")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	original, err := os.ReadFile(filepath.Join(storage, "media", "originals", "2024", "01", "small.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Body.String() != string(original) {
+		t.Error("expected the original bytes when the source is below the rung")
+	}
+	if _, err := os.Stat(filepath.Join(storage, "media", "variants", "512", "2024", "01", "small.jpg")); !os.IsNotExist(err) {
+		t.Errorf("rung 512 should not have been written for a 300px source, stat err = %v", err)
+	}
+}
+
+// The full Cache-Control matrix. What a response may be pinned for depends on
+// which file was resolved, so every case here is also a check that the header
+// is decided after variant resolution and not from the query alone.
+func TestServeSimplifiedMedia_VariantCacheControlMatrix(t *testing.T) {
+	const current = services.DefaultThumbnailGeneration
+
+	cases := []struct {
+		name      string
+		filename  string
+		w, h      int
+		isPublic  bool
+		query     string
+		wantCode  int
+		wantCache string
+	}{
+		{
+			name:     "variant, current token, content-addressed name",
+			filename: "photo_89017c29.jpg", w: 1200, h: 800, isPublic: true,
+			query: "s=256&v=" + current, wantCode: 200, wantCache: immutableCacheControl,
+		},
+		{
+			name:     "variant, current token, plain name",
+			filename: "photo.jpg", w: 1200, h: 800, isPublic: true,
+			query: "s=256&v=" + current, wantCode: 200, wantCache: publicVariantCacheControl,
+		},
+		{
+			name:     "variant, stale token, never an error",
+			filename: "photo_89017c29.jpg", w: 1200, h: 800, isPublic: true,
+			query: "s=256&v=stale", wantCode: 200, wantCache: publicShortCacheControl,
+		},
+		{
+			name:     "variant, no token",
+			filename: "photo_89017c29.jpg", w: 1200, h: 800, isPublic: true,
+			query: "s=256", wantCode: 200, wantCache: publicShortCacheControl,
+		},
+		{
+			// The query asks for a variant with a current token, but the source
+			// is below the rung so the ORIGINAL is what gets served — and an
+			// original is not a function of the generation token, so it may not
+			// take the variant's long TTL.
+			name:     "rung above source falls back to the original TTL",
+			filename: "small.jpg", w: 300, h: 200, isPublic: true,
+			query: "s=512&v=" + current, wantCode: 200, wantCache: publicShortCacheControl,
+		},
+		{
+			name:     "original, content-addressed name",
+			filename: "photo_89017c29.jpg", w: 1200, h: 800, isPublic: true,
+			query: "", wantCode: 200, wantCache: immutableCacheControl,
+		},
+		{
+			name:     "private variant never reaches a shared cache",
+			filename: "photo_89017c29.jpg", w: 1200, h: 800, isPublic: false,
+			query: "s=256&v=" + current, wantCode: 200, wantCache: "private, no-store",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, storage := newMediaRepo(t)
+			visibility := 0
+			if tc.isPublic {
+				visibility = 1
+			}
+			insertMedia(t, repo, "2024", "01", tc.filename, visibility)
+			if _, err := repo.DB().Exec(`UPDATE media SET file_type='image' WHERE original_path=?`,
+				"originals/2024/01/"+tc.filename); err != nil {
+				t.Fatal(err)
+			}
+			writeJPEG(t, storage, "2024", "01", tc.filename, tc.w, tc.h)
+
+			rec := serveQueryRequest(t, storage, repo, "2024", "01", tc.filename, tc.query)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("code = %d, want %d: %s", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if cc := rec.Header().Get("Cache-Control"); cc != tc.wantCache {
+				t.Errorf("Cache-Control = %q, want %q", cc, tc.wantCache)
+			}
+		})
+	}
+}
+
+// A thumbnail 404 must never inherit the hit TTL. The filename here is
+// content-addressed, so under the old ordering — Cache-Control first, variant
+// second — this response was pinned as immutable for a year before the 404 was
+// even known.
+func TestServeSimplifiedMedia_ThumbNotFoundDoesNotInheritImmutable(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	ctx := context.Background()
+	m, err := repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:     "clip_89017c29.mp4",
+		OriginalPath: "originals/2024/01/clip_89017c29.mp4",
+		FileType:     "video",
+		MimeType:     "video/mp4",
+		Checksum:     "clip-immutable-chk",
+		UploadedAt:   time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("CreateMedia: %v", err)
+	}
+	if _, err := repo.DB().ExecContext(ctx, `UPDATE media SET is_public=1 WHERE id=?`, m.ID); err != nil {
+		t.Fatalf("set is_public: %v", err)
+	}
+	makeMediaFile(t, storage, "2024", "01", "clip_89017c29.mp4")
+
+	rec := serveQueryRequest(t, storage, repo, "2024", "01", "clip_89017c29.mp4", "s=256")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for a posterless video, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != notFoundCacheControl {
+		t.Errorf("Cache-Control = %q, want %q", cc, notFoundCacheControl)
 	}
 }
 
@@ -635,10 +810,10 @@ func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
 
 	handler := serveSimplifiedMedia(storage, "", repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	req.Header.Set("X-Point-Direct-S3", "1")
-	
+
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("year", "month", "filename")

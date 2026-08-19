@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 )
@@ -34,11 +35,12 @@ func (h *SystemHandler) GetOfflineStats(c echo.Context) error {
 			}
 			imageCount++
 			originalBytes += m.FileSize
-			if m.ThumbnailPath.Valid {
-				thumbFile := filepath.Join(h.dataPath, "media", m.ThumbnailPath.String)
-				if info, err := os.Stat(thumbFile); err == nil {
-					thumbBytes += info.Size()
-				}
+			// Size the offline budget off the rung the service worker caches,
+			// not the poster column: an image's derived sizes live in the
+			// variants tree and thumbnail_path is a video's poster frame.
+			variant := filepath.Join(h.dataPath, "media", services.VariantRelPath(m.OriginalPath, services.DefaultVariantSize))
+			if info, err := os.Stat(variant); err == nil {
+				thumbBytes += info.Size()
 			}
 		}
 	}
