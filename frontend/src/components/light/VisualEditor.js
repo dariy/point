@@ -14,6 +14,12 @@ import { updateMedia, reextractMediaEXIF } from "../../api/media.js";
 import { store } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { thumbAttrs } from "../../utils/mediaUrl.js";
+
+// .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still
+// points at the original: the card's lightbox (see _bindLightbox) opens the
+// full image, not the rung the card painted.
+const VE_THUMB_SIZES = "80px";
 
 export class VisualEditor extends Component {
   render() {
@@ -30,7 +36,6 @@ export class VisualEditor extends Component {
     const cards = nodes
       .map((node, i) => {
         if (node.type === "image") {
-          const thumb = `${node.path}?thumb`;
           const filename = node.path.split("/").pop();
           const mediaByPath = this.props.mediaByPath || {};
           const media = mediaByPath[node.path];
@@ -56,7 +61,11 @@ export class VisualEditor extends Component {
             <div class="ve-handle" title="Drag to reorder">
               <span class="ve-handle-dots"></span>
             </div>
-            <img class="ve-thumb" src="${escapeHtml(thumb)}"
+            <img class="ve-thumb" ${thumbAttrs(node.path, {
+              sizes: VE_THUMB_SIZES,
+              width: media?.width,
+              height: media?.height,
+            })}
                  alt="${escapeHtml(filename)}"
                  data-full="${escapeHtml(node.path)}"
                  loading="lazy" decoding="async" draggable="false">
