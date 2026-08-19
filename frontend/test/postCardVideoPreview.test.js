@@ -147,7 +147,24 @@ describe('PostCard video preview', () => {
       const { card } = mount();
       const bg = card.querySelector('.post-card-background');
       hoverIn(card);
-      assert.match(bg.getAttribute('style'), /clip\.mp4\?thumb/);
+      // The poster is an <img> beside the clip now, not a background-image on
+      // the box the clip is appended to — so it is the element that has to
+      // survive the hover, not a style attribute.
+      const poster = bg.querySelector('img');
+      assert.ok(poster, 'the poster image should still be in the card');
+      assert.match(poster.getAttribute('src'), /clip\.mp4\?s=\d+/);
+      assert.equal(bg.getAttribute('style'), null, 'nothing paints via inline style');
+    });
+
+    test('a video with no stored poster leaves the card blank, not broken', () => {
+      const { card } = mount();
+      const poster = card.querySelector('.post-card-background img');
+      // Every rung 404s for a video that never got a poster frame; an <img>
+      // that fails paints the browser's broken-image glyph unless it goes.
+      poster.dispatchEvent(new dom.window.Event('error'));
+
+      assert.equal(card.querySelector('.post-card-background img'), null);
+      assert.ok(card.querySelector('.video-play-indicator'), 'still marked playable');
     });
   });
 

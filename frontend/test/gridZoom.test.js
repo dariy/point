@@ -34,6 +34,7 @@ globalThis.document = {
 const {
   getZoom, setZoom, clampZoom, maxZoomCols, createFitLatch,
   applyZoomVar, applyRowsVar, zoomCapacity,
+  cardImageSizes, applyCardImageSizes,
 } = await import('../src/utils/gridFit.js');
 
 describe('grid zoom', () => {
@@ -142,5 +143,52 @@ describe('fit latch', () => {
     assert.equal(latch.accept(2, 4), null);
     latch.reset();
     assert.equal(latch.accept(2, 4), 4);    // new viewport, new decision
+  });
+});
+
+/**
+ * The `sizes` a card's <img srcset> carries.
+ *
+ * There is no static answer to write into the markup: the column count comes
+ * from `auto-fill` against the viewport, or — once the reader has pinched — from
+ * a number in localStorage, and a media query can see neither. So the measured
+ * geometry is published here and the cards read it back.
+ */
+describe('card image sizes', () => {
+  /** A card image, with just enough element for applyCardImageSizes. */
+  const img = (hero = false) => ({
+    sizes: '',
+    closest: (sel) => (hero && sel === '.featured-post' ? {} : null),
+  });
+
+  test('a measured grid names the track width, in px', () => {
+    applyCardImageSizes(320, 1000);
+    assert.equal(cardImageSizes(), '320px');
+    // The featured card spans the whole row, so it is a different image.
+    assert.equal(cardImageSizes(true), '1000px');
+  });
+
+  test('an unmeasurable grid falls back to a responsive guess', () => {
+    applyCardImageSizes(0, 0);
+    assert.match(cardImageSizes(), /100vw/);
+    assert.equal(cardImageSizes(true), cardImageSizes());
+  });
+
+  test('images already on screen are re-pointed when the grid changes shape', () => {
+    applyCardImageSizes(320, 1000);
+    const regular = img();
+    const featured = img(true);
+    const root = { querySelectorAll: () => [regular, featured] };
+
+    applyCardImageSizes(700, 700, root);   // the same grid, one column wide now
+    assert.equal(regular.sizes, '700px');
+    assert.equal(featured.sizes, '700px');
+  });
+
+  test('an unchanged shape does not touch the DOM', () => {
+    applyCardImageSizes(320, 1000);
+    let queried = 0;
+    applyCardImageSizes(320, 1000, { querySelectorAll: () => { queried++; return []; } });
+    assert.equal(queried, 0, 'every resize would otherwise walk every card');
   });
 });
