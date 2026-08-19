@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -180,7 +181,15 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	if strings.HasPrefix(p.MimeType, "image/") {
 		fileType = "image"
 		// Load image for dimensions and thumbnail
-		src, err := safeImagingDecode(bytes.NewReader(p.Content))
+		src, err := s.decodeImage(ctx, p.Content)
+		if errors.Is(err, ErrTooLarge) {
+			// Other decode failures are tolerated below — the file is stored
+			// without dimensions or a thumbnail. "Too many pixels" is not a
+			// degraded success but a refusal: storing it would mean every later
+			// thumbnail attempt re-hits the same ceiling, and the uploader would
+			// never learn why.
+			return models.Medium{}, err
+		}
 		if err == nil {
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -313,7 +322,15 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	if strings.HasPrefix(mimeType, "image/") {
 		fileType = "image"
-		src, err := safeImagingDecode(bytes.NewReader(content))
+		src, err := s.decodeImage(ctx, content)
+		if errors.Is(err, ErrTooLarge) {
+			// Other decode failures are tolerated below — the file is stored
+			// without dimensions or a thumbnail. "Too many pixels" is not a
+			// degraded success but a refusal: storing it would mean every later
+			// thumbnail attempt re-hits the same ceiling, and the uploader would
+			// never learn why.
+			return models.Medium{}, err
+		}
 		if err == nil {
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -758,7 +775,7 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 		return models.Medium{}, ErrNotAVideo
 	}
 
-	src, err := safeImagingDecode(bytes.NewReader(poster))
+	src, err := s.decodeImage(ctx, poster)
 	if err != nil {
 		return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("poster frame is not a decodable image: %w", err))
 	}
@@ -880,7 +897,7 @@ func (s *MediaService) SquareThumbnail(ctx context.Context, media models.Medium,
 	if err != nil {
 		return "", err
 	}
-	src, err := safeImagingDecode(bytes.NewReader(data))
+	src, err := s.decodeImage(ctx, data)
 	if err != nil {
 		return "", err
 	}
@@ -923,7 +940,7 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			continue
 		}
 
-		src, err := safeImagingDecode(bytes.NewReader(data))
+		src, err := s.decodeImage(ctx, data)
 		if err != nil {
 			stats["errors"]++
 			continue
@@ -1400,6 +1417,11 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 // safeImagingDecode wraps imaging.Decode to convert panics into errors.
 // The imaging library can panic on crafted TIFF files (CVE-2023-36308) and
 // there is no patched upstream version as of 2026-05.
+//
+// It bounds nothing on its own. Production callers go through
+// MediaService.decodeImage, which adds the pixel guard and the concurrency
+// limit; this stays exported to the package for the decode paths that have
+// already been bounded and for tests of the panic guard itself.
 func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -1407,4 +1429,78 @@ func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 		}
 	}()
 	return imaging.Decode(r)
+}
+
+// defaultMaxImageMegapixels is the pixel ceiling used when the operator has
+// not set MAX_IMAGE_MEGAPIXELS. Generous for a blog — a 100 MP phone panorama
+// is above it, nothing else realistically is.
+const defaultMaxImageMegapixels = 80
+
+// decodeSem bounds how many image decodes run at once, process-wide. It is a
+// package-level counting semaphore rather than a MediaService field on
+// purpose: the bound that matters is on the machine's memory, and a second
+// service instance must not double it.
+//
+// Sizing: one decode holds roughly 4 bytes per pixel for the source plus the
+// resize destination, so GOMAXPROCS in flight is already the point where more
+// parallelism stops buying throughput and starts buying resident memory.
+var decodeSem = make(chan struct{}, maxInt(1, runtime.GOMAXPROCS(0)))
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// maxImagePixels returns the configured pixel ceiling, or 0 when the check is
+// disabled.
+func (s *MediaService) maxImagePixels() int64 {
+	mp := defaultMaxImageMegapixels
+	if s.cfg != nil && s.cfg.MaxImageMegapixels != 0 {
+		mp = s.cfg.MaxImageMegapixels
+	}
+	if mp < 0 {
+		return 0
+	}
+	return int64(mp) * 1_000_000
+}
+
+// decodeImage decodes an image with the two bounds a public upload path needs:
+// a pixel ceiling checked from the header before anything is allocated, and a
+// cap on how many decodes run concurrently.
+//
+// The body limit upstream bounds bytes on the wire, not pixels in memory —
+// JPEG compresses ~10-20x, so an upload well inside the limit can still carry
+// enough pixels to exhaust a memory-capped container. image.DecodeConfig reads
+// only the header, so an oversized image costs a few bytes to reject instead
+// of a ~400 MB RGBA allocation to discover.
+//
+// This lives here rather than in the HTTP handler because the Instagram
+// importer reaches the same decode with images the operator never chose.
+func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Image, error) {
+	if limit := s.maxImagePixels(); limit > 0 {
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			// Unreadable header. Fall through to the full decode, which
+			// produces the caller's usual decode error rather than a
+			// misleading "too large".
+			slog.Debug("image header unreadable, skipping pixel guard", "error", err)
+		} else if cfg.Width > 0 && cfg.Height > 0 {
+			if px := int64(cfg.Width) * int64(cfg.Height); px > limit {
+				return nil, wrapKind(ErrTooLarge, fmt.Errorf(
+					"image too large: %d megapixels (%dx%d), limit %d megapixels",
+					(px+999_999)/1_000_000, cfg.Width, cfg.Height, limit/1_000_000))
+			}
+		}
+	}
+
+	select {
+	case decodeSem <- struct{}{}:
+		defer func() { <-decodeSem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	return safeImagingDecode(bytes.NewReader(data))
 }
