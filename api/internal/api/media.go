@@ -475,17 +475,20 @@ func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
 	})
 }
 
+// RebuildThumbnails rolls the thumbnail generation token and purges the derived
+// images. It takes no parameters: a rebuild is all-or-nothing now, and the old
+// only_missing flag has nothing left to mean once every file is discarded.
 func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
-	onlyMissing := c.QueryParam("only_missing") != "false"
-
-	stats, err := h.mediaService.RebuildThumbnails(c.Request().Context(), onlyMissing)
+	res, err := h.mediaService.RebuildThumbnails(c.Request().Context())
 	if err != nil {
 		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": fmt.Sprintf("Thumbnail rebuild complete. Processed %d images.", stats["processed"]),
-		"stats":   stats,
+		"message": fmt.Sprintf(
+			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background.",
+			res.Purged+res.Legacy, res.Prewarming),
+		"stats": res,
 	})
 }
 

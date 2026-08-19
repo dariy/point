@@ -44,7 +44,10 @@ describe('RebuildThumbnailsSection', () => {
         return createMockResponse({});
       }
       if (url.includes('/api/media/thumbnails/rebuild')) {
-        return createMockResponse({ processed: 5, skipped: 2, errors: 0 });
+        return createMockResponse({
+          message: 'Thumbnails invalidated. Removed 8 cached images; regenerating the 2 most recent in the background.',
+          stats: { generation: 'a1b2c3d4e5f6', purged: 8, legacy: 0, prewarming: 2 }
+        });
       }
       return createMockResponse({});
     };
@@ -100,7 +103,7 @@ describe('RebuildThumbnailsSection', () => {
     const toast = await toastPromise;
 
     assert.equal(toast.type, 'success');
-    assert.ok(toast.message.includes('Processed: 5, Skipped: 2, Errors: 0'));
+    assert.ok(toast.message.includes('Removed 8 cached images'), 'Toast reports what the server did');
 
     assert.equal(btn.textContent, 'Rebuild Thumbnails', 'Button text is restored');
     assert.equal(btn.disabled, false, 'Button is re-enabled');
@@ -111,6 +114,7 @@ describe('RebuildThumbnailsSection', () => {
     assert.deepEqual(JSON.parse(fetchCalls[0].options.body), { thumbnail_width: "400", thumbnail_height: "300" });
 
     assert.ok(fetchCalls[1].url.includes('/api/media/thumbnails/rebuild'), 'Second call triggers rebuild');
+    assert.ok(!fetchCalls[1].url.includes('only_missing'), 'A rebuild discards every file; there is nothing to skip');
     assert.equal(fetchCalls[1].options.method, 'POST');
     // api.post skips body param if it's undefined
     assert.equal(fetchCalls[1].options.body, undefined);

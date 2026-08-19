@@ -34,8 +34,8 @@ export class RebuildThumbnailsSection extends Component {
             }
           }
           const { rebuildThumbnails } = await import('../../../api/media.js');
-          const stats = await rebuildThumbnails(false);
-          store.set("toast", { message: `Rebuilt thumbnails. Processed: ${stats.processed}, Skipped: ${stats.skipped}, Errors: ${stats.errors}`, type: "success" });
+          const res = await rebuildThumbnails();
+          store.set("toast", { message: res.message || "Thumbnails rebuilt.", type: "success" });
         } catch (err) {
           console.error("[RebuildThumbnailsSection] rebuild error:", err);
           store.set("toast", { message: err.message || "Failed to rebuild thumbnails.", type: "error" });

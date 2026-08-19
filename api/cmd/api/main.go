@@ -336,7 +336,8 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).
 		WithHealth(healthRegistry).
 		WithCache(cacheService)
-	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
+	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService).
+		WithCache(cacheService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
 	systemService.CleanupPartialBackups()

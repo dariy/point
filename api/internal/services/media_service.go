@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -20,6 +22,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -42,9 +45,26 @@ type MediaService struct {
 	genaiClient     *genai.Client
 	genaiConfig     GenAIConfig
 
+	// cache is the public page cache a rebuild drops. Nil is valid and skips
+	// the invalidation — see RebuildThumbnails for what that costs.
+	cache *CacheService
+
 	// variantFlight collapses concurrent ladder generation per media ID. See
 	// Variant for why the global decode semaphore is not enough on its own.
 	variantFlight singleflight.Group
+
+	// prewarming is held for the life of a background prewarm so a second
+	// rebuild does not start a duplicate one. See startPrewarm.
+	prewarming atomic.Bool
+}
+
+// WithCache attaches the public page cache so a rebuild can drop it. Without
+// it the cached home pages, feeds and sitemap keep serving variant URLs
+// carrying the previous generation token until their own TTL expires — up to
+// six hours for the sitemap.
+func (s *MediaService) WithCache(c *CacheService) *MediaService {
+	s.cache = c
+	return s
 }
 
 type GenAIConfig struct {
@@ -106,17 +126,6 @@ Return only valid JSON, no markdown or extra text.`
 func CalculateChecksum(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
-}
-
-// thumbnailWidth returns the effective thumbnail width, preferring env config
-// then DB setting then the hard-coded default.
-func (s *MediaService) thumbnailWidth(ctx context.Context) int {
-	return s.settingsService.GetConfigSetting(ctx, "thumbnail_width", s.cfg.ThumbnailWidth, 400)
-}
-
-// thumbnailHeight returns the effective thumbnail height.
-func (s *MediaService) thumbnailHeight(ctx context.Context) int {
-	return s.settingsService.GetConfigSetting(ctx, "thumbnail_height", s.cfg.ThumbnailHeight, 300)
 }
 
 // jpegQuality returns the effective JPEG quality (1-100).
@@ -1072,80 +1081,228 @@ func (s *MediaService) removeAllVariants(originalPath string) {
 	}
 }
 
-// RebuildThumbnails regenerates thumbnails for all image media.
-// If onlyMissing is true, skips images that already have a thumbnail.
-func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) (map[string]int, error) {
-	all, err := s.repo.ListMedia(ctx, models.ListMediaParams{
-		TypeFilter: true,
-		FileType:   "image",
-		Limit:      100000,
-		Offset:     0,
-	})
+// prewarmLimit bounds the eager regeneration a rebuild kicks off: the N most
+// recently uploaded media items, newest first.
+//
+// A rebuild must purge the whole derived tree, but it must not then decode
+// every image on the install — that unbounded synchronous pass is exactly what
+// this endpoint used to be. Everything past the limit is still correct, it just
+// regenerates on its first request like any other cold variant. The limit is
+// set at roughly what a visitor sees before scrolling out of the recent pages.
+const prewarmLimit = 200
+
+// mediaScanPage is the page size used to walk media rows a page at a time,
+// rather than asking for every row in one query and hoping the count is small.
+const mediaScanPage = 500
+
+// legacyThumbRe matches the pre-ladder thumbnail filename shape,
+// <base>_w<W>h<H>.jpg, that the old rebuild wrote into media/thumbnails/.
+var legacyThumbRe = regexp.MustCompile(`_w\d+h\d+\.jpe?g$`)
+
+// RebuildResult reports what a rebuild did. Purged and Legacy are files already
+// removed when it returns; Prewarming is work still running behind it.
+type RebuildResult struct {
+	Generation string `json:"generation"`
+	Purged     int    `json:"purged"`
+	Legacy     int    `json:"legacy"`
+	Prewarming int    `json:"prewarming"`
+}
+
+// RebuildThumbnails invalidates every derived image on the site.
+//
+// It does not rewrite files in place, which is what it used to do and which
+// achieved nothing a visitor could see: a variant's URL never changed, so no
+// browser, proxy or service worker ever re-fetched the bytes underneath it. A
+// rebuild is a token roll instead — purge the derived tree, mint a fresh
+// thumbnail_generation, drop the rendered public pages that bake the old `v`
+// into the URLs inside them, and let the ladder regenerate. Every variant URL
+// on the site moves at once.
+//
+// It returns in milliseconds: the only image work it does synchronously is
+// deleting files. The rest is a bounded background prewarm of the most recent
+// uploads, and beyond that the ladder rebuilds lazily on request.
+//
+// media/thumbnails/ survives, minus legacy image thumbnails. That root holds
+// client-captured video poster frames, which no server-side decoder can
+// reproduce (see VariantsRoot).
+func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, error) {
+	// Purge before the token moves, never after. A request landing in the gap
+	// regenerates a rung and serves it under the OLD token, which is what its
+	// client already had. The other order serves the stale file under the NEW
+	// token — and the new token is the one clients are told to cache hard.
+	res := RebuildResult{Purged: s.purgeVariants()}
+
+	legacy, err := s.sweepLegacyThumbnails(ctx)
 	if err != nil {
-		return nil, err
+		// The rows that say which stale thumbnail belongs to an image are
+		// unreadable, so a video's irreplaceable poster cannot be told from a
+		// regenerable image thumbnail. Skipping leaves dead files on disk;
+		// guessing deletes posters.
+		slog.Warn("thumbnail rebuild: legacy sweep skipped", "error", err)
+	}
+	res.Legacy = legacy
+
+	res.Generation = newGenerationToken()
+	if s.settingsService != nil {
+		if err := s.settingsService.SetSetting(ctx, ThumbnailGenerationSetting, res.Generation, "string"); err != nil {
+			return res, err
+		}
 	}
 
-	stats := map[string]int{"processed": 0, "skipped": 0, "errors": 0}
-
-	for _, m := range all {
-		if onlyMissing && m.ThumbnailPath.Valid {
-			stats["skipped"]++
-			continue
+	// Required, not incidental: the cached home and tag payloads, feed.xml and
+	// sitemap.xml all carry variant URLs with the old token inside them, and
+	// sitemap.xml holds its copy for six hours.
+	if s.cache != nil {
+		if err := s.cache.InvalidatePublicPages(ctx); err != nil {
+			slog.Warn("thumbnail rebuild: public page cache not dropped", "error", err)
 		}
+	}
 
-		origFull := filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath)
-		data, err := os.ReadFile(origFull)
-		if err != nil {
-			stats["errors"]++
-			continue
-		}
+	res.Prewarming = s.startPrewarm(ctx)
+	return res, nil
+}
 
-		src, err := s.decodeImage(ctx, data)
-		if err != nil {
-			stats["errors"]++
-			continue
-		}
+// newGenerationToken mints a token no earlier rebuild has used.
+//
+// Random rather than a counter or a timestamp: this token is the whole of the
+// engine's cache invalidation, and a counter that can restart — a restored
+// backup, a settings row rebuilt by hand — would hand back a value some cache
+// has already seen and pinned.
+func newGenerationToken() string {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(b[:])
+}
 
-		thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
-		thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
-
-		// Derive thumbnail path from original
-		origRel := m.OriginalPath
-		relUnder := strings.TrimPrefix(origRel, "originals/")
-		relDir := filepath.Dir(relUnder)
-		baseName := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(filepath.Base(origRel), filepath.Ext(origRel)), thumbW, thumbH)
-		thumbRel := filepath.Join("thumbnails", relDir, baseName)
-		thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
-
-		if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
-			stats["errors"]++
-			continue
-		}
-		if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
-			stats["errors"]++
-			continue
-		}
-
-		if m.ThumbnailPath.Valid && m.ThumbnailPath.String != thumbRel {
-			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
-		}
-
-		_, _ = s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{
-			ID:            m.ID,
-			Filename:      m.Filename,
-			OriginalPath:  m.OriginalPath,
-			ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
+// purgeVariants empties the derived-image tree and reports how many files went.
+//
+// It removes each rung directory by NAME, taken from the ladder's own list —
+// not a glob, and never a RemoveAll on media/variants itself or anything above
+// it. A purge is a routine operation triggered from a settings screen, and the
+// blast radius of one wrong path is every original on the install.
+func (s *MediaService) purgeVariants() int {
+	root := filepath.Clean(filepath.Join(s.mediaBase(), VariantsRoot))
+	removed := 0
+	for _, size := range VariantSizes {
+		dir := filepath.Join(root, strconv.Itoa(size))
+		_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				removed++
+			}
+			return nil
 		})
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("thumbnail rebuild: variant purge failed", "dir", dir, "error", err)
+		}
+	}
+	return removed
+}
 
-		// Sync with posts: if a post used the original path as its thumbnail,
-		// update it to use the new thumbnail variant (with ?thumb suffix).
-		barePath := "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
-		_, _ = s.repo.UpdatePostThumbnailPath(ctx, barePath, barePath+"?thumb")
-
-		stats["processed"]++
+// sweepLegacyThumbnails removes the flat _wNhN thumbnails the old rebuild wrote
+// for images, and leaves every video poster where it is.
+//
+// The two cannot be told apart by filename: a poster captured before the ladder
+// landed sits at the same _w400h300.jpg shape, because the old code built both
+// paths the same way. So the poster paths come from the media rows, and a file
+// any video points at is left alone however well it matches.
+func (s *MediaService) sweepLegacyThumbnails(ctx context.Context) (int, error) {
+	posters, err := s.videoPosterPaths(ctx)
+	if err != nil {
+		return 0, err
 	}
 
-	return stats, nil
+	base := s.mediaBase()
+	removed := 0
+	_ = filepath.WalkDir(filepath.Join(base, "thumbnails"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !legacyThumbRe.MatchString(strings.ToLower(d.Name())) {
+			return nil
+		}
+		rel, err := filepath.Rel(base, path)
+		if err != nil || posters[rel] {
+			return nil
+		}
+		if err := os.Remove(path); err == nil {
+			removed++
+		}
+		return nil
+	})
+	return removed, nil
+}
+
+// videoPosterPaths collects the media-relative path of every stored video
+// poster — the files a purge must never reach.
+func (s *MediaService) videoPosterPaths(ctx context.Context) (map[string]bool, error) {
+	posters := make(map[string]bool)
+	for offset := int64(0); ; offset += mediaScanPage {
+		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", mediaScanPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range rows {
+			if m.ThumbnailPath.Valid && m.ThumbnailPath.String != "" {
+				posters[filepath.Clean(m.ThumbnailPath.String)] = true
+			}
+		}
+		if int64(len(rows)) < mediaScanPage {
+			return posters, nil
+		}
+	}
+}
+
+// startPrewarm regenerates the most recent uploads in the background and
+// reports how many items it queued.
+//
+// The work is off the request because the caller is a settings screen holding
+// an HTTP connection, and decoding even a few hundred images is tens of
+// seconds. Only one prewarm runs at a time: a second rebuild while the first is
+// still warming would double the decode load to produce the same files.
+func (s *MediaService) startPrewarm(ctx context.Context) int {
+	rows, err := s.repo.ListMediaFiltered(ctx, "", "", prewarmLimit, 0)
+	if err != nil {
+		slog.Warn("thumbnail rebuild: prewarm list failed", "error", err)
+		return 0
+	}
+	if len(rows) == 0 || !s.prewarming.CompareAndSwap(false, true) {
+		return 0
+	}
+
+	// The request's context is cancelled the moment the response is written;
+	// the values on it are still worth carrying into the background work.
+	bg := context.WithoutCancel(ctx)
+	go func() {
+		defer s.prewarming.Store(false)
+		s.prewarm(bg, rows)
+	}()
+	return len(rows)
+}
+
+// prewarm rebuilds the ladder for each row in turn. It is the synchronous half
+// of startPrewarm, and reports how many items ended up with a usable still.
+//
+// Sequential on purpose. Each item costs one decode — Variant builds every rung
+// from it — and the decode semaphore is shared with live requests: a prewarm
+// that fanned out would fill it and leave every visitor's first uncached image
+// queued behind maintenance work. Per-item failure is ordinary: an audio file
+// has no still, a video may never have had a poster captured, a row can outlive
+// its file.
+func (s *MediaService) prewarm(ctx context.Context, rows []models.Medium) int {
+	warmed := 0
+	for _, m := range rows {
+		if ctx.Err() != nil {
+			break
+		}
+		switch _, err := s.Variant(ctx, m, VariantSizes[0]); {
+		case err == nil, errors.Is(err, ErrVariantNotNeeded):
+			warmed++
+		case errors.Is(err, ErrNotAnImage), errors.Is(err, ErrNoPoster):
+			// Nothing to derive a still from. Not a failure.
+		default:
+			slog.Debug("thumbnail prewarm failed", "media_id", m.ID, "error", err)
+		}
+	}
+	return warmed
 }
 
 // AnalysisResponse matches the Python AnalysisResponse schema
