@@ -321,8 +321,8 @@ func TestPagesHandler_GetTagsGraph_Posts(t *testing.T) {
 	if len(full.Posts) != 1 || full.Posts[0].ID != imgPost.ID {
 		t.Fatalf("expected 1 post (the image post), got %+v", full.Posts)
 	}
-	if full.Posts[0].MediaURL != "/photo.jpg?s=128" {
-		t.Errorf("image post media_url = %q, want /photo.jpg?s=128", full.Posts[0].MediaURL)
+	if full.Posts[0].MediaURL != "/photo.jpg?s=256&v=1" {
+		t.Errorf("image post media_url = %q, want /photo.jpg?s=256&v=1", full.Posts[0].MediaURL)
 	}
 
 	// ?posts=0: the Atlas's lightweight request omits posts + membership edges.
@@ -418,8 +418,8 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 		t.Errorf("expected 'food' as a popular related tag, got %+v", resp.Tags)
 	}
 	// The image post is newest, so it leads the list with a rewritten thumbnail.
-	if len(resp.Posts) > 0 && resp.Posts[0].MediaURL != "/photo.jpg?s=128" {
-		t.Errorf("newest post media_url = %q, want /photo.jpg?s=128", resp.Posts[0].MediaURL)
+	if len(resp.Posts) > 0 && resp.Posts[0].MediaURL != "/photo.jpg?s=256&v=1" {
+		t.Errorf("newest post media_url = %q, want /photo.jpg?s=256&v=1", resp.Posts[0].MediaURL)
 	}
 
 	// atlas_post_limit overrides the default cap: raise it past the 12 posts and

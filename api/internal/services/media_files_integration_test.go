@@ -729,7 +729,7 @@ func TestVariant(t *testing.T) {
 		t.Fatal("expected error for unsupported size 999")
 	}
 
-	path, err := svc.Variant(ctx, m, AtlasVariantSize)
+	path, err := svc.Variant(ctx, m, 128)
 	if err != nil {
 		t.Fatalf("Variant failed: %v", err)
 	}
@@ -744,14 +744,14 @@ func TestVariant(t *testing.T) {
 	}
 
 	// A second call reuses the cached file (same resolved path).
-	path2, err := svc.Variant(ctx, m, AtlasVariantSize)
+	path2, err := svc.Variant(ctx, m, 128)
 	if err != nil || path2 != path {
 		t.Errorf("cached call = %q, %v; want %q, nil", path2, err, path)
 	}
 
 	// Non-image media has no still to derive from.
 	txt, _ := svc.UploadFile(ctx, UploadFileParams{Content: []byte("x"), Filename: "n.txt", MimeType: "text/plain"})
-	if _, err := svc.Variant(ctx, txt, AtlasVariantSize); !errors.Is(err, ErrNotAnImage) {
+	if _, err := svc.Variant(ctx, txt, 128); !errors.Is(err, ErrNotAnImage) {
 		t.Errorf("non-image Variant err = %v, want ErrNotAnImage", err)
 	}
 }

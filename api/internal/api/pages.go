@@ -826,6 +826,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 			return MapError(err)
 		}
 
+		gen := h.mediaService.ThumbnailGeneration(ctx)
 		posts := make([]map[string]interface{}, 0, len(postNodes))
 		membershipEdges := make([]map[string]interface{}, 0)
 		for _, p := range postNodes {
@@ -856,7 +857,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 				"title": p.Title,
 			}
 			if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
-				node["media_url"] = atlasThumbURL(*mediaURL)
+				node["media_url"] = atlasThumbURL(*mediaURL, gen)
 			}
 			posts = append(posts, node)
 		}
@@ -967,13 +968,14 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 		return MapError(err)
 	}
 
+	gen := h.mediaService.ThumbnailGeneration(ctx)
 	posts := make([]map[string]interface{}, 0, len(postModels))
 	postIDs := make([]int64, 0, len(postModels))
 	for _, p := range postModels {
 		postIDs = append(postIDs, p.ID)
 		node := map[string]interface{}{"id": p.ID, "slug": p.Slug, "title": p.Title}
 		if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
-			node["media_url"] = atlasThumbURL(*mediaURL)
+			node["media_url"] = atlasThumbURL(*mediaURL, gen)
 		}
 		// A post chip only the owner can see (draft, hidden or still scheduled)
 		// is marked, so the cloud shows *why* it thins out with revelio off.
@@ -1057,19 +1059,16 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	})
 }
 
-// atlasThumbURL rewrites a preview media URL to request the smallest ladder
-// rung, which is what the atlas cloud chips display. Local media paths get a
-// `?s=N` query (replacing any existing query, e.g. a post whose thumbnail_path
-// already carries `?thumb`); external URLs are returned unchanged since the
-// server can't resize media it doesn't host.
-func atlasThumbURL(u string) string {
+// atlasThumbURL rewrites a preview media URL to request the ladder rung the
+// atlas cloud chips display. Local media paths get `?s=N&v=<generation>`,
+// replacing any existing query (e.g. a post whose thumbnail_path still carries
+// `?thumb`); external URLs are returned unchanged since the server can't resize
+// media it doesn't host.
+func atlasThumbURL(u, gen string) string {
 	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
 		return u
 	}
-	if i := strings.IndexByte(u, '?'); i >= 0 {
-		u = u[:i]
-	}
-	return fmt.Sprintf("%s?s=%d", u, services.AtlasVariantSize)
+	return services.VariantURL(u, services.AtlasVariantSize, gen)
 }
 
 // GetMapPage returns all tags that have coordinates, categorised by type

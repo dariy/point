@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -844,10 +845,10 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 // a derived JPEG, ascending. Aspect ratio is preserved (imaging.Fit), so a
 // portrait source at rung 512 is 512 tall and narrower than that.
 //
-// Four rungs cover the whole product: 128 for atlas chips, 256 for dense grids,
-// 512 for cards and the legacy bare `?thumb`, 1024 for article bodies and
-// retina cards. JPEG only — the binary is CGO-free and disintegration/imaging
-// cannot encode WebP or AVIF without a cgo dependency.
+// Four rungs cover the whole product: 128 for dense grids and list rows, 256
+// for atlas chips, 512 for cards and the legacy bare `?thumb`, 1024 for article
+// bodies, retina cards and social cards. JPEG only — the binary is CGO-free and
+// disintegration/imaging cannot encode WebP or AVIF without a cgo dependency.
 var VariantSizes = []int{128, 256, 512, 1024}
 
 // DefaultVariantSize is the rung a bare `?thumb` resolves to. Existing
@@ -856,7 +857,18 @@ var VariantSizes = []int{128, 256, 512, 1024}
 const DefaultVariantSize = 512
 
 // AtlasVariantSize is the rung the atlas cloud requests for its post chips.
-const AtlasVariantSize = 128
+//
+// 256 rather than the bottom rung: a selected chip's thumb is 10vw wide
+// (atlas.css), so on a desktop it paints at 150-200px. The rungs preserve
+// aspect ratio, so a 3:2 photo at rung 128 is only 128x85 — under `object-fit:
+// cover` that gets blown up past 2x and visibly softens.
+const AtlasVariantSize = 256
+
+// SocialCardVariantSize is the rung the crawler prerender points og:image and
+// twitter:image at. The original is the wrong answer there: a 4000px camera
+// JPEG is several megabytes and past the size ceiling every card renderer
+// applies, so the card silently renders blank.
+const SocialCardVariantSize = 1024
 
 // AllowedVariantSize reports whether size is a rung of the ladder. Restricting
 // generation to a fixed set keeps the on-disk cache bounded and stops an
@@ -905,6 +917,35 @@ func (s *MediaService) ThumbnailGeneration(ctx context.Context) string {
 		return DefaultThumbnailGeneration
 	}
 	return v
+}
+
+// ThumbnailGenerationFrom reads the generation token out of a settings
+// snapshot. The HTML serve path already holds the cached map, so it takes this
+// instead of ThumbnailGeneration and spares itself a second lookup on every
+// document.
+func ThumbnailGenerationFrom(all map[string]string) string {
+	if v := all[ThumbnailGenerationSetting]; v != "" {
+		return v
+	}
+	return DefaultThumbnailGeneration
+}
+
+// VariantURL builds the public URL of one ladder rung for the media served at
+// barePath ("/YYYY/MM/file.jpg"). Any existing query is dropped, so a stored
+// path that still carries the legacy `?thumb` resolves cleanly.
+//
+// gen is the cache-busting token, not a selector: the route serves the same
+// bytes whatever `v` says, and only decides from it how long the response may
+// be cached. An empty gen therefore yields a working URL that simply cannot be
+// cached hard.
+func VariantURL(barePath string, size int, gen string) string {
+	if i := strings.IndexByte(barePath, '?'); i >= 0 {
+		barePath = barePath[:i]
+	}
+	if gen == "" {
+		return barePath + "?s=" + strconv.Itoa(size)
+	}
+	return barePath + "?s=" + strconv.Itoa(size) + "&v=" + url.QueryEscape(gen)
 }
 
 // VariantRelPath returns the media-relative path of one ladder rung derived

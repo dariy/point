@@ -51,14 +51,28 @@ func init() {
 // resolveJSDir returns the directory to serve under /assets/js.
 // It prefers the pre-built bundle directory (frontend/js/) over the raw
 // source directory (frontend/src/), enabling zero-config dev/prod switching.
-// pluginManifestScript renders the enabled-only plugin manifest as an inline
-// <script> assigning window.__PLUGINS__. The manifest is computed per request
-// because enabled-state can change at runtime; chunks is the static build map.
-// json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
+// mediaBootstrap is the window.__MEDIA__ payload: everything a client needs to
+// build a variant URL for itself. Gen is the cache-busting token a rebuild
+// rolls; Sizes is the ladder, so the frontend picks rungs from the server's
+// list rather than from a copy that can drift out of sync with it.
+type mediaBootstrap struct {
+	Gen   string `json:"gen"`
+	Sizes []int  `json:"sizes"`
+}
+
+// bootstrapScript renders the inline <script> every HTML document carries,
+// along with the base64 sha256 of its body for the CSP script-src splice.
+//
+// It assigns window.__PLUGINS__ (the enabled-only plugin manifest, computed per
+// request because enabled-state changes at runtime; chunks is the static build
+// map) and window.__MEDIA__ in ONE body. One body means one hash, which is what
+// lets all three injection sites and both CSP splices stay as they are.
+//
+// json.Marshal HTML-escapes <, > and & by default, so both payloads are safe to
 // embed inline. Disabled plugins are absent from the result entirely.
-func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
-	// Snapshot, not GetAllSettings: this runs on every HTML serve and
-	// BuildManifest only reads the map.
+func bootstrapScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
+	// Snapshot, not GetAllSettings: this runs on every HTML serve, and both
+	// BuildManifest and the generation token only read the map.
 	all, err := settings.Snapshot(ctx)
 	if err != nil {
 		all = map[string]string{}
@@ -67,7 +81,14 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 	if err != nil {
 		b = []byte("[]")
 	}
-	scriptContent := "window.__PLUGINS__=" + string(b) + ";"
+	m, err := json.Marshal(mediaBootstrap{
+		Gen:   services.ThumbnailGenerationFrom(all),
+		Sizes: services.VariantSizes,
+	})
+	if err != nil {
+		m = []byte("{}")
+	}
+	scriptContent := "window.__PLUGINS__=" + string(b) + ";window.__MEDIA__=" + string(m) + ";"
 	hash := sha256.Sum256([]byte(scriptContent))
 	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
 	return "\n  <script>" + scriptContent + "</script>", hashBase64
@@ -504,7 +525,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// script-src allows the shell's inline <script> blocks by hash, computed
 	// from index.html at startup (see inlineScriptHashes) so an edit to the
 	// inline bootstrap script can never silently break CSP. The per-request
-	// __PLUGINS__ manifest hash is appended where index.html is served.
+	// per-request bootstrap script's hash is appended where index.html is
+	// served (see bootstrapScript).
 	scriptSrc := strings.Join(append([]string{"'self'"}, inlineScriptHashes(filepath.Join(cfg.FrontendDir, "index.html"))...), " ")
 	connectSrc := "'self' https://*.basemaps.cartocdn.com"
 	// Deployment-supplied extra CSP origins. They let an operator allow-list a
@@ -985,10 +1007,26 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
 						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
 
+						gen := svcs.Media.ThumbnailGeneration(c.Request().Context())
 						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
-						if len(media) > 0 {
-							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
-							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+						// Card image = the post's first media that can actually
+						// render one. A video without a captured poster has no
+						// still behind it, so it is skipped rather than pointed
+						// at: the crawler would fetch the whole stream and show
+						// nothing.
+						cardPath := ""
+						for _, m := range media {
+							if strings.EqualFold(m.FileType, "image") || (m.ThumbnailPath.Valid && m.ThumbnailPath.String != "") {
+								cardPath = "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
+								break
+							}
+						}
+						if cardPath != "" {
+							// The 1024 rung, never the original: a camera JPEG
+							// is megabytes and past every card renderer's size
+							// ceiling, which renders as no card at all.
+							variant := services.VariantURL(cardPath, services.SocialCardVariantSize, gen)
+							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, variant)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
 							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
 							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
@@ -996,7 +1034,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
-						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
+						script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
 						sb.WriteString(script)
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
@@ -1014,7 +1052,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			// shell (chosen above) already omits third-party markup for admin
 			// routes and authenticated viewers.
 			{
-				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
+				script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
 				htmlStr := strings.Replace(shell, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")
@@ -1485,7 +1523,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
 			if indexHTMLContent != "" {
-				script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
+				script, hash := bootstrapScript(c.Request().Context(), settings, chunks, cssMap)
 				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")

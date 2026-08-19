@@ -1506,7 +1506,7 @@ func TestVariant_Video(t *testing.T) {
 
 	// Without a poster there is nothing to derive from: the server cannot
 	// decode the video itself.
-	if _, err := service.Variant(ctx, video, AtlasVariantSize); !errors.Is(err, ErrNoPoster) {
+	if _, err := service.Variant(ctx, video, 128); !errors.Is(err, ErrNoPoster) {
 		t.Errorf("expected ErrNoPoster, got %v", err)
 	}
 
@@ -1523,7 +1523,7 @@ func TestVariant_Video(t *testing.T) {
 			w, h, posterMaxSide, posterMaxSide*1080/1920)
 	}
 
-	rung, err := service.Variant(ctx, withPoster, AtlasVariantSize)
+	rung, err := service.Variant(ctx, withPoster, 128)
 	if err != nil {
 		t.Fatalf("Variant: %v", err)
 	}
@@ -1574,7 +1574,7 @@ func TestPurgingVariantsLeavesVideoPostersIntact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveVideoPoster: %v", err)
 	}
-	if _, err := service.Variant(ctx, withPoster, AtlasVariantSize); err != nil {
+	if _, err := service.Variant(ctx, withPoster, 128); err != nil {
 		t.Fatalf("Variant: %v", err)
 	}
 
@@ -1591,7 +1591,7 @@ func TestPurgingVariantsLeavesVideoPostersIntact(t *testing.T) {
 		t.Errorf("poster destroyed by a variant purge: %v", err)
 	}
 	// And the poster is still enough to rebuild the ladder from.
-	if _, err := service.Variant(ctx, withPoster, AtlasVariantSize); err != nil {
+	if _, err := service.Variant(ctx, withPoster, 128); err != nil {
 		t.Errorf("Variant after purge: %v", err)
 	}
 }
@@ -1675,7 +1675,7 @@ func TestLifecycleSweepsAllVariants(t *testing.T) {
 		// The rungs were keyed on the old path, so they are orphans now.
 		assertGone(t, paths)
 		// And the new name regenerates on demand.
-		if _, err := service.Variant(ctx, renamed, AtlasVariantSize); err != nil {
+		if _, err := service.Variant(ctx, renamed, 128); err != nil {
 			t.Errorf("Variant after rename: %v", err)
 		}
 	})

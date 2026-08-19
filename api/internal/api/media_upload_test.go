@@ -272,11 +272,12 @@ func TestUploadFile_VideoPoster(t *testing.T) {
 		if resp["file_type"] != "video" {
 			t.Fatalf("expected file_type video, got %v", resp["file_type"])
 		}
-		// The response exposes the thumbnail as the ?thumb variant of the media
-		// URL, which is what the admin grid and the atlas render.
+		// The response exposes the thumbnail as a ladder rung of the media URL
+		// carrying the generation token, which is what the admin grid and the
+		// atlas render.
 		thumb, _ := resp["thumbnail_path"].(string)
-		if thumb == "" || !strings.HasSuffix(thumb, ".mp4?thumb") {
-			t.Errorf("expected a ?thumb path for the video, got %q", thumb)
+		if !strings.HasSuffix(thumb, ".mp4?s=512&v=1") {
+			t.Errorf("expected a sized variant path for the video, got %q", thumb)
 		}
 	})
 
@@ -340,8 +341,8 @@ func TestSetVideoPoster(t *testing.T) {
 		}
 		var resp map[string]interface{}
 		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-		if thumb, _ := resp["thumbnail_path"].(string); !strings.HasSuffix(thumb, ".mp4?thumb") {
-			t.Errorf("expected a ?thumb path for the video, got %q", thumb)
+		if thumb, _ := resp["thumbnail_path"].(string); !strings.HasSuffix(thumb, ".mp4?s=512&v=1") {
+			t.Errorf("expected a sized variant path for the video, got %q", thumb)
 		}
 	})
 

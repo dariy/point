@@ -16,7 +16,7 @@ const GRAPH = {
 const CLOUD = {
   tags: [{ id: 5, name: 'food', slug: 'food', kind: 'topic' }],
   posts: [
-    { id: 10, slug: 'p10', title: 'Berlin 2020', media_url: '/a.jpg?thumb=128' },
+    { id: 10, slug: 'p10', title: 'Berlin 2020', media_url: '/a.jpg?s=256&v=abc123' },
     { id: 11, slug: 'p11', title: 'Berlin 2015' },
   ],
   membershipEdges: [

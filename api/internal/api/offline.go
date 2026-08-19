@@ -134,10 +134,11 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 
 	// 5. Public media (images only)
 	media, _ := h.repo.GetAllMediaPaths(ctx)
+	gen := h.mediaService.ThumbnailGeneration(ctx)
 	publicMedia := make([]map[string]interface{}, 0)
 	for _, m := range media {
 		if strings.ToLower(m.FileType) == "image" && m.IsPublic == 1 {
-			publicMedia = append(publicMedia, mediaToResponse(m))
+			publicMedia = append(publicMedia, mediaToResponse(m, gen))
 		}
 	}
 
