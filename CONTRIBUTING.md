@@ -49,6 +49,17 @@ you (generated files you must not edit by hand, the test build tags, the plugin 
 of where things live. It is written for coding agents, and it is equally the fastest orientation for
 a human. Read it before your first change.
 
+## Where to start
+
+Issues labelled [`agent-ready`](https://github.com/dariy/point/issues?q=is%3Aissue+is%3Aopen+label%3Aagent-ready)
+are picked to be workable by someone — or something — that has never seen this codebase. Each one
+names the files involved and **the command that proves it done**, so you can tell you are finished
+without waiting for a review round. Several are also labelled `good first issue`.
+
+If one interests you, say so in a comment before you start, so two people don't write the same patch.
+
+Anything else in the tracker is fair game too; those just come with less scaffolding.
+
 ## Reporting bugs
 
 * Test against the latest version first.
