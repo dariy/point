@@ -306,6 +306,17 @@ var schema = []struct{ name, sql string }{
 			                     WHERE key IN ('plugin.immersive.enabled', 'plugin.immersive-sheet.enabled')
 			                       AND value = 'true')`,
 	},
+	{
+		// Thumbnails are a fixed ladder of longest-side widths now, so there is
+		// no dimension left for an operator to configure: nothing has read
+		// these two keys since the ladder landed. jpeg_quality is still live
+		// and stays.
+		"drop_unused_thumbnail_dimension_settings",
+		`DELETE FROM blog_settings WHERE key IN (
+				'thumbnail_width',
+				'thumbnail_height'
+			)`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

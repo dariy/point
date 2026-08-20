@@ -165,30 +165,30 @@ func isGuestRequest(c echo.Context) bool {
 }
 
 // visibilityCache emits a visibility-aware Cache-Control on a public read route
-// so a Cloudflare Cache Rule can edge-cache the anonymous response while never
-// storing an authenticated one — the HTML/API analogue of serveSimplifiedMedia's
-// media caching, for surviving a traffic spike behind a CDN. A guest GET
-// gets `public, max-age=60`; everything else (authenticated reads, any write)
-// gets private,no-store so a per-user response is never stored at the edge even
-// if the CF rule misfires. The header is set before the handler runs because
-// Echo flushes headers on first write; handlers that set their own Cache-Control
-// (media) still win by overwriting it.
+// so a shared cache can store the anonymous response while never storing an
+// authenticated one — the HTML/API analogue of serveSimplifiedMedia's media
+// caching, for surviving a traffic spike behind a CDN. A guest GET gets
+// `public, max-age=60`; everything else (authenticated reads, any write) gets
+// private,no-store so a per-user response is never stored at the edge even if
+// the edge's own cache rule misfires. The header is set before the handler runs
+// because Echo flushes headers on first write; handlers that set their own
+// Cache-Control (media) still win by overwriting it.
 //
 // Why plain max-age=60 and not `s-maxage=60, max-age=0` (edge caches, browser
-// revalidates): Cloudflare Cache Rules treat max-age=0 as non-cacheable even
-// when s-maxage is also present (Origin Cache Control is always on for
-// Free/Pro/Business and cannot be disabled), so that header yields
-// CF-Cache-Status: DYNAMIC and never caches — verified empirically against both
-// bypass_by_default and respect_origin. The browser-revalidation half is instead
-// handled at the edge: the CF Cache Rule sets Browser TTL = 0 (override_origin),
-// which also stops the zone's 4 h default Browser Cache TTL from leaking a long
-// max-age downstream. So the origin just advertises the 60 s edge TTL here.
+// revalidates): some CDNs read max-age=0 as "do not cache" even when s-maxage is
+// also present, and then store nothing at all. Verified empirically against a
+// major CDN under both of its origin-cache-control modes (honour the origin's
+// headers, and ignore them by default): the two-part header cached nothing,
+// while a plain max-age=60 cached as intended. The browser-revalidation half is
+// better handled at the edge anyway — the CDN can pin browser TTL to 0 on these
+// routes, which also stops a zone-wide default browser TTL from leaking a long
+// max-age downstream. So the origin just advertises the 60 s shared TTL here.
 func visibilityCache(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if c.Request().Method == http.MethodGet && isGuestRequest(c) {
 			c.Response().Header().Set("Cache-Control", "public, max-age=60")
-			// Cloudflare treats any response whose Vary lists a value other than
-			// Accept-Encoding as uncacheable. The global CORS middleware adds
+			// Many shared caches refuse to store a response whose Vary lists
+			// anything but Accept-Encoding. The global CORS middleware adds
 			// `Vary: Origin`, but a guest public read does not vary by Origin
 			// (ACAO is a constant `*`, no credentialed CORS), so Origin in Vary
 			// only defeats edge caching — strip it while keeping Accept-Encoding.

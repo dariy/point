@@ -7,7 +7,7 @@ export class RebuildThumbnailsSection extends Component {
       <div class="section-block">
         <h3 class="section-subhead">Maintenance</h3>
         <button type="button" class="btn btn-secondary" id="rebuild-thumbnails-btn">Rebuild Thumbnails</button>
-        <p class="form-hint" style="margin-top: 0.5rem;">Regenerate thumbnails for all images with the current dimensions (this will bust the Cloudflare cache because the filenames change to match the dimensions).</p>
+        <p class="form-hint" style="margin-top: 0.5rem;">Discard every generated thumbnail and build the ladder again in the background. Each image gets a fresh URL, so browsers and any cache in front of the site pick up the new files on their own.</p>
       </div>`;
   }
 
@@ -21,18 +21,6 @@ export class RebuildThumbnailsSection extends Component {
         const ogText = btn.textContent;
         btn.textContent = "Rebuilding…";
         try {
-          const form = document.getElementById("plugin-settings-form");
-          if (form) {
-            const wInput = form.querySelector('[name="thumbnail_width"]');
-            const hInput = form.querySelector('[name="thumbnail_height"]');
-            if (wInput && hInput) {
-              const { updateSettings } = await import('../../../api/settings.js');
-              await updateSettings({
-                thumbnail_width: wInput.value,
-                thumbnail_height: hInput.value
-              });
-            }
-          }
           const { rebuildThumbnails } = await import('../../../api/media.js');
           const res = await rebuildThumbnails();
           store.set("toast", { message: res.message || "Thumbnails rebuilt.", type: "success" });

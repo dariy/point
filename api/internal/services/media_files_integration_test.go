@@ -471,9 +471,8 @@ func TestNewMediaServiceWithAPIKey(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		StoragePath:    tmpDir,
-		GeminiAPIKey:   "fake-key-for-coverage",
-		ThumbnailWidth: 400, ThumbnailHeight: 300,
+		StoragePath:  tmpDir,
+		GeminiAPIKey: "fake-key-for-coverage",
 	}
 	settings := NewSettingsService(repo)
 	tags := NewTagService(repo)

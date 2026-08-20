@@ -85,8 +85,6 @@ You can customize Point by editing the `.env` file.
 | `APP_ENV` | `development` | Set to `production` for live environments |
 | `DEBUG` | `true` | Set to `false` in production environments |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Maximum allowed size for uploaded photos |
-| `THUMBNAIL_WIDTH` | `400` | Width of generated thumbnails in pixels |
-| `THUMBNAIL_HEIGHT` | `300` | Height of generated thumbnails in pixels |
 | `JPEG_QUALITY` | `85` | Compression quality for JPEG images (1-100) |
 | `SESSION_EXPIRY_HOURS` | `720` | How long an admin session remains valid |
 | `SESSION_EXPIRY_PUBLIC_HOURS` | `24` | How long a public session remains valid |

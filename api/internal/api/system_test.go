@@ -682,9 +682,7 @@ func TestSystemHandler_GetStats_DBError(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{
-		StoragePath:     t.TempDir(),
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
+		StoragePath: t.TempDir(),
 	}, settingsSvc, tagSvc)
 	tmpDir2 := t.TempDir()
 	systemSvc2 := services.NewSystemService(repo, tmpDir2, "")
@@ -765,7 +763,7 @@ func TestSystemHandler_GetMigrations_OK(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -789,7 +787,7 @@ func TestSystemHandler_ClearCache_DBError(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -810,7 +808,7 @@ func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -831,7 +829,7 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
