@@ -809,7 +809,7 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 
 	mediaBase := s.mediaBase()
 	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
-	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
+	baseName := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)), thumbW, thumbH)
 	thumbRel := filepath.Join("thumbnails", filepath.Dir(relUnder), baseName)
 	thumbFull := filepath.Clean(filepath.Join(mediaBase, thumbRel))
 	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
@@ -828,6 +828,10 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 	// newer source on its own, but a re-capture that lands within the same
 	// filesystem timestamp granularity would not move mtime forward.
 	s.removeAllVariants(media.OriginalPath)
+
+	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != thumbRel {
+		_ = os.Remove(filepath.Join(mediaBase, media.ThumbnailPath.String))
+	}
 
 	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != thumbRel {
 		_ = os.Remove(filepath.Join(mediaBase, media.ThumbnailPath.String))
