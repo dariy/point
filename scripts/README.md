@@ -45,8 +45,8 @@ outside this repo — see [Production](#production) below.
   detector, `--html` for a coverage report. See
   [docs/testing.md](../docs/testing.md).
 - **check-docs.sh**: Runs the commands the documentation promises — the fenced
-  `bash` blocks in `AGENTS.md`, `CONTRIBUTING.md` and `QUICKSTART.md`, plus the
-  command table in `AGENTS.md`. `--list` shows the plan without running it, and
+  `bash` blocks in `AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md` and
+  `ai-declaration.md`, plus the command table in `AGENTS.md`. `--list` shows the plan without running it, and
   a trailing file list overrides which docs are read. A command that cannot run
   unattended is marked in the doc with `<!-- verify:skip reason -->` (or
   `<!-- verify:tmpdir -->` to run in a scratch directory) — the runner itself

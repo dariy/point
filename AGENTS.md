@@ -44,8 +44,8 @@ does it for you — it reports every version this repo requires against what you
 from `api/go.mod` and `.github/workflows/test.yml` so it cannot disagree with CI, and prints the
 install line for whatever is missing.
 
-Every command in this file, in [CONTRIBUTING.md](CONTRIBUTING.md) and in [QUICKSTART.md](QUICKSTART.md)
-is executed on every PR by the `docs-commands` job — locally, that is `./scripts/check-docs.sh`. If a
+Every command in this file, in [CONTRIBUTING.md](CONTRIBUTING.md), in [QUICKSTART.md](QUICKSTART.md)
+and in [ai-declaration.md](ai-declaration.md) is executed on every PR by the `docs-commands` job — locally, that is `./scripts/check-docs.sh`. If a
 command you add cannot run unattended, mark it in the source with
 `<!-- verify:skip reason -->` rather than teaching the runner about it.
 

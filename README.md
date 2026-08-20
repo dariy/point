@@ -141,6 +141,9 @@ at what it changed ([the recipe](docs/testing.md#verifying-a-ui-change)).
 The bar for the resulting PR is the same as any other: the tests pass, the change is verified, and
 you understand and stand behind the diff.
 
+How this repository was itself built is stated in [ai-declaration.md](ai-declaration.md) —
+provenance by category and level, with a floor that is countable from the commit history.
+
 ## Project structure
 
 ```

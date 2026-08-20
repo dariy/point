@@ -33,7 +33,7 @@ for arg in "$@"; do
         *) DOCS+=("$arg") ;;
     esac
 done
-[ ${#DOCS[@]} -gt 0 ] || DOCS=(AGENTS.md CONTRIBUTING.md QUICKSTART.md)
+[ ${#DOCS[@]} -gt 0 ] || DOCS=(AGENTS.md CONTRIBUTING.md QUICKSTART.md ai-declaration.md)
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

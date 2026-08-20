@@ -50,6 +50,7 @@ One page per plugin in the registry — [plugins/](./plugins/) (index:
 - [Testing](./testing.md) — test layout and how to run
 - [Usages](./usages.md) — operational recipes
 - [Troubleshooting](./troubleshooting.md) — common issues and solutions
+- [AI Declaration](../ai-declaration.md) — how this repository was built: provenance by category and level
 
 ## External Links
 

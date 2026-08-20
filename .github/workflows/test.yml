@@ -249,7 +249,11 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     steps:
+      # Full history: ai-declaration.md's block counts commits and co-author
+      # trailers, and on a shallow clone those commands do not run at all.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -293,7 +297,7 @@ jobs:
         run: shellcheck scripts/check-docs.sh scripts/doctor.sh scripts/build-tarball.sh scripts/release-notes.sh
 
       # Extracts the fenced bash blocks and the AGENTS.md command table from the
-      # three docs and runs them. Anything that cannot run unattended carries a
-      # `<!-- verify:skip … -->` marker in the doc itself.
+      # documented set and runs them. Anything that cannot run unattended
+      # carries a `<!-- verify:skip … -->` marker in the doc itself.
       - name: Run every documented command
         run: ./scripts/check-docs.sh
