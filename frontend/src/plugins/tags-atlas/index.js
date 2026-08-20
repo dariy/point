@@ -26,7 +26,7 @@ import {
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
-import { tagKind } from "../../utils/tags.js";
+import { tagKind } from "../../utils/tagLinks.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { isRevelioOn } from "../../utils/revelio.js";
 

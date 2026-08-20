@@ -4,7 +4,7 @@ import { escapeHtml, navigate } from '../../utils/helpers.js';
 import {
   hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl,
   HOVER_OPEN_MS,
-} from '../../utils/tags.js';
+} from '../../utils/tagFlyout.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 
 const DEFAULT_INLINE_MAX = 4;

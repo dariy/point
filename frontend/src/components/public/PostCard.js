@@ -17,12 +17,8 @@ import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { store } from "../../store.js";
-import {
-  buildTagIndex,
-  parseTagUrl,
-  renderTagStrip,
-  setupTagStrip,
-} from "../../utils/tags.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
+import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
 const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;

@@ -10,9 +10,10 @@ import { Component } from '../../components/Component.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { tagHref } from '../../utils/tagLinks.js';
 import {
-  showCrumbDropdown, hideFlyout, tagHref, attachFlyoutTrigger, HOVER_OPEN_MS,
-} from '../../utils/tags.js';
+  showCrumbDropdown, hideFlyout, attachFlyoutTrigger, HOVER_OPEN_MS,
+} from '../../utils/tagFlyout.js';
 
 export class Breadcrumbs extends Component {
   render() {

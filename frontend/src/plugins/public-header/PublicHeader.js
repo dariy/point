@@ -25,7 +25,7 @@ import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { hideFlyout } from '../../utils/tags.js';
+import { hideFlyout } from '../../utils/tagFlyout.js';
 import { HeaderFold } from '../../utils/headerFold.js';
 
 export class PublicHeader extends Component {

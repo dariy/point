@@ -1,48 +1,24 @@
 /**
- * Unified tag link renderer — the single source of truth for rendering
- * public-facing tag <a> elements across all components.
+ * The shared tag flyout — one dropdown element, reused by every surface that
+ * shows a tag family or a header menu (PostCard, PostContent, PublicFooter,
+ * the breadcrumb, the nav "More" panel).
  *
- * Also owns the singleton flyout used for tag family display
- * (setupTagFlyout — shared across PostCard, PostContent, PublicFooter, etc.).
+ * It is a singleton on purpose: only one dropdown may be open at a time, and
+ * the surfaces that open it do not know about each other. That is also why
+ * hideFlyoutWithin exists — see its doc comment.
+ *
+ * Pure tag helpers (tagHref, renderTagLink, buildTagIndex, …) live in
+ * tagLinks.js; the scrollable strip that hosts these triggers on a card is in
+ * tagStrip.js.
  */
 
 import { escapeHtml, setupLongPress } from './helpers.js';
-import { CHEVRON_SVG, LOCK_SVG } from './icons.js';
+import { LOCK_SVG } from './icons.js';
 import { hasFinePointer, eventPointerType } from './pointerMode.js';
+import { tagHref, getTagAncestors } from './tagLinks.js';
 
 /** Hover-intent delay before a header dropdown opens, in ms. */
 export const HOVER_OPEN_MS = 180;
-
-/**
- * Build a tag URL whose `path` query carries the ancestor slug chain the user
- * drilled through to reach it. Empty chain → bare /tags/<slug>.
- *
- * @param {string} slug
- * @param {string[]} [pathSlugs] ancestor slugs, root-first (current tag excluded)
- */
-export function tagHref(slug, pathSlugs = []) {
-  const chain = (pathSlugs || []).filter(Boolean);
-  return chain.length
-    ? `/tags/${slug}?path=${chain.join('/')}`
-    : `/tags/${slug}`;
-}
-
-/**
- * Inverse of {@link tagHref}: split a `/tags/<slug>?path=<trail>` href into its
- * decoded tag slug and navigation trail. Used by flyout navigateFns so the
- * `path` query survives instead of being swept into the tag slug (which would
- * then get percent-encoded into a broken `/tags/slug%3Fpath%3D…` URL).
- *
- * @param {string} url
- * @returns {{ tag: string, navPath: string|null }}
- */
-export function parseTagUrl(url) {
-  const u = new URL(url, window.location.origin);
-  return {
-    tag: decodeURIComponent(u.pathname.replace('/tags/', '')),
-    navPath: u.searchParams.get('path') || null,
-  };
-}
 
 // ── Hot-zone tracker ─────────────────────────────────────────────────────────
 
@@ -477,136 +453,4 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     window.removeEventListener('scroll', dismissOnScroll, { passive: true });
     _hideFlyout();
   };
-}
-
-export function setupScrollableStrip(trackEl, scrollEl) {
-  if (!trackEl || !scrollEl) return () => {};
-  const btnLeft  = trackEl.querySelector('.tags-scroll-btn--left');
-  const btnRight = trackEl.querySelector('.tags-scroll-btn--right');
-  const overlay = trackEl.closest('.post-card')?.querySelector('.post-card-content.overlay');
-
-  // On a card whose overlay is still transparent — touch, before the reveal tap —
-  // the arrows are invisible but still hit-testable, so a tap meant to reveal the
-  // card would land on one and scroll a strip nobody can see. Decline those and
-  // let the click bubble to the card's own reveal handler.
-  const isRevealed = () => !overlay || getComputedStyle(overlay).opacity !== '0';
-  const update = () => {
-    const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
-    trackEl.classList.toggle('has-scroll-left',  scrollLeft > 1);
-    trackEl.classList.toggle('has-scroll-right', scrollLeft < scrollWidth - clientWidth - 1);
-  };
-  // The strip can live inside a fully clickable post card — once an arrow acts on
-  // a click, stop it reaching the card's "navigate to post" handler.
-  const scrollBy = (dx) => (e) => {
-    if (!isRevealed()) return;
-    e.preventDefault();
-    e.stopPropagation();
-    scrollEl.scrollBy({ left: dx, behavior: 'smooth' });
-  };
-  const onLeft  = scrollBy(-200);
-  const onRight = scrollBy(200);
-  btnLeft?.addEventListener('click',  onLeft);
-  btnRight?.addEventListener('click', onRight);
-  scrollEl.addEventListener('scroll', update, { passive: true });
-  const ro = new ResizeObserver(update);
-  ro.observe(scrollEl);
-  requestAnimationFrame(update);
-  return () => {
-    btnLeft?.removeEventListener('click',  onLeft);
-    btnRight?.removeEventListener('click', onRight);
-    scrollEl.removeEventListener('scroll', update);
-    ro.disconnect();
-  };
-}
-
-/**
- * The post's own tags, as a horizontally scrollable strip.
- *
- * Page endpoints expand each post's tags with their ancestors so a post can be
- * matched against a whole subtree (see expandPostTagsWithAncestors), and mark
- * those extras `inherited`. A card must show what the post is tagged with, not
- * that closure — otherwise one photo of a fern lists location/country/city/…
- * while the post page lists three tags.
- */
-export function renderTagStrip(postTags) {
-  const visibleTags = (postTags || []).filter((t) => !t.inherited);
-  const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
-  if (!tagsHtml) return '';
-  return `
-    <div class="tag-strip-track">
-      <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${CHEVRON_SVG}</button>
-      <div class="tag-strip-scroll" aria-label="Tags">${tagsHtml}</div>
-      <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">${CHEVRON_SVG}</button>
-    </div>`;
-}
-
-export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
-  const track = container.querySelector('.tag-strip-track');
-  const tagsEl = container.querySelector('.tag-strip-scroll');
-  if (!tagsEl) return () => {};
-  const cleanups = [];
-  const stop = (e) => e.stopPropagation();
-  tagsEl.addEventListener('touchstart', stop, { passive: true });
-  tagsEl.addEventListener('touchmove',  stop, { passive: true });
-  cleanups.push(() => {
-    tagsEl.removeEventListener('touchstart', stop);
-    tagsEl.removeEventListener('touchmove',  stop);
-  });
-  cleanups.push(setupScrollableStrip(track, tagsEl));
-  cleanups.push(setupTagFlyout(tagsEl, tagIndex, navigateFn, hostEl));
-  return () => cleanups.forEach(fn => fn());
-}
-
-/**
- * Classify a tag into a colour bucket — the single source of truth shared by
- * the tag pills, the Atlas cloud and the tags graph. Mirrors the original
- * AtlasPage._kindOf / tagGraph._classifyTag logic so every surface agrees.
- *
- * Buckets: 'year' (a year/decade tag), 'geo' (carries lat/long), else 'tag'.
- */
-export function tagKind(tag) {
-  if (!tag || typeof tag === 'string') return 'tag';
-  if (tag.kind === 'year') return 'year';
-  if (typeof tag.latitude === 'number' && typeof tag.longitude === 'number') return 'geo';
-  return 'tag';
-}
-
-export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
-  const name = typeof tag === 'string' ? tag : tag.name;
-  const slug = typeof tag === 'string' ? tag : tag.slug;
-  const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tags/${slug}`;
-  const classes = ['tag-link', `tag-kind-${tagKind(tag)}`, active ? 'active' : '', extra].filter(Boolean).join(' ');
-  const isExternal = /^https?:\/\//.test(href);
-  const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return `<a href="${escapeHtml(href)}" class="${classes}"${externalAttrs}>${prefix}${escapeHtml(name)}${suffix}</a>`;
-}
-
-export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
-  for (const tag of navTags) {
-    const children = (tag.children || []).map(c => ({ name: c.name, slug: c.slug, count: c.post_count }));
-    map.set(tag.slug, { 
-      tag: { name: tag.name, slug: tag.slug, count: tag.post_count }, 
-      parentSlug, 
-      isLeaf: !children.length, 
-      children,
-      showInAncestors: tag.show_in_ancestors !== false 
-    });
-    if (tag.children?.length) buildTagIndex(tag.children, tag.slug, map);
-  }
-  return map;
-}
-
-export function getTagAncestors(slug, index) {
-  const ancestors = [];
-  const visited = new Set([slug]);
-  let entry = index.get(slug);
-  while (entry?.parentSlug) {
-    if (visited.has(entry.parentSlug)) break;
-    visited.add(entry.parentSlug);
-    entry = index.get(entry.parentSlug);
-    if (entry && !entry.tag.slug.startsWith('_') && entry.showInAncestors !== false) {
-      ancestors.unshift(entry.tag);
-    }
-  }
-  return ancestors;
 }

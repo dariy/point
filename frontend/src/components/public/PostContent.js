@@ -14,11 +14,8 @@
 import { Component } from "../Component.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
-import {
-  buildTagIndex,
-  renderTagStrip,
-  setupTagStrip,
-} from "../../utils/tags.js";
+import { buildTagIndex } from "../../utils/tagLinks.js";
+import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
 import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getPostPageLocation } from "../../api/posts.js";

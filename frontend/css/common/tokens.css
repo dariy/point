@@ -21,7 +21,7 @@
 
     /* Tag type accents — one source of truth for colouring tags by kind
        (year / place / topic / plain), shared by the tag pills, the Atlas cloud
-       and the tags graph. Classification lives in tagKind() (utils/tags.js). */
+       and the tags graph. Classification lives in tagKind() (utils/tagLinks.js). */
     --tag-type-tag: var(--color-primary);
     --tag-type-year: #d39327;
     --tag-type-geo: #1f9e8e;

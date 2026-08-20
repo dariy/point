@@ -2,7 +2,7 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 
 /**
- * The pure logic in src/utils/tags.js: how a tag becomes a URL, a colour
+ * The pure logic in src/utils/tagLinks.js: how a tag becomes a URL, a colour
  * bucket, an <a>, and how the nav payload becomes the index the flyout walks
  * for ancestors.
  *
@@ -17,7 +17,7 @@ let tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors;
 before(async () => {
   globalThis.window = { location: { origin: 'https://example.com' } };
   ({ tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors } =
-    await import('../src/utils/tags.js'));
+    await import('../src/utils/tagLinks.js'));
 });
 
 // ── tagHref ──────────────────────────────────────────────────────────────────

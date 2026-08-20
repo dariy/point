@@ -7,10 +7,9 @@ import {
   showCrumbDropdown,
   attachFlyoutTrigger,
   setupTagFlyout,
-  setupScrollableStrip,
-  setupTagStrip,
   createHotZone
-} from '../src/utils/tags.js';
+} from '../src/utils/tagFlyout.js';
+import { setupScrollableStrip, setupTagStrip } from '../src/utils/tagStrip.js';
 
 describe('tags flyout and UI', () => {
   let anchorEl, excludeEl, navigateFn;

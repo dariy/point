@@ -26,7 +26,7 @@ import { X_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
-import { hideFlyout } from '../../utils/tags.js';
+import { hideFlyout } from '../../utils/tagFlyout.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { mediaFromHtml } from '../../utils/postMedia.js';
