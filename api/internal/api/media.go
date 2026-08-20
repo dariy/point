@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"point-api/internal/models"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -29,6 +30,12 @@ func NewMediaHandler(mediaService *services.MediaService, settingsService *servi
 		mediaService:    mediaService,
 		settingsService: settingsService,
 	}
+}
+
+// mediaResponse is mediaToResponse with the request's thumbnail generation
+// token already read off the settings cache.
+func (h *MediaHandler) mediaResponse(c echo.Context, m models.Medium) map[string]interface{} {
+	return mediaToResponse(m, h.mediaService.ThumbnailGeneration(c.Request().Context()))
 }
 
 func (h *MediaHandler) UploadFile(c echo.Context) error {
@@ -91,7 +98,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusCreated, mediaToResponse(media))
+	return c.JSON(http.StatusCreated, h.mediaResponse(c, media))
 }
 
 // posterFromForm reads the optional "poster" upload field and returns its bytes
@@ -148,7 +155,7 @@ func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
 	if err != nil {
 		return MapError(err)
 	}
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 func (h *MediaHandler) ListMedia(c echo.Context) error {
@@ -171,9 +178,10 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		pages = 1
 	}
 
+	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	items := make([]map[string]interface{}, len(media))
 	for i, m := range media {
-		items[i] = mediaToResponse(m)
+		items[i] = mediaToResponse(m, gen)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"media":    items,
@@ -213,7 +221,7 @@ func (h *MediaHandler) GetMedia(c echo.Context) error {
 		return MapError(err)
 	}
 
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 type UpdateMediaRequest struct {
@@ -245,7 +253,7 @@ func (h *MediaHandler) UpdateMedia(c echo.Context) error {
 		return MapError(err)
 	}
 
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
@@ -257,7 +265,7 @@ func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
 	if err != nil {
 		return MapError(err)
 	}
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 // UpdateEXIFRequest is the body for PUT /api/media/:id/exif.
@@ -282,7 +290,7 @@ func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
 	if err != nil {
 		return MapError(err)
 	}
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 func (h *MediaHandler) RevertEXIF(c echo.Context) error {
@@ -295,7 +303,7 @@ func (h *MediaHandler) RevertEXIF(c echo.Context) error {
 	if err != nil {
 		return MapError(err)
 	}
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
@@ -311,9 +319,10 @@ func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
 		pages = 1
 	}
 
+	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	orphaned := make([]map[string]interface{}, len(media))
 	for i, m := range media {
-		orphaned[i] = mediaToResponse(m)
+		orphaned[i] = mediaToResponse(m, gen)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"media":    orphaned,
@@ -381,6 +390,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 		}
 	}
 
+	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	var uploaded []interface{}
 	var failed []interface{}
 
@@ -413,7 +423,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 			failed = append(failed, map[string]string{"filename": fh.Filename, "error": err.Error()})
 			continue
 		}
-		uploaded = append(uploaded, mediaToResponse(media))
+		uploaded = append(uploaded, mediaToResponse(media, gen))
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
@@ -458,7 +468,7 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 		return MapError(err)
 	}
 
-	return c.JSON(http.StatusOK, mediaToResponse(media))
+	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
 func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
@@ -475,17 +485,20 @@ func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
 	})
 }
 
+// RebuildThumbnails rolls the thumbnail generation token and purges the derived
+// images. It takes no parameters: a rebuild is all-or-nothing now, and the old
+// only_missing flag has nothing left to mean once every file is discarded.
 func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
-	onlyMissing := c.QueryParam("only_missing") != "false"
-
-	stats, err := h.mediaService.RebuildThumbnails(c.Request().Context(), onlyMissing)
+	res, err := h.mediaService.RebuildThumbnails(c.Request().Context())
 	if err != nil {
 		return MapError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": fmt.Sprintf("Thumbnail rebuild complete. Processed %d images.", stats["processed"]),
-		"stats":   stats,
+		"message": fmt.Sprintf(
+			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background.",
+			res.Purged+res.Legacy, res.Prewarming),
+		"stats": res,
 	})
 }
 

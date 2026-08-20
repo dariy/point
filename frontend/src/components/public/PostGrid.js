@@ -16,6 +16,7 @@
 import { Component } from '../Component.js';
 import { PostCard } from './PostCard.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { measureCardImageSizes } from '../../utils/gridFit.js';
 
 export class PostGrid extends Component {
   render() {
@@ -39,11 +40,17 @@ export class PostGrid extends Component {
 
   afterRender() {
     const { posts = [] } = this.props;
+    const heroIndex = posts.findIndex((p) => p.is_featured);
 
+    // The empty tracks are already laid out, and the cards about to mount into
+    // them are each about to ask how wide they will paint (PostCard reads the
+    // answer back out of gridFit for its <img sizes>). Measure first, so the
+    // question is asked of this grid rather than of the last one.
+    measureCardImageSizes(this.container.querySelector('.posts-grid'));
 
     this._cards = posts.map((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
-      return slot ? this.mountChild(PostCard, slot, this._cardProps(post)) : null;
+      return slot ? this.mountChild(PostCard, slot, this._cardProps(post, i === heroIndex)) : null;
     });
 
     const grid = this.container.querySelector('.posts-grid');
@@ -66,9 +73,12 @@ export class PostGrid extends Component {
     if (this._gridKeyHandler) document.removeEventListener('keydown', this._gridKeyHandler);
   }
 
-  _cardProps(post) {
+  _cardProps(post, isHero = false) {
     const { showViewCount = false, tagSlug, tagPage } = this.props;
-    return { post, showViewCount, tagSlug, tagPage };
+    // isHero is not decoration: the hero slot spans the whole row, so its card
+    // paints an image several times the width of a regular one and has to ask
+    // for a different rung (PostCard → gridFit).
+    return { post, showViewCount, tagSlug, tagPage, isHero };
   }
 
   /**
@@ -99,6 +109,11 @@ export class PostGrid extends Component {
       if (posts[i].id !== current[i].id) return false;
     }
 
+    // A refit follows a zoom step often enough that the shape here is not the
+    // shape the surviving cards were rendered into — re-measure before the
+    // arrivals read it.
+    measureCardImageSizes(grid);
+
     const heroIndex = posts.findIndex((p) => p.is_featured);
     for (let i = current.length - 1; i >= posts.length; i--) {
       this._dropCard(i);
@@ -109,7 +124,7 @@ export class PostGrid extends Component {
       slot.dataset.index = String(i);
       slot.addEventListener('animationend', () => slot.classList.remove('is-entering'), { once: true });
       grid.appendChild(slot);
-      this._cards[i] = this.mountChild(PostCard, slot, this._cardProps(posts[i]));
+      this._cards[i] = this.mountChild(PostCard, slot, this._cardProps(posts[i], i === heroIndex));
     }
     // A step that shrank the grid may have hidden cards it was about to drop;
     // whatever survived the refit belongs on screen (see .is-zoom-surplus).

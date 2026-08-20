@@ -1009,12 +1009,13 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 	outcomes := services.ParallelImport(ctx, candidates, func(ctx context.Context, cnd candidate) (models.Medium, error) {
 		return h.mediaService.ImportFromPath(ctx, cnd.absPath)
 	})
+	gen := h.mediaService.ThumbnailGeneration(ctx)
 	for i, o := range outcomes {
 		if o.Err != nil {
 			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(candidates[i].relPath), o.Err))
 			continue
 		}
-		importedItems = append(importedItems, mediaToResponse(o.Value))
+		importedItems = append(importedItems, mediaToResponse(o.Value, gen))
 		imported++
 	}
 

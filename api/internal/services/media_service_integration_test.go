@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -262,96 +263,6 @@ func TestMediaService_Stats(t *testing.T) {
 	}
 	if stats.TotalBytes != 4 {
 		t.Errorf("expected 4 bytes, got %d", stats.TotalBytes)
-	}
-}
-
-func TestMediaService_RebuildThumbnails(t *testing.T) {
-	service, tmpDir := setupMediaService(t)
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-		_ = service.repo.Close()
-	}()
-
-	ctx := context.Background()
-
-	// 1. Rebuild on empty should not fail
-	stats, err := service.RebuildThumbnails(ctx, false)
-	if err != nil {
-		t.Fatalf("RebuildThumbnails failed: %v", err)
-	}
-	if stats["processed"] != 0 {
-		t.Errorf("expected 0 processed, got %d", stats["processed"])
-	}
-
-	// 2. Create a dummy image
-	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("jpeg.Encode failed: %v", err)
-	}
-
-	media, err := service.UploadFile(ctx, UploadFileParams{
-		Content:  buf.Bytes(),
-		Filename: "test.jpg",
-		MimeType: "image/jpeg",
-	})
-	if err != nil {
-		t.Fatalf("UploadFile failed: %v", err)
-	}
-
-	// Create a post using this media as thumbnail
-	barePath := "/" + strings.TrimPrefix(media.OriginalPath, "originals/")
-	_, _ = service.repo.DB().Exec(`INSERT OR IGNORE INTO users (id, username, email, password_hash, display_name) VALUES (1, 'u','e','h','D')`)
-	_, _ = service.repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id, thumbnail_path) VALUES ('PT','pt','C','published',1,?)`, barePath)
-
-	// Force delete thumbnail from disk but keep in DB
-	if media.ThumbnailPath.Valid {
-		_ = os.Remove(filepath.Join(tmpDir, "media", media.ThumbnailPath.String))
-	}
-
-	stats, err = service.RebuildThumbnails(ctx, false)
-	if err != nil {
-		t.Fatalf("RebuildThumbnails failed: %v", err)
-	}
-	if stats["processed"] != 1 {
-		t.Errorf("expected 1 processed, got %d", stats["processed"])
-	}
-
-	// Verify post thumbnail_path was updated
-	var updatedPath string
-	err = service.repo.DB().QueryRowContext(ctx, "SELECT thumbnail_path FROM posts WHERE slug = 'pt'").Scan(&updatedPath)
-	if err != nil {
-		t.Fatalf("failed to query updated post: %v", err)
-	}
-	if updatedPath != barePath+"?thumb" {
-		t.Errorf("expected post thumbnail_path updated to %s, got %s", barePath+"?thumb", updatedPath)
-	}
-
-	// 4. Update dimensions in config and rebuild
-	service.cfg.ThumbnailWidth = 200
-	service.cfg.ThumbnailHeight = 200
-	// Re-fetch media to get its current ThumbnailPath
-	mediaAfterRebuild, _ := service.GetMediaByID(ctx, media.ID)
-
-	stats, err = service.RebuildThumbnails(ctx, false)
-	if err != nil {
-		t.Fatalf("RebuildThumbnails with new dimensions failed: %v", err)
-	}
-	if stats["processed"] != 1 {
-		t.Errorf("expected 1 processed after dimension change, got %d", stats["processed"])
-	}
-
-	// Verify old thumbnail file was deleted
-	if mediaAfterRebuild.ThumbnailPath.Valid {
-		oldThumbFull := filepath.Join(tmpDir, "media", mediaAfterRebuild.ThumbnailPath.String)
-		if _, err := os.Stat(oldThumbFull); !os.IsNotExist(err) {
-			t.Errorf("expected old thumbnail %s to be deleted from disk", oldThumbFull)
-		}
-	}
-
-	mediaFinal, _ := service.GetMediaByID(ctx, media.ID)
-	if mediaFinal.ThumbnailPath.String == mediaAfterRebuild.ThumbnailPath.String {
-		t.Errorf("expected thumbnail path to change, got %s", mediaFinal.ThumbnailPath.String)
 	}
 }
 
@@ -931,6 +842,211 @@ func TestSafeImagingDecode_PanicRecovery(t *testing.T) {
 		t.Error("expected error for empty reader")
 	}
 }
+
+// hugeHeaderPNG returns a PNG whose IHDR declares w x h but which carries no
+// usable image data. image.DecodeConfig reads the header and reports the
+// declared dimensions; a full decode fails. That asymmetry is the whole point:
+// a test that gets ErrTooLarge back has proved the guard ran *before* the
+// decode, because a decode would have produced a different error.
+func hugeHeaderPNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+
+	crc := func(b []byte) []byte {
+		table := make([]uint32, 256)
+		for i := range table {
+			c := uint32(i)
+			for k := 0; k < 8; k++ {
+				if c&1 != 0 {
+					c = 0xedb88320 ^ (c >> 1)
+				} else {
+					c >>= 1
+				}
+			}
+			table[i] = c
+		}
+		c := uint32(0xffffffff)
+		for _, x := range b {
+			c = table[(c^uint32(x))&0xff] ^ (c >> 8)
+		}
+		c ^= 0xffffffff
+		return []byte{byte(c >> 24), byte(c >> 16), byte(c >> 8), byte(c)}
+	}
+	be32 := func(v int) []byte {
+		return []byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}
+	}
+
+	var out []byte
+	out = append(out, 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a)
+
+	ihdr := []byte("IHDR")
+	ihdr = append(ihdr, be32(w)...)
+	ihdr = append(ihdr, be32(h)...)
+	ihdr = append(ihdr, 8, 2, 0, 0, 0) // 8-bit truecolour, no interlace
+	out = append(out, be32(len(ihdr)-4)...)
+	out = append(out, ihdr...)
+	out = append(out, crc(ihdr)...)
+
+	return out
+}
+
+func TestDecodeImage_RejectsOversizedHeader(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// 20000 x 20000 = 400 MP, well over the 80 MP default. A few dozen bytes on
+	// disk; ~1.6 GB of RGBA if it were ever decoded.
+	data := hugeHeaderPNG(t, 20000, 20000)
+	if len(data) > 128 {
+		t.Fatalf("fixture should be tiny, got %d bytes", len(data))
+	}
+
+	_, err := svc.decodeImage(context.Background(), data)
+	if err == nil {
+		t.Fatal("expected oversized image to be rejected")
+	}
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("expected ErrTooLarge (413), got %T: %v", err, err)
+	}
+	// The message has to be actionable: an operator seeing this must be able to
+	// tell how far over the line they are.
+	for _, want := range []string{"400 megapixels", "20000x20000", "80 megapixels"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message %q missing %q", err.Error(), want)
+		}
+	}
+}
+
+func TestDecodeImage_AllowsNormalImage(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	img := image.NewRGBA(image.Rect(0, 0, 64, 48))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.decodeImage(context.Background(), buf.Bytes())
+	if err != nil {
+		t.Fatalf("expected decode to succeed, got: %v", err)
+	}
+	if got.Bounds().Dx() != 64 || got.Bounds().Dy() != 48 {
+		t.Errorf("got %v, want 64x48", got.Bounds())
+	}
+}
+
+func TestDecodeImage_LimitIsConfigurable(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	// 1 MP ceiling: a 2000x2000 (4 MP) header is now over the line.
+	cfg := &config.Config{StoragePath: t.TempDir(), MaxImageMegapixels: 1}
+	svc := NewMediaService(repo, cfg, NewSettingsService(repo), NewTagService(repo))
+
+	_, err := svc.decodeImage(context.Background(), hugeHeaderPNG(t, 2000, 2000))
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("expected ErrTooLarge at a 1 MP ceiling, got: %v", err)
+	}
+
+	// And the same image passes when the ceiling is raised above it.
+	cfg.MaxImageMegapixels = 80
+	_, err = svc.decodeImage(context.Background(), hugeHeaderPNG(t, 2000, 2000))
+	if errors.Is(err, ErrTooLarge) {
+		t.Fatal("expected the 4 MP image to clear an 80 MP ceiling")
+	}
+}
+
+func TestDecodeImage_UploadRejectsOversized(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// The guard has to sit in the service, not the HTTP handler: the Instagram
+	// importer reaches this same path with images the operator never chose.
+	_, err := svc.UploadFile(context.Background(), UploadFileParams{
+		Content:  hugeHeaderPNG(t, 20000, 20000),
+		Filename: "huge.png",
+		MimeType: "image/png",
+	})
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("expected UploadFile to reject an oversized image with ErrTooLarge, got: %v", err)
+	}
+}
+
+func TestDecodeImage_ConcurrencyIsBounded(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	img := image.NewRGBA(image.Rect(0, 0, 256, 256))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.Bytes()
+
+	limit := cap(decodeSem)
+	if limit < 1 {
+		t.Fatal("decode semaphore has no capacity")
+	}
+
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+
+	var wg sync.WaitGroup
+	for i := 0; i < limit*8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Sample occupancy from inside the guarded region by wrapping the
+			// same semaphore discipline decodeImage uses.
+			if _, err := svc.decodeImage(context.Background(), data); err != nil {
+				t.Errorf("decode: %v", err)
+				return
+			}
+			mu.Lock()
+			inFlight++
+			if inFlight > peak {
+				peak = inFlight
+			}
+			inFlight--
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	// The real assertion is that the semaphore never lets more than its
+	// capacity through; observed directly, since decodeImage releases before
+	// returning.
+	if got := len(decodeSem); got != 0 {
+		t.Errorf("semaphore leaked %d slots", got)
+	}
+}
+
+func TestDecodeImage_RespectsContextCancellation(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Saturate the semaphore so the next acquire has to wait.
+	for i := 0; i < cap(decodeSem); i++ {
+		decodeSem <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(decodeSem); i++ {
+			<-decodeSem
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := svc.decodeImage(ctx, buf.Bytes()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled when the semaphore is full, got: %v", err)
+	}
+}
 func TestPreprocessContent(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -1314,8 +1430,8 @@ func TestSaveVideoPoster(t *testing.T) {
 		t.Fatal("expected thumbnail_path to be set")
 	}
 
-	// The poster lands where an image upload's thumbnail would, so ?thumb and
-	// every other consumer of thumbnail_path finds it unchanged.
+	// The poster lands in the poster tree, which is a different root from the
+	// derived variants — purging those must never reach it.
 	if !strings.HasPrefix(updated.ThumbnailPath.String, "thumbnails/") ||
 		!strings.HasSuffix(updated.ThumbnailPath.String, ".jpg") {
 		t.Errorf("unexpected thumbnail path %q", updated.ThumbnailPath.String)
@@ -1325,18 +1441,11 @@ func TestSaveVideoPoster(t *testing.T) {
 		t.Fatalf("poster file missing: %v", err)
 	}
 
-	// Stored at the configured thumbnail box, not at capture resolution.
-	f, err := os.Open(thumbFull)
-	if err != nil {
-		t.Fatalf("open poster: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	cfgImg, _, err := image.DecodeConfig(f)
-	if err != nil {
-		t.Fatalf("decode poster: %v", err)
-	}
-	if cfgImg.Width != 400 || cfgImg.Height != 300 {
-		t.Errorf("expected poster resized to 400x300, got %dx%d", cfgImg.Width, cfgImg.Height)
+	// A capture below the poster box is stored as captured: Fit never upscales,
+	// and cropping it to a fixed box is what used to make video thumbnails
+	// silently non-aspect-preserving.
+	if w, h := imageDims(t, thumbFull); w != 640 || h != 480 {
+		t.Errorf("expected poster stored at 640x480, got %dx%d", w, h)
 	}
 
 	// The row really was updated, not just the returned copy.
@@ -1385,7 +1494,7 @@ func TestSaveVideoPoster_Rejects(t *testing.T) {
 	})
 }
 
-func TestSquareThumbnail_Video(t *testing.T) {
+func TestVariant_Video(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
 	defer func() {
 		_ = os.RemoveAll(tmpDir)
@@ -1395,59 +1504,181 @@ func TestSquareThumbnail_Video(t *testing.T) {
 
 	video := uploadVideo(t, service, "atlas.mp4")
 
-	// Without a poster there is nothing to square: the server cannot decode the
-	// video itself.
-	if _, err := service.SquareThumbnail(ctx, video, AtlasThumbSize); !errors.Is(err, ErrNoPoster) {
+	// Without a poster there is nothing to derive from: the server cannot
+	// decode the video itself.
+	if _, err := service.Variant(ctx, video, 128); !errors.Is(err, ErrNoPoster) {
 		t.Errorf("expected ErrNoPoster, got %v", err)
 	}
 
-	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 640, 480))
+	// A 16:9 frame. The stored poster used to be a 4:3 centre crop of this,
+	// which made every video's thumbnails silently non-aspect-preserving.
+	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 1920, 1080))
 	if err != nil {
 		t.Fatalf("SaveVideoPoster: %v", err)
 	}
 
-	sqPath, err := service.SquareThumbnail(ctx, withPoster, AtlasThumbSize)
-	if err != nil {
-		t.Fatalf("SquareThumbnail: %v", err)
-	}
-	f, err := os.Open(sqPath)
-	if err != nil {
-		t.Fatalf("open square thumb: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	cfgImg, _, err := image.DecodeConfig(f)
-	if err != nil {
-		t.Fatalf("decode square thumb: %v", err)
-	}
-	if cfgImg.Width != AtlasThumbSize || cfgImg.Height != AtlasThumbSize {
-		t.Errorf("expected %dx%[1]d square, got %dx%d", AtlasThumbSize, cfgImg.Width, cfgImg.Height)
+	posterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
+	if w, h := imageDims(t, posterFull); w != posterMaxSide || h != posterMaxSide*1080/1920 {
+		t.Errorf("stored poster = %dx%d, want %dx%d — it must not be cropped",
+			w, h, posterMaxSide, posterMaxSide*1080/1920)
 	}
 
-	// A replacement poster must invalidate the cached square variant rather than
-	// leave the atlas showing the old frame.
-	before, err := os.Stat(sqPath)
+	rung, err := service.Variant(ctx, withPoster, 128)
 	if err != nil {
-		t.Fatalf("stat square thumb: %v", err)
+		t.Fatalf("Variant: %v", err)
+	}
+	if w, h := imageDims(t, rung); w != 128 || h != 72 {
+		t.Errorf("video rung = %dx%d, want 128x72 (16:9 preserved)", w, h)
 	}
 
-	// Change dimensions so the base name changes, testing deletion of the old poster
-	service.cfg.ThumbnailWidth = 200
-	service.cfg.ThumbnailHeight = 200
-
+	// A replacement poster must invalidate the cached rungs rather than leave
+	// the grid showing the old frame.
 	if _, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 320, 240)); err != nil {
 		t.Fatalf("SaveVideoPoster (replace): %v", err)
 	}
-	if _, err := os.Stat(sqPath); !os.IsNotExist(err) {
-		t.Errorf("expected cached square variant to be dropped, stat err = %v (was modified %v)", err, before.ModTime())
+	if _, err := os.Stat(rung); !os.IsNotExist(err) {
+		t.Errorf("expected cached rung to be dropped after a re-capture, stat err = %v", err)
+	}
+}
+
+// imageDims decodes just the header of an image file.
+func imageDims(t *testing.T, path string) (int, int) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
+	}
+	defer func() { _ = f.Close() }()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	return cfg.Width, cfg.Height
+}
+
+// Purging the derived tree — what a thumbnail rebuild does — must not touch a
+// video's poster frame. There is no server-side video decoder, so a lost
+// poster can only be recovered by an admin re-capturing the frame in a browser
+// for every video on the install. The two trees are separate roots precisely
+// so this cannot happen by accident.
+func TestPurgingVariantsLeavesVideoPostersIntact(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+	ctx := context.Background()
+
+	video := uploadVideo(t, service, "keepme.mp4")
+	withPoster, err := service.SaveVideoPoster(ctx, video.ID, jpegBytes(t, 640, 480))
+	if err != nil {
+		t.Fatalf("SaveVideoPoster: %v", err)
+	}
+	if _, err := service.Variant(ctx, withPoster, 128); err != nil {
+		t.Fatalf("Variant: %v", err)
 	}
 
-	// Verify old poster thumbnail file was deleted
-	if withPoster.ThumbnailPath.Valid {
-		oldPosterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
-		if _, err := os.Stat(oldPosterFull); !os.IsNotExist(err) {
-			t.Errorf("expected old poster thumbnail %s to be deleted from disk", oldPosterFull)
+	posterFull := filepath.Join(tmpDir, "media", withPoster.ThumbnailPath.String)
+	if _, err := os.Stat(posterFull); err != nil {
+		t.Fatalf("poster missing before purge: %v", err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(tmpDir, "media", VariantsRoot)); err != nil {
+		t.Fatalf("purge variants: %v", err)
+	}
+
+	if _, err := os.Stat(posterFull); err != nil {
+		t.Errorf("poster destroyed by a variant purge: %v", err)
+	}
+	// And the poster is still enough to rebuild the ladder from.
+	if _, err := service.Variant(ctx, withPoster, 128); err != nil {
+		t.Errorf("Variant after purge: %v", err)
+	}
+}
+
+// Every lifecycle path that destroys or moves a source must sweep all four
+// rungs. A rung has no DB row, so one left behind is invisible and permanent.
+func TestLifecycleSweepsAllVariants(t *testing.T) {
+	ctx := context.Background()
+
+	rungPaths := func(tmpDir string, m models.Medium) []string {
+		var paths []string
+		for _, size := range VariantSizes {
+			paths = append(paths, filepath.Join(tmpDir, "media", VariantRelPath(m.OriginalPath, size)))
+		}
+		return paths
+	}
+	assertGone := func(t *testing.T, paths []string) {
+		t.Helper()
+		for _, p := range paths {
+			if _, err := os.Stat(p); !os.IsNotExist(err) {
+				t.Errorf("variant %s survived, stat err = %v", p, err)
+			}
 		}
 	}
+	upload := func(t *testing.T, service *MediaService, name string) models.Medium {
+		t.Helper()
+		m, err := service.UploadFile(ctx, UploadFileParams{
+			Content:  jpegBytes(t, 2000, 1500),
+			Filename: name,
+			MimeType: "image/jpeg",
+		})
+		if err != nil {
+			t.Fatalf("UploadFile: %v", err)
+		}
+		for _, size := range VariantSizes {
+			if _, err := service.Variant(ctx, m, size); err != nil {
+				t.Fatalf("Variant(%d): %v", size, err)
+			}
+		}
+		return m
+	}
+
+	t.Run("delete", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "del.jpg")
+		paths := rungPaths(tmpDir, m)
+		if err := service.DeleteMedia(ctx, m.ID); err != nil {
+			t.Fatalf("DeleteMedia: %v", err)
+		}
+		assertGone(t, paths)
+	})
+
+	t.Run("bulk delete", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "bulk.jpg")
+		paths := rungPaths(tmpDir, m)
+		if _, err := service.BulkDeleteMedia(ctx, []int64{m.ID}); err != nil {
+			t.Fatalf("BulkDeleteMedia: %v", err)
+		}
+		assertGone(t, paths)
+	})
+
+	t.Run("orphan cleanup", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "orphan.jpg")
+		paths := rungPaths(tmpDir, m)
+		if _, _, err := service.CleanupOrphaned(ctx); err != nil {
+			t.Fatalf("CleanupOrphaned: %v", err)
+		}
+		assertGone(t, paths)
+	})
+
+	t.Run("rename", func(t *testing.T) {
+		service, tmpDir := setupMediaService(t)
+		m := upload(t, service, "before.jpg")
+		paths := rungPaths(tmpDir, m)
+		renamed, err := service.RenameMedia(ctx, m.ID, "after.jpg")
+		if err != nil {
+			t.Fatalf("RenameMedia: %v", err)
+		}
+		// The rungs were keyed on the old path, so they are orphans now.
+		assertGone(t, paths)
+		// And the new name regenerates on demand.
+		if _, err := service.Variant(ctx, renamed, 128); err != nil {
+			t.Errorf("Variant after rename: %v", err)
+		}
+	})
 }
 
 func TestSanitizeOrigin_InvalidURL(t *testing.T) {

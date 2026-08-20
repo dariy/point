@@ -12,6 +12,8 @@
 
 import { Component } from "../Component.js";
 import { escapeHtml, safeUrl } from "../../utils/helpers.js";
+import { cardImageSizes } from "../../utils/gridFit.js";
+import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { store } from "../../store.js";
@@ -33,19 +35,23 @@ let touchPreview = null;
 
 export class PostCard extends Component {
   render() {
-    const { post, showViewCount = false } = this.props;
+    const { post, showViewCount = false, isHero = false } = this.props;
     if (!post) return "";
 
     const mediaUrl = post.media_url || null;
     const isVideo = mediaUrl && VIDEO_RE.test(mediaUrl);
     const hasMedia = !!mediaUrl;
-    // Cards paint the thumbnail variant, never the original: a grid of
-    // full-size photos runs to tens of megabytes a page. `?thumb` serves the
-    // stored thumbnail for a still and the stored poster frame for a video, so
+    // Cards paint a rung of the thumbnail ladder, never the original: a grid of
+    // full-size photos runs to tens of megabytes a page. A rung serves the
+    // derived thumbnail for a still and the stored poster frame for a video, so
     // a card costs the same either way and no video streams unasked. A video
-    // with no stored poster 404s here and simply leaves the card unpainted —
-    // the play indicator below still marks it as playable.
-    const posterUrl = hasMedia ? `${mediaUrl}?thumb` : null;
+    // with no stored poster 404s every rung and leaves the card unpainted (see
+    // afterRender) — the play indicator below still marks it as playable.
+    //
+    // safeUrl first, so a hostile media_url is dropped rather than dressed up
+    // as four variant URLs. The card keeps its `has-image` shape either way:
+    // whether media paints is not a question about the card's layout.
+    const posterUrl = hasMedia ? safeUrl(mediaUrl) : "#";
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     // A post waiting on its publish time. Only the owner is ever handed one
     // (the server keeps them off every public payload), and it is drawn faded
@@ -67,9 +73,18 @@ export class PostCard extends Component {
       ? post.scheduled_at
       : post.published_at || post.created_at;
 
-    const bgStyle = hasMedia
-      ? ` style="background-image: url('${safeUrl(posterUrl)}')"`
-      : "";
+    // A real <img>, not a CSS background-image: only the element form carries a
+    // srcset, and the ladder is the whole point — a card three-across on a
+    // desktop and the same card alone on a phone are different images. `sizes`
+    // is the measured track width (gridFit), because the column count comes
+    // from auto-fill or from a stored zoom, neither of which a media query can
+    // see. The CSS to receive it (object-fit: cover, the hover scale) has been
+    // in post-grid.css all along, written for the video branch.
+    const bgImage =
+      posterUrl !== "#"
+        ? `<img ${thumbAttrs(posterUrl, { sizes: cardImageSizes(isHero) })}
+                alt="" loading="lazy" decoding="async">`
+        : "";
 
     const playIndicator = isVideo
       ? `
@@ -91,7 +106,7 @@ export class PostCard extends Component {
     return `
       <article class="${cardClass}" role="button" tabindex="0"
                data-post-slug="${escapeHtml(post.slug)}">
-        <div class="post-card-background"${bgStyle}></div>
+        <div class="post-card-background">${bgImage}</div>
         ${playIndicator}
         <div class="post-card-content${hasMedia ? " overlay" : ""}">
           <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
@@ -118,6 +133,19 @@ export class PostCard extends Component {
     this._stopHoverVideo?.();
     this._stopHoverVideo = null;
     this._startTouchVideo = null;
+
+    // A video that never got a poster frame 404s every rung of the ladder. As
+    // a background-image that was silent — the card simply stayed unpainted —
+    // but an <img> whose src fails paints the browser's broken-image glyph
+    // instead, in the middle of a photo grid. Drop the element and the card is
+    // unpainted again, which is what it was before and what the play indicator
+    // already accounts for. (The ghost grids gridPager builds carry no
+    // component, so they arrange the same thing by delegation — see
+    // dropBrokenImages.)
+    const poster = card.querySelector(".post-card-background img");
+    if (poster) {
+      poster.addEventListener("error", () => poster.remove(), { once: true });
+    }
 
     // Hover-to-play is opt-in per site (post-list plugin setting). Off, a video
     // card stays a poster frame until the reader opens the post.

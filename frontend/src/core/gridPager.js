@@ -33,7 +33,9 @@
 import { PostCard } from '../components/public/PostCard.js';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
 import { store } from '../store.js';
-import { stepZoom, requestZoom, zoomCapacity } from '../utils/gridFit.js';
+import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gridFit.js';
+import { thumbSrcset } from '../utils/mediaUrl.js';
+import { dropBrokenImages } from '../utils/helpers.js';
 import { flipGrid } from '../utils/gridFlip.js';
 
 export class GridPager {
@@ -530,14 +532,19 @@ export class GridPager {
       if (gridHeight) el.style.height = `${gridHeight}px`;
       if (gridTop) el.style.top = `${gridTop}px`;
       el.innerHTML = this._buildGridHtml(posts || [], page);
+      // The ghost's cards are static markup with no component behind them, so
+      // the one bit of card behaviour they still need is wired here: a video
+      // with no poster frame must leave its card unpainted rather than paint a
+      // broken-image glyph (see PostCard.afterRender).
+      dropBrokenImages(el);
       container.appendChild(el);
       // Warm the neighbour cards' media now, while the ghost is parked
-      // off-screen. The cards paint media as CSS background-image, which the
-      // browser won't fetch or decode until the element is actually painted —
-      // so without this the first drag frame (when the ghost fades in) pays the
-      // whole grid's fetch+decode+paint cost at once, which is the start-of-drag
-      // hitch. Decoding ahead of time lets that first frame just composite an
-      // already-rasterized layer.
+      // off-screen. A ghost is laid out off-screen and its cards are lazy, so
+      // the browser won't fetch or decode any of it until the element is
+      // actually painted — without this the first drag frame (when the ghost
+      // fades in) pays the whole grid's fetch+decode+paint cost at once, which
+      // is the start-of-drag hitch. Decoding ahead of time lets that first
+      // frame just composite an already-rasterized layer.
       this._warmGridMedia(posts || []);
       // Rest off-screen at one full stride so the first drag frame doesn't jump.
       const stride = this._swipeStride();
@@ -549,24 +556,38 @@ export class GridPager {
   }
 
   /**
-   * Pre-fetch and pre-decode the neighbour cards' background-image media so the
-   * first frame of a swipe composites an already-rasterized ghost instead of
-   * triggering a grid-wide fetch+decode+paint burst. Videos paint via <video>
-   * (not background-image) and are skipped here. Runs at idle so it never
-   * competes with the live grid's own first paint.
+   * Pre-fetch and pre-decode the neighbour cards' media so the first frame of a
+   * swipe composites an already-rasterized ghost instead of triggering a
+   * grid-wide fetch+decode+paint burst. Runs at idle so it never competes with
+   * the live grid's own first paint.
+   *
+   * The warm-up is handed the card's whole candidate set — the same srcset and
+   * the same `sizes` PostCard renders — rather than a URL of its own, so the
+   * browser picks the identical rung and the card finds it already in cache.
+   * Warming `media_url` bare, as this did, fetched the full original of every
+   * neighbouring post: megabytes each, and not one byte of it the file the card
+   * goes on to request.
+   *
+   * Videos are warmed too, and for the same reason: a card paints a video's
+   * poster frame through the same ladder, so it is an image like any other.
    */
   _warmGridMedia(posts) {
-    const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
-    const urls = posts
-      .map((p) => p && p.media_url)
-      .filter((u) => u && !VIDEO_RE.test(u));
+    const urls = posts.map((p) => p && p.media_url).filter(Boolean);
     if (!urls.length) return;
+    const sizes = cardImageSizes();
     const warm = () => {
       for (const url of urls) {
         if (this._warmedMedia?.has(url)) continue;
         (this._warmedMedia ||= new Set()).add(url);
+        const { src, srcset } = thumbSrcset(url, { sizes });
         const im = new Image();
-        im.src = url;
+        // sizes before srcset before src: the candidate is chosen when src is
+        // assigned, off whatever the other two say at that moment.
+        if (srcset) {
+          im.sizes = sizes;
+          im.srcset = srcset;
+        }
+        im.src = src;
         im.decode?.().catch(() => {});
       }
     };

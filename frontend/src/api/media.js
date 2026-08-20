@@ -188,11 +188,12 @@ export function revertMediaEXIF(id) {
 }
 
 /**
- * Rebuild thumbnails for all images.
- * @param {boolean} onlyMissing
- * @returns {Promise<{ processed: number, skipped: number, errors: number }>}
+ * Invalidate every derived image: the server purges the variant tree, rolls the
+ * thumbnail generation token and regenerates the most recent uploads in the
+ * background. There is nothing to opt out of — a rebuild discards every file.
+ * @returns {Promise<{ message: string, stats: { generation: string, purged: number, legacy: number, prewarming: number } }>}
  */
-export function rebuildThumbnails(onlyMissing = false) {
-  return api.post(`/api/media/thumbnails/rebuild?only_missing=${onlyMissing}`);
+export function rebuildThumbnails() {
+  return api.post("/api/media/thumbnails/rebuild");
 }
 

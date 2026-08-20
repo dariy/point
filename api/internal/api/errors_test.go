@@ -52,6 +52,7 @@ func TestMapErrorKinds(t *testing.T) {
 		{"forbidden", services.ErrForbidden, http.StatusForbidden},
 		{"upstream", services.ErrUpstream, http.StatusBadGateway},
 		{"storage full", services.ErrStorageFull, http.StatusInsufficientStorage},
+		{"too large", services.ErrTooLarge, http.StatusRequestEntityTooLarge},
 	}
 
 	// Every kind must be exercised, so a kind added later cannot sit untested.

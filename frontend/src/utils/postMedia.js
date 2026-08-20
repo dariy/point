@@ -13,9 +13,18 @@ const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
 const AUDIO_EXTS = new Set(["mp3", "m4a", "ogg", "wav", "flac", "aac", "opus"]);
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "heic", "heif", "bmp"]);
 
-/** Return 'video', 'audio', 'image', or null based on file extension. */
+/**
+ * Return 'video', 'audio', 'image', or null based on file extension.
+ *
+ * The query is stripped first. Rendered <img> tags keep a bare `src` by
+ * design, so a variant URL should never reach here — but the bare-URL-line
+ * fallback in extractMedia hands over whatever a line contains, and
+ * "a.jpg?s=512&v=x" would otherwise classify as an extension of its own and
+ * come back null.
+ */
 export function mediaTypeFromPath(path) {
-  const ext = (path.split(".").pop() || "").toLowerCase();
+  const bare = String(path ?? "").split(/[?#]/)[0];
+  const ext = (bare.split(".").pop() || "").toLowerCase();
   if (VIDEO_EXTS.has(ext)) return "video";
   if (AUDIO_EXTS.has(ext)) return "audio";
   if (IMAGE_EXTS.has(ext)) return "image";

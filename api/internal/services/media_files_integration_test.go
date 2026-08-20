@@ -6,14 +6,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"point-api/internal/config"
+	"point-api/internal/models"
 )
 
 func TestNewMediaService(t *testing.T) {
@@ -159,14 +164,10 @@ func TestMediaService_EdgeCases(t *testing.T) {
 		t.Error("DeleteMedia should fail for non-existent ID")
 	}
 
-	// RebuildThumbnails: with non-existent file in DB
+	// RebuildThumbnails: a row whose file is gone must not fail the rebuild.
 	_, _ = service.repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('ghost.jpg', 'originals/ghost.jpg', 'image', 'image/jpeg', 100, 'abc')`)
-	stats, err := service.RebuildThumbnails(ctx, true)
-	if err != nil {
+	if _, err := service.RebuildThumbnails(ctx); err != nil {
 		t.Errorf("RebuildThumbnails should not fail for missing files: %v", err)
-	}
-	if stats["errors"] == 0 {
-		t.Log("rebuild thumbnails had 0 errors as expected")
 	}
 }
 
@@ -316,51 +317,6 @@ func TestMediaService_UpdateMediaWithPostID(t *testing.T) {
 	}
 }
 
-// TestMediaService_RebuildThumbnailsOnlyMissing covers the onlyMissing=true "skipped" path.
-func TestMediaService_RebuildThumbnailsOnlyMissing(t *testing.T) {
-	svc, tmpDir := setupMediaService(t)
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-		_ = svc.repo.Close()
-	}()
-	ctx := context.Background()
-
-	// Upload a real image (creates a thumbnail)
-	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, nil)
-	_, _ = svc.UploadFile(ctx, UploadFileParams{Content: buf.Bytes(), Filename: "existing.jpg", MimeType: "image/jpeg"})
-
-	// onlyMissing=true: image with existing thumbnail should be skipped
-	stats, err := svc.RebuildThumbnails(ctx, true)
-	if err != nil {
-		t.Fatalf("RebuildThumbnails (onlyMissing) failed: %v", err)
-	}
-	if stats["skipped"] < 1 {
-		t.Errorf("expected at least 1 skipped, got %d", stats["skipped"])
-	}
-}
-
-// TestMediaService_RebuildThumbnailsSkip covers the "skipped" path (non-image file).
-func TestMediaService_RebuildThumbnailsSkip(t *testing.T) {
-	svc, tmpDir := setupMediaService(t)
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-		_ = svc.repo.Close()
-	}()
-	ctx := context.Background()
-
-	// Upload a text file - it should be skipped during thumbnail rebuild
-	_, _ = svc.UploadFile(ctx, UploadFileParams{Content: []byte("text"), Filename: "skip.txt", MimeType: "text/plain"})
-
-	stats, err := svc.RebuildThumbnails(ctx, false)
-	if err != nil {
-		t.Fatalf("RebuildThumbnails (skip) failed: %v", err)
-	}
-	// Text files get skipped
-	_ = stats
-}
-
 // TestMediaService_AnalyzeMediaByIDSuccess covers the file-read path (66.7% function).
 func TestMediaService_AnalyzeMediaByIDSuccess(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
@@ -459,29 +415,6 @@ func TestMediaService_RecalculateAllMediaVisibilityBoost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RecalculateAllMediaVisibility failed: %v", err)
 	}
-}
-
-// TestMediaService_RebuildThumbnailsWithImages covers 72.7% function more thoroughly.
-func TestMediaService_RebuildThumbnailsWithImages(t *testing.T) {
-	svc, tmpDir := setupMediaService(t)
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-		_ = svc.repo.Close()
-	}()
-	ctx := context.Background()
-
-	// Upload a real image so rebuild can succeed
-	img := image.NewRGBA(image.Rect(0, 0, 20, 20))
-	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, nil)
-	m, _ := svc.UploadFile(ctx, UploadFileParams{Content: buf.Bytes(), Filename: "thumb.jpg", MimeType: "image/jpeg"})
-	_ = m
-
-	stats, err := svc.RebuildThumbnails(ctx, false)
-	if err != nil {
-		t.Fatalf("RebuildThumbnails failed: %v", err)
-	}
-	_ = stats
 }
 
 // TestMediaService_UpdateMediaVisibilityForPathsBoost covers 73% function.
@@ -775,7 +708,7 @@ func TestUpdateMediaVisibilityForPaths_HiddenAndDuplicate(t *testing.T) {
 	}
 }
 
-func TestSquareThumbnail(t *testing.T) {
+func TestVariant(t *testing.T) {
 	svc, _ := setupMediaService(t)
 	ctx := context.Background()
 
@@ -791,42 +724,197 @@ func TestSquareThumbnail(t *testing.T) {
 		t.Fatalf("UploadFile failed: %v", err)
 	}
 
-	// Unsupported sizes are refused so the on-disk cache stays bounded.
-	if _, err := svc.SquareThumbnail(ctx, m, 999); err == nil {
+	// Sizes off the ladder are refused so the on-disk cache stays bounded.
+	if _, err := svc.Variant(ctx, m, 999); err == nil {
 		t.Fatal("expected error for unsupported size 999")
 	}
 
-	path, err := svc.SquareThumbnail(ctx, m, AtlasThumbSize)
+	path, err := svc.Variant(ctx, m, 128)
 	if err != nil {
-		t.Fatalf("SquareThumbnail failed: %v", err)
+		t.Fatalf("Variant failed: %v", err)
 	}
-	if !strings.Contains(filepath.ToSlash(path), "thumbnails/sq128/") {
-		t.Errorf("thumbnail path = %q, want it under thumbnails/sq128/", path)
+	if !strings.Contains(filepath.ToSlash(path), "variants/128/") {
+		t.Errorf("variant path = %q, want it under variants/128/", path)
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("open thumbnail: %v", err)
-	}
-	cfg, _, err := image.DecodeConfig(f)
-	_ = f.Close()
-	if err != nil {
-		t.Fatalf("decode thumbnail: %v", err)
-	}
-	if cfg.Width != AtlasThumbSize || cfg.Height != AtlasThumbSize {
-		t.Errorf("thumbnail = %dx%d, want %dx%d square", cfg.Width, cfg.Height, AtlasThumbSize, AtlasThumbSize)
+	// The longest side is capped and the aspect ratio survives: 600x400 at
+	// rung 128 is 128x85, not a 128x128 crop.
+	if w, h := variantDims(t, path); w != 128 || h != 85 {
+		t.Errorf("variant = %dx%d, want 128x85", w, h)
 	}
 
 	// A second call reuses the cached file (same resolved path).
-	path2, err := svc.SquareThumbnail(ctx, m, AtlasThumbSize)
+	path2, err := svc.Variant(ctx, m, 128)
 	if err != nil || path2 != path {
 		t.Errorf("cached call = %q, %v; want %q, nil", path2, err, path)
 	}
 
-	// Non-image media has no square thumbnail.
+	// Non-image media has no still to derive from.
 	txt, _ := svc.UploadFile(ctx, UploadFileParams{Content: []byte("x"), Filename: "n.txt", MimeType: "text/plain"})
-	if _, err := svc.SquareThumbnail(ctx, txt, AtlasThumbSize); !errors.Is(err, ErrNotAnImage) {
-		t.Errorf("non-image SquareThumbnail err = %v, want ErrNotAnImage", err)
+	if _, err := svc.Variant(ctx, txt, 128); !errors.Is(err, ErrNotAnImage) {
+		t.Errorf("non-image Variant err = %v, want ErrNotAnImage", err)
+	}
+}
+
+// variantDims decodes just the header of a generated variant.
+func variantDims(t *testing.T, path string) (int, int) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open variant: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		t.Fatalf("decode variant: %v", err)
+	}
+	return cfg.Width, cfg.Height
+}
+
+// A portrait source must cap its HEIGHT at the rung, not its width — the whole
+// point of Fit over the old Fill is that the ladder is aspect-preserving in
+// both orientations.
+func TestVariant_PortraitCapsLongestSide(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 400, 800)), nil)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "tall.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+
+	for _, tc := range []struct{ size, wantW, wantH int }{
+		{128, 64, 128},
+		{256, 128, 256},
+		{512, 256, 512},
+	} {
+		path, err := svc.Variant(ctx, m, tc.size)
+		if err != nil {
+			t.Fatalf("Variant(%d): %v", tc.size, err)
+		}
+		if w, h := variantDims(t, path); w != tc.wantW || h != tc.wantH {
+			t.Errorf("rung %d = %dx%d, want %dx%d", tc.size, w, h, tc.wantW, tc.wantH)
+		}
+	}
+}
+
+// One request generates the whole ladder. A responsive srcset asks for every
+// rung at once; decoding once per rung would mean four decodes to paint one
+// image.
+func TestVariant_OneRequestBuildsWholeLadder(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2000, 1500)), nil)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "wide.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+
+	// Start from an empty tree so the count below measures one lazy request,
+	// not the eager generation the upload already did.
+	if err := os.RemoveAll(filepath.Join(storage, "media", VariantsRoot)); err != nil {
+		t.Fatalf("purge variants: %v", err)
+	}
+
+	if _, err := svc.Variant(ctx, m, 256); err != nil {
+		t.Fatalf("Variant(256): %v", err)
+	}
+
+	for _, size := range VariantSizes {
+		full := filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size))
+		if _, err := os.Stat(full); err != nil {
+			t.Errorf("rung %d missing after a single request for 256: %v", size, err)
+		}
+	}
+}
+
+// A source smaller than a rung gets no file for it: imaging.Fit does not
+// upscale, so the rungs above it would be byte-identical copies. Callers fall
+// back to the original.
+func TestVariant_SkipsRungsAboveSource(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 300, 200)), nil)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "small.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+
+	for _, size := range VariantSizes {
+		full := filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size))
+		_, statErr := os.Stat(full)
+		if size < 300 && statErr != nil {
+			t.Errorf("rung %d should exist for a 300px source: %v", size, statErr)
+		}
+		if size >= 300 && statErr == nil {
+			t.Errorf("rung %d should not exist for a 300px source", size)
+		}
+	}
+
+	if _, err := svc.Variant(ctx, m, 512); !errors.Is(err, ErrVariantNotNeeded) {
+		t.Errorf("Variant(512) err = %v, want ErrVariantNotNeeded", err)
+	}
+}
+
+// Two concurrent requests for different rungs of a cold image must decode once
+// between them, not once each.
+func TestVariant_ConcurrentRequestsDecodeOnce(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1600, 1200)), nil)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "cold.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(storage, "media", VariantsRoot)); err != nil {
+		t.Fatalf("purge variants: %v", err)
+	}
+
+	var decodes atomic.Int64
+	decodeObserver = func() { decodes.Add(1) }
+	t.Cleanup(func() { decodeObserver = nil })
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for _, size := range []int{128, 512} {
+		wg.Add(1)
+		go func(size int) {
+			defer wg.Done()
+			<-start
+			if _, err := svc.Variant(ctx, m, size); err != nil {
+				t.Errorf("Variant(%d): %v", size, err)
+			}
+		}(size)
+	}
+	close(start)
+	wg.Wait()
+
+	if n := decodes.Load(); n != 1 {
+		t.Errorf("decoded %d times for two concurrent rungs, want 1", n)
 	}
 }
 
@@ -874,5 +962,236 @@ func TestUpdateMediaVisibilityForPaths_BatchResolvesEveryPath(t *testing.T) {
 		if got != want {
 			t.Errorf("media %d is_public = %d, want %d", id, got, want)
 		}
+	}
+}
+
+// waitPrewarm blocks until a rebuild's background prewarm has finished. The
+// flag is raised synchronously inside RebuildThumbnails, before the goroutine
+// starts, so there is no window where this returns early.
+func waitPrewarm(t *testing.T, svc *MediaService) {
+	t.Helper()
+	for i := 0; i < 500; i++ {
+		if !svc.prewarming.Load() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("prewarm did not finish")
+}
+
+// uploadTestImage uploads a JPEG of the given size and returns its media row.
+func uploadTestImage(t *testing.T, svc *MediaService, name string, w, h int) models.Medium {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h)), nil); err != nil {
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+	m, err := svc.UploadFile(context.Background(), UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: name,
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile(%s): %v", name, err)
+	}
+	return m
+}
+
+// A rebuild is a token roll: the generation moves, the derived tree is emptied,
+// and the rendered public pages — which have the old token baked into the
+// variant URLs inside them — are dropped.
+func TestRebuildThumbnails_RollsTokenAndPurges(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	defer func() { _ = svc.repo.Close() }()
+	svc.WithCache(NewCacheService(storage))
+	ctx := context.Background()
+
+	m := uploadTestImage(t, svc, "wide.jpg", 1600, 1200)
+	before := svc.ThumbnailGeneration(ctx)
+
+	// A rendered public page, holding variant URLs stamped with `before`.
+	if err := svc.cache.Set(ctx, "homepage_p1_pp20.json", []byte(`{"v":"`+before+`"}`)); err != nil {
+		t.Fatalf("seed page cache: %v", err)
+	}
+
+	res, err := svc.RebuildThumbnails(ctx)
+	if err != nil {
+		t.Fatalf("RebuildThumbnails: %v", err)
+	}
+
+	if res.Generation == before || res.Generation == "" {
+		t.Errorf("generation = %q, want a fresh token (was %q)", res.Generation, before)
+	}
+	if got := svc.ThumbnailGeneration(ctx); got != res.Generation {
+		t.Errorf("stored generation = %q, want %q", got, res.Generation)
+	}
+	if res.Purged != len(VariantSizes) {
+		t.Errorf("purged %d files, want %d (one per rung of an upload)", res.Purged, len(VariantSizes))
+	}
+	if _, err := svc.cache.Get(ctx, "homepage_p1_pp20.json"); err == nil {
+		t.Error("public page cache survived the rebuild; it still serves the old generation token")
+	}
+
+	waitPrewarm(t, svc)
+
+	// Prewarm put the ladder back, so the rungs exist again — under the new
+	// token, which is the point of the roll.
+	for _, size := range VariantSizes {
+		if _, err := os.Stat(filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size))); err != nil {
+			t.Errorf("rung %d was not regenerated by prewarm: %v", size, err)
+		}
+	}
+}
+
+// purgeVariants empties the derived tree and reaches nothing outside it. The
+// originals and the poster root are what an install cannot get back.
+func TestPurgeVariants_LeavesOriginalsAndPosterRoot(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	defer func() { _ = svc.repo.Close() }()
+
+	m := uploadTestImage(t, svc, "keep.jpg", 1600, 1200)
+
+	poster := filepath.Join(storage, "media", "thumbnails", "2024", "05", "clip.jpg")
+	if err := os.MkdirAll(filepath.Dir(poster), 0755); err != nil {
+		t.Fatalf("mkdir posters: %v", err)
+	}
+	if err := os.WriteFile(poster, []byte("poster"), 0644); err != nil {
+		t.Fatalf("write poster: %v", err)
+	}
+
+	if n := svc.purgeVariants(); n != len(VariantSizes) {
+		t.Errorf("purged %d, want %d", n, len(VariantSizes))
+	}
+
+	for _, size := range VariantSizes {
+		if _, err := os.Stat(filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size))); !os.IsNotExist(err) {
+			t.Errorf("rung %d survived the purge", size)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(storage, "media", m.OriginalPath)); err != nil {
+		t.Errorf("original was destroyed by a variant purge: %v", err)
+	}
+	if _, err := os.Stat(poster); err != nil {
+		t.Errorf("video poster was destroyed by a variant purge: %v", err)
+	}
+}
+
+// The legacy sweep has to separate two files with the same name shape: a stale
+// image thumbnail, which regenerates, and a video poster, which cannot — there
+// is no server-side video decoder to capture the frame again.
+func TestRebuildThumbnails_SweepsLegacyImagesButKeepsPosters(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	defer func() { _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	mediaDir := filepath.Join(storage, "media", "thumbnails", "2024", "05")
+	if err := os.MkdirAll(mediaDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	legacyImage := filepath.Join(mediaDir, "photo_w400h300.jpg")
+	legacyPoster := filepath.Join(mediaDir, "clip_w400h300.jpg")
+	modernPoster := filepath.Join(mediaDir, "reel.jpg")
+	for _, p := range []string{legacyImage, legacyPoster, modernPoster} {
+		if err := os.WriteFile(p, []byte("x"), 0644); err != nil {
+			t.Fatalf("write %s: %v", p, err)
+		}
+	}
+
+	// The image row carries the legacy thumbnail; both video rows carry their
+	// posters, one at each naming generation.
+	_, err := svc.repo.DB().ExecContext(ctx, `INSERT INTO media (filename, original_path, thumbnail_path, file_type, mime_type, file_size, checksum) VALUES
+		('photo.jpg','originals/2024/05/photo.jpg','thumbnails/2024/05/photo_w400h300.jpg','image','image/jpeg',1,'c1'),
+		('clip.mp4','originals/2024/05/clip.mp4','thumbnails/2024/05/clip_w400h300.jpg','video','video/mp4',1,'c2'),
+		('reel.mp4','originals/2024/05/reel.mp4','thumbnails/2024/05/reel.jpg','video','video/mp4',1,'c3')`)
+	if err != nil {
+		t.Fatalf("seed media: %v", err)
+	}
+
+	res, err := svc.RebuildThumbnails(ctx)
+	if err != nil {
+		t.Fatalf("RebuildThumbnails: %v", err)
+	}
+	waitPrewarm(t, svc)
+
+	if res.Legacy != 1 {
+		t.Errorf("swept %d legacy thumbnails, want 1", res.Legacy)
+	}
+	if _, err := os.Stat(legacyImage); !os.IsNotExist(err) {
+		t.Error("legacy image thumbnail survived the rebuild")
+	}
+	for _, p := range []string{legacyPoster, modernPoster} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("video poster %s was deleted by a rebuild: %v", filepath.Base(p), err)
+		}
+	}
+}
+
+// A rebuild answers a settings screen holding an HTTP connection: it must roll
+// the token and hand back, never decode the library on the request.
+func TestRebuildThumbnails_ReturnsWithoutDecodingTheLibrary(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	defer func() { _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	// 500 real images: enough work to be plainly slow if the rebuild did it
+	// inline. They are copies of one encode, but each has its own path and so
+	// its own ladder to rebuild.
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 300, 200)), nil); err != nil {
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+	dir := filepath.Join(storage, "media", "originals", "2024", "05")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	rows := make([]string, 0, 500)
+	args := make([]any, 0, 500*3)
+	for i := 0; i < 500; i++ {
+		name := fmt.Sprintf("row%d.jpg", i)
+		if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		rows = append(rows, "(?,?,'image','image/jpeg',1,?)")
+		args = append(args, name, "originals/2024/05/"+name, fmt.Sprintf("sum%d", i))
+	}
+	if _, err := svc.repo.DB().ExecContext(ctx,
+		`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES `+
+			strings.Join(rows, ","), args...); err != nil {
+		t.Fatalf("seed media: %v", err)
+	}
+
+	var decodes atomic.Int64
+	decodeObserver = func() { decodes.Add(1) }
+	t.Cleanup(func() { decodeObserver = nil })
+
+	start := time.Now()
+	res, err := svc.RebuildThumbnails(ctx)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("RebuildThumbnails: %v", err)
+	}
+
+	if elapsed > time.Second {
+		t.Errorf("rebuild took %s for 500 rows; it is doing image work on the request", elapsed)
+	}
+	if res.Prewarming != prewarmLimit {
+		t.Errorf("queued %d for prewarm, want the bound of %d", res.Prewarming, prewarmLimit)
+	}
+
+	waitPrewarm(t, svc)
+	// One decode per queued row, and nothing past the bound: the other 300
+	// rows regenerate lazily when something asks for them.
+	if n := decodes.Load(); n != int64(prewarmLimit) {
+		t.Errorf("prewarm decoded %d times, want one per queued row (%d)", n, prewarmLimit)
+	}
+	warmed := 0
+	for i := 0; i < 500; i++ {
+		p := VariantRelPath(fmt.Sprintf("originals/2024/05/row%d.jpg", i), 128)
+		if _, err := os.Stat(filepath.Join(storage, "media", p)); err == nil {
+			warmed++
+		}
+	}
+	if warmed != prewarmLimit {
+		t.Errorf("%d rows have a warm rung, want %d", warmed, prewarmLimit)
 	}
 }

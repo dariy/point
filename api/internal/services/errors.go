@@ -19,6 +19,7 @@ import "errors"
 //	ErrForbidden       403  the caller is known but may not do this
 //	ErrUpstream        502  a service we depend on failed or misbehaved
 //	ErrStorageFull     507  the operation needs more disk than is available
+//	ErrTooLarge        413  the input is larger than the operation will process
 //
 // Errors that are *not* foreseeable — a closed database, a failed write, a
 // bug — deliberately carry no kind. They fall through to a logged 500, which
@@ -36,6 +37,7 @@ var (
 	ErrForbidden       = errors.New("forbidden")
 	ErrUpstream        = errors.New("upstream failure")
 	ErrStorageFull     = errors.New("insufficient storage")
+	ErrTooLarge        = errors.New("payload too large")
 )
 
 // ErrorKinds lists every kind sentinel. The mapper in internal/api and the
@@ -50,6 +52,7 @@ var ErrorKinds = []error{
 	ErrForbidden,
 	ErrUpstream,
 	ErrStorageFull,
+	ErrTooLarge,
 }
 
 // kindError is a sentinel that reports its own message but unwraps to a kind,
