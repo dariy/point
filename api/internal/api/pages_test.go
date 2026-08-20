@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1283,5 +1286,98 @@ func TestPagesHandler_GetTagCloud_HiddenMarking(t *testing.T) {
 	}
 	if _, ok := guestPosts["Published"]["status"]; ok {
 		t.Error("guest cloud must never carry status")
+	}
+}
+
+// TestPagesHandler_PathScopedTagPageCaches covers the cache key composition for
+// the two hot public reads. The tag-page key mixes in the breadcrumb `path`
+// chain, which contains separators; embedded raw, that key was rejected by
+// CacheService and every path-scoped tag page re-rendered from scratch — with
+// both the Get and the Set error discarded, so nothing surfaced it.
+//
+// The assertion is deliberately end-to-end: fire the request, then overwrite
+// whatever file landed in the cache directory with a sentinel and fire again.
+// A second response carrying the sentinel proves Set and Get agreed on a key
+// the cache actually accepts.
+func TestPagesHandler_PathScopedTagPageCaches(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	cacheDir := filepath.Join(h.cfg.StoragePath, "cache")
+
+	location, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Location", Slug: "location", InBreadcrumbs: true})
+	ukraine, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Ukraine", Slug: "ukraine", InBreadcrumbs: true, ParentIDs: []int64{location.ID}})
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Kyiv", Slug: "kyiv", ParentIDs: []int64{ukraine.ID}})
+
+	// cachedFile returns the single file the cache directory holds, failing if
+	// the handler wrote none (the bug) or more than one.
+	cachedFile := func(t *testing.T) string {
+		t.Helper()
+		entries, err := os.ReadDir(cacheDir)
+		if err != nil {
+			t.Fatalf("read cache dir: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("expected exactly 1 cache entry, got %d", len(entries))
+		}
+		return filepath.Join(cacheDir, entries[0].Name())
+	}
+
+	get := func(t *testing.T, target string, params ...string) *httptest.ResponseRecorder {
+		t.Helper()
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if len(params) == 2 {
+			c.SetParamNames(params[0])
+			c.SetParamValues(params[1])
+		}
+		if err := ph.GetTagPage(c); err != nil {
+			t.Fatalf("GetTagPage failed: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rec.Code)
+		}
+		return rec
+	}
+
+	const target = "/tags/kyiv?path=location/ukraine"
+	get(t, target, "slug", "kyiv")
+
+	const sentinel = `{"served":"from-cache"}`
+	if err := os.WriteFile(cachedFile(t), []byte(sentinel), 0644); err != nil {
+		t.Fatalf("overwrite cache entry: %v", err)
+	}
+
+	if body := get(t, target, "slug", "kyiv").Body.String(); body != sentinel {
+		t.Errorf("second request was not served from cache: got %s", body)
+	}
+}
+
+// TestPagesHandler_HomePageCaches is the homepage half of the same key
+// composition — no user input in this key, but it is hashed alongside the tag
+// key and must keep round-tripping.
+func TestPagesHandler_HomePageCaches(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/posts", nil)
+	rec := httptest.NewRecorder()
+	if err := ph.GetHomePage(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetHomePage failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(h.cfg.StoragePath, "cache"))
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected exactly 1 cache entry, got %d", len(entries))
+	}
+	if !strings.HasPrefix(entries[0].Name(), "homepage_") || !strings.HasSuffix(entries[0].Name(), ".json") {
+		t.Errorf("unexpected cache filename %q", entries[0].Name())
 	}
 }

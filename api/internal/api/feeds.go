@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -121,7 +122,9 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	)
 
 	// Save to cache
-	_ = h.cacheService.Set(ctx, "feed.xml", []byte(xml))
+	if err := h.cacheService.Set(ctx, "feed.xml", []byte(xml)); err != nil {
+		slog.Warn("page cache write failed", "key", "feed.xml", "error", err)
+	}
 
 	return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", []byte(xml))
 }
@@ -182,7 +185,9 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 %s</urlset>`, urls.String())
 
 	// Save to cache
-	_ = h.cacheService.Set(ctx, "sitemap.xml", []byte(xml))
+	if err := h.cacheService.Set(ctx, "sitemap.xml", []byte(xml)); err != nil {
+		slog.Warn("page cache write failed", "key", "sitemap.xml", "error", err)
+	}
 
 	return c.Blob(http.StatusOK, "application/xml; charset=utf-8", []byte(xml))
 }

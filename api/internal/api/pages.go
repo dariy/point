@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"sort"
@@ -121,7 +123,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
 	// same page at a different post count must not serve a stale-sized blob.
-	cacheKey := fmt.Sprintf("homepage_p%d_pp%d.json", page, perPage)
+	cacheKey := pageCacheKey("homepage", fmt.Sprintf("p%d_pp%d", page, perPage))
 	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
@@ -305,11 +307,28 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
-			_ = h.cacheService.Set(ctx, cacheKey, data)
+			if err := h.cacheService.Set(ctx, cacheKey, data); err != nil {
+				slog.Warn("page cache write failed", "key", cacheKey, "error", err)
+			}
 		}
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+// pageCacheKey turns a composed cache identity into a filename-safe key.
+//
+// The identity carries user-controlled input — a tag slug, the breadcrumb
+// `path` chain — which cannot be embedded in a filename directly: CacheService
+// rejects any key containing a separator, and it rejected every path-scoped tag
+// page for exactly that reason, silently, because both Get and Set errors were
+// discarded. Hashing keeps the key opaque and fixed-width, and leaves
+// CacheService's traversal guard as belt-and-braces rather than load-bearing.
+//
+// The prefix stays readable so the cache directory can still be reasoned about
+// by eye.
+func pageCacheKey(prefix, identity string) string {
+	return fmt.Sprintf("%s_%x.json", prefix, sha256.Sum256([]byte(identity)))
 }
 
 // splitPathParam parses the `path` query value ("a/b/c") into a slice of
@@ -396,7 +415,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	// per_page is part of the key (device-fit / pinch-zoom controlled) so the same
 	// page at a different post count isn't served a stale-sized cached blob.
-	cacheKey := fmt.Sprintf("tagpage_%s_path-%s_p%d_pp%d.json", slug, strings.Join(pathSlugs, "/"), page, perPage)
+	cacheKey := pageCacheKey("tagpage", fmt.Sprintf("%s_path-%s_p%d_pp%d", slug, strings.Join(pathSlugs, "/"), page, perPage))
 	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
@@ -599,7 +618,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
-			_ = h.cacheService.Set(ctx, cacheKey, data)
+			if err := h.cacheService.Set(ctx, cacheKey, data); err != nil {
+				slog.Warn("page cache write failed", "key", cacheKey, "error", err)
+			}
 		}
 	}
 
