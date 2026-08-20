@@ -86,6 +86,14 @@ input[type="password"] {
     color: var(--text-muted);
 }
 
+/* Inline variant of .form-help — no display:block, so it can sit next to a
+   label (used by the tag editor, Security, Themes and System pages). */
+.form-hint {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
 .form-error {
     display: block;
     margin-top: var(--spacing-xs);
