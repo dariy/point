@@ -27,10 +27,16 @@ type Config struct {
 	MigrationBackup     bool `mapstructure:"MIGRATION_BACKUP"`
 	MigrationBackupKeep int  `mapstructure:"MIGRATION_BACKUP_KEEP"`
 
+	// MaxImageMegapixels bounds how many pixels an image may decode to. The
+	// upload body limit bounds bytes on the wire, not pixels in memory: JPEG
+	// compresses ~10-20x, so a 50 MB upload can carry well over 100 megapixels,
+	// and Go decodes to RGBA at 4 bytes/pixel. The header is read first
+	// (image.DecodeConfig) and an oversized image is rejected before any full
+	// decode allocates. 0 disables the check.
+	MaxImageMegapixels int `mapstructure:"MAX_IMAGE_MEGAPIXELS"`
+
 	MaxImageWidth   int `mapstructure:"MAX_IMAGE_WIDTH"`
 	JpegQuality     int `mapstructure:"JPEG_QUALITY"`
-	ThumbnailWidth  int `mapstructure:"THUMBNAIL_WIDTH"`
-	ThumbnailHeight int `mapstructure:"THUMBNAIL_HEIGHT"`
 	AvatarSize      int `mapstructure:"AVATAR_SIZE"`
 	MaxUploadSizeMB int `mapstructure:"MAX_UPLOAD_SIZE_MB"`
 	// StorageQuotaMB is the media storage allowance the dashboard reports usage
@@ -98,10 +104,10 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("APP_VERSION", "")
 	v.SetDefault("SESSION_EXPIRY_HOURS", 720)
 	v.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
-	v.SetDefault("THUMBNAIL_WIDTH", 400)
-	v.SetDefault("THUMBNAIL_HEIGHT", 300)
-	v.SetDefault("JPEG_QUALITY", 85)
 	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
+	// ~80 MP: above any panorama a blog needs, far below the ~400 MB RGBA
+	// allocation a crafted header could otherwise force.
+	v.SetDefault("MAX_IMAGE_MEGAPIXELS", 80)
 	v.SetDefault("STORAGE_QUOTA_MB", 0)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")

@@ -1,6 +1,33 @@
 # Environments
 .env
 .env.*
+# …but the template is meant to be read. A negation only works after the pattern
+# that ignored the file, so keep this line below `.env.*`.
+!.env.example
+
+# Agent instructions ship with this repo. Many developers ignore these names
+# globally (~/.gitignore_global); patterns here take precedence over that file,
+# which is what keeps AGENTS.md tracked for everyone who clones.
+!AGENTS.md
+!CLAUDE.md
+# Maintainer-only overrides stay local.
+CLAUDE.local.md
+GEMINI.md
+
+# The browser-automation skill ships too, for the same reason: an agent that
+# cannot see the SPA it just changed cannot verify it. Global ignore files
+# routinely exclude `.claude/` wholesale, and a negation cannot re-include a
+# file whose parent directory is excluded — hence one line per level down to
+# the skill. Everything else you keep there (settings, commands, worktrees)
+# stays yours, ignored here whether or not your global file says so.
+!.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/playwright-cli/
+# …and the files inside it, because a global `.claude/**` reaches them even
+# once their directory is back.
+!.claude/skills/playwright-cli/**
 
 # IDE
 *~
@@ -38,6 +65,9 @@ frontend/css/asset-manifest.json
 frontend/css/common/theme.css
 frontend/css/p/
 
+# Release tarballs (scripts/build-tarball.sh) — build output.
+dist/
+
 # Static UI demo (demo/scripts/build.sh) — build output.
 demo/dist/
 # Throwaway instance used to generate demo content (demo/scripts/make-content.sh).
@@ -48,6 +78,12 @@ demo/.media-cache/
 # against an instance whose content you intend to publish: the recording is a
 # copy of that instance's posts, tags and media metadata.
 demo/mock/fixtures/fixtures.json
+
+# playwright-cli working state: per-session console/network logs, screenshots
+# and traces in the first, local browser preferences in the second. Both are
+# written into whatever directory you run the CLI from.
+.playwright-cli/
+.playwright/
 
 # bv (beads viewer) local config and caches
 .bv/

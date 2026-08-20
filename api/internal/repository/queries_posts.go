@@ -685,19 +685,6 @@ func (r *sqliteRepository) ReplacePostContentPath(ctx context.Context, oldPath, 
 	return n1 + n2 + n3, nil
 }
 
-// UpdatePostThumbnailPath updates the thumbnail_path column for all posts
-// currently using oldPath to newPath. Returns number of posts updated.
-func (r *sqliteRepository) UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE posts SET thumbnail_path = ? WHERE thumbnail_path = ?`,
-		newPath, oldPath,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
-}
-
 // PostStub is a lightweight post descriptor used for position/page lookups.
 type PostStub struct {
 	ID          int64

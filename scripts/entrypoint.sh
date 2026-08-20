@@ -24,7 +24,8 @@ export ADMIN_PASSWD
 # In some environments (like rootless Podman), su-exec might fail with
 # "setgroups: Operation not permitted". If so, we fall back to running as-is.
 if [ "$(id -u)" = '0' ]; then
-    # chown the root and all non-R2 mounts (skip media and backups to avoid FUSE hangs)
+    # chown the root and all local dirs (skip media and backups: those may be
+    # network/FUSE mounts, where a recursive chown can hang)
     chown appuser:appuser /data 2>/dev/null || true
     find /data -mindepth 1 -maxdepth 1 ! -name media ! -name backups -exec chown -R appuser:appuser {} + 2>/dev/null || true
     # explicitly chown the roots of skipped dirs without -R so local setups can write to them

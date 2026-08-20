@@ -75,7 +75,6 @@ type Repository interface {
 	GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error)
 	GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *PostNavItem, err error)
 	ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error)
-	UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	ListPublishedPostStubs(ctx context.Context) ([]PostStub, error)
 	ListScheduledPosts(ctx context.Context, limit, offset int64) ([]models.Post, error)
 	CountScheduledPosts(ctx context.Context) (int64, error)

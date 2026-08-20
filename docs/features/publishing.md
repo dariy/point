@@ -1,8 +1,11 @@
 # Content & Publishing
 
 The post lifecycle: authoring, saving, scheduling, previewing, and the editor model.
-Backend core is `PostService` (`api/internal/services/post_service.go`); the editor is
-`frontend/src/pages/light/PostEditPage.js`.
+Backend core is `PostService`, split by concern across `api/internal/services/`:
+`post_service.go` (CRUD, queries, tags, trash), `post_render.go` (the goldmark
+pipeline and the bluemonday allowlist), `post_css.go` (per-post and site-wide CSS
+sanitization), `post_publish.go` (publish, withdraw, the scheduled queue, Instagram
+cross-posting). The editor is `frontend/src/pages/light/PostEditPage.js`.
 
 ## Authoring
 
@@ -10,9 +13,9 @@ Backend core is `PostService` (`api/internal/services/post_service.go`); the edi
   rendered server-side; fenced code blocks highlighted via Chroma. A raw **HTML**
   formatter is available for full layout control.
 - **Text / Visual editor modes**: the Visual mode is a node model
-  (`parseNodes`/`serializeNodes`) over image sequences + text blocks — deliberately not
-  a WYSIWYG rewrite; media references serialize as bare paths matched by
-  `IMAGE_PATH_RE`.
+  (`parseNodes`/`serializeNodes` in `frontend/src/utils/postNodes.js`) over image
+  sequences + text blocks — deliberately not a WYSIWYG rewrite; media references
+  serialize as bare paths matched by `IMAGE_PATH_RE`.
 - **Per-post custom CSS** (via the `custom-css` plugin): a CSS textarea in the editor;
   `SanitizePostCSS` enforces an explicit safe-property allowlist (excluded: `position`,
   `z-index`, `background-image`, `content`, `transform`, `animation`, `transition`),

@@ -79,7 +79,7 @@ func TestMediaHandler_Upload(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
@@ -125,7 +125,7 @@ func TestMediaHandler_Upload_RejectsNonMedia(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
@@ -165,7 +165,7 @@ func TestMediaHandler_List(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
@@ -227,7 +227,7 @@ func TestMediaHandler_GetMediaFolders(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -255,7 +255,7 @@ func TestMediaHandler_GetMedia(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -314,7 +314,7 @@ func TestMediaHandler_UpdateMedia(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -364,7 +364,7 @@ func TestMediaHandler_ListOrphanedMedia(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -392,7 +392,7 @@ func TestMediaHandler_DeleteMedia(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -432,7 +432,7 @@ func setupMediaHandler(t *testing.T) (*MediaHandler, func()) {
 	t.Helper()
 	repo := setupTestDB(t)
 	tmpDir, _ := os.MkdirTemp("", "media-handler-test")
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
@@ -581,7 +581,7 @@ func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -681,7 +681,7 @@ func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "media-meta-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -740,7 +740,7 @@ func TestMediaHandler_ReextractEXIF(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "media-reextract-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -783,7 +783,7 @@ func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "post-media-paths-test")
 	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -843,7 +843,7 @@ func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "media-list-meta-test")
 	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -891,7 +891,7 @@ func TestMediaHandler_UpdateEXIF_ValidInput(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "exif-handler-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -934,7 +934,7 @@ func TestMediaHandler_UpdateEXIF_InvalidChars(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "exif-handler-invalid-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -985,7 +985,7 @@ func TestMediaHandler_RevertEXIF(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "exif-revert-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -1041,7 +1041,7 @@ func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T
 	tmpDir, _ := os.MkdirTemp("", "media-preserve-test")
 	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)

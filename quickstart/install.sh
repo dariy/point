@@ -100,6 +100,18 @@ pick_install_method() {
     *)        echo "docker" ;;
   esac
 }
+
+# Directory this script was read from, or empty when it was piped into bash —
+# `curl … /install.sh | bash` is the documented one-liner, and bash then sets
+# BASH_SOURCE[0] to "main", which dirname resolves to the caller's working
+# directory. The branches below use this to decide whether a local checkout is
+# available; without the check they would treat whatever happens to sit next to
+# the caller's cwd as the Point source tree.
+script_source_dir() {
+  local src="${BASH_SOURCE[0]:-}"
+  [ -f "$src" ] || return 0
+  (cd "$(dirname "$src")" && pwd)
+}
 # ── Config collection ──────────────────────────────────────────────────────────
 # Globals set by collect_config:
 #   PORT           - port Point listens on
@@ -256,9 +268,9 @@ install_via_docker() {
   fi
 
   local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  script_dir="$(script_source_dir)"
 
-  if [ -f "${script_dir}/docker-compose.yml" ] && [ -f "${script_dir}/update.sh" ]; then
+  if [ -n "$script_dir" ] && [ -f "${script_dir}/docker-compose.yml" ] && [ -f "${script_dir}/update.sh" ]; then
     say "Found local docker-compose.yml and update.sh, copying..."
     if [ "${script_dir}" != "${INSTALL_DIR}" ]; then
         cp "${script_dir}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
@@ -372,21 +384,25 @@ install_native() {
     die "Native installation requires root. Re-run with sudo."
   fi
 
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local project_root
-  project_root="$(cd "$script_dir/.." && pwd)"
+  local script_dir project_root=""
+  script_dir="$(script_source_dir)"
+  if [ -n "$script_dir" ]; then
+    project_root="$(cd "$script_dir/.." && pwd)"
+  fi
 
   say "Installing to ${INSTALL_DIR}..."
   mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 
-  if [ -f "${project_root}/point" ]; then
+  if [ -n "$project_root" ] && [ -f "${project_root}/point" ]; then
     say "Found local point binary, copying..."
     cp "${project_root}/point" "${INSTALL_DIR}/point"
     if [ -d "${project_root}/frontend" ]; then
       cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
     fi
-  elif [ -f "${project_root}/api/cmd/api/main.go" ]; then
+    if [ -f "${project_root}/data.yml" ]; then
+      cp "${project_root}/data.yml" "${INSTALL_DIR}/"
+    fi
+  elif [ -n "$project_root" ] && [ -f "${project_root}/api/cmd/api/main.go" ]; then
     say "Found source code, building..."
     if ! command -v go >/dev/null 2>&1; then
       die "Go compiler not found. Please install Go or use Docker."
@@ -397,9 +413,15 @@ install_native() {
     else
       warn "npm not found. Frontend assets will not be updated from source."
     fi
-    (cd "${project_root}/api" && go build -o "${INSTALL_DIR}/point" cmd/api/main.go)
+    # The package, not cmd/api/main.go: main lives in eight files (routes.go,
+    # setup.go, apikey.go …) and building the single file fails on every
+    # symbol defined beside it.
+    (cd "${project_root}/api" && go build -o "${INSTALL_DIR}/point" ./cmd/api)
     if [ -d "${project_root}/frontend" ]; then
       cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
+    fi
+    if [ -f "${project_root}/data.yml" ]; then
+      cp "${project_root}/data.yml" "${INSTALL_DIR}/"
     fi
   else
     local arch; arch=$(detect_arch)

@@ -20,9 +20,7 @@ func newTestImportService(t *testing.T) *InstagramImportService {
 	t.Cleanup(func() { _ = repo.Close() })
 
 	cfg := &config.Config{
-		StoragePath:     t.TempDir(),
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
+		StoragePath: t.TempDir(),
 	}
 	settings := NewSettingsService(repo)
 	media := NewMediaService(repo, cfg, settings, NewTagService(repo))

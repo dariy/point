@@ -391,8 +391,9 @@ class Router {
     p.textContent = body;
 
     const link = document.createElement("a");
-    link.href = "/";
-    link.textContent = "Go home";
+    const isLight = window.location.pathname.startsWith("/light");
+    link.href = isLight ? "/light" : "/";
+    link.textContent = "Go to main";
 
     wrap.append(h1, p, link);
     this._mountPoint.textContent = "";

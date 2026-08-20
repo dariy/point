@@ -186,3 +186,14 @@ export function updateMediaEXIF(id, fields) {
 export function revertMediaEXIF(id) {
   return api.post(`/api/media/${id}/revert-exif`, {});
 }
+
+/**
+ * Invalidate every derived image: the server purges the variant tree, rolls the
+ * thumbnail generation token and regenerates the most recent uploads in the
+ * background. There is nothing to opt out of — a rebuild discards every file.
+ * @returns {Promise<{ message: string, stats: { generation: string, purged: number, legacy: number, prewarming: number } }>}
+ */
+export function rebuildThumbnails() {
+  return api.post("/api/media/thumbnails/rebuild");
+}
+

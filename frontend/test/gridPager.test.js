@@ -54,7 +54,15 @@ before(async () => {
     removeEventListener(type, fn) { keyHandlers[type] = (keyHandlers[type] || []).filter((f) => f !== fn); },
     dispatchEvent(e) { dispatched.push(e); },
   };
-  globalThis.Image = class { set src(_v) {} decode() { return Promise.resolve(); } };
+  // Records what the media warm-up asks the browser for. The pager hands an
+  // <img> a srcset and lets it pick, exactly as a card does, so the assertions
+  // are about the candidate set rather than about one URL.
+  globalThis.warmed = [];
+  globalThis.Image = class {
+    set src(v) { this._src = v; warmed.push(this); }
+    get src() { return this._src; }
+    decode() { return Promise.resolve(); }
+  };
   globalThis.document = {
     body: null, // set per test
     documentElement: { scrollHeight: 600 }, // fits the viewport, like a DF grid
@@ -97,6 +105,9 @@ function setup({ page = 2, pages = 4, posts = [] } = {}) {
 /** Let the preload's awaits settle. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** …and the idle-scheduled media warm-up behind it. */
+const flushWarm = async () => { await flush(); await flush(); };
+
 describe('GridPager', () => {
   beforeEach(() => { keyHandlers = {}; });
 
@@ -112,6 +123,46 @@ describe('GridPager', () => {
     assert.deepEqual(ghosts.map((g) => g.style.transform).sort(),
       ['translateX(-816px)', 'translateX(816px)']);
     for (const g of ghosts) assert.equal(g.style.opacity, '0');
+  });
+
+  // A ghost is built from the neighbouring page's real cards, so it wants the
+  // same bytes they do. Warming the bare `media_url` — which is what this did —
+  // downloaded the full original of every neighbouring post, several megabytes
+  // each, and none of it was the file the card then went on to request.
+  test('warms the rung the cards paint, never the original', async () => {
+    warmed.length = 0;
+    const posts = [
+      { id: 1, slug: 'a', title: 'A', tags: [], media_url: '/2026/03/photo.jpg' },
+      { id: 2, slug: 'b', title: 'B', tags: [], media_url: '/2026/03/clip.mp4' },
+    ];
+    const { pager } = setup({ page: 2, pages: 4, posts });
+    pager.arm({ page: 2, pages: 4 });
+    await flushWarm();
+
+    assert.ok(warmed.length, 'the neighbour pages should have been warmed');
+    for (const im of warmed) {
+      assert.match(im.src, /\?s=\d+/, 'a warm-up must name a rung');
+      assert.ok(im.srcset.includes(' 128w'), 'the browser picks from the ladder');
+      assert.ok(im.sizes, 'and it cannot pick without knowing how wide the card is');
+    }
+    // Video cards paint their poster frame through the same ladder, so they are
+    // warmed like any other image — skipping them left a hitch on exactly the
+    // cards that cost the most to paint.
+    assert.ok(warmed.some((im) => im.src.startsWith('/2026/03/clip.mp4?')));
+  });
+
+  test('a ghost drops a poster that never loads, rather than showing it broken', async () => {
+    const posts = [{ id: 1, slug: 'a', title: 'A', tags: [], media_url: '/2026/03/clip.mp4' }];
+    const { pager } = setup({ page: 2, pages: 4, posts });
+    pager.arm({ page: 2, pages: 4 });
+    await flush();
+
+    // Ghost cards are static markup with no component behind them, so the
+    // listener has to be a delegated one on the ghost itself — and in the
+    // capture phase, since `error` does not bubble.
+    for (const ghost of container.children.slice(1)) {
+      assert.ok(ghost.listeners.error?.length, 'no ghost should paint a broken-image glyph');
+    }
   });
 
   test('pins each ghost to the live grid box, not the container', async () => {

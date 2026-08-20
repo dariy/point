@@ -138,7 +138,10 @@ self.addEventListener("activate", (event) => {
           keys
             // Drop stale shell caches only. The point-images-* caches are
             // written by the offline-sync plugin from the page context and
-            // must survive SW updates.
+            // must survive SW updates. They are keyed by full URL, generation
+            // token included, so a thumbnail rebuild orphans every entry — the
+            // SW cannot see window.__MEDIA__ to notice, so OfflineDataSection
+            // clears them before each re-precache instead.
             .filter((k) => k !== CACHE_NAME && !k.startsWith("point-images-"))
             .map((k) => caches.delete(k)),
         ),
@@ -171,27 +174,9 @@ self.addEventListener("fetch", (event) => {
   // 2. Image intercept (path pattern /:year/:month/:filename)
   if (isMediaPath(url.pathname)) {
     event.respondWith(
-      caches
-        .match(request.url, {
-          ignoreSearch: true,
-          cacheName: "point-images-full-v1",
-        })
-        .then(
-          (r) =>
-            r ||
-            caches.match(request.url, {
-              ignoreSearch: true,
-              cacheName: "point-images-v1",
-            }),
-        )
-        .then(
-          (r) =>
-            r ||
-            (navigator.onLine
-              ? fetch(request)
-              : new Response("Not found", { status: 404 })),
-        )
-        .catch(() => new Response("Not found", { status: 404 })),
+      serveMedia(request).catch(
+        () => new Response("Not found", { status: 404 }),
+      ),
     );
     return;
   }
@@ -310,6 +295,58 @@ async function handleShareTarget(request) {
 
 function isMediaPath(path) {
   return /^\/\d{4}\/\d{2}\/[^/]+$/.test(path);
+}
+
+// The offline image caches, most faithful first. Both are written from the page
+// context by the offline-sync plugin (utils/imageCache.js): the original bytes
+// go to point-images-full-v1, the ladder rungs to point-images-v1.
+const IMAGE_CACHES = ["point-images-full-v1", "point-images-v1"];
+
+/**
+ * caches.match for one named cache, treating a cache that was never created as
+ * a miss. The spec resolves undefined for an unknown cacheName, but older
+ * implementations reject instead, and a user who has never pressed "Update
+ * Offline Data" has neither cache.
+ */
+async function matchImageCache(cacheName, url, options = {}) {
+  try {
+    return await caches.match(url, { ...options, cacheName });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Serve a media request from the offline caches, then the network.
+ *
+ * The query is part of the cache key here, deliberately. A media URL now names
+ * one rung of the thumbnail ladder (`?s=512&v=…`), so the `ignoreSearch: true`
+ * this used to pass would answer a request for the 1024 rung with whichever
+ * variant happened to be cached first — a 128px chip painted into a full-width
+ * slot. Match exactly instead, and only when we cannot reach the network at all
+ * fall back to an approximate hit: offline, a soft image beats a broken one.
+ */
+async function serveMedia(request) {
+  for (const name of IMAGE_CACHES) {
+    const hit = await matchImageCache(name, request.url);
+    if (hit) return hit;
+  }
+
+  if (navigator.onLine) {
+    try {
+      return await fetch(request);
+    } catch {
+      // Online by the flag, unreachable in fact (captive portal, flaky link) —
+      // the approximate match below is still better than nothing.
+    }
+  }
+
+  for (const name of IMAGE_CACHES) {
+    const hit = await matchImageCache(name, request.url, { ignoreSearch: true });
+    if (hit) return hit;
+  }
+
+  return new Response("Not found", { status: 404 });
 }
 
 async function serveFromOfflineStore(request) {

@@ -10,8 +10,9 @@
     "test:frontend": "node --test frontend/test/*.test.js"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
-    "eslint": "^10.8.0",
+    "@playwright/cli": "0.1.18",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.8.1",
     "linkedom": "^0.18.13",
     "playwright": "^1.58.0"
   }

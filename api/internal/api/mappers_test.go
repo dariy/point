@@ -241,7 +241,7 @@ func TestMediaToResponse(t *testing.T) {
 		IsPublic:      1,
 		ThumbnailPath: sql.NullString{String: "thumbnails/2026/03/photo.jpg", Valid: true},
 	}
-	resp := mediaToResponse(m)
+	resp := mediaToResponse(m, "abc123")
 
 	if resp["path"] != "/2026/03/photo.jpg" {
 		t.Errorf("expected path /2026/03/photo.jpg, got %v", resp["path"])
@@ -249,19 +249,51 @@ func TestMediaToResponse(t *testing.T) {
 	if resp["file_type"] != "image" {
 		t.Errorf("expected lowercase file_type, got %v", resp["file_type"])
 	}
-	if resp["thumbnail_path"] == nil {
-		t.Error("expected thumbnail_path to be set")
-	}
-	// thumbnail path should be derived from media path + ?thumb
-	if resp["thumbnail_path"] != "/2026/03/photo.jpg?thumb" {
-		t.Errorf("expected thumbnail path /2026/03/photo.jpg?thumb, got %v", resp["thumbnail_path"])
+	// The thumbnail is a ladder rung derived from the media path, carrying the
+	// generation token — not the thumbnail_path column, which holds video
+	// posters only.
+	wantThumb := "/2026/03/photo.jpg?s=512&v=abc123"
+	if resp["thumbnail_path"] != wantThumb {
+		t.Errorf("expected thumbnail path %s, got %v", wantThumb, resp["thumbnail_path"])
 	}
 
-	// No thumbnail
+	// An image keeps its rung with the poster column empty: every image has a
+	// derived thumbnail whether or not anything is stored on that row.
 	m.ThumbnailPath = sql.NullString{Valid: false}
-	resp = mediaToResponse(m)
-	if resp["thumbnail_path"] != nil {
-		t.Errorf("expected nil thumbnail_path, got %v", resp["thumbnail_path"])
+	resp = mediaToResponse(m, "abc123")
+	if resp["thumbnail_path"] != wantThumb {
+		t.Errorf("expected image thumbnail path %s, got %v", wantThumb, resp["thumbnail_path"])
+	}
+}
+
+// A video's thumbnail_path is null until an admin browser captures a poster
+// frame. MediaBrowser reads that null as "needs a capture" and offers the
+// affordance, so making it always-truthy would silently remove it.
+func TestMediaToResponseVideoPoster(t *testing.T) {
+	v := models.Medium{
+		ID:           2,
+		Filename:     "clip.mp4",
+		OriginalPath: "originals/2026/03/clip.mp4",
+		FileType:     "video",
+		MimeType:     "video/mp4",
+	}
+	if resp := mediaToResponse(v, "abc123"); resp["thumbnail_path"] != nil {
+		t.Errorf("expected nil thumbnail_path for a video with no poster, got %v", resp["thumbnail_path"])
+	}
+
+	v.ThumbnailPath = sql.NullString{String: "thumbnails/2026/03/clip.jpg", Valid: true}
+	want := "/2026/03/clip.mp4?s=512&v=abc123"
+	if resp := mediaToResponse(v, "abc123"); resp["thumbnail_path"] != want {
+		t.Errorf("expected %s once a poster exists, got %v", want, resp["thumbnail_path"])
+	}
+}
+
+// An empty token still has to produce a URL that resolves; it only costs the
+// response its long cache lifetime.
+func TestMediaToResponseNoGeneration(t *testing.T) {
+	m := models.Medium{OriginalPath: "originals/2026/03/photo.jpg", FileType: "image"}
+	if resp := mediaToResponse(m, ""); resp["thumbnail_path"] != "/2026/03/photo.jpg?s=512" {
+		t.Errorf("unexpected thumbnail_path: %v", resp["thumbnail_path"])
 	}
 }
 

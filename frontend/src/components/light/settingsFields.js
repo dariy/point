@@ -44,7 +44,6 @@ export const LABEL_OVERRIDES = {
   remark_telegram_chan: "Telegram Channel ID",
 };
 
-// Keys rendered as <input type="number">.
 export const NUMERIC_KEYS = new Set([
   "posts_per_page",
   "min_tag_posts_to_show",

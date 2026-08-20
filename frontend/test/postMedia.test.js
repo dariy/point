@@ -177,4 +177,57 @@ describe('mediaTypeFromPath', () => {
     assert.strictEqual(mediaTypeFromPath('/a.txt'), null);
     assert.strictEqual(mediaTypeFromPath('/no-extension'), null);
   });
+
+  test('ignores a query or fragment after the extension', () => {
+    assert.strictEqual(mediaTypeFromPath('/2026/07/a.jpg?s=512&v=c0ffee01'), 'image');
+    assert.strictEqual(mediaTypeFromPath('/2026/07/a.mp4?t=3'), 'video');
+    assert.strictEqual(mediaTypeFromPath('/2026/07/a.jpg#frag'), 'image');
+  });
+});
+
+/**
+ * The thumbnail ladder puts a `srcset` on every rendered <img>, so these two
+ * regex parsers now meet a tag whose first `…src…="…"` is not the one they
+ * want. Both survive it by construction — `\ssrc="` cannot match inside
+ * `srcset="`, and a srcset value carries commas and spaces but never a `>` —
+ * and these lock that in, in either attribute order.
+ */
+describe('srcset-bearing images', () => {
+  const SRCSET =
+    '/2026/07/a.jpg?s=128&v=c0ffee01 128w, /2026/07/a.jpg?s=512&v=c0ffee01 512w';
+  const SRC = '/2026/07/a.jpg?s=512&v=c0ffee01';
+
+  const srcsetFirst = `<img srcset="${SRCSET}" sizes="48px" src="${SRC}" alt="first">`;
+  const srcFirst = `<img src="${SRC}" srcset="${SRCSET}" sizes="48px" alt="first">`;
+
+  test('extractMedia reads the real src, not the first candidate in srcset', () => {
+    for (const html of [srcsetFirst, srcFirst]) {
+      assert.deepStrictEqual(
+        extractMedia(html),
+        [{ type: 'image', url: SRC, alt: 'first' }],
+        html,
+      );
+    }
+  });
+
+  test('splitTopLevelBlocks keeps a srcset image as one block', () => {
+    for (const html of [srcsetFirst, srcFirst]) {
+      assert.deepStrictEqual(splitTopLevelBlocks(html), [html], html);
+    }
+  });
+
+  test('splitTopLevelBlocks does not let a srcset swallow its siblings', () => {
+    const html = `<p>Before.</p>${srcsetFirst}<p>After.</p>`;
+    assert.deepStrictEqual(splitTopLevelBlocks(html), [
+      '<p>Before.</p>',
+      srcsetFirst,
+      '<p>After.</p>',
+    ]);
+  });
+
+  test('mediaFromHtml keeps prose around a srcset image', () => {
+    const html = ['<p>Before.</p>', srcFirst, '<p>After.</p>'].join('\n');
+    assert.deepStrictEqual(types(mediaFromHtml(html)), ['html', 'image', 'html']);
+    assert.strictEqual(mediaFromHtml(html)[1].url, SRC);
+  });
 });

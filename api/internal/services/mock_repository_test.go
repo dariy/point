@@ -141,7 +141,6 @@ type mockRepository struct {
 	MockGetPostByPreviewToken                func(ctx context.Context, token string) (models.Post, error)
 	MockGetPostNavigation                    func(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error)
 	MockReplacePostContentPath               func(ctx context.Context, oldPath, newPath string) (int64, error)
-	MockUpdatePostThumbnailPath              func(ctx context.Context, oldPath, newPath string) (int64, error)
 	MockListPublishedPostStubs               func(ctx context.Context) ([]repository.PostStub, error)
 	MockListScheduledPosts                   func(ctx context.Context, limit, offset int64) ([]models.Post, error)
 	MockCountScheduledPosts                  func(ctx context.Context) (int64, error)
@@ -1047,13 +1046,6 @@ func (m *mockRepository) ReplacePostContentPath(ctx context.Context, oldPath, ne
 		return m.MockReplacePostContentPath(ctx, oldPath, newPath)
 	}
 	return 0, fmt.Errorf("ReplacePostContentPath not implemented")
-}
-
-func (m *mockRepository) UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error) {
-	if m.MockUpdatePostThumbnailPath != nil {
-		return m.MockUpdatePostThumbnailPath(ctx, oldPath, newPath)
-	}
-	return 0, fmt.Errorf("UpdatePostThumbnailPath not implemented")
 }
 
 func (m *mockRepository) ListPublishedPostStubs(ctx context.Context) ([]repository.PostStub, error) {
