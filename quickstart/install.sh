@@ -112,6 +112,18 @@ script_source_dir() {
   [ -f "$src" ] || return 0
   (cd "$(dirname "$src")" && pwd)
 }
+
+# data.yml is tracked at api/data.yml; scripts/run.sh also drops a copy at the
+# repo root for local dev. Prefer the root copy (a dev may have edited it),
+# fall back to the tracked one so a fresh clone still gets a config.
+copy_data_yml() {
+  local root="$1"
+  if [ -f "${root}/data.yml" ]; then
+    cp "${root}/data.yml" "${INSTALL_DIR}/"
+  elif [ -f "${root}/api/data.yml" ]; then
+    cp "${root}/api/data.yml" "${INSTALL_DIR}/"
+  fi
+}
 # ── Config collection ──────────────────────────────────────────────────────────
 # Globals set by collect_config:
 #   PORT           - port Point listens on
@@ -399,9 +411,7 @@ install_native() {
     if [ -d "${project_root}/frontend" ]; then
       cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
     fi
-    if [ -f "${project_root}/data.yml" ]; then
-      cp "${project_root}/data.yml" "${INSTALL_DIR}/"
-    fi
+    copy_data_yml "$project_root"
   elif [ -n "$project_root" ] && [ -f "${project_root}/api/cmd/api/main.go" ]; then
     say "Found source code, building..."
     if ! command -v go >/dev/null 2>&1; then
@@ -420,9 +430,7 @@ install_native() {
     if [ -d "${project_root}/frontend" ]; then
       cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
     fi
-    if [ -f "${project_root}/data.yml" ]; then
-      cp "${project_root}/data.yml" "${INSTALL_DIR}/"
-    fi
+    copy_data_yml "$project_root"
   else
     local arch; arch=$(detect_arch)
     fetch_latest_version

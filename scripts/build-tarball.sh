@@ -12,6 +12,7 @@
 #   point           the server        (ExecStart=${INSTALL_DIR}/point)
 #   frontend/       static assets     (FRONTEND_DIR=${INSTALL_DIR}/frontend)
 #   data.yml        Gemini prompt/model config, read from the working directory
+#                   (tracked as api/data.yml; only run.sh puts a copy at the root)
 #   migrate-paths   the storage-path migration utility, as in the image
 #   LICENSE
 #
@@ -100,7 +101,7 @@ for arch in "${ARCHES[@]}"; do
         -trimpath -ldflags="-s -w" \
         -o "$stage/migrate-paths" ./cmd/migrate-paths)
 
-    cp "$ROOT_DIR/data.yml" "$ROOT_DIR/LICENSE" "$stage/"
+    cp "$ROOT_DIR/api/data.yml" "$ROOT_DIR/LICENSE" "$stage/"
     cp -r "$ROOT_DIR/frontend" "$stage/frontend"
     rm -rf "$stage/frontend/js-debug"
 
