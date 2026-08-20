@@ -16,6 +16,7 @@ import {
   getPost,
   createPost,
   updatePost,
+  deletePost,
   generatePreviewLink,
   publishPostToInstagram,
   previewRender,
@@ -675,6 +676,29 @@ export default class PostEditPage extends Component {
     if (this.state.hasPendingEdits) await this._autosave();
     const slug = this.state.post?.slug;
     navigate(slug ? `/posts/${slug}` : this.props.publicUrl || "/");
+  }
+
+  /**
+   * Move the post to Trash and leave the editor.
+   *
+   * `deleting` is what parks the autosave — a queued idle save would otherwise
+   * fire against the row we just trashed and resurrect it as a draft.
+   */
+  async _deletePost(id) {
+    // Never saved: the post exists only in this form, so there is nothing to
+    // trash — just leave.
+    if (!id) { navigate("/light/posts"); return; }
+
+    this.setState({ deleting: true });
+    try {
+      await deletePost(id);
+      this.state.hasPendingEdits = false;
+      store.set("toast", { message: "Post moved to Trash.", type: "success" });
+      navigate("/light/posts");
+    } catch (err) {
+      this.setState({ deleting: false });
+      store.set("toast", { message: err.message || "Move to Trash failed.", type: "error" });
+    }
   }
 
   _analyzeNow() {
