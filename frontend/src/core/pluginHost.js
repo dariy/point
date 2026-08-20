@@ -2,7 +2,7 @@
  * PluginHost — the frontend half of Point's plugin system.
  *
  * The server is the source of truth: it injects an ENABLED-ONLY manifest into
- * the served HTML as `window.__PLUGINS__` (see api/cmd/api/main.go). Each entry
+ * the served HTML as `window.__PLUGINS__` (see api/cmd/api/assets.go). Each entry
  * is `{ id, type, slot?, routes?, entry? }`, where `entry` is the hashed chunk
  * URL (`/assets/js/p/<hash>.js`) of the plugin's built bundle — or empty while a
  * plugin has no built chunk yet (the Phase 2 foundation state: the wiring is in

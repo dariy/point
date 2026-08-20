@@ -15,6 +15,7 @@ import { formatDate } from '../../utils/formatters.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.js';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
+import { X_SVG } from '../../utils/icons.js';
 
 export default class PostPage extends Component {
   constructor(container, props = {}) {
@@ -287,6 +288,15 @@ export default class PostPage extends Component {
       p.textContent = msg;
       contentEl.textContent = '';
       contentEl.appendChild(p);
+
+      if (this.state.forceImmersive) {
+        const btn = document.createElement('button');
+        btn.className = 'lightbox-close';
+        btn.setAttribute('aria-label', 'Close');
+        btn.innerHTML = X_SVG;
+        btn.onclick = () => exitImmersive(this);
+        contentEl.appendChild(btn);
+      }
     }
   }
 

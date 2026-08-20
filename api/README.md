@@ -6,12 +6,17 @@ Go implementation of the Point blog API, using Echo v4 and sqlc.
 
 ```
 api/
-├── cmd/api/main.go         # Entry point; route registration + startup migrations
+├── cmd/api/                # Entry point; one concern per file (main, cli,
+│                           #   wiring, server, routes, cache, assets, media)
 ├── internal/
 │   ├── api/                # HTTP handlers (Echo)
 │   ├── services/           # Business logic
-│   ├── repository/         # DB access (sqlc-generated + extended.go for custom queries)
+│   ├── repository/         # DB access: the Repository interface (db.go, which
+│   │                       #   embeds the sqlc Querier) + hand-written queries
 │   ├── models/             # sqlc-generated models — do not edit directly
+│   ├── migrations/         # Startup schema/data migrations
+│   ├── plugins/            # Plugin registry (the enabled-only catalog)
+│   ├── mcp/                # In-process MCP server at /mcp
 │   ├── config/             # Viper config loader
 │   └── utils/              # Slug generation, helpers
 ├── sql/
@@ -21,6 +26,9 @@ api/
 ├── go.mod
 └── sqlc.yaml
 ```
+
+Which file to edit for a given change:
+[docs/architecture/map.md](../docs/architecture/map.md).
 
 ## Development
 

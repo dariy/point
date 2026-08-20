@@ -27,4 +27,4 @@ or interface — those mirrored the REST API needlessly).
 ## Layering
 `mcp` imports `api` (for the handler types); `api` does **not** import `mcp`, so
 there is no cycle and no need for an interface seam. Wiring happens in
-`cmd/api/main.go` via `mcp.Register(e, mcp.Deps{...})`.
+`cmd/api/routes.go` — `registerMCPRoutes` calls `mcp.Register(e, mcp.Deps{...})`.

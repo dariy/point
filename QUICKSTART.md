@@ -4,6 +4,7 @@ Point is a self-hosted personal photo blog designed for simplicity and privacy. 
 
 ## One-Command Install
 
+<!-- verify:skip installs a live instance; the wizard is driven end to end by the quickstart-smoke job -->
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
 ```
@@ -22,6 +23,7 @@ The wizard will ask a few questions (all with sensible defaults — just hit Ent
 If you prefer to run the steps yourself:
 
 ### Step 1: Download the files
+<!-- verify:tmpdir -->
 ```bash
 mkdir point && cd point
 curl -LO https://raw.githubusercontent.com/dariy/point/main/quickstart/docker-compose.yml
@@ -30,6 +32,7 @@ cp .env.example .env
 ```
 
 ### Step 2: Start Point
+<!-- verify:skip starts a real instance from the published image; covered by the quickstart-smoke job -->
 ```bash
 docker compose up -d
 ```
@@ -52,6 +55,7 @@ Point copies these photos into its internal data directory; your original files 
 ### Option A: Run the update script (easiest)
 Point includes a script that auto-detects Docker or Podman and pulls the latest version. You can download it from the quickstart directory or run it directly:
 
+<!-- verify:skip updates an existing install; quickstart/update.sh is shellchecked by the quickstart-smoke job -->
 ```bash
 sh update.sh
 ```
@@ -59,6 +63,7 @@ sh update.sh
 ### Option B: Manual update
 Alternatively, you can update manually using standard Compose commands:
 
+<!-- verify:skip updates an existing install -->
 ```bash
 docker compose pull && docker compose up -d --force-recreate
 ```
@@ -111,6 +116,7 @@ Point supports long-lived, revocable API keys for programmatic access. These key
 - **Via CLI (Bootstrap):** If you need an API key before accessing the UI, download
   [`create-api-key.sh`](quickstart/cli/create-api-key.sh) into your install directory
   (next to `docker-compose.yml`) and run:
+  <!-- verify:skip needs a running container to create the key in -->
   ```bash
   curl -fsSLO https://raw.githubusercontent.com/dariy/point/main/quickstart/cli/create-api-key.sh
   chmod +x create-api-key.sh
@@ -121,6 +127,7 @@ Point supports long-lived, revocable API keys for programmatic access. These key
 
 ### Using an API Key
 Send the key in the `Authorization` header of your requests:
+<!-- verify:skip illustrative — needs a running instance and a real key -->
 ```bash
 curl -H "Authorization: Bearer point_pat_..." http://localhost:8000/api/posts
 ```
@@ -134,6 +141,7 @@ container — no extra services to run. It stays dormant until configured.
 
 1. Set both values in your `.env` (then `docker compose up -d` to recreate):
 
+   <!-- verify:skip .env values, not commands -->
    ```bash
    # Your blog's public URL + /comments
    REMARK_URL=https://blog.example.com/comments
@@ -209,6 +217,7 @@ For full details, including carousel publishing and caption templates, see
 3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container: download
    [`change-password.sh`](quickstart/cli/change-password.sh) into your install directory
    (next to `docker-compose.yml`) and run:
+   <!-- verify:skip needs a running container to reset the password in -->
    ```bash
    curl -fsSLO https://raw.githubusercontent.com/dariy/point/main/quickstart/cli/change-password.sh
    chmod +x change-password.sh

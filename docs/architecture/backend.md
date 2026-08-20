@@ -40,19 +40,25 @@ The project follows a standard Go layout:
 ```
 api/
 ├── cmd/
-│   └── api/                <- Entry point (main.go)
+│   └── api/                <- Entry point; routes.go registers every route
 ├── internal/
-│   ├── api/                <- HTTP Handlers & Routing
+│   ├── api/                <- HTTP Handlers
 │   ├── config/             <- Configuration management
-│   ├── models/             <- Domain models
+│   ├── models/             <- Domain models (SQLC generated)
 │   ├── repository/         <- Data access layer (SQLC generated + extensions)
 │   ├── services/           <- Business logic
+│   ├── migrations/         <- Startup migrations
+│   ├── plugins/            <- Plugin registry
+│   ├── mcp/                <- In-process MCP server
 │   └── utils/              <- Shared helpers
 ├── sql/
 │   ├── schema.sql          <- Database schema (SQLite)
 │   └── queries.sql         <- SQL query definitions for SQLC
 └── sqlc.yaml               <- SQLC configuration
 ```
+
+A file-level map of the whole repository, including the frontend and the
+generated files, is in [map.md](./map.md).
 
 ---
 
@@ -204,7 +210,7 @@ The `SchedulerService` manages recurring and deferred tasks:
 ### Running the API
 ```bash
 cd api
-go run cmd/api/main.go
+go run ./cmd/api
 ```
 
 ### Database Migrations

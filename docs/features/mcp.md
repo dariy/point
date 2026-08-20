@@ -33,7 +33,7 @@ surface admins must consciously enable from `/light/plugins`).
    behaves *exactly* like the REST API — same validation, same response mappers, same 
    business rules — with no second process, no network hop, no DTO layer to keep in sync.
 2. **Layering**: `mcp` imports `api` (for handler types); `api` never imports `mcp`.
-   Wiring happens in `cmd/api/main.go` via `mcp.Register(e, mcp.Deps{...})`. No import
+   Wiring happens in `cmd/api/routes.go` via `mcp.Register(e, mcp.Deps{...})`. No import
    cycle, no interface seam needed.
 3. **Typed tool inputs, passthrough outputs.** Tool input structs drive the
    model-facing JSON schema; outputs are the handler JSON passed straight through.

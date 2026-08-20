@@ -4,6 +4,7 @@ Welcome to the Point documentation.
 
 ## Architecture
 
+- [Repository Map](./architecture/map.md) — start here: which file do I edit?
 - [Frontend Architecture](./architecture/frontend.md) — Vanilla JS Component System
 - [Backend Architecture](./architecture/backend.md) — Go & SQLC Service Layer
 
@@ -49,6 +50,7 @@ One page per plugin in the registry — [plugins/](./plugins/) (index:
 - [Testing](./testing.md) — test layout and how to run
 - [Usages](./usages.md) — operational recipes
 - [Troubleshooting](./troubleshooting.md) — common issues and solutions
+- [AI Declaration](../ai-declaration.md) — how this repository was built: provenance by category and level
 
 ## External Links
 

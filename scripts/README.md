@@ -5,6 +5,13 @@ outside this repo — see [Production](#production) below.
 
 ## Local Development
 
+- **doctor.sh**: Environment readiness — Go, Node, npm and the installed JS
+  dependencies, `golangci-lint`, `govulncheck`, `sqlc`, whether port 8001 is
+  free and whether `data/` is writable. Every wanted version is read from the
+  file that already decides it (`api/go.mod`, `.github/workflows/test.yml`), so
+  the report cannot drift from CI. `--json` emits the same rows for machines.
+  FAIL means a build is impossible and sets exit status 1; the tools only
+  `check.sh` needs are WARN, since you can build and run Point without them.
 - **run.sh**: The local dev runner — no Docker. Rebuilds CSS/JS and runs the API
   directly on port 8001, sourcing machine-specific env (data paths, `HOST`) from
   `.env`. This is the primary way to run Point locally.
@@ -37,6 +44,15 @@ outside this repo — see [Production](#production) below.
   by default; `--unit` for unit-only, `--race` for the race
   detector, `--html` for a coverage report. See
   [docs/testing.md](../docs/testing.md).
+- **check-docs.sh**: Runs the commands the documentation promises — the fenced
+  `bash` blocks in `AGENTS.md`, `CONTRIBUTING.md`, `QUICKSTART.md` and
+  `ai-declaration.md`, plus the command table in `AGENTS.md`. `--list` shows the plan without running it, and
+  a trailing file list overrides which docs are read. A command that cannot run
+  unattended is marked in the doc with `<!-- verify:skip reason -->` (or
+  `<!-- verify:tmpdir -->` to run in a scratch directory) — the runner itself
+  knows nothing about individual commands. The `docs-commands` CI job runs this
+  on every PR; `check.sh` does not, because several of the blocks reach the
+  network.
 
 ## Recovery
 

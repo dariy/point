@@ -78,7 +78,7 @@ lsof -ti:"$PORT" | xargs kill -9 2>/dev/null || true
 mkdir -p data/media/originals data/media/thumbnails data/logs data/backups data/themes
 
 # index.html is served with __BUILD_VERSION__ substituted at serve time (the
-# server reads APP_VERSION — see cmd/api/main.go), so the file on disk is never
+# server reads APP_VERSION — see cmd/api/server.go), so the file on disk is never
 # mutated and stays a normally tracked file.
 
 # Copy data.yml to root if it exists in api but not in root

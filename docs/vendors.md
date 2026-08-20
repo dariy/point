@@ -81,4 +81,4 @@ third-party origins allowed out of the box are:
 
 Anything else — analytics, verification scripts — is
 opt-in via `HEAD_HTML` + `CSP_SCRIPT_SRC`/`CSP_CONNECT_SRC`, see
-[Syndication & SEO](./features/syndication.md) and `api/cmd/api/main.go`.
+[Syndication & SEO](./features/syndication.md) and `api/cmd/api/server.go`.
