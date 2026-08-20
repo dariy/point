@@ -15,7 +15,7 @@ RUN mkdir -p /srv
 FROM remark42-${IS_SLIM} AS remark42
 
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27rc2-alpine3.23 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27rc3-alpine3.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
