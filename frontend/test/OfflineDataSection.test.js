@@ -82,7 +82,7 @@ describe('OfflineDataSection', () => {
     test('skips remote URLs, which cache.add cannot store and the SW never sees', () => {
       const { thumbs, originals } = section._imageUrls(snapshot);
       const all = [...thumbs, ...originals];
-      assert.ok(!all.some((u) => u.includes('cdn.example.com')), all.join(' '));
+      assert.ok(!all.some((u) => u.includes('remote.jpg')), all.join(' '));
     });
 
     test('survives a snapshot with neither key', () => {
