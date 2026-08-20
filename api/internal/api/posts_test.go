@@ -131,7 +131,7 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -190,7 +190,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -641,9 +641,7 @@ func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, &config.Config{
-		StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300,
-	}, settingsSvc, tagSvc)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
 	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	e := echo.New()
 

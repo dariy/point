@@ -28,6 +28,7 @@ import (
 	"point-api/internal/mcp"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
+	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -408,7 +409,7 @@ type frontendAssets struct {
 }
 
 // registerMediaFileRoutes serves the stored originals and thumbnails at
-// /YYYY/MM/filename[?thumb]. Auth-gated: unauthenticated clients see 404 for
+// /YYYY/MM/filename[?s=&v=]. Auth-gated: unauthenticated clients see 404 for
 // non-public media. Registered after the /api routes to avoid collisions
 // (e.g. /api/settings/public would otherwise match /:year/:month/:filename).
 func registerMediaFileRoutes(e *echo.Echo, cfg config.Config, repo repository.Repository, svcs *AppServices, fe frontendAssets) {
@@ -578,10 +579,26 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
 						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
 
+						gen := svcs.Media.ThumbnailGeneration(c.Request().Context())
 						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
-						if len(media) > 0 {
-							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
-							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+						// Card image = the post's first media that can actually
+						// render one. A video without a captured poster has no
+						// still behind it, so it is skipped rather than pointed
+						// at: the crawler would fetch the whole stream and show
+						// nothing.
+						cardPath := ""
+						for _, m := range media {
+							if strings.EqualFold(m.FileType, "image") || (m.ThumbnailPath.Valid && m.ThumbnailPath.String != "") {
+								cardPath = "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
+								break
+							}
+						}
+						if cardPath != "" {
+							// The 1024 rung, never the original: a camera JPEG
+							// is megabytes and past every card renderer's size
+							// ceiling, which renders as no card at all.
+							variant := services.VariantURL(cardPath, services.SocialCardVariantSize, gen)
+							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, variant)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
 							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
 							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
@@ -589,7 +606,7 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
-						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
+						script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
 						sb.WriteString(script)
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
@@ -607,7 +624,7 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 			// shell (chosen above) already omits third-party markup for admin
 			// routes and authenticated viewers.
 			{
-				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
+				script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
 				htmlStr := strings.Replace(shell, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")

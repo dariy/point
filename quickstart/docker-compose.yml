@@ -26,7 +26,9 @@ services:
       - AUTH_ANON=${AUTH_ANON:-true}
       # - PHOTO_LIBRARY_PATH=/photos
     volumes:
-      - ${DATA_PATH:-./data}:/data:z,U
+      # `z` only — Docker rejects Podman's `U` option. Ownership is handled by
+      # the container entrypoint, which chowns /data before dropping privileges.
+      - ${DATA_PATH:-./data}:/data:z
       # Uncomment the next line and set PHOTO_LIBRARY_PATH in .env to mount your library
       # - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro,z
     healthcheck:

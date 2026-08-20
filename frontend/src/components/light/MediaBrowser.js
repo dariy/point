@@ -42,6 +42,7 @@ import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
+import { thumbAttrs } from "../../utils/mediaUrl.js";
 import {
   EDIT_SVG,
   LOCK_SVG,
@@ -50,6 +51,13 @@ import {
   LINK_SVG,
   PLUS_SVG,
 } from "../../utils/icons.js";
+
+// What a grid card paints at. The grid is auto-fill minmax(180px, 1fr), dropping
+// to 144px under 48em, and a pinned zoom (core/mediaPager.js) can squeeze a
+// column to MIN_CARD_PX = 110. The nominal desktop width covers the common case;
+// the previews are object-fit: cover, so the browser rounding a rung up is the
+// forgiving direction.
+const GRID_THUMB_SIZES = "(max-width: 48em) 50vw, 220px";
 
 export class MediaBrowser extends Component {
   constructor(container, props = {}) {
@@ -361,16 +369,27 @@ export class MediaBrowser extends Component {
     const fileType = (m.file_type || "").toLowerCase();
     const isImage = fileType === "image";
     const isVideo = fileType === "video";
-    const thumb = m.thumbnail_path || (isImage ? m.original_path : null);
+    // thumbnail_path is the presence signal, not the URL to use: the API sets it
+    // for every image and only for a video that has a captured poster, and it
+    // arrives as a rung URL (?s=512&v=…) that thumbAttrs would only have to
+    // strip again. The rungs come off m.path, the bare original.
+    const hasStill = m.thumbnail_path != null && (isImage || isVideo);
     const isSelected = selectedIds.has(m.id);
 
     // A video shows its captured poster frame when it has one, with the play
     // glyph laid over it; without a poster it keeps the bare glyph. The <img>
     // carries a load handler (see _bindPreviewFallback) so a poster that has
     // gone missing on disk degrades to the glyph rather than a broken image.
+    //
+    // A video's dimensions describe the video, and its poster is fitted into the
+    // same box the ladder caps at, so they are only handed over for an image.
     const preview =
-      thumb && (isImage || isVideo)
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${
+      hasStill
+        ? `<img ${thumbAttrs(m.path || m.thumbnail_path, {
+            sizes: GRID_THUMB_SIZES,
+            width: isImage ? m.width : 0,
+            height: isImage ? m.height : 0,
+          })} alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${
             isVideo
               ? `<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>`
               : ""

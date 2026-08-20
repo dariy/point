@@ -51,7 +51,11 @@ func (h *PostHandler) syncMediaVisibility(ctx context.Context, op string, paths 
 	}
 }
 
-func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, excludeIDs map[int64]bool, media []models.Medium) map[string]interface{} {
+// buildPostResponse assembles the post payload. It is also where the rendered
+// body picks up its responsive image candidates: every caller has already
+// fetched the post's media rows for the `media` array below, so the widths the
+// descriptors need are in hand here and nowhere earlier.
+func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, excludeIDs map[int64]bool, media []models.Medium, gen string) map[string]interface{} {
 	tagObjs := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
 		if excludeIDs != nil && excludeIDs[t.ID] {
@@ -79,7 +83,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"slug":             post.Slug,
 		"type":             post.Type,
 		"content":          post.Content,
-		"content_html":     htmlContent,
+		"content_html":     injectArticleSrcset(htmlContent, media, gen),
 		"css":              post.Css,
 		"immersive_mode":   post.ImmersiveMode,
 		"excerpt":          nullString(post.Excerpt),
@@ -98,12 +102,16 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 	}
 }
 
-func (h *PostHandler) fetchPostMedia(ctx context.Context, post models.Post) []models.Medium {
+// fetchPostMedia returns the media rows a post references, plus the thumbnail
+// generation token its variant URLs are built with. The token comes back from
+// here rather than from a second call at each site because it is only ever
+// wanted alongside these rows, and the settings cache makes it free.
+func (h *PostHandler) fetchPostMedia(ctx context.Context, post models.Post) ([]models.Medium, string) {
 	if h.mediaService == nil {
-		return nil
+		return nil, ""
 	}
 	media, _ := h.mediaService.GetMediaByContent(ctx, post.Content, post.ThumbnailPath.String)
-	return media
+	return media, h.mediaService.ThumbnailGeneration(ctx)
 }
 
 // getFullPostResponse fetches a post by ID with author and tags, returns the response map.
@@ -127,8 +135,8 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
-	postMedia := h.fetchPostMedia(ctx, post)
-	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
+	postMedia, mediaGen := h.fetchPostMedia(ctx, post)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia, mediaGen)
 	var effectiveHiddenPosts map[int64]bool
 	if snap != nil {
 		effectiveHiddenPosts = snap.EffectiveHidesPosts
@@ -303,8 +311,8 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	postMedia := h.fetchPostMedia(ctx, post)
-	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
+	postMedia, mediaGen := h.fetchPostMedia(ctx, post)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia, mediaGen)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 		injectPostInstagramFields(resp, post)
@@ -460,8 +468,8 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	postMedia := h.fetchPostMedia(ctx, post)
-	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
+	postMedia, mediaGen := h.fetchPostMedia(ctx, post)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia, mediaGen)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 		injectPostInstagramFields(resp, post)
@@ -874,8 +882,8 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 
 	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	postMedia := h.fetchPostMedia(c.Request().Context(), post)
-	resp := buildPostResponse(post, tags, htmlContent, nil, postMedia)
+	postMedia, mediaGen := h.fetchPostMedia(c.Request().Context(), post)
+	resp := buildPostResponse(post, tags, htmlContent, nil, postMedia, mediaGen)
 	resp["preview_mode"] = true
 
 	return c.JSON(http.StatusOK, resp)

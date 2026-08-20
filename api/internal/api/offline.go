@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 )
@@ -34,11 +35,12 @@ func (h *SystemHandler) GetOfflineStats(c echo.Context) error {
 			}
 			imageCount++
 			originalBytes += m.FileSize
-			if m.ThumbnailPath.Valid {
-				thumbFile := filepath.Join(h.dataPath, "media", m.ThumbnailPath.String)
-				if info, err := os.Stat(thumbFile); err == nil {
-					thumbBytes += info.Size()
-				}
+			// Size the offline budget off the rung the service worker caches,
+			// not the poster column: an image's derived sizes live in the
+			// variants tree and thumbnail_path is a video's poster frame.
+			variant := filepath.Join(h.dataPath, "media", services.VariantRelPath(m.OriginalPath, services.DefaultVariantSize))
+			if info, err := os.Stat(variant); err == nil {
+				thumbBytes += info.Size()
 			}
 		}
 	}
@@ -83,10 +85,20 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	}
 	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
 
+	// Every media row on the site, read once. The snapshot bundles every post
+	// body, so the per-post lookup GetMediaByContent does would be a query per
+	// post; the public media list below needs the same rows anyway.
+	allMedia, _ := h.repo.GetAllMediaPaths(ctx)
+	gen := h.mediaService.ThumbnailGeneration(ctx)
+	mediaDims := articleImageDims(allMedia)
+
 	// Convert to response format
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
 		html, _ := h.postService.RenderContent(p.Content)
+		// An offline reader is the one that benefits most from a small
+		// variant: it is on the connection that made them cache the site.
+		html = injectArticleSrcsetDims(html, mediaDims, gen)
 		// Use a temporary map to build a response that looks like GetPostRow/GetPostBySlugRow
 		resp := map[string]interface{}{
 			"id":               p.ID,
@@ -131,11 +143,10 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	}
 
 	// 5. Public media (images only)
-	media, _ := h.repo.GetAllMediaPaths(ctx)
 	publicMedia := make([]map[string]interface{}, 0)
-	for _, m := range media {
+	for _, m := range allMedia {
 		if strings.ToLower(m.FileType) == "image" && m.IsPublic == 1 {
-			publicMedia = append(publicMedia, mediaToResponse(m))
+			publicMedia = append(publicMedia, mediaToResponse(m, gen))
 		}
 	}
 

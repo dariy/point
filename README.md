@@ -11,10 +11,11 @@ Single container, SQLite storage. Built with Go + Echo v4 backend and a plain JS
 ## Quick showcase
 [UI Demo](https://demo.point.photos)
 
-![Post list + post details](./docs/images/post-list-post-details.gif) <img src="./docs/images/mobile-post-list.png" height="540"> 
-![Post list + zoom + scheduled posts](./docs/images/post-list-zoom-and-scheduled-posts.gif) <img src="./docs/images/mobile-post-details.png" height="540">
+### Post list
+<img src="./docs/images/post-list-post.png" height="400"> <img src="./docs/images/mobile-post-list.png" height="400">
 
-![Map](./docs/images/map.gif)
+### Post datails
+<img src="./docs/images/post-details.png" height="400"> <img src="./docs/images/mobile-post-details.png" height="400">
 
 ## Quick start
 
@@ -88,7 +89,6 @@ The app is configured via environment variables (or a `.env` file in the working
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
 | `STORAGE_QUOTA_MB` | `0` | Media storage allowance the dashboard reports usage against; `0` = unlimited (no usage bar) |
-| `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
 | `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` at serve time (analytics, verification tags) — public shell only, never served to admin/authenticated pages |
 | `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy `script-src`/`connect-src` directives, for use with `HEAD_HTML` |
 

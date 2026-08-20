@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"point-api/internal/config"
@@ -222,5 +223,75 @@ func TestOfflineStats_WithThumbnail(t *testing.T) {
 	err := sh.GetOfflineStats(e.NewContext(req, rec))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// The snapshot renders every post body, so it reads the media table ONCE and
+// indexes it, rather than asking per post. This covers that path end to end:
+// a published post whose body references a known-size image comes back with
+// responsive candidates on its <img>, and the media list is still built from
+// the same rows.
+func TestOfflineSnapshot_ArticleImagesGetSrcset(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	systemSvc := services.NewSystemService(repo, tmpDir, "")
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, nil, tmpDir, "1.0.0")
+	e := echo.New()
+
+	if _, err := repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum, width, height, is_public)
+		VALUES ('photo.jpg','originals/2026/03/photo.jpg','image','image/jpeg',1024,'c-srcset',4000,3000,1)`); err != nil {
+		t.Fatalf("seed media: %v", err)
+	}
+	if _, err := repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name)
+		VALUES (1,'u','u@t.com','h','U')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at)
+		VALUES ('Photo post','photo-post','/2026/03/photo.jpg',1,'published',datetime('now'))`); err != nil {
+		t.Fatalf("seed post: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec)
+	if err := handler.GetOfflineSnapshot(c); err != nil {
+		t.Fatalf("GetOfflineSnapshot failed: %v", err)
+	}
+
+	var resp struct {
+		Posts []struct {
+			Slug        string `json:"slug"`
+			ContentHTML string `json:"content_html"`
+		} `json:"posts"`
+		Media []map[string]interface{} `json:"media"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	var html string
+	for _, p := range resp.Posts {
+		if p.Slug == "photo-post" {
+			html = p.ContentHTML
+		}
+	}
+	if html == "" {
+		t.Fatalf("post not in snapshot: %s", rec.Body.String())
+	}
+	if !strings.Contains(html, `srcset="`) || !strings.Contains(html, "s=1024") {
+		t.Errorf("no ladder candidates in the offline body: %q", html)
+	}
+	if !strings.Contains(html, `src="/2026/03/photo.jpg"`) {
+		t.Errorf("src is no longer the bare original: %q", html)
+	}
+	if len(resp.Media) != 1 {
+		t.Errorf("media list = %v, want the one seeded image", resp.Media)
 	}
 }

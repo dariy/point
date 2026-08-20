@@ -26,6 +26,7 @@ var statusByKind = map[error]int{
 	services.ErrForbidden:       http.StatusForbidden,
 	services.ErrUpstream:        http.StatusBadGateway,
 	services.ErrStorageFull:     http.StatusInsufficientStorage,
+	services.ErrTooLarge:        http.StatusRequestEntityTooLarge,
 }
 
 // MapError converts a service-layer error into the error a handler should

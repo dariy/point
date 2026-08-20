@@ -78,6 +78,90 @@ export function applyZoomVar() {
   );
 }
 
+// ── Card image sizing ───────────────────────────────────────────────────────
+// A card paints its media as an `<img srcset>` (PostCard), and a srcset is only
+// as good as the `sizes` beside it: without one the browser assumes 100vw and
+// fetches a full-width rung for every card in a three-across grid.
+//
+// `sizes` cannot be written as a static media-query list here. The unzoomed
+// grid is `repeat(auto-fill, minmax(<col>, 1fr))` — a column count that falls
+// out of the available width, the site's own column token and the content
+// max-width, none of which a breakpoint list can restate — and the zoomed grid
+// pins its columns from localStorage, which no media query can see at all. So
+// the value is measured off the laid-out grid instead: PostGrid measures before
+// mounting its cards, computePerPage measures again on every fit, and both
+// publish through applyCardImageSizes.
+//
+// The static fallback stands in for the one moment there is nothing to measure:
+// markup rendered before the first grid exists (a ghost page built by
+// gridPager, a card rendered by a test).
+
+const CARD_SIZES_FALLBACK = '(max-width: 700px) 100vw, 400px';
+let _cardSizes = CARD_SIZES_FALLBACK;
+let _heroSizes = CARD_SIZES_FALLBACK;
+
+/**
+ * The `sizes` attribute a card image should be rendered with.
+ *
+ * Kept across page changes rather than reset: the next grid is overwhelmingly
+ * the same shape as the last one, so the remembered value is a better first
+ * paint than the fallback — the same bet cachedPerPage makes.
+ *
+ * @param {boolean} [isHero]  the featured card, which spans the whole row.
+ * @returns {string}
+ */
+export function cardImageSizes(isHero = false) {
+  return isHero ? _heroSizes : _cardSizes;
+}
+
+/**
+ * Measure a live grid and publish what its cards are painting at.
+ *
+ * Read off the resolved `grid-template-columns` rather than derived from a
+ * column count and a gap: the tracks are the answer the layout already
+ * computed, whichever of the two grid definitions produced them.
+ *
+ * Separate from computePerPage because the two questions have different
+ * lifetimes. A page only re-fits per_page when it owns the decision — a URL
+ * carrying an explicit `?per_page=` is reproduced as given — but every card
+ * that renders needs to know how wide it will paint, on that load too.
+ *
+ * @param {HTMLElement|null} gridEl  the live `.posts-grid`.
+ */
+export function measureCardImageSizes(gridEl) {
+  if (!gridEl || !gridEl.isConnected) return;
+  const rowW = gridEl.getBoundingClientRect().width;
+  const tracks = (window.getComputedStyle?.(gridEl)?.gridTemplateColumns || '')
+    .split(/\s+/)
+    .map(parseFloat)
+    .filter((n) => n > 0);
+  applyCardImageSizes(tracks.length ? Math.max(...tracks) : rowW, rowW);
+}
+
+/**
+ * Publish the widths cards are actually painting at.
+ *
+ * Images already on screen are updated in place: `sizes` is re-evaluated when
+ * it changes, so a grid that just went from three columns to one upgrades its
+ * cards to the rung they now need. (The browser never downgrades an image it
+ * has already fetched, so the reverse costs nothing.)
+ *
+ * @param {number} cardW  width of one column track, in px.
+ * @param {number} rowW   width of the whole grid — the hero spans it.
+ * @param {ParentNode} [root]
+ */
+export function applyCardImageSizes(cardW, rowW, root = document) {
+  const px = (v) => (v > 0 ? `${Math.round(v)}px` : CARD_SIZES_FALLBACK);
+  const card = px(cardW);
+  const hero = px(rowW > 0 ? rowW : cardW);
+  if (card === _cardSizes && hero === _heroSizes) return;
+  _cardSizes = card;
+  _heroSizes = hero;
+  for (const img of root.querySelectorAll?.('.post-card-background img') || []) {
+    img.sizes = img.closest?.('.featured-post') ? hero : card;
+  }
+}
+
 // ── Row tracks ──────────────────────────────────────────────────────────────
 // The column count alone does not fix a zoomed grid's geometry: rows are
 // `minmax(0, 1fr)` and the grid stretches to the viewport, so N cards laid out
@@ -320,12 +404,16 @@ export function computePerPage(minPerPage, gridEl = null) {
   let rowH;
   let gap;
   let top;
+  // The grid's own width, which is the width of a full-row card (the hero) and,
+  // divided by the columns, of a regular one — see applyCardImageSizes.
+  let gridW = 0;
   let reserve = pluginHost.hasSlot('footer') ? FOOTER_FALLBACK : 0;
 
   if (gridEl && gridEl.isConnected) {
     const cs = window.getComputedStyle(gridEl);
     cols = cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length || 1;
     gap = parseFloat(cs.rowGap) || parseFloat(cs.gap) || 0;
+    gridW = gridEl.getBoundingClientRect().width;
     // Row height = the tallest regular (non-featured) slot. The grid stretches
     // every card in a row to the tallest, so a single short text card would
     // under-measure the row and over-request posts (footer off-screen); the
@@ -338,7 +426,7 @@ export function computePerPage(minPerPage, gridEl = null) {
       // height feeds back: taller row → fewer rows computed → refetch → even
       // taller rows. Use the square base (column width) instead — the leftover
       // after fitting squares becomes a modest per-row stretch, not a spiral.
-      rowH = (gridEl.getBoundingClientRect().width - (cols - 1) * gap) / cols;
+      rowH = (gridW - (cols - 1) * gap) / cols;
     } else {
       const slots = [...gridEl.querySelectorAll('.post-card-slot:not(.featured-post)')];
       rowH =
@@ -352,6 +440,7 @@ export function computePerPage(minPerPage, gridEl = null) {
     const pad = tokenPx('var(--spacing-md)');
     gap = tokenPx('var(--spacing-xl)');
     const width = Math.min(window.innerWidth, maxW || window.innerWidth) - 2 * pad;
+    gridW = width;
     if (zoomCols) {
       // Zoom pins the columns; cards are square, so a row is as tall as a card
       // is wide. The post-mount re-measure refines this once laid out.
@@ -366,6 +455,12 @@ export function computePerPage(minPerPage, gridEl = null) {
     // mount re-measure corrects this once the real geometry is known.
     top = Math.min(window.innerHeight * 0.25, 220);
   }
+
+  // Cards are sized by their grid track, so the track is also what their
+  // images have to fill. Published before the rowH bail-out below: an
+  // unmeasurable row height says nothing about the width.
+  if (gridEl && gridEl.isConnected) measureCardImageSizes(gridEl);
+  else applyCardImageSizes((gridW - (cols - 1) * gap) / cols, gridW);
 
   if (!rowH) {
     _cache = floor;

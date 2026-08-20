@@ -633,19 +633,3 @@ func TestRepository_PostsInYearRange(t *testing.T) {
 	}
 }
 
-func TestRepository_UpdatePostThumbnailPath(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	ctx := context.Background()
-
-	_, pid := insertUserAndPost(t, repo, "thumb-post", "published")
-	_, _ = repo.DB().Exec(`UPDATE posts SET thumbnail_path='old' WHERE id=?`, pid)
-
-	n, err := repo.UpdatePostThumbnailPath(ctx, "old", "new")
-	if err != nil {
-		t.Fatalf("UpdatePostThumbnailPath failed: %v", err)
-	}
-	if n != 1 {
-		t.Errorf("expected 1 updated post, got %d", n)
-	}
-}

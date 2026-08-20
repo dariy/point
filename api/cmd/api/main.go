@@ -117,7 +117,10 @@ func main() {
 	}
 
 	// Ensure media directories exist
-	for _, dir := range []string{"originals", "thumbnails"} {
+	// "thumbnails" holds client-captured video posters; "variants" holds the
+	// derived ladder. They are separate roots so purging the derived tree can
+	// never reach a poster (see services.VariantsRoot).
+	for _, dir := range []string{"originals", "thumbnails", services.VariantsRoot} {
 		path := filepath.Join(cfg.StoragePath, "media", dir)
 		if err := os.MkdirAll(path, 0755); err != nil {
 			slog.Warn("could not create media dir", "path", path, "error", err)

@@ -2,8 +2,8 @@ package main
 
 // The built frontend as the server sees it: where the JS bundle lives, how a
 // CSS bundle's content-addressed URL maps back to a file on disk, and the two
-// pieces of markup the HTML shell is stamped with at serve time (the plugin
-// manifest, the PWA site name).
+// pieces of markup the HTML shell is stamped with at serve time (the bootstrap
+// script, the PWA site name).
 
 import (
 	"context"
@@ -27,14 +27,28 @@ import (
 // browsers honour.
 const immutableCacheControl = "public, max-age=31536000, immutable"
 
-// pluginManifestScript renders the enabled-only plugin manifest as an inline
-// <script> assigning window.__PLUGINS__. The manifest is computed per request
-// because enabled-state can change at runtime; chunks is the static build map.
-// json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
+// mediaBootstrap is the window.__MEDIA__ payload: everything a client needs to
+// build a variant URL for itself. Gen is the cache-busting token a rebuild
+// rolls; Sizes is the ladder, so the frontend picks rungs from the server's
+// list rather than from a copy that can drift out of sync with it.
+type mediaBootstrap struct {
+	Gen   string `json:"gen"`
+	Sizes []int  `json:"sizes"`
+}
+
+// bootstrapScript renders the inline <script> every HTML document carries,
+// along with the base64 sha256 of its body for the CSP script-src splice.
+//
+// It assigns window.__PLUGINS__ (the enabled-only plugin manifest, computed per
+// request because enabled-state changes at runtime; chunks is the static build
+// map) and window.__MEDIA__ in ONE body. One body means one hash, which is what
+// lets all three injection sites and both CSP splices stay as they are.
+//
+// json.Marshal HTML-escapes <, > and & by default, so both payloads are safe to
 // embed inline. Disabled plugins are absent from the result entirely.
-func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
-	// Snapshot, not GetAllSettings: this runs on every HTML serve and
-	// BuildManifest only reads the map.
+func bootstrapScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
+	// Snapshot, not GetAllSettings: this runs on every HTML serve, and both
+	// BuildManifest and the generation token only read the map.
 	all, err := settings.Snapshot(ctx)
 	if err != nil {
 		all = map[string]string{}
@@ -43,7 +57,14 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 	if err != nil {
 		b = []byte("[]")
 	}
-	scriptContent := "window.__PLUGINS__=" + string(b) + ";"
+	m, err := json.Marshal(mediaBootstrap{
+		Gen:   services.ThumbnailGenerationFrom(all),
+		Sizes: services.VariantSizes,
+	})
+	if err != nil {
+		m = []byte("{}")
+	}
+	scriptContent := "window.__PLUGINS__=" + string(b) + ";window.__MEDIA__=" + string(m) + ";"
 	hash := sha256.Sum256([]byte(scriptContent))
 	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
 	return "\n  <script>" + scriptContent + "</script>", hashBase64

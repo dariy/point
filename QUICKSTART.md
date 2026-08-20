@@ -65,8 +65,12 @@ Alternatively, you can update manually using standard Compose commands:
 
 <!-- verify:skip updates an existing install -->
 ```bash
-docker compose pull && docker compose up -d
+docker compose pull && docker compose up -d --force-recreate
 ```
+
+`--force-recreate` matters on Podman: `podman compose up -d` keeps the existing
+container running even when `pull` has fetched a newer image, so without the flag
+the update silently does nothing. Your data in `./data` is untouched either way.
 
 *Note: Point will show a notification in the admin panel whenever a new version is available.*
 
@@ -76,7 +80,7 @@ You can customize Point by editing the `.env` file.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `DEPLOY_PORT` | `8000` | The host port Point listens on |
+| `APP_PORT` | `8000` | The host port Point listens on |
 | `APP_URL` | (None) | The external URL of your blog (e.g., https://blog.example.com) |
 | `DATA_PATH` | `./data` | Directory where the database, photos, and backups are stored |
 | `PHOTO_LIBRARY_PATH` | (None) | Path to your existing photo library (mounted read-only) |
@@ -86,8 +90,6 @@ You can customize Point by editing the `.env` file.
 | `APP_ENV` | `development` | Set to `production` for live environments |
 | `DEBUG` | `true` | Set to `false` in production environments |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Maximum allowed size for uploaded photos |
-| `THUMBNAIL_WIDTH` | `400` | Width of generated thumbnails in pixels |
-| `THUMBNAIL_HEIGHT` | `300` | Height of generated thumbnails in pixels |
 | `JPEG_QUALITY` | `85` | Compression quality for JPEG images (1-100) |
 | `SESSION_EXPIRY_HOURS` | `720` | How long an admin session remains valid |
 | `SESSION_EXPIRY_PUBLIC_HOURS` | `24` | How long a public session remains valid |
@@ -210,8 +212,8 @@ For full details, including carousel publishing and caption templates, see
 
 ## Troubleshooting
 
-1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
-2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `DEPLOY_PORT`.
+1. **Port already in use:** Change `APP_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
+2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `APP_PORT`.
 3. **Forgot your password:** If SMTP is configured (see below), use the "Forgot password?" link on the login page. Otherwise, reset it directly from the container: download
    [`change-password.sh`](quickstart/cli/change-password.sh) into your install directory
    (next to `docker-compose.yml`) and run:

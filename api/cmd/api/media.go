@@ -25,6 +25,81 @@ import (
 // e.g. "video_89017c29.mp4" → "89017c29".
 var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 
+// requestedVariantSize reads which thumbnail rung a media request asks for, or
+// 0 for the original.
+//
+// `?s=<n>` is the current form. `?thumb` and `?thumb=<n>` keep working with no
+// data migration behind them: posts.thumbnail_path rows and published post
+// content already carry them, and a bare `?thumb` predates the ladder entirely
+// so it resolves to the default rung. A size off the ladder is rejected rather
+// than clamped — accepting arbitrary sizes would let one crawler fill the disk.
+func requestedVariantSize(c echo.Context) (int, error) {
+	q := c.Request().URL.Query()
+	raw := ""
+	if v, ok := q["s"]; ok {
+		raw = v[0]
+	} else if v, ok := q["thumb"]; ok {
+		if v[0] == "" {
+			return services.DefaultVariantSize, nil
+		}
+		raw = v[0]
+	} else {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || !services.AllowedVariantSize(n) {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid thumbnail size")
+	}
+	return n, nil
+}
+
+// mediaCacheControl picks the Cache-Control for a media hit.
+//
+// Private media must never reach a shared cache: an authenticated preview
+// response cached at the edge would be replayed to anonymous requests.
+//
+// For public media the question is what may be pinned, and a URL is only safe
+// to pin when changing the bytes changes the URL. Two things do that:
+//
+//   - a content-addressed filename (…_<checksum>.ext), for the source;
+//   - `v=<generation>`, for a derived variant — a rebuild writes a fresh token,
+//     which moves every variant URL the site emits at once.
+//
+// A variant needs both to earn `immutable`. The token alone is not enough: a
+// source can be replaced in place — a re-captured poster, an EXIF write —
+// without its URL moving, and the variant follows it. The checksum alone is not
+// enough either: the variant is derived, and a rebuild changes how it is
+// derived (jpeg_quality, the ladder itself) while the source's checksum stands.
+// With both, a year at the edge is still a bet that no one replaces a
+// content-addressed file in place without rebuilding.
+//
+// Everything else gets a short browser TTL and a day at the edge, which is what
+// the engine served before the ladder existed. A stale or absent `v` is never
+// an error: a service worker can hold a page shell that emits last week's
+// token, and a 400 or 404 there would black out its images.
+func mediaCacheControl(isPublic bool, filename string, servedVariant, genCurrent bool) string {
+	if !isPublic {
+		return "private, no-store"
+	}
+	contentAddressed := checksumRe.MatchString(filename)
+	if servedVariant {
+		switch {
+		case !genCurrent:
+			return publicShortCacheControl
+		case contentAddressed:
+			return immutableCacheControl
+		default:
+			return publicVariantCacheControl
+		}
+	}
+	// The original. Its bytes are not a function of the generation token, so
+	// only the filename decides.
+	if contentAddressed {
+		return immutableCacheControl
+	}
+	return publicShortCacheControl
+}
+
 // neutralizeSVG locks down the response when the file being served is an SVG.
 //
 // SVG is the only allowlisted upload format a browser will execute script from:
@@ -45,6 +120,19 @@ func neutralizeSVG(c echo.Context, path string) {
 		"default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 }
+
+// publicShortCacheControl is the default for public media: a CDN absorbs the
+// traffic for a day while a short browser max-age bounds client staleness.
+// Media can be renamed, replaced or unpublished at the same URL, so a change
+// needs a manual edge purge — a deliberate trade of revalidation for offload.
+const publicShortCacheControl = "public, max-age=300, s-maxage=86400"
+
+// publicVariantCacheControl is for a derived variant whose generation token is
+// current but whose source filename is not content-addressed. A rebuild moves
+// the token and so the URL, which is what lets the edge hold it for a year;
+// the browser TTL stays a day so a client that missed the new token recovers
+// without waiting one out.
+const publicVariantCacheControl = "public, max-age=86400, s-maxage=31536000"
 
 // notFoundCacheControl is the header for media 404s. A 404 is never cached on
 // the same terms as a hit: the reasons a media URL 404s are all transient
@@ -69,10 +157,15 @@ const notFoundCacheControl = "public, max-age=30, s-maxage=60"
 //   - Files not found in the media table return 404.
 //
 // Variant selection:
-//   - ?thumb=<size> serves an on-demand square thumbnail (e.g. the atlas
-//     cloud's 128px chips), generated and cached lazily from the original.
-//   - ?thumb (no value) serves the stored thumbnail (media/thumbnails/…) when one exists.
-//   - No query param serves the original (media/originals/…).
+//   - ?s=<size> serves a rung of the thumbnail ladder (services.VariantSizes),
+//     generated and cached lazily under media/variants/<size>/ on first request.
+//     A size off the ladder is a 400.
+//   - ?thumb and ?thumb=<size> are the pre-ladder spelling, kept working
+//     because published post content carries them; see requestedVariantSize.
+//   - ?v=<generation> is the cache-busting token. It never selects a file, only
+//     how long the response may be cached; see mediaCacheControl.
+//   - No size serves the original (media/originals/…), as does a size at or
+//     above the source's longest side.
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
 func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
@@ -86,7 +179,7 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
 			if indexHTMLContent != "" {
-				script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
+				script, hash := bootstrapScript(c.Request().Context(), settings, chunks, cssMap)
 				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")
@@ -151,72 +244,42 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
-		// Public media is edge-cacheable so a CDN absorbs traffic without
-		// hitting the origin: s-maxage lets a shared cache serve it for a day,
-		// while a short browser max-age bounds client staleness. Media can be
-		// renamed/replaced/unpublished at the same URL, so a change requires a
-		// manual edge purge (rare, operator-driven) — we deliberately trade
-		// no-cache revalidation for full offload. Private media must never be
-		// cached by a shared cache, or an authenticated preview response could
-		// leak hidden media to the edge for unauthenticated requests to reuse.
-		if media.IsPublic != 0 {
-			if checksumRe.MatchString(filename) {
-				// Content-addressed: the filename carries a checksum of the bytes,
-				// so replacing the image produces a different URL and this one can
-				// be cached forever. The trade-off is unpublishing — a client that
-				// already fetched the file keeps its copy until the year is up, so
-				// visibility changes are not retroactive for cached bytes. That is
-				// the same bargain the existing s-maxage=86400 edge cache makes.
-				c.Response().Header().Set("Cache-Control", immutableCacheControl)
-			} else {
-				c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
-			}
-		} else {
-			c.Response().Header().Set("Cache-Control", "private, no-store")
+		// Resolve the variant before anything is decided about caching: whether
+		// this response can be pinned depends on which file ends up served and
+		// on the generation token, neither of which is known from the URL path.
+		variantSize, sizeErr := requestedVariantSize(c)
+		if sizeErr != nil {
+			return sizeErr
 		}
 
-		// Determine which file to serve.
-		thumbVals, wantThumb := c.Request().URL.Query()["thumb"]
-		if wantThumb {
-			// `?thumb=<size>` requests an on-demand square thumbnail; a bare
-			// `?thumb` serves the stored thumbnail variant. An unsupported size is
-			// rejected, but a generation failure (e.g. an undecodable image) falls
-			// through to the original below so the image still renders. A bare
-			// `?thumb` whose stored thumbnail is absent (no path, outside the media
-			// dir, or file missing) likewise falls through to the original rather
-			// than 404ing, so the image still renders.
-			if sizeStr := thumbVals[0]; sizeStr != "" {
-				n, convErr := strconv.Atoi(sizeStr)
-				if convErr != nil || !services.AllowedSquareThumbSize(n) {
-					return echo.NewHTTPError(http.StatusBadRequest, "invalid thumbnail size")
-				}
-				if thumbFile, genErr := mediaSvc.SquareThumbnail(ctx, media, n); genErr == nil {
-					return c.File(thumbFile)
-				}
-			} else if media.ThumbnailPath.Valid {
-				thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
-
-				// Security: ensure the resolved file is within the media storage
-				// directory before serving it; otherwise fall through to the original.
-				if strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
-					if _, err := os.Stat(thumbFile); err == nil {
-						return c.File(thumbFile)
-					}
-				}
-			}
-
-			// Falling through to the original is only a graceful degradation when
-			// the original is itself a still. For a video or audio file the caller
-			// asked for a thumbnail and would get an <img> pointed at a media
-			// stream — a broken image that costs a full download. 404 instead;
-			// the UI drops back to a type glyph on error.
-			if strings.EqualFold(media.FileType, "video") || strings.EqualFold(media.FileType, "audio") {
-				// Replace the hit TTL set above, which for a content-addressed
-				// filename is immutable — a year of cached 404 for a thumbnail
-				// that a later reupload could well make available.
+		servedVariant := ""
+		if variantSize > 0 {
+			if f, genErr := mediaSvc.Variant(ctx, media, variantSize); genErr == nil {
+				servedVariant = f
+			} else if strings.EqualFold(media.FileType, "video") || strings.EqualFold(media.FileType, "audio") {
+				// Falling through to the original is graceful degradation only
+				// when the original is itself a still. For a video or audio
+				// file the caller asked for a thumbnail and would get an <img>
+				// pointed at a media stream — a broken image that costs a full
+				// download. 404 instead; the UI drops back to a type glyph.
 				c.Response().Header().Set("Cache-Control", notFoundCacheControl)
 				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail for this media")
 			}
+			// Any other failure — a source below this rung, an undecodable
+			// image, an SVG — falls through to the original, which still
+			// renders.
+		}
+
+		gen := c.Request().URL.Query().Get("v")
+		c.Response().Header().Set("Cache-Control", mediaCacheControl(
+			media.IsPublic != 0,
+			filename,
+			servedVariant != "",
+			gen != "" && gen == mediaSvc.ThumbnailGeneration(ctx),
+		))
+
+		if servedVariant != "" {
+			return c.File(servedVariant)
 		}
 
 		// Serve original — try exact path first, then checksum-glob fallback.

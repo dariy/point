@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -11,13 +12,18 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -26,6 +32,7 @@ import (
 	"point-api/internal/repository"
 
 	"github.com/disintegration/imaging"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
@@ -38,6 +45,27 @@ type MediaService struct {
 	tagService      *TagService
 	genaiClient     *genai.Client
 	genaiConfig     GenAIConfig
+
+	// cache is the public page cache a rebuild drops. Nil is valid and skips
+	// the invalidation — see RebuildThumbnails for what that costs.
+	cache *CacheService
+
+	// variantFlight collapses concurrent ladder generation per media ID. See
+	// Variant for why the global decode semaphore is not enough on its own.
+	variantFlight singleflight.Group
+
+	// prewarming is held for the life of a background prewarm so a second
+	// rebuild does not start a duplicate one. See startPrewarm.
+	prewarming atomic.Bool
+}
+
+// WithCache attaches the public page cache so a rebuild can drop it. Without
+// it the cached home pages, feeds and sitemap keep serving variant URLs
+// carrying the previous generation token until their own TTL expires — up to
+// six hours for the sitemap.
+func (s *MediaService) WithCache(c *CacheService) *MediaService {
+	s.cache = c
+	return s
 }
 
 type GenAIConfig struct {
@@ -101,17 +129,6 @@ func CalculateChecksum(data []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// thumbnailWidth returns the effective thumbnail width, preferring env config
-// then DB setting then the hard-coded default.
-func (s *MediaService) thumbnailWidth(ctx context.Context) int {
-	return s.settingsService.GetConfigSetting(ctx, "thumbnail_width", s.cfg.ThumbnailWidth, 400)
-}
-
-// thumbnailHeight returns the effective thumbnail height.
-func (s *MediaService) thumbnailHeight(ctx context.Context) int {
-	return s.settingsService.GetConfigSetting(ctx, "thumbnail_height", s.cfg.ThumbnailHeight, 300)
-}
-
 // jpegQuality returns the effective JPEG quality (1-100).
 func (s *MediaService) jpegQuality(ctx context.Context) int {
 	return s.settingsService.GetConfigSetting(ctx, "jpeg_quality", s.cfg.JpegQuality, 85)
@@ -151,12 +168,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 
 	// Create directories
 	originalsDir := filepath.Join(s.cfg.StoragePath, "media", "originals", datePath)
-	thumbnailsDir := filepath.Join(s.cfg.StoragePath, "media", "thumbnails", datePath)
-
 	if err := os.MkdirAll(originalsDir, 0755); err != nil {
-		return models.Medium{}, err
-	}
-	if err := os.MkdirAll(thumbnailsDir, 0755); err != nil {
 		return models.Medium{}, err
 	}
 
@@ -173,29 +185,30 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 
 	// Process media
 	var width, height sql.NullInt64
-	var thumbnailRelPath sql.NullString
 	var metadata map[string]interface{}
+	// decoded is kept alive past this block so the thumbnail ladder can be
+	// written from it once the original is safely on disk — the decode already
+	// happened for the dimension read, so the rungs are nearly free.
+	var decoded image.Image
 	fileType := "file"
 
 	if strings.HasPrefix(p.MimeType, "image/") {
 		fileType = "image"
-		// Load image for dimensions and thumbnail
-		src, err := safeImagingDecode(bytes.NewReader(p.Content))
+		// Load image for dimensions and the thumbnail ladder
+		src, err := s.decodeImage(ctx, p.Content)
+		if errors.Is(err, ErrTooLarge) {
+			// Other decode failures are tolerated below — the file is stored
+			// without dimensions or a thumbnail. "Too many pixels" is not a
+			// degraded success but a refusal: storing it would mean every later
+			// thumbnail attempt re-hits the same ceiling, and the uploader would
+			// never learn why.
+			return models.Medium{}, err
+		}
 		if err == nil {
+			decoded = src
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
-
-			thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
-			if thumbW > 0 && thumbH > 0 {
-				thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
-				thumbFilename := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)), thumbW, thumbH)
-				thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
-				thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
-				if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
-					thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
-				}
-			}
 		}
 		// Extract EXIF
 		metadata = s.extractEXIF(bytes.NewReader(p.Content))
@@ -217,6 +230,15 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		return models.Medium{}, err
 	}
 
+	// Generate the ladder eagerly, so the first visitor to the post is not the
+	// one who pays for it. A failure is not fatal: the media route regenerates
+	// any missing rung on request.
+	if decoded != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, ""); err != nil {
+			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
+		}
+	}
+
 	var postID sql.NullInt64
 	if p.PostID != nil {
 		postID = sql.NullInt64{Int64: *p.PostID, Valid: true}
@@ -224,9 +246,12 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 
 	// Save to DB
 	media, err := s.repo.CreateMedia(ctx, models.CreateMediaParams{
-		Filename:         p.Filename,
-		OriginalPath:     originalRelPath,
-		ThumbnailPath:    thumbnailRelPath,
+		Filename:     p.Filename,
+		OriginalPath: originalRelPath,
+		// thumbnail_path is the video poster column now: an image's derived
+		// sizes live in the variants tree, keyed on the original's path, and
+		// need no row of their own.
+		ThumbnailPath:    sql.NullString{},
 		FileType:         fileType,
 		MimeType:         p.MimeType,
 		FileSize:         int64(len(p.Content)),
@@ -293,12 +318,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
 
 	originalsDir := filepath.Join(s.cfg.StoragePath, "media", "originals", datePath)
-	thumbnailsDir := filepath.Join(s.cfg.StoragePath, "media", "thumbnails", datePath)
-
 	if err := os.MkdirAll(originalsDir, 0755); err != nil {
-		return models.Medium{}, err
-	}
-	if err := os.MkdirAll(thumbnailsDir, 0755); err != nil {
 		return models.Medium{}, err
 	}
 
@@ -307,29 +327,26 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 	originalFullPath := filepath.Join(s.cfg.StoragePath, "media", originalRelPath)
 
 	var width, height sql.NullInt64
-	var thumbnailRelPath sql.NullString
 	var metadata map[string]interface{}
+	var decoded image.Image
 	fileType := "file"
 
 	if strings.HasPrefix(mimeType, "image/") {
 		fileType = "image"
-		src, err := safeImagingDecode(bytes.NewReader(content))
+		src, err := s.decodeImage(ctx, content)
+		if errors.Is(err, ErrTooLarge) {
+			// Other decode failures are tolerated below — the file is stored
+			// without dimensions or a thumbnail. "Too many pixels" is not a
+			// degraded success but a refusal: storing it would mean every later
+			// thumbnail attempt re-hits the same ceiling, and the uploader would
+			// never learn why.
+			return models.Medium{}, err
+		}
 		if err == nil {
+			decoded = src
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
-
-			thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
-			if thumbW > 0 && thumbH > 0 {
-				thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
-				thumbFilename := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)), thumbW, thumbH)
-				thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
-				thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
-
-				if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
-					thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
-				}
-			}
 		}
 		// Extract EXIF
 		metadata = s.extractEXIF(bytes.NewReader(content))
@@ -353,10 +370,17 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		return models.Medium{}, err
 	}
 
+	// Same eager ladder as UploadFile, off the decode already done above.
+	if decoded != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, ""); err != nil {
+			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
+		}
+	}
+
 	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
 		Filename:         filename,
 		OriginalPath:     originalRelPath,
-		ThumbnailPath:    thumbnailRelPath,
+		ThumbnailPath:    sql.NullString{},
 		FileType:         fileType,
 		MimeType:         mimeType,
 		FileSize:         int64(len(content)),
@@ -586,6 +610,7 @@ func (s *MediaService) DeleteMedia(ctx context.Context, id int64) error {
 		thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", media.ThumbnailPath.String)
 		_ = os.Remove(thumbnailFull)
 	}
+	s.removeAllVariants(media.OriginalPath)
 
 	return s.repo.DeleteMedia(ctx, id)
 }
@@ -605,6 +630,7 @@ func (s *MediaService) BulkDeleteMedia(ctx context.Context, ids []int64) (int, e
 			thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String)
 			_ = os.Remove(thumbnailFull)
 		}
+		s.removeAllVariants(m.OriginalPath)
 	}
 
 	if err := s.repo.DeleteMediaByIDs(ctx, ids); err != nil {
@@ -639,6 +665,7 @@ func (s *MediaService) CleanupOrphaned(ctx context.Context) (int, int64, error) 
 		if m.ThumbnailPath.Valid {
 			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
 		}
+		s.removeAllVariants(m.OriginalPath)
 	}
 
 	if len(ids) > 0 {
@@ -698,7 +725,14 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 		return models.Medium{}, fmt.Errorf("rename file: %w", err)
 	}
 
-	// Rename thumbnail if present
+	// Drop the ladder rather than renaming four files: a rung is keyed on the
+	// original's path, so the old names are now orphans, and regenerating one
+	// costs a single decode on next request.
+	s.removeAllVariants(m.OriginalPath)
+
+	// A video poster does have to move. It is client-captured and there is no
+	// server-side decoder to reproduce it, so losing it would mean asking the
+	// operator to re-capture the frame by hand.
 	var newThumbRel sql.NullString
 	if m.ThumbnailPath.Valid {
 		thumbExt := filepath.Ext(m.ThumbnailPath.String)
@@ -750,29 +784,32 @@ func (s *MediaService) SaveVideoPoster(ctx context.Context, id int64, poster []b
 	return s.storePoster(ctx, media, poster)
 }
 
-// storePoster resizes poster to the configured thumbnail box and records it as
-// media's thumbnail_path. It is the shared tail of SaveVideoPoster and the
-// poster field on upload.
+// posterMaxSide is the box a client-captured poster frame is fitted into.
+//
+// The poster is the only still a video has, and it is not reproducible without
+// the admin browser, so it is stored generously and aspect-preserved and the
+// ladder is derived from it like any image. It used to be cropped to the
+// 400x300 thumbnail box, which meant every video's thumbnails were a 4:3
+// centre crop of a 16:9 frame while images kept their proportions. Fit cannot
+// put back pixels a Fill discarded, so the crop had to go at the source.
+const posterMaxSide = 1600
+
+// storePoster fits poster into the poster box and records it as media's
+// thumbnail_path. It is the shared tail of SaveVideoPoster and the poster
+// field on upload.
 func (s *MediaService) storePoster(ctx context.Context, media models.Medium, poster []byte) (models.Medium, error) {
 	if !strings.EqualFold(media.FileType, "video") {
 		return models.Medium{}, ErrNotAVideo
 	}
 
-	src, err := safeImagingDecode(bytes.NewReader(poster))
+	src, err := s.decodeImage(ctx, poster)
 	if err != nil {
 		return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("poster frame is not a decodable image: %w", err))
 	}
 
-	// Thumbnails are switched off when either dimension is zeroed out; without a
-	// box to fill there is nothing to store.
-	thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
-	if thumbW <= 0 || thumbH <= 0 {
-		return models.Medium{}, wrapKind(ErrInvalidInput, errors.New("thumbnails are disabled"))
-	}
-
-	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	mediaBase := s.mediaBase()
 	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
-	baseName := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)), thumbW, thumbH)
+	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
 	thumbRel := filepath.Join("thumbnails", filepath.Dir(relUnder), baseName)
 	thumbFull := filepath.Clean(filepath.Join(mediaBase, thumbRel))
 	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
@@ -782,15 +819,15 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 	if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
 		return models.Medium{}, err
 	}
-	thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
+	thumb := imaging.Fit(src, posterMaxSide, posterMaxSide, imaging.Lanczos)
 	if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
 		return models.Medium{}, err
 	}
 
-	// Drop any square variant cached from an earlier poster; SquareThumbnail
-	// keys its freshness off the source file's mtime, and a replaced poster is
-	// written to the same path.
-	_ = os.Remove(s.squareThumbPath(media, AtlasThumbSize))
+	// Drop the rungs cut from the previous poster. Variant would notice the
+	// newer source on its own, but a re-capture that lands within the same
+	// filesystem timestamp granularity would not move mtime forward.
+	s.removeAllVariants(media.OriginalPath)
 
 	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != thumbRel {
 		_ = os.Remove(filepath.Join(mediaBase, media.ThumbnailPath.String))
@@ -804,171 +841,509 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 	})
 }
 
-// AtlasThumbSize is the edge length (px) of the square thumbnail the atlas
-// cloud requests for image-post chips. It must be a member of the allowed set
-// below so SquareThumbnail will generate it.
-const AtlasThumbSize = 128
-
-// allowedSquareThumbSizes whitelists the square-thumbnail edge sizes the media
-// endpoint will generate on demand. Restricting to a fixed set keeps the
-// on-disk cache bounded and prevents a cache-busting flood via arbitrary
-// ?thumb=<n> values.
-var allowedSquareThumbSizes = map[int]bool{AtlasThumbSize: true}
-
-// AllowedSquareThumbSize reports whether an on-demand square thumbnail of the
-// given edge size may be generated.
-func AllowedSquareThumbSize(size int) bool {
-	return allowedSquareThumbSizes[size]
-}
-
-// squareThumbPath returns the absolute path of the cached square variant of the
-// given edge size for a media item, whether or not it has been generated yet.
-func (s *MediaService) squareThumbPath(media models.Medium, size int) string {
-	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
-	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
-	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
-	thumbRel := filepath.Join("thumbnails", fmt.Sprintf("sq%d", size), filepath.Dir(relUnder), baseName)
-	return filepath.Clean(filepath.Join(mediaBase, thumbRel))
-}
-
-// SquareThumbnail returns the absolute path to a cached square JPEG thumbnail of
-// the given edge size for a media item, generating it lazily on first request.
-// Variants live under media/thumbnails/sq<size>/YYYY/MM/, mirroring the
-// original's date path, so no DB column or migration is needed. A cached file is
-// regenerated if its source has since changed.
+// VariantSizes is the thumbnail ladder: the cap applied to the LONGEST side of
+// a derived JPEG, ascending. Aspect ratio is preserved (imaging.Fit), so a
+// portrait source at rung 512 is 512 tall and narrower than that.
 //
-// Images are squared from the original. A video has no server-decodable still,
-// so it is squared from the stored poster frame instead (see SaveVideoPoster);
-// a video without one has no source at all and errors out.
-func (s *MediaService) SquareThumbnail(ctx context.Context, media models.Medium, size int) (string, error) {
-	if !AllowedSquareThumbSize(size) {
+// Four rungs cover the whole product: 128 for dense grids and list rows, 256
+// for atlas chips, 512 for cards and the legacy bare `?thumb`, 1024 for article
+// bodies, retina cards and social cards. JPEG only — the binary is CGO-free and
+// disintegration/imaging cannot encode WebP or AVIF without a cgo dependency.
+var VariantSizes = []int{128, 256, 512, 1024}
+
+// DefaultVariantSize is the rung a bare `?thumb` resolves to. Existing
+// posts.thumbnail_path rows and published post content carry `?thumb` with no
+// size and there is no data migration behind them, so they land here.
+const DefaultVariantSize = 512
+
+// AtlasVariantSize is the rung the atlas cloud requests for its post chips.
+//
+// 256 rather than the bottom rung: a selected chip's thumb is 10vw wide
+// (atlas.css), so on a desktop it paints at 150-200px. The rungs preserve
+// aspect ratio, so a 3:2 photo at rung 128 is only 128x85 — under `object-fit:
+// cover` that gets blown up past 2x and visibly softens.
+const AtlasVariantSize = 256
+
+// SocialCardVariantSize is the rung the crawler prerender points og:image and
+// twitter:image at. The original is the wrong answer there: a 4000px camera
+// JPEG is several megabytes and past the size ceiling every card renderer
+// applies, so the card silently renders blank.
+const SocialCardVariantSize = 1024
+
+// AllowedVariantSize reports whether size is a rung of the ladder. Restricting
+// generation to a fixed set keeps the on-disk cache bounded and stops an
+// arbitrary `?s=<n>` flood from filling the disk.
+func AllowedVariantSize(size int) bool {
+	for _, s := range VariantSizes {
+		if s == size {
+			return true
+		}
+	}
+	return false
+}
+
+// VariantsRoot is the root of the derived-image tree, under media/.
+//
+// It is deliberately a different root from media/thumbnails/, which holds
+// client-captured video poster frames. Those are not derivable: the runtime
+// ships no ffmpeg and the binary is CGO-free, so a poster exists only because
+// an admin browser drew a frame off a <video> onto a canvas and posted it
+// (see SaveVideoPoster). Purging the derived tree is a routine operation and
+// must not be able to reach them; separate roots make that structural, where
+// "no year directory is ever named 128" would only be a coincidence.
+const VariantsRoot = "variants"
+
+// ThumbnailGenerationSetting is the settings key holding the generation token.
+const ThumbnailGenerationSetting = "thumbnail_generation"
+
+// DefaultThumbnailGeneration is the token a site serves on before any rebuild
+// has written one.
+const DefaultThumbnailGeneration = "1"
+
+// ThumbnailGeneration returns the current thumbnail generation token — the `v`
+// in a variant URL.
+//
+// It is one global token rather than a per-media value because the frontend
+// call sites that build a media URL hold a bare path string and nothing else;
+// a per-media token would have to be plumbed through every one of them. A
+// rebuild writes a fresh token, which moves every variant URL on the site at
+// once and is the whole of the engine's cache invalidation.
+func (s *MediaService) ThumbnailGeneration(ctx context.Context) string {
+	if s.settingsService == nil {
+		return DefaultThumbnailGeneration
+	}
+	v, err := s.settingsService.GetSetting(ctx, ThumbnailGenerationSetting, DefaultThumbnailGeneration)
+	if err != nil || v == "" {
+		return DefaultThumbnailGeneration
+	}
+	return v
+}
+
+// ThumbnailGenerationFrom reads the generation token out of a settings
+// snapshot. The HTML serve path already holds the cached map, so it takes this
+// instead of ThumbnailGeneration and spares itself a second lookup on every
+// document.
+func ThumbnailGenerationFrom(all map[string]string) string {
+	if v := all[ThumbnailGenerationSetting]; v != "" {
+		return v
+	}
+	return DefaultThumbnailGeneration
+}
+
+// VariantURL builds the public URL of one ladder rung for the media served at
+// barePath ("/YYYY/MM/file.jpg"). Any existing query is dropped, so a stored
+// path that still carries the legacy `?thumb` resolves cleanly.
+//
+// gen is the cache-busting token, not a selector: the route serves the same
+// bytes whatever `v` says, and only decides from it how long the response may
+// be cached. An empty gen therefore yields a working URL that simply cannot be
+// cached hard.
+func VariantURL(barePath string, size int, gen string) string {
+	if i := strings.IndexByte(barePath, '?'); i >= 0 {
+		barePath = barePath[:i]
+	}
+	if gen == "" {
+		return barePath + "?s=" + strconv.Itoa(size)
+	}
+	return barePath + "?s=" + strconv.Itoa(size) + "&v=" + url.QueryEscape(gen)
+}
+
+// VariantRelPath returns the media-relative path of one ladder rung derived
+// from the media item whose original lives at originalPath. The size is a
+// directory rather than a filename suffix, and the generation token is not on
+// disk at all: a rebuild purges the tree, it does not accumulate generations.
+func VariantRelPath(originalPath string, size int) string {
+	relUnder := strings.TrimPrefix(originalPath, "originals/")
+	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
+	return filepath.Join(VariantsRoot, strconv.Itoa(size), filepath.Dir(relUnder), baseName)
+}
+
+// mediaBase is the cleaned root every media path must stay inside.
+func (s *MediaService) mediaBase() string {
+	return filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+}
+
+// variantFullPath is the absolute path of a rung, generated or not.
+func (s *MediaService) variantFullPath(originalPath string, size int) string {
+	return filepath.Clean(filepath.Join(s.mediaBase(), VariantRelPath(originalPath, size)))
+}
+
+// variantSourceRel returns the media-relative path of the file a media item's
+// variants are cut from: the original for an image, the stored poster frame
+// for a video. Anything else has no still to derive from.
+func variantSourceRel(media models.Medium) (string, error) {
+	if strings.EqualFold(media.FileType, "image") {
+		return media.OriginalPath, nil
+	}
+	if !strings.EqualFold(media.FileType, "video") {
+		return "", ErrNotAnImage
+	}
+	if !media.ThumbnailPath.Valid || media.ThumbnailPath.String == "" {
+		return "", ErrNoPoster
+	}
+	return media.ThumbnailPath.String, nil
+}
+
+// variantIsFresh reports whether a cached rung exists and is no older than the
+// source it was cut from. A source can be replaced in place — a re-captured
+// poster, an EXIF write — without its path changing, so mtime is the only
+// signal that the cache is stale.
+func variantIsFresh(variantFull, srcFull string) bool {
+	vi, err := os.Stat(variantFull)
+	if err != nil {
+		return false
+	}
+	si, err := os.Stat(srcFull)
+	if err != nil {
+		return false
+	}
+	return !si.ModTime().After(vi.ModTime())
+}
+
+// Variant returns the absolute path of the cached JPEG rung of the given size,
+// generating it lazily on first request.
+//
+// One decode produces the WHOLE ladder. A responsive <img srcset> asks for
+// several sizes of the same image within milliseconds of each other, so a
+// decode per size would mean four decodes of one source to paint one card.
+// Instead the first request through decodes once and writes every rung, and
+// the rest find warm files. Concurrent requests are collapsed per media ID, so
+// the four candidates cannot race into four decodes either — for this access
+// pattern that matters more than the process-wide decode semaphore, which
+// bounds the machine but not the duplication.
+//
+// Rungs at or above the source's longest side are never written: imaging.Fit
+// does not upscale, so they would be byte-identical copies of one another. The
+// caller gets ErrVariantNotNeeded and serves the original instead. A video
+// falls back to its poster frame rather than the original, which is a media
+// stream and not a still.
+func (s *MediaService) Variant(ctx context.Context, media models.Medium, size int) (string, error) {
+	if !AllowedVariantSize(size) {
 		return "", wrapKind(ErrInvalidInput, fmt.Errorf("unsupported thumbnail size %d", size))
 	}
 
-	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
-
-	// srcRel is the media-relative path of the file the square is cut from.
-	srcRel := media.OriginalPath
-	if !strings.EqualFold(media.FileType, "image") {
-		if !strings.EqualFold(media.FileType, "video") {
-			return "", ErrNotAnImage
-		}
-		if !media.ThumbnailPath.Valid || media.ThumbnailPath.String == "" {
-			return "", ErrNoPoster
-		}
-		srcRel = media.ThumbnailPath.String
+	srcRel, err := variantSourceRel(media)
+	if err != nil {
+		return "", err
 	}
 
+	mediaBase := s.mediaBase()
 	srcFull := filepath.Clean(filepath.Join(mediaBase, srcRel))
 	if !strings.HasPrefix(srcFull, mediaBase+string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid media path")
 	}
-
-	thumbFull := s.squareThumbPath(media, size)
-	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
+	variantFull := s.variantFullPath(media.OriginalPath, size)
+	if !strings.HasPrefix(variantFull, mediaBase+string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid thumbnail path")
 	}
 
-	// Reuse the cached thumbnail unless the source is newer (e.g. replaced).
-	if ti, err := os.Stat(thumbFull); err == nil {
-		if oi, err := os.Stat(srcFull); err == nil && !oi.ModTime().After(ti.ModTime()) {
-			return thumbFull, nil
-		}
+	if variantIsFresh(variantFull, srcFull) {
+		return variantFull, nil
 	}
 
-	data, err := os.ReadFile(srcFull)
-	if err != nil {
-		return "", err
-	}
-	src, err := safeImagingDecode(bytes.NewReader(data))
-	if err != nil {
+	key := strconv.FormatInt(media.ID, 10)
+	if _, err, _ := s.variantFlight.Do(key, func() (any, error) {
+		return nil, s.buildLadder(ctx, media.OriginalPath, srcFull)
+	}); err != nil {
 		return "", err
 	}
 
-	thumb := imaging.Fill(src, size, size, imaging.Center, imaging.Lanczos)
-	if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
-		return "", err
+	if variantIsFresh(variantFull, srcFull) {
+		return variantFull, nil
 	}
-	if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
-		return "", err
+
+	// The ladder was built and this rung was not part of it: the source is
+	// already at or below this size.
+	if !strings.EqualFold(media.FileType, "image") {
+		return srcFull, nil
 	}
-	return thumbFull, nil
+	return "", ErrVariantNotNeeded
 }
 
-// RebuildThumbnails regenerates thumbnails for all image media.
-// If onlyMissing is true, skips images that already have a thumbnail.
-func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) (map[string]int, error) {
-	all, err := s.repo.ListMedia(ctx, models.ListMediaParams{
-		TypeFilter: true,
-		FileType:   "image",
-		Limit:      100000,
-		Offset:     0,
-	})
+// buildLadder decodes a source once and writes every rung derived from it.
+func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull string) error {
+	data, err := os.ReadFile(srcFull)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	src, err := s.decodeImage(ctx, data)
+	if err != nil {
+		return err
+	}
+	return s.writeLadder(ctx, originalPath, src, srcFull)
+}
+
+// writeLadder writes every missing or stale rung from an already-decoded
+// source. Callers that already hold one — upload, import, the lazy path above
+// — reuse it here, so eager generation costs no extra decode.
+//
+// srcFull is the source's path for the freshness check; pass "" when the
+// source has no settled file yet (an upload writes its original after this
+// runs) to write every rung unconditionally.
+func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, srcFull string) error {
+	bounds := src.Bounds()
+	longest := maxInt(bounds.Dx(), bounds.Dy())
+	quality := imaging.JPEGQuality(s.jpegQuality(ctx))
+
+	var firstErr error
+	fail := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
 	}
 
-	stats := map[string]int{"processed": 0, "skipped": 0, "errors": 0}
-
-	for _, m := range all {
-		if onlyMissing && m.ThumbnailPath.Valid {
-			stats["skipped"]++
+	for _, size := range VariantSizes {
+		if size >= longest {
 			continue
 		}
-
-		origFull := filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath)
-		data, err := os.ReadFile(origFull)
-		if err != nil {
-			stats["errors"]++
+		full := s.variantFullPath(originalPath, size)
+		if srcFull != "" && variantIsFresh(full, srcFull) {
 			continue
 		}
-
-		src, err := safeImagingDecode(bytes.NewReader(data))
-		if err != nil {
-			stats["errors"]++
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			fail(err)
 			continue
 		}
-
-		thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
-		thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
-
-		// Derive thumbnail path from original
-		origRel := m.OriginalPath
-		relUnder := strings.TrimPrefix(origRel, "originals/")
-		relDir := filepath.Dir(relUnder)
-		baseName := fmt.Sprintf("%s_w%dh%d.jpg", strings.TrimSuffix(filepath.Base(origRel), filepath.Ext(origRel)), thumbW, thumbH)
-		thumbRel := filepath.Join("thumbnails", relDir, baseName)
-		thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
-
-		if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
-			stats["errors"]++
-			continue
+		if err := imaging.Save(imaging.Fit(src, size, size, imaging.Lanczos), full, quality); err != nil {
+			fail(err)
 		}
-		if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
-			stats["errors"]++
-			continue
-		}
+	}
+	return firstErr
+}
 
-		if m.ThumbnailPath.Valid && m.ThumbnailPath.String != thumbRel {
-			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
-		}
+// removeAllVariants deletes every cached rung derived from a media item.
+//
+// Every path that destroys, renames or replaces a source must call it: a rung
+// is keyed on the original's path and has no DB row, so one left behind is
+// invisible and permanent. Best-effort — a missing file is the common case.
+func (s *MediaService) removeAllVariants(originalPath string) {
+	for _, size := range VariantSizes {
+		_ = os.Remove(s.variantFullPath(originalPath, size))
+	}
+}
 
-		_, _ = s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{
-			ID:            m.ID,
-			Filename:      m.Filename,
-			OriginalPath:  m.OriginalPath,
-			ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
+// prewarmLimit bounds the eager regeneration a rebuild kicks off: the N most
+// recently uploaded media items, newest first.
+//
+// A rebuild must purge the whole derived tree, but it must not then decode
+// every image on the install — that unbounded synchronous pass is exactly what
+// this endpoint used to be. Everything past the limit is still correct, it just
+// regenerates on its first request like any other cold variant. The limit is
+// set at roughly what a visitor sees before scrolling out of the recent pages.
+const prewarmLimit = 200
+
+// mediaScanPage is the page size used to walk media rows a page at a time,
+// rather than asking for every row in one query and hoping the count is small.
+const mediaScanPage = 500
+
+// legacyThumbRe matches the pre-ladder thumbnail filename shape,
+// <base>_w<W>h<H>.jpg, that the old rebuild wrote into media/thumbnails/.
+var legacyThumbRe = regexp.MustCompile(`_w\d+h\d+\.jpe?g$`)
+
+// RebuildResult reports what a rebuild did. Purged and Legacy are files already
+// removed when it returns; Prewarming is work still running behind it.
+type RebuildResult struct {
+	Generation string `json:"generation"`
+	Purged     int    `json:"purged"`
+	Legacy     int    `json:"legacy"`
+	Prewarming int    `json:"prewarming"`
+}
+
+// RebuildThumbnails invalidates every derived image on the site.
+//
+// It does not rewrite files in place, which is what it used to do and which
+// achieved nothing a visitor could see: a variant's URL never changed, so no
+// browser, proxy or service worker ever re-fetched the bytes underneath it. A
+// rebuild is a token roll instead — purge the derived tree, mint a fresh
+// thumbnail_generation, drop the rendered public pages that bake the old `v`
+// into the URLs inside them, and let the ladder regenerate. Every variant URL
+// on the site moves at once.
+//
+// It returns in milliseconds: the only image work it does synchronously is
+// deleting files. The rest is a bounded background prewarm of the most recent
+// uploads, and beyond that the ladder rebuilds lazily on request.
+//
+// media/thumbnails/ survives, minus legacy image thumbnails. That root holds
+// client-captured video poster frames, which no server-side decoder can
+// reproduce (see VariantsRoot).
+func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, error) {
+	// Purge before the token moves, never after. A request landing in the gap
+	// regenerates a rung and serves it under the OLD token, which is what its
+	// client already had. The other order serves the stale file under the NEW
+	// token — and the new token is the one clients are told to cache hard.
+	res := RebuildResult{Purged: s.purgeVariants()}
+
+	legacy, err := s.sweepLegacyThumbnails(ctx)
+	if err != nil {
+		// The rows that say which stale thumbnail belongs to an image are
+		// unreadable, so a video's irreplaceable poster cannot be told from a
+		// regenerable image thumbnail. Skipping leaves dead files on disk;
+		// guessing deletes posters.
+		slog.Warn("thumbnail rebuild: legacy sweep skipped", "error", err)
+	}
+	res.Legacy = legacy
+
+	res.Generation = newGenerationToken()
+	if s.settingsService != nil {
+		if err := s.settingsService.SetSetting(ctx, ThumbnailGenerationSetting, res.Generation, "string"); err != nil {
+			return res, err
+		}
+	}
+
+	// Required, not incidental: the cached home and tag payloads, feed.xml and
+	// sitemap.xml all carry variant URLs with the old token inside them, and
+	// sitemap.xml holds its copy for six hours.
+	if s.cache != nil {
+		if err := s.cache.InvalidatePublicPages(ctx); err != nil {
+			slog.Warn("thumbnail rebuild: public page cache not dropped", "error", err)
+		}
+	}
+
+	res.Prewarming = s.startPrewarm(ctx)
+	return res, nil
+}
+
+// newGenerationToken mints a token no earlier rebuild has used.
+//
+// Random rather than a counter or a timestamp: this token is the whole of the
+// engine's cache invalidation, and a counter that can restart — a restored
+// backup, a settings row rebuilt by hand — would hand back a value some cache
+// has already seen and pinned.
+func newGenerationToken() string {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(b[:])
+}
+
+// purgeVariants empties the derived-image tree and reports how many files went.
+//
+// It removes each rung directory by NAME, taken from the ladder's own list —
+// not a glob, and never a RemoveAll on media/variants itself or anything above
+// it. A purge is a routine operation triggered from a settings screen, and the
+// blast radius of one wrong path is every original on the install.
+func (s *MediaService) purgeVariants() int {
+	root := filepath.Clean(filepath.Join(s.mediaBase(), VariantsRoot))
+	removed := 0
+	for _, size := range VariantSizes {
+		dir := filepath.Join(root, strconv.Itoa(size))
+		_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				removed++
+			}
+			return nil
 		})
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("thumbnail rebuild: variant purge failed", "dir", dir, "error", err)
+		}
+	}
+	return removed
+}
 
-		// Sync with posts: if a post used the original path as its thumbnail,
-		// update it to use the new thumbnail variant (with ?thumb suffix).
-		barePath := "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
-		_, _ = s.repo.UpdatePostThumbnailPath(ctx, barePath, barePath+"?thumb")
-
-		stats["processed"]++
+// sweepLegacyThumbnails removes the flat _wNhN thumbnails the old rebuild wrote
+// for images, and leaves every video poster where it is.
+//
+// The two cannot be told apart by filename: a poster captured before the ladder
+// landed sits at the same _w400h300.jpg shape, because the old code built both
+// paths the same way. So the poster paths come from the media rows, and a file
+// any video points at is left alone however well it matches.
+func (s *MediaService) sweepLegacyThumbnails(ctx context.Context) (int, error) {
+	posters, err := s.videoPosterPaths(ctx)
+	if err != nil {
+		return 0, err
 	}
 
-	return stats, nil
+	base := s.mediaBase()
+	removed := 0
+	_ = filepath.WalkDir(filepath.Join(base, "thumbnails"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !legacyThumbRe.MatchString(strings.ToLower(d.Name())) {
+			return nil
+		}
+		rel, err := filepath.Rel(base, path)
+		if err != nil || posters[rel] {
+			return nil
+		}
+		if err := os.Remove(path); err == nil {
+			removed++
+		}
+		return nil
+	})
+	return removed, nil
+}
+
+// videoPosterPaths collects the media-relative path of every stored video
+// poster — the files a purge must never reach.
+func (s *MediaService) videoPosterPaths(ctx context.Context) (map[string]bool, error) {
+	posters := make(map[string]bool)
+	for offset := int64(0); ; offset += mediaScanPage {
+		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", mediaScanPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range rows {
+			if m.ThumbnailPath.Valid && m.ThumbnailPath.String != "" {
+				posters[filepath.Clean(m.ThumbnailPath.String)] = true
+			}
+		}
+		if int64(len(rows)) < mediaScanPage {
+			return posters, nil
+		}
+	}
+}
+
+// startPrewarm regenerates the most recent uploads in the background and
+// reports how many items it queued.
+//
+// The work is off the request because the caller is a settings screen holding
+// an HTTP connection, and decoding even a few hundred images is tens of
+// seconds. Only one prewarm runs at a time: a second rebuild while the first is
+// still warming would double the decode load to produce the same files.
+func (s *MediaService) startPrewarm(ctx context.Context) int {
+	rows, err := s.repo.ListMediaFiltered(ctx, "", "", prewarmLimit, 0)
+	if err != nil {
+		slog.Warn("thumbnail rebuild: prewarm list failed", "error", err)
+		return 0
+	}
+	if len(rows) == 0 || !s.prewarming.CompareAndSwap(false, true) {
+		return 0
+	}
+
+	// The request's context is cancelled the moment the response is written;
+	// the values on it are still worth carrying into the background work.
+	bg := context.WithoutCancel(ctx)
+	go func() {
+		defer s.prewarming.Store(false)
+		s.prewarm(bg, rows)
+	}()
+	return len(rows)
+}
+
+// prewarm rebuilds the ladder for each row in turn. It is the synchronous half
+// of startPrewarm, and reports how many items ended up with a usable still.
+//
+// Sequential on purpose. Each item costs one decode — Variant builds every rung
+// from it — and the decode semaphore is shared with live requests: a prewarm
+// that fanned out would fill it and leave every visitor's first uncached image
+// queued behind maintenance work. Per-item failure is ordinary: an audio file
+// has no still, a video may never have had a poster captured, a row can outlive
+// its file.
+func (s *MediaService) prewarm(ctx context.Context, rows []models.Medium) int {
+	warmed := 0
+	for _, m := range rows {
+		if ctx.Err() != nil {
+			break
+		}
+		switch _, err := s.Variant(ctx, m, VariantSizes[0]); {
+		case err == nil, errors.Is(err, ErrVariantNotNeeded):
+			warmed++
+		case errors.Is(err, ErrNotAnImage), errors.Is(err, ErrNoPoster):
+			// Nothing to derive a still from. Not a failure.
+		default:
+			slog.Debug("thumbnail prewarm failed", "media_id", m.ID, "error", err)
+		}
+	}
+	return warmed
 }
 
 // AnalysisResponse matches the Python AnalysisResponse schema
@@ -983,8 +1358,11 @@ var (
 	ErrNotAnImage    = kindSentinel(ErrInvalidInput, "media item is not an image")
 	ErrNotAVideo     = kindSentinel(ErrInvalidInput, "media item is not a video")
 	// A video whose poster frame was never captured — there is no still to
-	// serve or derive a square variant from.
+	// serve or derive a variant from.
 	ErrNoPoster = kindSentinel(ErrNotFound, "video has no poster frame")
+	// The requested rung is at or above the source's longest side, so it was
+	// never written: imaging.Fit does not upscale. Callers serve the source.
+	ErrVariantNotNeeded = kindSentinel(ErrNotFound, "source is smaller than the requested size")
 	// The analysis upstream answered, but not with something we can use.
 	ErrResponseUnusable = kindSentinel(ErrUpstream, "the response cannot be used")
 )
@@ -1400,6 +1778,11 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 // safeImagingDecode wraps imaging.Decode to convert panics into errors.
 // The imaging library can panic on crafted TIFF files (CVE-2023-36308) and
 // there is no patched upstream version as of 2026-05.
+//
+// It bounds nothing on its own. Production callers go through
+// MediaService.decodeImage, which adds the pixel guard and the concurrency
+// limit; this stays exported to the package for the decode paths that have
+// already been bounded and for tests of the panic guard itself.
 func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -1407,4 +1790,90 @@ func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 		}
 	}()
 	return imaging.Decode(r)
+}
+
+// defaultMaxImageMegapixels is the pixel ceiling used when the operator has
+// not set MAX_IMAGE_MEGAPIXELS. Generous for a blog — a 100 MP phone panorama
+// is above it, nothing else realistically is.
+const defaultMaxImageMegapixels = 80
+
+// decodeSem bounds how many image decodes run at once, process-wide. It is a
+// package-level counting semaphore rather than a MediaService field on
+// purpose: the bound that matters is on the machine's memory, and a second
+// service instance must not double it.
+//
+// Sizing: one decode holds roughly 4 bytes per pixel for the source plus the
+// resize destination, so GOMAXPROCS in flight is already the point where more
+// parallelism stops buying throughput and starts buying resident memory.
+var decodeSem = make(chan struct{}, maxInt(1, runtime.GOMAXPROCS(0)))
+
+// decodeObserver is called once per decode that gets past the pixel guard.
+// It is nil in production; tests set it to count decodes, which is how the
+// "one decode produces the whole ladder" guarantee is asserted from the
+// outside. A package-level var rather than a service field because decodeSem
+// is package-level for the same reason: the property under test is a property
+// of the process, not of one MediaService.
+var decodeObserver func()
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// maxImagePixels returns the configured pixel ceiling, or 0 when the check is
+// disabled.
+func (s *MediaService) maxImagePixels() int64 {
+	mp := defaultMaxImageMegapixels
+	if s.cfg != nil && s.cfg.MaxImageMegapixels != 0 {
+		mp = s.cfg.MaxImageMegapixels
+	}
+	if mp < 0 {
+		return 0
+	}
+	return int64(mp) * 1_000_000
+}
+
+// decodeImage decodes an image with the two bounds a public upload path needs:
+// a pixel ceiling checked from the header before anything is allocated, and a
+// cap on how many decodes run concurrently.
+//
+// The body limit upstream bounds bytes on the wire, not pixels in memory —
+// JPEG compresses ~10-20x, so an upload well inside the limit can still carry
+// enough pixels to exhaust a memory-capped container. image.DecodeConfig reads
+// only the header, so an oversized image costs a few bytes to reject instead
+// of a ~400 MB RGBA allocation to discover.
+//
+// This lives here rather than in the HTTP handler because the Instagram
+// importer reaches the same decode with images the operator never chose.
+func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Image, error) {
+	if limit := s.maxImagePixels(); limit > 0 {
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			// Unreadable header. Fall through to the full decode, which
+			// produces the caller's usual decode error rather than a
+			// misleading "too large".
+			slog.Debug("image header unreadable, skipping pixel guard", "error", err)
+		} else if cfg.Width > 0 && cfg.Height > 0 {
+			if px := int64(cfg.Width) * int64(cfg.Height); px > limit {
+				return nil, wrapKind(ErrTooLarge, fmt.Errorf(
+					"image too large: %d megapixels (%dx%d), limit %d megapixels",
+					(px+999_999)/1_000_000, cfg.Width, cfg.Height, limit/1_000_000))
+			}
+		}
+	}
+
+	if decodeObserver != nil {
+		decodeObserver()
+	}
+
+	select {
+	case decodeSem <- struct{}{}:
+		defer func() { <-decodeSem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	return safeImagingDecode(bytes.NewReader(data))
 }

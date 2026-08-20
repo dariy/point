@@ -27,6 +27,7 @@ import {
   dropBrokenImages,
 } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
+import { thumbAttrs } from "../../utils/mediaUrl.js";
 import {
   EDIT_SVG,
   X_SVG,
@@ -54,15 +55,24 @@ const STATUS_LABELS = {
 // published). Treat any type=page post as having the effective status "page".
 const effStatus = (p) => (p.type === "page" ? "page" : (p.status || "draft"));
 
+// What the two preview boxes actually paint at. The table row's `.post-preview-img`
+// has an 80px floor, its video poster is inset into a 40px placeholder, and a
+// card row's thumb is a fixed 48px square. `post.media_url` is a denormalized
+// string column with no dimensions beside it, so the srcset descriptors are the
+// rungs themselves — see thumbSrcset on what that costs a portrait.
+const TABLE_THUMB_SIZES = "80px";
+const TABLE_POSTER_SIZES = "40px";
+const CARD_THUMB_SIZES = "48px";
+
 /**
  * Preview for a video post: its captured poster frame laid over the play glyph.
  * The poster URL 404s for videos that never got one (see dropBrokenImages),
  * which strips the <img> back to the bare glyph this list has always shown.
  */
-const videoThumb = (mediaUrl) =>
+const videoThumb = (mediaUrl, sizes) =>
   `${PLAY_SVG}${
     mediaUrl
-      ? `<img src="${escapeHtml(mediaUrl + "?thumb")}" class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">`
+      ? `<img ${thumbAttrs(mediaUrl, { sizes })} class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">`
       : ""
   }`;
 
@@ -111,9 +121,9 @@ export default class PostsListPage extends Component {
 
     let thumbInner = "";
     if (isImage && p.media_url) {
-      thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
+      thumbInner = `<img ${thumbAttrs(p.media_url, { sizes: CARD_THUMB_SIZES })} class="post-preview-img" loading="lazy" decoding="async">`;
     } else if (isVideo) {
-      thumbInner = videoThumb(p.media_url);
+      thumbInner = videoThumb(p.media_url, CARD_THUMB_SIZES);
     } else if (isAudio) {
       thumbInner = MUSIC_SVG;
     }
@@ -247,9 +257,9 @@ export default class PostsListPage extends Component {
 
                 let previewHtml = "";
                 if (isImage && p.media_url) {
-                  previewHtml = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy" decoding="async">`;
+                  previewHtml = `<img ${thumbAttrs(p.media_url, { sizes: TABLE_THUMB_SIZES })} class="post-preview-img" loading="lazy" decoding="async">`;
                 } else if (isVideo) {
-                  previewHtml = `<div class="post-preview-placeholder" title="Video">${videoThumb(p.media_url)}</div>`;
+                  previewHtml = `<div class="post-preview-placeholder" title="Video">${videoThumb(p.media_url, TABLE_POSTER_SIZES)}</div>`;
                 } else if (isAudio) {
                   previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
                 } else {

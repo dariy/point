@@ -7,6 +7,7 @@ import (
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
+	"point-api/internal/services"
 	"point-api/internal/utils"
 )
 
@@ -278,21 +279,29 @@ func injectTagHiddenFields(resp map[string]interface{}, t models.Tag, effectiveH
 // mediaToResponse converts a Medium model into an API response map with
 // normalised URL fields:
 //
-//	path          = "/<year>/<month>/<filename>"          (e.g. /2026/02/photo.jpg)
-//	original_path = "/media/originals/<year>/<month>/…"
-//	thumbnail_path = "/media/thumbnails/<year>/<month>/…"  (nil when absent)
+//	path           = "/<year>/<month>/<filename>"      (e.g. /2026/02/photo.jpg)
+//	thumbnail_path = "/<year>/<month>/<filename>?s=…&v=…"  (nil — see below)
 //
 // The DB stores relative paths without a leading slash
-// ("originals/YYYY/MM/file"), so we strip the prefix and prepend the
-// canonical web root.
-func mediaToResponse(m models.Medium) map[string]interface{} {
+// ("originals/YYYY/MM/file"), so we strip the prefix and prepend the canonical
+// web root. There is no original_path field and never has been; path is the
+// original.
+//
+// thumbnail_path is NOT the media.thumbnail_path column. Every image has a
+// derived rung, generated lazily on first request, so an image always gets a
+// URL here. A video or audio file has one only if an admin browser captured a
+// poster frame for it — nothing server-side can decode one — and the null is
+// load-bearing: MediaBrowser reads a missing thumbnail_path as "this video
+// still needs a capture" and offers the affordance.
+//
+// gen is the thumbnail generation token; see services.VariantURL.
+func mediaToResponse(m models.Medium, gen string) map[string]interface{} {
 	// mediaPath is the public-facing simplified URL, e.g. "/2026/03/ts_file.jpg"
 	mediaPath := "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
 
 	var thumbPath interface{}
-	if m.ThumbnailPath.Valid {
-		// Thumbnail served via the same route with ?thumb query parameter.
-		thumbPath = mediaPath + "?thumb"
+	if strings.EqualFold(m.FileType, "image") || (m.ThumbnailPath.Valid && m.ThumbnailPath.String != "") {
+		thumbPath = services.VariantURL(mediaPath, services.DefaultVariantSize, gen)
 	}
 
 	var metadata map[string]interface{}

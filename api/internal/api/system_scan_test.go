@@ -134,9 +134,7 @@ func setupSystemHandler(t *testing.T) (*SystemHandler, func()) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, &config.Config{
-		StoragePath:     tmpDir,
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
+		StoragePath: tmpDir,
 	}, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -201,9 +199,7 @@ func TestScanMediaImport_WithFiles(t *testing.T) {
 	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tmpDir := t.TempDir()
 	mediaSvc := services.NewMediaService(repo, &config.Config{
-		StoragePath:     tmpDir,
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
+		StoragePath: tmpDir,
 	}, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)

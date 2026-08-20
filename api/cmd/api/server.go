@@ -193,7 +193,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// script-src allows the shell's inline <script> blocks by hash, computed
 	// from index.html at startup (see inlineScriptHashes) so an edit to the
 	// inline bootstrap script can never silently break CSP. The per-request
-	// __PLUGINS__ manifest hash is appended where index.html is served.
+	// bootstrap script's hash is appended where index.html is served (see
+	// bootstrapScript).
 	scriptSrc := strings.Join(append([]string{"'self'"}, inlineScriptHashes(filepath.Join(cfg.FrontendDir, "index.html"))...), " ")
 	connectSrc := "'self' https://*.basemaps.cartocdn.com"
 	// Deployment-supplied extra CSP origins. They let an operator allow-list a

@@ -206,10 +206,10 @@ func buildBank(rng *rand.Rand) []bankImg {
 		if err := os.Link(*srcImage, abs); err != nil && !os.IsExist(err) {
 			log.Fatalf("hardlink %s: %v", abs, err)
 		}
-		// Also materialize the stored thumbnail. The bare `?thumb` media route
-		// (used by the admin post list) serves media/thumbnails/<rel> with no
-		// fallback to the original, so a missing file 404s. Hardlink the same
-		// source so the thumbnail path resolves.
+		// Also materialize a legacy thumbnail_path file. Thumbnails are derived
+		// from the original now (media/variants/<size>/), so nothing serves
+		// these — they are here so a seeded database has the shape of an
+		// install that predates the ladder.
 		thumbAbs := filepath.Join(*storage, "media", "thumbnails", rel)
 		must(os.MkdirAll(filepath.Dir(thumbAbs), 0o755))
 		if err := os.Link(*srcImage, thumbAbs); err != nil && !os.IsExist(err) {

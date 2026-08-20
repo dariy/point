@@ -666,6 +666,7 @@ func TestSetupEcho_SPAFallback_WithFullPost(t *testing.T) {
 	_, _ = repo.CreateMedia(ctx, models.CreateMediaParams{
 		Filename:     "test.jpg",
 		OriginalPath: "originals/2024/01/test.jpg",
+		FileType:     "image",
 		Checksum:     "abc",
 		UploadedAt:   time.Now(),
 	})
@@ -694,8 +695,10 @@ func TestSetupEcho_SPAFallback_WithFullPost(t *testing.T) {
 	if !strings.Contains(body, "My Meta Desc") {
 		t.Errorf("expected meta description in HTML")
 	}
-	if !strings.Contains(body, "test.jpg") {
-		t.Errorf("expected og:image in HTML")
+	// og:image points at the 1024 rung, not the original: a full-size camera
+	// JPEG is past the size ceiling every social card renderer applies.
+	if !strings.Contains(body, `og:image" content="https://example.com/2024/01/test.jpg?s=1024&amp;v=1"`) {
+		t.Errorf("expected og:image at the 1024 rung in HTML, got:\n%s", body)
 	}
 	if !strings.Contains(body, "https://") {
 		t.Errorf("expected https in og:url")
