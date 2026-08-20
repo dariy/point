@@ -1,0 +1,132 @@
+/* ===========================
+   Tags manager — parent/child picker
+   The tag-badge checkboxes and collapsible picker tree of
+   frontend/src/components/light/tags/tagToggleTree.js.
+   =========================== */
+
+.tag-toggles-container {
+    padding: var(--spacing-sm) 0 var(--spacing-xs);
+}
+
+.tag-toggles-empty {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    padding: var(--tag-toggles-empty-padding) 0;
+}
+
+.tag-toggle {
+    display: inline-flex;
+    cursor: pointer;
+    user-select: none;
+}
+
+.tag-toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.tag-toggle span {
+    display: inline-flex;
+    align-items: center;
+    height: var(--span-height);
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1;
+    border-radius: var(--span-border-radius);
+    border: var(--border-width) solid var(--border-primary);
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.tag-toggle:hover span {
+    border-color: var(--color-primary);
+    color: var(--text-primary);
+}
+
+.tag-toggle input[type="checkbox"]:checked + span {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-white);
+}
+
+.tag-toggle-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tag-toggle-tree:not(.level-0) {
+    padding-left: var(--tag-toggle-treelevel-1-padding-left);
+    border-left: var(--border-width) dashed var(--border-primary);
+    margin-left: 0.9375rem;
+    margin-top: var(--tag-toggle-treelevel-1-margin-top);
+    margin-bottom: var(--tag-toggle-treelevel-1-margin-bottom);
+}
+
+.tag-toggle-node {
+    display: flex;
+    flex-direction: column;
+}
+
+.tag-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--tag-toggle-row-padding-y) var(--tag-toggle-row-padding-x);
+    border-radius: var(--border-radius);
+}
+
+.tag-toggle-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.tag-toggle-btn {
+    flex-shrink: 0;
+    width: var(--tag-toggle-btn-width);
+    height: var(--tag-toggle-btn-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--tag-toggle-btn-font-size);
+    border-radius: var(--border-radius-sm);
+    padding: 0;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tag-toggle-btn:hover {
+    background: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.tag-toggle-btn-spacer {
+    flex-shrink: 0;
+    width: var(--tag-toggle-btn-spacer-width);
+}
+
+/* Indeterminate pill: not checked, but a descendant is checked */
+
+.tag-toggle input[type="checkbox"]:indeterminate + span {
+    border-color: var(--color-primary);
+    border-style: dashed;
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+/* Search box above the picker tree */
+.tm-toggle-search {
+    width: 100%;
+    padding: var(--tm-toggle-search-padding-y) var(--tm-toggle-search-padding-x);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--tm-toggle-search-margin-bottom);
+    box-sizing: border-box;
+}

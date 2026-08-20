@@ -1,0 +1,120 @@
+/* ===========================
+   Tags manager — editor modal
+   The tag editor of frontend/src/components/light/tags/TagEditorForm.js.
+   =========================== */
+
+.tag-editor-modal {
+    width: var(--tag-editor-modal-width-alt1);
+}
+
+/* Editor-style field spacing (title-row / slug-row have no intrinsic margin) */
+
+.tag-editor-modal .title-row {
+    margin-bottom: var(--spacing-xs);
+}
+
+.tag-editor-modal .slug-row {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Coordinates section: tighter spacing between lat and lng rows */
+
+.tag-editor-modal .tm-section-body .input-with-btn {
+    margin-bottom: var(--spacing-sm);
+}
+
+.tag-editor-modal .tm-section-body .slug-row {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Form input styles for modal (textarea & select[multiple] not in settings.css) */
+
+.tag-editor-modal .form-group textarea,
+.tag-editor-modal .form-group select {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-input);
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.tag-editor-modal .form-group textarea:focus,
+.tag-editor-modal .form-group select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 var(--textarea-box-shadow) var(--color-primary-light);
+}
+
+.input-with-btn {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.input-with-btn input {
+    flex: 1;
+    min-width: 0;
+}
+
+.input-with-btn .btn {
+    flex-shrink: 0;
+}
+
+.tm-collapsible-section {
+    border-top: var(--border-width) solid var(--border-primary);
+    margin-top: var(--spacing-sm);
+}
+
+.tm-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--tm-section-toggle-gap);
+    width: 100%;
+    padding: var(--tm-section-toggle-padding) 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
+    transition: color var(--transition-fast);
+}
+
+.tm-section-toggle:hover {
+    color: var(--text-primary);
+}
+
+.tm-section-arrow {
+    font-size: var(--tm-section-arrow-font-size);
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+}
+
+.tm-section-count {
+    margin-left: auto;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-primary);
+    min-width: var(--tm-section-count-min-width);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-section-body {
+    padding-bottom: var(--spacing-sm);
+}
+
+/* Readonly name/slug fields in system tag editor */
+
+.tag-editor-modal .editor-title[readonly],
+.tag-editor-modal .editor-slug[readonly] {
+    opacity: 0.6;
+    cursor: default;
+    background: var(--surface-hover);
+}

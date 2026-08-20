@@ -1,0 +1,116 @@
+/* ===========================
+   Tags manager — select mode & dialogs
+   Bulk toolbar and selection styling from
+   frontend/src/components/light/tags/tagFlows.js, and the Move…/Merge…/drop-onto
+   dialogs of TagPickerDialog.js.
+   =========================== */
+
+.tm-bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    font-size: var(--font-size-sm);
+}
+
+/* Transparent on desktop so the toolbar stays one row; becomes a real flex
+   row on portrait — see responsive.css. Mirrors .bulk-actions on the posts list. */
+
+.tm-bulk-actions {
+    display: contents;
+}
+
+#tm-bulk-count {
+    color: var(--text-secondary);
+    min-width: var(--bulk-count-min-width);
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-check-col {
+    width: var(--check-col-width);
+    text-align: center;
+    vertical-align: middle;
+}
+
+.tm-select-cb {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* Translucent accent, so it reads the same in light and dark themes */
+
+.tm-row.is-selected,
+.tm-tag-row.is-selected {
+    background-color: var(--color-primary-light-alpha-20);
+}
+
+.tm-picker-modal {
+    width: min(28rem, calc(100vw - 2rem));
+}
+
+.tm-picker-list {
+    max-height: 14rem;
+    overflow-y: auto;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-xs) 0;
+    margin-top: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+.tm-picker-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.tm-picker-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-picker-item input[type="radio"] {
+    flex-shrink: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.tm-picker-name {
+    color: var(--text-primary);
+}
+
+/* Merge… stacks the tag's full path under its name; the others are one line. */
+
+.tm-picker-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-0-0625);
+    min-width: 0;
+}
+
+.tm-picker-path {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Drop-onto confirm dialog — stacked action buttons */
+
+.tm-drop-confirm-footer {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.tm-drop-confirm-footer .btn {
+    width: 100%;
+    justify-content: center;
+}

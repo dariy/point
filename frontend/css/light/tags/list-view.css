@@ -1,0 +1,225 @@
+/* ===========================
+   Tags manager — list view
+   The tag table of frontend/src/components/light/tags/TagListView.js:
+   rows, sortable headers, flag buttons and the filter bar above it.
+   =========================== */
+
+.tm-view-toggle {
+    display: flex;
+    gap: 0;
+}
+
+.tm-view-toggle .btn {
+    border-radius: 0;
+}
+
+.tm-view-toggle .btn:first-child {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.tm-view-toggle .btn:last-child {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    border-left: none;
+}
+
+.tm-tag-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.tm-slug {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
+    border: none;
+}
+
+.tm-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tm-count-badge-min-width);
+    padding: var(--tm-count-badge-padding-y) var(--tm-count-badge-padding-x);
+    border-radius: var(--tm-count-badge-border-radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    background: var(--border-primary);
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-flag-static {
+    padding: 0;
+    width: var(--tm-flag-toggle-width);
+    height: var(--tm-flag-toggle-height);
+    font-size: var(--tm-flag-toggle-font-size);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    color: var(--text-muted);
+    cursor: default;
+    opacity: 0.6;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tm-flag-static.active,
+.tm-flag-link.active {
+    opacity: 1;
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-sm);
+}
+
+.tm-flag-link {
+    width: auto;
+    padding: 0 var(--spacing-sm);
+    text-decoration: none;
+}
+
+.tm-flag-link:hover {
+    border-color: var(--color-primary);
+    background-color: var(--surface-hover);
+    opacity: 1;
+    color: var(--color-primary);
+}
+
+.tm-flag-link .btn-label {
+    margin-left: var(--spacing-xs);
+    font-weight: 500;
+}
+
+.tm-flag-static:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+.tm-flag-static.active:disabled {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.tm-flag-static.active.tm-flag-location, .tm-flag-link.active.tm-flag-location { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); opacity: 1; }
+
+.tm-parents-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    max-width: var(--tm-parents-cell-max-width);
+}
+
+.tm-tags-table th, .tm-tags-table td {
+    padding: var(--spacing-sm);
+    vertical-align: middle;
+}
+
+.tm-sortable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--transition-fast);
+}
+
+.tm-sortable-header:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-sortable-header.active {
+    color: var(--color-primary);
+}
+
+.tm-header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.tm-sort-icon {
+    font-size: var(--tm-sort-icon-font-size);
+    width: var(--tm-sort-icon-width);
+}
+
+.tm-tags-table .tm-flag-static {
+    margin: 0 auto;
+}
+
+.tm-rel-badge {
+    display: inline-block;
+    padding: var(--tm-rel-badge-padding-y) var(--tm-rel-badge-padding-x);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    margin-right: var(--spacing-xs);
+    white-space: nowrap;
+}
+
+.tm-list-filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tm-list-filter-bar-gap);
+    margin-bottom: var(--tm-list-filter-bar-margin-bottom);
+}
+
+.tm-list-search-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.tm-list-search {
+    flex: 1;
+    padding: var(--tm-list-search-padding-y) var(--tm-list-search-padding-x);
+    font-size: var(--font-size-sm);
+}
+
+.tm-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tm-filter-chips-gap);
+    min-height: 0;
+}
+
+.tm-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tm-filter-chip-gap);
+    padding: var(--tm-filter-chip-padding-y) var(--tm-filter-chip-padding-x);
+    border-radius: var(--tm-filter-chip-border-radius);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    background: var(--color-primary);
+    color: var(--color-white);
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.tm-filter-chip:hover {
+    background: var(--color-primary-dark);
+}
+
+.tm-chip-remove {
+    font-size: var(--tm-chip-remove-font-size);
+    line-height: 1;
+    opacity: 0.8;
+}
+
+/* Parent filter buttons inside table cells */
+
+.tm-parent-filter-btn.tm-rel-badge {
+    cursor: pointer;
+    border: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-parent-filter-btn.tm-rel-badge:hover {
+    background: var(--color-primary);
+    color: var(--color-white);
+}
