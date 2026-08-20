@@ -19,6 +19,7 @@ import { pluginHost } from "../../core/pluginHost.js";
 import { getTagsGraph, getTagCloud } from "../../api/pages.js";
 import { store } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { setPageTitle } from "../../utils/documentTitle.js";
 import {
   escapeHtml,
   navigate,
@@ -379,7 +380,7 @@ export default class AtlasPage extends Component {
       const token = ++this._graphReq;
       const data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
       if (token !== this._graphReq) return; // a scope change overtook this load
-      document.title = "Atlas";
+      setPageTitle("Atlas");
       setCanonical(`${window.location.origin}/tags`);
       this._buildIndexes(data);
       this.setState({ loading: false, data, error: null });
