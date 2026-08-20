@@ -529,5 +529,98 @@ test('should preserve other fields when switching from visual to text mode', () 
     assert.ok(html.includes('checked'), 'Toggle pre-checked via default_share');
     assert.ok(!html.includes('ig-publish-now-btn'), 'Publish button absent for new posts');
   });
+
+  describe('delete from the editor', () => {
+    const withStubs = async (fetchImpl, fn) => {
+      const savedFetch = global.fetch;
+      const savedDispatch = global.window.dispatchEvent;
+      // Node's own `navigator` is a getter-only global and has no `onLine`,
+      // which the api client reads to decide between fetch and the offline queue.
+      const savedNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+      const navigations = [];
+      global.fetch = fetchImpl;
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { onLine: true }, configurable: true, writable: true,
+      });
+      global.window.dispatchEvent = (e) => {
+        if (e.type === 'app:navigate') navigations.push(e.detail.path);
+      };
+      try {
+        await fn(navigations);
+      } finally {
+        global.fetch = savedFetch;
+        if (savedNav) Object.defineProperty(globalThis, 'navigator', savedNav);
+        else delete globalThis.navigator;
+        global.window.dispatchEvent = savedDispatch;
+      }
+    };
+
+    const makePage = () => {
+      const container = { querySelector: () => null, querySelectorAll: () => [] };
+      const page = new PostEditPage(container, { params: { id: '123' } });
+      page.state.loading = false;
+      page.state.isNew = false;
+      page.state.post = { id: 123, title: 'Test' };
+      page.setState = (patch) => { Object.assign(page.state, patch); };
+      return page;
+    };
+
+    test('confirming the menu Delete trashes the post and leaves the editor', async () => {
+      const calls = [];
+      await withStubs(
+        async (url, opts) => { calls.push([url, opts.method]); return { status: 204 }; },
+        async (navigations) => {
+          const page = makePage();
+          let confirmed = null;
+          page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+            confirmed = { title, confirmText, variant };
+            return onConfirm();
+          };
+
+          await page._handleMenuAction('delete');
+          // _showConfirm's onConfirm is async; let the delete settle.
+          await new Promise((r) => setImmediate(r));
+
+          assert.ok(confirmed, 'Delete opens the confirm dialog');
+          assert.strictEqual(confirmed.variant, 'danger');
+          assert.deepStrictEqual(calls, [['/api/posts/123', 'DELETE']], 'DELETE hits the post');
+          assert.deepStrictEqual(navigations, ['/light/posts'], 'editor returns to the list');
+        }
+      );
+    });
+
+    test('a failed delete keeps the editor open and re-enables the actions', async () => {
+      await withStubs(
+        async () => ({
+          status: 500,
+          ok: false,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ detail: 'nope' }),
+        }),
+        async (navigations) => {
+          const page = makePage();
+          await page._deletePost('123');
+
+          assert.strictEqual(page.state.deleting, false, 'actions are usable again');
+          assert.deepStrictEqual(navigations, [], 'the editor stays put');
+        }
+      );
+    });
+
+    test('deleting a never-saved post just leaves, without an API call', async () => {
+      await withStubs(
+        async () => { throw new Error('no request expected'); },
+        async (navigations) => {
+          const page = makePage();
+          page.state.isNew = true;
+          page.state.postId = undefined;
+
+          await page._deletePost(undefined);
+
+          assert.deepStrictEqual(navigations, ['/light/posts']);
+        }
+      );
+    });
+  });
   });
 
