@@ -31,6 +31,7 @@ import {
 } from "../../utils/helpers.js";
 import { GridPager } from "../../core/gridPager.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { setPageTitle } from "../../utils/documentTitle.js";
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from "../../utils/immersiveNav.js";
 import {
   computePerPage,
@@ -152,7 +153,7 @@ export default class TagPage extends Component {
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
-    document.title = `${data.tag?.name || slug} — Posts`;
+    setPageTitle(`${data.tag?.name || slug} — Posts`);
     setCanonical(
       vc.page > 1
         ? `${window.location.origin}/tags/${slug}?page=${vc.page}`
@@ -650,7 +651,7 @@ export default class TagPage extends Component {
 
       if (vc.postSlug) {
         const post = await getPostBySlug(vc.postSlug);
-        document.title = `${post.title} — ${data.tag?.name || slug}`;
+        setPageTitle(`${post.title} — ${data.tag?.name || slug}`);
         setCanonical(`${window.location.origin}/posts/${post.slug}`);
 
         // Tag-scoped prev/next spans the whole tag collection (all pages), not
@@ -671,7 +672,7 @@ export default class TagPage extends Component {
           forceImmersive,
         });
       } else {
-        document.title = `${data.tag?.name || slug} — Posts`;
+        setPageTitle(`${data.tag?.name || slug} — Posts`);
         const canonicalUrl =
           vc.page > 1
             ? `${window.location.origin}/tags/${slug}?page=${vc.page}`

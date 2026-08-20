@@ -12,6 +12,7 @@ import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
+import { setPageTitle } from '../../utils/documentTitle.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.js';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
@@ -350,7 +351,7 @@ export default class PostPage extends Component {
       const post = await getPostBySlug(slug);
       if (this._unmounted || version !== this._loadVersion) return;
 
-      document.title = post.title;
+      setPageTitle(post.title);
       setCanonical(`${window.location.origin}/posts/${post.slug}`);
       const metaDesc = document.querySelector('meta[name="description"]');
       const descText = post.meta_description || post.excerpt || '';

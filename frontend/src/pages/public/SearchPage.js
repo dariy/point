@@ -22,6 +22,7 @@ import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { setPageTitle } from '../../utils/documentTitle.js';
 import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, refitPage } from '../../utils/gridFit.js';
 
 export default class SearchPage extends Component {
@@ -432,7 +433,7 @@ export default class SearchPage extends Component {
     let titleQuery = vc.query || '';
     if (vc.tag) titleQuery += ` in ${vc.tag}`;
 
-    document.title = titleQuery ? `Search: ${titleQuery} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
+    setPageTitle(titleQuery ? `Search: ${titleQuery}` : 'Search');
 
     if (!vc.query?.trim()) {
       this.setState({ loading: false, data: { posts: [], total: 0, page: 1, pages: 1 }, tags: [], error: null });

@@ -19,6 +19,7 @@ import { getTagsGraph } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
+import { setPageTitle } from '../../utils/documentTitle.js';
 import { TagGraph } from "./tagGraph.js";
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -301,7 +302,7 @@ export default class TagsPage extends Component {
         params.year_to = vc.years[1];
       }
       const data = await getTagsGraph(params);
-      document.title = 'Tags';
+      setPageTitle('Tags');
       setCanonical(`${window.location.origin}/tags`);
       this.setState({
         loading: false,
