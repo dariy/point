@@ -13,8 +13,8 @@ import {
   renderTagLink,
   buildTagIndex,
   parseTagUrl,
-  setupTagFlyout,
-} from "../../utils/tags.js";
+} from "../../utils/tagLinks.js";
+import { setupTagFlyout } from "../../utils/tagFlyout.js";
 import {
   RSS_SVG,
   SUN_SVG,

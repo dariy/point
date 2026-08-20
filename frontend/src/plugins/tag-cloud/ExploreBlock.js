@@ -9,7 +9,8 @@
 import { Component } from "../../components/Component.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { store } from "../../store.js";
-import { buildTagIndex, parseTagUrl, setupTagFlyout } from "../../utils/tags.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
+import { setupTagFlyout } from "../../utils/tagFlyout.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
 export class ExploreBlock extends Component {
