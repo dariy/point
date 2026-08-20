@@ -85,10 +85,20 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	}
 	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
 
+	// Every media row on the site, read once. The snapshot bundles every post
+	// body, so the per-post lookup GetMediaByContent does would be a query per
+	// post; the public media list below needs the same rows anyway.
+	allMedia, _ := h.repo.GetAllMediaPaths(ctx)
+	gen := h.mediaService.ThumbnailGeneration(ctx)
+	mediaDims := articleImageDims(allMedia)
+
 	// Convert to response format
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
 		html, _ := h.postService.RenderContent(p.Content)
+		// An offline reader is the one that benefits most from a small
+		// variant: it is on the connection that made them cache the site.
+		html = injectArticleSrcsetDims(html, mediaDims, gen)
 		// Use a temporary map to build a response that looks like GetPostRow/GetPostBySlugRow
 		resp := map[string]interface{}{
 			"id":               p.ID,
@@ -133,10 +143,8 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	}
 
 	// 5. Public media (images only)
-	media, _ := h.repo.GetAllMediaPaths(ctx)
-	gen := h.mediaService.ThumbnailGeneration(ctx)
 	publicMedia := make([]map[string]interface{}, 0)
-	for _, m := range media {
+	for _, m := range allMedia {
 		if strings.ToLower(m.FileType) == "image" && m.IsPublic == 1 {
 			publicMedia = append(publicMedia, mediaToResponse(m, gen))
 		}

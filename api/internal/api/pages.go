@@ -159,9 +159,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 					}
 
 					htmlContent, _ := h.postService.RenderContent(hpPost.Content)
-					resp["content_html"] = htmlContent
-
 					media, _ := h.mediaService.GetMediaByContent(ctx, hpPost.Content, hpPost.ThumbnailPath.String)
+					// The settings snapshot is already loaded here, so the
+					// generation token costs nothing extra.
+					resp["content_html"] = injectArticleSrcset(htmlContent, media, services.ThumbnailGenerationFrom(allSettings))
+
 					mediaObjs := make([]map[string]interface{}, 0, len(media))
 					for _, m := range media {
 						mediaObjs = append(mediaObjs, map[string]interface{}{

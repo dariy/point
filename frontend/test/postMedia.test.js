@@ -177,6 +177,12 @@ describe('mediaTypeFromPath', () => {
     assert.strictEqual(mediaTypeFromPath('/a.txt'), null);
     assert.strictEqual(mediaTypeFromPath('/no-extension'), null);
   });
+
+  test('ignores a query or fragment after the extension', () => {
+    assert.strictEqual(mediaTypeFromPath('/2026/07/a.jpg?s=512&v=c0ffee01'), 'image');
+    assert.strictEqual(mediaTypeFromPath('/2026/07/a.mp4?t=3'), 'video');
+    assert.strictEqual(mediaTypeFromPath('/2026/07/a.jpg#frag'), 'image');
+  });
 });
 
 /**
