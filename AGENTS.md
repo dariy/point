@@ -83,7 +83,7 @@ you need to reach the dev server from another device.
 
 | To change… | Start at |
 |---|---|
-| An HTTP route | `api/cmd/api/routes.go` — every route, no exceptions; one `register*Routes` function per domain, called from `setupEcho` in registration order |
+| An HTTP route | `api/cmd/api/routes.go` — one `register*Routes` function per domain, called from `setupEcho` in registration order. New routes go here; `/mcp` and `/comments` mount their own subtrees from their packages, but still only via this file |
 | Global middleware, CSP, the HTML shells | `api/cmd/api/server.go` — `setupEcho`: Echo's own config, the `e.Use`/`e.Pre` chain, handler construction |
 | Startup, shutdown, migrations | `api/cmd/api/main.go` — process lifecycle only; services are wired in `wiring.go`, subcommands dispatched in `cli.go` |
 | A CLI subcommand (`setup`, `reset-password`, …) | `api/cmd/api/cli.go` decides which one the args name; the command itself gets its own file |
@@ -100,6 +100,7 @@ you need to reach the dev server from another device.
 
 The fuller version of this table — the whole request path, where plugins, themes, migrations and MCP
 attach, and which files are generated — is [docs/architecture/map.md](docs/architecture/map.md).
+
 Architecture in depth: [docs/architecture/backend.md](docs/architecture/backend.md),
 [docs/architecture/frontend.md](docs/architecture/frontend.md). Every significant feature has a doc
 under [docs/features/](docs/features/) that records what was built **and what was considered and
