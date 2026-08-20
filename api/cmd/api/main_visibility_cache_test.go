@@ -33,7 +33,7 @@ func TestVisibilityCache_LiveCORSChain(t *testing.T) {
 	}
 	for _, v := range rec.Header().Values("Vary") {
 		if v == "Origin" {
-			t.Errorf("Vary still contains Origin (uncacheable at CF): %v", rec.Header().Values("Vary"))
+			t.Errorf("Vary still contains Origin (blocks shared caching): %v", rec.Header().Values("Vary"))
 		}
 	}
 }
@@ -171,9 +171,9 @@ func runVisibilityCacheVary(t *testing.T, mutate func(*http.Request), presetVary
 }
 
 func TestVisibilityCache_Guest_StripsVaryOrigin(t *testing.T) {
-	// CORS sets `Vary: Origin`; Cloudflare will not cache a response whose Vary
-	// lists anything but Accept-Encoding, so the guest branch must drop Origin
-	// while preserving Accept-Encoding.
+	// CORS sets `Vary: Origin`; many shared caches will not store a response
+	// whose Vary lists anything but Accept-Encoding, so the guest branch must
+	// drop Origin while preserving Accept-Encoding.
 	got := runVisibilityCacheVary(t, nil, []string{"Origin", "Accept-Encoding"})
 	if len(got) != 1 || got[0] != "Accept-Encoding" {
 		t.Errorf("guest Vary: expected [Accept-Encoding], got %v", got)

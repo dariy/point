@@ -38,8 +38,6 @@ func TestFullWorkflow(t *testing.T) {
 
 	cfg := &config.Config{
 		StoragePath:              tmpDir,
-		ThumbnailWidth:           100,
-		ThumbnailHeight:          100,
 		SessionExpiryHours:       720,
 		SessionExpiryPublicHours: 24,
 	}
@@ -518,9 +516,7 @@ func setupHandlers(t *testing.T) *testHandlers {
 	repo := setupTestDB(t)
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		StoragePath:     tmpDir,
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
+		StoragePath: tmpDir,
 	}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)

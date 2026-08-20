@@ -49,8 +49,6 @@ export const NUMERIC_KEYS = new Set([
   "min_tag_posts_to_show",
   "atlas_post_limit",
   "remark_smtp_port",
-  "thumbnail_width",
-  "thumbnail_height",
 ]);
 
 /** Humanized label for a setting key (snake_case → Title Case), with overrides. */

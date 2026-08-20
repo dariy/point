@@ -69,16 +69,7 @@ describe('RebuildThumbnailsSection', () => {
     assert.equal(btn.textContent, 'Rebuild Thumbnails');
   });
 
-  test('clicking the button updates settings and rebuilds thumbnails', async () => {
-    // Fake the settings form in the document
-    const form = document.createElement('form');
-    form.id = 'plugin-settings-form';
-    form.innerHTML = `
-      <input name="thumbnail_width" value="400" />
-      <input name="thumbnail_height" value="300" />
-    `;
-    document.body.appendChild(form);
-
+  test('clicking the button rebuilds thumbnails', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const section = new RebuildThumbnailsSection(container);
@@ -108,16 +99,12 @@ describe('RebuildThumbnailsSection', () => {
     assert.equal(btn.textContent, 'Rebuild Thumbnails', 'Button text is restored');
     assert.equal(btn.disabled, false, 'Button is re-enabled');
 
-    assert.equal(fetchCalls.length, 2, 'Should make exactly two API calls');
-    assert.ok(fetchCalls[0].url.includes('/api/settings'), 'First call updates settings');
-    assert.equal(fetchCalls[0].options.method, 'PUT');
-    assert.deepEqual(JSON.parse(fetchCalls[0].options.body), { thumbnail_width: "400", thumbnail_height: "300" });
-
-    assert.ok(fetchCalls[1].url.includes('/api/media/thumbnails/rebuild'), 'Second call triggers rebuild');
-    assert.ok(!fetchCalls[1].url.includes('only_missing'), 'A rebuild discards every file; there is nothing to skip');
-    assert.equal(fetchCalls[1].options.method, 'POST');
+    assert.equal(fetchCalls.length, 1, 'The rebuild is the only call: there are no thumbnail dimensions left to save first');
+    assert.ok(fetchCalls[0].url.includes('/api/media/thumbnails/rebuild'), 'The one call triggers the rebuild');
+    assert.ok(!fetchCalls[0].url.includes('only_missing'), 'A rebuild discards every file; there is nothing to skip');
+    assert.equal(fetchCalls[0].options.method, 'POST');
     // api.post skips body param if it's undefined
-    assert.equal(fetchCalls[1].options.body, undefined);
+    assert.equal(fetchCalls[0].options.body, undefined);
   });
 
   test('shows an error toast if rebuild fails', async () => {

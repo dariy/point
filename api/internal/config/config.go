@@ -37,8 +37,6 @@ type Config struct {
 
 	MaxImageWidth   int `mapstructure:"MAX_IMAGE_WIDTH"`
 	JpegQuality     int `mapstructure:"JPEG_QUALITY"`
-	ThumbnailWidth  int `mapstructure:"THUMBNAIL_WIDTH"`
-	ThumbnailHeight int `mapstructure:"THUMBNAIL_HEIGHT"`
 	AvatarSize      int `mapstructure:"AVATAR_SIZE"`
 	MaxUploadSizeMB int `mapstructure:"MAX_UPLOAD_SIZE_MB"`
 	// StorageQuotaMB is the media storage allowance the dashboard reports usage

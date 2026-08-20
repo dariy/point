@@ -25,9 +25,7 @@ func setupMediaService(t *testing.T) (*MediaService, string) {
 	}
 
 	cfg := &config.Config{
-		StoragePath:     tmpDir,
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
+		StoragePath: tmpDir,
 	}
 	settingsService := NewSettingsService(repo)
 	tagService := NewTagService(repo)

@@ -195,7 +195,7 @@ func TestMediaHandler_UploadFileErrors(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
+	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -224,7 +224,7 @@ func newMediaHandler(t *testing.T) (*MediaHandler, *echo.Echo) {
 	repo := setupTestDB(t)
 	t.Cleanup(func() { _ = repo.Close() })
 
-	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
+	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
@@ -385,7 +385,7 @@ func TestUploadMultiple_WithPostID(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
+	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)

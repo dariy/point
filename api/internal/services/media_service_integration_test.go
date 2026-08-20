@@ -765,7 +765,7 @@ func TestRevertEXIF_NotFound(t *testing.T) {
 func TestMediaService_UpdateMedia_Metadata(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
-	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 100, ThumbnailHeight: 100}
+	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := NewSettingsService(repo)
 	tagSvc := NewTagService(repo)
 	svc := NewMediaService(repo, cfg, settingsSvc, tagSvc)
