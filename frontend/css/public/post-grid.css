@@ -102,19 +102,18 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
 }
 
-.post-card-background img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform var(--transition-slow), scale var(--transition-slow);
-}
-
+/* The poster and the hover clip are two children of the same box, and they have
+   to occupy it both at once — the clip is appended on hover, alongside a poster
+   that is already there. In normal flow they stack vertically instead: the
+   poster fills the card and the video lands directly beneath it, outside the
+   card, where `.post-card { overflow: hidden }` clips it away. Taking both out
+   of flow puts them on top of each other, later-in-DOM (the video) on top. */
+.post-card-background img,
 .post-card-background video {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -165,6 +164,15 @@
    moving footage saying it can play. Set by JS on the video's `playing` event,
    so a card whose autoplay was blocked keeps its marker. */
 .post-card.is-playing .video-play-indicator {
+    opacity: 0;
+}
+
+/* And with frames running, the poster is a still the clip would otherwise have
+   to paint over — an exact cover crop of the same media, so any seam between
+   the two shows. Hide it while playing; it comes straight back when the clip is
+   torn down (no opacity transition, or the card would be blank through the
+   fade, the video element having already left). */
+.post-card.is-playing .post-card-background img {
     opacity: 0;
 }
 
