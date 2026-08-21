@@ -90,6 +90,7 @@ you need to reach the dev server from another device.
 | Serving media bytes / frontend assets | `api/cmd/api/media.go`, `api/cmd/api/assets.go`; cache headers for HTML and API responses in `api/cmd/api/cache.go` |
 | Request handling / validation | `api/internal/api/` |
 | Business logic | `api/internal/services/` |
+| A BFF page aggregate (`/api/pages/...`) | `api/internal/services/pageview/` composes the view; `api/internal/api/pages.go` renders it to JSON |
 | Database access | `api/internal/repository/` (hand-written) and `api/internal/models/` (sqlc-generated) |
 | The schema | `api/sql/schema.sql` + a migration in `api/internal/migrations/` |
 | Auth, sessions, API keys | `api/internal/api/middleware.go`, `api/internal/services/auth_service.go` |

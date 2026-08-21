@@ -1,4 +1,4 @@
-package api
+package pageview
 
 import (
 	"point-api/internal/repository"
@@ -34,12 +34,12 @@ func TestIsPostVisibleToPublic(t *testing.T) {
 // unpublished post.
 func TestIsPubliclyReadableStatus(t *testing.T) {
 	for _, status := range []string{"draft", "hidden", "scheduled", "Scheduled", "DRAFT"} {
-		if isPubliclyReadableStatus(status) {
+		if IsPubliclyReadableStatus(status) {
 			t.Errorf("%q must not be readable by a guest", status)
 		}
 	}
 	for _, status := range []string{"published", "Published", "page"} {
-		if !isPubliclyReadableStatus(status) {
+		if !IsPubliclyReadableStatus(status) {
 			t.Errorf("%q is live and must stay readable", status)
 		}
 	}

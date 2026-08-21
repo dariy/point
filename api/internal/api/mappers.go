@@ -8,22 +8,8 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
-	"point-api/internal/utils"
+	"point-api/internal/services/pageview"
 )
-
-// extractMediaURL returns a single preview URL for list responses:
-// thumbnail path if set, else first markdown image URL, else first video/audio src from a <video>/<source>
-// tag in the content, else first bare media path found in the content.
-func extractMediaURL(thumbPath sql.NullString, content string) *string {
-	var tp string
-	if thumbPath.Valid {
-		tp = thumbPath.String
-	}
-	if u := utils.DeriveMediaURL(tp, content); u != "" {
-		return &u
-	}
-	return nil
-}
 
 // postMediaURL prefers the denormalized posts.media_url column (populated at
 // write time and used by lite list queries that no longer SELECT content),
@@ -34,7 +20,7 @@ func postMediaURL(p models.Post) *string {
 		s := p.MediaURL.String
 		return &s
 	}
-	return extractMediaURL(p.ThumbnailPath, p.Content)
+	return pageview.ExtractMediaURL(p.ThumbnailPath, p.Content)
 }
 
 func nullString(s sql.NullString) *string {

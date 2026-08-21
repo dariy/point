@@ -750,7 +750,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	}
 
 	// Case 1: post carries only botany → nature is added as an inherited ancestor.
-	got := ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got := ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {{ID: botany.ID, Name: botany.Name, Slug: botany.Slug}},
 	}, true)
 	m := byID(got[1])
@@ -764,7 +764,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	// Case 2: post carries BOTH botany and its parent nature → nature is the
 	// post's own tag, so it must stay non-inherited even though the walk from
 	// botany also reaches it (Pass 1 claims it before Pass 2 runs).
-	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got = ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {
 			{ID: botany.ID, Name: botany.Name, Slug: botany.Slug},
 			{ID: nature.ID, Name: nature.Name, Slug: nature.Slug},
@@ -777,7 +777,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 
 	// Case 3: publicOnly drops a hidden ancestor. Post carries visible, whose
 	// only parent hush is hidden → hush is not surfaced.
-	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got = ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {{ID: visible.ID, Name: visible.Name, Slug: visible.Slug}},
 	}, true)
 	m = byID(got[1])
@@ -789,7 +789,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	}
 
 	// Case 4: with publicOnly=false the hidden ancestor is included and inherited.
-	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got = ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {{ID: visible.ID, Name: visible.Name, Slug: visible.Slug}},
 	}, false)
 	m = byID(got[1])
