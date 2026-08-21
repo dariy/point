@@ -311,6 +311,39 @@ describe('PostCard video preview', () => {
     });
   });
 
+  describe('a video missing its poster frame', () => {
+    test('falls back to a paused video element if the poster 404s', () => {
+      const { card } = mount();
+      
+      const poster = card.querySelector('.post-card-background img');
+      assert.ok(poster, 'the poster image is initially rendered');
+      assert.equal(videoIn(card), null, 'no video element yet');
+
+      fire(poster, 'error');
+
+      assert.equal(card.querySelector('.post-card-background img'), null,
+        'the broken image is removed');
+      
+      const v = videoIn(card);
+      assert.ok(v, 'a paused video fallback is appended');
+      assert.equal(v.muted, true);
+      assert.equal(v.playsInline, true);
+      assert.equal(v.preload, 'metadata');
+      assert.ok(v.src.endsWith('#t=0.001'), '#t=0.001 is appended to seek to the first frame');
+      assert.equal(v.pauseCalls || 0, 0, 'it does not call play or pause directly');
+    });
+
+    test('a regular image missing its poster frame stays unpainted', () => {
+      const { card } = mount({ ...POST, media_url: '/2026/03/photo.jpg' });
+      
+      const poster = card.querySelector('.post-card-background img');
+      fire(poster, 'error');
+
+      assert.equal(card.querySelector('.post-card-background img'), null);
+      assert.equal(videoIn(card), null, 'no video fallback for a regular image');
+    });
+  });
+
   describe('when the card should stay a still', () => {
     test('the setting off means no clip on hover or on tap', () => {
       const { card } = mount(POST, {});
