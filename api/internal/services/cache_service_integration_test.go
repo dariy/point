@@ -305,3 +305,21 @@ func TestCacheService_Set_EntryIsReadable(t *testing.T) {
 		t.Errorf("cache entry mode is %o, want 644", perm)
 	}
 }
+
+// TestCacheService_Set_MissingCacheDir covers the other end of the write: if
+// the cache directory has been removed under a running server, Set must report
+// it rather than half-create anything. Callers log that warning; Clear is what
+// puts the directory back.
+func TestCacheService_Set_MissingCacheDir(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx := context.Background()
+
+	if err := os.RemoveAll(svc.cacheDir); err != nil {
+		t.Fatalf("remove cache dir: %v", err)
+	}
+
+	if err := svc.Set(ctx, "gone.json", []byte("payload")); err == nil {
+		t.Error("expected Set to fail with no cache directory")
+	}
+}

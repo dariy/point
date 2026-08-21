@@ -64,7 +64,7 @@ func (s *CacheService) Get(ctx context.Context, key string) ([]byte, error) {
 // and it surfaces as an intermittent SPA parse error on a page that works on
 // reload. Rename is atomic within a filesystem, so a reader sees either the
 // whole previous entry or the whole new one.
-func (s *CacheService) Set(ctx context.Context, key string, data []byte) error {
+func (s *CacheService) Set(ctx context.Context, key string, data []byte) (err error) {
 	if err := s.validateKey(key); err != nil {
 		return err
 	}
@@ -75,23 +75,26 @@ func (s *CacheService) Set(ctx context.Context, key string, data []byte) error {
 		return err
 	}
 	tmpPath := f.Name()
-	// A no-op once the rename below has succeeded; on every error path this is
-	// what keeps failed writes from accumulating in the cache directory.
-	defer func() { _ = os.Remove(tmpPath) }()
+	// One cleanup path for every way the write can fail: close the handle, keep
+	// the first error, and leave nothing behind in a directory that has no
+	// eviction. A successful rename has already moved tmpPath away.
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
+	if _, err = f.Write(data); err != nil {
 		return err
 	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
+	if err = f.Sync(); err != nil {
 		return err
 	}
 	// CreateTemp opens at 0600; cache entries have always been world-readable.
-	if err := os.Chmod(tmpPath, 0644); err != nil {
+	if err = f.Chmod(0644); err != nil {
 		return err
 	}
 	return os.Rename(tmpPath, path)
