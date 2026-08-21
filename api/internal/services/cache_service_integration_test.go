@@ -5,9 +5,13 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -321,5 +325,192 @@ func TestCacheService_Set_MissingCacheDir(t *testing.T) {
 
 	if err := svc.Set(ctx, "gone.json", []byte("payload")); err == nil {
 		t.Error("expected Set to fail with no cache directory")
+	}
+}
+
+// TestCacheService_GetOrRender_CoalescesMisses is the stampede regression: on a
+// TTL expiry every concurrent reader of a hot key used to run the full render.
+// N readers arriving at one cold key must produce exactly one render, and all
+// of them must get its bytes.
+func TestCacheService_GetOrRender_CoalescesMisses(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx := context.Background()
+
+	const (
+		key      = "homepage_stampede.json"
+		readers  = 32
+		rendered = "the rendered page"
+	)
+
+	var renders atomic.Int64
+	// The render blocks until every reader has had time to arrive, so the test
+	// cannot pass merely because the goroutines happened to run in sequence.
+	release := make(chan struct{})
+
+	var wg sync.WaitGroup
+	results := make([][]byte, readers)
+	errs := make([]error, readers)
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i], errs[i] = svc.GetOrRender(ctx, key, 1*time.Hour, func(context.Context) ([]byte, error) {
+				renders.Add(1)
+				<-release
+				return []byte(rendered), nil
+			})
+		}(i)
+	}
+
+	// Give the readers a moment to pile up behind the flight before letting the
+	// leader finish. A short sleep is enough: a premature release would only
+	// make the test weaker, never flaky.
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if n := renders.Load(); n != 1 {
+		t.Errorf("render ran %d times for %d concurrent readers, want 1", n, readers)
+	}
+	for i := range results {
+		if errs[i] != nil {
+			t.Fatalf("reader %d failed: %v", i, errs[i])
+		}
+		if string(results[i]) != rendered {
+			t.Errorf("reader %d got %q, want %q", i, results[i], rendered)
+		}
+	}
+
+	// And the flight left the entry behind, so the next reader does not render
+	// either.
+	got, err := svc.GetOrRender(ctx, key, 1*time.Hour, func(context.Context) ([]byte, error) {
+		t.Error("a fresh entry must be served without rendering")
+		return nil, nil
+	})
+	if err != nil || string(got) != rendered {
+		t.Errorf("cached read: got %q, err %v", got, err)
+	}
+}
+
+// TestCacheService_GetOrRender_Expiry pins the other half: coalescing must not
+// turn into serving a stale entry forever. Once the TTL has passed, the next
+// reader renders again.
+func TestCacheService_GetOrRender_Expiry(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx := context.Background()
+
+	const key = "homepage_expiry.json"
+	if err := svc.Set(ctx, key, []byte("old")); err != nil {
+		t.Fatalf("seed Set failed: %v", err)
+	}
+
+	got, err := svc.GetOrRender(ctx, key, -1*time.Second, func(context.Context) ([]byte, error) {
+		return []byte("new"), nil
+	})
+	if err != nil {
+		t.Fatalf("GetOrRender failed: %v", err)
+	}
+	if string(got) != "new" {
+		t.Errorf("expired entry was served: got %q", got)
+	}
+
+	fresh, err := svc.Get(ctx, key)
+	if err != nil || string(fresh) != "new" {
+		t.Errorf("re-render was not stored: got %q, err %v", fresh, err)
+	}
+}
+
+// TestCacheService_GetOrRender_ErrorIsNotCached: a handler that fails — a tag
+// that 404s, a query that errors — must not have its failure installed as the
+// entry for the next TTL. Every waiter sees the error, and the key stays cold.
+func TestCacheService_GetOrRender_ErrorIsNotCached(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx := context.Background()
+
+	const key = "homepage_failed.json"
+	sentinel := errors.New("render failed")
+
+	if _, err := svc.GetOrRender(ctx, key, 1*time.Hour, func(context.Context) ([]byte, error) {
+		return nil, sentinel
+	}); !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want %v", err, sentinel)
+	}
+
+	if _, err := svc.Get(ctx, key); err == nil {
+		t.Error("a failed render was cached")
+	}
+
+	got, err := svc.GetOrRender(ctx, key, 1*time.Hour, func(context.Context) ([]byte, error) {
+		return []byte("recovered"), nil
+	})
+	if err != nil || string(got) != "recovered" {
+		t.Errorf("the key stayed poisoned: got %q, err %v", got, err)
+	}
+}
+
+// TestCacheService_GetOrRender_SurvivesLeaderCancellation: the goroutine that
+// wins the flight is one arbitrary request among the waiters. If its client
+// hangs up, everyone queued behind it must still be answered — which is why the
+// render runs on a context detached from cancellation.
+func TestCacheService_GetOrRender_SurvivesLeaderCancellation(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	const key = "homepage_cancelled.json"
+	leaderCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	got, err := svc.GetOrRender(leaderCtx, key, 1*time.Hour, func(ctx context.Context) ([]byte, error) {
+		cancel() // the leader's client goes away mid-render
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return []byte("rendered anyway"), nil
+	})
+	if err != nil {
+		t.Fatalf("a cancelled leader must not fail the render: %v", err)
+	}
+	if string(got) != "rendered anyway" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// TestCacheService_GetOrRender_ReportsRefusedWrite: a write the cache refuses
+// costs the next reader a re-render and nothing more, so it must not fail the
+// response — but it must be logged. Discarding it is what let a permanently
+// dead cache key go unnoticed.
+func TestCacheService_GetOrRender_ReportsRefusedWrite(t *testing.T) {
+	svc, dir := setupCacheService(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(restore)
+
+	// A directory sitting on the key's path makes the rename fail.
+	const key = "blocked_write.json"
+	if err := os.Mkdir(filepath.Join(svc.cacheDir, key), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	got, err := svc.GetOrRender(ctx, key, 1*time.Hour, func(context.Context) ([]byte, error) {
+		return []byte("payload"), nil
+	})
+	if err != nil {
+		t.Fatalf("a refused write must not fail the response: %v", err)
+	}
+	if string(got) != "payload" {
+		t.Errorf("got %q, want %q", got, "payload")
+	}
+	if !strings.Contains(buf.String(), "page cache write failed") {
+		t.Errorf("refused write was not logged, got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), key) {
+		t.Errorf("log does not name the key, got %q", buf.String())
 	}
 }

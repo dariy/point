@@ -1,15 +1,18 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"log/slog"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 // TestPageCacheKey pins the two properties the key composition has to hold:
@@ -34,40 +37,84 @@ func TestPageCacheKey(t *testing.T) {
 	}
 }
 
-// TestSetPageCache covers both halves of the write: the payload lands under the
-// key, and a refused write is reported rather than swallowed — swallowing is
-// what let the path-scoped tag key stay dead for as long as it did.
-func TestSetPageCache(t *testing.T) {
-	dir := t.TempDir()
-	cache := services.NewCacheService(dir)
-	ctx := context.Background()
+// TestServePageJSON covers the two routes through the one call site each page
+// handler now has: a cacheable request is stored and served from the cache on
+// the next visit, an uncacheable one renders every time and leaves nothing
+// behind.
+func TestServePageJSON(t *testing.T) {
+	e := echo.New()
+	key := pageCacheKey("homepage", "p1_pp12")
 
-	t.Run("writes the payload", func(t *testing.T) {
-		key := pageCacheKey("homepage", "p1_pp12")
-		setPageCache(ctx, cache, key, []byte(`{"posts":[]}`))
+	serve := func(cache *services.CacheService, cacheable bool, render func(context.Context) ([]byte, error)) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/pages/home", nil), rec)
+		if err := servePageJSON(c, cache, key, cacheable, render); err != nil {
+			t.Fatalf("servePageJSON: %v", err)
+		}
+		return rec
+	}
 
-		got, err := os.ReadFile(filepath.Join(dir, "cache", key))
-		if err != nil {
+	t.Run("cacheable request renders once and is stored", func(t *testing.T) {
+		dir := t.TempDir()
+		cache := services.NewCacheService(dir)
+		renders := 0
+		render := func(context.Context) ([]byte, error) {
+			renders++
+			return []byte(`{"posts":[]}`), nil
+		}
+
+		rec := serve(cache, true, render)
+		if rec.Body.String() != `{"posts":[]}` {
+			t.Errorf("body = %q", rec.Body.String())
+		}
+		if ct := rec.Header().Get(echo.HeaderContentType); ct != pageContentType {
+			t.Errorf("content type = %q, want %q", ct, pageContentType)
+		}
+		if _, err := os.ReadFile(filepath.Join(dir, "cache", key)); err != nil {
 			t.Fatalf("cache entry not written: %v", err)
 		}
-		if string(got) != `{"posts":[]}` {
-			t.Errorf("cached %q, want %q", got, `{"posts":[]}`)
+
+		serve(cache, true, render)
+		if renders != 1 {
+			t.Errorf("rendered %d times, want 1 — the second request should have hit the cache", renders)
 		}
 	})
 
-	t.Run("logs a refused write", func(t *testing.T) {
-		var buf bytes.Buffer
-		restore := slog.Default()
-		slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
-		defer slog.SetDefault(restore)
-
-		setPageCache(ctx, cache, "not/a/valid/key", []byte("{}"))
-
-		if !strings.Contains(buf.String(), "page cache write failed") {
-			t.Errorf("refused write was not logged, got %q", buf.String())
+	t.Run("uncacheable request is never stored", func(t *testing.T) {
+		dir := t.TempDir()
+		cache := services.NewCacheService(dir)
+		renders := 0
+		render := func(context.Context) ([]byte, error) {
+			renders++
+			return []byte(`{"posts":[]}`), nil
 		}
-		if !strings.Contains(buf.String(), "not/a/valid/key") {
-			t.Errorf("log does not name the key, got %q", buf.String())
+
+		serve(cache, false, render)
+		serve(cache, false, render)
+
+		if renders != 2 {
+			t.Errorf("rendered %d times, want 2 — an owner view must not be cached", renders)
+		}
+		if entries, err := os.ReadDir(filepath.Join(dir, "cache")); err != nil || len(entries) != 0 {
+			t.Errorf("cache dir should be empty, got %v (err %v)", entries, err)
+		}
+	})
+
+	t.Run("a render failure reaches the caller", func(t *testing.T) {
+		dir := t.TempDir()
+		cache := services.NewCacheService(dir)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/pages/home", nil), rec)
+
+		want := echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		err := servePageJSON(c, cache, key, true, func(context.Context) ([]byte, error) {
+			return nil, want
+		})
+		if !errors.Is(err, want) {
+			t.Errorf("err = %v, want %v", err, want)
+		}
+		if entries, _ := os.ReadDir(filepath.Join(dir, "cache")); len(entries) != 0 {
+			t.Error("a failed render must not leave a cache entry behind")
 		}
 	})
 }

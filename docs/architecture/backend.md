@@ -120,6 +120,19 @@ so effectively unbounded), and there is no way to map a changed post back to the
 keys that mention it. New mutation paths must go through those two hooks rather
 than invalidating by hand.
 
+### Serving a miss
+
+Handlers do not read and write the cache themselves. They compose a key, wrap
+the render in a closure and hand both to `CacheService.GetOrRender`, which
+serves a fresh entry or renders one — at most once per key, whatever the
+concurrency, via `singleflight`. Without that, every TTL expiry on a shared key
+sends all its concurrent readers through the full render, and one publish (which
+drops the whole cache) does it to every key at once.
+
+A render error propagates to every waiter and is not stored, so a failure never
+becomes the entry for the next TTL. A failed *write* is logged and the response
+still served — it only costs the next reader a re-render.
+
 ---
 
 ## API Layer (Echo)

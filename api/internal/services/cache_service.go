@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // tmpPrefix marks the half-written files Set leaves in the cache directory for
@@ -17,6 +20,9 @@ const tmpPrefix = ".tmp-"
 
 type CacheService struct {
 	cacheDir string
+
+	// flight coalesces the renders behind GetOrRender, keyed by cache key.
+	flight singleflight.Group
 }
 
 func NewCacheService(dataPath string) *CacheService {
@@ -167,4 +173,55 @@ func (s *CacheService) GetWithTTL(ctx context.Context, key string, ttl time.Dura
 		return nil, fmt.Errorf("cache file empty")
 	}
 	return data, nil
+}
+
+// GetOrRender serves key from the cache, calling render at most once per key
+// per expiry when the entry is missing or older than ttl.
+//
+// Without this, a TTL expiry on a hot key is a stampede: the home feed and the
+// tag archives are shared by every anonymous visitor, so all of them miss in
+// the same instant and every one of them runs the full render — the tag
+// snapshot, the recursive tag-tree query, the post list, the media joins, the
+// marshal. InvalidatePublicPages compounds it, because one publish drops the
+// whole cache and turns every in-flight request into an uncached render at
+// once. Coalescing means one render and N-1 short waits instead.
+//
+// A render failure is returned to every waiter and nothing is cached, so an
+// error page never becomes the entry for the next ttl. A failed *write* only
+// costs the next reader a re-render, so it is logged rather than returned —
+// but it is logged, because discarding it is what let a permanently dead cache
+// key go unnoticed.
+//
+// render receives a context detached from cancellation: the leader is one
+// arbitrary request among the waiters, and its client hanging up must not fail
+// the responses of everyone queued behind it.
+//
+// The returned slice is shared by every waiter of the same flight. Callers
+// write it to a response; none of them may modify it.
+func (s *CacheService) GetOrRender(ctx context.Context, key string, ttl time.Duration, render func(context.Context) ([]byte, error)) ([]byte, error) {
+	if data, err := s.GetWithTTL(ctx, key, ttl); err == nil {
+		return data, nil
+	}
+
+	v, err, _ := s.flight.Do(key, func() (any, error) {
+		// Look again: a previous flight may have filled the key between this
+		// goroutine's miss above and its arrival here, in which case starting a
+		// fresh render would defeat the point.
+		if data, err := s.GetWithTTL(ctx, key, ttl); err == nil {
+			return data, nil
+		}
+
+		data, err := render(context.WithoutCancel(ctx))
+		if err != nil {
+			return nil, err
+		}
+		if err := s.Set(ctx, key, data); err != nil {
+			slog.Warn("page cache write failed", "key", key, "error", err)
+		}
+		return data, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]byte), nil
 }
