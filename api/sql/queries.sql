@@ -41,10 +41,6 @@ FROM sessions s
 JOIN users u ON s.user_id = u.id
 WHERE s.token = ? LIMIT 1;
 
--- name: DeleteSession :exec
-DELETE FROM sessions
-WHERE id = ? AND user_id = ?;
-
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions
 WHERE user_id = ? AND id != ?;
@@ -106,93 +102,6 @@ WHERE p.id = ? AND p.deleted_at IS NULL LIMIT 1;
 SELECT p.*
 FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1;
-
--- name: ListPosts :many
-WITH RECURSIVE h(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-)
-SELECT p.*
-FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
-    AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
-    END)
-
-    AND (CASE
-        WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN 1=1
-        ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (SELECT id FROM h)
-        )
-    END)
-ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
-
--- name: ListPostsByViews :many
-WITH RECURSIVE h(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-)
-SELECT p.*
-FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
-    AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
-    END)
-
-    AND (CASE
-        WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN 1=1
-        ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (SELECT id FROM h)
-        )
-    END)
-ORDER BY p.view_count DESC, p.published_at DESC
-LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
-
--- name: CountPosts :one
-WITH RECURSIVE h(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-)
-SELECT COUNT(*) FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
-    AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
-    END)
-
-    AND (CASE
-        WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN 1=1
-        ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (SELECT id FROM h)
-        )
-    END);
 
 -- name: CreatePost :one
 INSERT INTO posts (
@@ -515,7 +424,6 @@ INSERT INTO blog_secrets (key, value, updated_at)
 VALUES (?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;
 
-
 -- API KEYS
 
 -- name: CreateAPIKey :one
@@ -559,7 +467,17 @@ SELECT
 FROM posts
 WHERE deleted_at IS NULL AND status = 'published';
 
--- name: PreviewRenderPost :one
--- This is a virtual query for sqlc to generate types if needed, 
--- but we'll implement the logic in the handler.
-SELECT 1;
+-- Queries for sqlc. Every entry here becomes a method on *models.Queries, which
+-- is embedded in sqliteRepository, so a name added here is also a name added to
+-- the repository -- and a hand-written method of the same name silently wins
+-- over it. ListPosts, ListPostsByViews, CountPosts and DeleteSession used to
+-- live here and were shadowed exactly that way; they are now owned solely by
+-- internal/repository, whose buildPostsQuery composes filters sqlc cannot
+-- express. Do not reintroduce them.
+--
+-- This note sits at the end of the file, not the top, because sqlc attaches a
+-- leading comment block to the first query as its doc comment.
+--
+-- scripts/check-sql-layer.sh fails the build on a name collision, and on
+-- generated output that no longer matches this file. Keep this file ASCII: one
+-- non-ASCII character breaks the byte offsets sqlc uses to expand SELECT *.

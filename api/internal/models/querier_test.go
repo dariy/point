@@ -203,22 +203,8 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Errorf("expected 30 total views, got %d", stats.TotalViews)
 		}
 
-		posts, err := q.ListPostsByViews(ctx, ListPostsByViewsParams{
-			StatusFilter:   false,
-			IncludeDrafts:  true,
-			IncludeHidden:  false,
-			FeaturedFilter: false,
-			Limit:          10,
-			Offset:         0,
-		})
-		if err != nil {
-			t.Fatalf("ListPostsByViews: %v", err)
-		}
-		if len(posts) < 2 {
-			t.Errorf("expected at least 2 posts, got %d", len(posts))
-		}
-		if posts[0].ID != p2.ID {
-			t.Errorf("expected p2 to be first (most views), got %d", posts[0].ID)
-		}
+		// Ordering by view count is exercised in
+		// repository.TestRepository_ListPostsByViews: the repository owns that
+		// query, and the generated method this used to call never ran.
 	})
 }
