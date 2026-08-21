@@ -12,6 +12,40 @@ import (
 	"point-api/internal/utils"
 )
 
+// The public visibility rule has two halves: a status filter, and the exclusion
+// of every post carried by a tag with hides_posts = 1 — or by any descendant of
+// such a tag. The second half used to be pasted into each query that needed it,
+// and GetPostNavigation was written without it, so the prev/next chain offered
+// posts the post-detail endpoint then refused with a 404. The two forms below
+// are the only place the rule is spelled out now.
+
+// hidesPostsExclusion returns a WHERE predicate that drops every post hidden by
+// a tag. col is the post-id column to test, qualified the way the calling query
+// needs it ("p.id", or bare "id" when the query has no table alias).
+func hidesPostsExclusion(col string) string {
+	return col + ` NOT IN (
+    SELECT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE hides_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+)`
+}
+
+// hidesPostsCTE is the same rule as a named CTE, for queries that reference the
+// hidden set from more than one place or already open a WITH chain. Prefix it
+// with "WITH RECURSIVE " to start a chain, or join it to an existing one with a
+// comma; read the result back as (SELECT id FROM ehp).
+const hidesPostsCTE = `ehp(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
+)`
+
 // ListPosts returns all posts, with optional filters. Callers that only render
 // list/grid cards leave IncludeContent false so the (potentially large) content
 // body is not read; the derived media_url column covers the card preview. The
@@ -580,9 +614,13 @@ func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, 
 	}
 	publishedAt := anchor.String
 
-	statusFilter := "LOWER(status) = 'published'"
+	// Public visibility is a status filter *and* the hides-posts exclusion; the
+	// list queries apply both, so navigation has to as well. Without the second
+	// half the chain steps onto a published-but-tag-hidden post, and the detail
+	// endpoint — which does apply the full rule — answers 404.
+	visibility := "LOWER(status) = 'published' AND " + hidesPostsExclusion("id")
 	if !publicOnly {
-		statusFilter = "LOWER(status) IN ('published', 'hidden')"
+		visibility = "LOWER(status) IN ('published', 'hidden')"
 	}
 
 	// Optional tag scope: restrict adjacency to posts under the given tag (and
@@ -607,7 +645,7 @@ AND id IN (
 	qPrev := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
 WHERE (%s) AND deleted_at IS NULL AND type != 'page' AND (published_at < ? OR (published_at = ? AND id < ?))%s
-ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter, tagClause)
+ORDER BY published_at DESC, id DESC LIMIT 1`, visibility, tagClause)
 	prevArgs := []interface{}{publishedAt, publishedAt, postID}
 	if tag != "" {
 		prevArgs = append(prevArgs, tag)
@@ -620,7 +658,7 @@ ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter, tagClause)
 	qNext := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
 WHERE (%s) AND deleted_at IS NULL AND type != 'page' AND (published_at > ? OR (published_at = ? AND id > ?))%s
-ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter, tagClause)
+ORDER BY published_at ASC, id ASC LIMIT 1`, visibility, tagClause)
 	nextArgs := []interface{}{publishedAt, publishedAt, postID}
 	if tag != "" {
 		nextArgs = append(nextArgs, tag)
