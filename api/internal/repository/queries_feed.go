@@ -18,17 +18,7 @@ FROM posts p
 WHERE LOWER(p.status) = 'published'
 AND p.deleted_at IS NULL
 AND p.type != 'page'
-AND p.id NOT IN (
-    SELECT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (
-        WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE hides_posts = 1
-            UNION
-            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-        )
-        SELECT id FROM h
-    )
-)
+AND ` + hidesPostsExcludeP + `
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?`
 
@@ -66,17 +56,7 @@ SELECT slug, COALESCE(updated_at, published_at, created_at) as updated_at
 FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
-AND id NOT IN (
-    SELECT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (
-        WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE hides_posts = 1
-            UNION
-            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-        )
-        SELECT id FROM h
-    )
-)
+AND ` + hidesPostsExcludeID + `
 ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
