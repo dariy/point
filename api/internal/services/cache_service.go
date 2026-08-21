@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+// tmpPrefix marks the half-written files Set leaves in the cache directory for
+// the instant between create and rename. It starts with a dot so it sorts away
+// from real keys, and nothing composes a key that begins with it.
+const tmpPrefix = ".tmp-"
+
 type CacheService struct {
 	cacheDir string
 }
@@ -50,12 +55,46 @@ func (s *CacheService) Get(ctx context.Context, key string) ([]byte, error) {
 	return data, nil
 }
 
+// Set writes a cache entry atomically: into a sibling temp file, then rename.
+//
+// os.WriteFile truncates the live path before it writes, so a reader arriving
+// mid-write on a hot key — the home feed and the tag archives are shared by
+// every anonymous visitor — could read a prefix of the payload and serve it as
+// application/json. The zero-length case was caught; a truncated one was not,
+// and it surfaces as an intermittent SPA parse error on a page that works on
+// reload. Rename is atomic within a filesystem, so a reader sees either the
+// whole previous entry or the whole new one.
 func (s *CacheService) Set(ctx context.Context, key string, data []byte) error {
 	if err := s.validateKey(key); err != nil {
 		return err
 	}
 	path := filepath.Join(s.cacheDir, key)
-	return os.WriteFile(path, data, 0644)
+
+	f, err := os.CreateTemp(s.cacheDir, tmpPrefix+"*")
+	if err != nil {
+		return err
+	}
+	tmpPath := f.Name()
+	// A no-op once the rename below has succeeded; on every error path this is
+	// what keeps failed writes from accumulating in the cache directory.
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	// CreateTemp opens at 0600; cache entries have always been world-readable.
+	if err := os.Chmod(tmpPath, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 func (s *CacheService) Invalidate(ctx context.Context, key string) error {
