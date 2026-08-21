@@ -104,7 +104,8 @@ Key services include:
 - `MediaService`: Image resizing, Exif extraction, file storage.
 - `TagService`: Hierarchical tag management, post count recalculation.
 - `CacheService`: on-disk cache of rendered public payloads (`<storage>/cache`) —
-  home feed pages, tag archives, `feed.xml`, `sitemap.xml`.
+  home feed pages, tag archives, `feed.xml`, `sitemap.xml`. Size-capped, with
+  oldest-first eviction (`PAGE_CACHE_BUDGET_MB`).
 
 ### Invalidating the public page cache
 
@@ -116,8 +117,8 @@ feed listing a post that already 404s.
 Every post write funnels through `PostService.onPostsChanged` and every tag
 write through `TagService.Invalidate`; both drop the whole cache. It is
 all-or-nothing on purpose: keys are per page *and* per `per_page` (device-fit,
-so effectively unbounded), and there is no way to map a changed post back to the
-keys that mention it. New mutation paths must go through those two hooks rather
+so wide even after bucketing), and there is no way to map a changed post back to
+the keys that mention it. New mutation paths must go through those two hooks rather
 than invalidating by hand.
 
 ### Serving a miss
@@ -132,6 +133,31 @@ drops the whole cache) does it to every key at once.
 A render error propagates to every waiter and is not stored, so a failure never
 becomes the entry for the next TTL. A failed *write* is logged and the response
 still served — it only costs the next reader a re-render.
+
+### Bounding the directory
+
+Nothing but a content write removes an entry, so the cache would otherwise grow
+for as long as the blog goes unpublished. Two things bound it.
+
+`per_page` on the public grids is not a setting — the client measures the
+viewport and asks for the columns × rows that fit, and a query string can name
+any number at all. `clampGridPageSize` (`internal/api/page_cache.go`) snaps it
+*down* to a fixed ladder before it reaches a query or a key, so nearby window
+sizes share one entry. Down, not to the nearest: the client sized the grid to
+keep the paginator and footer on screen, and serving fewer posts than it asked
+for keeps that true where serving more would not. The blog's own
+`posts_per_page` is allowed through off-ladder, so the clamp bounds a key space
+without quietly changing a setting.
+
+`PAGE_CACHE_BUDGET_MB` (default 64) then caps the directory. `Set` charges each
+write against an allowance of a tenth of the budget; when it is spent, one scan
+sorts the entries by mtime and deletes oldest-first down to 80% of the budget.
+The gap between the two watermarks is what makes the budget a ceiling rather
+than a line the cache crosses and then notices. Oldest-by-mtime stands in for
+LRU: entries are written once and never touched, so mtime is "least recently
+rendered", and a wrong eviction costs one re-render. The same scan collects
+`.tmp-*` files older than an hour — what a crash between `CreateTemp` and
+`Rename` leaves behind, which no other path would ever remove.
 
 ---
 

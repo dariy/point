@@ -37,6 +37,60 @@ func TestPageCacheKey(t *testing.T) {
 	}
 }
 
+// TestClampGridPageSize pins the two things the clamp has to get right: it
+// never hands back more posts than were asked for (a grid sized to keep the
+// footer on screen must not be overfilled), and it collapses the continuum of
+// viewport-fitted values onto a small set so the cache is keyed by bucket
+// rather than by browser-window height.
+func TestClampGridPageSize(t *testing.T) {
+	const site = 10
+
+	tests := []struct {
+		name       string
+		perPage    int32
+		sitePerPag int32
+		want       int32
+	}{
+		{"exact ladder value passes through", 12, site, 12},
+		{"between ladder values snaps down", 17, site, 15},
+		{"just under a step snaps down", 59, site, 55},
+		{"small fits are exact", 4, site, 4},
+		{"one is the floor", 1, site, 1},
+		{"non-positive is floored", 0, site, 1},
+		{"above the ladder is capped", 1000000, site, 60},
+		{"max int32 is capped", 2147483647, site, 60},
+		{"site setting passes through even off-ladder", 7, 7, 7},
+		{"site setting does not raise a smaller request", 5, 7, 5},
+		{"site setting is not preferred over a higher ladder value", 9, 7, 8},
+		{"site setting above the ladder is honoured", 100, 100, 100},
+		{"site setting above the ladder still caps a bigger request", 500, 100, 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := clampGridPageSize(tt.perPage, tt.sitePerPag)
+			if got != tt.want {
+				t.Errorf("clampGridPageSize(%d, %d) = %d, want %d", tt.perPage, tt.sitePerPag, got, tt.want)
+			}
+			if tt.perPage >= 1 && got > tt.perPage {
+				t.Errorf("clamp returned %d for a request of %d — a grid must never be overfilled", got, tt.perPage)
+			}
+		})
+	}
+}
+
+// The key space the cache has to hold is the point of the clamp: without it,
+// every per_page a client can name is its own entry.
+func TestClampGridPageSize_BoundsTheKeySpace(t *testing.T) {
+	seen := map[int32]bool{}
+	for pp := int32(1); pp <= 5000; pp++ {
+		seen[clampGridPageSize(pp, 10)] = true
+	}
+	if len(seen) > len(gridPageSizes) {
+		t.Errorf("clamp produced %d distinct values from 5000 inputs, ladder has %d", len(seen), len(gridPageSizes))
+	}
+}
+
 // TestServePageJSON covers the two routes through the one call site each page
 // handler now has: a cacheable request is stored and served from the cache on
 // the next visit, an uncacheable one renders every time and leaves nothing

@@ -102,6 +102,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
 	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
+	perPage = clampGridPageSize(perPage, int32(defaultPerPage))
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -118,7 +119,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	scheduledView := page < 1
 
 	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
-	// same page at a different post count must not serve a stale-sized blob.
+	// same page at a different post count must not serve a stale-sized blob. It
+	// has been snapped to the gridPageSizes ladder, which is what keeps that from
+	// meaning one entry per browser-window height.
 	cacheKey := pageCacheKey("homepage", fmt.Sprintf("p%d_pp%d", page, perPage))
 	// An owner's feed carries drafts, hidden posts and the scheduled queue, and a
 	// timeline scope is a long tail of one-off ranges. Neither is shared between
@@ -378,6 +381,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
 	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
+	perPage = clampGridPageSize(perPage, int32(defaultPerPage))
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -388,8 +392,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// to know which branch produced the breadcrumb the user expects to see.
 	pathSlugs := splitPathParam(c.QueryParam("path"))
 
-	// per_page is part of the key (device-fit / pinch-zoom controlled) so the same
-	// page at a different post count isn't served a stale-sized cached blob.
+	// per_page is part of the key (device-fit / pinch-zoom controlled, snapped to
+	// the gridPageSizes ladder) so the same page at a different post count isn't
+	// served a stale-sized cached blob.
 	cacheKey := pageCacheKey("tagpage", fmt.Sprintf("%s_path-%s_p%d_pp%d", slug, strings.Join(pathSlugs, "/"), page, perPage))
 	// As on the home feed: an owner's archive and a timeline scope are not shared
 	// between visitors, so neither is cached.

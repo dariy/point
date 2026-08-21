@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -18,19 +20,78 @@ import (
 // from real keys, and nothing composes a key that begins with it.
 const tmpPrefix = ".tmp-"
 
+// DefaultBudgetMB is the cache directory's size ceiling when the operator sets
+// none. A rendered page payload is tens of kilobytes, so 64 MB holds several
+// hundred entries — far more than a blog's live key set — while costing a
+// quarter of a percent of a 25 GB root volume. That volume is the reason there
+// is a ceiling at all: nothing else evicts, so an unbounded cache is a slow
+// leak with the whole host downstream of it.
+const DefaultBudgetMB = 64
+
+// tmpMaxAge is how long a leftover temp file is tolerated before a sweep
+// collects it. Set writes and renames within one call, so anything this old
+// belongs to a process that died mid-write; the margin is generous because
+// deleting a temp file another process is still writing to would cost it its
+// entry.
+const tmpMaxAge = time.Hour
+
+// sweepEvery is how much of the budget may be written between directory scans
+// (one tenth), and sweepTargetPct is how far below the budget a scan cuts the
+// cache back to.
+//
+// The gap between them is what makes the budget a real ceiling rather than a
+// line the cache crosses and then notices: a sweep leaves the directory at 80%,
+// and no more than a tenth of the budget plus one entry can be added before the
+// next one runs. That holds as long as a single entry is smaller than a tenth
+// of the budget — a rendered page is tens of kilobytes against a budget in
+// megabytes, so it is not close.
+//
+// Cutting back to 80% rather than to the budget itself is also what keeps a
+// warm cache from sweeping on every write.
+const (
+	sweepEvery     = 10
+	sweepTargetPct = 80
+)
+
 type CacheService struct {
 	cacheDir string
 
 	// flight coalesces the renders behind GetOrRender, keyed by cache key.
 	flight singleflight.Group
+
+	// maxBytes is the directory's size ceiling; 0 disables eviction entirely.
+	maxBytes int64
+
+	// mu guards sinceSweep and serialises sweeps, so concurrent Sets scan the
+	// directory once between them rather than each racing the others' deletes.
+	mu sync.Mutex
+	// sinceSweep counts bytes written since the last sweep. It starts at the
+	// budget so the first Set after a restart always sweeps — otherwise a
+	// directory left oversized by a crash, or by the operator lowering the
+	// budget, would sit there until a tenth of a budget had been rewritten.
+	sinceSweep int64
 }
 
 func NewCacheService(dataPath string) *CacheService {
 	cacheDir := filepath.Join(dataPath, "cache")
 	_ = os.MkdirAll(cacheDir, 0755)
-	return &CacheService{
-		cacheDir: cacheDir,
+	s := &CacheService{cacheDir: cacheDir}
+	return s.WithBudgetMB(DefaultBudgetMB)
+}
+
+// WithBudgetMB sets the cache directory's size ceiling in megabytes. A
+// non-positive value turns eviction off, which is only sane where the volume
+// is not shared with anything that matters.
+func (s *CacheService) WithBudgetMB(mb int) *CacheService {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if mb <= 0 {
+		s.maxBytes = 0
+		return s
 	}
+	s.maxBytes = int64(mb) * 1024 * 1024
+	s.sinceSweep = s.maxBytes
+	return s
 }
 
 func (s *CacheService) validateKey(key string) error {
@@ -82,8 +143,10 @@ func (s *CacheService) Set(ctx context.Context, key string, data []byte) (err er
 	}
 	tmpPath := f.Name()
 	// One cleanup path for every way the write can fail: close the handle, keep
-	// the first error, and leave nothing behind in a directory that has no
-	// eviction. A successful rename has already moved tmpPath away.
+	// the first error, and leave nothing behind. A successful rename has already
+	// moved tmpPath away. The sweep collects temp files too, but only ones old
+	// enough to be certain their writer is gone — this is what keeps the common
+	// failure from waiting an hour for that.
 	defer func() {
 		if cerr := f.Close(); err == nil {
 			err = cerr
@@ -103,7 +166,107 @@ func (s *CacheService) Set(ctx context.Context, key string, data []byte) (err er
 	if err = f.Chmod(0644); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err = os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	s.noteWrite(int64(len(data)))
+	return nil
+}
+
+// noteWrite charges n bytes against the sweep allowance and runs a sweep once
+// the allowance is spent.
+//
+// Set is the only growth path, so it is also the only place eviction has to
+// hook into; hanging it off a timer would mean a goroutine per instance doing
+// nothing on a quiet blog. The scan is O(entries) and runs once per
+// budget/sweepEvery bytes written, so a hot cache pays it rarely and an idle
+// one never.
+func (s *CacheService) noteWrite(n int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.maxBytes == 0 {
+		return
+	}
+	s.sinceSweep += n
+	if s.sinceSweep < s.maxBytes/sweepEvery {
+		return
+	}
+	s.sinceSweep = 0
+	if err := s.sweepLocked(); err != nil {
+		slog.Warn("page cache sweep failed", "error", err)
+	}
+}
+
+// sweepLocked deletes oldest-first until the directory is back under
+// sweepTargetPct of the budget, and collects temp files a crashed write left
+// behind.
+//
+// Oldest-by-mtime is a coarse stand-in for least-recently-used: entries are
+// written once and never touched again, so mtime is really "least recently
+// rendered". That is the right thing to drop anyway — an entry nobody has
+// re-rendered since the last invalidation is one nobody is asking for, and a
+// wrong eviction costs a single re-render, not a wrong answer.
+func (s *CacheService) sweepLocked() error {
+	entries, err := os.ReadDir(s.cacheDir)
+	if err != nil {
+		return err
+	}
+
+	type entry struct {
+		name    string
+		size    int64
+		modTime time.Time
+	}
+	files := make([]entry, 0, len(entries))
+	var total int64
+	var firstErr error
+	cutoff := time.Now().Add(-tmpMaxAge)
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue // vanished under us; nothing to account for
+		}
+		if strings.HasPrefix(e.Name(), tmpPrefix) {
+			if info.ModTime().Before(cutoff) {
+				if err := os.Remove(filepath.Join(s.cacheDir, e.Name())); err != nil && firstErr == nil {
+					firstErr = err
+				}
+			}
+			continue
+		}
+		files = append(files, entry{e.Name(), info.Size(), info.ModTime()})
+		total += info.Size()
+	}
+
+	// Against the target, not the budget: stopping at the budget would leave the
+	// directory sitting on the ceiling, and the next tenth of a budget written
+	// between sweeps would go straight through it.
+	target := s.maxBytes / 100 * sweepTargetPct
+	if total <= target {
+		return firstErr
+	}
+
+	sort.Slice(files, func(i, j int) bool { return files[i].modTime.Before(files[j].modTime) })
+	evicted := 0
+	for _, f := range files {
+		if total <= target {
+			break
+		}
+		if err := os.Remove(filepath.Join(s.cacheDir, f.name)); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		total -= f.size
+		evicted++
+	}
+	slog.Info("page cache evicted", "entries", evicted, "bytes_remaining", total, "budget", s.maxBytes)
+	return firstErr
 }
 
 func (s *CacheService) Invalidate(ctx context.Context, key string) error {
@@ -132,6 +295,11 @@ func (s *CacheService) Clear(ctx context.Context) error {
 			firstErr = err
 		}
 	}
+	// The directory is empty, so the next Set starts the sweep allowance over
+	// rather than paying for a scan it cannot possibly need.
+	s.mu.Lock()
+	s.sinceSweep = 0
+	s.mu.Unlock()
 	return firstErr
 }
 
@@ -141,8 +309,8 @@ func (s *CacheService) Clear(ctx context.Context) error {
 // It is deliberately all-or-nothing. Every entry in this cache — the home feed
 // pages, the tag archives, feed.xml, sitemap.xml — is derived from which posts
 // are publicly visible, and the keys are per page *and* per `per_page` (which
-// is device-fit, so the key space is effectively unbounded). There is no way to
-// map "post 244 became hidden" back to the handful of keys that mentioned it,
+// is device-fit, so the key space is wide even after bucketing). There is no way
+// to map "post 244 became hidden" back to the handful of keys that mentioned it,
 // and serving a post in a list that 404s when opened is a worse outcome than
 // re-rendering a few pages.
 func (s *CacheService) InvalidatePublicPages(ctx context.Context) error {
