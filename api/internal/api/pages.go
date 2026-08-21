@@ -2,10 +2,8 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math"
 	"net/http"
 	"sort"
@@ -307,28 +305,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
-			if err := h.cacheService.Set(ctx, cacheKey, data); err != nil {
-				slog.Warn("page cache write failed", "key", cacheKey, "error", err)
-			}
+			setPageCache(ctx, h.cacheService, cacheKey, data)
 		}
 	}
 
 	return c.JSON(http.StatusOK, resp)
-}
-
-// pageCacheKey turns a composed cache identity into a filename-safe key.
-//
-// The identity carries user-controlled input — a tag slug, the breadcrumb
-// `path` chain — which cannot be embedded in a filename directly: CacheService
-// rejects any key containing a separator, and it rejected every path-scoped tag
-// page for exactly that reason, silently, because both Get and Set errors were
-// discarded. Hashing keeps the key opaque and fixed-width, and leaves
-// CacheService's traversal guard as belt-and-braces rather than load-bearing.
-//
-// The prefix stays readable so the cache directory can still be reasoned about
-// by eye.
-func pageCacheKey(prefix, identity string) string {
-	return fmt.Sprintf("%s_%x.json", prefix, sha256.Sum256([]byte(identity)))
 }
 
 // splitPathParam parses the `path` query value ("a/b/c") into a slice of
@@ -618,9 +599,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
-			if err := h.cacheService.Set(ctx, cacheKey, data); err != nil {
-				slog.Warn("page cache write failed", "key", cacheKey, "error", err)
-			}
+			setPageCache(ctx, h.cacheService, cacheKey, data)
 		}
 	}
 
