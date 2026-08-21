@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"point-api/internal/models"
 	"point-api/internal/plugins"
@@ -103,6 +102,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
 	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
+	perPage = clampGridPageSize(perPage, int32(defaultPerPage))
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -118,198 +118,196 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 	scheduledView := page < 1
 
-	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
-	// same page at a different post count must not serve a stale-sized blob.
-	cacheKey := fmt.Sprintf("homepage_p%d_pp%d.json", page, perPage)
-	if publicOnly && !hasYearFilter {
-		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
-			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
-		}
-	}
+	// same page at a different post count must not serve a stale-sized blob. It
+	// has been snapped to the gridPageSizes ladder, which is what keeps that from
+	// meaning one entry per browser-window height.
+	cacheKey := pageCacheKey("homepage", fmt.Sprintf("p%d_pp%d", page, perPage))
+	// An owner's feed carries drafts, hidden posts and the scheduled queue, and a
+	// timeline scope is a long tail of one-off ranges. Neither is shared between
+	// visitors, so neither earns an entry.
+	cacheable := publicOnly && !hasYearFilter
 
-	showViewCounts := allSettings["show_view_counts"] == "true"
-	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	render := func(ctx context.Context) ([]byte, error) {
+		showViewCounts := allSettings["show_view_counts"] == "true"
+		snap, _ := h.tagService.GetTagSnapshot(ctx)
 
-	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
-	// We only apply this on the first page of the index if no other filters are active.
-	if page == 1 && !hasYearFilter {
-		if hpIDStr, ok := allSettings["home_page_post_id"]; ok && hpIDStr != "" {
-			hpPost, err := h.postService.GetPostBySlug(ctx, hpIDStr)
-			if err == nil && (hpPost.Status == "published" || hpPost.Status == "page" || !publicOnly) {
-				postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, []int64{hpPost.ID})
-				hpPostType := hpPost.Type
-				if hpPostType == "page" {
-					postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
+		// Custom Home Page logic: if home_page_post_id is set, return that specific post.
+		// We only apply this on the first page of the index if no other filters are active.
+		if page == 1 && !hasYearFilter {
+			if hpIDStr, ok := allSettings["home_page_post_id"]; ok && hpIDStr != "" {
+				hpPost, err := h.postService.GetPostBySlug(ctx, hpIDStr)
+				if err == nil && (hpPost.Status == "published" || hpPost.Status == "page" || !publicOnly) {
+					postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, []int64{hpPost.ID})
+					hpPostType := hpPost.Type
+					if hpPostType == "page" {
+						postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
 
-					minPosts := getMinTagPostsSetting(allSettings)
-					var excludeTagIDs map[int64]bool
-					var effectiveHiddenPosts map[int64]bool
-					if snap != nil {
-						if publicOnly {
-							excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+						minPosts := getMinTagPostsSetting(allSettings)
+						var excludeTagIDs map[int64]bool
+						var effectiveHiddenPosts map[int64]bool
+						if snap != nil {
+							if publicOnly {
+								excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+							}
+							effectiveHiddenPosts = snap.EffectiveHidesPosts
 						}
-						effectiveHiddenPosts = snap.EffectiveHidesPosts
-					}
 
-					resp := postToResponse(hpPost, postTagsMap[hpPost.ID], excludeTagIDs)
-					resp["type"] = "page" // Force type to page as we verified it above
-					if !showViewCounts {
-						delete(resp, "view_count")
-					}
+						resp := postToResponse(hpPost, postTagsMap[hpPost.ID], excludeTagIDs)
+						resp["type"] = "page" // Force type to page as we verified it above
+						if !showViewCounts {
+							delete(resp, "view_count")
+						}
 
-					htmlContent, _ := h.postService.RenderContent(hpPost.Content)
-					media, _ := h.mediaService.GetMediaByContent(ctx, hpPost.Content, hpPost.ThumbnailPath.String)
-					// The settings snapshot is already loaded here, so the
-					// generation token costs nothing extra.
-					resp["content_html"] = injectArticleSrcset(htmlContent, media, services.ThumbnailGenerationFrom(allSettings))
+						htmlContent, _ := h.postService.RenderContent(hpPost.Content)
+						media, _ := h.mediaService.GetMediaByContent(ctx, hpPost.Content, hpPost.ThumbnailPath.String)
+						// The settings snapshot is already loaded here, so the
+						// generation token costs nothing extra.
+						resp["content_html"] = injectArticleSrcset(htmlContent, media, services.ThumbnailGenerationFrom(allSettings))
 
-					mediaObjs := make([]map[string]interface{}, 0, len(media))
-					for _, m := range media {
-						mediaObjs = append(mediaObjs, map[string]interface{}{
-							"path":     "/" + strings.TrimPrefix(m.OriginalPath, "originals/"),
-							"alt_text": nullString(m.AltText),
+						mediaObjs := make([]map[string]interface{}, 0, len(media))
+						for _, m := range media {
+							mediaObjs = append(mediaObjs, map[string]interface{}{
+								"path":     "/" + strings.TrimPrefix(m.OriginalPath, "originals/"),
+								"alt_text": nullString(m.AltText),
+							})
+						}
+						resp["media"] = mediaObjs
+
+						if !publicOnly {
+							injectPostHiddenFieldsFromInfo(resp, hpPost.Status, postTagsMap[hpPost.ID], effectiveHiddenPosts)
+						}
+
+						// Public settings subset
+						publicSettings := make(map[string]string)
+						for k, v := range allSettings {
+							if pagePublicSettingKeys[k] {
+								publicSettings[k] = v
+							}
+						}
+
+						return json.Marshal(map[string]interface{}{
+							"posts": []map[string]interface{}{resp},
+							"pagination": map[string]interface{}{
+								"page":     1,
+								"per_page": 1,
+								"total":    1,
+								"pages":    1,
+							},
+							"settings": publicSettings,
 						})
 					}
-					resp["media"] = mediaObjs
-
-					if !publicOnly {
-						injectPostHiddenFieldsFromInfo(resp, hpPost.Status, postTagsMap[hpPost.ID], effectiveHiddenPosts)
-					}
-
-					// Public settings subset
-					publicSettings := make(map[string]string)
-					for k, v := range allSettings {
-						if pagePublicSettingKeys[k] {
-							publicSettings[k] = v
-						}
-					}
-
-					return c.JSON(http.StatusOK, map[string]interface{}{
-						"posts": []map[string]interface{}{resp},
-						"pagination": map[string]interface{}{
-							"page":     1,
-							"per_page": 1,
-							"total":    1,
-							"pages":    1,
-						},
-						"settings": publicSettings,
-					})
 				}
 			}
 		}
-	}
 
-	// Published posts
-	listParams := services.ListPostsParams{
-		Page:          page,
-		PerPage:       perPage,
-		IncludeDrafts: false,
-		IncludeHidden: !publicOnly,
-	}
-	if hasYearFilter {
-		listParams.YearFrom = yearFrom
-		listParams.YearTo = yearTo
-	}
+		// Published posts
+		listParams := services.ListPostsParams{
+			Page:          page,
+			PerPage:       perPage,
+			IncludeDrafts: false,
+			IncludeHidden: !publicOnly,
+		}
+		if hasYearFilter {
+			listParams.YearFrom = yearFrom
+			listParams.YearTo = yearTo
+		}
 
-	var posts []models.Post
-	var total int64
-	var err error
-	if scheduledView {
-		// The queue, not the feed. `total` still describes the published feed:
-		// the paginator spans both halves, and swiping right has to land back
-		// on page 1 knowing how many pages follow it.
-		total, err = h.postService.CountPostsOnly(ctx, listParams)
+		var posts []models.Post
+		var total int64
+		var err error
+		if scheduledView {
+			// The queue, not the feed. `total` still describes the published feed:
+			// the paginator spans both halves, and swiping right has to land back
+			// on page 1 knowing how many pages follow it.
+			total, err = h.postService.CountPostsOnly(ctx, listParams)
+			if err != nil {
+				return nil, MapError(err)
+			}
+			// Page 0 is the queue's first page, -1 its second, and so on.
+			posts, _, err = h.postService.ListScheduledPosts(ctx, 1-page, perPage)
+		} else {
+			posts, total, err = h.postService.ListPosts(ctx, listParams)
+		}
 		if err != nil {
-			return MapError(err)
+			return nil, MapError(err)
 		}
-		// Page 0 is the queue's first page, -1 its second, and so on.
-		posts, _, err = h.postService.ListScheduledPosts(ctx, 1-page, perPage)
-	} else {
-		posts, total, err = h.postService.ListPosts(ctx, listParams)
-	}
-	if err != nil {
-		return MapError(err)
-	}
 
-	postIDs := make([]int64, len(posts))
-	for i, p := range posts {
-		postIDs[i] = p.ID
-	}
-	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
-	postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
-
-	minPosts := getMinTagPostsSetting(allSettings)
-	var excludeTagIDs map[int64]bool
-	var effectiveHiddenPosts map[int64]bool
-	if snap != nil {
-		if publicOnly {
-			excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+		postIDs := make([]int64, len(posts))
+		for i, p := range posts {
+			postIDs[i] = p.ID
 		}
-		effectiveHiddenPosts = snap.EffectiveHidesPosts
-	}
+		postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
+		postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
 
-	postResponses := make([]map[string]interface{}, 0, len(posts))
-	for _, p := range posts {
-		if publicOnly && !IsPostVisibleToPublic(postTagsMap[p.ID], effectiveHiddenPosts) {
-			continue
+		minPosts := getMinTagPostsSetting(allSettings)
+		var excludeTagIDs map[int64]bool
+		var effectiveHiddenPosts map[int64]bool
+		if snap != nil {
+			if publicOnly {
+				excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+			}
+			effectiveHiddenPosts = snap.EffectiveHidesPosts
 		}
-		resp := postToListResponse(p, postTagsMap[p.ID], excludeTagIDs)
-		if !publicOnly {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
+
+		postResponses := make([]map[string]interface{}, 0, len(posts))
+		for _, p := range posts {
+			if publicOnly && !IsPostVisibleToPublic(postTagsMap[p.ID], effectiveHiddenPosts) {
+				continue
+			}
+			resp := postToListResponse(p, postTagsMap[p.ID], excludeTagIDs)
+			if !publicOnly {
+				injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
+			}
+			if !showViewCounts {
+				delete(resp, "view_count")
+			}
+			postResponses = append(postResponses, resp)
 		}
-		if !showViewCounts {
-			delete(resp, "view_count")
+
+		pages := int(math.Ceil(float64(total) / float64(perPage)))
+		if pages == 0 {
+			pages = 1
 		}
-		postResponses = append(postResponses, resp)
-	}
 
-	pages := int(math.Ceil(float64(total) / float64(perPage)))
-	if pages == 0 {
-		pages = 1
-	}
-
-	// Public settings subset
-	publicSettings := make(map[string]string)
-	for k, v := range allSettings {
-		if pagePublicSettingKeys[k] {
-			publicSettings[k] = v
+		// Public settings subset
+		publicSettings := make(map[string]string)
+		for k, v := range allSettings {
+			if pagePublicSettingKeys[k] {
+				publicSettings[k] = v
+			}
 		}
-	}
 
-	resp := map[string]interface{}{
-		"posts": postResponses,
-		"pagination": map[string]interface{}{
-			"page":     page,
-			"per_page": perPage,
-			"total":    total,
-			"pages":    pages,
-			// How far left the feed extends: 1 for everyone but an owner with a
-			// non-empty scheduled queue, for whom it drops to 0 or below.
-			// `scheduled` says which half the page being returned came from.
-			"min_page":  minPage,
-			"scheduled": scheduledView,
-		},
-		"settings": publicSettings,
-	}
-
-	// tag_cloud and menu are page-independent; compute and send them only on the
-	// first, unfiltered page. The client retains the last-seen values across
-	// pagination and prev/next preloads, so later pages skip this work entirely.
-	if page == 1 && !hasYearFilter {
-		cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly, minPosts)
-		navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
-		resp["tag_cloud"] = cloud
-		resp["menu"] = navTags
-	}
-
-	if publicOnly && !hasYearFilter {
-		if data, err := json.Marshal(resp); err == nil {
-			_ = h.cacheService.Set(ctx, cacheKey, data)
+		resp := map[string]interface{}{
+			"posts": postResponses,
+			"pagination": map[string]interface{}{
+				"page":     page,
+				"per_page": perPage,
+				"total":    total,
+				"pages":    pages,
+				// How far left the feed extends: 1 for everyone but an owner with a
+				// non-empty scheduled queue, for whom it drops to 0 or below.
+				// `scheduled` says which half the page being returned came from.
+				"min_page":  minPage,
+				"scheduled": scheduledView,
+			},
+			"settings": publicSettings,
 		}
+
+		// tag_cloud and menu are page-independent; compute and send them only on the
+		// first, unfiltered page. The client retains the last-seen values across
+		// pagination and prev/next preloads, so later pages skip this work entirely.
+		if page == 1 && !hasYearFilter {
+			cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly, minPosts)
+			navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
+			resp["tag_cloud"] = cloud
+			resp["menu"] = navTags
+		}
+
+		return json.Marshal(resp)
 	}
 
-	return c.JSON(http.StatusOK, resp)
+	return servePageJSON(c, h.cacheService, cacheKey, cacheable, render)
 }
 
 // splitPathParam parses the `path` query value ("a/b/c") into a slice of
@@ -383,6 +381,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
 	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
+	perPage = clampGridPageSize(perPage, int32(defaultPerPage))
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -393,217 +392,213 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// to know which branch produced the breadcrumb the user expects to see.
 	pathSlugs := splitPathParam(c.QueryParam("path"))
 
-	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
-	// per_page is part of the key (device-fit / pinch-zoom controlled) so the same
-	// page at a different post count isn't served a stale-sized cached blob.
-	cacheKey := fmt.Sprintf("tagpage_%s_path-%s_p%d_pp%d.json", slug, strings.Join(pathSlugs, "/"), page, perPage)
-	if publicOnly && !hasYearFilter {
-		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
-			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
-		}
-	}
+	// per_page is part of the key (device-fit / pinch-zoom controlled, snapped to
+	// the gridPageSizes ladder) so the same page at a different post count isn't
+	// served a stale-sized cached blob.
+	cacheKey := pageCacheKey("tagpage", fmt.Sprintf("%s_path-%s_p%d_pp%d", slug, strings.Join(pathSlugs, "/"), page, perPage))
+	// As on the home feed: an owner's archive and a timeline scope are not shared
+	// between visitors, so neither is cached.
+	cacheable := publicOnly && !hasYearFilter
 
-	snap, _ := h.tagService.GetTagSnapshot(ctx)
-	tag, err := h.tagService.GetTagBySlug(ctx, slug)
-	if err != nil {
-		return MapError(err)
-	}
-
-	minPosts := getMinTagPostsSetting(allSettings)
-	var effectivelyHidden map[int64]bool
-	var excludeTagIDs map[int64]bool
-	var effectiveHiddenPostsTagIDs map[int64]bool
-	var withRelatedIDs map[int64]bool
-	var inBreadcrumbs map[int64]bool
-	if snap != nil {
-		effectivelyHidden = snap.EffectiveHidden
-		effectiveHiddenPostsTagIDs = snap.EffectiveHidesPosts
-		withRelatedIDs = snap.WithRelatedIDs()
-		inBreadcrumbs = snap.InBreadcrumbsIDs()
-		if publicOnly {
-			excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
-			if excludeTagIDs[tag.ID] {
-				return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-			}
-		}
-	}
-
-	showViewCounts := allSettings["show_view_counts"] == "true"
-
-	// Breadcrumb ancestors
-	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
-
-	// Direct children for tag detail response (exclude effectively hidden ones)
-	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly, minPosts)
-	children := make([]models.Tag, 0, len(allChildren))
-	for _, ch := range allChildren {
-		if !publicOnly || (effectivelyHidden != nil && !effectivelyHidden[ch.ID]) {
-			children = append(children, ch)
-		}
-	}
-
-	// Hierarchical children for sub-nav.
-	// If the tag (or any of its parents) has ShowRelated=true, replace the normal
-	// sub-nav with co-occurring tags from posts, marked as related.
-
-	var childItems []services.NavTagNode
-	if useCoOccurrence := withRelatedIDs[tag.ID] || func() bool {
-		parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
-		for _, p := range parents {
-			if withRelatedIDs[p.ID] {
-				return true
-			}
-		}
-		return false
-	}(); useCoOccurrence {
-		coTags, _ := h.repo.GetCoOccurringTags(ctx, tag.ID, publicOnly)
-		for _, t := range coTags {
-			if publicOnly && effectivelyHidden[t.ID] {
-				continue
-			}
-			childItems = append(childItems, services.NavTagNode{
-				ID:        t.ID,
-				Name:      t.Name,
-				Slug:      t.Slug,
-				PostCount: t.PostCount,
-				IsRelated: true,
-				Children:  []services.NavTagNode{},
-			})
-		}
-	} else {
-		childItems, _ = h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly, minPosts)
-	}
-
-	// Root-level nav tags for global navigation
-	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
-
-	// Posts for this tag. Like the home feed, an owner's tag page runs left of
-	// page 1 into the posts tagged this way that are still waiting to publish —
-	// see resolveScheduledPage. The queue is read separately (the ordering is
-	// the opposite of the feed's and the two never share a page), but `total`
-	// and `pages` keep describing the published half so the paginator still
-	// spans both.
-	minPage := int32(1)
-	if !publicOnly && !hasYearFilter {
-		n, _ := h.tagService.CountScheduledPostsByTag(ctx, tag.ID)
-		page, minPage = resolveScheduledPage(c, page, perPage, n)
-	}
-	scheduledView := page < 1
-
-	var posts []models.Post
-	var total int64
-	if scheduledView {
-		total, err = h.tagService.CountPostsByTag(ctx, tag.ID, publicOnly, yearFrom, yearTo)
+	render := func(ctx context.Context) ([]byte, error) {
+		snap, _ := h.tagService.GetTagSnapshot(ctx)
+		tag, err := h.tagService.GetTagBySlug(ctx, slug)
 		if err != nil {
-			return MapError(err)
+			return nil, MapError(err)
 		}
-		// Page 0 is the queue's first page, -1 its second, and so on.
-		posts, err = h.tagService.GetScheduledPostsByTag(ctx, tag.ID, 1-page, perPage)
-	} else {
-		posts, total, err = h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
-	}
-	if err != nil {
-		return MapError(err)
-	}
 
-	tagPostIDs := make([]int64, len(posts))
-	for i, p := range posts {
-		tagPostIDs[i] = p.ID
-	}
-	tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
-	tagPostTagsMap = h.expandPostTagsWithAncestors(ctx, tagPostTagsMap, publicOnly)
-
-	postResponses := make([]map[string]interface{}, 0, len(posts))
-	for _, p := range posts {
-		if publicOnly && !IsPostVisibleToPublic(tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs) {
-			continue
+		minPosts := getMinTagPostsSetting(allSettings)
+		var effectivelyHidden map[int64]bool
+		var excludeTagIDs map[int64]bool
+		var effectiveHiddenPostsTagIDs map[int64]bool
+		var withRelatedIDs map[int64]bool
+		var inBreadcrumbs map[int64]bool
+		if snap != nil {
+			effectivelyHidden = snap.EffectiveHidden
+			effectiveHiddenPostsTagIDs = snap.EffectiveHidesPosts
+			withRelatedIDs = snap.WithRelatedIDs()
+			inBreadcrumbs = snap.InBreadcrumbsIDs()
+			if publicOnly {
+				excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+				if excludeTagIDs[tag.ID] {
+					return nil, echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+				}
+			}
 		}
-		resp := postToListResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
-		if !publicOnly {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
-		}
-		if !showViewCounts {
-			delete(resp, "view_count")
-		}
-		postResponses = append(postResponses, resp)
-	}
 
-	pages := int(math.Ceil(float64(total) / float64(perPage)))
-	if pages == 0 {
-		pages = 1
-	}
+		showViewCounts := allSettings["show_view_counts"] == "true"
 
-	// Build breadcrumbs. When the request carries a valid `path` (a real
-	// root→…→parent chain in the tag graph that ends at a parent of this tag),
-	// honour it verbatim so the crumb trail matches the branch the user
-	// navigated. Otherwise fall back to the server-computed ancestor chain.
-	var breadcrumbs []map[string]interface{}
-	if pathTags, ok := resolveBreadcrumbPath(snap, pathSlugs, tag); ok {
-		breadcrumbs = make([]map[string]interface{}, 0, len(pathTags))
-		for i, a := range pathTags {
-			if excludeTagIDs[a.ID] {
+		// Breadcrumb ancestors
+		ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
+
+		// Direct children for tag detail response (exclude effectively hidden ones)
+		allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly, minPosts)
+		children := make([]models.Tag, 0, len(allChildren))
+		for _, ch := range allChildren {
+			if !publicOnly || (effectivelyHidden != nil && !effectivelyHidden[ch.ID]) {
+				children = append(children, ch)
+			}
+		}
+
+		// Hierarchical children for sub-nav.
+		// If the tag (or any of its parents) has ShowRelated=true, replace the normal
+		// sub-nav with co-occurring tags from posts, marked as related.
+
+		var childItems []services.NavTagNode
+		if useCoOccurrence := withRelatedIDs[tag.ID] || func() bool {
+			parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
+			for _, p := range parents {
+				if withRelatedIDs[p.ID] {
+					return true
+				}
+			}
+			return false
+		}(); useCoOccurrence {
+			coTags, _ := h.repo.GetCoOccurringTags(ctx, tag.ID, publicOnly)
+			for _, t := range coTags {
+				if publicOnly && effectivelyHidden[t.ID] {
+					continue
+				}
+				childItems = append(childItems, services.NavTagNode{
+					ID:        t.ID,
+					Name:      t.Name,
+					Slug:      t.Slug,
+					PostCount: t.PostCount,
+					IsRelated: true,
+					Children:  []services.NavTagNode{},
+				})
+			}
+		} else {
+			childItems, _ = h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly, minPosts)
+		}
+
+		// Root-level nav tags for global navigation
+		rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
+
+		// Posts for this tag. Like the home feed, an owner's tag page runs left of
+		// page 1 into the posts tagged this way that are still waiting to publish —
+		// see resolveScheduledPage. The queue is read separately (the ordering is
+		// the opposite of the feed's and the two never share a page), but `total`
+		// and `pages` keep describing the published half so the paginator still
+		// spans both.
+		minPage := int32(1)
+		if !publicOnly && !hasYearFilter {
+			n, _ := h.tagService.CountScheduledPostsByTag(ctx, tag.ID)
+			page, minPage = resolveScheduledPage(c, page, perPage, n)
+		}
+		scheduledView := page < 1
+
+		var posts []models.Post
+		var total int64
+		if scheduledView {
+			total, err = h.tagService.CountPostsByTag(ctx, tag.ID, publicOnly, yearFrom, yearTo)
+			if err != nil {
+				return nil, MapError(err)
+			}
+			// Page 0 is the queue's first page, -1 its second, and so on.
+			posts, err = h.tagService.GetScheduledPostsByTag(ctx, tag.ID, 1-page, perPage)
+		} else {
+			posts, total, err = h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
+		}
+		if err != nil {
+			return nil, MapError(err)
+		}
+
+		tagPostIDs := make([]int64, len(posts))
+		for i, p := range posts {
+			tagPostIDs[i] = p.ID
+		}
+		tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
+		tagPostTagsMap = h.expandPostTagsWithAncestors(ctx, tagPostTagsMap, publicOnly)
+
+		postResponses := make([]map[string]interface{}, 0, len(posts))
+		for _, p := range posts {
+			if publicOnly && !IsPostVisibleToPublic(tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs) {
 				continue
 			}
-			crumb := tagToListItem(a)
-			// Each crumb links to itself carrying its own truncated path, so
-			// clicking back up the trail preserves the navigated branch.
-			crumb["href"] = tagPathHref(a.Slug, pathSlugs[:i])
+			resp := postToListResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
 			if !publicOnly {
-				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
-				crumb["is_hidden"] = effectivelyHidden[a.ID]
+				injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
 			}
-			breadcrumbs = append(breadcrumbs, crumb)
+			if !showViewCounts {
+				delete(resp, "view_count")
+			}
+			postResponses = append(postResponses, resp)
 		}
-	} else {
-		breadcrumbs = make([]map[string]interface{}, 0, len(ancestors))
-		for _, a := range ancestors {
-			if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
+
+		pages := int(math.Ceil(float64(total) / float64(perPage)))
+		if pages == 0 {
+			pages = 1
+		}
+
+		// Build breadcrumbs. When the request carries a valid `path` (a real
+		// root→…→parent chain in the tag graph that ends at a parent of this tag),
+		// honour it verbatim so the crumb trail matches the branch the user
+		// navigated. Otherwise fall back to the server-computed ancestor chain.
+		var breadcrumbs []map[string]interface{}
+		if pathTags, ok := resolveBreadcrumbPath(snap, pathSlugs, tag); ok {
+			breadcrumbs = make([]map[string]interface{}, 0, len(pathTags))
+			for i, a := range pathTags {
+				if excludeTagIDs[a.ID] {
+					continue
+				}
 				crumb := tagToListItem(a)
+				// Each crumb links to itself carrying its own truncated path, so
+				// clicking back up the trail preserves the navigated branch.
+				crumb["href"] = tagPathHref(a.Slug, pathSlugs[:i])
 				if !publicOnly {
 					crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
 					crumb["is_hidden"] = effectivelyHidden[a.ID]
 				}
 				breadcrumbs = append(breadcrumbs, crumb)
 			}
+		} else {
+			breadcrumbs = make([]map[string]interface{}, 0, len(ancestors))
+			for _, a := range ancestors {
+				if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
+					crumb := tagToListItem(a)
+					if !publicOnly {
+						crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
+						crumb["is_hidden"] = effectivelyHidden[a.ID]
+					}
+					breadcrumbs = append(breadcrumbs, crumb)
+				}
+			}
 		}
-	}
 
-	parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
-	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, []int64{tag.ID})
-	var tagLoc *models.TagLocation
-	if l, ok := locMap[tag.ID]; ok {
-		tagLoc = &l
-	}
-	tagResp := tagToFullResponse(tag, parents, children, tagLoc, excludeTagIDs)
-	if !publicOnly {
-		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
-		tagResp["is_hidden"] = effectivelyHidden[tag.ID]
-	}
-	resp := map[string]interface{}{
-		"tag":          tagResp,
-		"breadcrumbs":  breadcrumbs,
-		"posts":        postResponses,
-		"menu":         rootNavTags,
-		"nav_children": childItems,
-		"pagination": map[string]interface{}{
-			"page":     page,
-			"per_page": perPage,
-			"total":    total,
-			"pages":    pages,
-			// How far left this tag's feed extends, and which half the page
-			// being returned came from — as on the home feed.
-			"min_page":  minPage,
-			"scheduled": scheduledView,
-		},
-	}
-
-	if publicOnly && !hasYearFilter {
-		if data, err := json.Marshal(resp); err == nil {
-			_ = h.cacheService.Set(ctx, cacheKey, data)
+		parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
+		locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, []int64{tag.ID})
+		var tagLoc *models.TagLocation
+		if l, ok := locMap[tag.ID]; ok {
+			tagLoc = &l
 		}
+		tagResp := tagToFullResponse(tag, parents, children, tagLoc, excludeTagIDs)
+		if !publicOnly {
+			injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
+			tagResp["is_hidden"] = effectivelyHidden[tag.ID]
+		}
+		resp := map[string]interface{}{
+			"tag":          tagResp,
+			"breadcrumbs":  breadcrumbs,
+			"posts":        postResponses,
+			"menu":         rootNavTags,
+			"nav_children": childItems,
+			"pagination": map[string]interface{}{
+				"page":     page,
+				"per_page": perPage,
+				"total":    total,
+				"pages":    pages,
+				// How far left this tag's feed extends, and which half the page
+				// being returned came from — as on the home feed.
+				"min_page":  minPage,
+				"scheduled": scheduledView,
+			},
+		}
+
+		return json.Marshal(resp)
 	}
 
-	return c.JSON(http.StatusOK, resp)
+	return servePageJSON(c, h.cacheService, cacheKey, cacheable, render)
 }
 
 // GetTagsPage returns data for the tags directory page.

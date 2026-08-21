@@ -89,6 +89,7 @@ The app is configured via environment variables (or a `.env` file in the working
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
 | `STORAGE_QUOTA_MB` | `0` | Media storage allowance the dashboard reports usage against; `0` = unlimited (no usage bar) |
+| `PAGE_CACHE_BUDGET_MB` | `64` | Size ceiling for the rendered-page cache (`<STORAGE_PATH>/cache`); oldest entries are evicted first once it is passed, `0` = no eviction |
 | `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` at serve time (analytics, verification tags) — public shell only, never served to admin/authenticated pages |
 | `CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC` | *(empty)* | Extra origins appended to the Content-Security-Policy `script-src`/`connect-src` directives, for use with `HEAD_HTML` |
 

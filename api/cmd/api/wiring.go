@@ -42,7 +42,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	// Built before the post/tag services so both can be handed it: a write to
 	// either invalidates the rendered public pages (see onPostsChanged /
 	// TagService.Invalidate).
-	cacheService := services.NewCacheService(cfg.StoragePath)
+	cacheService := services.NewCacheService(cfg.StoragePath).WithBudgetMB(cfg.PageCacheBudgetMB)
 	tagService.WithCache(cacheService)
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).
 		WithHealth(healthRegistry).

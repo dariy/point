@@ -45,6 +45,14 @@ type Config struct {
 	// 0 means unlimited — the dashboard then shows bare usage with no bar.
 	StorageQuotaMB int `mapstructure:"STORAGE_QUOTA_MB"`
 
+	// PageCacheBudgetMB caps the on-disk cache of rendered public pages
+	// (`<storage>/cache`). Nothing else bounds it: entries are only removed when
+	// a content write drops the whole cache, so a rarely-published blog
+	// accumulates one entry per (page, per_page) combination indefinitely.
+	// Oldest entries are evicted first once the budget is passed; 0 disables
+	// eviction.
+	PageCacheBudgetMB int `mapstructure:"PAGE_CACHE_BUDGET_MB"`
+
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
@@ -109,6 +117,11 @@ func LoadConfig(path string) (config Config, err error) {
 	// allocation a crafted header could otherwise force.
 	v.SetDefault("MAX_IMAGE_MEGAPIXELS", 80)
 	v.SetDefault("STORAGE_QUOTA_MB", 0)
+	// 64 MB holds several hundred rendered pages — far more than a blog's live
+	// key set — for a quarter of a percent of a 25 GB root volume. Kept as a
+	// literal because services imports config, not the other way round; it must
+	// stay in step with services.DefaultBudgetMB, which a test asserts.
+	v.SetDefault("PAGE_CACHE_BUDGET_MB", 64)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")
 	v.SetDefault("SMTP_HOST", "")
