@@ -233,6 +233,96 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	}
 }
 
+// An anonymous request carries no principal, so the handler asks for the
+// public view — which excludes posts hidden by a tag. The chain used to offer
+// them anyway, and following the link 404'd on the post-detail endpoint. This
+// goes through the handler rather than the repository to pin the fact that
+// "no user in context" is what selects the public rule.
+func TestPostHandler_GetPostNavigation_AnonymousSkipsHiddenByTag(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	tmpDir, _ := os.MkdirTemp("", "posts-nav-hidden-test")
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
+	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	ctx := context.Background()
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "navanon", Email: "navanon@test.com", PasswordHash: "h", DisplayName: "Anon",
+	})
+
+	ids := make([]int64, 0, 3)
+	for i, slug := range []string{"anon-a", "anon-b", "anon-c"} {
+		post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: slug, Slug: slug, Content: "c", Status: "published", AuthorID: user.ID,
+		})
+		if err != nil {
+			t.Fatalf("create %s: %v", slug, err)
+		}
+		if _, err := repo.DB().Exec(
+			`UPDATE posts SET published_at=? WHERE id=?`,
+			fmt.Sprintf("2024-0%d-01", i+1), post.ID); err != nil {
+			t.Fatalf("set published_at: %v", err)
+		}
+		ids = append(ids, post.ID)
+	}
+
+	// The middle post is buried under a hides_posts tag.
+	if _, err := repo.DB().Exec(
+		`INSERT INTO tags (name, slug, hides_posts) VALUES ('Secret','secret',1)`); err != nil {
+		t.Fatalf("insert tag: %v", err)
+	}
+	var tagID int64
+	if err := repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='secret'`).Scan(&tagID); err != nil {
+		t.Fatalf("lookup tag: %v", err)
+	}
+	if _, err := repo.DB().Exec(
+		`INSERT INTO post_tags (post_id, tag_id) VALUES (?,?)`, ids[1], tagID); err != nil {
+		t.Fatalf("tag post: %v", err)
+	}
+
+	// No user is set on the context: this is a signed-out visitor.
+	req := httptest.NewRequest(http.MethodGet, "/posts/x/navigation", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(ids[2], 10))
+
+	if err := handler.GetPostNavigation(c); err != nil {
+		t.Fatalf("GetPostNavigation failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Prev *struct {
+			ID   int64  `json:"id"`
+			Slug string `json:"slug"`
+		} `json:"prev"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Prev == nil {
+		t.Fatal("prev = nil, want anon-a")
+	}
+	if resp.Prev.ID != ids[0] {
+		t.Errorf("prev = %+v, want anon-a (%d) — the hidden post must be stepped over", resp.Prev, ids[0])
+	}
+}
+
 func TestPostHandler_GetPostByID(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {

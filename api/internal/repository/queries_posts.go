@@ -12,6 +12,49 @@ import (
 	"point-api/internal/utils"
 )
 
+// The public visibility rule has two halves: a status filter, and the exclusion
+// of every post carried by a tag with hides_posts = 1 — or by any descendant of
+// such a tag. The second half used to be pasted into each of the fifteen
+// queries that needed it, and GetPostNavigation was written without it, so the
+// prev/next chain offered posts the post-detail endpoint then refused with a
+// 404. It is spelled out here and nowhere else now: as a predicate for queries
+// that test it once, and as a named CTE for queries that read the hidden set
+// from more than one place. The two differ only in the name the recursion
+// recurses into — keep them in step.
+
+// hidesPostsPredicate is the exclusion minus the column it tests, so the two
+// bindings below can share one copy of it. Everything here stays a constant:
+// the queries that embed it are constant SQL, which is both what the SQL
+// injection linter checks for and true — no caller value reaches this text.
+const hidesPostsPredicate = ` NOT IN (
+    SELECT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE hides_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+)`
+
+// hidesPostsExcludeP is the predicate for queries that alias posts as p;
+// hidesPostsExcludeID for those that select from posts unaliased.
+const (
+	hidesPostsExcludeP  = "p.id" + hidesPostsPredicate
+	hidesPostsExcludeID = "id" + hidesPostsPredicate
+)
+
+// hidesPostsCTE is the same rule as a named CTE, for queries that reference the
+// hidden set from more than one place or already open a WITH chain. Prefix it
+// with "WITH RECURSIVE " to start a chain, or join it to an existing one with a
+// comma; read the result back as (SELECT id FROM ehp).
+const hidesPostsCTE = `ehp(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
+)`
+
 // ListPosts returns all posts, with optional filters. Callers that only render
 // list/grid cards leave IncludeContent false so the (potentially large) content
 // body is not read; the derived media_url column covers the card preview. The
@@ -59,17 +102,7 @@ func buildPostsQuery(
 
 	bypassEHP := includeDrafts || includeHidden
 	if !bypassEHP {
-		where = append(where, `p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt
-        WHERE pt.tag_id IN (
-            WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE hides_posts = 1
-                UNION
-                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-            )
-            SELECT id FROM h
-        )
-    )`)
+		where = append(where, hidesPostsExcludeP)
 	}
 
 	if tag != "" {
@@ -580,9 +613,13 @@ func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, 
 	}
 	publishedAt := anchor.String
 
-	statusFilter := "LOWER(status) = 'published'"
+	// Public visibility is a status filter *and* the hides-posts exclusion; the
+	// list queries apply both, so navigation has to as well. Without the second
+	// half the chain steps onto a published-but-tag-hidden post, and the detail
+	// endpoint — which does apply the full rule — answers 404.
+	visibility := "LOWER(status) = 'published' AND " + hidesPostsExcludeID
 	if !publicOnly {
-		statusFilter = "LOWER(status) IN ('published', 'hidden')"
+		visibility = "LOWER(status) IN ('published', 'hidden')"
 	}
 
 	// Optional tag scope: restrict adjacency to posts under the given tag (and
@@ -607,7 +644,7 @@ AND id IN (
 	qPrev := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
 WHERE (%s) AND deleted_at IS NULL AND type != 'page' AND (published_at < ? OR (published_at = ? AND id < ?))%s
-ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter, tagClause)
+ORDER BY published_at DESC, id DESC LIMIT 1`, visibility, tagClause)
 	prevArgs := []interface{}{publishedAt, publishedAt, postID}
 	if tag != "" {
 		prevArgs = append(prevArgs, tag)
@@ -620,7 +657,7 @@ ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter, tagClause)
 	qNext := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
 WHERE (%s) AND deleted_at IS NULL AND type != 'page' AND (published_at > ? OR (published_at = ? AND id > ?))%s
-ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter, tagClause)
+ORDER BY published_at ASC, id ASC LIMIT 1`, visibility, tagClause)
 	nextArgs := []interface{}{publishedAt, publishedAt, postID}
 	if tag != "" {
 		nextArgs = append(nextArgs, tag)
@@ -706,17 +743,7 @@ FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
 AND type != 'page'
-AND id NOT IN (
-    SELECT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (
-        WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE hides_posts = 1
-            UNION
-            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-        )
-        SELECT id FROM h
-    )
-)
+AND ` + hidesPostsExcludeID + `
 ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -761,17 +788,7 @@ SELECT id, slug, title, thumbnail_path, content
 FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
-AND id NOT IN (
-    SELECT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (
-        WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE hides_posts = 1
-            UNION
-            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-        )
-        SELECT id FROM h
-    )
-)
+AND ` + hidesPostsExcludeID + `
 ORDER BY published_at DESC, created_at DESC`
 	} else {
 		q = `
@@ -827,17 +844,7 @@ func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64,
 		} else {
 			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 		}
-		statusClause += ` AND p.id NOT IN (
-			SELECT pt.post_id FROM post_tags pt
-			WHERE pt.tag_id IN (
-				WITH RECURSIVE h(id) AS (
-					SELECT id FROM tags WHERE hides_posts = 1
-					UNION
-					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-				)
-				SELECT id FROM h
-			)
-		)`
+		statusClause += " AND " + hidesPostsExcludeP
 	}
 
 	bypassEHP := includeDrafts || includeHidden
@@ -845,11 +852,7 @@ func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64,
 	// caller-supplied value is a bound argument.
 	//nolint:gosec // G202: constant clause fragments only, values are bound
 	q := `
-WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-)
+WITH RECURSIVE ` + hidesPostsCTE + `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
@@ -921,26 +924,12 @@ func (r *sqliteRepository) CountPostsByTagIDs(ctx context.Context, tagIDs []int6
 		} else {
 			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 		}
-		statusClause += ` AND p.id NOT IN (
-			SELECT pt.post_id FROM post_tags pt
-			WHERE pt.tag_id IN (
-				WITH RECURSIVE h(id) AS (
-					SELECT id FROM tags WHERE hides_posts = 1
-					UNION
-					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-				)
-				SELECT id FROM h
-			)
-		)`
+		statusClause += " AND " + hidesPostsExcludeP
 	}
 
 	bypassEHP := includeDrafts || includeHidden
 	q := `
-WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-)
+WITH RECURSIVE ` + hidesPostsCTE + `
 SELECT COUNT(*) FROM posts p
 WHERE p.deleted_at IS NULL
 AND p.id IN (
@@ -986,17 +975,7 @@ func (r *sqliteRepository) GetPostsByTagIDsInYearRange(ctx context.Context, tagI
 		} else {
 			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 		}
-		statusClause += ` AND p.id NOT IN (
-			SELECT pt.post_id FROM post_tags pt
-			WHERE pt.tag_id IN (
-				WITH RECURSIVE h(id) AS (
-					SELECT id FROM tags WHERE hides_posts = 1
-					UNION
-					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-				)
-				SELECT id FROM h
-			)
-		)`
+		statusClause += " AND " + hidesPostsExcludeP
 	}
 
 	bypassEHP := includeDrafts || includeHidden
@@ -1011,11 +990,7 @@ WITH _ytags AS (
 _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
 ),
-ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-)
+` + hidesPostsCTE + `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
@@ -1082,17 +1057,7 @@ func (r *sqliteRepository) CountPostsByTagIDsInYearRange(ctx context.Context, ta
 		} else {
 			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 		}
-		statusClause += ` AND p.id NOT IN (
-			SELECT pt.post_id FROM post_tags pt
-			WHERE pt.tag_id IN (
-				WITH RECURSIVE h(id) AS (
-					SELECT id FROM tags WHERE hides_posts = 1
-					UNION
-					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-				)
-				SELECT id FROM h
-			)
-		)`
+		statusClause += " AND " + hidesPostsExcludeP
 	}
 
 	bypassEHP := includeDrafts || includeHidden
@@ -1105,11 +1070,7 @@ WITH _ytags AS (
 _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
 ),
-ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-)
+` + hidesPostsCTE + `
 SELECT COUNT(*) FROM posts p
 WHERE p.deleted_at IS NULL
 AND p.id IN (SELECT post_id FROM _yposts)
@@ -1280,11 +1241,7 @@ func hierarchicalPostCountsQuery(yearScoped bool) string {
 	// UNION (not UNION ALL) deduplicates (root_id, tag_id) pairs, preventing
 	// infinite recursion if tag_relationships contains a cycle.
 	q := `
-WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-),
+WITH RECURSIVE ` + hidesPostsCTE + `,
 descendants(root_id, tag_id) AS (
     SELECT id, id FROM tags
     UNION
@@ -1301,17 +1258,7 @@ AND (CASE WHEN ? THEN LOWER(p.status) = 'published'
            ELSE LOWER(p.status) IN ('published', 'hidden', 'scheduled')
       END)
 
-AND (CASE WHEN ? THEN p.id NOT IN (
-    SELECT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (
-        WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE hides_posts = 1
-            UNION
-            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-        )
-        SELECT id FROM h
-    )
-) ELSE 1=1 END)`
+AND (CASE WHEN ? THEN ` + hidesPostsExcludeP + ` ELSE 1=1 END)`
 
 	if yearScoped {
 		q += `
