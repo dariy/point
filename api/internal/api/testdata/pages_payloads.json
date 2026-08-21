@@ -1074,7 +1074,7 @@
         "created_at": "\u003ctimestamp\u003e",
         "excerpt": null,
         "formatter": "",
-        "id": 1,
+        "id": 4,
         "immersive_mode": "",
         "is_featured": false,
         "is_hidden": false,
@@ -1083,30 +1083,17 @@
         "meta_description": null,
         "published_at": "\u003ctimestamp\u003e",
         "scheduled_at": null,
-        "slug": "alpha",
+        "slug": "delta",
         "status": "published",
         "tags": [
           {
             "is_hidden_posts": false,
-            "kind": "year",
-            "name": "2024",
-            "slug": "2024"
-          },
-          {
-            "is_hidden_posts": false,
             "kind": "tag",
-            "name": "Botany",
-            "slug": "botany"
-          },
-          {
-            "inherited": true,
-            "is_hidden_posts": false,
-            "kind": "",
-            "name": "Nature",
-            "slug": "nature"
+            "name": "Quiet",
+            "slug": "quiet"
           }
         ],
-        "title": "Alpha",
+        "title": "Delta",
         "type": "post",
         "updated_at": "\u003ctimestamp\u003e",
         "view_count": 0
@@ -1115,62 +1102,26 @@
         "created_at": "\u003ctimestamp\u003e",
         "excerpt": null,
         "formatter": "",
-        "id": 2,
+        "id": 3,
         "immersive_mode": "",
         "is_featured": false,
         "is_hidden": false,
-        "is_hidden_by_tag": false,
-        "media_url": "/beta.jpg",
+        "is_hidden_by_tag": true,
+        "media_url": null,
         "meta_description": null,
         "published_at": "\u003ctimestamp\u003e",
         "scheduled_at": null,
-        "slug": "beta",
+        "slug": "gamma",
         "status": "published",
         "tags": [
           {
-            "is_hidden_posts": false,
-            "kind": "year",
-            "name": "2024",
-            "slug": "2024"
-          },
-          {
-            "is_hidden_posts": false,
-            "kind": "geo",
-            "latitude": 48.85,
-            "longitude": 2.35,
-            "name": "Paris",
-            "slug": "paris"
-          },
-          {
-            "inherited": true,
-            "is_hidden_posts": false,
-            "kind": "",
-            "name": "Botany",
-            "slug": "botany"
-          },
-          {
-            "inherited": true,
-            "is_hidden_posts": false,
-            "kind": "",
-            "name": "France",
-            "slug": "france"
-          },
-          {
-            "inherited": true,
-            "is_hidden_posts": false,
-            "kind": "",
-            "name": "Nature",
-            "slug": "nature"
-          },
-          {
-            "inherited": true,
-            "is_hidden_posts": false,
-            "kind": "",
-            "name": "Country",
-            "slug": "country"
+            "is_hidden_posts": true,
+            "kind": "tag",
+            "name": "Vault",
+            "slug": "vault"
           }
         ],
-        "title": "Beta",
+        "title": "Gamma",
         "type": "post",
         "updated_at": "\u003ctimestamp\u003e",
         "view_count": 0
@@ -1257,17 +1208,34 @@
         "created_at": "\u003ctimestamp\u003e",
         "excerpt": null,
         "formatter": "",
-        "id": 4,
+        "id": 1,
         "immersive_mode": "",
         "is_featured": false,
         "media_url": null,
         "meta_description": null,
         "published_at": "\u003ctimestamp\u003e",
         "scheduled_at": null,
-        "slug": "delta",
+        "slug": "alpha",
         "status": "published",
-        "tags": [],
-        "title": "Delta",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "tag",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          }
+        ],
+        "title": "Alpha",
         "type": "post",
         "updated_at": "\u003ctimestamp\u003e",
         "view_count": 0
@@ -1297,34 +1265,17 @@
         "created_at": "\u003ctimestamp\u003e",
         "excerpt": null,
         "formatter": "",
-        "id": 1,
+        "id": 4,
         "immersive_mode": "",
         "is_featured": false,
         "media_url": null,
         "meta_description": null,
         "published_at": "\u003ctimestamp\u003e",
         "scheduled_at": null,
-        "slug": "alpha",
+        "slug": "delta",
         "status": "published",
-        "tags": [
-          {
-            "kind": "year",
-            "name": "2024",
-            "slug": "2024"
-          },
-          {
-            "kind": "tag",
-            "name": "Botany",
-            "slug": "botany"
-          },
-          {
-            "inherited": true,
-            "kind": "",
-            "name": "Nature",
-            "slug": "nature"
-          }
-        ],
-        "title": "Alpha",
+        "tags": [],
+        "title": "Delta",
         "type": "post",
         "updated_at": "\u003ctimestamp\u003e",
         "view_count": 0
@@ -1454,34 +1405,17 @@
         "created_at": "\u003ctimestamp\u003e",
         "excerpt": null,
         "formatter": "",
-        "id": 1,
+        "id": 4,
         "immersive_mode": "",
         "is_featured": false,
         "media_url": null,
         "meta_description": null,
         "published_at": "\u003ctimestamp\u003e",
         "scheduled_at": null,
-        "slug": "alpha",
+        "slug": "delta",
         "status": "published",
-        "tags": [
-          {
-            "kind": "year",
-            "name": "2024",
-            "slug": "2024"
-          },
-          {
-            "kind": "tag",
-            "name": "Botany",
-            "slug": "botany"
-          },
-          {
-            "inherited": true,
-            "kind": "",
-            "name": "Nature",
-            "slug": "nature"
-          }
-        ],
-        "title": "Alpha",
+        "tags": [],
+        "title": "Delta",
         "type": "post",
         "updated_at": "\u003ctimestamp\u003e",
         "view_count": 0
@@ -1667,42 +1601,6 @@
         "created_at": "\u003ctimestamp\u003e",
         "excerpt": null,
         "formatter": "",
-        "id": 1,
-        "immersive_mode": "",
-        "is_featured": false,
-        "media_url": null,
-        "meta_description": null,
-        "published_at": "\u003ctimestamp\u003e",
-        "scheduled_at": null,
-        "slug": "alpha",
-        "status": "published",
-        "tags": [
-          {
-            "kind": "year",
-            "name": "2024",
-            "slug": "2024"
-          },
-          {
-            "kind": "tag",
-            "name": "Botany",
-            "slug": "botany"
-          },
-          {
-            "inherited": true,
-            "kind": "",
-            "name": "Nature",
-            "slug": "nature"
-          }
-        ],
-        "title": "Alpha",
-        "type": "post",
-        "updated_at": "\u003ctimestamp\u003e",
-        "view_count": 0
-      },
-      {
-        "created_at": "\u003ctimestamp\u003e",
-        "excerpt": null,
-        "formatter": "",
         "id": 2,
         "immersive_mode": "",
         "is_featured": false,
@@ -1751,6 +1649,42 @@
           }
         ],
         "title": "Beta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      },
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 1,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "alpha",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "tag",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          }
+        ],
+        "title": "Alpha",
         "type": "post",
         "updated_at": "\u003ctimestamp\u003e",
         "view_count": 0

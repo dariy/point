@@ -6,7 +6,9 @@
 // safe to call on each boot.
 //
 // Run and Pending share one ordered list, steps(), so the set of migrations a
-// build declares and the set it reports as outstanding can never drift.
+// build declares and the set it reports as outstanding can never drift. Run
+// then ends with one thing steps() does not declare — a statistics refresh,
+// which is maintenance and deliberately not one-shot.
 package migrations
 
 import (
@@ -317,6 +319,53 @@ var schema = []struct{ name, sql string }{
 				'thumbnail_height'
 			)`,
 	},
+	{
+		// Widen the tag_id index to cover post_id. Every list query reads
+		// post_tags by tag_id and wants only post_id back — the tag filter,
+		// and the hides_posts exclusion that runs on every public page — so
+		// the narrow index cost one table lookup per matching row.
+		//
+		// Measured over the three index changes below together, at 20k posts /
+		// 82k post_tags with a hides_posts tag on a tenth of them: a tag page
+		// 2.97ms -> 2.33ms, and the feed 28.8ms -> 2.06ms. The feed's order of
+		// magnitude is the deleted_at index two entries down, not this one.
+		"create_post_tags_tag_id_post_id_index",
+		`CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id_post_id ON post_tags(tag_id, post_id)`,
+	},
+	{
+		// ...which makes the narrow one dead weight: same leading column, so it
+		// serves nothing the composite does not, and every post_tags write pays
+		// for it. Ordered after the CREATE above so no boot is left with
+		// neither.
+		"drop_post_tags_tag_id_index",
+		`DROP INDEX IF EXISTS idx_post_tags_tag_id`,
+	},
+	{
+		// The feed's ORDER BY had no index behind it, so every page built a
+		// temp B-tree. Partial on deleted_at because that is the filter the
+		// feed always carries, and all three sort columns because whatever the
+		// ORDER BY names and the index does not is a temp B-tree again — id
+		// included, spelled out DESC, since the rowid an index carries
+		// implicitly is ascending.
+		"create_posts_live_index",
+		`CREATE INDEX IF NOT EXISTS idx_posts_live ON posts(published_at DESC, created_at DESC, id DESC) WHERE deleted_at IS NULL`,
+	},
+	{
+		// ...which the planner will not use while a whole-column index on
+		// deleted_at exists. deleted_at is NULL for all but a handful of rows,
+		// so `deleted_at IS NULL` looks to SQLite like a seek it can satisfy —
+		// and it takes it, reading nearly every post through that index and
+		// then sorting the feed in a temp B-tree. Only the trash view wants
+		// deleted_at, and only the rows that have one, so the replacement is
+		// partial: too small to tempt the planner into it for the feed, and
+		// still the index ListTrashedPosts sorts on.
+		"create_posts_trashed_index",
+		`CREATE INDEX IF NOT EXISTS idx_posts_trashed ON posts(deleted_at DESC) WHERE deleted_at IS NOT NULL`,
+	},
+	{
+		"drop_posts_deleted_at_index",
+		`DROP INDEX IF EXISTS idx_posts_deleted_at`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in
@@ -414,6 +463,9 @@ func Pending(ctx context.Context, repo repository.Repository) ([]string, error) 
 // rather than only the first; the errors are then joined and returned together.
 // That is also why the caller restores a snapshot rather than rolling back: by
 // the time Run returns, several steps may have written.
+//
+// A clean pass ends by refreshing the query planner's statistics — see
+// refreshQueryPlannerStats, which is maintenance rather than a migration.
 func Run(ctx context.Context, repo repository.Repository) error {
 	var errs []error
 	for _, s := range steps() {
@@ -422,5 +474,45 @@ func Run(ctx context.Context, repo repository.Repository) error {
 			errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
 		}
 	}
-	return errors.Join(errs...)
+	if len(errs) > 0 {
+		// The caller is about to restore a snapshot over this database; there
+		// is no point analysing the copy that loses.
+		return errors.Join(errs...)
+	}
+	if err := refreshQueryPlannerStats(ctx, repo); err != nil {
+		// Stale statistics cost speed, not correctness, and Run's error is
+		// fatal to the boot — so this one is reported and not returned.
+		slog.Warn("could not refresh query planner statistics", "error", err)
+	}
+	return nil
+}
+
+// refreshQueryPlannerStats brings sqlite_stat1 up to date so the planner has
+// something better than its default guesses to choose the indexes above with.
+// It is maintenance rather than migration — the only thing in Run that steps()
+// does not declare — because it is not a one-shot: statistics go stale as a
+// blog grows, so it has to be free to run on every boot.
+//
+// PRAGMA optimize is the conditional form of ANALYZE, and each half of that
+// matters here. It does nothing on the empty database a fresh install migrates,
+// where a bare ANALYZE would record "no rows" and leave the planner believing
+// that for the life of the install; and it does run the first time it meets a
+// database that has content or an index it has not seen, which is what makes
+// the indexes above take effect without an operator step. analysis_limit bounds
+// how much of each index it reads, so a large blog does not pay an unbounded
+// scan at boot. Both are per-connection settings, hence the single connection.
+func refreshQueryPlannerStats(ctx context.Context, repo repository.Repository) error {
+	conn, err := repo.DB().Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("open connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA analysis_limit = 400`); err != nil {
+		return fmt.Errorf("set analysis_limit: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `PRAGMA optimize`); err != nil {
+		return fmt.Errorf("optimize: %w", err)
+	}
+	return nil
 }
