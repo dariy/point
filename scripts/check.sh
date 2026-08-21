@@ -81,6 +81,11 @@ run_step "Go vet" bash -c "
     go vet ./...
 "
 
+# ── SQL layer ────────────────────────────────────────────────────────────────
+# Cheap and structural, so it runs before the test suite: a shadowed query or a
+# stale generated file makes every result below it less meaningful.
+run_step "SQL layer" "$SCRIPT_DIR/check-sql-layer.sh"
+
 # ── Go tests ──────────────────────────────────────────────────────────────────
 # The coverage summary is deliberately after `set -e`: a failed run must not be
 # followed by a reassuring coverage line, and the failure must reach run_step.

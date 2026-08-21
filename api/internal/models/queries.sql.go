@@ -65,7 +65,7 @@ SET status = 'published',
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
 AND deleted_at IS NULL
-RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
+RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, media_url, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
 `
 
 func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error) {
@@ -94,6 +94,7 @@ func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error)
 			&i.UpdatedAt,
 			&i.AuthorID,
 			&i.ThumbnailPath,
+			&i.MediaURL,
 			&i.MetaDescription,
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
@@ -157,57 +158,6 @@ type CountMediaParams struct {
 
 func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countMedia, arg.TypeFilter, arg.FileType)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countPosts = `-- name: CountPosts :one
-WITH RECURSIVE h(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-)
-SELECT COUNT(*) FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
-    AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ?4 THEN 1=1
-        WHEN ?5 THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
-    END)
-
-    AND (CASE
-        WHEN ?4 THEN 1=1
-        WHEN ?5 THEN 1=1
-        ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (SELECT id FROM h)
-        )
-    END)
-`
-
-type CountPostsParams struct {
-	StatusFilter   interface{} `json:"status_filter"`
-	Status         string      `json:"status"`
-	FeaturedFilter interface{} `json:"featured_filter"`
-	IncludeDrafts  interface{} `json:"include_drafts"`
-	IncludeHidden  interface{} `json:"include_hidden"`
-	// IncludePages, when true, keeps type=page rows in results (admin views).
-	IncludePages bool `json:"include_pages"`
-}
-
-func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPosts,
-		arg.StatusFilter,
-		arg.Status,
-		arg.FeaturedFilter,
-		arg.IncludeDrafts,
-		arg.IncludeHidden,
-	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -376,7 +326,7 @@ INSERT INTO posts (
 ) VALUES (
     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), ?12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?13, ?14, ?15
 )
-RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
+RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, media_url, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
 `
 
 type CreatePostParams struct {
@@ -433,6 +383,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.UpdatedAt,
 		&i.AuthorID,
 		&i.ThumbnailPath,
+		&i.MediaURL,
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
@@ -649,21 +600,6 @@ func (q *Queries) DeletePostTagsByTag(ctx context.Context, tagID int64) error {
 	return err
 }
 
-const deleteSession = `-- name: DeleteSession :exec
-DELETE FROM sessions
-WHERE id = ? AND user_id = ?
-`
-
-type DeleteSessionParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
-}
-
-func (q *Queries) DeleteSession(ctx context.Context, arg DeleteSessionParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSession, arg.ID, arg.UserID)
-	return err
-}
-
 const deleteSetting = `-- name: DeleteSetting :exec
 DELETE FROM blog_settings
 WHERE key = ?
@@ -871,7 +807,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 
 const getPost = `-- name: GetPost :one
 
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
 FROM posts p
 WHERE p.id = ? AND p.deleted_at IS NULL LIMIT 1
 `
@@ -897,6 +833,7 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.UpdatedAt,
 		&i.AuthorID,
 		&i.ThumbnailPath,
+		&i.MediaURL,
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
@@ -936,7 +873,7 @@ func (q *Queries) GetPostAnalytics(ctx context.Context) (GetPostAnalyticsRow, er
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
 FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1
 `
@@ -961,6 +898,7 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.UpdatedAt,
 		&i.AuthorID,
 		&i.ThumbnailPath,
+		&i.MediaURL,
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
@@ -983,7 +921,7 @@ WITH RECURSIVE h(id) AS (
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
@@ -1042,6 +980,7 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 			&i.UpdatedAt,
 			&i.AuthorID,
 			&i.ThumbnailPath,
+			&i.MediaURL,
 			&i.MetaDescription,
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
@@ -1561,215 +1500,6 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 	return items, nil
 }
 
-const listPosts = `-- name: ListPosts :many
-WITH RECURSIVE h(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-)
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
-FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
-    AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ?4 THEN 1=1
-        WHEN ?5 THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
-    END)
-
-    AND (CASE
-        WHEN ?4 THEN 1=1
-        WHEN ?5 THEN 1=1
-        ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (SELECT id FROM h)
-        )
-    END)
-ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ?7 OFFSET ?6
-`
-
-type ListPostsParams struct {
-	StatusFilter   interface{} `json:"status_filter"`
-	Status         string      `json:"status"`
-	FeaturedFilter interface{} `json:"featured_filter"`
-	IncludeDrafts  interface{} `json:"include_drafts"`
-	IncludeHidden  interface{} `json:"include_hidden"`
-	Offset         int64       `json:"offset"`
-	Limit          int64       `json:"limit"`
-	// IncludePages, when true, keeps type=page rows in results (admin views).
-	// Consumed by the hand-written sqliteRepository.ListPosts override.
-	IncludePages bool `json:"include_pages"`
-	// IncludeContent, when true, selects the full content body. List/grid views
-	// leave it false (they use media_url); the offline snapshot sets it true.
-	// Consumed by the hand-written sqliteRepository.ListPosts override.
-	IncludeContent bool `json:"include_content"`
-}
-
-func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, listPosts,
-		arg.StatusFilter,
-		arg.Status,
-		arg.FeaturedFilter,
-		arg.IncludeDrafts,
-		arg.IncludeHidden,
-		arg.Offset,
-		arg.Limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Post
-	for rows.Next() {
-		var i Post
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Slug,
-			&i.Content,
-			&i.Excerpt,
-			&i.Formatter,
-			&i.Status,
-			&i.Type,
-			&i.IsFeatured,
-			&i.ViewCount,
-			&i.PublishedAt,
-			&i.ScheduledAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.AuthorID,
-			&i.ThumbnailPath,
-			&i.MetaDescription,
-			&i.PreviewToken,
-			&i.PreviewExpiresAt,
-			&i.DeletedAt,
-			&i.Css,
-			&i.ImmersiveMode,
-			&i.InstagramShare,
-			&i.InstagramStatus,
-			&i.InstagramMediaID,
-			&i.InstagramPublishedAt,
-			&i.InstagramError,
-			&i.InstagramID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPostsByViews = `-- name: ListPostsByViews :many
-WITH RECURSIVE h(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-)
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error, p.instagram_id
-FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
-    AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ?4 THEN 1=1
-        WHEN ?5 THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
-    END)
-
-    AND (CASE
-        WHEN ?4 THEN 1=1
-        WHEN ?5 THEN 1=1
-        ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (SELECT id FROM h)
-        )
-    END)
-ORDER BY p.view_count DESC, p.published_at DESC
-LIMIT ?7 OFFSET ?6
-`
-
-type ListPostsByViewsParams struct {
-	StatusFilter   interface{} `json:"status_filter"`
-	Status         string      `json:"status"`
-	FeaturedFilter interface{} `json:"featured_filter"`
-	IncludeDrafts  interface{} `json:"include_drafts"`
-	IncludeHidden  interface{} `json:"include_hidden"`
-	Offset         int64       `json:"offset"`
-	Limit          int64       `json:"limit"`
-}
-
-func (q *Queries) ListPostsByViews(ctx context.Context, arg ListPostsByViewsParams) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, listPostsByViews,
-		arg.StatusFilter,
-		arg.Status,
-		arg.FeaturedFilter,
-		arg.IncludeDrafts,
-		arg.IncludeHidden,
-		arg.Offset,
-		arg.Limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Post
-	for rows.Next() {
-		var i Post
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Slug,
-			&i.Content,
-			&i.Excerpt,
-			&i.Formatter,
-			&i.Status,
-			&i.Type,
-			&i.IsFeatured,
-			&i.ViewCount,
-			&i.PublishedAt,
-			&i.ScheduledAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.AuthorID,
-			&i.ThumbnailPath,
-			&i.MetaDescription,
-			&i.PreviewToken,
-			&i.PreviewExpiresAt,
-			&i.DeletedAt,
-			&i.Css,
-			&i.ImmersiveMode,
-			&i.InstagramShare,
-			&i.InstagramStatus,
-			&i.InstagramMediaID,
-			&i.InstagramPublishedAt,
-			&i.InstagramError,
-			&i.InstagramID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSettings = `-- name: ListSettings :many
 SELECT "key", value, value_type, updated_at FROM blog_settings
 `
@@ -1848,7 +1578,7 @@ func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) 
 }
 
 const listTrashedPosts = `-- name: ListTrashedPosts :many
-SELECT id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id FROM posts
+SELECT id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, media_url, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id FROM posts
 WHERE deleted_at IS NOT NULL
 ORDER BY deleted_at DESC
 LIMIT ? OFFSET ?
@@ -1885,6 +1615,7 @@ func (q *Queries) ListTrashedPosts(ctx context.Context, arg ListTrashedPostsPara
 			&i.UpdatedAt,
 			&i.AuthorID,
 			&i.ThumbnailPath,
+			&i.MediaURL,
 			&i.MetaDescription,
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
@@ -1960,7 +1691,7 @@ const publishPost = `-- name: PublishPost :one
 UPDATE posts
 SET status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
+RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, media_url, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
 `
 
 func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
@@ -1983,6 +1714,7 @@ func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.UpdatedAt,
 		&i.AuthorID,
 		&i.ThumbnailPath,
+		&i.MediaURL,
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
@@ -2263,7 +1995,7 @@ SET title = ?1, slug = ?2, content = ?3, excerpt = ?4, formatter = ?5, status = 
     instagram_share = ?14,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?15 AND author_id = ?16
-RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
+RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, media_url, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
 `
 
 type UpdatePostParams struct {
@@ -2322,6 +2054,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.UpdatedAt,
 		&i.AuthorID,
 		&i.ThumbnailPath,
+		&i.MediaURL,
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
@@ -2483,6 +2216,22 @@ func (q *Queries) UpdateTagPostCount(ctx context.Context, id int64) error {
 	return err
 }
 
+const updateUserEmail = `-- name: UpdateUserEmail :exec
+UPDATE users
+SET email = ?
+WHERE id = ?
+`
+
+type UpdateUserEmailParams struct {
+	Email string `json:"email"`
+	ID    int64  `json:"id"`
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserEmail, arg.Email, arg.ID)
+	return err
+}
+
 const updateUserLogin = `-- name: UpdateUserLogin :exec
 UPDATE users
 SET last_login = CURRENT_TIMESTAMP
@@ -2510,22 +2259,6 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 	return err
 }
 
-const updateUserEmail = `-- name: UpdateUserEmail :exec
-UPDATE users
-SET email = ?
-WHERE id = ?
-`
-
-type UpdateUserEmailParams struct {
-	Email string `json:"email"`
-	ID    int64  `json:"id"`
-}
-
-func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserEmail, arg.Email, arg.ID)
-	return err
-}
-
 const upsertSecret = `-- name: UpsertSecret :exec
 INSERT INTO blog_secrets (key, value, updated_at)
 VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -2546,7 +2279,7 @@ const withdrawPost = `-- name: WithdrawPost :one
 UPDATE posts
 SET status = 'draft', updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
+RETURNING id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, media_url, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error, instagram_id
 `
 
 func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
@@ -2569,6 +2302,7 @@ func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
 		&i.UpdatedAt,
 		&i.AuthorID,
 		&i.ThumbnailPath,
+		&i.MediaURL,
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,

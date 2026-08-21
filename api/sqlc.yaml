@@ -11,3 +11,9 @@ sql:
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
+        # sqlc's initialism handling turns media_url into MediaUrl. The column was
+        # added after the generated file was first committed and the rename was
+        # done by hand there, so every `sqlc generate` since has tried to undo it.
+        # Declaring it here is what makes regeneration a no-op.
+        rename:
+          media_url: "MediaURL"

@@ -596,6 +596,44 @@ func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 	}
 }
 
+// TestRepository_ListPostsByViews covers the popular-posts ordering. The only
+// test this query ever had ran against the sqlc-generated ListPostsByViews,
+// which was shadowed by the method below and so never executed.
+func TestRepository_ListPostsByViews(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, view_count, published_at) VALUES
+		('Quiet','quiet','b',1,'published',10,datetime('now')),
+		('Popular','popular','b',1,'published',20,datetime('now'))`)
+
+	posts, err := repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
+		StatusFilter: false, FeaturedFilter: false, IncludeDrafts: true, Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListPostsByViews failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("expected 2 posts, got %d", len(posts))
+	}
+	if posts[0].Slug != "popular" {
+		t.Errorf("expected the most-viewed post first, got %q", posts[0].Slug)
+	}
+
+	// The status filter has to reach the SQL, not just the Go struct.
+	posts, err = repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
+		StatusFilter: true, Status: "draft", FeaturedFilter: false, IncludeDrafts: true, Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListPostsByViews with status filter failed: %v", err)
+	}
+	if len(posts) != 0 {
+		t.Errorf("expected no drafts, got %d", len(posts))
+	}
+}
+
 func TestRepository_PostsInYearRange(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
@@ -632,4 +670,3 @@ func TestRepository_PostsInYearRange(t *testing.T) {
 		t.Errorf("CountPostsByTagIDsInYearRange failed: %v, count=%d", err, count2)
 	}
 }
-

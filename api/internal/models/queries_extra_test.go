@@ -53,7 +53,6 @@ func TestQueries_Extra(t *testing.T) {
 	_, _ = q.GetSessionByToken(ctx, "t")
 	_, _ = q.GetUserSessions(ctx, u.ID)
 	_ = q.UpdateSessionActivity(ctx, s.ID)
-	_ = q.DeleteSession(ctx, DeleteSessionParams{ID: s.ID, UserID: u.ID})
 	_ = q.DeleteUserSessions(ctx, DeleteUserSessionsParams{UserID: u.ID, ID: 999})
 	_ = q.DeleteExpiredSessions(ctx)
 
@@ -84,8 +83,6 @@ func TestQueries_Extra(t *testing.T) {
 	p, _ := q.CreatePost(ctx, CreatePostParams{Title: "P", Slug: "p", AuthorID: u.ID, Status: "draft"})
 	_, _ = q.GetPost(ctx, p.ID)
 	_, _ = q.GetPostBySlug(ctx, "p")
-	_, _ = q.ListPosts(ctx, ListPostsParams{})
-	_, _ = q.CountPosts(ctx, CountPostsParams{})
 	_ = q.AddTagToPost(ctx, AddTagToPostParams{PostID: p.ID, TagID: tag.ID})
 	_, _ = q.GetTagsForPost(ctx, p.ID)
 	_, _ = q.GetPostsByTag(ctx, GetPostsByTagParams{TagID: tag.ID})
@@ -178,26 +175,11 @@ func TestQueryScanBodies(t *testing.T) {
 		t.Error("expected at least 1 parent in scan")
 	}
 
-	// Seed post for ListPosts and GetTagsForPost scan bodies
+	// Seed post for the GetTagsForPost scan body
 	p, _ := q.CreatePost(ctx, CreatePostParams{
 		Title: "ScanPost", Slug: "scan-post", AuthorID: u.ID, Status: "published",
 	})
 	_ = q.AddTagToPost(ctx, AddTagToPostParams{PostID: p.ID, TagID: parent.ID})
-
-	posts, err := q.ListPosts(ctx, ListPostsParams{
-		StatusFilter:   false,
-		IncludeDrafts:  true,
-		IncludeHidden:  false,
-		FeaturedFilter: false,
-		Limit:          100,
-		Offset:         0,
-	})
-	if err != nil {
-		t.Fatalf("ListPosts (scan) failed: %v", err)
-	}
-	if len(posts) == 0 {
-		t.Error("expected at least 1 post in scan")
-	}
 
 	tagsForPost, err := q.GetTagsForPost(ctx, p.ID)
 	if err != nil {
@@ -309,9 +291,6 @@ func TestScanFunctionErrors(t *testing.T) {
 	}
 	if _, err := q.ListMedia(ctx, ListMediaParams{}); err == nil {
 		t.Error("ListMedia: expected error on closed db")
-	}
-	if _, err := q.ListPosts(ctx, ListPostsParams{}); err == nil {
-		t.Error("ListPosts: expected error on closed db")
 	}
 	if _, err := q.ListSettings(ctx); err == nil {
 		t.Error("ListSettings: expected error on closed db")

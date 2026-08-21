@@ -21,6 +21,11 @@ type Repository interface {
 	DB() *sql.DB
 
 	// Auth / WebAuthn
+	//
+	// DeleteSession is hand-written (it reports "not found" rather than silently
+	// deleting nothing), so it is declared here rather than inherited from
+	// models.Querier.
+	DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error
 	DeleteSecret(ctx context.Context, key string) error
 	CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32, backupEligible, backupState bool) (*WebAuthnCredential, error)
 	GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error)
@@ -68,6 +73,15 @@ type Repository interface {
 	MigrateTagFlagsFromSystemTags(ctx context.Context) error
 
 	// Posts
+	//
+	// ListPosts, ListPostsByViews and CountPosts are declared here rather than
+	// reaching callers through the embedded models.Querier: buildPostsQuery
+	// composes their WHERE clause from filters sqlc cannot express, so this layer
+	// owns the SQL outright. They were sqlc queries once, and the hand-written
+	// methods below shadowed the generated ones without anything saying so.
+	ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error)
+	ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error)
+	CountPosts(ctx context.Context, arg models.CountPostsParams) (int64, error)
 	ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
 	CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
 	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)

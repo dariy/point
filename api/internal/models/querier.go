@@ -17,7 +17,6 @@ type Querier interface {
 	ClearPostTags(ctx context.Context, postID int64) error
 	ClearTagRelationships(ctx context.Context, arg ClearTagRelationshipsParams) error
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
-	CountPosts(ctx context.Context, arg CountPostsParams) (int64, error)
 	CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error)
 	CountTrashedPosts(ctx context.Context) (int64, error)
 	// API KEYS
@@ -32,7 +31,6 @@ type Querier interface {
 	DeleteMedia(ctx context.Context, id int64) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
 	DeletePostTagsByTag(ctx context.Context, tagID int64) error
-	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTag(ctx context.Context, id int64) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
@@ -67,8 +65,6 @@ type Querier interface {
 	IncrementPostViewCount(ctx context.Context, id int64) error
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
-	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
-	ListPostsByViews(ctx context.Context, arg ListPostsByViewsParams) ([]Post, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
 	ListTrashedPosts(ctx context.Context, arg ListTrashedPostsParams) ([]Post, error)
