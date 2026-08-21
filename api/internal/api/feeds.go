@@ -10,6 +10,7 @@ import (
 
 	"point-api/internal/repository"
 	"point-api/internal/services"
+	"point-api/internal/services/pageview"
 
 	"github.com/labstack/echo/v4"
 )
@@ -68,10 +69,10 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	// site per instance, unchanged here.
 	render := func(ctx context.Context) ([]byte, error) {
 		settings, _ := h.settingsService.GetAllSettings(ctx)
-		blogTitle := getSettingOr(settings, "blog_title", "Blog")
-		blogDesc := getSettingOr(settings, "blog_subtitle", "")
-		authorName := getSettingOr(settings, "author_name", "Author")
-		language := getSettingOr(settings, "default_language", "en")
+		blogTitle := pageview.SettingOr(settings, "blog_title", "Blog")
+		blogDesc := pageview.SettingOr(settings, "blog_subtitle", "")
+		authorName := pageview.SettingOr(settings, "author_name", "Author")
+		language := pageview.SettingOr(settings, "default_language", "en")
 
 		posts, err := h.repo.GetPublishedPostsForFeed(ctx, 20)
 		if err != nil {
@@ -154,7 +155,7 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 		}
 
 		settings, _ := h.settingsService.GetAllSettings(ctx)
-		minPostsStr := getSettingOr(settings, "min_tag_posts_to_show", "0")
+		minPostsStr := pageview.SettingOr(settings, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
 		snap, _ := h.tagService.GetTagSnapshot(ctx)
 		var excludeIDs map[int64]bool
@@ -201,11 +202,4 @@ func (h *FeedsHandler) RobotsTxt(c echo.Context) error {
 	base := baseURL(c)
 	content := fmt.Sprintf("User-agent: *\nAllow: /\nDisallow: /light/\nDisallow: /api/\nSitemap: %s/sitemap.xml\n", base)
 	return c.String(http.StatusOK, content)
-}
-
-func getSettingOr(settings map[string]string, key, fallback string) string {
-	if v, ok := settings[key]; ok && v != "" {
-		return v
-	}
-	return fallback
 }

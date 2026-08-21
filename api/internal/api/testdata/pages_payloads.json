@@ -1,0 +1,2454 @@
+{
+  "cloud/owner": {
+    "hierarchyEdges": [
+      {
+        "child": 5,
+        "parent": 4
+      }
+    ],
+    "membershipEdges": [
+      {
+        "post": 2,
+        "tag": 6
+      },
+      {
+        "post": 2,
+        "tag": 5
+      },
+      {
+        "post": 6,
+        "tag": 4
+      }
+    ],
+    "posts": [
+      {
+        "id": 2,
+        "media_url": "/beta.jpg?s=256\u0026v=1",
+        "slug": "beta",
+        "title": "Beta"
+      },
+      {
+        "id": 6,
+        "slug": "zeta",
+        "status": "scheduled",
+        "title": "Zeta"
+      }
+    ],
+    "tags": [
+      {
+        "id": 6,
+        "kind": "year",
+        "name": "2024",
+        "slug": "2024"
+      },
+      {
+        "id": 5,
+        "kind": "geo",
+        "latitude": 48.85,
+        "longitude": 2.35,
+        "name": "Paris",
+        "slug": "paris"
+      }
+    ]
+  },
+  "cloud/public": {
+    "hierarchyEdges": [
+      {
+        "child": 5,
+        "parent": 4
+      }
+    ],
+    "membershipEdges": [
+      {
+        "post": 2,
+        "tag": 6
+      },
+      {
+        "post": 2,
+        "tag": 5
+      }
+    ],
+    "posts": [
+      {
+        "id": 2,
+        "media_url": "/beta.jpg?s=256\u0026v=1",
+        "slug": "beta",
+        "title": "Beta"
+      }
+    ],
+    "tags": [
+      {
+        "id": 6,
+        "kind": "year",
+        "name": "2024",
+        "slug": "2024"
+      },
+      {
+        "id": 5,
+        "kind": "geo",
+        "latitude": 48.85,
+        "longitude": 2.35,
+        "name": "Paris",
+        "slug": "paris"
+      }
+    ]
+  },
+  "directory/owner": {
+    "tags": [
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 6,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "is_hidden": false,
+        "kind": "year",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "2024",
+        "name_path": "2024",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "2024"
+      },
+      {
+        "children": [
+          {
+            "id": 5,
+            "name": "Paris",
+            "name_path": "Paris",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "paris"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 2,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "is_hidden": false,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Botany",
+        "name_path": "Botany",
+        "nav_order": null,
+        "parents": [
+          {
+            "id": 1,
+            "name": "Nature",
+            "name_path": "Nature",
+            "nav_order": null,
+            "post_count": 0,
+            "slug": "nature"
+          }
+        ],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "botany"
+      },
+      {
+        "children": [
+          {
+            "id": 4,
+            "name": "France",
+            "name_path": "France",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "france"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 3,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": true,
+        "is_hidden": false,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Country",
+        "name_path": "Country",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "country"
+      },
+      {
+        "children": [
+          {
+            "id": 5,
+            "name": "Paris",
+            "name_path": "Paris",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "paris"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 4,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": true,
+        "is_hidden": false,
+        "kind": "geo",
+        "latitude": 46.6,
+        "locations": [
+          {
+            "id": 4,
+            "latitude": 46.6,
+            "longitude": 2.2
+          }
+        ],
+        "longitude": 2.2,
+        "name": "France",
+        "name_path": "France",
+        "nav_order": null,
+        "parents": [
+          {
+            "id": 3,
+            "name": "Country",
+            "name_path": "Country",
+            "nav_order": null,
+            "post_count": 0,
+            "slug": "country"
+          }
+        ],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "france"
+      },
+      {
+        "children": [
+          {
+            "id": 2,
+            "name": "Botany",
+            "name_path": "Botany",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "botany"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 1,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": true,
+        "is_hidden": false,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Nature",
+        "name_path": "Nature",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "nature"
+      },
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 5,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "is_hidden": false,
+        "kind": "geo",
+        "latitude": 48.85,
+        "locations": [
+          {
+            "id": 5,
+            "latitude": 48.85,
+            "longitude": 2.35
+          }
+        ],
+        "longitude": 2.35,
+        "name": "Paris",
+        "name_path": "Paris",
+        "nav_order": null,
+        "parents": [
+          {
+            "id": 2,
+            "name": "Botany",
+            "name_path": "Botany",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "botany"
+          },
+          {
+            "id": 4,
+            "name": "France",
+            "name_path": "France",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "france"
+          }
+        ],
+        "post_count": 1,
+        "show_related": false,
+        "siblings": [],
+        "slug": "paris"
+      },
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": true,
+        "effective_hides_posts": false,
+        "hidden": true,
+        "hidden_via": 7,
+        "hides_posts": false,
+        "id": 7,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "is_hidden": true,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Quiet",
+        "name_path": "Quiet",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 1,
+        "show_related": false,
+        "siblings": [],
+        "slug": "quiet"
+      },
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": true,
+        "hidden": false,
+        "hides_posts": true,
+        "id": 8,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "is_hidden": false,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Vault",
+        "name_path": "Vault",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 1,
+        "show_related": false,
+        "siblings": [],
+        "slug": "vault"
+      }
+    ],
+    "total": 8
+  },
+  "directory/public": {
+    "tags": [
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 6,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "kind": "year",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "2024",
+        "name_path": "2024",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "2024"
+      },
+      {
+        "children": [
+          {
+            "id": 5,
+            "name": "Paris",
+            "name_path": "Paris",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "paris"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 2,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Botany",
+        "name_path": "Botany",
+        "nav_order": null,
+        "parents": [
+          {
+            "id": 1,
+            "name": "Nature",
+            "name_path": "Nature",
+            "nav_order": null,
+            "post_count": 0,
+            "slug": "nature"
+          }
+        ],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "botany"
+      },
+      {
+        "children": [
+          {
+            "id": 4,
+            "name": "France",
+            "name_path": "France",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "france"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 3,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": true,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Country",
+        "name_path": "Country",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 1,
+        "show_related": false,
+        "siblings": [],
+        "slug": "country"
+      },
+      {
+        "children": [
+          {
+            "id": 5,
+            "name": "Paris",
+            "name_path": "Paris",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "paris"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 4,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": true,
+        "kind": "geo",
+        "latitude": 46.6,
+        "locations": [
+          {
+            "id": 4,
+            "latitude": 46.6,
+            "longitude": 2.2
+          }
+        ],
+        "longitude": 2.2,
+        "name": "France",
+        "name_path": "France",
+        "nav_order": null,
+        "parents": [
+          {
+            "id": 3,
+            "name": "Country",
+            "name_path": "Country",
+            "nav_order": null,
+            "post_count": 0,
+            "slug": "country"
+          }
+        ],
+        "post_count": 1,
+        "show_related": false,
+        "siblings": [],
+        "slug": "france"
+      },
+      {
+        "children": [
+          {
+            "id": 2,
+            "name": "Botany",
+            "name_path": "Botany",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "botany"
+          }
+        ],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 1,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": true,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Nature",
+        "name_path": "Nature",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 2,
+        "show_related": false,
+        "siblings": [],
+        "slug": "nature"
+      },
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": false,
+        "hidden": false,
+        "hides_posts": false,
+        "id": 5,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "kind": "geo",
+        "latitude": 48.85,
+        "locations": [
+          {
+            "id": 5,
+            "latitude": 48.85,
+            "longitude": 2.35
+          }
+        ],
+        "longitude": 2.35,
+        "name": "Paris",
+        "name_path": "Paris",
+        "nav_order": null,
+        "parents": [
+          {
+            "id": 2,
+            "name": "Botany",
+            "name_path": "Botany",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "botany"
+          },
+          {
+            "id": 4,
+            "name": "France",
+            "name_path": "France",
+            "nav_order": null,
+            "post_count": 1,
+            "slug": "france"
+          }
+        ],
+        "post_count": 1,
+        "show_related": false,
+        "siblings": [],
+        "slug": "paris"
+      },
+      {
+        "children": [],
+        "created_at": "\u003ctimestamp\u003e",
+        "description": null,
+        "effective_hidden": false,
+        "effective_hides_posts": true,
+        "hidden": false,
+        "hides_posts": true,
+        "id": 8,
+        "in_ancestor_flyout": false,
+        "in_breadcrumbs": false,
+        "kind": "tag",
+        "latitude": null,
+        "locations": [],
+        "longitude": null,
+        "name": "Vault",
+        "name_path": "Vault",
+        "nav_order": null,
+        "parents": [],
+        "post_count": 0,
+        "show_related": false,
+        "siblings": [],
+        "slug": "vault"
+      }
+    ],
+    "total": 7
+  },
+  "graph/no-posts": {
+    "hierarchyEdges": [
+      {
+        "child": 2,
+        "parent": 1
+      },
+      {
+        "child": 5,
+        "parent": 2
+      },
+      {
+        "child": 4,
+        "parent": 3
+      },
+      {
+        "child": 5,
+        "parent": 4
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "kind": "tag",
+        "name": "Nature",
+        "post_count": 2,
+        "slug": "nature"
+      },
+      {
+        "id": 2,
+        "kind": "tag",
+        "name": "Botany",
+        "post_count": 2,
+        "slug": "botany"
+      },
+      {
+        "id": 3,
+        "kind": "tag",
+        "name": "Country",
+        "post_count": 1,
+        "slug": "country"
+      },
+      {
+        "id": 4,
+        "kind": "geo",
+        "latitude": 46.6,
+        "longitude": 2.2,
+        "name": "France",
+        "post_count": 1,
+        "slug": "france"
+      },
+      {
+        "id": 5,
+        "kind": "geo",
+        "latitude": 48.85,
+        "longitude": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris"
+      },
+      {
+        "id": 6,
+        "kind": "year",
+        "name": "2024",
+        "post_count": 2,
+        "slug": "2024"
+      },
+      {
+        "id": 8,
+        "kind": "tag",
+        "name": "Vault",
+        "post_count": 0,
+        "slug": "vault"
+      }
+    ]
+  },
+  "graph/owner": {
+    "hierarchyEdges": [
+      {
+        "child": 2,
+        "parent": 1
+      },
+      {
+        "child": 5,
+        "parent": 2
+      },
+      {
+        "child": 4,
+        "parent": 3
+      },
+      {
+        "child": 5,
+        "parent": 4
+      }
+    ],
+    "membershipEdges": [
+      {
+        "post": 4,
+        "tag": 7
+      },
+      {
+        "post": 3,
+        "tag": 8
+      },
+      {
+        "post": 2,
+        "tag": 6
+      },
+      {
+        "post": 2,
+        "tag": 5
+      },
+      {
+        "post": 1,
+        "tag": 6
+      },
+      {
+        "post": 1,
+        "tag": 2
+      },
+      {
+        "post": 6,
+        "tag": 4
+      }
+    ],
+    "posts": [
+      {
+        "id": 4,
+        "slug": "delta",
+        "title": "Delta"
+      },
+      {
+        "id": 3,
+        "slug": "gamma",
+        "title": "Gamma"
+      },
+      {
+        "id": 2,
+        "media_url": "/beta.jpg?s=256\u0026v=1",
+        "slug": "beta",
+        "title": "Beta"
+      },
+      {
+        "id": 1,
+        "slug": "alpha",
+        "title": "Alpha"
+      },
+      {
+        "id": 6,
+        "slug": "zeta",
+        "title": "Zeta"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "kind": "tag",
+        "name": "Nature",
+        "post_count": 2,
+        "slug": "nature"
+      },
+      {
+        "id": 2,
+        "kind": "tag",
+        "name": "Botany",
+        "post_count": 2,
+        "slug": "botany"
+      },
+      {
+        "id": 3,
+        "kind": "tag",
+        "name": "Country",
+        "post_count": 2,
+        "slug": "country"
+      },
+      {
+        "id": 4,
+        "kind": "geo",
+        "latitude": 46.6,
+        "longitude": 2.2,
+        "name": "France",
+        "post_count": 2,
+        "slug": "france"
+      },
+      {
+        "id": 5,
+        "kind": "geo",
+        "latitude": 48.85,
+        "longitude": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris"
+      },
+      {
+        "id": 6,
+        "kind": "year",
+        "name": "2024",
+        "post_count": 2,
+        "slug": "2024"
+      },
+      {
+        "id": 7,
+        "is_hidden": true,
+        "kind": "tag",
+        "name": "Quiet",
+        "post_count": 1,
+        "slug": "quiet"
+      },
+      {
+        "id": 8,
+        "kind": "tag",
+        "name": "Vault",
+        "post_count": 1,
+        "slug": "vault"
+      }
+    ]
+  },
+  "graph/public": {
+    "hierarchyEdges": [
+      {
+        "child": 2,
+        "parent": 1
+      },
+      {
+        "child": 5,
+        "parent": 2
+      },
+      {
+        "child": 4,
+        "parent": 3
+      },
+      {
+        "child": 5,
+        "parent": 4
+      }
+    ],
+    "membershipEdges": [
+      {
+        "post": 2,
+        "tag": 6
+      },
+      {
+        "post": 2,
+        "tag": 5
+      },
+      {
+        "post": 1,
+        "tag": 6
+      },
+      {
+        "post": 1,
+        "tag": 2
+      }
+    ],
+    "posts": [
+      {
+        "id": 2,
+        "media_url": "/beta.jpg?s=256\u0026v=1",
+        "slug": "beta",
+        "title": "Beta"
+      },
+      {
+        "id": 1,
+        "slug": "alpha",
+        "title": "Alpha"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "kind": "tag",
+        "name": "Nature",
+        "post_count": 2,
+        "slug": "nature"
+      },
+      {
+        "id": 2,
+        "kind": "tag",
+        "name": "Botany",
+        "post_count": 2,
+        "slug": "botany"
+      },
+      {
+        "id": 3,
+        "kind": "tag",
+        "name": "Country",
+        "post_count": 1,
+        "slug": "country"
+      },
+      {
+        "id": 4,
+        "kind": "geo",
+        "latitude": 46.6,
+        "longitude": 2.2,
+        "name": "France",
+        "post_count": 1,
+        "slug": "france"
+      },
+      {
+        "id": 5,
+        "kind": "geo",
+        "latitude": 48.85,
+        "longitude": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris"
+      },
+      {
+        "id": 6,
+        "kind": "year",
+        "name": "2024",
+        "post_count": 2,
+        "slug": "2024"
+      },
+      {
+        "id": 8,
+        "kind": "tag",
+        "name": "Vault",
+        "post_count": 0,
+        "slug": "vault"
+      }
+    ]
+  },
+  "graph/year-scope": {
+    "hierarchyEdges": [
+      {
+        "child": 2,
+        "parent": 1
+      },
+      {
+        "child": 5,
+        "parent": 2
+      },
+      {
+        "child": 4,
+        "parent": 3
+      },
+      {
+        "child": 5,
+        "parent": 4
+      }
+    ],
+    "membershipEdges": [
+      {
+        "post": 2,
+        "tag": 6
+      },
+      {
+        "post": 2,
+        "tag": 5
+      },
+      {
+        "post": 1,
+        "tag": 6
+      },
+      {
+        "post": 1,
+        "tag": 2
+      }
+    ],
+    "posts": [
+      {
+        "id": 2,
+        "media_url": "/beta.jpg?s=256\u0026v=1",
+        "slug": "beta",
+        "title": "Beta"
+      },
+      {
+        "id": 1,
+        "slug": "alpha",
+        "title": "Alpha"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "kind": "tag",
+        "name": "Nature",
+        "post_count": 2,
+        "slug": "nature"
+      },
+      {
+        "id": 2,
+        "kind": "tag",
+        "name": "Botany",
+        "post_count": 2,
+        "slug": "botany"
+      },
+      {
+        "id": 3,
+        "kind": "tag",
+        "name": "Country",
+        "post_count": 1,
+        "slug": "country"
+      },
+      {
+        "id": 4,
+        "kind": "geo",
+        "latitude": 46.6,
+        "longitude": 2.2,
+        "name": "France",
+        "post_count": 1,
+        "slug": "france"
+      },
+      {
+        "id": 5,
+        "kind": "geo",
+        "latitude": 48.85,
+        "longitude": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris"
+      },
+      {
+        "id": 6,
+        "kind": "year",
+        "name": "2024",
+        "post_count": 2,
+        "slug": "2024"
+      }
+    ]
+  },
+  "home/owner": {
+    "menu": [],
+    "pagination": {
+      "min_page": 0,
+      "page": 1,
+      "pages": 2,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 4
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 1,
+        "immersive_mode": "",
+        "is_featured": false,
+        "is_hidden": false,
+        "is_hidden_by_tag": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "alpha",
+        "status": "published",
+        "tags": [
+          {
+            "is_hidden_posts": false,
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "is_hidden_posts": false,
+            "kind": "tag",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          }
+        ],
+        "title": "Alpha",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      },
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "is_hidden": false,
+        "is_hidden_by_tag": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "is_hidden_posts": false,
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "is_hidden_posts": false,
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "settings": {
+      "author_name": "Author",
+      "blog_subtitle": "a fixed site",
+      "blog_title": "Fixture",
+      "posts_per_page": "2",
+      "show_view_counts": "true",
+      "tags_visibility": "all"
+    },
+    "tag_cloud": [
+      {
+        "count": 2,
+        "id": 6,
+        "name": "2024",
+        "slug": "2024",
+        "weight": 1
+      },
+      {
+        "count": 2,
+        "id": 2,
+        "name": "Botany",
+        "slug": "botany",
+        "weight": 1
+      },
+      {
+        "count": 2,
+        "id": 3,
+        "name": "Country",
+        "slug": "country",
+        "weight": 1
+      },
+      {
+        "count": 2,
+        "id": 4,
+        "name": "France",
+        "slug": "france",
+        "weight": 1
+      },
+      {
+        "count": 2,
+        "id": 1,
+        "name": "Nature",
+        "slug": "nature",
+        "weight": 1
+      },
+      {
+        "count": 1,
+        "id": 5,
+        "name": "Paris",
+        "slug": "paris",
+        "weight": 0.5
+      },
+      {
+        "count": 1,
+        "id": 7,
+        "name": "Quiet",
+        "slug": "quiet",
+        "weight": 0.5
+      },
+      {
+        "count": 1,
+        "id": 8,
+        "name": "Vault",
+        "slug": "vault",
+        "weight": 0.5
+      }
+    ]
+  },
+  "home/page-2": {
+    "pagination": {
+      "min_page": 1,
+      "page": 2,
+      "pages": 2,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 3
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 4,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "delta",
+        "status": "published",
+        "tags": [],
+        "title": "Delta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "settings": {
+      "author_name": "Author",
+      "blog_subtitle": "a fixed site",
+      "blog_title": "Fixture",
+      "posts_per_page": "2",
+      "show_view_counts": "true",
+      "tags_visibility": "all"
+    }
+  },
+  "home/pinned-page": {
+    "menu": [],
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 2,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 3
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 1,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "alpha",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "tag",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          }
+        ],
+        "title": "Alpha",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      },
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "settings": {
+      "author_name": "Author",
+      "blog_subtitle": "a fixed site",
+      "blog_title": "Fixture",
+      "posts_per_page": "2",
+      "show_view_counts": "true",
+      "tags_visibility": "all"
+    },
+    "tag_cloud": [
+      {
+        "count": 2,
+        "id": 6,
+        "name": "2024",
+        "slug": "2024",
+        "weight": 1
+      },
+      {
+        "count": 2,
+        "id": 2,
+        "name": "Botany",
+        "slug": "botany",
+        "weight": 1
+      },
+      {
+        "count": 1,
+        "id": 3,
+        "name": "Country",
+        "slug": "country",
+        "weight": 0.5
+      },
+      {
+        "count": 1,
+        "id": 4,
+        "name": "France",
+        "slug": "france",
+        "weight": 0.5
+      },
+      {
+        "count": 2,
+        "id": 1,
+        "name": "Nature",
+        "slug": "nature",
+        "weight": 1
+      },
+      {
+        "count": 1,
+        "id": 5,
+        "name": "Paris",
+        "slug": "paris",
+        "weight": 0.5
+      }
+    ]
+  },
+  "home/public": {
+    "menu": [],
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 2,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 3
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 1,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "alpha",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "tag",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          }
+        ],
+        "title": "Alpha",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      },
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "settings": {
+      "author_name": "Author",
+      "blog_subtitle": "a fixed site",
+      "blog_title": "Fixture",
+      "posts_per_page": "2",
+      "show_view_counts": "true",
+      "tags_visibility": "all"
+    },
+    "tag_cloud": [
+      {
+        "count": 2,
+        "id": 6,
+        "name": "2024",
+        "slug": "2024",
+        "weight": 1
+      },
+      {
+        "count": 2,
+        "id": 2,
+        "name": "Botany",
+        "slug": "botany",
+        "weight": 1
+      },
+      {
+        "count": 1,
+        "id": 3,
+        "name": "Country",
+        "slug": "country",
+        "weight": 0.5
+      },
+      {
+        "count": 1,
+        "id": 4,
+        "name": "France",
+        "slug": "france",
+        "weight": 0.5
+      },
+      {
+        "count": 2,
+        "id": 1,
+        "name": "Nature",
+        "slug": "nature",
+        "weight": 1
+      },
+      {
+        "count": 1,
+        "id": 5,
+        "name": "Paris",
+        "slug": "paris",
+        "weight": 0.5
+      }
+    ]
+  },
+  "home/scheduled-queue": {
+    "pagination": {
+      "min_page": 0,
+      "page": 0,
+      "pages": 2,
+      "per_page": 2,
+      "scheduled": true,
+      "total": 4
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 6,
+        "immersive_mode": "",
+        "is_featured": false,
+        "is_hidden": false,
+        "is_hidden_by_tag": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": null,
+        "scheduled_at": "\u003ctimestamp\u003e",
+        "slug": "zeta",
+        "status": "scheduled",
+        "tags": [
+          {
+            "is_hidden_posts": false,
+            "kind": "geo",
+            "latitude": 46.6,
+            "longitude": 2.2,
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Zeta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "settings": {
+      "author_name": "Author",
+      "blog_subtitle": "a fixed site",
+      "blog_title": "Fixture",
+      "posts_per_page": "2",
+      "show_view_counts": "true",
+      "tags_visibility": "all"
+    }
+  },
+  "home/year-scope": {
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 1,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 2
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 1,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "alpha",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "tag",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          }
+        ],
+        "title": "Alpha",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      },
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "settings": {
+      "author_name": "Author",
+      "blog_subtitle": "a fixed site",
+      "blog_title": "Fixture",
+      "posts_per_page": "2",
+      "show_view_counts": "true",
+      "tags_visibility": "all"
+    }
+  },
+  "map/owner": {
+    "tags": [
+      {
+        "is_hidden": false,
+        "lat": 46.6,
+        "lng": 2.2,
+        "name": "France",
+        "post_count": 2,
+        "slug": "france",
+        "type": "country",
+        "years": []
+      },
+      {
+        "is_hidden": false,
+        "lat": 48.85,
+        "lng": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris",
+        "type": "country",
+        "years": [
+          {
+            "id": 6,
+            "kind": "",
+            "name": "2024",
+            "slug": "2024"
+          }
+        ]
+      }
+    ]
+  },
+  "map/public": {
+    "tags": [
+      {
+        "lat": 46.6,
+        "lng": 2.2,
+        "name": "France",
+        "post_count": 1,
+        "slug": "france",
+        "type": "country",
+        "years": []
+      },
+      {
+        "lat": 48.85,
+        "lng": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris",
+        "type": "country",
+        "years": [
+          {
+            "id": 6,
+            "kind": "",
+            "name": "2024",
+            "slug": "2024"
+          }
+        ]
+      }
+    ]
+  },
+  "map/year-scope": {
+    "tags": [
+      {
+        "lat": 48.85,
+        "lng": 2.35,
+        "name": "Paris",
+        "post_count": 1,
+        "slug": "paris",
+        "type": "country",
+        "years": [
+          {
+            "id": 6,
+            "kind": "",
+            "name": "2024",
+            "slug": "2024"
+          }
+        ]
+      }
+    ]
+  },
+  "nav/public": {
+    "menu": []
+  },
+  "tag/breadcrumb-path": {
+    "breadcrumbs": [
+      {
+        "href": "/tags/country",
+        "id": 3,
+        "name": "Country",
+        "name_path": "Country",
+        "nav_order": null,
+        "post_count": 0,
+        "slug": "country"
+      },
+      {
+        "href": "/tags/france?path=country",
+        "id": 4,
+        "name": "France",
+        "name_path": "France",
+        "nav_order": null,
+        "post_count": 1,
+        "slug": "france"
+      }
+    ],
+    "menu": [],
+    "nav_children": [],
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 1,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 1
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "tag": {
+      "children": [],
+      "created_at": "\u003ctimestamp\u003e",
+      "description": null,
+      "hidden": false,
+      "hides_posts": false,
+      "id": 5,
+      "in_ancestor_flyout": false,
+      "in_breadcrumbs": false,
+      "kind": "geo",
+      "latitude": 48.85,
+      "locations": [
+        {
+          "id": 5,
+          "latitude": 48.85,
+          "longitude": 2.35
+        }
+      ],
+      "longitude": 2.35,
+      "name": "Paris",
+      "name_path": "Paris",
+      "nav_order": null,
+      "parents": [
+        {
+          "id": 2,
+          "name": "Botany",
+          "name_path": "Botany",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "botany"
+        },
+        {
+          "id": 4,
+          "name": "France",
+          "name_path": "France",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "france"
+        }
+      ],
+      "post_count": 1,
+      "show_related": false,
+      "siblings": [],
+      "slug": "paris"
+    }
+  },
+  "tag/hides-posts-subtree": {
+    "breadcrumbs": [],
+    "menu": [],
+    "nav_children": [],
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 1,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 1
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 3,
+        "immersive_mode": "",
+        "is_featured": false,
+        "is_hidden": false,
+        "is_hidden_by_tag": true,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "gamma",
+        "status": "published",
+        "tags": [
+          {
+            "is_hidden_posts": true,
+            "kind": "tag",
+            "name": "Vault",
+            "slug": "vault"
+          }
+        ],
+        "title": "Gamma",
+        "type": "",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "tag": {
+      "children": [],
+      "created_at": "\u003ctimestamp\u003e",
+      "description": null,
+      "hidden": false,
+      "hides_posts": true,
+      "id": 8,
+      "in_ancestor_flyout": false,
+      "in_breadcrumbs": false,
+      "is_hidden": false,
+      "is_hidden_posts": true,
+      "kind": "tag",
+      "latitude": null,
+      "locations": [],
+      "longitude": null,
+      "name": "Vault",
+      "name_path": "Vault",
+      "nav_order": null,
+      "parents": [],
+      "post_count": 1,
+      "show_related": false,
+      "siblings": [],
+      "slug": "vault"
+    }
+  },
+  "tag/owner": {
+    "breadcrumbs": [
+      {
+        "id": 3,
+        "is_hidden": false,
+        "is_hidden_posts": false,
+        "name": "Country",
+        "name_path": "Country",
+        "nav_order": null,
+        "post_count": 0,
+        "slug": "country"
+      },
+      {
+        "id": 4,
+        "is_hidden": false,
+        "is_hidden_posts": false,
+        "name": "France",
+        "name_path": "France",
+        "nav_order": null,
+        "post_count": 1,
+        "slug": "france"
+      }
+    ],
+    "menu": [],
+    "nav_children": [],
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 1,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 1
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "is_hidden": false,
+        "is_hidden_by_tag": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "is_hidden_posts": false,
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "is_hidden_posts": false,
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "tag": {
+      "children": [],
+      "created_at": "\u003ctimestamp\u003e",
+      "description": null,
+      "hidden": false,
+      "hides_posts": false,
+      "id": 5,
+      "in_ancestor_flyout": false,
+      "in_breadcrumbs": false,
+      "is_hidden": false,
+      "is_hidden_posts": false,
+      "kind": "geo",
+      "latitude": 48.85,
+      "locations": [
+        {
+          "id": 5,
+          "latitude": 48.85,
+          "longitude": 2.35
+        }
+      ],
+      "longitude": 2.35,
+      "name": "Paris",
+      "name_path": "Paris",
+      "nav_order": null,
+      "parents": [
+        {
+          "id": 2,
+          "name": "Botany",
+          "name_path": "Botany",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "botany"
+        },
+        {
+          "id": 4,
+          "name": "France",
+          "name_path": "France",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "france"
+        }
+      ],
+      "post_count": 1,
+      "show_related": false,
+      "siblings": [],
+      "slug": "paris"
+    }
+  },
+  "tag/public": {
+    "breadcrumbs": [
+      {
+        "id": 3,
+        "name": "Country",
+        "name_path": "Country",
+        "nav_order": null,
+        "post_count": 0,
+        "slug": "country"
+      },
+      {
+        "id": 4,
+        "name": "France",
+        "name_path": "France",
+        "nav_order": null,
+        "post_count": 1,
+        "slug": "france"
+      }
+    ],
+    "menu": [],
+    "nav_children": [],
+    "pagination": {
+      "min_page": 1,
+      "page": 1,
+      "pages": 1,
+      "per_page": 2,
+      "scheduled": false,
+      "total": 1
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 2,
+        "immersive_mode": "",
+        "is_featured": false,
+        "media_url": "/beta.jpg",
+        "meta_description": null,
+        "published_at": "\u003ctimestamp\u003e",
+        "scheduled_at": null,
+        "slug": "beta",
+        "status": "published",
+        "tags": [
+          {
+            "kind": "year",
+            "name": "2024",
+            "slug": "2024"
+          },
+          {
+            "kind": "geo",
+            "latitude": 48.85,
+            "longitude": 2.35,
+            "name": "Paris",
+            "slug": "paris"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Botany",
+            "slug": "botany"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Nature",
+            "slug": "nature"
+          },
+          {
+            "inherited": true,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Beta",
+        "type": "",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "tag": {
+      "children": [],
+      "created_at": "\u003ctimestamp\u003e",
+      "description": null,
+      "hidden": false,
+      "hides_posts": false,
+      "id": 5,
+      "in_ancestor_flyout": false,
+      "in_breadcrumbs": false,
+      "kind": "geo",
+      "latitude": 48.85,
+      "locations": [
+        {
+          "id": 5,
+          "latitude": 48.85,
+          "longitude": 2.35
+        }
+      ],
+      "longitude": 2.35,
+      "name": "Paris",
+      "name_path": "Paris",
+      "nav_order": null,
+      "parents": [
+        {
+          "id": 2,
+          "name": "Botany",
+          "name_path": "Botany",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "botany"
+        },
+        {
+          "id": 4,
+          "name": "France",
+          "name_path": "France",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "france"
+        }
+      ],
+      "post_count": 1,
+      "show_related": false,
+      "siblings": [],
+      "slug": "paris"
+    }
+  },
+  "tag/scheduled-queue": {
+    "breadcrumbs": [
+      {
+        "id": 3,
+        "is_hidden": false,
+        "is_hidden_posts": false,
+        "name": "Country",
+        "name_path": "Country",
+        "nav_order": null,
+        "post_count": 0,
+        "slug": "country"
+      }
+    ],
+    "menu": [],
+    "nav_children": [
+      {
+        "children": [],
+        "id": 5,
+        "is_related": false,
+        "name": "Paris",
+        "post_count": 1,
+        "show_in_ancestors": false,
+        "slug": "paris"
+      }
+    ],
+    "pagination": {
+      "min_page": 0,
+      "page": 0,
+      "pages": 1,
+      "per_page": 2,
+      "scheduled": true,
+      "total": 1
+    },
+    "posts": [
+      {
+        "created_at": "\u003ctimestamp\u003e",
+        "excerpt": null,
+        "formatter": "",
+        "id": 6,
+        "immersive_mode": "",
+        "is_featured": false,
+        "is_hidden": false,
+        "is_hidden_by_tag": false,
+        "media_url": null,
+        "meta_description": null,
+        "published_at": null,
+        "scheduled_at": "\u003ctimestamp\u003e",
+        "slug": "zeta",
+        "status": "scheduled",
+        "tags": [
+          {
+            "is_hidden_posts": false,
+            "kind": "geo",
+            "latitude": 46.6,
+            "longitude": 2.2,
+            "name": "France",
+            "slug": "france"
+          },
+          {
+            "inherited": true,
+            "is_hidden_posts": false,
+            "kind": "",
+            "name": "Country",
+            "slug": "country"
+          }
+        ],
+        "title": "Zeta",
+        "type": "post",
+        "updated_at": "\u003ctimestamp\u003e",
+        "view_count": 0
+      }
+    ],
+    "tag": {
+      "children": [
+        {
+          "id": 5,
+          "name": "Paris",
+          "name_path": "Paris",
+          "nav_order": null,
+          "post_count": 1,
+          "slug": "paris"
+        }
+      ],
+      "created_at": "\u003ctimestamp\u003e",
+      "description": null,
+      "hidden": false,
+      "hides_posts": false,
+      "id": 4,
+      "in_ancestor_flyout": false,
+      "in_breadcrumbs": true,
+      "is_hidden": false,
+      "is_hidden_posts": false,
+      "kind": "geo",
+      "latitude": 46.6,
+      "locations": [
+        {
+          "id": 4,
+          "latitude": 46.6,
+          "longitude": 2.2
+        }
+      ],
+      "longitude": 2.2,
+      "name": "France",
+      "name_path": "France",
+      "nav_order": null,
+      "parents": [
+        {
+          "id": 3,
+          "name": "Country",
+          "name_path": "Country",
+          "nav_order": null,
+          "post_count": 0,
+          "slug": "country"
+        }
+      ],
+      "post_count": 1,
+      "show_related": false,
+      "siblings": [],
+      "slug": "france"
+    }
+  }
+}

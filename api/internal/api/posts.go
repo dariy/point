@@ -16,6 +16,7 @@ import (
 
 	"point-api/internal/models"
 	"point-api/internal/services"
+	"point-api/internal/services/pageview"
 
 	"github.com/labstack/echo/v4"
 )
@@ -286,7 +287,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
-		if !isPubliclyReadableStatus(post.Status) {
+		if !pageview.IsPubliclyReadableStatus(post.Status) {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
@@ -378,7 +379,7 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 
 	for _, s := range stubs {
 		// Public visibility check
-		if publicOnly && !IsPostVisibleToPublic(tagsMap[s.ID], hiddenTagIDs) {
+		if publicOnly && !pageview.IsPostVisibleToPublic(tagsMap[s.ID], hiddenTagIDs) {
 			continue
 		}
 
@@ -449,7 +450,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
-		if !isPubliclyReadableStatus(post.Status) {
+		if !pageview.IsPubliclyReadableStatus(post.Status) {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {

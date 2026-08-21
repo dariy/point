@@ -23,10 +23,21 @@ comments sidecar.
 |---|---|---|---|
 | 1 | Route | `api/cmd/api/routes.go` | Path, method, and the middleware chain for that route. Every route is reached from here — one `register*Routes` per domain. |
 | 2 | Handler | `api/internal/api/<domain>.go` | Parsing params, authorization checks, shaping the JSON. `mappers.go` turns DB models into response shapes; `MapError` in `errors.go` turns a service sentinel error into a status code. |
-| 3 | Service | `api/internal/services/<domain>_service.go` | Business logic and side effects. Takes the `repository.Repository` **interface**, never a concrete type — that is what makes unit-test mocks possible. A service that outgrows one file splits by concern beside it, not into a subpackage: `PostService` is `post_service.go` + `post_render.go`, `post_css.go`, `post_publish.go`. |
+| 3 | Service | `api/internal/services/<domain>_service.go` | Business logic and side effects. Takes the `repository.Repository` **interface**, never a concrete type — that is what makes unit-test mocks possible. A service that outgrows one file splits by concern beside it, not into a subpackage: `PostService` is `post_service.go` + `post_render.go`, `post_css.go`, `post_publish.go`. The one subpackage is `services/pageview` — see below. |
 | 4 | Repository | `api/internal/repository/queries_<domain>.go` | Hand-written SQL: anything sqlc cannot express (dynamic filters, multi-statement work, `IN (?…)` fan-outs). The interface itself is `db.go`. |
 | 5 | sqlc | `api/internal/models/` | **Generated.** `queries.sql.go`, `models.go`, `querier.go`, `db.go` — regenerate, never hand-edit. `extra.go` is the one hand-written file in the package, for types that outlived their table. |
 | 6 | SQL | `api/sql/queries.sql`, `api/sql/schema.sql` | The source of truth for both the schema and every generated query. |
+
+`api/internal/services/pageview` is the single exception to the
+"split beside it, not into a subpackage" rule above. The BFF page endpoints
+(`/api/pages/...`) are aggregates named after frontend screens, and each one
+composes across posts, tags, media and settings at once — it belongs to no
+single domain service, so it sits beside them rather than inside one. It holds
+the composition and the reading rules (visibility, the scheduled queue, the
+public settings subset) and returns a typed view; `internal/api/pages.go` still
+owns the wire format, so the JSON shape has exactly one author. The split is
+what lets those rules be tested without an HTTP harness, and
+`internal/api/testdata/pages_payloads.json` pins the resulting payloads.
 
 Two kinds of middleware run before step 2. The global chain — logging, recover,
 gzip, CORS, security headers and CSP, the public rate limiter — is built in
