@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"testing"
 
 	"point-api/internal/models"
@@ -802,44 +804,68 @@ func TestRepository_GetPostNavigation_TagScopedRespectsHidden(t *testing.T) {
 func TestListPostNodesForGraph(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
 
-	nodes, err := repo.ListPostNodesForGraph(context.Background(), true)
+	if nodes, err := repo.ListPostNodesForGraph(ctx, true); err != nil {
+		t.Fatalf("ListPostNodesForGraph on an empty database: %v", err)
+	} else if len(nodes) != 0 {
+		t.Fatalf("empty database returned %d nodes", len(nodes))
+	}
+
+	// Four posts an hour apart, oldest first, so newest-first is a real claim
+	// about the result and not the insertion order read back.
+	db := repo.DB()
+	if _, err := db.Exec(
+		`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u1','e1','h','D')`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	insert := func(slug, status string, hoursAgo int) int64 {
+		t.Helper()
+		res, err := db.Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at, created_at)
+			VALUES (?, ?, 'c', 1, ?, datetime('now', ?), datetime('now', ?))`,
+			slug, slug, status, fmt.Sprintf("-%d hours", hoursAgo), fmt.Sprintf("-%d hours", hoursAgo))
+		if err != nil {
+			t.Fatalf("insert %s: %v", slug, err)
+		}
+		id, _ := res.LastInsertId()
+		return id
+	}
+	insert("oldest", "published", 4)
+	insert("draft", "draft", 3)
+	vaulted := insert("vaulted", "published", 2)
+	insert("newest", "published", 1)
+
+	// A post carried by a hides_posts tag: published, but not public.
+	res, err := db.Exec(
+		`INSERT INTO tags (name, slug, post_count, created_at, hides_posts) VALUES ('Vault','vault',0,CURRENT_TIMESTAMP,1)`)
 	if err != nil {
-		t.Fatalf("ListPostNodesForGraph(true): %v", err)
+		t.Fatalf("insert tag: %v", err)
 	}
-	if len(nodes) != 0 {
-		t.Errorf("expected 0 nodes, got %d", len(nodes))
-	}
-
-	nodes, err = repo.ListPostNodesForGraph(context.Background(), false)
-	if err != nil {
-		t.Fatalf("ListPostNodesForGraph(false): %v", err)
-	}
-	if len(nodes) != 0 {
-		t.Errorf("expected 0 nodes, got %d", len(nodes))
-	}
-}
-
-func TestListPostNodesForGraph_WithData(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-
-	// Insert a test post
-	insertUserAndPost(t, repo, "slug-1", "published")
-
-	nodes, err := repo.ListPostNodesForGraph(context.Background(), true)
-	if err != nil {
-		t.Fatalf("ListPostNodesForGraph(true): %v", err)
-	}
-	if len(nodes) != 1 {
-		t.Errorf("expected 1 node, got %d", len(nodes))
+	tagID, _ := res.LastInsertId()
+	if _, err := db.Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, vaulted, tagID); err != nil {
+		t.Fatalf("tag the vaulted post: %v", err)
 	}
 
-	nodes, err = repo.ListPostNodesForGraph(context.Background(), false)
-	if err != nil {
-		t.Fatalf("ListPostNodesForGraph(false): %v", err)
+	slugs := func(publishedOnly bool) []string {
+		t.Helper()
+		nodes, err := repo.ListPostNodesForGraph(ctx, publishedOnly)
+		if err != nil {
+			t.Fatalf("ListPostNodesForGraph(%v): %v", publishedOnly, err)
+		}
+		out := make([]string, len(nodes))
+		for i, n := range nodes {
+			out[i] = n.Slug
+		}
+		return out
 	}
-	if len(nodes) != 1 {
-		t.Errorf("expected 1 node, got %d", len(nodes))
+
+	// publishedOnly is what the public graph is drawn from: the draft is gone,
+	// and so is the post the vault tag hides.
+	if got, want := slugs(true), []string{"newest", "oldest"}; !slices.Equal(got, want) {
+		t.Errorf("ListPostNodesForGraph(true) = %v, want %v", got, want)
+	}
+	// The owner's graph keeps both, and still reads newest first.
+	if got, want := slugs(false), []string{"newest", "vaulted", "draft", "oldest"}; !slices.Equal(got, want) {
+		t.Errorf("ListPostNodesForGraph(false) = %v, want %v", got, want)
 	}
 }

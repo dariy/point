@@ -250,7 +250,7 @@ func TestRefreshQueryPlannerStats_ContextCancellation(t *testing.T) {
 		t.Fatalf("NewRepository: %v", err)
 	}
 	defer func() { _ = repo.Close() }()
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
