@@ -19,7 +19,7 @@ WHERE LOWER(p.status) = 'published'
 AND p.deleted_at IS NULL
 AND p.type != 'page'
 AND ` + hidesPostsExcludeP + `
-ORDER BY p.published_at DESC, p.created_at DESC
+` + orderNewestFirstP + `
 LIMIT ?`
 
 	rows, err := r.db.QueryContext(ctx, q, limit)
@@ -57,7 +57,7 @@ FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
 AND ` + hidesPostsExcludeID + `
-ORDER BY published_at DESC, created_at DESC`
+` + orderNewestFirstID
 
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {

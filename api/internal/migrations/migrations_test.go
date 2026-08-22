@@ -2,7 +2,9 @@ package migrations
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -128,5 +130,132 @@ func TestRun_Idempotent(t *testing.T) {
 		if err := Run(ctx, repo); err != nil {
 			t.Fatalf("Run pass %d: %v", i+1, err)
 		}
+	}
+}
+
+// indexNames reads the indexes SQLite holds for one table.
+func indexNames(t *testing.T, repo repository.Repository, table string) []string {
+	t.Helper()
+	rows, err := repo.DB().Query(
+		`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? ORDER BY name`, table)
+	if err != nil {
+		t.Fatalf("read indexes of %s: %v", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, n)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("scan indexes of %s: %v", table, err)
+	}
+	return names
+}
+
+// A database that predates the composite index has the narrow one, from the
+// earlier migration that created it. Both cannot be left in place: they share a
+// leading column, so the narrow one serves nothing and every post_tags write
+// still pays to maintain it. The plan assertions live next to the query
+// (internal/repository); this is only about what survives the swap.
+func TestRun_WidensThePostTagsIndex(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Stand in for an old database: schema.sql no longer creates the narrow
+	// index, so put it back before migrating.
+	if _, err := repo.DB().ExecContext(ctx,
+		`CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id ON post_tags(tag_id)`); err != nil {
+		t.Fatalf("seed the narrow index: %v", err)
+	}
+
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	names := indexNames(t, repo, "post_tags")
+	if slices.Contains(names, "idx_post_tags_tag_id") {
+		t.Errorf("the narrow idx_post_tags_tag_id survived the widening: %v", names)
+	}
+	if !slices.Contains(names, "idx_post_tags_tag_id_post_id") {
+		t.Errorf("idx_post_tags_tag_id_post_id is missing after Run: %v", names)
+	}
+}
+
+// A fresh install migrates an empty database. ANALYZE there would record "no
+// rows" for every table and the planner would believe it until something ran
+// ANALYZE again — so the statistics refresh has to hold off until there is
+// something to measure, and then not need an operator to ask for it.
+func TestRun_RefreshesStatisticsOnlyOnceThereAreRows(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Migrations seed system tags and settings, so parts of a fresh database
+	// legitimately have rows to measure. posts is the one that does not.
+	postsStats := func() int {
+		var n int
+		// sqlite_stat1 does not exist until something analyses, which is itself
+		// the answer on a fresh database.
+		if err := repo.DB().QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'posts'`).Scan(&n); err != nil {
+			return 0
+		}
+		return n
+	}
+
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run on a fresh database: %v", err)
+	}
+	if n := postsStats(); n != 0 {
+		t.Errorf("an empty posts table was analysed anyway (%d sqlite_stat1 rows); "+
+			"the planner would carry those zeroes for the life of the install", n)
+	}
+
+	if _, err := repo.DB().ExecContext(ctx,
+		`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','e','h','D')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	for i := range 200 {
+		if _, err := repo.DB().ExecContext(ctx,
+			`INSERT INTO posts (title, slug, content, author_id, status, published_at)
+			 VALUES ('t', ?, 'c', 1, 'published', datetime('now'))`, fmt.Sprint(i)); err != nil {
+			t.Fatalf("seed post %d: %v", i, err)
+		}
+	}
+
+	// The next boot has no migrations left to apply, so this is the refresh
+	// running on its own — which is the point of it not being a one-shot step.
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run on a populated database: %v", err)
+	}
+	if n := postsStats(); n == 0 {
+		t.Error("a populated posts table was left with no statistics; the planner is guessing")
+	}
+}
+
+func TestRefreshQueryPlannerStats_ContextCancellation(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = refreshQueryPlannerStats(ctx, repo)
+	if err == nil {
+		t.Error("expected error on cancelled context")
 	}
 }

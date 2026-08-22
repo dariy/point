@@ -45,6 +45,19 @@ const (
 	hidesPostsExcludeID = "id" + hidesPostsPredicate
 )
 
+// Newest first is the order every list of posts is read in, and it has to be a
+// total one. published_at and created_at both store whole seconds, so an import
+// — or any two posts published in the same second — leaves ties for the query
+// planner to break however the index it chose happens to run, which is not a
+// decision it makes consistently across two queries or two releases. Under
+// LIMIT/OFFSET an unstable tie is not merely cosmetic: the same post can appear
+// on two pages, or on neither. id settles it, descending like the rest, and
+// idx_posts_live carries all three columns so the sort still costs nothing.
+const (
+	orderNewestFirstP  = "ORDER BY p.published_at DESC, p.created_at DESC, p.id DESC"
+	orderNewestFirstID = "ORDER BY published_at DESC, created_at DESC, id DESC"
+)
+
 // hidesPostsCTE is the same rule as a named CTE, for queries that reference the
 // hidden set from more than one place or already open a WITH chain. Prefix it
 // with "WITH RECURSIVE " to start a chain, or join it to an existing one with a
@@ -182,7 +195,7 @@ FROM posts p`, contentCol)
 	draftsBool, _ := arg.IncludeDrafts.(bool)
 	hiddenBool, _ := arg.IncludeHidden.(bool)
 
-	q, args := buildPostsQuery(selectClause, "ORDER BY p.published_at DESC, p.created_at DESC", "LIMIT ? OFFSET ?", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", 0, 0)
+	q, args := buildPostsQuery(selectClause, orderNewestFirstP, "LIMIT ? OFFSET ?", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", 0, 0)
 	args = append(args, arg.Limit, arg.Offset)
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -472,7 +485,7 @@ FROM posts p`
 	draftsBool, _ := arg.IncludeDrafts.(bool)
 	hiddenBool, _ := arg.IncludeHidden.(bool)
 
-	q, args := buildPostsQuery(selectClause, "ORDER BY p.published_at DESC, p.created_at DESC", "LIMIT ? OFFSET ?", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", fromYear, toYear)
+	q, args := buildPostsQuery(selectClause, orderNewestFirstP, "LIMIT ? OFFSET ?", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", fromYear, toYear)
 	args = append(args, arg.Limit, arg.Offset)
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -526,7 +539,7 @@ FROM posts p`
 		pType = "page"
 	}
 
-	q, args := buildPostsQuery(selectClause, "ORDER BY p.published_at DESC, p.created_at DESC", "LIMIT ? OFFSET ?", pType, statusFilter, status, featuredFilter, includeDrafts, includeHidden, tag, search, 0, 0)
+	q, args := buildPostsQuery(selectClause, orderNewestFirstP, "LIMIT ? OFFSET ?", pType, statusFilter, status, featuredFilter, includeDrafts, includeHidden, tag, search, 0, 0)
 	args = append(args, limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -744,7 +757,7 @@ WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
 AND type != 'page'
 AND ` + hidesPostsExcludeID + `
-ORDER BY published_at DESC, created_at DESC`
+` + orderNewestFirstID
 
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -789,13 +802,13 @@ FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
 AND ` + hidesPostsExcludeID + `
-ORDER BY published_at DESC, created_at DESC`
+` + orderNewestFirstID
 	} else {
 		q = `
 SELECT id, slug, title, thumbnail_path, content
 FROM posts
 WHERE deleted_at IS NULL
-ORDER BY published_at DESC, created_at DESC`
+` + orderNewestFirstID
 	}
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -865,7 +878,7 @@ AND (` + statusClause + `)
 AND (? OR NOT EXISTS (
     SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
 ))
-ORDER BY p.published_at DESC, p.created_at DESC
+` + orderNewestFirstP + `
 LIMIT ? OFFSET ?`
 	// bypassEHP controls the EHP visibility check, then limit and offset
 	args = append(args, bypassEHP, limit, offset)
@@ -1004,7 +1017,7 @@ AND (` + statusClause + `)
 AND (? OR NOT EXISTS (
     SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
 ))
-ORDER BY p.published_at DESC, p.created_at DESC
+` + orderNewestFirstP + `
 LIMIT ? OFFSET ?`
 	args = append(args, bypassEHP, limit, offset)
 

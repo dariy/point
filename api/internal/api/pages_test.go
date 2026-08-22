@@ -364,15 +364,10 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 		t.Fatalf("tag creation failed: %v", err)
 	}
 
-	// An image post co-tagged with "food", plus 11 more text posts on the place —
-	// 12 in total, so the 10-cap drops the oldest two.
-	if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
-		Title: "Photo", Status: "published", AuthorID: userID,
-		ThumbnailPath: "/media/originals/photo.jpg",
-		Tags:          []string{place.Name, "food"},
-	}); err != nil {
-		t.Fatalf("image post creation failed: %v", err)
-	}
+	// Eleven text posts on the place, then an image post co-tagged with "food"
+	// — 12 in total, so the 10-cap drops the oldest two. Every post here lands
+	// in the same second, so it is the id tiebreak in the sort that decides
+	// which is "newest"; the image post is created last to be that one.
 	for i := 0; i < 11; i++ {
 		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
 			Title: fmt.Sprintf("Post %d", i), Status: "published", AuthorID: userID,
@@ -380,6 +375,13 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("post %d creation failed: %v", i, err)
 		}
+	}
+	if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Photo", Status: "published", AuthorID: userID,
+		ThumbnailPath: "/media/originals/photo.jpg",
+		Tags:          []string{place.Name, "food"},
+	}); err != nil {
+		t.Fatalf("image post creation failed: %v", err)
 	}
 
 	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "true", "string")
