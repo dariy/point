@@ -66,3 +66,5 @@ list of published releases.
 
 [Unreleased]: https://github.com/dariy/point/compare/v0.1.40...HEAD
 [0.1.0]: https://github.com/dariy/point/releases/tag/v0.1.0
+
+<!-- Helix Ops addressed issue: [Beads: point-security-html-escape-helper-9lic] security: ad -->
