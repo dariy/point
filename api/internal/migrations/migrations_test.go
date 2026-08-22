@@ -243,3 +243,19 @@ func TestRun_RefreshesStatisticsOnlyOnceThereAreRows(t *testing.T) {
 		t.Error("a populated posts table was left with no statistics; the planner is guessing")
 	}
 }
+
+func TestRefreshQueryPlannerStats_ContextCancellation(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = refreshQueryPlannerStats(ctx, repo)
+	if err == nil {
+		t.Error("expected error on cancelled context")
+	}
+}

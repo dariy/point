@@ -798,3 +798,48 @@ func TestRepository_GetPostNavigation_TagScopedRespectsHidden(t *testing.T) {
 		t.Errorf("tag-scoped public prev of C = %v, want nav-a (%d)", prev, pidA)
 	}
 }
+
+func TestListPostNodesForGraph(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	nodes, err := repo.ListPostNodesForGraph(context.Background(), true)
+	if err != nil {
+		t.Fatalf("ListPostNodesForGraph(true): %v", err)
+	}
+	if len(nodes) != 0 {
+		t.Errorf("expected 0 nodes, got %d", len(nodes))
+	}
+
+	nodes, err = repo.ListPostNodesForGraph(context.Background(), false)
+	if err != nil {
+		t.Fatalf("ListPostNodesForGraph(false): %v", err)
+	}
+	if len(nodes) != 0 {
+		t.Errorf("expected 0 nodes, got %d", len(nodes))
+	}
+}
+
+func TestListPostNodesForGraph_WithData(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	// Insert a test post
+	insertUserAndPost(t, repo, "slug-1", "published")
+
+	nodes, err := repo.ListPostNodesForGraph(context.Background(), true)
+	if err != nil {
+		t.Fatalf("ListPostNodesForGraph(true): %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Errorf("expected 1 node, got %d", len(nodes))
+	}
+
+	nodes, err = repo.ListPostNodesForGraph(context.Background(), false)
+	if err != nil {
+		t.Fatalf("ListPostNodesForGraph(false): %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Errorf("expected 1 node, got %d", len(nodes))
+	}
+}
