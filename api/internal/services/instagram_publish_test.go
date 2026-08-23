@@ -176,6 +176,95 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		}
 	})
 
+	t.Run("Carousel Slide Order Follows Content", func(t *testing.T) {
+		data := map[string]string{
+			"instagram_access_token": "test-token",
+			"instagram_user_id":      "ig-user-id",
+			"app_url":                "https://example.com",
+		}
+
+		var childURLs []string
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost {
+				_ = r.ParseForm()
+				if r.URL.Path == "/ig-user-id/media" {
+					if r.Form.Get("is_carousel_item") == "true" {
+						childURLs = append(childURLs, r.Form.Get("image_url"))
+						_, _ = fmt.Fprintf(w, `{"id": "child-id-%d"}`, len(childURLs))
+						return
+					}
+					_, _ = w.Write([]byte(`{"id": "carousel-creation-id"}`))
+					return
+				}
+				if r.URL.Path == "/ig-user-id/media_publish" {
+					_, _ = w.Write([]byte(`{"id": "media-id"}`))
+					return
+				}
+			}
+			if r.Method == http.MethodGet && r.URL.Query().Get("fields") != "" {
+				_, _ = w.Write([]byte(`{"status_code":"FINISHED"}`))
+				return
+			}
+			http.Error(w, "not found", http.StatusNotFound)
+		})
+
+		ts := httptest.NewServer(handler)
+		defer ts.Close()
+
+		settingsSvc := mockSettings(data)
+		igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
+
+		repo := &mockRepository{
+			MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
+				return models.Post{
+					ID:             id,
+					Title:          "Ordered Carousel",
+					Slug:           "ordered-carousel",
+					InstagramShare: true,
+					Content:        "![c](/2026/06/c.jpg)\n![a](/2026/06/a.jpg)\n![b](/2026/06/b.jpg)",
+				}, nil
+			},
+			// GetMediaByPaths makes no ordering promise; return a different
+			// order than the content, plus a non-image that must be dropped.
+			MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
+				return []models.Medium{
+					{OriginalPath: "originals/2026/06/a.jpg"},
+					{OriginalPath: "originals/2026/06/clip.mp4"},
+					{OriginalPath: "originals/2026/06/b.jpg"},
+					{OriginalPath: "originals/2026/06/c.jpg"},
+				}, nil
+			},
+			MockGetTagsForPost: func(_ context.Context, postID int64) ([]models.Tag, error) {
+				return []models.Tag{{Name: "test"}}, nil
+			},
+			MockUpdatePostInstagramStatus: func(_ context.Context, arg models.UpdatePostInstagramStatusParams) error {
+				if arg.InstagramStatus != "published" {
+					t.Errorf("expected status published, got %s", arg.InstagramStatus)
+				}
+				return nil
+			},
+		}
+
+		postSvc := NewPostService(repo, settingsSvc, igSvc, nil, ts.URL)
+		if err := postSvc.CrossPostToInstagram(ctx, 1); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		want := []string{
+			ts.URL + "/2026/06/c.jpg",
+			ts.URL + "/2026/06/a.jpg",
+			ts.URL + "/2026/06/b.jpg",
+		}
+		if len(childURLs) != len(want) {
+			t.Fatalf("expected %d carousel children, got %d (%v)", len(want), len(childURLs), childURLs)
+		}
+		for i, w := range want {
+			if childURLs[i] != w {
+				t.Errorf("slide %d: expected %s, got %s", i, w, childURLs[i])
+			}
+		}
+	})
+
 	t.Run("Container ERROR marks post error", func(t *testing.T) {
 		data := map[string]string{
 			"instagram_access_token": "test-token",
