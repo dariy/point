@@ -109,12 +109,7 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 		return err
 	}
 
-	var images []models.Medium
-	for _, m := range media {
-		if imageExtRe.MatchString(m.OriginalPath) {
-			images = append(images, m)
-		}
-	}
+	images := orderImagesByPaths(media, paths)
 
 	if len(images) == 0 {
 		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", "Post has no images")
@@ -172,6 +167,26 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	}
 
 	return s.updateInstagramStatus(ctx, post.ID, "published", mediaID, "")
+}
+
+// orderImagesByPaths filters media down to images and returns them in the
+// order their original_path appears in paths. GetMediaByPaths makes no
+// ordering promise, but paths comes from ExtractMediaPaths in content order,
+// which is the order the slides must appear in on Instagram.
+func orderImagesByPaths(media []models.Medium, paths []string) []models.Medium {
+	byPath := make(map[string]models.Medium, len(media))
+	for _, m := range media {
+		if imageExtRe.MatchString(m.OriginalPath) {
+			byPath[m.OriginalPath] = m
+		}
+	}
+	images := make([]models.Medium, 0, len(byPath))
+	for _, p := range paths {
+		if m, ok := byPath[p]; ok {
+			images = append(images, m)
+		}
+	}
+	return images
 }
 
 func (s *PostService) expandCaptionTemplate(ctx context.Context, template string, post models.Post, appURL string) string {
