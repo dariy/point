@@ -71,17 +71,17 @@ export class InstagramImportSection extends Component {
     if (status.errors !== undefined) parts.push(`Errors: ${status.errors}`);
     if (status.finished_at) parts.push(`Last run: ${formatDateShort(status.finished_at)}`);
 
-    let html = parts.length ? `<p class="system-msg">${escapeHtml(parts.join(" · "))}</p>` : "";
-    if (status.error) html += `<p class="system-msg error">${escapeHtml(status.error)}</p>`;
+    let _html = parts.length ? `<p class="system-msg">${escapeHtml(parts.join(" · "))}</p>` : "";
+    if (status.error) _html += `<p class="system-msg error">${escapeHtml(status.error)}</p>`;
     if (Array.isArray(status.messages) && status.messages.length) {
       const items = status.messages.map((m) => `<li>${escapeHtml(m)}</li>`).join("");
-      html += `
+      _html += `
         <details class="ig-import-details">
           <summary>${status.messages.length} message${status.messages.length === 1 ? "" : "s"}</summary>
           <ul class="ig-import-messages">${items}</ul>
         </details>`;
     }
-    return html;
+    return _html;
   }
 
   afterRender() {

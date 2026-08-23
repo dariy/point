@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 /**
  * Public site header — blog logo, unified breadcrumb (tag path + active
  * facets), and nav buttons.
@@ -27,7 +29,6 @@ import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_
 import { ViewContext } from '../../utils/viewContext.js';
 import { hideFlyout } from '../../utils/tagFlyout.js';
 import { HeaderFold } from '../../utils/headerFold.js';
-
 export class PublicHeader extends Component {
   render() {
     const {
@@ -36,28 +37,18 @@ export class PublicHeader extends Component {
       editUrl = null,
       showShare = false,
       onToggleImmersive = null,
-      slot = '',
+      slot = ''
     } = this.props;
-
     const user = store.get('user');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
-    const logoHtml = settings.logo_url
-      ? `<img class="app-logo" src="${escapeHtml(settings.logo_url)}" alt="${escapeHtml(settings.blog_title || 'Logo')}" decoding="async">`
-      : APP_LOGO_SVG;
-
-    const shareButtonHtml = showShare
-      ? `<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
+    const logoHtml = settings.logo_url ? `<img class="app-logo" src="${escapeHtml(settings.logo_url)}" alt="${escapeHtml(settings.blog_title || 'Logo')}" decoding="async">` : APP_LOGO_SVG;
+    const shareButtonHtml = showShare ? `<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
            ${SHARE_SVG}
-         </button>`
-      : '';
-
-    const immersiveToggleHtml = onToggleImmersive
-      ? `<button type="button" class="header-action-btn immersive-toggle-btn"
+         </button>` : '';
+    const immersiveToggleHtml = onToggleImmersive ? `<button type="button" class="header-action-btn immersive-toggle-btn"
                  title="Immersive mode" aria-label="Immersive mode">
            ${EXPAND_SVG}
-         </button>`
-      : '';
-
+         </button>` : '';
     const vc = ViewContext.current();
 
     // The context zone holds two renderers: the site crumb (ours — identity,
@@ -65,9 +56,7 @@ export class PublicHeader extends Component {
     // the plugin fills. Each needs its own container because a Component owns
     // its container's innerHTML; both wrappers are `display: contents`, so the
     // crumbs stay direct flex children of `.site-breadcrumb`.
-    this._hasTrail = pluginHost.hasSlot('breadcrumbs') && !!(
-      breadcrumb.length || (vc.years && !this.props.timelineVisible) || vc.query
-    );
+    this._hasTrail = pluginHost.hasSlot('breadcrumbs') && !!(breadcrumb.length || vc.years && !this.props.timelineVisible || vc.query);
     const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">
             <span class="site-crumb-mount"></span>
             <span class="breadcrumb-trail"></span>
@@ -78,23 +67,13 @@ export class PublicHeader extends Component {
     //   <a class="header-action-btn" href="..." aria-label="...">  — for navigation
     //   <button class="header-action-btn" type="button" aria-label="...">  — for actions (no navigation)
     // The `.theme-toggle` class is kept as an alias and for sun/moon icon visibility logic.
-    const editButtonHeader = (user && editUrl)
-      ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn edit-btn-header" title="Edit" aria-label="Edit post">
+    const editButtonHeader = user && editUrl ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn edit-btn-header" title="Edit" aria-label="Edit post">
            ${EDIT_SVG}
-         </a>`
-      : '';
-
-    const editButtonBurger = (user && editUrl)
-      ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn" title="Edit" aria-label="Edit post">
+         </a>` : '';
+    const editButtonBurger = user && editUrl ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn" title="Edit" aria-label="Edit post">
            ${EDIT_SVG}
-         </a>`
-      : '';
-
-
+         </a>` : '';
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
-
-
-
     return `
       <div class="site-header-group">
         <div id="search-typeahead-mount" class="search-typeahead-mount"></div>
@@ -114,13 +93,11 @@ export class PublicHeader extends Component {
 
           <!-- Zone: context — breadcrumbs + count (the only elastic zone) -->
           ${crumbHtml}
-          ${(immersiveToggleHtml || shareButtonHtml || editButtonHeader)
-            ? `<div class="branding-actions">
+          ${immersiveToggleHtml || shareButtonHtml || editButtonHeader ? `<div class="branding-actions">
             ${immersiveToggleHtml}
             ${shareButtonHtml}
             ${editButtonHeader}
-          </div>`
-            : ''}
+          </div>` : ''}
 
           ${slot ? `<div class="site-nav-slot">${slot}</div>` : ''}
 
@@ -172,20 +149,18 @@ export class PublicHeader extends Component {
         </div>
       </div>`;
   }
-
-
   afterRender() {
-    const { onToggleImmersive } = this.props;
-
+    const {
+      onToggleImmersive
+    } = this.props;
     this.container.querySelectorAll('.immersive-toggle-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', e => {
         e.preventDefault();
         onToggleImmersive?.();
       });
     });
-
     this.container.querySelectorAll('.share-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', e => {
         e.preventDefault();
         const settings = store.get('settings') || {};
         sharePost({
@@ -194,7 +169,6 @@ export class PublicHeader extends Component {
         });
       });
     });
-
     this._group = this.$('.site-header-group');
     this._inner = this.$('.site-header-inner');
 
@@ -202,13 +176,13 @@ export class PublicHeader extends Component {
     // re-render belongs to a dead header and is unmounted on arrival.
     this._slotMounts = [];
     this._docListeners = [];
-    const gen = (this._renderGen = (this._renderGen || 0) + 1);
+    const gen = this._renderGen = (this._renderGen || 0) + 1;
 
     // One fold controller owns the header's space; components and plugins
     // contribute ordered fold ops (see utils/headerFold.js for the order map).
     this._fold = new HeaderFold({
       observe: this._group,
-      fits: () => this._rowFits(),
+      fits: () => this._rowFits()
     });
     this._registerCoreFolds();
 
@@ -227,16 +201,25 @@ export class PublicHeader extends Component {
       settings: this.props.settings || {},
       hasTrail: this._hasTrail,
       group: this._group,
-      fold: this._fold,
+      fold: this._fold
     });
-
     if (pluginHost.hasSlot('breadcrumbs')) {
-      pluginHost.fill('breadcrumbs', this.$('.breadcrumb-trail'), { ...this.props, group: this._group })
-        .then((comps) => { this._keepSlotMounts(gen, comps); this._fold?.relayout(); });
+      pluginHost.fill('breadcrumbs', this.$('.breadcrumb-trail'), {
+        ...this.props,
+        group: this._group
+      }).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        this._fold?.relayout();
+      });
     }
     if (pluginHost.hasSlot('nav-menu')) {
-      pluginHost.fill('nav-menu', this._inner, { ...this.props, fold: this._fold })
-        .then((comps) => { this._keepSlotMounts(gen, comps); this._fold?.relayout(); });
+      pluginHost.fill('nav-menu', this._inner, {
+        ...this.props,
+        fold: this._fold
+      }).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        this._fold?.relayout();
+      });
     }
 
     // Distraction-free toggle: the post list asks for it (distractionToggle);
@@ -254,8 +237,7 @@ export class PublicHeader extends Component {
         // that survives our container clear and would otherwise lock the site
         // in full-screen mode when navigating off the list.
         pluginHost.fill('post-list-tools', holder, {}).then(comps => {
-          if (this._unmounted) comps[0]?.unmount?.();
-          else this._dfPlugin = comps[0];
+          if (this._unmounted) comps[0]?.unmount?.();else this._dfPlugin = comps[0];
         });
       }
     }
@@ -266,31 +248,28 @@ export class PublicHeader extends Component {
       store.set('theme', current === 'dark' ? 'light' : 'dark');
     });
 
-
-
     // Header search (expandable)
     const searchForm = this.$('#header-search');
     if (searchForm) {
       const input = searchForm.querySelector('input[type="search"]');
       const toggleBtn = searchForm.querySelector('.search-toggle-btn');
-
       const closeSearch = () => {
         searchForm.classList.remove('is-active');
         input.tabIndex = -1;
         input.blur();
       };
-
       const submitSearch = () => {
         const q = input.value.trim();
         if (q) {
           this._saveRecentSearch(q);
-          ViewContext.update({ query: q });
+          ViewContext.update({
+            query: q
+          });
           input.value = '';
         }
         this._hideTypeahead();
         closeSearch();
       };
-
       let debounceTimer = null;
       input.addEventListener('input', () => {
         const q = input.value.trim();
@@ -301,12 +280,10 @@ export class PublicHeader extends Component {
           this._hideTypeahead();
         }
       });
-
       input.addEventListener('focus', () => {
         if (!input.value.trim()) this._showRecentSearches(input);
       });
-
-      toggleBtn.addEventListener('click', (e) => {
+      toggleBtn.addEventListener('click', e => {
         e.preventDefault();
         if (!searchForm.classList.contains('is-active')) {
           searchForm.classList.add('is-active');
@@ -323,10 +300,14 @@ export class PublicHeader extends Component {
           submitSearch();
         }
       });
-
-      searchForm.addEventListener('submit', (e) => { e.preventDefault(); submitSearch(); });
-      input.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
-      this._onDocument('click', (e) => {
+      searchForm.addEventListener('submit', e => {
+        e.preventDefault();
+        submitSearch();
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeSearch();
+      });
+      this._onDocument('click', e => {
         if (searchForm.classList.contains('is-active') && !searchForm.contains(e.target)) closeSearch();
       });
     }
@@ -334,10 +315,12 @@ export class PublicHeader extends Component {
     // Burger search (always-visible full-width input)
     const burgerSearchForm = this.$('.burger-search-form');
     if (burgerSearchForm) {
-      burgerSearchForm.addEventListener('submit', (e) => {
+      burgerSearchForm.addEventListener('submit', e => {
         e.preventDefault();
         const q = burgerSearchForm.querySelector('input[type="search"]').value.trim();
-        if (q) ViewContext.update({ query: q });
+        if (q) ViewContext.update({
+          query: q
+        });
         this._closeBurger();
       });
     }
@@ -346,23 +329,20 @@ export class PublicHeader extends Component {
     const navBurger = this.$('#nav-burger');
     if (navBurger) {
       const burgerBtn = navBurger.querySelector('.burger-toggle');
-      burgerBtn?.addEventListener('click', (e) => {
+      burgerBtn?.addEventListener('click', e => {
         e.stopPropagation();
         const isOpen = navBurger.classList.contains('is-open');
         navBurger.classList.toggle('is-open', !isOpen);
         burgerBtn.setAttribute('aria-expanded', String(!isOpen));
-
         if (!isOpen) {
           const input = navBurger.querySelector('input[type="search"]');
           if (input) setTimeout(() => input.focus(), 100);
         }
       });
-
-      this._onDocument('click', (e) => {
+      this._onDocument('click', e => {
         if (!navBurger.contains(e.target)) this._closeBurger();
       });
     }
-
 
     // Initial fold pass (HeaderFold's own ResizeObserver keeps it current).
     this._fold.relayout();
@@ -385,7 +365,7 @@ export class PublicHeader extends Component {
   _keepSlotMounts(gen, comps) {
     const mounts = [].concat(comps || []).filter(Boolean);
     if (gen !== this._renderGen || this._unmounted) {
-      mounts.forEach((m) => m.unmount?.());
+      mounts.forEach(m => m.unmount?.());
       return;
     }
     this._slotMounts.push(...mounts);
@@ -393,7 +373,7 @@ export class PublicHeader extends Component {
 
   /** Release everything this render attached outside its own container. */
   _teardownRender() {
-    this._slotMounts?.forEach((m) => m.unmount?.());
+    this._slotMounts?.forEach(m => m.unmount?.());
     this._slotMounts = [];
     this._docListeners?.forEach(([type, handler]) => document.removeEventListener(type, handler, true));
     this._docListeners = [];
@@ -409,21 +389,21 @@ export class PublicHeader extends Component {
     const group = this._group;
     const checkEllipsis = () => {
       const folded = group.querySelectorAll('.crumb-pair.folded');
-      folded.forEach((p) => p.classList.remove('show-ellipsis'));
+      folded.forEach(p => p.classList.remove('show-ellipsis'));
       if (folded.length) folded[folded.length - 1].classList.add('show-ellipsis');
     };
 
     // 10 — ornament: the subtitle goes first.
     this._fold.register(10, {
       reset: () => group.classList.remove('fold-title'),
-      ops: () => [() => group.classList.add('fold-title')],
+      ops: () => [() => group.classList.add('fold-title')]
     });
 
     // 20 — history: facet pairs, then ancestor tag pairs, left to right. The
     // blog-title (site) pair is spared here; it folds at 50.
     this._fold.register(20, {
       reset: () => {
-        group.querySelectorAll('.crumb-pair.folded').forEach((p) => {
+        group.querySelectorAll('.crumb-pair.folded').forEach(p => {
           p.classList.remove('folded', 'show-ellipsis');
         });
         // A crumb dropdown anchored to a now-reflowing crumb would be
@@ -432,15 +412,13 @@ export class PublicHeader extends Component {
       },
       ops: () => {
         const pairs = [...group.querySelectorAll('.crumb-pair')];
-        const facets = pairs.filter((p) => p.classList.contains('crumb-facet-pair'));
-        const tags = pairs.filter(
-          (p) => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair',
-        );
-        return [...facets, ...tags].map((p) => () => {
+        const facets = pairs.filter(p => p.classList.contains('crumb-facet-pair'));
+        const tags = pairs.filter(p => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair');
+        return [...facets, ...tags].map(p => () => {
           p.classList.add('folded');
           checkEllipsis();
         });
-      },
+      }
     });
 
     // 40 — the nav zone collapses into the burger.
@@ -451,7 +429,7 @@ export class PublicHeader extends Component {
       // opens. When the nav genuinely un-folds, `.nav-burger` is display:none
       // via CSS, so a lingering is-open state stays invisible until it refolds.
       reset: () => group.classList.remove('fold-nav'),
-      ops: () => [() => group.classList.add('fold-nav')],
+      ops: () => [() => group.classList.add('fold-nav')]
     });
 
     // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
@@ -459,16 +437,17 @@ export class PublicHeader extends Component {
     this._fold.register(50, {
       ops: () => {
         const sitePair = group.querySelector('#site-crumb-pair');
-        return sitePair
-          ? [() => { sitePair.classList.add('folded'); checkEllipsis(); }]
-          : [];
-      },
+        return sitePair ? [() => {
+          sitePair.classList.add('folded');
+          checkEllipsis();
+        }] : [];
+      }
     });
 
     // 60 — last resort: ellipsize the current crumb (click opens the full path).
     this._fold.register(60, {
       reset: () => group.classList.remove('fold-current'),
-      ops: () => [() => group.classList.add('fold-current')],
+      ops: () => [() => group.classList.add('fold-current')]
     });
   }
 
@@ -491,85 +470,82 @@ export class PublicHeader extends Component {
     if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
     return toolsRect.right <= right + 1;
   }
-
   _saveRecentSearch(q) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
     const next = [q, ...recent.filter(s => s !== q)].slice(0, 5);
     localStorage.setItem('recentSearches', JSON.stringify(next));
   }
-
   async _showTypeahead(q, input) {
     this._typeaheadActive = true;
     const vc = ViewContext.current();
-    const params = { q, limit: 3, status: 'published' };
+    const params = {
+      q,
+      limit: 3,
+      status: 'published'
+    };
     if (vc.tag) params.tag = vc.tag;
-
     try {
-      const [postsData, tagsData] = await Promise.all([
-        listPosts(params),
-        listTags({ q, limit: 5, include_empty: false })
-      ]);
-
+      const [postsData, tagsData] = await Promise.all([listPosts(params), listTags({
+        q,
+        limit: 5,
+        include_empty: false
+      })]);
       if (!this._typeaheadActive) return;
       this._renderTypeaheadResults(q, postsData.posts || [], tagsData.tags || [], input);
     } catch (err) {
       console.error('Typeahead failed:', err);
     }
   }
-
   _showRecentSearches(input) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
     if (!recent.length) return;
     this._renderTypeaheadResults('', [], [], input, recent);
   }
-
   _renderTypeaheadResults(q, posts, tags, input, recent = []) {
     const mount = document.getElementById('search-typeahead-mount');
     if (!mount) return;
-
     const inputRect = input.getBoundingClientRect();
     mount.style.top = `${inputRect.bottom + 4}px`;
     mount.style.left = `${inputRect.left}px`;
     mount.style.width = `${inputRect.width}px`;
     mount.classList.add('is-open');
-
-    let html = '';
+    let _html = '';
     if (recent.length) {
-      html += `<div class="typeahead-section"><div class="typeahead-label">Recent</div>`;
+      _html += `<div class="typeahead-section"><div class="typeahead-label">Recent</div>`;
       recent.forEach(s => {
-        html += `<a href="#" class="typeahead-item recent-item" data-q="${escapeHtml(s)}">${escapeHtml(s)}</a>`;
+        _html += `<a href="#" class="typeahead-item recent-item" data-q="${escapeHtml(s)}">${escapeHtml(s)}</a>`;
       });
-      html += `</div>`;
+      _html += `</div>`;
     } else {
       if (tags.length) {
-        html += `<div class="typeahead-section"><div class="typeahead-label">Tags</div>`;
+        _html += `<div class="typeahead-section"><div class="typeahead-label">Tags</div>`;
         tags.forEach(t => {
-          html += `<a href="/tags/${t.slug}" class="typeahead-item tag-item">
+          _html += `<a href="/tags/${t.slug}" class="typeahead-item tag-item">
             <span class="name">${escapeHtml(t.name)}</span>
             <span class="count">${t.post_count}</span>
           </a>`;
         });
-        html += `</div>`;
+        _html += `</div>`;
       }
       if (posts.length) {
-        html += `<div class="typeahead-section"><div class="typeahead-label">Posts</div>`;
+        _html += `<div class="typeahead-section"><div class="typeahead-label">Posts</div>`;
         posts.forEach(p => {
-          html += `<a href="/posts/${p.slug}" class="typeahead-item post-item">${escapeHtml(p.title)}</a>`;
+          _html += `<a href="/posts/${p.slug}" class="typeahead-item post-item">${escapeHtml(p.title)}</a>`;
         });
-        html += `</div>`;
+        _html += `</div>`;
       }
-      html += `<a href="#" class="typeahead-item search-all" data-q="${escapeHtml(q)}">Search everything for &ldquo;${escapeHtml(q)}&rdquo;</a>`;
+      _html += `<a href="#" class="typeahead-item search-all" data-q="${escapeHtml(q)}">Search everything for &ldquo;${escapeHtml(q)}&rdquo;</a>`;
     }
-
-    mount.innerHTML = html;
-
+    mount.innerHTML = html`${raw(_html)}`;
     mount.querySelectorAll('.typeahead-item').forEach(item => {
-      item.addEventListener('click', (e) => {
+      item.addEventListener('click', e => {
         e.preventDefault();
         const searchQ = item.dataset.q;
         if (searchQ) {
           this._saveRecentSearch(searchQ);
-          ViewContext.update({ query: searchQ });
+          ViewContext.update({
+            query: searchQ
+          });
           input.value = '';
         } else {
           navigate(item.getAttribute('href'));
@@ -578,24 +554,20 @@ export class PublicHeader extends Component {
       });
     });
   }
-
   _hideTypeahead() {
     this._typeaheadActive = false;
     const mount = document.getElementById('search-typeahead-mount');
     mount?.classList.remove('is-open');
   }
-
   _closeBurger() {
     const navBurger = this.$('#nav-burger');
     if (!navBurger) return;
     navBurger.classList.remove('is-open');
     navBurger.querySelector('.burger-toggle')?.setAttribute('aria-expanded', 'false');
   }
-
   beforeRender() {
     this._teardownRender();
   }
-
   beforeUnmount() {
     this._teardownRender();
     hideFlyout();

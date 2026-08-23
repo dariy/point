@@ -1,3 +1,5 @@
+import { raw } from "../utils/helpers.js";
+import { html } from "../utils/helpers.js";
 /**
  * MediaPager — the gesture layer for the admin media grid (/light/media).
  *
@@ -48,10 +50,8 @@ export function getMediaZoom() {
 
 /** Persist a zoom column count; 0/falsy clears it back to auto. */
 export function setMediaZoom(cols) {
-  if (cols > 0) localStorage.setItem(ZOOM_KEY, String(cols));
-  else localStorage.removeItem(ZOOM_KEY);
+  if (cols > 0) localStorage.setItem(ZOOM_KEY, String(cols));else localStorage.removeItem(ZOOM_KEY);
 }
-
 export class MediaPager {
   /**
    * @param {object} opts
@@ -65,7 +65,10 @@ export class MediaPager {
    */
   constructor(opts) {
     this._o = opts;
-    this._ghosts = { prev: null, next: null };
+    this._ghosts = {
+      prev: null,
+      next: null
+    };
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -94,7 +97,6 @@ export class MediaPager {
       this._preloadAdjacent();
     }
   }
-
   destroy() {
     this._teardown();
     this._clearGhosts();
@@ -144,7 +146,6 @@ export class MediaPager {
     const pag = this._pagination;
     const atStart = () => (pag.page || 1) <= 1;
     const atEnd = () => (pag.page || 1) >= (pag.pages || 1);
-
     this._gesture = new GestureController(root, {
       // Engage the drag a touch sooner than the immersive default so the grid
       // starts tracking the finger promptly instead of feeling laggy.
@@ -153,7 +154,7 @@ export class MediaPager {
       // the folder chip strip scrolls sideways, and the EXIF editor and the
       // selection toolbar are full of controls.
       ignoreSelector: '.mb-folder-chips, .exif-panel, .mb-selection-bar',
-      onPinchMove: (scaleDelta) => this._pinchStep(scaleDelta),
+      onPinchMove: scaleDelta => this._pinchStep(scaleDelta),
       onPinchEnd: () => this._onPinchEnd(),
       onSwipeMove: (dx, dy) => {
         // A commit is already animating to the next page; ignore new drags
@@ -163,11 +164,10 @@ export class MediaPager {
         const area = this._o.area();
         if (!area) return;
         const dir = dx < 0 ? 'next' : 'prev';
-        const blocked = (dir === 'next' && atEnd()) || (dir === 'prev' && atStart());
+        const blocked = dir === 'next' && atEnd() || dir === 'prev' && atStart();
         const tx = blocked ? rubberBand(dx) : dx;
         const stride = this._cachedStride();
         const ratio = Math.min(1, Math.abs(tx) / stride);
-
         area.classList.add('mb-swiping');
         area.style.transition = 'none';
         area.style.transform = `translateX(${tx}px)`;
@@ -177,10 +177,7 @@ export class MediaPager {
         // neighbour revealed the outgoing grid fades fully out; otherwise keep a
         // floor so a blocked edge drag never blanks the area.
         const ghost = blocked ? null : this._ghosts[dir];
-        area.style.opacity = String(
-          ghost ? Math.max(0, 1 - ratio) : Math.max(blocked ? 0.85 : 0.2, 1 - ratio),
-        );
-
+        area.style.opacity = String(ghost ? Math.max(0, 1 - ratio) : Math.max(blocked ? 0.85 : 0.2, 1 - ratio));
         this._clearOtherPeek(dir);
         if (ghost) {
           const offset = dir === 'next' ? stride : -stride;
@@ -191,22 +188,19 @@ export class MediaPager {
         }
       },
       onSwipeCancel: () => this._resetSwipe(),
-      onSwipeCommit: (dir) => {
+      onSwipeCommit: dir => {
         // Only horizontal swipes paginate; a vertical one scrolled the grid.
         if (dir !== 'left' && dir !== 'right') return;
         if (this._pageNavPending) return;
         const d = dir === 'left' ? 'next' : 'prev';
-        if ((d === 'next' && atEnd()) || (d === 'prev' && atStart())) this._resetSwipe();
-        else this._commitPageSwipe(d);
-      },
+        if (d === 'next' && atEnd() || d === 'prev' && atStart()) this._resetSwipe();else this._commitPageSwipe(d);
+      }
     });
-
     this._trackpad = new TrackpadDetector(root, {
-      onHorizontal: (dir) => {
+      onHorizontal: dir => {
         if (this._pageNavPending) return;
-        if (dir === 'left' && !atEnd()) this._o.gotoPage(pag.page + 1);
-        else if (dir === 'right' && !atStart()) this._o.gotoPage(pag.page - 1);
-      },
+        if (dir === 'left' && !atEnd()) this._o.gotoPage(pag.page + 1);else if (dir === 'right' && !atStart()) this._o.gotoPage(pag.page - 1);
+      }
     });
 
     // Cache the slide stride and re-anchor the ghosts at touch-down, so no
@@ -217,7 +211,9 @@ export class MediaPager {
       this._stride = this._measureStride();
       this._positionGhosts();
     };
-    root.addEventListener('touchstart', this._onTouchDown, { passive: true });
+    root.addEventListener('touchstart', this._onTouchDown, {
+      passive: true
+    });
     this._touchEl = root;
   }
 
@@ -254,14 +250,13 @@ export class MediaPager {
   async _preloadAdjacent() {
     const pag = this._pagination;
     if (!pag || (pag.pages || 1) <= 1) return;
-    const version = (this._ghostVersion = (this._ghostVersion || 0) + 1);
-
-    const build = async (dir) => {
+    const version = this._ghostVersion = (this._ghostVersion || 0) + 1;
+    const build = async dir => {
       const page = dir === 'next' ? pag.page + 1 : pag.page - 1;
       if (page < 1 || page > pag.pages) return;
-      let html;
+      let _html;
       try {
-        html = await this._o.fetchPage(page);
+        _html = await this._o.fetchPage(page);
       } catch {
         return;
       }
@@ -269,13 +264,12 @@ export class MediaPager {
       const el = document.createElement('div');
       el.className = 'mb-page-ghost';
       el.dataset.edge = dir;
-      el.innerHTML = html;
+      el.innerHTML = html`${raw(_html)}`;
       document.body.appendChild(el);
       this._ghosts[dir] = el;
       this.applyZoom(); // the ghost is on <body> and inherits no zoom of its own
       this._anchorGhost(el);
     };
-
     await Promise.all([build('prev'), build('next')]);
   }
 
@@ -361,7 +355,6 @@ export class MediaPager {
       this._resetSwipe();
     }, 3000);
   }
-
   _endPageNav() {
     this._pageNavPending = false;
     clearTimeout(this._pageNavWatchdog);
@@ -377,7 +370,6 @@ export class MediaPager {
     const pag = this._pagination;
     const targetPage = dir === 'next' ? pag.page + 1 : pag.page - 1;
     const ghost = this._ghosts[dir];
-
     this._beginPageNav();
 
     // No preloaded page yet (slow network / just landed): plain load.
@@ -386,11 +378,9 @@ export class MediaPager {
       this._o.gotoPage(targetPage);
       return;
     }
-
     const area = this._o.area();
     const stride = this._cachedStride();
     const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
-
     if (area) {
       area.style.transition = T;
       area.style.transform = `translateX(${dir === 'next' ? -stride : stride}px)`;
@@ -408,7 +398,6 @@ export class MediaPager {
     // The ghost is the page we are about to be on, so its identity is stale —
     // force a fresh preload on the next arm() even if the key were to match.
     this._ghostKey = null;
-
     setTimeout(() => {
       if (!this._o.isAlive()) return;
       this._o.gotoPage(targetPage);
@@ -431,7 +420,6 @@ export class MediaPager {
     if (!w) return MAX_COLS;
     return Math.max(1, Math.min(MAX_COLS, Math.floor(w / MIN_CARD_PX)));
   }
-
   _clampCols(cols) {
     return Math.max(1, Math.min(cols, this._maxCols()));
   }
@@ -469,10 +457,15 @@ export class MediaPager {
   /** Accumulate incremental pinch scale and step a column once it crosses ±40%. */
   _pinchStep(scaleDelta) {
     this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
-    if (this._pinchAccum > 1.4) { this._zoomBy(-1); this._pinchAccum = 1; }        // spread → bigger thumbs, fewer cols
-    else if (this._pinchAccum < 1 / 1.4) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller thumbs, more cols
+    if (this._pinchAccum > 1.4) {
+      this._zoomBy(-1);
+      this._pinchAccum = 1;
+    } // spread → bigger thumbs, fewer cols
+    else if (this._pinchAccum < 1 / 1.4) {
+      this._zoomBy(1);
+      this._pinchAccum = 1;
+    } // pinch → smaller thumbs, more cols
   }
-
   _onPinchEnd() {
     this._pinchAccum = 1;
     this._commitZoom(); // gesture's over — safe to refetch/re-render now
@@ -494,22 +487,25 @@ export class MediaPager {
     clearTimeout(this._zoomCommitTimer);
     this._o.onZoomCommit?.();
   }
-
   _setupZoomInputs() {
     this._teardownZoomInputs();
     const root = this._o.root();
     if (!root) return;
-
-    this._onZoomKey = (e) => {
+    this._onZoomKey = e => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTyping(e.target)) return;
-      if (e.key === '+' || e.key === '=') { e.preventDefault(); this._zoomBy(-1); }
-      else if (e.key === '-' || e.key === '_') { e.preventDefault(); this._zoomBy(1); }
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        this._zoomBy(-1);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        this._zoomBy(1);
+      }
     };
     window.addEventListener('keydown', this._onZoomKey);
 
     // Trackpad pinch on Chrome/Firefox/Edge arrives as a wheel event with ctrlKey.
-    this._onZoomWheel = (e) => {
+    this._onZoomWheel = e => {
       if (!e.ctrlKey) return;
       e.preventDefault();
       // Trackpad pinches stream many tiny deltas — accumulate so one step needs
@@ -523,22 +519,39 @@ export class MediaPager {
     };
     // Desktop Safari does NOT send ctrl+wheel for a trackpad pinch — it fires
     // its own gesture* events with a cumulative `scale`.
-    this._onGestureStart = (e) => { e.preventDefault(); this._gestureScale = 1; };
-    this._onGestureChange = (e) => {
+    this._onGestureStart = e => {
+      e.preventDefault();
+      this._gestureScale = 1;
+    };
+    this._onGestureChange = e => {
       e.preventDefault();
       const rel = e.scale / (this._gestureScale || 1);
-      if (rel > 1.4) { this._zoomBy(-1); this._gestureScale = e.scale; }
-      else if (rel < 1 / 1.4) { this._zoomBy(1); this._gestureScale = e.scale; }
+      if (rel > 1.4) {
+        this._zoomBy(-1);
+        this._gestureScale = e.scale;
+      } else if (rel < 1 / 1.4) {
+        this._zoomBy(1);
+        this._gestureScale = e.scale;
+      }
     };
-    this._onGestureEnd = (e) => { e.preventDefault(); this._commitZoom(); };
-
+    this._onGestureEnd = e => {
+      e.preventDefault();
+      this._commitZoom();
+    };
     this._zoomWheelEl = root;
-    root.addEventListener('wheel', this._onZoomWheel, { passive: false });
-    root.addEventListener('gesturestart', this._onGestureStart, { passive: false });
-    root.addEventListener('gesturechange', this._onGestureChange, { passive: false });
-    root.addEventListener('gestureend', this._onGestureEnd, { passive: false });
+    root.addEventListener('wheel', this._onZoomWheel, {
+      passive: false
+    });
+    root.addEventListener('gesturestart', this._onGestureStart, {
+      passive: false
+    });
+    root.addEventListener('gesturechange', this._onGestureChange, {
+      passive: false
+    });
+    root.addEventListener('gestureend', this._onGestureEnd, {
+      passive: false
+    });
   }
-
   _teardownZoomInputs() {
     if (this._onZoomKey) window.removeEventListener('keydown', this._onZoomKey);
     this._onZoomKey = null;
@@ -562,26 +575,32 @@ export class MediaPager {
     const pag = this._pagination;
     const pages = pag.pages || 1;
     const page = pag.page || 1;
-    const goPrev = () => { if (page > 1) this._o.gotoPage(page - 1); };
-    const goNext = () => { if (page < pages) this._o.gotoPage(page + 1); };
-
-    this._onKeyNav = (e) => {
+    const goPrev = () => {
+      if (page > 1) this._o.gotoPage(page - 1);
+    };
+    const goNext = () => {
+      if (page < pages) this._o.gotoPage(page + 1);
+    };
+    this._onKeyNav = e => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTyping(e.target)) return;
       // Up/Down are left to the browser so vertical scrolling still works.
-      if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') { e.preventDefault(); goPrev(); }
-      else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') { e.preventDefault(); goNext(); }
+      if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') {
+        e.preventDefault();
+        goPrev();
+      } else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') {
+        e.preventDefault();
+        goNext();
+      }
     };
     window.addEventListener('keydown', this._onKeyNav);
-
-    const CHEVRON = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
-                       ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+    const CHEVRON = d => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = CHEVRON(d);
+      b.innerHTML = html`${raw(CHEVRON(d))}`;
       b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);

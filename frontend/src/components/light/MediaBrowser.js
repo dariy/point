@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 /**
  * MediaBrowser — reusable media library component.
  *
@@ -21,36 +23,16 @@ import { Pagination } from "../shared/Pagination.js";
 import { MediaLightbox } from "../public/MediaLightbox.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { PromptDialog } from "../shared/PromptDialog.js";
-import {
-  listMedia,
-  uploadMedia,
-  deleteMedia,
-  renameMedia,
-  getMediaFolders,
-  reextractMediaEXIF,
-  updateMediaEXIF,
-  revertMediaEXIF,
-  setVideoPoster,
-} from "../../api/media.js";
+import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.js";
 import { captureVideoPoster } from "../../utils/videoPoster.js";
 import { MediaPager } from "../../core/mediaPager.js";
-import {
-  monthLabel,
-  folderChips,
-} from "../../utils/mediaFolders.js";
+import { monthLabel, folderChips } from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
-import {
-  EDIT_SVG,
-  LOCK_SVG,
-  TRASH_SVG,
-  INFO_SVG,
-  LINK_SVG,
-  PLUS_SVG,
-} from "../../utils/icons.js";
+import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.js";
 
 // What a grid card paints at. The grid is auto-fill minmax(180px, 1fr), dropping
 // to 144px under 48em, and a pinned zoom (core/mediaPager.js) can squeeze a
@@ -58,7 +40,6 @@ import {
 // the previews are object-fit: cover, so the browser rounding a rung up is the
 // forgiving direction.
 const GRID_THUMB_SIZES = "(max-width: 48em) 50vw, 220px";
-
 export class MediaBrowser extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -76,7 +57,7 @@ export class MediaBrowser extends Component {
       selectMode: false,
       capturingPosters: false,
       // per-item referring-posts panel: { [mediaId]: { loading, posts, error } }
-      referringPostsState: {},
+      referringPostsState: {}
     };
     this._dragCount = 0;
     this._dragListeners = [];
@@ -95,16 +76,20 @@ export class MediaBrowser extends Component {
       root: () => this.$(".media-browser"),
       area: () => this.$("#mb-media-area"),
       grid: () => this.$(".media-grid"),
-      fetchPage: (page) => this._pageMarkup(page),
-      gotoPage: (page) => {
+      fetchPage: page => this._pageMarkup(page),
+      gotoPage: page => {
         // A page swipe that lands mid-list reads as a failed swipe; the new
         // page starts at its top. (Desktop resets for free — the scrolling box
         // is re-rendered — so this is really for the mobile document flow.)
-        window.scrollTo({ top: 0 });
-        this._load({ page });
+        window.scrollTo({
+          top: 0
+        });
+        this._load({
+          page
+        });
       },
       onZoomCommit: () => this._refitToZoom(),
-      isAlive: () => !this._unmounted,
+      isAlive: () => !this._unmounted
     });
   }
 
@@ -114,7 +99,9 @@ export class MediaBrowser extends Component {
    * lookup (one setState per image) would refetch both neighbours.
    */
   _listingKey() {
-    const { page } = this.state.pagination;
+    const {
+      page
+    } = this.state.pagination;
     return [page, this.state.typeFilter, this.state.selectedFolder, this._lastPerPage].join("|");
   }
 
@@ -125,14 +112,17 @@ export class MediaBrowser extends Component {
    * bound: nothing in a ghost is ever clicked.
    */
   async _pageMarkup(page) {
-    const params = { page, per_page: this._lastPerPage || 24 };
+    const params = {
+      page,
+      per_page: this._lastPerPage || 24
+    };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
     const data = await listMedia(params);
     const items = data.media || [];
     if (!items.length) return `<p class="empty-state">No media files.</p>`;
     const none = new Set();
-    return `<div class="media-grid">${items.map((m) => this._renderItem(m, none)).join("")}</div>`;
+    return `<div class="media-grid">${items.map(m => this._renderItem(m, none)).join("")}</div>`;
   }
 
   /**
@@ -145,9 +135,10 @@ export class MediaBrowser extends Component {
     const cap = this._gridCapacity();
     if (!cap || cap === this._lastPerPage) return;
     this._measuredPerPage = cap;
-    this._load({ page: this.state.pagination.page || 1 });
+    this._load({
+      page: this.state.pagination.page || 1
+    });
   }
-
   render() {
     const {
       loading,
@@ -156,35 +147,22 @@ export class MediaBrowser extends Component {
       error,
       uploading,
       draggingOver,
-      selectedIds,
+      selectedIds
     } = this.state;
     const pickerMode = this.props.pickerMode;
-
-    const grid = loading
-      ? `<div class="loading-spinner" aria-label="Loading media…"></div>`
-      : error
-        ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
-        : !media.length
-          ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`
-          : `<div class="media-grid">${media.map((m) => this._renderItem(m, selectedIds)).join("")}</div>`;
-
-    const dropOverlay = pickerMode
-      ? `<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
+    const grid = loading ? `<div class="loading-spinner" aria-label="Loading media…"></div>` : error ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>` : !media.length ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>` : `<div class="media-grid">${media.map(m => this._renderItem(m, selectedIds)).join("")}</div>`;
+    const dropOverlay = pickerMode ? `<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
-         </div>`
-      : `<div class="drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
+         </div>` : `<div class="drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
          </div>`;
-
-    const selectionBar =
-      !pickerMode && this.state.selectMode ? this._renderSelectionBar() : "";
-
+    const selectionBar = !pickerMode && this.state.selectMode ? this._renderSelectionBar() : "";
     return `
       <div class="media-browser${pickerMode ? " media-browser--picker" : ""}${this.state.selectMode ? " media-browser--select-mode" : ""}">
         <input type="file" id="mb-file-input" multiple accept="image/*,video/*,audio/*" style="display:none">
@@ -218,13 +196,10 @@ export class MediaBrowser extends Component {
 
   /** Media type filter — first control on the folder (media/year/month) line. */
   _renderTypeFilter(typeFilter) {
-    const typeOptions = ["", "image", "video", "audio", "file"]
-      .map((t) => {
-        const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
-        return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
-      })
-      .join("");
-
+    const typeOptions = ["", "image", "video", "audio", "file"].map(t => {
+      const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
+      return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
+    }).join("");
     return `<select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
   }
 
@@ -236,15 +211,8 @@ export class MediaBrowser extends Component {
    * those in the header <h1> instead (see afterRender).
    */
   _renderMobileBar(typeFilter) {
-    const chips = folderChips(this.state.folders, this.state.selectedFolder)
-      .map(
-        (c) =>
-          `<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${escapeHtml(c.folder)}">${escapeHtml(c.label)}</button>`,
-      )
-      .join("");
-
+    const chips = folderChips(this.state.folders, this.state.selectedFolder).map(c => `<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${escapeHtml(c.folder)}">${escapeHtml(c.label)}</button>`).join("");
     const controls = this._renderControls().trim();
-
     return `
       <div class="mb-mobile-bar">
         ${this.props.pickerMode ? this._renderBreadcrumbs() : ""}
@@ -265,15 +233,12 @@ export class MediaBrowser extends Component {
     const strip = this.$(".mb-folder-chips");
     const active = strip?.querySelector(".mb-folder-chip.active");
     if (!strip || !active) return;
-    strip.scrollLeft =
-      active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+    strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
   }
 
   /** Videos on the current page that were never given a poster frame. */
   _posterlessVideos() {
-    return this.state.media.filter(
-      (m) => (m.file_type || "").toLowerCase() === "video" && !m.thumbnail_path,
-    );
+    return this.state.media.filter(m => (m.file_type || "").toLowerCase() === "video" && !m.thumbnail_path);
   }
 
   /**
@@ -294,7 +259,6 @@ export class MediaBrowser extends Component {
         ▶ Poster ${pending} video${pending === 1 ? "" : "s"}
       </button>`;
   }
-
   async _backfillPosters() {
     const pending = this._posterlessVideos();
     if (!pending.length || this.state.capturingPosters) return;
@@ -303,12 +267,13 @@ export class MediaBrowser extends Component {
     // silently reads as a dead button, so the run is announced up front and
     // reported at the end — both through the toast store, like every other
     // outcome in this component.
-    this.setState({ capturingPosters: true });
+    this.setState({
+      capturingPosters: true
+    });
     store.set("toast", {
       message: `Capturing poster${pending.length === 1 ? "" : "s"} for ${pending.length} video${pending.length === 1 ? "" : "s"}…`,
-      type: "info",
+      type: "info"
     });
-
     let done = 0;
     let failed = 0;
     for (const m of pending) {
@@ -324,17 +289,19 @@ export class MediaBrowser extends Component {
         failed++;
       }
     }
-
-    this.setState({ capturingPosters: false });
+    this.setState({
+      capturingPosters: false
+    });
     store.set("toast", {
       message: `Captured ${done} poster${done === 1 ? "" : "s"}${failed ? `, ${failed} could not be decoded by this browser` : ""}.`,
-      type: failed ? "warning" : "success",
+      type: failed ? "warning" : "success"
     });
     await this._load();
   }
-
   _renderBreadcrumbs() {
-    const { selectedFolder } = this.state;
+    const {
+      selectedFolder
+    } = this.state;
     const parts = selectedFolder ? selectedFolder.split("/") : [];
     const rootLabel = this.props.pickerMode ? "All Media" : "Media";
     let crumbs = `<button class="mb-breadcrumb-item" data-folder="">${escapeHtml(rootLabel)}</button>`;
@@ -346,7 +313,6 @@ export class MediaBrowser extends Component {
     });
     return `<div class="mb-breadcrumbs">${crumbs}</div>`;
   }
-
   _renderSelectionBar() {
     const count = this.state.selectedIds.size;
     return `
@@ -363,7 +329,6 @@ export class MediaBrowser extends Component {
         <button id="mb-sel-cancel" class="btn btn-sm btn-secondary" title="Exit selection mode">✕ Cancel</button>
       </div>`;
   }
-
   _renderItem(m, selectedIds) {
     const pickerMode = this.props.pickerMode;
     const fileType = (m.file_type || "").toLowerCase();
@@ -383,56 +348,30 @@ export class MediaBrowser extends Component {
     //
     // A video's dimensions describe the video, and its poster is fitted into the
     // same box the ladder caps at, so they are only handed over for an image.
-    const preview =
-      hasStill
-        ? `<img ${thumbAttrs(m.path || m.thumbnail_path, {
-            sizes: GRID_THUMB_SIZES,
-            width: isImage ? m.width : 0,
-            height: isImage ? m.height : 0,
-          })} alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${
-            isVideo
-              ? `<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>`
-              : ""
-          }`
-        : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${
-            isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"
-          }</div>`;
-
-    const publicStatus = m.is_public
-      ? ""
-      : `
+    const preview = hasStill ? `<img ${thumbAttrs(m.path || m.thumbnail_path, {
+      sizes: GRID_THUMB_SIZES,
+      width: isImage ? m.width : 0,
+      height: isImage ? m.height : 0
+    })} alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${isVideo ? `<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>` : ""}` : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"}</div>`;
+    const publicStatus = m.is_public ? "" : `
       <div class="media-item-status" title="Private (hidden from guests)">
         ${LOCK_SVG}
       </div>`;
-
     const copyPath = m.path || "";
-
-    const pickerCheckbox =
-      pickerMode || this.state.selectMode
-        ? `
+    const pickerCheckbox = pickerMode || this.state.selectMode ? `
       <label class="media-item-checkbox" title="${isSelected ? "Deselect" : "Select"}">
         <input type="checkbox" class="media-item-check" data-id="${escapeHtml(String(m.id))}"
                ${isSelected ? "checked" : ""} aria-label="Select ${escapeHtml(m.filename)}">
-      </label>`
-        : "";
-
+      </label>` : "";
     const exifPanel = pickerMode ? "" : this._renderExifPanel(m);
-    const refPanel =
-      !pickerMode && isImage ? this._renderReferringPostsInline(m) : "";
-
-    const actions = pickerMode
-      ? ""
-      : `
+    const refPanel = !pickerMode && isImage ? this._renderReferringPostsInline(m) : "";
+    const actions = pickerMode ? "" : `
       <div class="media-item-actions">
         <a href="${escapeHtml(m.path || "")}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
-        ${
-          isImage
-            ? `<button class="btn btn-sm create-post-btn"
+        ${isImage ? `<button class="btn btn-sm create-post-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-path="${escapeHtml(m.path || "")}" title="Create post with this image" aria-label="Create post with this image">${PLUS_SVG}</button>`
-            : ""
-        }
+                data-path="${escapeHtml(m.path || "")}" title="Create post with this image" aria-label="Create post with this image">${PLUS_SVG}</button>` : ""}
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
                 data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${EDIT_SVG}</button>
@@ -442,27 +381,18 @@ export class MediaBrowser extends Component {
         <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${INFO_SVG}</button>
 
       </div>`;
-
     return `
       <div class="media-item${isSelected ? " media-item--selected" : ""}"
-           data-id="${escapeHtml(String(m.id))}"${
-             isImage
-               ? ` data-src="${escapeHtml(m.path || "")}" data-alt="${escapeHtml(m.filename)}"`
-               : ""
-           }>
+           data-id="${escapeHtml(String(m.id))}"${isImage ? ` data-src="${escapeHtml(m.path || "")}" data-alt="${escapeHtml(m.filename)}"` : ""}>
         ${pickerCheckbox}
         ${publicStatus}
         <div class="media-item-preview${isImage && !pickerMode ? " media-item-preview--clickable" : ""}">${preview}</div>
         <div class="media-item-info">
           <div class="media-item-name-row">
             <div class="media-item-name" title="Click to select: ${escapeHtml(m.path)}">${escapeHtml(m.path)}</div>
-            ${
-              pickerMode
-                ? ""
-                : `
+            ${pickerMode ? "" : `
               <button class="btn btn-sm copy-path-btn"
-                      data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>`
-            }
+                      data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>`}
           </div>
           <div class="media-item-meta">
             ${escapeHtml(formatFileSize(m.file_size))} · ${escapeHtml(formatDateShort(m.uploaded_at))}
@@ -473,11 +403,9 @@ export class MediaBrowser extends Component {
         ${refPanel}
       </div>`;
   }
-
   _renderReferringPostsInline(m) {
     const st = (this.state.referringPostsState || {})[m.id];
     if (!st) return "";
-
     let body = "";
     if (st.loading) {
       body = `<div class="referring-posts-loading">Searching…</div>`;
@@ -486,17 +414,13 @@ export class MediaBrowser extends Component {
     } else if (!st.posts || st.posts.length === 0) {
       return "";
     } else {
-      body = `<ul class="referring-posts-list">${st.posts
-        .map(
-          (p) => `
+      body = `<ul class="referring-posts-list">${st.posts.map(p => `
         <li>
           <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="referring-post-link">
             <span class="referring-post-title">${escapeHtml(p.title || "(Untitled)")}</span>
             <span class="referring-post-status referring-post-status--${escapeHtml(p.status || "draft")}">${escapeHtml(p.status || "draft")}</span>
           </a>
-        </li>`,
-        )
-        .join("")}</ul>`;
+        </li>`).join("")}</ul>`;
     }
     return `
       <div class="referring-posts-panel inline" id="ref-panel-${escapeHtml(String(m.id))}">
@@ -506,20 +430,13 @@ export class MediaBrowser extends Component {
         ${body}
       </div>`;
   }
-
   _renderExifPanel(m) {
     const metadata = m.metadata || {};
-    const rows = Object.entries(metadata)
-      .map(
-        ([k, v]) =>
-          `<tr>
+    const rows = Object.entries(metadata).map(([k, v]) => `<tr>
         <td><input class="exif-key" value="${escapeHtml(String(k))}" placeholder="Field name" aria-label="EXIF field name"></td>
         <td><input class="exif-val" value="${escapeHtml(String(v))}" placeholder="Value" aria-label="EXIF value"></td>
         <td><button class="exif-delete-btn" type="button" title="Remove field" aria-label="Remove EXIF field">\u00d7</button></td>
-      </tr>`,
-      )
-      .join("");
-
+      </tr>`).join("");
     return `
       <div class="exif-panel" id="exif-panel-${escapeHtml(String(m.id))}" hidden>
         <div class="exif-panel-heading">
@@ -537,47 +454,41 @@ export class MediaBrowser extends Component {
         </div>
       </div>`;
   }
-
   _bindExifPanels() {
     // Toggle visibility
-    this.container.querySelectorAll(".exif-toggle-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
+    this.container.querySelectorAll(".exif-toggle-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
         e.stopPropagation();
-        const panel = this.container.querySelector(
-          `#exif-panel-${btn.dataset.id}`,
-        );
+        const panel = this.container.querySelector(`#exif-panel-${btn.dataset.id}`);
         if (panel) panel.hidden = !panel.hidden;
       });
     });
 
     // Delete a row
-    const bindDeleteBtns = (scope) => {
-      scope.querySelectorAll(".exif-delete-btn").forEach((btn) => {
+    const bindDeleteBtns = scope => {
+      scope.querySelectorAll(".exif-delete-btn").forEach(btn => {
         btn.addEventListener("click", () => btn.closest("tr").remove());
       });
     };
     bindDeleteBtns(this.container);
 
     // Add a new blank row using DOM API (no innerHTML with user data)
-    this.container.querySelectorAll(".exif-add-btn").forEach((btn) => {
+    this.container.querySelectorAll(".exif-add-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const tbody = btn.closest(".exif-panel").querySelector(".exif-rows");
         const tr = document.createElement("tr");
-
         const tdKey = document.createElement("td");
         const inputKey = document.createElement("input");
         inputKey.className = "exif-key";
         inputKey.placeholder = "Field name";
         inputKey.setAttribute("aria-label", "EXIF field name");
         tdKey.appendChild(inputKey);
-
         const tdVal = document.createElement("td");
         const inputVal = document.createElement("input");
         inputVal.className = "exif-val";
         inputVal.placeholder = "Value";
         inputVal.setAttribute("aria-label", "EXIF value");
         tdVal.appendChild(inputVal);
-
         const tdDel = document.createElement("td");
         const delBtn = document.createElement("button");
         delBtn.className = "exif-delete-btn";
@@ -587,7 +498,6 @@ export class MediaBrowser extends Component {
         delBtn.textContent = "\u00d7";
         delBtn.addEventListener("click", () => tr.remove());
         tdDel.appendChild(delBtn);
-
         tr.appendChild(tdKey);
         tr.appendChild(tdVal);
         tr.appendChild(tdDel);
@@ -596,13 +506,13 @@ export class MediaBrowser extends Component {
     });
 
     // Save EXIF — validates alphanumeric+space, writes to file via PUT /exif
-    this.container.querySelectorAll(".exif-save-btn").forEach((btn) => {
+    this.container.querySelectorAll(".exif-save-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
         const id = parseInt(btn.dataset.id, 10);
         const panel = btn.closest(".exif-panel");
         const fields = {};
         const invalid = [];
-        panel.querySelectorAll(".exif-rows tr").forEach((tr) => {
+        panel.querySelectorAll(".exif-rows tr").forEach(tr => {
           const key = tr.querySelector(".exif-key")?.value.trim();
           const val = tr.querySelector(".exif-val")?.value.trim();
           if (!key) return;
@@ -615,24 +525,27 @@ export class MediaBrowser extends Component {
         if (invalid.length > 0) {
           store.set("toast", {
             message: `Invalid characters in: ${invalid.join(", ")}. Only letters, numbers and spaces allowed.`,
-            type: "error",
+            type: "error"
           });
           return;
         }
         try {
           await updateMediaEXIF(id, fields);
-          store.set("toast", { message: "EXIF saved.", type: "success" });
+          store.set("toast", {
+            message: "EXIF saved.",
+            type: "success"
+          });
         } catch (err) {
           store.set("toast", {
             message: err.message || "Save failed.",
-            type: "error",
+            type: "error"
           });
         }
       });
     });
 
     // Revert EXIF — restores original_metadata captured at upload
-    this.container.querySelectorAll(".exif-revert-btn").forEach((btn) => {
+    this.container.querySelectorAll(".exif-revert-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const mountEl = document.createElement("div");
         document.body.appendChild(mountEl);
@@ -682,26 +595,26 @@ export class MediaBrowser extends Component {
               });
               store.set("toast", {
                 message: "EXIF reverted to original.",
-                type: "success",
+                type: "success"
               });
             } catch (err) {
               store.set("toast", {
                 message: err.message || "Revert failed.",
-                type: "error",
+                type: "error"
               });
             }
           },
           onCancel: () => {
             dialog.unmount();
             mountEl.remove();
-          },
+          }
         });
         dialog.mount();
       });
     });
 
     // Re-extract — rebuilds rows via DOM API
-    this.container.querySelectorAll(".exif-reextract-btn").forEach((btn) => {
+    this.container.querySelectorAll(".exif-reextract-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const mountEl = document.createElement("div");
         document.body.appendChild(mountEl);
@@ -726,7 +639,6 @@ export class MediaBrowser extends Component {
               // Rebuild rows via DOM API
               Object.entries(metadata).forEach(([k, v]) => {
                 const tr = document.createElement("tr");
-
                 const tdKey = document.createElement("td");
                 const inputKey = document.createElement("input");
                 inputKey.className = "exif-key";
@@ -734,7 +646,6 @@ export class MediaBrowser extends Component {
                 inputKey.setAttribute("aria-label", "EXIF field name");
                 inputKey.value = String(k); // safe: sets value property, not attribute
                 tdKey.appendChild(inputKey);
-
                 const tdVal = document.createElement("td");
                 const inputVal = document.createElement("input");
                 inputVal.className = "exif-val";
@@ -742,7 +653,6 @@ export class MediaBrowser extends Component {
                 inputVal.setAttribute("aria-label", "EXIF value");
                 inputVal.value = String(v); // safe: sets value property
                 tdVal.appendChild(inputVal);
-
                 const tdDel = document.createElement("td");
                 const delBtn = document.createElement("button");
                 delBtn.className = "exif-delete-btn";
@@ -752,63 +662,56 @@ export class MediaBrowser extends Component {
                 delBtn.textContent = "\u00d7";
                 delBtn.addEventListener("click", () => tr.remove());
                 tdDel.appendChild(delBtn);
-
                 tr.appendChild(tdKey);
                 tr.appendChild(tdVal);
                 tr.appendChild(tdDel);
                 tbody.appendChild(tr);
               });
-
-              const msg = Object.keys(metadata).length
-                ? "EXIF re-extracted."
-                : "No EXIF data found in this file.";
-              store.set("toast", { message: msg, type: "success" });
+              const msg = Object.keys(metadata).length ? "EXIF re-extracted." : "No EXIF data found in this file.";
+              store.set("toast", {
+                message: msg,
+                type: "success"
+              });
             } catch (err) {
               store.set("toast", {
                 message: err.message || "Re-extract failed.",
-                type: "error",
+                type: "error"
               });
             }
           },
           onCancel: () => {
             dialog.unmount();
             mountEl.remove();
-          },
+          }
         });
         dialog.mount();
       });
     });
   }
-
   afterRender() {
-    const { pickerMode } = this.props;
-
+    const {
+      pickerMode
+    } = this.props;
     if (!this.state.loading && this.state.pagination.pages > 1) {
       this.mountChild(Pagination, "#mb-pagination-mount", {
         page: this.state.pagination.page,
         pages: this.state.pagination.pages,
         total: this.state.pagination.total,
-        onPage: (p) => this._load({ page: p }),
+        onPage: p => this._load({
+          page: p
+        })
       });
     }
-
     const fileInput = this.$("#mb-file-input");
 
     // Tree and mobile-bar copies of each control are both in the DOM (CSS shows
     // one), so every listener binds across all matches.
-    this.$$(".mb-posters-btn").forEach((btn) =>
-      btn.addEventListener("click", () => this._backfillPosters()),
-    );
+    this.$$(".mb-posters-btn").forEach(btn => btn.addEventListener("click", () => this._backfillPosters()));
 
     // Mobile capture buttons
-    this.$("#mb-capture-camera-btn")?.addEventListener("click", () =>
-      this.$("#mb-capture-camera-input")?.click(),
-    );
-    this.$("#mb-capture-video-btn")?.addEventListener("click", () =>
-      this.$("#mb-capture-video-input")?.click(),
-    );
-
-    const onCapture = (e) => {
+    this.$("#mb-capture-camera-btn")?.addEventListener("click", () => this.$("#mb-capture-camera-input")?.click());
+    this.$("#mb-capture-video-btn")?.addEventListener("click", () => this.$("#mb-capture-video-input")?.click());
+    const onCapture = e => {
       this._uploadFiles(Array.from(e.target.files));
       e.target.value = "";
     };
@@ -816,99 +719,110 @@ export class MediaBrowser extends Component {
     this.$("#mb-capture-video-input")?.addEventListener("change", onCapture);
 
     // Breadcrumbs
-    this.$$(".mb-breadcrumb-item").forEach((btn) => {
+    this.$$(".mb-breadcrumb-item").forEach(btn => {
       btn.addEventListener("click", () => {
-        this.setState({ selectedFolder: btn.dataset.folder || null });
-        this._load({ page: 1 });
+        this.setState({
+          selectedFolder: btn.dataset.folder || null
+        });
+        this._load({
+          page: 1
+        });
       });
     });
-
     if (!pickerMode) {
       const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
-        h1.innerHTML = this._renderBreadcrumbs();
-        h1.querySelectorAll(".mb-breadcrumb-item").forEach((btn) => {
+        h1.innerHTML = html`${raw(this._renderBreadcrumbs())}`;
+        h1.querySelectorAll(".mb-breadcrumb-item").forEach(btn => {
           btn.addEventListener("click", () => {
-            this.setState({ selectedFolder: btn.dataset.folder || null });
-            this._load({ page: 1 });
+            this.setState({
+              selectedFolder: btn.dataset.folder || null
+            });
+            this._load({
+              page: 1
+            });
           });
         });
       }
     }
-
     fileInput?.addEventListener("change", () => {
       this._uploadFiles(Array.from(fileInput.files));
       fileInput.value = "";
     });
-
     this._wireDragDrop(fileInput, pickerMode);
     this._bindPreviewFallback();
-
-    this.$$(".mb-type-filter").forEach((select) =>
-      select.addEventListener("change", (e) => {
-        this.setState({ typeFilter: e.target.value });
-        this._load({ page: 1 });
-        this._loadFolders();
-      }),
-    );
+    this.$$(".mb-type-filter").forEach(select => select.addEventListener("change", e => {
+      this.setState({
+        typeFilter: e.target.value
+      });
+      this._load({
+        page: 1
+      });
+      this._loadFolders();
+    }));
 
     // Folder / "all" / Year selection — mobile chips share the
     // data-folder contract. (Not [data-folder]: that would also match the
     // breadcrumb buttons wired above.)
-    this.$$(".mb-folder-chip").forEach((btn) => {
+    this.$$(".mb-folder-chip").forEach(btn => {
       btn.addEventListener("click", () => {
         const folder = btn.dataset.folder || null;
-        this.setState({ selectedFolder: folder });
-        this._load({ page: 1 });
+        this.setState({
+          selectedFolder: folder
+        });
+        this._load({
+          page: 1
+        });
       });
     });
-
     this._centerActiveChip();
-
     if (pickerMode || this.state.selectMode) {
       // Picker/Select: toggle selection via checkbox or clicking the item
-      this.$$(".media-item").forEach((item) => {
-        item.addEventListener("click", (e) => {
+      this.$$(".media-item").forEach(item => {
+        item.addEventListener("click", e => {
           // Don't trigger if clicking directly on checkbox label (it handles its own state)
           if (e.target.closest(".media-item-checkbox")) return;
           const id = parseInt(item.dataset.id, 10);
           this._toggleSelection(id);
         });
       });
-      this.$$(".media-item-check").forEach((checkbox) => {
+      this.$$(".media-item-check").forEach(checkbox => {
         checkbox.addEventListener("change", () => {
           const id = parseInt(checkbox.dataset.id, 10);
           this._toggleSelection(id);
         });
       });
     }
-
     if (!pickerMode) {
       // Selection bar actions
       this.$("#mb-sel-cancel")?.addEventListener("click", () => {
-        this.setState({ selectMode: false, selectedIds: new Set() });
+        this.setState({
+          selectMode: false,
+          selectedIds: new Set()
+        });
       });
-
       this.$("#mb-sel-create-post")?.addEventListener("click", () => {
         this._createPostFromSelected();
       });
-
       this.$("#mb-sel-delete")?.addEventListener("click", () => {
         this._deleteSelected();
       });
 
       // Long-press to enter select mode (standalone only)
-      this.$$(".media-item").forEach((item) => {
+      this.$$(".media-item").forEach(item => {
         let timer = null;
         let originX = 0;
         let originY = 0;
-        const start = (e) => {
+        const start = e => {
           originX = e.clientX;
           originY = e.clientY;
           timer = setTimeout(() => {
             if (!this.state.selectMode) {
               const id = parseInt(item.dataset.id, 10);
-              this.setState({ selectMode: true, selectedIds: new Set([id]) });
+              this.setState({
+                selectMode: true,
+                selectedIds: new Set([id])
+              });
             }
           }, 600);
         };
@@ -919,7 +833,7 @@ export class MediaBrowser extends Component {
         // A drag is a page swipe (or a scroll), not a long press — a slow one
         // would otherwise sit still long enough to open select mode under the
         // moving grid.
-        const moved = (e) => {
+        const moved = e => {
           if (!timer) return;
           if (Math.hypot(e.clientX - originX, e.clientY - originY) > 10) cancel();
         };
@@ -931,8 +845,8 @@ export class MediaBrowser extends Component {
       });
 
       // Standalone: delete, copy, lightbox
-      this.$$(".delete-media-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
+      this.$$(".delete-media-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
           e.stopPropagation();
           const id = parseInt(btn.dataset.id, 10);
           this._showDeleteConfirm(id, btn.dataset.name);
@@ -940,50 +854,47 @@ export class MediaBrowser extends Component {
       });
 
       // Create post from single image
-      this.$$(".create-post-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
+      this.$$(".create-post-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
           e.stopPropagation();
           const path = btn.dataset.path;
           this._createPostWithImage(path);
         });
       });
-
-      this.$$(".copy-path-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
+      this.$$(".copy-path-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
           e.stopPropagation();
           const path = btn.dataset.path;
           if (navigator.clipboard) {
-            navigator.clipboard
-              .writeText(path)
-              .then(() => {
-                store.set("toast", {
-                  message: `Copied: ${path}`,
-                  type: "success",
-                });
-              })
-              .catch(() => {
-                store.set("toast", { message: "Copy failed", type: "error" });
+            navigator.clipboard.writeText(path).then(() => {
+              store.set("toast", {
+                message: `Copied: ${path}`,
+                type: "success"
               });
+            }).catch(() => {
+              store.set("toast", {
+                message: "Copy failed",
+                type: "error"
+              });
+            });
           } else {
             store.set("toast", {
               message: "Clipboard unavailable (requires HTTPS)",
-              type: "error",
+              type: "error"
             });
           }
         });
       });
-
-      this.$$(".rename-media-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
+      this.$$(".rename-media-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
           e.stopPropagation();
           const id = parseInt(btn.dataset.id, 10);
           const oldName = btn.dataset.name;
           this._showRenamePrompt(id, oldName);
         });
       });
-
-      this.$$(".media-item-name").forEach((el) => {
-        el.addEventListener("click", (e) => {
+      this.$$(".media-item-name").forEach(el => {
+        el.addEventListener("click", e => {
           e.stopPropagation(); // Don't trigger item selection or lightbox
           const selection = window.getSelection();
           const range = document.createRange();
@@ -992,23 +903,18 @@ export class MediaBrowser extends Component {
           selection.addRange(range);
         });
       });
-
       const imageItems = Array.from(this.$$(".media-item[data-src]"));
       if (imageItems.length > 0) {
-        const images = imageItems.map((el) => ({
+        const images = imageItems.map(el => ({
           src: el.dataset.src,
-          alt: el.dataset.alt || "",
+          alt: el.dataset.alt || ""
         }));
         imageItems.forEach((el, index) => {
-          el.querySelector(".media-item-preview")?.addEventListener(
-            "click",
-            () => {
-              this._lightbox.open(images, index);
-            },
-          );
+          el.querySelector(".media-item-preview")?.addEventListener("click", () => {
+            this._lightbox.open(images, index);
+          });
         });
       }
-
       this._bindExifPanels();
     }
 
@@ -1019,7 +925,6 @@ export class MediaBrowser extends Component {
       this._pager.arm(this.state.pagination, this._listingKey());
     }
   }
-
   _toggleSelection(id) {
     const selectedIds = new Set(this.state.selectedIds);
     if (selectedIds.has(id)) {
@@ -1027,10 +932,12 @@ export class MediaBrowser extends Component {
       delete this._selectedItemsById[id];
     } else {
       selectedIds.add(id);
-      const item = this.state.media.find((m) => m.id === id);
+      const item = this.state.media.find(m => m.id === id);
       if (item) this._selectedItemsById[id] = item;
     }
-    this.setState({ selectedIds });
+    this.setState({
+      selectedIds
+    });
   }
 
   /** Navigate to a new post pre-seeded with one image path in content. */
@@ -1044,16 +951,20 @@ export class MediaBrowser extends Component {
 
   /** Create a post from all currently selected images (standalone mode). */
   async _createPostFromSelected() {
-    const items = Array.from(this.state.selectedIds)
-      .map((id) => this._selectedItemsById[id])
-      .filter(Boolean);
+    const items = Array.from(this.state.selectedIds).map(id => this._selectedItemsById[id]).filter(Boolean);
     if (items.length === 0) {
-      store.set("toast", { message: "No images selected.", type: "error" });
+      store.set("toast", {
+        message: "No images selected.",
+        type: "error"
+      });
       return;
     }
-    const content = items.map((m) => m.path).join("\n");
+    const content = items.map(m => m.path).join("\n");
     sessionStorage.setItem("newPostInitialContent", content);
-    this.setState({ selectMode: false, selectedIds: new Set() });
+    this.setState({
+      selectMode: false,
+      selectedIds: new Set()
+    });
     navigate("/light/posts/new");
   }
 
@@ -1063,11 +974,12 @@ export class MediaBrowser extends Component {
     if (ids.length === 0) return;
     this._showBulkDeleteConfirm(ids);
   }
-
   _showBulkDeleteConfirm(ids) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
-    import("../shared/ConfirmDialog.js").then(({ ConfirmDialog }) => {
+    import("../shared/ConfirmDialog.js").then(({
+      ConfirmDialog
+    }) => {
       const dialog = new ConfirmDialog(mountEl, {
         title: "Delete files",
         message: `Delete ${ids.length} file${ids.length !== 1 ? "s" : ""}? This cannot be undone.`,
@@ -1081,12 +993,11 @@ export class MediaBrowser extends Component {
         onCancel: () => {
           dialog.unmount();
           mountEl.remove();
-        },
+        }
       });
       dialog.mount();
     });
   }
-
   async _bulkDelete(ids) {
     let deleted = 0;
     let failed = 0;
@@ -1100,35 +1011,57 @@ export class MediaBrowser extends Component {
     }
     store.set("toast", {
       message: `Deleted ${deleted}${failed ? `, ${failed} failed` : ""}.`,
-      type: failed ? "warning" : "success",
+      type: failed ? "warning" : "success"
     });
-    this.setState({ selectMode: false, selectedIds: new Set() });
+    this.setState({
+      selectMode: false,
+      selectedIds: new Set()
+    });
     this._selectedItemsById = {};
     this._load();
     this._loadFolders();
   }
-
   async _loadReferringPosts(id, imagePath) {
-    const rps = { ...this.state.referringPostsState };
-    rps[id] = { loading: true, posts: null, error: null };
-    this.setState({ referringPostsState: rps });
+    const rps = {
+      ...this.state.referringPostsState
+    };
+    rps[id] = {
+      loading: true,
+      posts: null,
+      error: null
+    };
+    this.setState({
+      referringPostsState: rps
+    });
     try {
       const data = await listPosts({
         q: imagePath,
         per_page: 50,
-        status: "all",
+        status: "all"
       });
-      const rps2 = { ...this.state.referringPostsState };
-      rps2[id] = { loading: false, posts: data.posts || [], error: null };
-      this.setState({ referringPostsState: rps2 });
+      const rps2 = {
+        ...this.state.referringPostsState
+      };
+      rps2[id] = {
+        loading: false,
+        posts: data.posts || [],
+        error: null
+      };
+      this.setState({
+        referringPostsState: rps2
+      });
     } catch (err) {
-      const rps2 = { ...this.state.referringPostsState };
+      const rps2 = {
+        ...this.state.referringPostsState
+      };
       rps2[id] = {
         loading: false,
         posts: null,
-        error: err.message || "Search failed.",
+        error: err.message || "Search failed."
       };
-      this.setState({ referringPostsState: rps2 });
+      this.setState({
+        referringPostsState: rps2
+      });
     }
   }
 
@@ -1162,79 +1095,70 @@ export class MediaBrowser extends Component {
   _bindPreviewFallback() {
     const grid = this.$(".media-grid");
     if (!grid) return;
-    grid.addEventListener(
-      "error",
-      (e) => {
-        const img = e.target;
-        if (!(img instanceof HTMLImageElement)) return;
-        const preview = img.closest(".media-item-preview");
-        if (!preview) return;
-        const overlay = preview.querySelector(".file-icon--overlay");
-        img.remove();
-        if (overlay) overlay.classList.remove("file-icon--overlay");
-      },
-      true,
-    );
+    grid.addEventListener("error", e => {
+      const img = e.target;
+      if (!(img instanceof HTMLImageElement)) return;
+      const preview = img.closest(".media-item-preview");
+      if (!preview) return;
+      const overlay = preview.querySelector(".file-icon--overlay");
+      img.remove();
+      if (overlay) overlay.classList.remove("file-icon--overlay");
+    }, true);
   }
-
   _wireDragDrop(fileInput, pickerMode) {
     // Remove any previously registered listeners before re-registering.
     // afterRender fires on every setState re-render, so without this cleanup
     // each render accumulates an extra set of document-level drop handlers.
-    for (const [t, ev, fn] of this._dragListeners)
-      t.removeEventListener(ev, fn);
+    for (const [t, ev, fn] of this._dragListeners) t.removeEventListener(ev, fn);
     this._dragListeners = [];
 
     // In picker mode, scope drag-drop to the component container to avoid
     // conflicting with PostEditPage's document-level drag handler.
     const target = pickerMode ? this.container : document;
-
     this._internalDrag = false;
-    const onDragStart = () => { this._internalDrag = true; };
-    const onDragEnd = () => { this._internalDrag = false; };
-
-    const onEnter = (e) => {
+    const onDragStart = () => {
+      this._internalDrag = true;
+    };
+    const onDragEnd = () => {
+      this._internalDrag = false;
+    };
+    const onEnter = e => {
       if (this._internalDrag) return;
       if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount++;
-      if (this._dragCount === 1) this.setState({ draggingOver: true });
+      if (this._dragCount === 1) this.setState({
+        draggingOver: true
+      });
     };
-    const onLeave = (e) => {
+    const onLeave = e => {
       if (this._internalDrag) return;
       if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount = Math.max(0, this._dragCount - 1);
-      if (this._dragCount === 0) this.setState({ draggingOver: false });
+      if (this._dragCount === 0) this.setState({
+        draggingOver: false
+      });
     };
-    const onOver = (e) => {
+    const onOver = e => {
       if (!this._internalDrag) e.preventDefault();
     };
-    const onDrop = (e) => {
+    const onDrop = e => {
       if (this._internalDrag) return;
       e.preventDefault();
       this._dragCount = 0;
-      this.setState({ draggingOver: false });
+      this.setState({
+        draggingOver: false
+      });
       const files = Array.from(e.dataTransfer?.files || []);
       if (files.length) this._uploadFiles(files);
     };
-
     target.addEventListener("dragenter", onEnter);
     target.addEventListener("dragleave", onLeave);
     target.addEventListener("dragover", onOver);
     target.addEventListener("drop", onDrop);
-
     document.addEventListener("dragstart", onDragStart);
     document.addEventListener("dragend", onDragEnd);
-
-    this._dragListeners = [
-      [target, "dragenter", onEnter],
-      [target, "dragleave", onLeave],
-      [target, "dragover", onOver],
-      [target, "drop", onDrop],
-      [document, "dragstart", onDragStart],
-      [document, "dragend", onDragEnd],
-    ];
+    this._dragListeners = [[target, "dragenter", onEnter], [target, "dragleave", onLeave], [target, "dragover", onOver], [target, "drop", onDrop], [document, "dragstart", onDragStart], [document, "dragend", onDragEnd]];
   }
-
   beforeUnmount() {
     for (const [target, event, fn] of this._dragListeners) {
       target.removeEventListener(event, fn);
@@ -1244,20 +1168,20 @@ export class MediaBrowser extends Component {
     this._pager?.destroy();
     this._dragCount = 0;
   }
-
   mount() {
     super.mount();
     this._loadFolders();
     this._load();
   }
-
   async _loadFolders() {
     try {
       const params = {};
       if (this.state.typeFilter) params.file_type = this.state.typeFilter;
       const data = await getMediaFolders(params);
       const folders = data.folders || [];
-      this.setState({ folders });
+      this.setState({
+        folders
+      });
     } catch {
       // Silently ignore
     }
@@ -1285,29 +1209,33 @@ export class MediaBrowser extends Component {
     const rows = Math.max(1, Math.floor((area.clientHeight + gap) / (item.offsetHeight + gap)));
     return Math.min(MAX, Math.max(BASE, cols * rows));
   }
-
   async _load(overrides = {}) {
-    this.setState({ loading: true, error: null });
+    this.setState({
+      loading: true,
+      error: null
+    });
     const perPage = this._measuredPerPage ?? 24;
     this._lastPerPage = perPage;
     const params = {
       page: overrides.page ?? 1,
-      per_page: perPage,
+      per_page: perPage
     };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
-
     try {
       const data = await listMedia(params);
       const media = data.media || [];
       this.setState({
         loading: false,
         media,
-        pagination: { page: data.page, pages: data.pages, total: data.total },
+        pagination: {
+          page: data.page,
+          pages: data.pages,
+          total: data.total
+        }
       });
-
       if (!this.props.pickerMode) {
-        media.forEach((m) => {
+        media.forEach(m => {
           if ((m.file_type || "").toLowerCase() === "image" && m.path) {
             this._loadReferringPosts(m.id, m.path);
           }
@@ -1322,24 +1250,27 @@ export class MediaBrowser extends Component {
           const cap = this._gridCapacity();
           if (cap && cap !== this._lastPerPage) {
             this._measuredPerPage = cap;
-            this._load({ page: data.page, corrected: true });
+            this._load({
+              page: data.page,
+              corrected: true
+            });
           }
         });
       }
     } catch (err) {
       this.setState({
         loading: false,
-        error: err.message || "Failed to load media.",
+        error: err.message || "Failed to load media."
       });
     }
   }
-
   async _uploadFiles(files) {
     if (!files.length) return;
-    this.setState({ uploading: true });
+    this.setState({
+      uploading: true
+    });
     const uploadedItems = [];
     let failed = 0;
-
     for (const file of files) {
       try {
         const result = await uploadMedia(file);
@@ -1348,13 +1279,13 @@ export class MediaBrowser extends Component {
         failed++;
       }
     }
-
-    this.setState({ uploading: false });
+    this.setState({
+      uploading: false
+    });
     store.set("toast", {
       message: `Uploaded ${uploadedItems.length}${failed ? `, ${failed} failed` : ""}.`,
-      type: failed ? "warning" : "success",
+      type: failed ? "warning" : "success"
     });
-
     await this._load();
     await this._loadFolders();
 
@@ -1363,12 +1294,13 @@ export class MediaBrowser extends Component {
       for (const item of uploadedItems) {
         this._selectedItemsById[item.id] = item;
       }
-      const newIds = uploadedItems.map((item) => item.id);
+      const newIds = uploadedItems.map(item => item.id);
       const selectedIds = new Set([...this.state.selectedIds, ...newIds]);
-      this.setState({ selectedIds });
+      this.setState({
+        selectedIds
+      });
     }
   }
-
   _showDeleteConfirm(id, name) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
@@ -1385,11 +1317,10 @@ export class MediaBrowser extends Component {
       onCancel: () => {
         dialog.unmount();
         mountEl.remove();
-      },
+      }
     });
     dialog.mount();
   }
-
   _showRenamePrompt(id, oldName) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
@@ -1398,16 +1329,15 @@ export class MediaBrowser extends Component {
       message: "Enter new name:",
       defaultValue: oldName,
       confirmText: "Rename",
-      onConfirm: (newName) => {
+      onConfirm: newName => {
         dialog.unmount();
         mountEl.remove();
         // Sanitise: keep only letters, digits, hyphens, underscores and spaces.
         const safe = (newName || "").trim().replace(/[^a-zA-Z0-9\-_ ]/g, "");
         if (!safe) {
           store.set("toast", {
-            message:
-              "Name must contain letters, digits, hyphens, underscores or spaces only.",
-            type: "error",
+            message: "Name must contain letters, digits, hyphens, underscores or spaces only.",
+            type: "error"
           });
           return;
         }
@@ -1418,35 +1348,39 @@ export class MediaBrowser extends Component {
       onCancel: () => {
         dialog.unmount();
         mountEl.remove();
-      },
+      }
     });
     dialog.mount();
   }
-
   async _deleteMedia(id) {
     try {
       await deleteMedia(id);
-      store.set("toast", { message: "File deleted.", type: "success" });
+      store.set("toast", {
+        message: "File deleted.",
+        type: "success"
+      });
       this._load();
       this._loadFolders();
     } catch (err) {
       store.set("toast", {
         message: err.message || "Delete failed.",
-        type: "error",
+        type: "error"
       });
     }
   }
-
   async _renameMedia(id, newFilename) {
     try {
       await renameMedia(id, newFilename);
-      store.set("toast", { message: "File renamed.", type: "success" });
+      store.set("toast", {
+        message: "File renamed.",
+        type: "success"
+      });
       this._load();
       this._loadFolders();
     } catch (err) {
       store.set("toast", {
         message: err.message || "Rename failed.",
-        type: "error",
+        type: "error"
       });
     }
   }

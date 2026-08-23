@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 /**
  * Slideshow — auto-advancing controller for the immersive MediaViewer.
  *
@@ -15,7 +17,6 @@
  */
 
 import { PLAY_SVG, PAUSE_SVG, MINUS_SVG, PLUS_SVG, SHUFFLE_SVG, REPEAT_SVG } from '../../utils/icons.js';
-
 const MIN_INTERVAL = 1;
 const MAX_INTERVAL = 30;
 const DEFAULT_INTERVAL = 5;
@@ -34,20 +35,16 @@ let crossing = false;
 // binding that start() never touches. The DOM is the one thing both bundles
 // share, so that's where the cross-bundle signal goes.
 const RUNNING_CLASS = 'slideshow-running';
-const setRunning = (v) => {
+const setRunning = v => {
   running = v;
   document.body.classList.toggle(RUNNING_CLASS, v);
 };
 export const isSlideshowRunning = () => document.body.classList.contains(RUNNING_CLASS);
-
-const clampInterval = (n) =>
-  Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
-
+const clampInterval = n => Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
 const loadInterval = () => clampInterval(parseInt(localStorage.getItem('slideshow.interval'), 10));
 const loadShuffle = () => localStorage.getItem('slideshow.shuffle') === 'true';
 // Loop defaults ON (the historical behaviour: the show wraps the feed forever).
 const loadLoop = () => localStorage.getItem('slideshow.loop') !== 'false';
-
 export class Slideshow {
   constructor(wrapper, ctx) {
     this.wrapper = wrapper;
@@ -62,14 +59,15 @@ export class Slideshow {
     this._onPointer = () => this._activity(false);
     this._onNav = () => this._activity(true);
     this._onVisibility = () => this._visibility();
-
     this._buildButton();
 
     // Cross-post continuation: a show that was running before the remount picks
     // straight back up on this fresh instance. It's a mid-show resume, not a
     // user gesture, so the chrome stays hidden rather than flashing back for the
     // idle grace on every auto-advanced slide.
-    if (running) this.start({ resumed: true });
+    if (running) this.start({
+      resumed: true
+    });
   }
 
   // ── Top-right toggle button ───────────────────────────────────────────────
@@ -79,34 +77,38 @@ export class Slideshow {
     btn.className = 'header-action-btn slideshow-btn';
     this._btn = btn;
     this._syncButton();
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', e => {
       e.stopPropagation();
       this.toggle();
     });
     this.wrapper.appendChild(btn); // absolutely positioned; DOM order irrelevant
   }
-
   _syncButton() {
     if (!this._btn) return;
-    this._btn.innerHTML = running ? PAUSE_SVG : PLAY_SVG;
+    this._btn.innerHTML = html`${raw(running ? PAUSE_SVG : PLAY_SVG)}`;
     this._btn.classList.toggle('active', running);
     this._btn.setAttribute('aria-label', running ? 'Pause slideshow' : 'Start slideshow');
   }
-
   toggle() {
     running ? this.stop() : this.start();
   }
 
   // ── Start / stop ──────────────────────────────────────────────────────────
-  start({ resumed = false } = {}) {
+  start({
+    resumed = false
+  } = {}) {
     setRunning(true);
     // NB: don't reset `crossing` here. On a cross-post remount this start() races
     // the old instance's unmount() (which reads `crossing`); clearing it would let
     // that unmount mistake the auto-cross for a real close and stop the show.
     this._syncButton();
     this._buildBar();
-    document.addEventListener('pointermove', this._onPointer, { passive: true });
-    document.addEventListener('touchstart', this._onNav, { passive: true });
+    document.addEventListener('pointermove', this._onPointer, {
+      passive: true
+    });
+    document.addEventListener('touchstart', this._onNav, {
+      passive: true
+    });
     document.addEventListener('keydown', this._onNav);
     document.addEventListener('visibilitychange', this._onVisibility);
     // A fresh user gesture shows the chrome then fades it after the idle grace; a
@@ -114,7 +116,6 @@ export class Slideshow {
     resumed ? this._hideChrome() : this._resetInactivity();
     this._arm();
   }
-
   stop() {
     setRunning(false);
     crossing = false;
@@ -134,7 +135,6 @@ export class Slideshow {
     document.removeEventListener('keydown', this._onNav);
     document.removeEventListener('visibilitychange', this._onVisibility);
   }
-
   unmount() {
     this._teardownRuntime();
     this._removeBar();
@@ -143,8 +143,7 @@ export class Slideshow {
     this._showChrome();
     // An auto-cross keeps the show alive for the remount; anything else
     // (Esc / close cross / leaving the page) is a real stop.
-    if (crossing) crossing = false;
-    else setRunning(false);
+    if (crossing) crossing = false;else setRunning(false);
   }
 
   // ── Advance loop ──────────────────────────────────────────────────────────
@@ -211,8 +210,12 @@ export class Slideshow {
       this._armedVideo = video;
       video.loop = false;
       this._onEnded = () => this._advance();
-      video.addEventListener('ended', this._onEnded, { once: true });
-      video.addEventListener('error', this._onEnded, { once: true });
+      video.addEventListener('ended', this._onEnded, {
+        once: true
+      });
+      video.addEventListener('error', this._onEnded, {
+        once: true
+      });
       // Fallback if the duration never resolves (stalled/broken stream).
       if (!Number.isFinite(video.duration) || video.duration === 0) {
         this._timer = setTimeout(() => this._advance(), this.interval * 1000);
@@ -221,7 +224,6 @@ export class Slideshow {
     }
     this._timer = setTimeout(() => this._advance(), this.interval * 1000);
   }
-
   _disarm() {
     clearTimeout(this._timer);
     this._timer = null;
@@ -233,9 +235,10 @@ export class Slideshow {
       this._onEnded = null;
     }
   }
-
   _shuffled() {
-    const a = Array.from({ length: this.ctx.count }, (_, i) => i);
+    const a = Array.from({
+      length: this.ctx.count
+    }, (_, i) => i);
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
@@ -248,7 +251,7 @@ export class Slideshow {
     if (this._bar) return;
     const bar = document.createElement('div');
     bar.className = 'slideshow-bar';
-    bar.innerHTML = `
+    bar.innerHTML = html`
       <div class="slideshow-stepper">
         <button type="button" class="slideshow-bar-btn" data-step="-1" aria-label="Slower">${MINUS_SVG}</button>
         <span class="slideshow-interval" aria-live="polite">${this.interval}s</span>
@@ -259,10 +262,8 @@ export class Slideshow {
       <button type="button" class="slideshow-bar-btn slideshow-shuffle${this.shuffle ? ' active' : ''}"
               aria-label="Shuffle" aria-pressed="${this.shuffle}">${SHUFFLE_SVG}</button>`;
     // Keep taps on the bar from reaching the viewer's close/hide handler.
-    bar.addEventListener('click', (e) => e.stopPropagation());
-    bar.querySelectorAll('[data-step]').forEach((b) =>
-      b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))),
-    );
+    bar.addEventListener('click', e => e.stopPropagation());
+    bar.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));
     this._intervalLabel = bar.querySelector('.slideshow-interval');
     this._loopBtn = bar.querySelector('.slideshow-loop');
     this._loopBtn.addEventListener('click', () => this._toggleLoop());
@@ -271,7 +272,6 @@ export class Slideshow {
     this.wrapper.appendChild(bar);
     this._bar = bar;
   }
-
   _removeBar() {
     this._bar?.remove();
     this._bar = null;
@@ -279,21 +279,18 @@ export class Slideshow {
     this._loopBtn = null;
     this._shuffleBtn = null;
   }
-
   _toggleLoop() {
     this.loop = !this.loop;
     localStorage.setItem('slideshow.loop', this.loop ? 'true' : 'false');
     this._loopBtn?.classList.toggle('active', this.loop);
     this._loopBtn?.setAttribute('aria-pressed', String(this.loop));
   }
-
   _changeInterval(delta) {
     this.interval = clampInterval(this.interval + delta);
     localStorage.setItem('slideshow.interval', String(this.interval));
     if (this._intervalLabel) this._intervalLabel.textContent = `${this.interval}s`;
     this._arm(); // apply live
   }
-
   _toggleShuffle() {
     this.shuffle = !this.shuffle;
     localStorage.setItem('slideshow.shuffle', this.shuffle ? 'true' : 'false');
@@ -313,20 +310,16 @@ export class Slideshow {
     // never delay the next slide (otherwise the show stalls while the pointer moves).
     if (resetAdvance && running) this._arm();
   }
-
   _resetInactivity() {
     clearTimeout(this._idleTimer);
     this._idleTimer = setTimeout(() => this._hideChrome(), IDLE_MS);
   }
-
   _showChrome() {
     document.body.classList.remove('ui-hidden');
   }
-
   _hideChrome() {
     if (running) document.body.classList.add('ui-hidden');
   }
-
   _visibility() {
     if (document.hidden) {
       this._disarm(); // pause advancing while the tab is hidden

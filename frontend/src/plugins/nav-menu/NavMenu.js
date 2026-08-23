@@ -1,12 +1,10 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
-import {
-  hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl,
-  HOVER_OPEN_MS,
-} from '../../utils/tagFlyout.js';
+import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
-
 const DEFAULT_INLINE_MAX = 4;
 
 /**
@@ -23,7 +21,12 @@ const DEFAULT_INLINE_MAX = 4;
  * pointers, tap-to-toggle on coarse — same interaction as breadcrumb crumbs.
  */
 export class NavMenu {
-  constructor({ navItemsEl, burgerTagsEl, burgerSitemapEl, ctx }) {
+  constructor({
+    navItemsEl,
+    burgerTagsEl,
+    burgerSitemapEl,
+    ctx
+  }) {
     this.navItemsEl = navItemsEl;
     this.burgerTagsEl = burgerTagsEl;
     this.burgerSitemapEl = burgerSitemapEl;
@@ -36,7 +39,6 @@ export class NavMenu {
     this._moreOpenTimer = null;
     this._moreZone = null;
   }
-
   mount() {
     this._unsubscribeNav = store.subscribe('navTags', () => this.render());
     this._unsubscribeSettings = store.subscribe('settings', () => this.render());
@@ -46,7 +48,7 @@ export class NavMenu {
     if (this.fold) {
       this._unregisterFold = this.fold.register(30, {
         reset: () => this._resetFoldedLinks(),
-        ops: () => this._foldOps(),
+        ops: () => this._foldOps()
       });
     }
 
@@ -57,16 +59,14 @@ export class NavMenu {
     // Capture phase, because content below stops propagation on its own taps
     // (a photo card's first tap reveals its overlay) — the panel must still
     // close when the tap lands there.
-    this._onDocClick = (e) => {
+    this._onDocClick = e => {
       if (!this.navItemsEl.isConnected) return;
       const more = this.navItemsEl.querySelector('.nav-more.open');
       if (more && !more.contains(e.target)) this._closeMore();
     };
     document.addEventListener('click', this._onDocClick, true);
-
     this.render();
   }
-
   unmount() {
     if (this._unsubscribeNav) this._unsubscribeNav();
     if (this._unsubscribeSettings) this._unsubscribeSettings();
@@ -83,21 +83,21 @@ export class NavMenu {
     const navTags = store.get('navTags') || [];
     const settings = store.get('settings') || {};
     if (settings.nav_menu_mode === 'none') return [];
-    const toItem = (t) => ({
+    const toItem = t => ({
       name: t.name,
       slug: t.slug || '',
       count: t.post_count || 0,
       href: t.url || (t.slug ? `/tags/${t.slug}` : null),
-      children: (t.children || []).map(toItem),
+      children: (t.children || []).map(toItem)
     });
-    return navTags.map(toItem).filter((i) => i.href || i.children.length);
+    return navTags.map(toItem).filter(i => i.href || i.children.length);
   }
-
   render() {
     const settings = store.get('settings') || {};
     const user = store.get('user');
-    const { currentPath } = this.ctx;
-
+    const {
+      currentPath
+    } = this.ctx;
     const items = this._items();
     const inlineMax = parseInt(settings.nav_inline_max, 10) || DEFAULT_INLINE_MAX;
     // nav_inline_max caps the number of *visible* nav slots, and the "More ▾"
@@ -113,53 +113,59 @@ export class NavMenu {
 
     // Tags button — the active viz is the enabled tags-viz plugin (at most
     // one). None enabled → no tags link. Rendered as one more nav item.
-    const activeTagsViz =
-      ['tags-atlas', 'tags-map', 'tags-graph'].find((id) => pluginHost.isEnabled(id)) || '';
+    const activeTagsViz = ['tags-atlas', 'tags-map', 'tags-graph'].find(id => pluginHost.isEnabled(id)) || '';
     const tagsVisibility = settings.tags_visibility || 'hidden';
     const tagsVisible = !!activeTagsViz && (tagsVisibility === 'all' || !!user);
     const tagsMeta = {
-      'tags-graph': { icon: TAGS_SVG, label: 'All tags' },
-      'tags-map': { icon: MAP_SVG, label: 'Map' },
-      'tags-atlas': { icon: GLOBE_SVG, label: 'Atlas' },
-    }[activeTagsViz] || { icon: TAGS_SVG, label: 'All tags' };
-
-    const isActive = (href) => !!href && href === currentPath;
+      'tags-graph': {
+        icon: TAGS_SVG,
+        label: 'All tags'
+      },
+      'tags-map': {
+        icon: MAP_SVG,
+        label: 'Map'
+      },
+      'tags-atlas': {
+        icon: GLOBE_SVG,
+        label: 'Atlas'
+      }
+    }[activeTagsViz] || {
+      icon: TAGS_SVG,
+      label: 'All tags'
+    };
+    const isActive = href => !!href && href === currentPath;
 
     // Inline links + More shell + tags icon.
-    this.navItemsEl.innerHTML = `
+    this.navItemsEl.innerHTML = html`
       ${this._inline.map((it, i) => `
-        <a href="${escapeHtml(it.href || '#')}"
+        <a href="${it.href || '#'}"
            class="nav-menu-link${isActive(it.href) ? ' active' : ''}${it.children.length ? ' has-children' : ''}"
-           data-nav-i="${i}">${escapeHtml(it.name)}</a>`).join('')}
+           data-nav-i="${i}">${it.name}</a>`).join('')}
       <span class="nav-more is-empty">
         <button type="button" class="nav-menu-link nav-more-btn"
-                aria-haspopup="true" aria-expanded="false">${escapeHtml(settings.nav_more_title || 'More')}<span class="nav-more-caret" aria-hidden="true">▾</span></button>
+                aria-haspopup="true" aria-expanded="false">${settings.nav_more_title || 'More'}<span class="nav-more-caret" aria-hidden="true">▾</span></button>
         <div class="nav-more-panel"></div>
       </span>
-      ${tagsVisible
-        ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
+      ${tagsVisible ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
                   aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
                  ${tagsMeta.icon}
-               </a>`
-        : ''}
+               </a>` : ''}
     `;
     this._wireInline();
     this._syncMore();
 
     // Burger: the full menu, children indented.
-    this.burgerTagsEl.innerHTML = items.length
-      ? items.map((it) => {
-          let html = `<a href="${escapeHtml(it.href || '#')}" class="burger-link burger-tag-link">${escapeHtml(it.name)}</a>`;
-          it.children.forEach((c) => {
-            if (!c.href) return;
-            html += `<a href="${escapeHtml(c.href)}" class="burger-link burger-sub-link">${escapeHtml(c.name)}</a>`;
-          });
-          return html;
-        }).join('')
-      : '';
+    this.burgerTagsEl.innerHTML = html`${raw(items.length ? items.map(it => {
+      let _html = `<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`;
+      it.children.forEach(c => {
+        if (!c.href) return;
+        _html += `<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`;
+      });
+      return _html;
+    }).join('') : '')}`;
 
     // Burger sitemap.
-    this.burgerSitemapEl.innerHTML = `
+    this.burgerSitemapEl.innerHTML = html`
       ${tagsVisible ? `<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
       <a href="/light" class="burger-link">${user ? 'Admin' : 'About'}</a>
     `;
@@ -170,9 +176,12 @@ export class NavMenu {
 
   /** The child links (href-bearing) of a menu item, shaped for the dropdown. */
   _childItems(it) {
-    return it.children
-      .filter((c) => c.href)
-      .map((c) => ({ name: c.name, slug: c.slug, count: c.count, href: c.href }));
+    return it.children.filter(c => c.href).map(c => ({
+      name: c.name,
+      slug: c.slug,
+      count: c.count,
+      href: c.href
+    }));
   }
 
   /**
@@ -193,29 +202,25 @@ export class NavMenu {
     clearTimeout(this._moreOpenTimer);
     this._moreZone?.stop();
     this._moreZone = null;
-
-    this.navItemsEl.querySelectorAll('.nav-menu-link.has-children').forEach((el) => {
+    this.navItemsEl.querySelectorAll('.nav-menu-link.has-children').forEach(el => {
       const it = this._inline[Number(el.dataset.navI)];
       if (!it) return;
       const childItems = this._childItems(it);
       if (childItems.length) this._wireChildFlyout(el, childItems);
     });
-
     const moreBtn = this.navItemsEl.querySelector('.nav-more-btn');
     if (!moreBtn) return;
     const more = moreBtn.closest('.nav-more');
-
-    moreBtn.addEventListener('click', (e) => {
+    moreBtn.addEventListener('click', e => {
       e.stopPropagation();
       clearTimeout(this._moreOpenTimer);
-      if (more.classList.contains('open')) this._closeMore();
-      else this._openMore();
+      if (more.classList.contains('open')) this._closeMore();else this._openMore();
     });
 
     // Mouse: hover-intent opens the panel, no click needed. Gated on
     // `pointerType === 'mouse'` so a tap's compatibility mouse events can't
     // trip it — touch keeps tap-to-toggle.
-    more.addEventListener('pointerenter', (e) => {
+    more.addEventListener('pointerenter', e => {
       if (e.pointerType !== 'mouse') return;
       clearTimeout(this._moreOpenTimer);
       this._moreOpenTimer = setTimeout(() => this._openMore(true), HOVER_OPEN_MS);
@@ -240,13 +245,8 @@ export class NavMenu {
     // — track it explicitly or the cursor "leaves" the moment it reaches the
     // menu it just opened. A row's child dropdown lands outside both, hence the
     // flyout. The pad bridges the button→panel gap.
-    this._moreZone = createHotZone(
-      () => [more, more.querySelector('.nav-more-panel'), flyoutEl()],
-      () => this._closeMore(),
-      12,
-    );
+    this._moreZone = createHotZone(() => [more, more.querySelector('.nav-more-panel'), flyoutEl()], () => this._closeMore(), 12);
   }
-
   _closeMore() {
     clearTimeout(this._moreOpenTimer);
     this._moreZone?.stop();
@@ -264,16 +264,14 @@ export class NavMenu {
   _visibleLinks() {
     return [...this.navItemsEl.querySelectorAll('.nav-menu-link[data-nav-i]:not(.in-more)')];
   }
-
   _resetFoldedLinks() {
-    this.navItemsEl.querySelectorAll('.nav-menu-link.in-more').forEach((a) => {
+    this.navItemsEl.querySelectorAll('.nav-menu-link.in-more').forEach(a => {
       a.classList.remove('in-more');
     });
     this._syncMore();
   }
-
   _foldOps() {
-    return this._visibleLinks().reverse().map((el) => () => {
+    return this._visibleLinks().reverse().map(el => () => {
       el.classList.add('in-more');
       this._syncMore();
     });
@@ -283,13 +281,8 @@ export class NavMenu {
   _syncMore() {
     const more = this.navItemsEl.querySelector('.nav-more');
     if (!more) return;
-    const foldedIdx = [...this.navItemsEl.querySelectorAll('.nav-menu-link.in-more')]
-      .map((a) => Number(a.dataset.navI))
-      .sort((a, b) => a - b);
-    const panelItems = [
-      ...foldedIdx.map((i) => this._inline[i]).filter(Boolean),
-      ...this._configOverflow,
-    ];
+    const foldedIdx = [...this.navItemsEl.querySelectorAll('.nav-menu-link.in-more')].map(a => Number(a.dataset.navI)).sort((a, b) => a - b);
+    const panelItems = [...foldedIdx.map(i => this._inline[i]).filter(Boolean), ...this._configOverflow];
     if (!panelItems.length) {
       // Transient: a fold relayout unfolds every link before re-folding, so
       // the panel empties mid-cycle. Hide the shell (CSS also hides an empty
@@ -302,16 +295,14 @@ export class NavMenu {
     // Parents only — a parent with children reveals them in the shared
     // dropdown (like inline links) rather than flattening the whole subtree.
     const panel = more.querySelector('.nav-more-panel');
-    panel.innerHTML = panelItems.map((it, i) => {
+    panel.innerHTML = html`${raw(panelItems.map((it, i) => {
       const hasChildren = this._childItems(it).length > 0;
-      const caret = hasChildren
-        ? `<span class="nav-more-item-caret" aria-hidden="true">›</span>`
-        : '';
-      return `<a href="${escapeHtml(it.href || '#')}"
+      const caret = hasChildren ? `<span class="nav-more-item-caret" aria-hidden="true">›</span>` : '';
+      return `<a href="${it.href || '#'}"
          class="nav-more-item${hasChildren ? ' has-children' : ''}"
-         data-more-i="${i}">${escapeHtml(it.name)}${caret}</a>`;
-    }).join('');
-    panel.querySelectorAll('.nav-more-item.has-children').forEach((el) => {
+         data-more-i="${i}">${it.name}${caret}</a>`;
+    }).join(''))}`;
+    panel.querySelectorAll('.nav-more-item.has-children').forEach(el => {
       const childItems = this._childItems(panelItems[Number(el.dataset.moreI)]);
       if (childItems.length) this._wireChildFlyout(el, childItems);
     });

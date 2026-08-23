@@ -67,6 +67,21 @@ const rules = {
   "valid-typeof": "error",
   "no-console": "off",
   "require-atomic-updates": "off",
+  "no-restricted-syntax": [
+    "error",
+    {
+      selector: "AssignmentExpression[left.property.name='innerHTML']:not([right.type='TaggedTemplateExpression'][right.tag.name='html'])",
+      message: "Use the html tagged template helper for innerHTML assignments."
+    },
+    {
+      selector: "CallExpression[callee.property.name='insertAdjacentHTML']:not([arguments.1.type='TaggedTemplateExpression'][arguments.1.tag.name='html'])",
+      message: "Use the html tagged template helper for insertAdjacentHTML."
+    },
+    {
+      selector: "TaggedTemplateExpression[tag.name='html'] TemplateElement[value.raw=/=\\s*$/]",
+      message: "Attribute interpolations must be quoted (e.g. href=\"${url}\")."
+    }
+  ],
 };
 
 export default [

@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { sharePost } from '../../utils/helpers.js';
 import { SHARE_SVG } from '../../utils/icons.js';
 
@@ -7,16 +9,17 @@ import { SHARE_SVG } from '../../utils/icons.js';
 // (.carousel-share-btn) stays in the global immersive styles.
 export function mount(wrapper, _ctx) {
   if (!wrapper) return null;
-
   const btn = document.createElement('button');
   btn.className = 'header-action-btn share-btn carousel-share-btn';
   btn.type = 'button';
   btn.setAttribute('aria-label', 'Share');
-  btn.innerHTML = SHARE_SVG;
-
-  const onClick = (e) => {
+  btn.innerHTML = html`${raw(SHARE_SVG)}`;
+  const onClick = e => {
     e.stopPropagation();
-    sharePost({ title: document.title, url: window.location.href });
+    sharePost({
+      title: document.title,
+      url: window.location.href
+    });
   };
   btn.addEventListener('click', onClick);
   wrapper.appendChild(btn); // absolutely positioned, so DOM order is irrelevant
@@ -25,6 +28,6 @@ export function mount(wrapper, _ctx) {
     unmount() {
       btn.removeEventListener('click', onClick);
       btn.remove();
-    },
+    }
   };
 }

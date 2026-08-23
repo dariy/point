@@ -1,3 +1,4 @@
+import { html } from "../../utils/helpers.js";
 /**
  * ImmersiveSheetViewer — alternate immersive overlay (the "sheet" mode).
  *
@@ -30,21 +31,20 @@ import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../.
 import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.js';
 import { immersiveNavTargets } from '../../utils/immersiveNav.js';
 import { renderCopyright } from '../../utils/copyright.js';
-
 const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
-
 export class ImmersiveSheetViewer extends MediaViewer {
   constructor(container, props = {}) {
     super(container, props);
-    this._sheetOpen = false;     // current snap state
-    this._sheetHeight = 0;       // px the stage travels when fully open
-    this._currentOffset = 0;     // px currently translated
-    this._sheetDrag = false;     // true when the active vertical drag drives the sheet
+    this._sheetOpen = false; // current snap state
+    this._sheetHeight = 0; // px the stage travels when fully open
+    this._currentOffset = 0; // px currently translated
+    this._sheetDrag = false; // true when the active vertical drag drives the sheet
   }
 
   // EXIF is rendered inline inside the sheet, so skip the floating flyout.
-  _useFloatingExif() { return false; }
-
+  _useFloatingExif() {
+    return false;
+  }
   _renderExtras() {
     return `
       <button class="immersive-sheet-hint" type="button" aria-label="Show details">
@@ -53,31 +53,25 @@ export class ImmersiveSheetViewer extends MediaViewer {
       </button>
       ${this._renderSheet()}`;
   }
-
   _renderSheet() {
-    const { post, navPrev, navNext } = this.props;
+    const {
+      post,
+      navPrev,
+      navNext
+    } = this.props;
     const settings = store.get('settings') || {};
     if (!post) return '<div class="immersive-sheet" aria-hidden="true"></div>';
-
     const showViews = settings.show_view_counts && post.view_count != null;
-    const viewsLine = showViews
-      ? `<div class="immersive-sheet-meta">${escapeHtml(`${post.view_count} views`)}</div>`
-      : '';
+    const viewsLine = showViews ? `<div class="immersive-sheet-meta">${escapeHtml(`${post.view_count} views`)}</div>` : '';
 
     // The breadcrumb doubles as the title — just the post title, no site crumb.
     const breadcrumb = `<nav class="immersive-sheet-crumbs" aria-label="Breadcrumb"><span class="immersive-sheet-crumb-current">${escapeHtml(post.title || '')}</span></nav>`;
-
-    const excerpt = post.excerpt
-      ? `<p class="immersive-sheet-excerpt">${linkify(post.excerpt)}</p>`
-      : '';
+    const excerpt = post.excerpt ? `<p class="immersive-sheet-excerpt">${linkify(post.excerpt)}</p>` : '';
 
     // The post's own tags — ancestors the page endpoints add for subtree
     // matching are marked `inherited` and belong to the breadcrumb, not here.
-    const tags = (post.tags || []).filter((t) => !t.inherited);
-    const tagsHtml = tags.length
-      ? `<div class="immersive-sheet-tags">${tags.map((t) => renderTagLink(t)).join('')}</div>`
-      : '';
-
+    const tags = (post.tags || []).filter(t => !t.inherited);
+    const tagsHtml = tags.length ? `<div class="immersive-sheet-tags">${tags.map(t => renderTagLink(t)).join('')}</div>` : '';
     return `
       <div class="immersive-sheet" aria-hidden="true">
         <button class="immersive-sheet-grip" type="button" aria-label="Collapse details"></button>
@@ -97,19 +91,15 @@ export class ImmersiveSheetViewer extends MediaViewer {
         </div>
       </div>`;
   }
-
   _renderActions() {
-    const { editUrl } = this.props;
+    const {
+      editUrl
+    } = this.props;
     const user = store.get('user');
-
-    const editBtn = (user && editUrl)
-      ? `<a class="immersive-sheet-action" href="${escapeHtml(editUrl)}" data-action="edit">${EDIT_SVG}<span>Edit</span></a>`
-      : '';
+    const editBtn = user && editUrl ? `<a class="immersive-sheet-action" href="${escapeHtml(editUrl)}" data-action="edit">${EDIT_SVG}<span>Edit</span></a>` : '';
     const shareBtn = `<button class="immersive-sheet-action" type="button" data-action="share">${SHARE_SVG}<span>Share</span></button>`;
-
     return `<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
   }
-
   _renderFooter(prev, next) {
     const settings = store.get('settings') || {};
     // Same renderer as the site footer — the admin-editable `footer_copyright`
@@ -119,8 +109,10 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // Keep the footer's ‹ left / right › links pointing at the same posts the
     // on-photo nav panels do, under either reading direction — same resolver,
     // so they can't drift apart ('back' is the left panel, 'fwd' the right).
-    const { back: leftPost, fwd: rightPost } = immersiveNavTargets(settings, prev, next);
-
+    const {
+      back: leftPost,
+      fwd: rightPost
+    } = immersiveNavTargets(settings, prev, next);
     const navLink = (postObj, side) => {
       if (!postObj) return '<span></span>';
       const rel = postObj === prev ? 'prev' : 'next';
@@ -128,19 +120,13 @@ export class ImmersiveSheetViewer extends MediaViewer {
       const text = side === 'left' ? `‹ ${label}` : `${label} ›`;
       return `<a class="immersive-sheet-postnav ${side}" href="/posts/${escapeHtml(postObj.slug)}" rel="${rel}">${text}</a>`;
     };
-
-    const nav = (leftPost || rightPost)
-      ? `<div class="immersive-sheet-postnav-row">${navLink(leftPost, 'left')}${navLink(rightPost, 'right')}</div>`
-      : '';
+    const nav = leftPost || rightPost ? `<div class="immersive-sheet-postnav-row">${navLink(leftPost, 'left')}${navLink(rightPost, 'right')}</div>` : '';
 
     // RSS + theme toggle live bottom-right, mirroring the footer on other pages.
-    const rssBtn = pluginHost.isEnabled("rss")
-      ? `<a class="footer-action-btn" href="/feed.xml" target="_blank" rel="noopener" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
-      : '';
+    const rssBtn = pluginHost.isEnabled("rss") ? `<a class="footer-action-btn" href="/feed.xml" target="_blank" rel="noopener" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>` : '';
     const themeBtn = `<button class="footer-action-btn theme-toggle immersive-sheet-theme" type="button" aria-label="Toggle theme">
         <span class="icon-sun">${SUN_SVG}</span><span class="icon-moon">${MOON_SVG}</span>
       </button>`;
-
     return `<div class="immersive-sheet-footer">
       ${nav}
       <div class="immersive-sheet-footer-bottom">
@@ -149,7 +135,6 @@ export class ImmersiveSheetViewer extends MediaViewer {
       </div>
     </div>`;
   }
-
   _initInteractivity() {
     super._initInteractivity();
     this._wrapper = this.$('.media-viewer-wrapper');
@@ -162,9 +147,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const media = this.props.media || [];
     if (exifVisible(settings, store.get('user')) && media.length) {
       const exifMap = buildExifMap(media);
-      const meta = (this.props.items || []).map((it) =>
-        it.type === 'image' && it.url ? metadataForSrc(exifMap, it.url) : null,
-      );
+      const meta = (this.props.items || []).map(it => it.type === 'image' && it.url ? metadataForSrc(exifMap, it.url) : null);
       if (meta.some(Boolean)) this._sheetExifMeta = meta;
     }
     this._updateSheetExif();
@@ -174,28 +157,30 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (tagsEl) {
       const navTags = store.get('navTags') || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-      this._sheetFlyoutCleanup = setupTagFlyout(tagsEl, tagIndex, (url) => {
+      this._sheetFlyoutCleanup = setupTagFlyout(tagsEl, tagIndex, url => {
         const slug = url.replace('/tags/', '');
-        ViewContext.update({ tag: slug, postSlug: null, query: null });
+        ViewContext.update({
+          tag: slug,
+          postSlug: null,
+          query: null
+        });
       });
     }
-
     const commentsEl = this.$('.immersive-sheet-comments');
     if (commentsEl && pluginHost.isEnabled("comments")) {
       pluginHost.fill("post-comments", commentsEl, {
         post: this.props.post,
-        url: window.location.href,
-      }).then(res => { this._sheetCommentsComps = res; });
+        url: window.location.href
+      }).then(res => {
+        this._sheetCommentsComps = res;
+      });
     }
-
     this._wireSheetControls();
-
-    this._onResize = () => { 
-      this._measureSheet(); 
+    this._onResize = () => {
+      this._measureSheet();
       if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
     };
     window.addEventListener('resize', this._onResize);
-    
     const sheetEl = this.$('.immersive-sheet');
     if (sheetEl) {
       this._sheetObserver = new ResizeObserver(() => {
@@ -204,33 +189,41 @@ export class ImmersiveSheetViewer extends MediaViewer {
       });
       this._sheetObserver.observe(sheetEl);
     }
-    
     this._measureSheet();
   }
-
   _wireSheetControls() {
-    this._on(this.$('.immersive-sheet-hint'), 'click', (e) => { e.stopPropagation(); this._openSheet(); });
-    this._on(this.$('.immersive-sheet-grip'), 'click', (e) => { e.stopPropagation(); this._closeSheet(); });
+    this._on(this.$('.immersive-sheet-hint'), 'click', e => {
+      e.stopPropagation();
+      this._openSheet();
+    });
+    this._on(this.$('.immersive-sheet-grip'), 'click', e => {
+      e.stopPropagation();
+      this._closeSheet();
+    });
 
     // Tapping the photo strip while the sheet is open collapses it (instead of
     // letting MediaViewer's background-tap close the whole viewer).
     const visuals = this.$('.immersive-visuals');
-    this._on(visuals, 'click', (e) => {
-      if (this._sheetOpen) { e.stopPropagation(); this._closeSheet(); }
+    this._on(visuals, 'click', e => {
+      if (this._sheetOpen) {
+        e.stopPropagation();
+        this._closeSheet();
+      }
     }, true);
-
     const actions = this.$('.immersive-sheet-actions');
-    this._on(actions, 'click', (e) => {
+    this._on(actions, 'click', e => {
       const el = e.target.closest('[data-action]');
       if (!el) return;
       const action = el.dataset.action;
       if (action === 'edit') return; // let the link navigate
       e.preventDefault();
       e.stopPropagation();
-      if (action === 'share') sharePost({ title: document.title, url: window.location.href });
+      if (action === 'share') sharePost({
+        title: document.title,
+        url: window.location.href
+      });
     });
-
-    this._on(this.$('.immersive-sheet-theme'), 'click', (e) => {
+    this._on(this.$('.immersive-sheet-theme'), 'click', e => {
       e.stopPropagation();
       const current = store.get('theme') || 'auto';
       store.set('theme', current === 'dark' ? 'light' : 'dark');
@@ -250,7 +243,6 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _onKeyDown(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (this._zoomState.scale > 1) return super._onKeyDown(e);
-
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (!this._sheetOpen) return this._openSheet();
@@ -278,7 +270,10 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (!el) return false;
     const room = dir < 0 ? el.scrollTop : el.scrollHeight - el.clientHeight - el.scrollTop;
     if (room <= 1) return false;
-    el.scrollBy({ top: dir * Math.max(80, el.clientHeight * 0.4), behavior: 'smooth' });
+    el.scrollBy({
+      top: dir * Math.max(80, el.clientHeight * 0.4),
+      behavior: 'smooth'
+    });
     return true;
   }
 
@@ -300,7 +295,6 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (this._swipeAxis == null) {
       this._swipeAxis = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h';
     }
-
     if (this._swipeAxis === 'v') {
       // Vertical: drive the sheet, except a downward drag while closed, which
       // falls back to MediaViewer's swipe-to-dismiss.
@@ -322,7 +316,6 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (this._sheetOpen) return;
     super._onSwipeMove(dx, 0);
   }
-
   _onSwipeCommit(dir) {
     this._swipeAxis = null;
     if (this._zoomState.scale > 1) return super._onSwipeCommit(dir);
@@ -334,19 +327,16 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (this._sheetOpen) return; // ignore horizontal flips while open
     super._onSwipeCommit(dir);
   }
-
   _onSwipeCancel() {
     this._swipeAxis = null;
     if (this._sheetDrag) {
       this._sheetDrag = false;
       // Snap to the nearer end state — never rest mid-way.
-      if (this._currentOffset > this._sheetHeight / 2) this._openSheet();
-      else this._closeSheet();
+      if (this._currentOffset > this._sheetHeight / 2) this._openSheet();else this._closeSheet();
       return;
     }
     super._onSwipeCancel();
   }
-
   _setSheetOffset(px, animate) {
     this._currentOffset = px;
     const t = animate ? SHEET_ANIM : 'none';
@@ -356,10 +346,15 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // By translating it up by exactly half the sheet's offset, we shift its
     // center from window.innerHeight/2 to (window.innerHeight - px)/2.
     const imgPx = px / 2;
-    if (visuals) { visuals.style.transition = t; visuals.style.transform = `translateY(${-imgPx}px)`; }
-    if (sheet) { sheet.style.transition = t; sheet.style.transform = `translateY(${-px}px)`; }
+    if (visuals) {
+      visuals.style.transition = t;
+      visuals.style.transform = `translateY(${-imgPx}px)`;
+    }
+    if (sheet) {
+      sheet.style.transition = t;
+      sheet.style.transform = `translateY(${-px}px)`;
+    }
   }
-
   _openSheet() {
     if (!this._sheetHeight) this._measureSheet();
     this._sheetOpen = true;
@@ -369,7 +364,6 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'false');
     this._setSheetOffset(this._sheetHeight, true);
   }
-
   _closeSheet() {
     this._sheetOpen = false;
     this._sheetDrag = false;
@@ -384,12 +378,10 @@ export class ImmersiveSheetViewer extends MediaViewer {
     super._updateExif();
     this._updateSheetExif();
   }
-
   _finalizeSwap(newIndex) {
     super._finalizeSwap(newIndex);
     this._updateSheetExif();
   }
-
   _updateSheetExif() {
     const mount = this.$('.immersive-sheet-exif');
     if (!mount) return;
@@ -401,18 +393,24 @@ export class ImmersiveSheetViewer extends MediaViewer {
       bodyEl?.classList.remove('has-exif');
       return;
     }
-    const body = rows.map(({ label, value }) =>
-      `<div class="immersive-sheet-exif-row"><span class="immersive-sheet-exif-key">${escapeHtml(label)}</span><span class="immersive-sheet-exif-val">${escapeHtml(value)}</span></div>`,
-    ).join('');
-    mount.innerHTML = `<div class="immersive-sheet-exif-title">Camera data</div>${body}`;
+    const body = rows.map(({
+      label,
+      value
+    }) => `<div class="immersive-sheet-exif-row"><span class="immersive-sheet-exif-key">${escapeHtml(label)}</span><span class="immersive-sheet-exif-val">${escapeHtml(value)}</span></div>`).join('');
+    mount.innerHTML = html`<div class="immersive-sheet-exif-title">Camera data</div>${body}`;
     mount.classList.remove('hidden');
     bodyEl?.classList.add('has-exif');
   }
-
   _cleanup() {
     super._cleanup();
-    if (this._onResize) { window.removeEventListener('resize', this._onResize); this._onResize = null; }
-    if (this._sheetObserver) { this._sheetObserver.disconnect(); this._sheetObserver = null; }
+    if (this._onResize) {
+      window.removeEventListener('resize', this._onResize);
+      this._onResize = null;
+    }
+    if (this._sheetObserver) {
+      this._sheetObserver.disconnect();
+      this._sheetObserver = null;
+    }
     this._sheetFlyoutCleanup?.();
     this._sheetFlyoutCleanup = null;
     if (this._sheetCommentsComps) {

@@ -144,7 +144,7 @@ describe('TagsManagerPage', () => {
 
     page._updateFilterChips();
     assert.equal(chipsEl.innerHTML, renderFilterChips(page._listFilterParents));
-    assert.match(chipsEl.innerHTML, /<svg/, 'the × icon survives a re-render');
+    assert.match(String(chipsEl.innerHTML), /<svg/, 'the × icon survives a re-render');
   });
 
   test('should render tree with nav root when tag has nav_order', () => {
