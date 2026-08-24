@@ -1,3 +1,4 @@
+import { html } from "./utils/helpers.js";
 /**
  * Demo-only UI: an explanatory banner, a reset control, and a login hint.
  *
@@ -10,7 +11,6 @@
  */
 
 const CREDENTIAL = "demo";
-
 const STYLE = `
   .demo-banner {
     position: fixed; inset-inline: 0; bottom: 0; z-index: 9999;
@@ -77,24 +77,21 @@ const STYLE = `
   #sync-pill-btn { display: none; }
   @media (max-width: 30rem) { .demo-banner { font-size: .75rem; } }
 `;
-
 function injectStyles() {
   const el = document.createElement("style");
   el.textContent = STYLE;
   document.head.appendChild(el);
 }
-
 function buildBanner() {
   const bar = document.createElement("aside");
   bar.className = "demo-banner";
   bar.setAttribute("role", "note");
-  bar.innerHTML = `
+  bar.innerHTML = html`
     <p><strong>Point demo.</strong> Changes live in this browser tab only.</p>
     <a class="demo-admin-link" href="/light">Open the admin →</a>
     <button type="button" data-demo-reset>Reset demo</button>
     <button type="button" data-demo-dismiss aria-label="Hide this notice">Hide</button>
   `;
-
   bar.querySelector("[data-demo-reset]").addEventListener("click", () => {
     window.__DEMO_RESET__?.();
   });
@@ -107,13 +104,11 @@ function buildBanner() {
       /* private browsing — the banner simply returns next load */
     }
   });
-
   try {
     if (sessionStorage.getItem("demo-banner-hidden") === "1") bar.hidden = true;
   } catch {
     /* ignore */
   }
-
   return bar;
 }
 
@@ -168,7 +163,6 @@ function watchForLogin() {
     if (!input || input.dataset.demoFilled) return;
     input.dataset.demoFilled = "1";
     input.value = CREDENTIAL;
-
     const form = input.closest("form");
     if (form && !form.parentElement.querySelector(".demo-login-hint")) {
       const hint = document.createElement("p");
@@ -177,11 +171,9 @@ function watchForLogin() {
       form.insertAdjacentElement("afterend", hint);
     }
   };
-
   fill();
   return fill;
 }
-
 function init() {
   injectStyles();
   document.body.appendChild(buildBanner());
@@ -201,12 +193,10 @@ function init() {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["class"],
+    attributeFilter: ["class"]
   });
-
   window.addEventListener("popstate", syncAdminLink);
 }
-
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {

@@ -1,3 +1,4 @@
+import { html } from "../../utils/helpers.js";
 /**
  * MenuPage — custom navigation menu editor.
  *
@@ -36,9 +37,17 @@ function parseMarkdown(text) {
     const content = trimmed.trim().slice(1).trim(); // strip leading -
     const linkMatch = content.match(/^\[([^\]]+)\]\(([^)]*)\)$/);
     if (linkMatch) {
-      items.push({ label: linkMatch[1], url: linkMatch[2], depth });
+      items.push({
+        label: linkMatch[1],
+        url: linkMatch[2],
+        depth
+      });
     } else if (content) {
-      items.push({ label: content, url: '', depth });
+      items.push({
+        label: content,
+        url: '',
+        depth
+      });
     }
   }
   return items;
@@ -52,7 +61,11 @@ function parseMarkdown(text) {
  * bare `- ` or `- [](url)` does not round-trip back through parseMarkdown.
  */
 function serializeMarkdown(items) {
-  return namedItems(items).map(({ label, url, depth }) => {
+  return namedItems(items).map(({
+    label,
+    url,
+    depth
+  }) => {
     const prefix = '  '.repeat(depth) + '- ';
     return url ? `${prefix}[${label}](${url})` : `${prefix}${label}`;
   }).join('\n');
@@ -60,9 +73,8 @@ function serializeMarkdown(items) {
 
 /** The items that are actually a menu entry — i.e. have a label. */
 function namedItems(items) {
-  return items.filter((i) => i.label);
+  return items.filter(i => i.label);
 }
-
 export default class MenuPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -70,29 +82,36 @@ export default class MenuPage extends Component {
       loading: true,
       saving: false,
       error: null,
-      mode: 'tags', // 'tags' | 'custom' | 'none'
-      editFormat: 'visual', // 'visual' | 'markdown'
-      items: [], // [{label, url, depth}]
-      inlineMax: 4, // links shown inline before More ▾
-      moreTitle: 'More', // Title for the More link
+      mode: 'tags',
+      // 'tags' | 'custom' | 'none'
+      editFormat: 'visual',
+      // 'visual' | 'markdown'
+      items: [],
+      // [{label, url, depth}]
+      inlineMax: 4,
+      // links shown inline before More ▾
+      moreTitle: 'More' // Title for the More link
     };
     this._tagItems = []; // tags-mode menu (fetched once, for the preview)
     this._previewFolds = [];
   }
-
   render() {
     return adminLayoutTemplate({
       title: 'Menu',
       content: this._renderContent()
     });
   }
-
   _renderContent() {
-    const { loading, error, mode, editFormat, items, saving } = this.state;
-
+    const {
+      loading,
+      error,
+      mode,
+      editFormat,
+      items,
+      saving
+    } = this.state;
     if (loading) return '<div class="loading-spinner" aria-label="Loading menu\u2026"></div>';
     if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
-
     const customEditor = mode === 'custom' ? `
       <div class="menu-editor-card card">
         <div class="card-header">
@@ -106,7 +125,6 @@ export default class MenuPage extends Component {
         </div>
       </div>
     ` : '';
-
     return `
       <div class="menu-page-container">
         <section class="menu-mode-selector card">
@@ -202,7 +220,6 @@ export default class MenuPage extends Component {
         </div>
       </div>
     `).join('');
-
     return `
       <div class="menu-visual-editor">
         <div class="menu-items" id="menu-items-list">${rows}</div>
@@ -211,7 +228,6 @@ export default class MenuPage extends Component {
         </div>
       </div>`;
   }
-
   _renderMarkdownEditor(items) {
     const text = serializeMarkdown(items);
     return `<textarea id="menu-markdown-input" class="form-input font-mono" rows="15" placeholder="- [Label](url)">${escapeHtml(text)}</textarea>`;
@@ -249,149 +265,159 @@ export default class MenuPage extends Component {
    */
   _currentItems() {
     if (this.state.mode !== 'custom') return this.state.items;
-    return this.state.editFormat === 'visual'
-      ? this._collectVisualItems()
-      : parseMarkdown(this.container.querySelector('#menu-markdown-input')?.value || '');
+    return this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown(this.container.querySelector('#menu-markdown-input')?.value || '');
   }
 
   /** Menu items to preview, as {name, hasChildren} — depends on the mode. */
   _previewItems() {
-    const { mode } = this.state;
+    const {
+      mode
+    } = this.state;
     if (mode === 'none') return [];
     if (mode === 'custom') {
-      return namedItems(this._currentItems()).filter((i) => i.depth === 0)
-        .map((i) => ({ name: i.label }));
+      return namedItems(this._currentItems()).filter(i => i.depth === 0).map(i => ({
+        name: i.label
+      }));
     }
-    return this._tagItems.map((t) => ({ name: t.name }));
+    return this._tagItems.map(t => ({
+      name: t.name
+    }));
   }
-
   _updatePreviews() {
     this._destroyPreviews();
     const items = this._previewItems();
     const settings = store.get('settings') || {};
     const title = settings.blog_title || 'My blog';
     const inlineMax = this.state.inlineMax;
-
-    this.container.querySelectorAll('.menu-preview-vp').forEach((vp) => {
+    this.container.querySelectorAll('.menu-preview-vp').forEach(vp => {
       // Mirror NavMenu: "More ▾" occupies one of the max visible slots, so
       // when items overflow we show max-1 inline and fold the rest under More.
       const cap = items.length <= inlineMax ? items.length : inlineMax - 1;
       const inline = items.slice(0, cap);
       const overflow = items.length - inline.length;
-      vp.innerHTML = `
+      vp.innerHTML = html`
         <div class="pvh">
-          <span class="pvh-brand"><span class="pvh-logo"></span><span class="pvh-title">${escapeHtml(title)}</span></span>
+          <span class="pvh-brand"><span class="pvh-logo"></span><span class="pvh-title">${title}</span></span>
           <span class="pvh-spacer"></span>
           <nav class="pvh-nav">
-            ${inline.map((it) => `<span class="nav-menu-link">${escapeHtml(it.name)}</span>`).join('')}
-            <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">${escapeHtml(this.state.moreTitle)}<span class="nav-more-caret">▾</span></span></span>
+            ${inline.map(it => `<span class="nav-menu-link">${it.name}</span>`).join('')}
+            <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">${this.state.moreTitle}<span class="nav-more-caret">▾</span></span></span>
           </nav>
           <span class="pvh-tools">
             <span class="pvh-iconbtn">${SEARCH_SVG}</span>
             <span class="pvh-iconbtn pvh-burger">${MENU_SVG}</span>
           </span>
         </div>`;
-
       const root = vp.querySelector('.pvh');
       const nav = root.querySelector('.pvh-nav');
       const more = root.querySelector('.nav-more');
       const moreBtn = root.querySelector('.nav-more-btn');
-      const links = [...nav.querySelectorAll('.nav-menu-link')].filter((l) => !l.closest('.nav-more'));
+      const links = [...nav.querySelectorAll('.nav-menu-link')].filter(l => !l.closest('.nav-more'));
       let foldedCount = 0;
       const syncMore = () => {
         const total = foldedCount + overflow;
         more.classList.toggle('is-empty', total === 0);
-        moreBtn.innerHTML = `${escapeHtml(this.state.moreTitle)} (${total})<span class="nav-more-caret">▾</span>`;
+        moreBtn.innerHTML = html`${this.state.moreTitle} (${total})<span class="nav-more-caret">▾</span>`;
       };
       syncMore();
-
       const fold = new HeaderFold({
         observe: vp,
         fits: () => {
           void root.offsetWidth;
           const tools = root.querySelector('.pvh-tools');
           return tools.getBoundingClientRect().right <= root.getBoundingClientRect().right - 7;
-        },
+        }
       });
       fold.register(30, {
         reset: () => {
-          links.forEach((l) => l.classList.remove('in-more'));
+          links.forEach(l => l.classList.remove('in-more'));
           foldedCount = 0;
           syncMore();
         },
-        ops: () => links.slice().reverse().map((l) => () => {
+        ops: () => links.slice().reverse().map(l => () => {
           l.classList.add('in-more');
           foldedCount += 1;
           syncMore();
-        }),
+        })
       });
       fold.register(40, {
         reset: () => root.classList.remove('pvh-folded'),
-        ops: () => [() => root.classList.add('pvh-folded')],
+        ops: () => [() => root.classList.add('pvh-folded')]
       });
       this._previewFolds.push(fold);
     });
   }
-
   _destroyPreviews() {
-    this._previewFolds.forEach((f) => f.destroy());
+    this._previewFolds.forEach(f => f.destroy());
     this._previewFolds = [];
   }
-
   afterRender() {
     this._cleanupAdminLayout = setupAdminLayout(this, {
-      currentPath: '/light/menu',
+      currentPath: '/light/menu'
     });
-
     setupTextareaMaximizer(this.container);
-
     if (this.state.loading || this.state.error) return;
-
     this.container.querySelectorAll('input[name="menu-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
+      radio.addEventListener('change', e => {
         // Carry the unsaved editor contents across, so flipping to None to see
         // the preview and back does not discard what has been typed.
-        this.setState({ mode: e.target.value, items: this._currentItems() });
+        this.setState({
+          mode: e.target.value,
+          items: this._currentItems()
+        });
       });
     });
-
     this.container.querySelector('#mode-visual-btn')?.addEventListener('click', () => {
       if (this.state.editFormat === 'markdown') {
         const text = this.container.querySelector('#menu-markdown-input').value;
-        this.setState({ editFormat: 'visual', items: parseMarkdown(text) });
+        this.setState({
+          editFormat: 'visual',
+          items: parseMarkdown(text)
+        });
       }
     });
-
     this.container.querySelector('#mode-markdown-btn')?.addEventListener('click', () => {
       if (this.state.editFormat === 'visual') {
-        this.setState({ editFormat: 'markdown', items: this._collectVisualItems() });
+        this.setState({
+          editFormat: 'markdown',
+          items: this._collectVisualItems()
+        });
       }
     });
-
     this.container.querySelector('#add-item-btn')?.addEventListener('click', () => {
       const items = this._collectVisualItems();
-      items.push({ label: '', url: '', depth: 0 });
-      this.setState({ items });
+      items.push({
+        label: '',
+        url: '',
+        depth: 0
+      });
+      this.setState({
+        items
+      });
     });
-
     let dragSrcIndex = -1;
-
     this.container.querySelectorAll('.menu-row').forEach(row => {
       const index = parseInt(row.dataset.index, 10);
       row.querySelector('.delete-item-btn').addEventListener('click', () => {
         const items = this._collectVisualItems();
         items.splice(index, 1);
-        this.setState({ items });
+        this.setState({
+          items
+        });
       });
       row.querySelector('.indent-btn').addEventListener('click', () => {
         const items = this._collectVisualItems();
         items[index].depth = Math.min(3, items[index].depth + 1);
-        this.setState({ items });
+        this.setState({
+          items
+        });
       });
       row.querySelector('.outdent-btn').addEventListener('click', () => {
         const items = this._collectVisualItems();
         items[index].depth = Math.max(0, items[index].depth - 1);
-        this.setState({ items });
+        this.setState({
+          items
+        });
       });
 
       // Arm the row for dragging only while the pointer went down on the
@@ -402,34 +428,31 @@ export default class MenuPage extends Component {
         // A press that never becomes a drag ends in mouseup and no dragend, so
         // without this a plain click on the handle would leave the row armed
         // for good — and an armed row is one whose inputs cannot be edited.
-        document.addEventListener('mouseup', () => row.removeAttribute('draggable'), { once: true });
+        document.addEventListener('mouseup', () => row.removeAttribute('draggable'), {
+          once: true
+        });
       });
-
-      row.addEventListener('dragstart', (e) => {
+      row.addEventListener('dragstart', e => {
         if (row.getAttribute('draggable') !== 'true') return;
         dragSrcIndex = index;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', index.toString());
         row.classList.add('dragging');
       });
-
-      row.addEventListener('dragover', (e) => {
+      row.addEventListener('dragover', e => {
         if (dragSrcIndex === -1) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
       });
-
-      row.addEventListener('dragenter', (e) => {
+      row.addEventListener('dragenter', e => {
         if (dragSrcIndex === -1) return;
         e.preventDefault();
         row.classList.add('drag-over');
       });
-
       row.addEventListener('dragleave', () => {
         row.classList.remove('drag-over');
       });
-
-      row.addEventListener('drop', (e) => {
+      row.addEventListener('drop', e => {
         if (dragSrcIndex === -1) return;
         // preventDefault, not `return false`: a listener's return value does
         // not cancel the default action, and the default drop handler would
@@ -441,10 +464,11 @@ export default class MenuPage extends Component {
           const items = this._collectVisualItems();
           const [movedItem] = items.splice(dragSrcIndex, 1);
           items.splice(index, 0, movedItem);
-          this.setState({ items });
+          this.setState({
+            items
+          });
         }
       });
-
       row.addEventListener('dragend', () => {
         dragSrcIndex = -1;
         row.classList.remove('dragging');
@@ -454,18 +478,17 @@ export default class MenuPage extends Component {
         });
       });
     });
-
     this.container.querySelector('#save-menu-btn')?.addEventListener('click', () => this._handleSave());
 
     // Inline cap + item edits update the preview in place (no full re-render,
     // so inputs keep focus while typing).
-    this.container.querySelector('#inline-max-input')?.addEventListener('change', (e) => {
+    this.container.querySelector('#inline-max-input')?.addEventListener('change', e => {
       const n = parseInt(e.target.value, 10);
       if (n >= 1 && n <= 10) this.state.inlineMax = n;
       e.target.value = this.state.inlineMax;
       this._updatePreviews();
     });
-    this.container.querySelector('#more-title-input')?.addEventListener('input', (e) => {
+    this.container.querySelector('#more-title-input')?.addEventListener('input', e => {
       this.state.moreTitle = e.target.value || 'More';
       this._updatePreviews();
     });
@@ -476,14 +499,11 @@ export default class MenuPage extends Component {
     };
     this.container.querySelector('#menu-items-list')?.addEventListener('input', schedulePreview);
     this.container.querySelector('#menu-markdown-input')?.addEventListener('input', schedulePreview);
-
     this._updatePreviews();
   }
-
   beforeRender() {
     this._destroyPreviews();
   }
-
   beforeUnmount() {
     this._destroyPreviews();
     this._cleanupAdminLayout?.();
@@ -507,17 +527,15 @@ export default class MenuPage extends Component {
       items.push({
         label: row.querySelector('.item-label').value.trim(),
         url: row.querySelector('.item-url').value.trim(),
-        depth: parseInt(row.dataset.depth, 10) || 0,
+        depth: parseInt(row.dataset.depth, 10) || 0
       });
     });
     return items;
   }
-
   mount() {
     super.mount();
     this._load();
   }
-
   async _load() {
     try {
       const data = await getAdminNavMenu();
@@ -533,7 +551,10 @@ export default class MenuPage extends Component {
       });
     } catch (err) {
       console.error('[MenuPage] load error:', err);
-      this.setState({ loading: false, error: 'Could not load menu configuration.' });
+      this.setState({
+        loading: false,
+        error: 'Could not load menu configuration.'
+      });
     }
   }
 
@@ -553,7 +574,6 @@ export default class MenuPage extends Component {
     btn.disabled = saving;
     btn.textContent = saving ? 'Saving…' : 'Save Menu Configuration';
   }
-
   async _handleSave() {
     let markdown = '';
     let apiItems = [];
@@ -570,15 +590,20 @@ export default class MenuPage extends Component {
       // alone would hand it to B, which is no longer on the path.
       const stack = [];
       for (const item of items) {
-        const node = { name: item.label, url: item.url, children: [] };
+        const node = {
+          name: item.label,
+          url: item.url,
+          children: []
+        };
         while (stack.length && stack[stack.length - 1].depth >= item.depth) stack.pop();
         const parent = stack[stack.length - 1];
-        if (parent) parent.node.children.push(node);
-        else apiItems.push(node);
-        stack.push({ depth: item.depth, node });
+        if (parent) parent.node.children.push(node);else apiItems.push(node);
+        stack.push({
+          depth: item.depth,
+          node
+        });
       }
     }
-
     this._setSaving(true);
     try {
       await updateAdminNavMenu({
@@ -586,7 +611,7 @@ export default class MenuPage extends Component {
         custom_markdown: markdown,
         items: apiItems,
         inline_max: this.state.inlineMax,
-        more_title: this.state.moreTitle,
+        more_title: this.state.moreTitle
       });
 
       // Sync the public settings store so the header reflects the change
@@ -596,13 +621,18 @@ export default class MenuPage extends Component {
         ...settings,
         nav_menu_mode: this.state.mode,
         nav_inline_max: String(this.state.inlineMax),
-        nav_more_title: this.state.moreTitle,
+        nav_more_title: this.state.moreTitle
       });
       document.dispatchEvent(new CustomEvent('nav-changed'));
-
-      store.set('toast', { message: 'Menu saved.', type: 'success' });
+      store.set('toast', {
+        message: 'Menu saved.',
+        type: 'success'
+      });
     } catch (err) {
-      store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
+      store.set('toast', {
+        message: err.message || 'Save failed.',
+        type: 'error'
+      });
     } finally {
       this._setSaving(false);
     }

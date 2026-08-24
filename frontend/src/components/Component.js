@@ -1,3 +1,5 @@
+import { raw } from "../utils/helpers.js";
+import { html } from "../utils/helpers.js";
 /**
  * Base Component class.
  *
@@ -68,7 +70,10 @@ export class Component {
    */
   setState(delta) {
     if (this._unmounted) return;
-    this.state = { ...this.state, ...delta };
+    this.state = {
+      ...this.state,
+      ...delta
+    };
     this._rerender();
   }
 
@@ -78,7 +83,10 @@ export class Component {
    */
   setProps(delta) {
     if (this._unmounted) return;
-    this.props = { ...this.props, ...delta };
+    this.props = {
+      ...this.props,
+      ...delta
+    };
     this._rerender();
   }
 
@@ -94,7 +102,7 @@ export class Component {
    */
   unmount() {
     this._unmounted = true;
-    this._storeUnsubs.forEach((fn) => fn());
+    this._storeUnsubs.forEach(fn => fn());
     this._storeUnsubs = [];
     this._unmountChildren();
     this.beforeUnmount();
@@ -113,8 +121,7 @@ export class Component {
    * @returns {Component}
    */
   mountChild(Cls, target, props = {}) {
-    const el =
-      typeof target === 'string' ? this.container.querySelector(target) : target;
+    const el = typeof target === 'string' ? this.container.querySelector(target) : target;
     if (!el) {
       throw new Error(`${this.constructor.name}.mountChild: target "${target}" not found`);
     }
@@ -166,12 +173,11 @@ export class Component {
     const markup = this.render();
     // render() must escape all user-supplied values with escapeHtml().
     // Server-generated HTML is sanitized server-side before storage.
-    this.container.innerHTML = markup;
+    this.container.innerHTML = html`${raw(markup)}`;
     this.afterRender();
   }
-
   _unmountChildren() {
-    this._children.forEach((c) => c.unmount());
+    this._children.forEach(c => c.unmount());
     this._children = [];
   }
 }

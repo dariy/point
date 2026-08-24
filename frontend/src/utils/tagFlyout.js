@@ -1,3 +1,4 @@
+import { html } from "../utils/helpers.js";
 /**
  * The shared tag flyout — one dropdown element, reused by every surface that
  * shows a tag family or a header menu (PostCard, PostContent, PublicFooter,
@@ -27,22 +28,26 @@ export const HOVER_OPEN_MS = 180;
  * returned by getEls.
  */
 export function createHotZone(getEls, onLeave, pad = 8) {
-  const check = (e) => {
-    const inside = getEls().some((el) => {
+  const check = e => {
+    const inside = getEls().some(el => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
-      return (
-        e.clientX >= r.left  - pad &&
-        e.clientX <= r.right + pad &&
-        e.clientY >= r.top   - pad &&
-        e.clientY <= r.bottom + pad
-      );
+      return e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad;
     });
-    if (!inside) { stop(); onLeave(); }
+    if (!inside) {
+      stop();
+      onLeave();
+    }
   };
-  document.addEventListener('mousemove', check, { passive: true });
-  function stop() { document.removeEventListener('mousemove', check); }
-  return { stop };
+  document.addEventListener('mousemove', check, {
+    passive: true
+  });
+  function stop() {
+    document.removeEventListener('mousemove', check);
+  }
+  return {
+    stop
+  };
 }
 
 // ── Flyout singleton ─────────────────────────────────────────────────────────
@@ -54,7 +59,6 @@ let _hotZone = null;
 let _openTimer = null;
 let _flyoutShowTime = 0;
 let _flyoutDismiss = null;
-
 function _getFlyoutEl() {
   if (!_flyoutEl) {
     _flyoutEl = document.createElement('div');
@@ -63,24 +67,20 @@ function _getFlyoutEl() {
   }
   return _flyoutEl;
 }
-
 function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   const entry = index.get(slug);
   if (!entry) return;
-
   const ancestors = getTagAncestors(slug, index);
-  const ancestorSlugs = ancestors.map((t) => t.slug);
+  const ancestorSlugs = ancestors.map(t => t.slug);
   const children = entry.children || [];
-
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
-
   const createItem = (t, className, href) => {
     const a = document.createElement('a');
     a.href = href || `/tags/${t.slug}`;
     a.className = `flyout-item ${className}`;
-    a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count}</span>`;
-    a.addEventListener('click', (e) => {
+    a.innerHTML = html`<span class="name">${t.name}</span> <span class="count">${t.count}</span>`;
+    a.addEventListener('click', e => {
       e.preventDefault();
       _hideFlyout();
       navigateFn(a.pathname + a.search + a.hash);
@@ -92,18 +92,14 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   if (ancestors.length) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-ancestors';
-    ancestors.forEach((t, i) =>
-      section.appendChild(
-        createItem(t, 'ancestor-link', tagHref(t.slug, ancestorSlugs.slice(0, i))),
-      ),
-    );
+    ancestors.forEach((t, i) => section.appendChild(createItem(t, 'ancestor-link', tagHref(t.slug, ancestorSlugs.slice(0, i)))));
     flyout.appendChild(section);
   }
 
   // 2. Current Tag
   const currentSection = document.createElement('div');
   currentSection.className = 'flyout-section flyout-current';
-  currentSection.innerHTML = `<span class="name">${escapeHtml(entry.tag.name)}</span> <span class="count">${entry.tag.count}</span>`;
+  currentSection.innerHTML = html`<span class="name">${entry.tag.name}</span> <span class="count">${entry.tag.count}</span>`;
   flyout.appendChild(currentSection);
 
   // 3. Children — drilling down appends the current tag to the path chain.
@@ -111,15 +107,11 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     const childPath = [...ancestorSlugs, slug];
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-children';
-    children.forEach((t) =>
-      section.appendChild(createItem(t, 'child-link', tagHref(t.slug, childPath))),
-    );
+    children.forEach(t => section.appendChild(createItem(t, 'child-link', tagHref(t.slug, childPath))));
     flyout.appendChild(section);
   }
-
   flyout.style.visibility = 'hidden';
   flyout.classList.remove('hidden');
-
   const isMobile = window.innerWidth < 640;
   if (isMobile) {
     flyout.classList.add('bottom-sheet');
@@ -131,17 +123,13 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     const flyW = flyout.offsetWidth;
     const anchorRect = anchorEl.getBoundingClientRect();
     const gap = 8;
-    
     let top = anchorRect.top - flyH - gap;
     if (top < 8) top = anchorRect.bottom + gap;
-    
     let left = anchorRect.left + anchorRect.width / 2 - flyW / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
-    
     flyout.style.top = `${top}px`;
     flyout.style.left = `${left}px`;
   }
-
   flyout.style.visibility = '';
   anchorEl.classList.add('is-flyout-open');
   anchorEl.classList.add('is-active');
@@ -149,14 +137,12 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   _activeLink = anchorEl;
   _activeCard = anchorEl.closest('.post-card');
   if (_activeCard) _activeCard.classList.add('has-flyout-open');
-
   if (!isMobile) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [_activeCard, anchorEl, _flyoutEl], () => _hideFlyout());
   }
-
   if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
-  _flyoutDismiss = (e) => {
+  _flyoutDismiss = e => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
     if (_flyoutEl.contains(e.target)) return;
     if (excludeEl && excludeEl.contains(e.target)) return;
@@ -166,7 +152,6 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   // overlay, and the flyout must still dismiss when the tap lands there.
   document.addEventListener('click', _flyoutDismiss, true);
 }
-
 function _hideFlyout() {
   _activeLink?.classList.remove('is-flyout-open');
   _activeLink?.classList.remove('is-active');
@@ -189,11 +174,14 @@ function _hideFlyout() {
     _flyoutDismiss = null;
   }
 }
-
-export function hideFlyout() { _hideFlyout(); }
+export function hideFlyout() {
+  _hideFlyout();
+}
 
 /** The shared flyout element, or null before anything has ever opened one. */
-export function flyoutEl() { return _flyoutEl; }
+export function flyoutEl() {
+  return _flyoutEl;
+}
 
 /**
  * Hide the shared flyout only when its trigger lives inside `root`.
@@ -226,22 +214,18 @@ function _anchorFlyoutTo(anchorEl) {
   const spaceBelow = window.innerHeight - anchorRect.bottom - gap - margin;
   const spaceAbove = anchorRect.top - gap - margin;
   const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
-  flyout.style.maxHeight = `${Math.max(160, (openUp ? spaceAbove : spaceBelow))}px`;
+  flyout.style.maxHeight = `${Math.max(160, openUp ? spaceAbove : spaceBelow)}px`;
   flyout.style.overflowY = 'auto';
-
   const flyW = flyout.offsetWidth;
   const flyH = flyout.offsetHeight;
-  const top = openUp ? anchorRect.bottom - anchorRect.height - flyH - gap
-                     : anchorRect.bottom + gap;
+  const top = openUp ? anchorRect.bottom - anchorRect.height - flyH - gap : anchorRect.bottom + gap;
 
   // Prefer aligning the panel's left edge with the trigger; clamp to viewport.
   let left = anchorRect.left;
   left = Math.max(margin, Math.min(left, window.innerWidth - flyW - margin));
-
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
 }
-
 function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
   const a = document.createElement('a');
   a.href = item.href || `/tags/${item.slug}`;
@@ -249,8 +233,8 @@ function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
   const lock = item.is_hidden ? LOCK_SVG : '';
   // No count badge for countless items (custom menu links have no posts).
   const count = item.count ?? item.post_count;
-  a.innerHTML = `<span class="name">${lock}${escapeHtml(item.name)}</span>${count ? ` <span class="count">${count}</span>` : ''}`;
-  a.addEventListener('click', (e) => {
+  a.innerHTML = html`<span class="name">${lock}${item.name}</span>${count ? ` <span class="count">${count}</span>` : ''}`;
+  a.addEventListener('click', e => {
     e.preventDefault();
     _hideFlyout();
     navigateFn(a.pathname + a.search + a.hash);
@@ -279,9 +263,8 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
   _hideFlyout();
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
-
-  const path     = Array.isArray(spec) ? []   : (spec?.path || []);
-  const children = Array.isArray(spec) ? spec  : (spec?.children || []);
+  const path = Array.isArray(spec) ? [] : spec?.path || [];
+  const children = Array.isArray(spec) ? spec : spec?.children || [];
   if (!path.length && !children.length) return;
 
   // Path section — ancestor links + highlighted current crumb. Only worth
@@ -289,12 +272,12 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
   if (path.length > 1) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-path';
-    path.forEach((c) => {
+    path.forEach(c => {
       if (c.current || !c.href) {
         const span = document.createElement('span');
         span.className = 'flyout-item flyout-path-current';
         const lock = c.is_hidden ? LOCK_SVG : '';
-        span.innerHTML = `<span class="name">${lock}${escapeHtml(c.name)}</span>`;
+        span.innerHTML = html`<span class="name">${lock}${c.name}</span>`;
         section.appendChild(span);
       } else {
         _appendFlyoutLink(section, c, navigateFn, 'ancestor-link');
@@ -302,34 +285,28 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
     });
     flyout.appendChild(section);
   }
-
   if (children.length) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-children';
-    children.forEach((t) => _appendFlyoutLink(section, t, navigateFn, 'child-link'));
+    children.forEach(t => _appendFlyoutLink(section, t, navigateFn, 'child-link'));
     flyout.appendChild(section);
   }
-
   flyout.classList.remove('bottom-sheet');
   flyout.style.minWidth = 'max-content';
   flyout.style.visibility = 'hidden';
   flyout.classList.remove('hidden');
-
   _anchorFlyoutTo(anchorEl);
-
   flyout.style.visibility = '';
   anchorEl.classList.add('is-flyout-open');
   _flyoutShowTime = Date.now();
   _activeLink = anchorEl;
   _activeCard = null;
-
   if (hasFinePointer()) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }
-
   if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
-  _flyoutDismiss = (e) => {
+  _flyoutDismiss = e => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
     if (_flyoutEl.contains(e.target)) return;
     if (excludeEl && excludeEl.contains(e.target)) return;
@@ -354,19 +331,17 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
  */
 export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
   let timer = null;
-  const cancel = () => { clearTimeout(timer); timer = null; };
-
-  el.addEventListener('pointerenter', (e) => {
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  el.addEventListener('pointerenter', e => {
     if (e.pointerType !== 'mouse') return;
     cancel();
-    timer = setTimeout(
-      () => showCrumbDropdown(el, getSpec(), navigateFn, excludeEl),
-      HOVER_OPEN_MS,
-    );
+    timer = setTimeout(() => showCrumbDropdown(el, getSpec(), navigateFn, excludeEl), HOVER_OPEN_MS);
   });
   el.addEventListener('pointerleave', cancel);
-
-  el.addEventListener('click', (e) => {
+  el.addEventListener('click', e => {
     cancel();
     // Ask this click what produced it rather than the session-wide verdict: a
     // tap reports pointerType 'touch' even on a machine that has a mouse (and
@@ -384,7 +359,10 @@ export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
     const fromMouse = pointerType ? pointerType === 'mouse' : hasFinePointer();
     // With a mouse the dropdown is already showing from hover, so a click means
     // "go to this item" — let the link navigate.
-    if (fromMouse) { _hideFlyout(); return; }
+    if (fromMouse) {
+      _hideFlyout();
+      return;
+    }
     // Coarse pointer: first tap opens the dropdown, second tap follows the link.
     if (el.classList.contains('is-flyout-open')) {
       const href = el.getAttribute('href');
@@ -399,14 +377,11 @@ export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
     showCrumbDropdown(el, getSpec(), navigateFn, excludeEl);
   });
 }
-
 export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
   if (!tagIndex) return () => {};
-
   const excludeEl = hostEl || containerEl;
   const cleanups = [];
-
-  containerEl.querySelectorAll('.tag-link').forEach((link) => {
+  containerEl.querySelectorAll('.tag-link').forEach(link => {
     const href = link.getAttribute('href');
     if (!href || href.startsWith('http') || !href.startsWith('/tags/')) return;
     const slug = href.replace('/tags/', '').split('?')[0];
@@ -434,23 +409,25 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     }, 350));
 
     // One click = navigate
-    link.addEventListener('click', (e) => {
+    link.addEventListener('click', e => {
       e.stopPropagation();
       clearTimeout(_openTimer);
       _hideFlyout();
     });
   });
-
   const dismissOnScroll = () => {
     if (Date.now() - _flyoutShowTime < 300) return;
     _hideFlyout();
   };
-  window.addEventListener('scroll', dismissOnScroll, { passive: true });
-
+  window.addEventListener('scroll', dismissOnScroll, {
+    passive: true
+  });
   return () => {
     cleanups.forEach(fn => fn());
     clearTimeout(_openTimer);
-    window.removeEventListener('scroll', dismissOnScroll, { passive: true });
+    window.removeEventListener('scroll', dismissOnScroll, {
+      passive: true
+    });
     _hideFlyout();
   };
 }

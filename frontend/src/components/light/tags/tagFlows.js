@@ -1,3 +1,5 @@
+import { raw } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.js";
 /**
  * tagFlows — the tags manager's mutating flows: Move…, Merge…, the confirm
  * shown when one tag is dragged onto another, and the bulk operations behind
@@ -40,9 +42,7 @@ import { getChildrenOf } from './tagOrdering.js';
  */
 export function candidateTags(tags, excludeIds) {
   const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds);
-  return tags
-    .filter(t => !excluded.has(t.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return tags.filter(t => !excluded.has(t.id)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
@@ -66,12 +66,7 @@ export function parentsWith(tag, parentId) {
  * that way — and the moving tag is never offered as its own anchor.
  */
 export function positionOptions(tags, parentId, movingId) {
-  return [
-    `<option value="">At beginning</option>`,
-    ...getChildrenOf(tags, parentId)
-      .filter(t => t.id !== movingId)
-      .map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
-  ].join('');
+  return [`<option value="">At beginning</option>`, ...getChildrenOf(tags, parentId).filter(t => t.id !== movingId).map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`)].join('');
 }
 
 /**
@@ -84,9 +79,13 @@ export function positionOptions(tags, parentId, movingId) {
  */
 export function bulkOutcome(done, total, successMessage) {
   const failed = total - done;
-  return failed === 0
-    ? { message: successMessage(done), type: 'success' }
-    : { message: `${done} of ${total} done. ${failed} failed.`, type: 'error' };
+  return failed === 0 ? {
+    message: successMessage(done),
+    type: 'success'
+  } : {
+    message: `${done} of ${total} done. ${failed} failed.`,
+    type: 'error'
+  };
 }
 
 /** "1 tag" / "3 tags" — the plural these flows repeat in every message. */
@@ -110,7 +109,9 @@ export function pluralTags(n) {
  * @param {(count:number)=>string} successMessage  Called with the done count.
  * @param {{onDone?: Function}} [opts]  Run after the toast, failures included.
  */
-export async function runBulk(ids, op, successMessage, { onDone } = {}) {
+export async function runBulk(ids, op, successMessage, {
+  onDone
+} = {}) {
   let done = 0;
   for (const id of ids) {
     try {
@@ -120,19 +121,21 @@ export async function runBulk(ids, op, successMessage, { onDone } = {}) {
       console.error(`[tagFlows] bulk operation failed for tag ${id}:`, err);
     }
   }
-
   store.set('toast', bulkOutcome(done, ids.length, successMessage));
   onDone?.();
 }
 
 /** Bulk visibility: mark every selected tag hidden or visible. */
-export function bulkVisibility({ ids, hidden, onDone }) {
-  return runBulk(
-    ids,
-    id => patchTag(id, { hidden }),
-    n => `${pluralTags(n)} marked ${hidden ? 'hidden' : 'visible'}.`,
-    { onDone },
-  );
+export function bulkVisibility({
+  ids,
+  hidden,
+  onDone
+}) {
+  return runBulk(ids, id => patchTag(id, {
+    hidden
+  }), n => `${pluralTags(n)} marked ${hidden ? 'hidden' : 'visible'}.`, {
+    onDone
+  });
 }
 
 /**
@@ -141,14 +144,14 @@ export function bulkVisibility({ ids, hidden, onDone }) {
  * `confirm` is the caller's ConfirmDialog plumbing, in its existing positional
  * shape — the dialog itself is generic and not part of this flow.
  */
-export function bulkDelete({ ids, confirm, onDone }) {
-  confirm(
-    'Delete tags',
-    `Delete ${pluralTags(ids.length)}? Posts will NOT be deleted.`,
-    'Delete',
-    'danger',
-    () => runBulk(ids, id => deleteTag(id), n => `${pluralTags(n)} deleted.`, { onDone }),
-  );
+export function bulkDelete({
+  ids,
+  confirm,
+  onDone
+}) {
+  confirm('Delete tags', `Delete ${pluralTags(ids.length)}? Posts will NOT be deleted.`, 'Delete', 'danger', () => runBulk(ids, id => deleteTag(id), n => `${pluralTags(n)} deleted.`, {
+    onDone
+  }));
 }
 
 /**
@@ -158,15 +161,20 @@ export function bulkDelete({ ids, confirm, onDone }) {
  * them, which the dialog says in as many words — one parent chosen for a whole
  * selection cannot preserve each tag's own set without asking per tag.
  */
-export function openBulkMoveDialog({ tags, ids, onDone }) {
+export function openBulkMoveDialog({
+  tags,
+  ids,
+  onDone
+}) {
   if (!ids.length) return null;
-
   const available = candidateTags(tags, ids);
   if (!available.length) {
-    store.set('toast', { message: 'No tag left to move these under.', type: 'error' });
+    store.set('toast', {
+      message: 'No tag left to move these under.',
+      type: 'error'
+    });
     return null;
   }
-
   return openTagPickerDialog({
     title: `Move ${pluralTags(ids.length)} under…`,
     modalClass: 'tm-picker-modal',
@@ -185,13 +193,13 @@ export function openBulkMoveDialog({ tags, ids, onDone }) {
     cancelId: 'tm-bulk-move-cancel-btn',
     confirmId: 'tm-bulk-move-confirm-btn',
     confirmLabel: 'Move',
-    onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
-    onConfirm: parentId => runBulk(
-      ids,
-      id => setTagParents(id, [parentId]),
-      n => `${pluralTags(n)} moved.`,
-      { onDone },
-    ),
+    onEmpty: () => store.set('toast', {
+      message: 'Select a parent first.',
+      type: 'error'
+    }),
+    onConfirm: parentId => runBulk(ids, id => setTagParents(id, [parentId]), n => `${pluralTags(n)} moved.`, {
+      onDone
+    })
   });
 }
 
@@ -204,10 +212,13 @@ export function openBulkMoveDialog({ tags, ids, onDone }) {
  * before confirming. The redirect checkbox is sent but not yet honoured by the
  * backend; its label says so.
  */
-export function openMergeDialog({ tags, loserId, onDone }) {
+export function openMergeDialog({
+  tags,
+  loserId,
+  onDone
+}) {
   const loser = tags.find(t => t.id === loserId);
   if (!loser) return null;
-
   return openTagPickerDialog({
     title: `Merge "${escapeHtml(loser.name)}" into…`,
     modalClass: 'tm-picker-modal',
@@ -237,17 +248,29 @@ export function openMergeDialog({ tags, loserId, onDone }) {
     cancelId: 'tm-merge-cancel-btn',
     confirmId: 'tm-merge-confirm-btn',
     confirmLabel: 'Merge Tags',
-    onEmpty: () => store.set('toast', { message: 'Select a destination tag first.', type: 'error' }),
+    onEmpty: () => store.set('toast', {
+      message: 'Select a destination tag first.',
+      type: 'error'
+    }),
     collect: overlay => overlay.querySelector('#tm-merge-redirect').checked,
     onConfirm: async (winnerId, keepRedirect) => {
       try {
-        await mergeTags(loserId, { winner_id: winnerId, keep_redirect: keepRedirect });
+        await mergeTags(loserId, {
+          winner_id: winnerId,
+          keep_redirect: keepRedirect
+        });
         onDone?.();
-        store.set('toast', { message: 'Tags merged successfully.', type: 'success' });
+        store.set('toast', {
+          message: 'Tags merged successfully.',
+          type: 'success'
+        });
       } catch (err) {
-        store.set('toast', { message: err.message || 'Merge failed.', type: 'error' });
+        store.set('toast', {
+          message: err.message || 'Merge failed.',
+          type: 'error'
+        });
       }
-    },
+    }
   });
 }
 
@@ -262,10 +285,14 @@ export function openMergeDialog({ tags, loserId, onDone }) {
  * @param {number} contextParentId  The parent whose branch the user clicked
  *   Move… under; preselected, and the group whose positions are offered first.
  */
-export function openMoveDialog({ tags, tagId, contextParentId, onDone }) {
+export function openMoveDialog({
+  tags,
+  tagId,
+  contextParentId,
+  onDone
+}) {
   const tag = tags.find(t => t.id === tagId);
   if (!tag) return null;
-
   return openTagPickerDialog({
     title: `Move "${escapeHtml(tag.name)}"`,
     modalClass: 'tm-picker-modal',
@@ -287,13 +314,15 @@ export function openMoveDialog({ tags, tagId, contextParentId, onDone }) {
     cancelId: 'tm-move-cancel-btn',
     confirmId: 'tm-move-confirm-btn',
     confirmLabel: 'Move',
-    onEmpty: () => store.set('toast', { message: 'Select a parent first.', type: 'error' }),
+    onEmpty: () => store.set('toast', {
+      message: 'Select a parent first.',
+      type: 'error'
+    }),
     onMount: overlay => {
       // Re-offer positions whenever the chosen parent changes.
       overlay.querySelector('.tm-picker-list').addEventListener('change', e => {
         if (e.target.name === 'tm-move-parent') {
-          overlay.querySelector('.tm-move-position-select').innerHTML =
-            positionOptions(tags, parseInt(e.target.value, 10), tagId);
+          overlay.querySelector('.tm-move-position-select').innerHTML = html`${raw(positionOptions(tags, parseInt(e.target.value, 10), tagId))}`;
         }
       });
     },
@@ -305,13 +334,22 @@ export function openMoveDialog({ tags, tagId, contextParentId, onDone }) {
       try {
         const nextParents = parentsWith(tag, parentId);
         if (nextParents) await setTagParents(tagId, nextParents);
-        await moveTag(tagId, { parent_id: parentId, after_id: afterId });
+        await moveTag(tagId, {
+          parent_id: parentId,
+          after_id: afterId
+        });
         onDone?.();
-        store.set('toast', { message: 'Tag moved.', type: 'success' });
+        store.set('toast', {
+          message: 'Tag moved.',
+          type: 'success'
+        });
       } catch (err) {
-        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+        store.set('toast', {
+          message: err.message || 'Move failed.',
+          type: 'error'
+        });
       }
-    },
+    }
   });
 }
 
@@ -323,12 +361,19 @@ export function openMoveDialog({ tags, tagId, contextParentId, onDone }) {
  * them. Both options say which they are in the button itself — this is the one
  * place a user can lose a filing they cannot see on screen.
  */
-export function openDropOnConfirm({ tags, dragId, targetId, onDone }) {
-  const drag   = tags.find(t => t.id === dragId);
+export function openDropOnConfirm({
+  tags,
+  dragId,
+  targetId,
+  onDone
+}) {
+  const drag = tags.find(t => t.id === dragId);
   const target = tags.find(t => t.id === targetId);
   if (!drag || !target) return null;
-
-  const { overlay, close } = openOverlay(`
+  const {
+    overlay,
+    close
+  } = openOverlay(`
       <div class="modal" role="dialog" aria-modal="true" style="max-width:28rem">
         <div class="modal-header">
           <h3>Move "${escapeHtml(drag.name)}" under "${escapeHtml(target.name)}"?</h3>
@@ -348,19 +393,19 @@ export function openDropOnConfirm({ tags, dragId, targetId, onDone }) {
           <button class="btn btn-secondary" id="drop-cancel-btn">Cancel</button>
         </div>
       </div>`);
-
   overlay.querySelector('#drop-cancel-btn').addEventListener('click', close);
-
   overlay.querySelector('#drop-move-btn').addEventListener('click', async () => {
     close();
     try {
       await setTagParents(dragId, [targetId]);
       onDone?.();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+      store.set('toast', {
+        message: err.message || 'Move failed.',
+        type: 'error'
+      });
     }
   });
-
   overlay.querySelector('#drop-also-btn').addEventListener('click', async () => {
     close();
     try {
@@ -368,9 +413,14 @@ export function openDropOnConfirm({ tags, dragId, targetId, onDone }) {
       if (nextParents) await setTagParents(dragId, nextParents);
       onDone?.();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+      store.set('toast', {
+        message: err.message || 'Move failed.',
+        type: 'error'
+      });
     }
   });
-
-  return { overlay, close };
+  return {
+    overlay,
+    close
+  };
 }

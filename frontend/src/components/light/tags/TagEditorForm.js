@@ -50,7 +50,7 @@ export function renderTagEditorForm({ tag = null, parentId = null, allTags = [] 
   const navOrder  = f.nav_order ?? '';
   const kind      = f.kind || 'topic';
 
-const html = [
+const _html = [
   '<div class="modal tag-editor-modal" role="dialog" aria-modal="true">',
   '  <button class="modal-close" aria-label="Close">×</button>',
   '  <div class="modal-header">',
@@ -176,7 +176,7 @@ const html = [
   '</div>',
 ].join('\n');
 
-  return html;
+  return _html;
 }
 
 export function renderVisibilitySection(f) {

@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 // Distraction-free (full-screen) mode for the public post list. A floating
 // toggle mounted into the `post-list-tools` slot (see HomePage); clicking it
 // adds `body.distraction-free`, which the plugin CSS uses to hide every bit of
@@ -15,19 +17,23 @@
 const KEY = 'distraction-free';
 const MODE_CLASS = 'distraction-free';
 const OVERLAY_CLASS = 'distraction-overlay';
-
 const ENTER_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>`;
 const EXIT_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>`;
 
 // localStorage can throw (Safari private mode, disabled cookies); degrade to a
 // non-persistent toggle rather than breaking the button.
 function readPref() {
-  try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem(KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 function writePref(on) {
-  try { localStorage.setItem(KEY, on ? '1' : '0'); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(KEY, on ? '1' : '0');
+  } catch {/* ignore */}
 }
-
 export function mount(el) {
   if (!el) return null;
 
@@ -38,19 +44,16 @@ export function mount(el) {
   // live one; drop any stray portalled toggle a leaked instance left behind so
   // only ever one button exists. (Off-mode buttons sit inside the header, not as
   // a direct body child, so this only sweeps orphaned portalled ones.)
-  document.querySelectorAll('body > .distraction-toggle').forEach((b) => b.remove());
-
+  document.querySelectorAll('body > .distraction-toggle').forEach(b => b.remove());
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'header-action-btn distraction-toggle';
-
   let on = readPref();
   let overlay = false; // never persisted — every entry starts with a clean grid
 
   const applyOverlay = () => {
     document.body.classList.toggle(OVERLAY_CLASS, on && overlay);
   };
-
   const apply = () => {
     document.body.classList.toggle(MODE_CLASS, on);
     // In DF mode the button is portalled to body so the header can be hidden
@@ -60,12 +63,11 @@ export function mount(el) {
     } else {
       el.appendChild(btn);
     }
-    btn.innerHTML = on ? EXIT_SVG : ENTER_SVG;
+    btn.innerHTML = html`${raw(on ? EXIT_SVG : ENTER_SVG)}`;
     btn.setAttribute('aria-label', on ? 'Exit full-screen mode' : 'Full-screen mode');
     btn.setAttribute('aria-pressed', String(on));
     applyOverlay();
   };
-
   const toggle = () => {
     on = !on;
     overlay = false; // leaving takes the overlay with it; entering starts bare
@@ -76,7 +78,7 @@ export function mount(el) {
   // Flick up raises the overlay, flick down lowers it, and a flick down with the
   // overlay already down leaves the mode — so the two directions are never
   // ambiguous and one gesture only ever does one thing.
-  const onVerticalSwipe = (e) => {
+  const onVerticalSwipe = e => {
     if (!on) return;
     const dir = e.detail?.dir;
     if (dir === 'up') {
@@ -96,13 +98,12 @@ export function mount(el) {
   // mode that would drag it back into the display:none header and hide it.
   btn.addEventListener('click', toggle);
   apply();
-
   return {
     unmount() {
       btn.removeEventListener('click', toggle);
       window.removeEventListener('point:grid-swipe-vertical', onVerticalSwipe);
       btn.remove();
       document.body.classList.remove(MODE_CLASS, OVERLAY_CLASS);
-    },
+    }
   };
 }
