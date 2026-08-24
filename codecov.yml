@@ -22,7 +22,7 @@ coverage:
         flags:
           - unittests
       frontend:
-        target: 44%
+        target: 65%
         threshold: 2%
         flags:
           - frontend
@@ -33,7 +33,7 @@ coverage:
         flags:
           - unittests
       frontend:
-        target: 44%
+        target: 65%
         threshold: 2%
         flags:
           - frontend
