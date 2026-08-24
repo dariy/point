@@ -71,7 +71,7 @@ export function setupAdminLayout(component, {
   // visitor then looked at.
   const headerActions = component.$(".header-actions");
   if (headerActions) {
-    headerActions.insertAdjacentHTML("beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${EXTERNAL_LINK_SVG}</a>`);
+    headerActions.insertAdjacentHTML("beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${raw(EXTERNAL_LINK_SVG)}</a>`);
   }
   const onLogout = async () => {
     try {
