@@ -155,14 +155,10 @@ export class NavMenu {
     this._syncMore();
 
     // Burger: the full menu, children indented.
-    this.burgerTagsEl.innerHTML = html`${raw(items.length ? items.map(it => {
-      let _html = `<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`;
-      it.children.forEach(c => {
-        if (!c.href) return;
-        _html += `<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`;
-      });
-      return _html;
-    }).join('') : '')}`;
+    this.burgerTagsEl.innerHTML = html`${items.length ? items.map(it => [
+      html`<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`,
+      ...it.children.filter(c => c.href).map(c => html`<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`)
+    ]) : ''}`;
 
     // Burger sitemap.
     this.burgerSitemapEl.innerHTML = html`

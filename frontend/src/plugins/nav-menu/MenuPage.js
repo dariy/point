@@ -300,7 +300,7 @@ export default class MenuPage extends Component {
           <span class="pvh-brand"><span class="pvh-logo"></span><span class="pvh-title">${title}</span></span>
           <span class="pvh-spacer"></span>
           <nav class="pvh-nav">
-            ${inline.map(it => `<span class="nav-menu-link">${it.name}</span>`).join('')}
+            ${inline.map(it => html`<span class="nav-menu-link">${it.name}</span>`)}
             <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">${this.state.moreTitle}<span class="nav-more-caret">▾</span></span></span>
           </nav>
           <span class="pvh-tools">
