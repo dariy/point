@@ -59,6 +59,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
 
   def('window', win);
   def('document', win.document);
+  win.document.elementFromPoint = () => null;
   for (const k of ['Event', 'MouseEvent', 'KeyboardEvent', 'CustomEvent', 'Node', 'HTMLElement']) {
     if (win[k]) def(k, win[k]);
   }
