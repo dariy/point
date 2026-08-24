@@ -122,6 +122,11 @@ run_step "JS tests" bash -c "
 # ── JS coverage floor ────────────────────────────────────────────────────────
 run_step "JS coverage" node "$SCRIPT_DIR/js-coverage-report.mjs" "$ROOT_DIR/coverage-frontend.lcov"
 
+# ── E2E tests ────────────────────────────────────────────────────────────────
+if [ -z "$SHORT_FLAG" ]; then
+    run_step "E2E tests" "$SCRIPT_DIR/run-e2e.sh"
+fi
+
 # ── Vulnerability scan ────────────────────────────────────────────────────────
 run_step "govulncheck" bash -c "
     set -eo pipefail

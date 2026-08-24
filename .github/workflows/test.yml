@@ -54,6 +54,10 @@ jobs:
 
       # Coverage rides along on the same run (V8 instrumentation via the
       # built-in runner — no c8, no extra devDependency).
+      - name: E2E tests
+        run: ./scripts/run-e2e.sh
+
+
       - name: JS tests
         run: |
           node --test --experimental-test-coverage \
