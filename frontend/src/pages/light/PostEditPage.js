@@ -121,7 +121,7 @@ export default class PostEditPage extends Component {
       if (stored) backUrl = stored;
     } catch {/* ignore */}
     return adminLayoutTemplate({
-      title: `<a href="${escapeHtml(backUrl)}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
+      title: html`<a href="${backUrl}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
       actions: detailsToggle + actions,
       content: this._renderContent(),
       contentClass: "editor-full-width"

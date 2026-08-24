@@ -432,7 +432,7 @@ export default class SearchPage extends Component {
     const mount = this.$('#tag-results-mount');
     if (!mount) return;
     const tagsHtml = this.state.tags.map(t => `
-      <a href="/tags/${escapeHtml(t.slug)}" class="search-tag-chip">
+      <a ${html`href="/tags/${t.slug}"`.toString()} class="search-tag-chip">
         <span class="search-tag-chip-name">${escapeHtml(t.name)}</span>
         <span class="search-tag-chip-count">${t.post_count}</span>
       </a>

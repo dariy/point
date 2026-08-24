@@ -1,4 +1,3 @@
-import { html } from "../../utils/helpers.js";
 /**
  * ImmersiveSheetViewer — alternate immersive overlay (the "sheet" mode).
  *
@@ -21,7 +20,7 @@ import { html } from "../../utils/helpers.js";
  */
 
 import { MediaViewer } from '../../components/shared/MediaViewer.js';
-import { escapeHtml, sharePost, linkify } from '../../utils/helpers.js';
+import { escapeHtml, sharePost, linkify , html, raw} from '../../utils/helpers.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -96,7 +95,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       editUrl
     } = this.props;
     const user = store.get('user');
-    const editBtn = user && editUrl ? `<a class="immersive-sheet-action" href="${escapeHtml(editUrl)}" data-action="edit">${EDIT_SVG}<span>Edit</span></a>` : '';
+    const editBtn = user && editUrl ? html`<a class="immersive-sheet-action" href="${editUrl}" data-action="edit">${raw(EDIT_SVG)}<span>Edit</span></a>` : '';
     const shareBtn = `<button class="immersive-sheet-action" type="button" data-action="share">${SHARE_SVG}<span>Share</span></button>`;
     return `<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
   }
@@ -118,7 +117,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       const rel = postObj === prev ? 'prev' : 'next';
       const label = escapeHtml(postObj.title || (side === 'left' ? 'Previous' : 'Next'));
       const text = side === 'left' ? `‹ ${label}` : `${label} ›`;
-      return `<a class="immersive-sheet-postnav ${side}" href="/posts/${escapeHtml(postObj.slug)}" rel="${rel}">${text}</a>`;
+      return html`<a class="immersive-sheet-postnav ${side}" href="/posts/${postObj.slug}" rel="${rel}">${text}</a>`;
     };
     const nav = leftPost || rightPost ? `<div class="immersive-sheet-postnav-row">${navLink(leftPost, 'left')}${navLink(rightPost, 'right')}</div>` : '';
 

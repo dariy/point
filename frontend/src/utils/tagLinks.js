@@ -11,7 +11,7 @@
  * shared dropdown singleton) and tagStrip.js (the scrollable strip).
  */
 
-import { escapeHtml } from './helpers.js';
+import { escapeHtml, html, raw } from './helpers.js';
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user
@@ -65,7 +65,7 @@ export function renderTagLink(tag, { active = false, extra = '', prefix = '', su
   const classes = ['tag-link', `tag-kind-${tagKind(tag)}`, active ? 'active' : '', extra].filter(Boolean).join(' ');
   const isExternal = /^https?:\/\//.test(href);
   const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return `<a href="${escapeHtml(href)}" class="${classes}"${externalAttrs}>${prefix}${escapeHtml(name)}${suffix}</a>`;
+  return html`<a href="${href}" class="${classes}"${raw(externalAttrs)}>${raw(prefix)}${name}${raw(suffix)}</a>`.toString();
 }
 
 export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {

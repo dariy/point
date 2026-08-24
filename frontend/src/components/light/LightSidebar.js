@@ -9,7 +9,7 @@
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { escapeHtml, html, raw } from '../../utils/helpers.js';
 import { DEBUG } from '../../utils/debug.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import {
@@ -70,11 +70,11 @@ export class LightSidebar extends Component {
         ? currentPath === item.href
         : currentPath === item.href || currentPath.startsWith(item.href + '/');
       const cls = isActive ? ' class="nav-item active"' : ' class="nav-item"';
-      return `
-        <li${cls}>
-          <a href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}">
-            ${item.icon}
-            <span class="nav-label">${escapeHtml(item.label)}</span>
+      return html`
+        <li${raw(cls)}>
+          <a href="${item.href}" title="${item.label}">
+            ${raw(item.icon)}
+            <span class="nav-label">${item.label}</span>
           </a>
         </li>`;
     };

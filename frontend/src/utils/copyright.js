@@ -7,7 +7,7 @@
  * keeping the markup in one place is what stops those two from drifting.
  */
 
-import { escapeHtml, safeUrl } from "./helpers.js";
+import { escapeHtml, safeUrl , html, raw} from "./helpers.js";
 
 const DEFAULT_WITH_AUTHOR = "© {{author_name}}, powered by {{engine}}";
 const DEFAULT_NO_AUTHOR = "© powered by {{engine}}";
@@ -41,7 +41,7 @@ export function renderCopyright(settings = {}) {
     if (url === "#" || url.startsWith("//")) return null;
     const external = /^https?:\/\//i.test(url);
     const attrs = external ? ` target="_blank" rel="noopener noreferrer"` : "";
-    return `<a href="${escapeHtml(url)}"${attrs}>${escapeHtml(text)}</a>`;
+    return html`<a href="${url}"${raw(attrs)}>${text}</a>`.toString();
   };
 
   const template =
