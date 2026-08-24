@@ -1,4 +1,4 @@
-import { html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 /**
  * MenuPage — custom navigation menu editor.
  *
@@ -304,8 +304,8 @@ export default class MenuPage extends Component {
             <span class="nav-more is-empty"><span class="nav-menu-link nav-more-btn">${this.state.moreTitle}<span class="nav-more-caret">▾</span></span></span>
           </nav>
           <span class="pvh-tools">
-            <span class="pvh-iconbtn">${SEARCH_SVG}</span>
-            <span class="pvh-iconbtn pvh-burger">${MENU_SVG}</span>
+            <span class="pvh-iconbtn">${raw(SEARCH_SVG)}</span>
+            <span class="pvh-iconbtn pvh-burger">${raw(MENU_SVG)}</span>
           </span>
         </div>`;
       const root = vp.querySelector('.pvh');
