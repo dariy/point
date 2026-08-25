@@ -576,13 +576,13 @@ export class Timeline extends Component {
           <p class="timeline-popover-empty" style="margin-top: 8px;">No locations recorded for this date.</p>
         `;
       } else {
-        const items = locations.map(loc => `
+        const items = locations.map(loc => html`
           <li>
-            ${renderTagLink(loc)}
-            <span class="count">${escapeHtml(loc.post_count)}</span>
+            ${raw(renderTagLink(loc))}
+            <span class="count">${loc.post_count}</span>
           </li>
-        `).join("");
-        popoverEl.innerHTML = html`<ul class="timeline-popover-list">${yearItem}${raw(items)}</ul>`;
+        `);
+        popoverEl.innerHTML = html`<ul class="timeline-popover-list">${yearItem}${items}</ul>`;
       }
       this._anchorPopover(el, popoverEl);
 

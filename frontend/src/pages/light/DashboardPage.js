@@ -10,7 +10,7 @@ import { getStats, getVersion } from '../../api/system.js';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
 import { listPosts, createPost } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml, html, navigate } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
 import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.js';
 
@@ -133,7 +133,7 @@ export default class DashboardPage extends Component {
                 ${topPosts.map(post => `
                   <tr>
                     <td>
-                      <a href="/light/posts/${escapeHtml(String(post.id))}/edit" class="post-title-link">
+                      <a ${html`href="/light/posts/${String(post.id)}/edit"`.toString()} class="post-title-link">
                         ${escapeHtml(post.title)}
                       </a>
                     </td>

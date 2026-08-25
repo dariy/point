@@ -2,7 +2,7 @@ import { raw } from "../../utils/helpers.js";
 import { html } from "../../utils/helpers.js";
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { navigate } from '../../utils/helpers.js';
 import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 const DEFAULT_INLINE_MAX = 4;
@@ -155,14 +155,10 @@ export class NavMenu {
     this._syncMore();
 
     // Burger: the full menu, children indented.
-    this.burgerTagsEl.innerHTML = html`${raw(items.length ? items.map(it => {
-      let _html = `<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`;
-      it.children.forEach(c => {
-        if (!c.href) return;
-        _html += `<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`;
-      });
-      return _html;
-    }).join('') : '')}`;
+    this.burgerTagsEl.innerHTML = html`${items.length ? items.map(it => [
+      html`<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`,
+      ...it.children.filter(c => c.href).map(c => html`<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`)
+    ]) : ''}`;
 
     // Burger sitemap.
     this.burgerSitemapEl.innerHTML = html`

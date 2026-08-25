@@ -41,7 +41,7 @@ export class PublicHeader extends Component {
     } = this.props;
     const user = store.get('user');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
-    const logoHtml = settings.logo_url ? `<img class="app-logo" src="${escapeHtml(settings.logo_url)}" alt="${escapeHtml(settings.blog_title || 'Logo')}" decoding="async">` : APP_LOGO_SVG;
+    const logoHtml = settings.logo_url ? html`<img class="app-logo" src="${settings.logo_url}" alt="${settings.blog_title || 'Logo'}" decoding="async">`.toString() : APP_LOGO_SVG;
     const shareButtonHtml = showShare ? `<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
            ${SHARE_SVG}
          </button>` : '';
@@ -67,11 +67,11 @@ export class PublicHeader extends Component {
     //   <a class="header-action-btn" href="..." aria-label="...">  — for navigation
     //   <button class="header-action-btn" type="button" aria-label="...">  — for actions (no navigation)
     // The `.theme-toggle` class is kept as an alias and for sun/moon icon visibility logic.
-    const editButtonHeader = user && editUrl ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn edit-btn-header" title="Edit" aria-label="Edit post">
-           ${EDIT_SVG}
+    const editButtonHeader = user && editUrl ? html`<a href="${editUrl}" class="header-action-btn edit-btn-header" title="Edit" aria-label="Edit post">
+           ${raw(EDIT_SVG)}
          </a>` : '';
-    const editButtonBurger = user && editUrl ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn" title="Edit" aria-label="Edit post">
-           ${EDIT_SVG}
+    const editButtonBurger = user && editUrl ? html`<a href="${editUrl}" class="header-action-btn" title="Edit" aria-label="Edit post">
+           ${raw(EDIT_SVG)}
          </a>` : '';
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
     return `
@@ -513,7 +513,7 @@ export class PublicHeader extends Component {
     if (recent.length) {
       _html += `<div class="typeahead-section"><div class="typeahead-label">Recent</div>`;
       recent.forEach(s => {
-        _html += `<a href="#" class="typeahead-item recent-item" data-q="${escapeHtml(s)}">${escapeHtml(s)}</a>`;
+        _html += html`<a href="#" class="typeahead-item recent-item" data-q="${s}">${s}</a>`.toString();
       });
       _html += `</div>`;
     } else {
@@ -530,11 +530,11 @@ export class PublicHeader extends Component {
       if (posts.length) {
         _html += `<div class="typeahead-section"><div class="typeahead-label">Posts</div>`;
         posts.forEach(p => {
-          _html += `<a href="/posts/${p.slug}" class="typeahead-item post-item">${escapeHtml(p.title)}</a>`;
+          _html += html`<a href="/posts/${p.slug}" class="typeahead-item post-item">${p.title}</a>`.toString();
         });
         _html += `</div>`;
       }
-      _html += `<a href="#" class="typeahead-item search-all" data-q="${escapeHtml(q)}">Search everything for &ldquo;${escapeHtml(q)}&rdquo;</a>`;
+      _html += html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`.toString();
     }
     mount.innerHTML = html`${raw(_html)}`;
     mount.querySelectorAll('.typeahead-item').forEach(item => {

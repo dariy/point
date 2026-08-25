@@ -17,7 +17,7 @@ import { Component } from '../../components/Component.js';
 
 import { getTagsGraph } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
+import { escapeHtml, html, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { TagGraph } from "./tagGraph.js";
@@ -66,7 +66,7 @@ export default class TagsPage extends Component {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(
         (t) =>
-          `<li><a href="/tags/${escapeHtml(t.slug)}">${escapeHtml(t.name)} (${escapeHtml(String(t.post_count || 0))})</a></li>`,
+          `<li><a ${html`href="/tags/${t.slug}"`.toString()}>${escapeHtml(t.name)} (${escapeHtml(String(t.post_count || 0))})</a></li>`,
       )
       .join('');
 

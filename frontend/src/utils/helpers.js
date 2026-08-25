@@ -42,7 +42,7 @@ export function linkify(text) {
     const t = trim.exec(raw);
     if (t) { tail = raw.slice(t.index); raw = raw.slice(0, t.index); }
     const href = raw.startsWith('http') ? raw : `https://${raw}`;
-    out += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(raw)}</a>${escapeHtml(tail)}`;
+    out += html`<a href="${href}" target="_blank" rel="noopener noreferrer">${raw}</a>${tail}`.toString();
     last = m.index + m[0].length;
   }
   out += escapeHtml(str.slice(last));
@@ -171,7 +171,7 @@ export function dropBrokenImages(root) {
   root.addEventListener(
     'error',
     (e) => {
-      if (e.target instanceof HTMLImageElement) e.target.remove();
+      if (e.target.tagName === 'IMG') e.target.remove();
     },
     true,
   );

@@ -27,6 +27,7 @@ import {
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { tagKind } from "../../utils/tagLinks.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { isRevelioOn } from "../../utils/revelio.js";
@@ -946,7 +947,7 @@ export default class AtlasPage extends Component {
       const thumbUrl = node.thumb && safeUrl(node.thumb);
       const thumbHtml =
         thumbUrl && thumbUrl !== "#"
-          ? `<img class="atlas-node__thumb" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" decoding="async" />`
+          ? html`<img class="atlas-node__thumb" src="${thumbUrl}" alt="" loading="lazy" decoding="async" />`.toString()
           : "";
       const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
       // Owner-only chips carry the site-wide lock plus a dashed ring, so a cloud

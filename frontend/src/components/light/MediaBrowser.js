@@ -365,9 +365,9 @@ export class MediaBrowser extends Component {
       </label>` : "";
     const exifPanel = pickerMode ? "" : this._renderExifPanel(m);
     const refPanel = !pickerMode && isImage ? this._renderReferringPostsInline(m) : "";
-    const actions = pickerMode ? "" : `
+    const actions = pickerMode ? "" : html`
       <div class="media-item-actions">
-        <a href="${escapeHtml(m.path || "")}" class="btn btn-sm" target="_blank"
+        <a href="${m.path || ""}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
         ${isImage ? `<button class="btn btn-sm create-post-btn"
                 data-id="${escapeHtml(String(m.id))}"
@@ -383,7 +383,7 @@ export class MediaBrowser extends Component {
       </div>`;
     return `
       <div class="media-item${isSelected ? " media-item--selected" : ""}"
-           data-id="${escapeHtml(String(m.id))}"${isImage ? ` data-src="${escapeHtml(m.path || "")}" data-alt="${escapeHtml(m.filename)}"` : ""}>
+           data-id="${escapeHtml(String(m.id))}"${isImage ? html` data-src="${m.path || ""}" data-alt="${m.filename}"`.toString() : ""}>
         ${pickerCheckbox}
         ${publicStatus}
         <div class="media-item-preview${isImage && !pickerMode ? " media-item-preview--clickable" : ""}">${preview}</div>
@@ -414,13 +414,13 @@ export class MediaBrowser extends Component {
     } else if (!st.posts || st.posts.length === 0) {
       return "";
     } else {
-      body = `<ul class="referring-posts-list">${st.posts.map(p => `
+      body = html`<ul class="referring-posts-list">${st.posts.map(p => html`
         <li>
-          <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="referring-post-link">
-            <span class="referring-post-title">${escapeHtml(p.title || "(Untitled)")}</span>
-            <span class="referring-post-status referring-post-status--${escapeHtml(p.status || "draft")}">${escapeHtml(p.status || "draft")}</span>
+          <a href="/light/posts/${String(p.id)}/edit" class="referring-post-link">
+            <span class="referring-post-title">${p.title || "(Untitled)"}</span>
+            <span class="referring-post-status referring-post-status--${p.status || "draft"}">${p.status || "draft"}</span>
           </a>
-        </li>`).join("")}</ul>`;
+        </li>`)}</ul>`;
     }
     return `
       <div class="referring-posts-panel inline" id="ref-panel-${escapeHtml(String(m.id))}">

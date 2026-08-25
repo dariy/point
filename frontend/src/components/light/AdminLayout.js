@@ -13,7 +13,7 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import { store } from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
-import { navigate, escapeHtml } from "../../utils/helpers.js";
+import { navigate } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
 /**
@@ -71,7 +71,7 @@ export function setupAdminLayout(component, {
   // visitor then looked at.
   const headerActions = component.$(".header-actions");
   if (headerActions) {
-    headerActions.insertAdjacentHTML("beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${EXTERNAL_LINK_SVG}</a>`);
+    headerActions.insertAdjacentHTML("beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${raw(EXTERNAL_LINK_SVG)}</a>`);
   }
   const onLogout = async () => {
     try {

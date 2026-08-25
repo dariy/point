@@ -145,7 +145,7 @@ export default class PostsListPage extends Component {
         <div class="post-card-swipe-actions">
           <button class="btn btn-sm swipe-publish-btn" data-id="${escapeHtml(String(p.id))}">${CHECK_SVG}<span>Publish</span></button>
           <button class="btn btn-sm swipe-preview-btn" data-id="${escapeHtml(String(p.id))}">${LINK_SVG}<span>Link</span></button>
-          <a class="btn btn-sm" href="/posts/${escapeHtml(p.slug)}">${EXTERNAL_LINK_SVG}<span>Open</span></a>
+          <a class="btn btn-sm" ${html`href="/posts/${p.slug}"`.toString()}>${EXTERNAL_LINK_SVG}<span>Open</span></a>
           <button class="btn btn-sm btn-danger swipe-delete-btn" data-id="${escapeHtml(String(p.id))}" data-title="${escapeHtml(p.title)}">${X_SVG}<span>Delete</span></button>
         </div>
       </div>`;
@@ -244,7 +244,7 @@ export default class PostsListPage extends Component {
               <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
                 ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? "checked" : ""}></td>` : ""}
                 <td class="preview-col" rowspan="2">
-                  <a href="/light/posts/${escapeHtml(String(p.id))}/edit" title="Edit post">
+                  <a ${html`href="/light/posts/${String(p.id)}/edit"`.toString()} title="Edit post">
                     ${previewHtml}
                   </a>
                 </td>
@@ -265,15 +265,15 @@ export default class PostsListPage extends Component {
       }))}</span>` : ""}
                 </td>
                 <td class="title-col">
-                  <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
+                  <a ${html`href="/light/posts/${String(p.id)}/edit"`.toString()} class="table-link">
                     ${escapeHtml(p.title)}
                   </a>
                 </td>
                 <td class="actions-col">
                   <div class="actions">
-                    <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
+                    <a ${html`href="/light/posts/${String(p.id)}/edit"`.toString()}
                        class="btn btn-sm" title="Edit" aria-label="Edit post">${EDIT_SVG}</a>
-                    <a href="/posts/${escapeHtml(p.slug)}" class="btn btn-sm"
+                    <a ${html`href="/posts/${p.slug}"`.toString()} class="btn btn-sm"
                        title="View" aria-label="View on public site">${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"

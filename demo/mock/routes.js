@@ -178,6 +178,7 @@ function projectPost(state, post, sets) {
   if (state.authenticated) {
     return { ...post, is_hidden: post.status === "hidden", is_hidden_by_tag: hiddenByTag(post, sets) };
   }
+  // eslint-disable-next-line no-unused-vars
   const { is_hidden, is_hidden_by_tag, ...rest } = post;
   return rest;
 }
@@ -193,6 +194,7 @@ function projectPosts(state, posts, sets) {
  */
 function projectTag(state, tag, sets) {
   if (!state.authenticated) {
+    // eslint-disable-next-line no-unused-vars
     const { hidden, hides_posts, effective_hidden, effective_hides_posts, hidden_via, ...rest } = tag;
     return rest;
   }
@@ -564,6 +566,7 @@ function scopedGraph(state, query) {
     .filter((t) => state.authenticated || !sets.hidden.has(t.id))
     .map((t) => {
       if (state.authenticated) return { ...t, is_hidden: sets.hidden.has(t.id) };
+      // eslint-disable-next-line no-unused-vars
       const { is_hidden, ...rest } = t;
       return rest;
     });
@@ -602,6 +605,7 @@ function scopedGraph(state, query) {
       .filter((p) => inRangeIds.has(p.id))
       .map((p) => {
         if (state.authenticated) return p;
+        // eslint-disable-next-line no-unused-vars
         const { status, is_hidden, ...rest } = p;
         return rest;
       });

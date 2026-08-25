@@ -1,4 +1,4 @@
-import { raw } from "../../utils/helpers.js";
+
 import { html } from "../../utils/helpers.js";
 /**
  * PhotoLibraryPickerDialog — browse the external photo library and selectively
@@ -19,7 +19,7 @@ import { html } from "../../utils/helpers.js";
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.js';
 export class PhotoLibraryPickerDialog extends Component {
   constructor({
@@ -220,11 +220,11 @@ export class PhotoLibraryPickerDialog extends Component {
       label: p,
       index: i
     }))];
-    el.innerHTML = html`${raw(crumbs.map((crumb, i) => {
+    el.innerHTML = html`${crumbs.map((crumb, i) => {
       const isLast = i === crumbs.length - 1;
-      return isLast ? `<span class="breadcrumb-current">${crumb.label}</span>` : `<button class="breadcrumb-btn" data-index="${crumb.index}">${crumb.label}</button>
+      return isLast ? html`<span class="breadcrumb-current">${crumb.label}</span>` : html`<button class="breadcrumb-btn" data-index="${crumb.index}">${crumb.label}</button>
            <span class="breadcrumb-sep">/</span>`;
-    }).join(''))}`;
+    })}`;
   }
   _patchSidebar(folders) {
     const el = this.$('#plpd-sidebar');
@@ -233,11 +233,11 @@ export class PhotoLibraryPickerDialog extends Component {
       el.innerHTML = html`<span class="photo-library-sidebar-empty">Loading…</span>`;
       return;
     }
-    el.innerHTML = html`${raw(folders.length ? folders.map(name => `
+    el.innerHTML = html`${folders.length ? folders.map(name => html`
           <button class="photo-library-folder-btn" data-folder="${name}" title="${name}">
             <span class="photo-library-folder-icon">&#128193;</span>
             <span class="photo-library-item-label">${name}</span>
-          </button>`).join('') : '<span class="photo-library-sidebar-empty">No subfolders</span>')}`;
+          </button>`) : html`<span class="photo-library-sidebar-empty">No subfolders</span>`}`;
   }
   _patchContent(files, selected) {
     const el = this.$('#plpd-content');

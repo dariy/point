@@ -125,10 +125,16 @@ describe('tags flyout and UI', () => {
     assert.ok(anchorEl.classList.contains('is-flyout-open'));
   });
 
-  test('showCrumbDropdown structured list', () => {
+  test('showCrumbDropdown structured list with locks and counts', () => {
     showCrumbDropdown(anchorEl, { 
-      path: [{ name: 'Parent', href: '/tags/parent', is_hidden: false, current: false }],
-      children: [{ name: 'Test', slug: 'test', count: 5 }]
+      path: [
+        { name: 'Parent', href: '/tags/parent', is_hidden: false, current: false },
+        { name: 'HiddenParent', href: '/tags/hidden', is_hidden: true, current: true }
+      ],
+      children: [
+        { name: 'Test', slug: 'test', count: 5, is_hidden: true },
+        { name: 'NoCount', slug: 'nocount', is_hidden: false } // no count property
+      ]
     }, navigateFn);
     
     const flyout = flyoutEl();

@@ -1,4 +1,4 @@
-import { html } from "../utils/helpers.js";
+import { html, raw } from "../utils/helpers.js";
 /**
  * The shared tag flyout — one dropdown element, reused by every surface that
  * shows a tag family or a header menu (PostCard, PostContent, PublicFooter,
@@ -13,7 +13,7 @@ import { html } from "../utils/helpers.js";
  * tagStrip.js.
  */
 
-import { escapeHtml, setupLongPress } from './helpers.js';
+import { setupLongPress } from './helpers.js';
 import { LOCK_SVG } from './icons.js';
 import { hasFinePointer, eventPointerType } from './pointerMode.js';
 import { tagHref, getTagAncestors } from './tagLinks.js';
@@ -230,10 +230,10 @@ function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
   const a = document.createElement('a');
   a.href = item.href || `/tags/${item.slug}`;
   a.className = `flyout-item ${extraClass}`.trim();
-  const lock = item.is_hidden ? LOCK_SVG : '';
+  const lock = item.is_hidden ? raw(LOCK_SVG) : '';
   // No count badge for countless items (custom menu links have no posts).
   const count = item.count ?? item.post_count;
-  a.innerHTML = html`<span class="name">${lock}${item.name}</span>${count ? ` <span class="count">${count}</span>` : ''}`;
+  a.innerHTML = html`<span class="name">${lock}${item.name}</span>${count ? html` <span class="count">${count}</span>` : ''}`;
   a.addEventListener('click', e => {
     e.preventDefault();
     _hideFlyout();
@@ -276,7 +276,7 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
       if (c.current || !c.href) {
         const span = document.createElement('span');
         span.className = 'flyout-item flyout-path-current';
-        const lock = c.is_hidden ? LOCK_SVG : '';
+        const lock = c.is_hidden ? raw(LOCK_SVG) : '';
         span.innerHTML = html`<span class="name">${lock}${c.name}</span>`;
         section.appendChild(span);
       } else {

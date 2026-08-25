@@ -12,7 +12,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, navigate } from "../../utils/helpers.js";
+import { escapeHtml, html, navigate } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import { buildTagIndex } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
@@ -224,8 +224,8 @@ export class PostContent extends Component {
 
   _renderNormalPostArrows(prevPost, nextPost) {
     if (!prevPost && !nextPost) return "";
-    const prev = prevPost ? `<a href="/posts/${escapeHtml(prevPost.slug)}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>` : "";
-    const next = nextPost ? `<a href="/posts/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>` : "";
+    const prev = prevPost ? `<a ${html`href="/posts/${prevPost.slug}"`.toString()} class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>` : "";
+    const next = nextPost ? `<a ${html`href="/posts/${nextPost.slug}"`.toString()} class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>` : "";
     return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
   }
 
@@ -292,8 +292,8 @@ export class PostContent extends Component {
 
   _renderNav(prev, next) {
     if (!prev && !next) return "";
-    const prevLink = prev ? `<a href="/posts/${escapeHtml(prev.slug)}" class="post-nav-link prev" rel="prev"><span class="nav-label">Previous</span><span class="nav-title">${escapeHtml(prev.title)}</span></a>` : "<span></span>";
-    const nextLink = next ? `<a href="/posts/${escapeHtml(next.slug)}" class="post-nav-link next" rel="next"><span class="nav-label">Next</span><span class="nav-title">${escapeHtml(next.title)}</span></a>` : "<span></span>";
+    const prevLink = prev ? `<a ${html`href="/posts/${prev.slug}"`.toString()} class="post-nav-link prev" rel="prev"><span class="nav-label">Previous</span><span class="nav-title">${escapeHtml(prev.title)}</span></a>` : "<span></span>";
+    const nextLink = next ? `<a ${html`href="/posts/${next.slug}"`.toString()} class="post-nav-link next" rel="next"><span class="nav-label">Next</span><span class="nav-title">${escapeHtml(next.title)}</span></a>` : "<span></span>";
     return `<nav class="post-navigation" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
   }
 
