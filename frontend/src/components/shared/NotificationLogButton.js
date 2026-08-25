@@ -16,7 +16,7 @@ import { html } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
 import { Modal } from './Modal.js';
-import { escapeHtml } from '../../utils/helpers.js';
+
 import { getRecentEntries } from '../../utils/notificationLog.js';
 const TYPE_LABELS = {
   success: '✓',

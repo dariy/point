@@ -171,7 +171,7 @@ export function dropBrokenImages(root) {
   root.addEventListener(
     'error',
     (e) => {
-      if (e.target instanceof HTMLImageElement) e.target.remove();
+      if (e.target.tagName === 'IMG') e.target.remove();
     },
     true,
   );

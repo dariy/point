@@ -27,7 +27,7 @@ import {
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
-import { html, raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { tagKind } from "../../utils/tagLinks.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { isRevelioOn } from "../../utils/revelio.js";

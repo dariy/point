@@ -11,7 +11,7 @@
  * shared dropdown singleton) and tagStrip.js (the scrollable strip).
  */
 
-import { escapeHtml, html, raw } from './helpers.js';
+import { html, raw } from './helpers.js';
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user

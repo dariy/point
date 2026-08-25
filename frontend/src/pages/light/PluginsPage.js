@@ -34,7 +34,7 @@ import { getAllSettings } from "../../api/settings.js";
 import { getInstagramStatus } from "../../api/instagram.js";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { store } from "../../store.js";
-import { escapeHtml , html, raw} from "../../utils/helpers.js";
+import { escapeHtml, html } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 
 // Slot cardinalities that make a slot's candidates alternatives (at most one

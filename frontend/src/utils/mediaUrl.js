@@ -15,7 +15,7 @@
  * tests, and a shell a service worker serves offline.
  */
 
-import { escapeHtml , html, raw} from "./helpers.js";
+import { escapeHtml, html } from "./helpers.js";
 
 /**
  * The ladder as of this build, and the fallback when `window.__MEDIA__` is

@@ -2,7 +2,7 @@ import { raw } from "../../utils/helpers.js";
 import { html } from "../../utils/helpers.js";
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { navigate } from '../../utils/helpers.js';
 import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 const DEFAULT_INLINE_MAX = 4;

@@ -13,7 +13,7 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import { store } from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
-import { navigate, escapeHtml } from "../../utils/helpers.js";
+import { navigate } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
 /**

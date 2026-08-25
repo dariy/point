@@ -199,7 +199,7 @@
 		'strike': {
 			// ~~strike through~~
 			// ~strike~
-			// eslint-disable-next-line regexp/strict
+
 			pattern: createInline(/(~~?)(?:(?!~)<inner>)+\2/.source),
 			lookbehind: true,
 			greedy: true,

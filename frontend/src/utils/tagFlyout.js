@@ -13,7 +13,7 @@ import { html, raw } from "../utils/helpers.js";
  * tagStrip.js.
  */
 
-import { escapeHtml, setupLongPress } from './helpers.js';
+import { setupLongPress } from './helpers.js';
 import { LOCK_SVG } from './icons.js';
 import { hasFinePointer, eventPointerType } from './pointerMode.js';
 import { tagHref, getTagAncestors } from './tagLinks.js';
