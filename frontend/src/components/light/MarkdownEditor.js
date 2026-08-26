@@ -1,7 +1,8 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
-
 import Prism from '../../../vendor/prismjs/prism-core.js';
 window.Prism = Prism;
 import '../../../vendor/prismjs/prism-markup.js';
@@ -13,15 +14,14 @@ if (Prism.languages.markdown) {
   Prism.languages.insertBefore('point-md', 'hr', {
     'image-path': {
       pattern: /^\/\d{4}\/\d{2}\/.+$/m,
-      alias: 'url',
+      alias: 'url'
     },
     'fenced-div': {
       pattern: /^:::(?:\{[^}\r\n]*\})?[ \t]*$/m,
-      alias: 'keyword',
-    },
+      alias: 'keyword'
+    }
   });
 }
-
 export class MarkdownEditor extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -32,7 +32,6 @@ export class MarkdownEditor extends Component {
     this.isMaximized = props.isMaximized || false;
     this.id = props.id || `md-editor-${Math.random().toString(36).substring(2, 9)}`;
   }
-
   render() {
     const isMaximizedClass = this.isMaximized ? 'is-maximized' : '';
     return `
@@ -49,77 +48,72 @@ export class MarkdownEditor extends Component {
       </div>
     `;
   }
-
   afterRender() {
     const editorElement = this.container.querySelector(`#${this.id}`);
     const maximizeBtn = this.container.querySelector('.textarea-maximize-btn');
     const saveBtn = this.container.querySelector('.textarea-save-btn');
-
     if (!editorElement) return;
-
     if (this.isMaximized) {
       document.body.classList.add('textarea-maximized-body-lock');
     }
-
     const lang = Prism.languages['point-md'] || Prism.languages.markdown;
     const langKey = Prism.languages['point-md'] ? 'point-md' : 'markdown';
-
-    const highlight = (editor) => {
+    const highlight = editor => {
       if (lang) {
-        editor.innerHTML = Prism.highlight(editor.textContent, lang, langKey);
+        editor.innerHTML = html`${raw(Prism.highlight(editor.textContent, lang, langKey))}`;
       }
     };
-
-    this.jar = CodeJar(editorElement, highlight, { tab: '  ' });
+    this.jar = CodeJar(editorElement, highlight, {
+      tab: '  '
+    });
     this.jar.updateCode(this.value || '');
-
-    this.jar.onUpdate((code) => {
+    this.jar.onUpdate(code => {
       this.value = code;
       this.onChange(code);
     });
-
     if (maximizeBtn) {
-      maximizeBtn.addEventListener('click', (e) => {
+      maximizeBtn.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
         this._toggleMaximize(editorElement, maximizeBtn, saveBtn);
       });
     }
-
     if (saveBtn) {
-      saveBtn.addEventListener('click', (e) => {
+      saveBtn.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
-        this.container.dispatchEvent(new CustomEvent('textarea:save', { bubbles: true }));
+        this.container.dispatchEvent(new CustomEvent('textarea:save', {
+          bubbles: true
+        }));
       });
     }
-
-    editorElement.addEventListener('keydown', (e) => {
+    editorElement.addEventListener('keydown', e => {
       if (e.key === 'Escape' && this.isMaximized) {
         this._toggleMaximize(editorElement, maximizeBtn, saveBtn);
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        this.container.dispatchEvent(new CustomEvent('textarea:save', { bubbles: true }));
+        this.container.dispatchEvent(new CustomEvent('textarea:save', {
+          bubbles: true
+        }));
       }
     });
   }
-
   _toggleMaximize(editorElement, btn, saveBtn) {
     this.isMaximized = !this.isMaximized;
     editorElement.classList.toggle('is-maximized', this.isMaximized);
     btn.classList.toggle('is-maximized', this.isMaximized);
     if (saveBtn) saveBtn.classList.toggle('is-maximized', this.isMaximized);
-    btn.innerHTML = this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG;
+    btn.innerHTML = html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`;
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
     document.body.classList.toggle('textarea-maximized-body-lock', this.isMaximized);
-
     this.container.dispatchEvent(new CustomEvent('textarea:maximize', {
       bubbles: true,
-      detail: { isMaximized: this.isMaximized }
+      detail: {
+        isMaximized: this.isMaximized
+      }
     }));
   }
-
   beforeUnmount() {
     if (this.isMaximized) {
       document.body.classList.remove('textarea-maximized-body-lock');
@@ -129,11 +123,9 @@ export class MarkdownEditor extends Component {
       this.jar = null;
     }
   }
-
   getValue() {
     return this.value;
   }
-
   insertAtEnd(text) {
     if (!this.jar) return;
     const current = this.jar.toString();

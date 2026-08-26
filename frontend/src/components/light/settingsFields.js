@@ -9,7 +9,7 @@
  * secrets, then plain text).
  */
 
-import { escapeHtml } from "../../utils/helpers.js";
+import { escapeHtml, html } from "../../utils/helpers.js";
 import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.js";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
@@ -119,7 +119,7 @@ function inputHtml(key, value, { posts = [] }) {
       })
       .join("");
     const previewLink = value
-      ? `<a href="/posts/${escapeHtml(String(value))}" class="settings-preview-link">Preview</a>`
+      ? `<a ${html`href="/posts/${String(value)}"`.toString()} class="settings-preview-link">Preview</a>`
       : "";
     return `<div class="settings-input-with-preview">
         <select name="${key}" id="${key}" class="form-select">

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"testing"
 
 	"point-api/internal/models"
@@ -596,6 +598,44 @@ func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 	}
 }
 
+// TestRepository_ListPostsByViews covers the popular-posts ordering. The only
+// test this query ever had ran against the sqlc-generated ListPostsByViews,
+// which was shadowed by the method below and so never executed.
+func TestRepository_ListPostsByViews(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, view_count, published_at) VALUES
+		('Quiet','quiet','b',1,'published',10,datetime('now')),
+		('Popular','popular','b',1,'published',20,datetime('now'))`)
+
+	posts, err := repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
+		StatusFilter: false, FeaturedFilter: false, IncludeDrafts: true, Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListPostsByViews failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("expected 2 posts, got %d", len(posts))
+	}
+	if posts[0].Slug != "popular" {
+		t.Errorf("expected the most-viewed post first, got %q", posts[0].Slug)
+	}
+
+	// The status filter has to reach the SQL, not just the Go struct.
+	posts, err = repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
+		StatusFilter: true, Status: "draft", FeaturedFilter: false, IncludeDrafts: true, Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListPostsByViews with status filter failed: %v", err)
+	}
+	if len(posts) != 0 {
+		t.Errorf("expected no drafts, got %d", len(posts))
+	}
+}
+
 func TestRepository_PostsInYearRange(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
@@ -633,3 +673,199 @@ func TestRepository_PostsInYearRange(t *testing.T) {
 	}
 }
 
+// mustExec runs a fixture statement and fails the test if it does not land —
+// a silently dropped INSERT here would make a visibility test pass for the
+// wrong reason.
+func mustExec(t *testing.T, repo Repository, q string, args ...interface{}) {
+	t.Helper()
+	if _, err := repo.DB().Exec(q, args...); err != nil {
+		t.Fatalf("exec %q: %v", q, err)
+	}
+}
+
+// navSeries lays out three published posts in chronological order (A oldest,
+// C newest) so a navigation test can hide the middle one and watch the chain
+// close over it.
+func navSeries(t *testing.T, repo Repository) (a, b, c int64) {
+	t.Helper()
+	_, a = insertUserAndPost(t, repo, "nav-a", "published")
+	_, b = insertUserAndPost(t, repo, "nav-b", "published")
+	_, c = insertUserAndPost(t, repo, "nav-c", "published")
+	for id, at := range map[int64]string{a: "2024-01-01", b: "2024-03-01", c: "2024-05-01"} {
+		if _, err := repo.DB().Exec(`UPDATE posts SET published_at=? WHERE id=?`, at, id); err != nil {
+			t.Fatalf("set published_at: %v", err)
+		}
+	}
+	return a, b, c
+}
+
+// A post carried by a hides_posts tag is absent from every public list, so it
+// must be absent from the public prev/next chain too. It used to pass the
+// navigation query's status-only filter, and clicking through to it hit the
+// post-detail endpoint, which applies the full rule and answers 404.
+//
+// publicOnly is what an anonymous visitor gets — the handler sets it whenever
+// there is no principal on the request. That covers the plain signed-out reader
+// as much as the guest-view switch; they are one code path.
+func TestRepository_GetPostNavigation_SkipsHiddenByTag(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	pidA, pidB, pidC := navSeries(t, repo)
+	mustExec(t, repo, `INSERT INTO tags (id, name, slug, hides_posts) VALUES (1,'Secret','secret',1)`)
+	mustExec(t, repo, `INSERT INTO post_tags (post_id, tag_id) VALUES (?,1)`, pidB)
+
+	// Public: B is skipped in both directions.
+	prev, next, err := repo.GetPostNavigation(ctx, pidC, true, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation (public, from C): %v", err)
+	}
+	if prev == nil || prev.ID != pidA {
+		t.Errorf("public prev of C = %v, want nav-a (%d)", prev, pidA)
+	}
+	if next != nil {
+		t.Errorf("public next of C = %v, want nil", next)
+	}
+
+	prev, next, err = repo.GetPostNavigation(ctx, pidA, true, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation (public, from A): %v", err)
+	}
+	if next == nil || next.ID != pidC {
+		t.Errorf("public next of A = %v, want nav-c (%d)", next, pidC)
+	}
+	if prev != nil {
+		t.Errorf("public prev of A = %v, want nil", prev)
+	}
+
+	// Signed in: the owner still walks through B.
+	prev, _, err = repo.GetPostNavigation(ctx, pidC, false, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation (owner): %v", err)
+	}
+	if prev == nil || prev.ID != pidB {
+		t.Errorf("owner prev of C = %v, want nav-b (%d)", prev, pidB)
+	}
+}
+
+// The exclusion follows the tag tree: a post under a child of a hides_posts tag
+// is hidden too, which is what the list queries do.
+func TestRepository_GetPostNavigation_SkipsHiddenByDescendantTag(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	pidA, pidB, pidC := navSeries(t, repo)
+	mustExec(t, repo, `INSERT INTO tags (id, name, slug, hides_posts) VALUES (1,'Secret','secret',1)`)
+	mustExec(t, repo, `INSERT INTO tags (id, name, slug, hides_posts) VALUES (2,'Sub','sub',0)`)
+	mustExec(t, repo, `INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
+	mustExec(t, repo, `INSERT INTO post_tags (post_id, tag_id) VALUES (?,2)`, pidB)
+
+	prev, _, err := repo.GetPostNavigation(ctx, pidC, true, "")
+	if err != nil {
+		t.Fatalf("GetPostNavigation: %v", err)
+	}
+	if prev == nil || prev.ID != pidA {
+		t.Errorf("public prev of C = %v, want nav-a (%d)", prev, pidA)
+	}
+}
+
+// Scoping navigation to a tag narrows the chain; it must not widen it back onto
+// a post the hides-posts rule excluded, even when that post carries the tag
+// being scoped to.
+func TestRepository_GetPostNavigation_TagScopedRespectsHidden(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	pidA, pidB, pidC := navSeries(t, repo)
+	mustExec(t, repo, `INSERT INTO tags (id, name, slug, hides_posts) VALUES (1,'Secret','secret',1)`)
+	mustExec(t, repo, `INSERT INTO tags (id, name, slug, hides_posts) VALUES (2,'Travel','travel',0)`)
+	// All three are in the travel collection; B is additionally hidden.
+	mustExec(t, repo, `INSERT INTO post_tags (post_id, tag_id) VALUES (?,2),(?,2),(?,2),(?,1)`,
+		pidA, pidB, pidC, pidB)
+
+	prev, _, err := repo.GetPostNavigation(ctx, pidC, true, "travel")
+	if err != nil {
+		t.Fatalf("GetPostNavigation (tag-scoped): %v", err)
+	}
+	if prev == nil || prev.ID != pidA {
+		t.Errorf("tag-scoped public prev of C = %v, want nav-a (%d)", prev, pidA)
+	}
+}
+
+func TestListPostNodesForGraph(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	if nodes, err := repo.ListPostNodesForGraph(ctx, true); err != nil {
+		t.Fatalf("ListPostNodesForGraph on an empty database: %v", err)
+	} else if len(nodes) != 0 {
+		t.Fatalf("empty database returned %d nodes", len(nodes))
+	}
+
+	// Four posts an hour apart, oldest first, so newest-first is a real claim
+	// about the result and not the insertion order read back.
+	db := repo.DB()
+	if _, err := db.Exec(
+		`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u1','e1','h','D')`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	insert := func(slug, status string, hoursAgo int) int64 {
+		t.Helper()
+		res, err := db.Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at, created_at)
+			VALUES (?, ?, 'c', 1, ?, datetime('now', ?), datetime('now', ?))`,
+			slug, slug, status, fmt.Sprintf("-%d hours", hoursAgo), fmt.Sprintf("-%d hours", hoursAgo))
+		if err != nil {
+			t.Fatalf("insert %s: %v", slug, err)
+		}
+		id, _ := res.LastInsertId()
+		return id
+	}
+	insert("oldest", "published", 4)
+	insert("draft", "draft", 3)
+	vaulted := insert("vaulted", "published", 2)
+	insert("newest", "published", 1)
+
+	// A post carried by a hides_posts tag: published, but not public.
+	res, err := db.Exec(
+		`INSERT INTO tags (name, slug, post_count, created_at, hides_posts) VALUES ('Vault','vault',0,CURRENT_TIMESTAMP,1)`)
+	if err != nil {
+		t.Fatalf("insert tag: %v", err)
+	}
+	tagID, _ := res.LastInsertId()
+	if _, err := db.Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, vaulted, tagID); err != nil {
+		t.Fatalf("tag the vaulted post: %v", err)
+	}
+
+	slugs := func(publishedOnly bool) []string {
+		t.Helper()
+		nodes, err := repo.ListPostNodesForGraph(ctx, publishedOnly)
+		if err != nil {
+			t.Fatalf("ListPostNodesForGraph(%v): %v", publishedOnly, err)
+		}
+		out := make([]string, len(nodes))
+		for i, n := range nodes {
+			out[i] = n.Slug
+		}
+		return out
+	}
+
+	// publishedOnly is what the public graph is drawn from: the draft is gone,
+	// and so is the post the vault tag hides.
+	if got, want := slugs(true), []string{"newest", "oldest"}; !slices.Equal(got, want) {
+		t.Errorf("ListPostNodesForGraph(true) = %v, want %v", got, want)
+	}
+	// The owner's graph keeps both, and still reads newest first.
+	if got, want := slugs(false), []string{"newest", "vaulted", "draft", "oldest"}; !slices.Equal(got, want) {
+		t.Errorf("ListPostNodesForGraph(false) = %v, want %v", got, want)
+	}
+}

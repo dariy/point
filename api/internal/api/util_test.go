@@ -1,6 +1,8 @@
 package api
 
 import (
+	"point-api/internal/services/pageview"
+
 	"database/sql"
 	"errors"
 	"net/http"
@@ -451,21 +453,21 @@ func TestParseCoordsFromDegreeString_SouthWest(t *testing.T) {
 
 func TestExtractMediaURL_Coverage(t *testing.T) {
 
-	result := extractMediaURL(sql.NullString{String: "/thumb/photo.jpg", Valid: true}, "")
+	result := pageview.ExtractMediaURL(sql.NullString{String: "/thumb/photo.jpg", Valid: true}, "")
 	if result == nil {
 		t.Error("expected non-nil result for valid thumb path")
 	}
 
-	result2 := extractMediaURL(sql.NullString{Valid: false}, "![alt](/media/photo.jpg)")
+	result2 := pageview.ExtractMediaURL(sql.NullString{Valid: false}, "![alt](/media/photo.jpg)")
 	if result2 == nil {
 		t.Error("expected non-nil result for markdown image in content")
 	}
 
-	result3 := extractMediaURL(sql.NullString{String: "originals/photo.jpg", Valid: true}, "")
+	result3 := pageview.ExtractMediaURL(sql.NullString{String: "originals/photo.jpg", Valid: true}, "")
 	if result3 == nil {
 		t.Error("expected non-nil for originals/ thumb path")
 	}
 
-	result4 := extractMediaURL(sql.NullString{Valid: false}, "")
+	result4 := pageview.ExtractMediaURL(sql.NullString{Valid: false}, "")
 	_ = result4
 }

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"point-api/internal/services"
+	"point-api/internal/services/pageview"
 
 	"github.com/labstack/echo/v4"
 )
@@ -367,13 +368,13 @@ func TestRecalculateCounts_Success(t *testing.T) {
 
 func TestGetMinTagPostsSetting(t *testing.T) {
 	settings := map[string]string{"min_tag_posts_to_show": "3"}
-	if v := getMinTagPostsSetting(settings); v != 3 {
+	if v := pageview.MinTagPostsSetting(settings); v != 3 {
 		t.Errorf("expected 3, got %d", v)
 	}
-	if v := getMinTagPostsSetting(map[string]string{}); v != 0 {
+	if v := pageview.MinTagPostsSetting(map[string]string{}); v != 0 {
 		t.Errorf("expected 0, got %d", v)
 	}
-	if v := getMinTagPostsSetting(map[string]string{"min_tag_posts_to_show": "-5"}); v != 0 {
+	if v := pageview.MinTagPostsSetting(map[string]string{"min_tag_posts_to_show": "-5"}); v != 0 {
 		t.Errorf("expected 0 for negative, got %d", v)
 	}
 }

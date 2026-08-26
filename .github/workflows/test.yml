@@ -54,6 +54,10 @@ jobs:
 
       # Coverage rides along on the same run (V8 instrumentation via the
       # built-in runner — no c8, no extra devDependency).
+      - name: E2E tests
+        run: ./scripts/run-e2e.sh
+
+
       - name: JS tests
         run: |
           node --test --experimental-test-coverage \
@@ -111,6 +115,16 @@ jobs:
 
       - name: Build CSS bundles
         run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
+
+      # sqlc is optional for contributors (the generated code is committed), so
+      # the script skips its regeneration check when the binary is absent. CI is
+      # where that skip must not happen — installing it here is what makes the
+      # committed models a checked fact rather than a convention.
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+
+      - name: SQL layer
+        run: ./scripts/check-sql-layer.sh
 
       - name: Run Go tests
         # The integration suite runs by default and requires a functioning

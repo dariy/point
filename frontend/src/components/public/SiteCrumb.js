@@ -23,7 +23,8 @@ import { Component } from '../Component.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { loadNav } from '../../api/nav.js';
-import { attachFlyoutTrigger, hideFlyoutWithin, tagHref } from '../../utils/tags.js';
+import { tagHref } from '../../utils/tagLinks.js';
+import { attachFlyoutTrigger, hideFlyoutWithin } from '../../utils/tagFlyout.js';
 
 export class SiteCrumb extends Component {
   render() {

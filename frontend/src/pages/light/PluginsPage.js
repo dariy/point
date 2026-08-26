@@ -34,7 +34,7 @@ import { getAllSettings } from "../../api/settings.js";
 import { getInstagramStatus } from "../../api/instagram.js";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { escapeHtml, html } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 
 // Slot cardinalities that make a slot's candidates alternatives (at most one
@@ -419,7 +419,7 @@ export default class PluginsPage extends Component {
     if (plugin.enabled && PLUGIN_SETTINGS[plugin.id]) {
       settingsLink = `<button type="button" class="plugin-settings-link" data-settings-id="${escapeHtml(plugin.id)}">Settings</button>`;
     } else if (plugin.enabled && SETTINGS_PAGE_PATHS[plugin.id]) {
-      settingsLink = `<a class="plugin-settings-link" href="${escapeHtml(SETTINGS_PAGE_PATHS[plugin.id])}">Settings</a>`;
+      settingsLink = html`<a class="plugin-settings-link" href="${SETTINGS_PAGE_PATHS[plugin.id]}">Settings</a>`;
     }
 
     const isAlternative = SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1;

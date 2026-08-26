@@ -54,7 +54,13 @@ bundle "$CSS_DIR"/light.css \
     "$CSS_DIR"/light/dashboard.css \
     "$CSS_DIR"/light/tables.css \
     "$CSS_DIR"/light/media.css \
-    "$CSS_DIR"/light/tags.css \
+    "$CSS_DIR"/light/tags/input.css \
+    "$CSS_DIR"/light/tags/gestures.css \
+    "$CSS_DIR"/light/tags/list-view.css \
+    "$CSS_DIR"/light/tags/tree-view.css \
+    "$CSS_DIR"/light/tags/editor.css \
+    "$CSS_DIR"/light/tags/toggle-tree.css \
+    "$CSS_DIR"/light/tags/flows.css \
     "$CSS_DIR"/light/tree-view.css \
     "$CSS_DIR"/light/editor.css \
     "$CSS_DIR"/light/filters.css \

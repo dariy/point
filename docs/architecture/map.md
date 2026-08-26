@@ -23,10 +23,21 @@ comments sidecar.
 |---|---|---|---|
 | 1 | Route | `api/cmd/api/routes.go` | Path, method, and the middleware chain for that route. Every route is reached from here — one `register*Routes` per domain. |
 | 2 | Handler | `api/internal/api/<domain>.go` | Parsing params, authorization checks, shaping the JSON. `mappers.go` turns DB models into response shapes; `MapError` in `errors.go` turns a service sentinel error into a status code. |
-| 3 | Service | `api/internal/services/<domain>_service.go` | Business logic and side effects. Takes the `repository.Repository` **interface**, never a concrete type — that is what makes unit-test mocks possible. A service that outgrows one file splits by concern beside it, not into a subpackage: `PostService` is `post_service.go` + `post_render.go`, `post_css.go`, `post_publish.go`. |
+| 3 | Service | `api/internal/services/<domain>_service.go` | Business logic and side effects. Takes the `repository.Repository` **interface**, never a concrete type — that is what makes unit-test mocks possible. A service that outgrows one file splits by concern beside it, not into a subpackage: `PostService` is `post_service.go` + `post_render.go`, `post_css.go`, `post_publish.go`. The one subpackage is `services/pageview` — see below. |
 | 4 | Repository | `api/internal/repository/queries_<domain>.go` | Hand-written SQL: anything sqlc cannot express (dynamic filters, multi-statement work, `IN (?…)` fan-outs). The interface itself is `db.go`. |
 | 5 | sqlc | `api/internal/models/` | **Generated.** `queries.sql.go`, `models.go`, `querier.go`, `db.go` — regenerate, never hand-edit. `extra.go` is the one hand-written file in the package, for types that outlived their table. |
 | 6 | SQL | `api/sql/queries.sql`, `api/sql/schema.sql` | The source of truth for both the schema and every generated query. |
+
+`api/internal/services/pageview` is the single exception to the
+"split beside it, not into a subpackage" rule above. The BFF page endpoints
+(`/api/pages/...`) are aggregates named after frontend screens, and each one
+composes across posts, tags, media and settings at once — it belongs to no
+single domain service, so it sits beside them rather than inside one. It holds
+the composition and the reading rules (visibility, the scheduled queue, the
+public settings subset) and returns a typed view; `internal/api/pages.go` still
+owns the wire format, so the JSON shape has exactly one author. The split is
+what lets those rules be tested without an HTTP harness, and
+`internal/api/testdata/pages_payloads.json` pins the resulting payloads.
 
 Two kinds of middleware run before step 2. The global chain — logging, recover,
 gzip, CORS, security headers and CSP, the public rate limiter — is built in
@@ -49,6 +60,16 @@ every sqlc-generated query is already a method on it. A service calling
 `s.repo.GetPost(ctx, id)` goes straight from step 3 to step 5 — there is no
 hand-written wrapper to find, and adding one is not the convention. Look in
 `queries_*.go` only when the query is not in `queries.sql`.
+
+That embedding has one sharp edge. A method written on `*sqliteRepository`
+*shadows* the promoted one of the same name: Go picks the concrete method over
+the embedded one, silently, and the generated query never runs. The call site
+reads `r.ListPosts(...)` either way, so nothing — not the compiler, not `go
+vet`, not a test — says which body executed. `ListPosts`, `ListPostsByViews`,
+`CountPosts` and `DeleteSession` were shadowed this way for a long time; they
+are now declared explicitly on the `Repository` interface and have no entry in
+`queries.sql` at all. `scripts/check-sql-layer.sh` fails the build if the two
+method sets ever overlap again.
 
 Worked example, `GET /api/posts/42`:
 
@@ -129,7 +150,7 @@ An edit to any of these survives until the next build and no further.
 
 | Generated | Edit instead | Then run | In git? |
 |---|---|---|---|
-| `api/internal/models/*.sql.go`, `models.go`, `querier.go` | `api/sql/queries.sql`, `api/sql/schema.sql` | `cd api && sqlc generate` (sqlc is optional to install — you only need it if you change the SQL) | **Committed** — regenerate and commit the result in the same change as the SQL. |
+| `api/internal/models/queries.sql.go`, `models.go`, `querier.go`, `db.go` | `api/sql/queries.sql`, `api/sql/schema.sql` | `cd api && sqlc generate` (sqlc is optional to install — you only need it if you change the SQL) | **Committed** — regenerate and commit the result in the same change as the SQL. |
 | `frontend/js/`, `frontend/js-debug/` | `frontend/src/` | `./scripts/build-js.sh` | gitignored |
 | `frontend/css/main.css`, `light.css`, `viewer.css`, `css/p/`, `asset-manifest.json` | `frontend/css/{common,light,public}/*.css` and `frontend/src/plugins/<id>/*.css` | `./scripts/build-css.sh` | gitignored |
 | `frontend/css/common/theme.css` | `frontend/themes/<name>.css`, or the custom-CSS setting | nothing — `ThemeService.SyncActiveTheme` rewrites it at startup and whenever the active theme changes | gitignored |
@@ -137,7 +158,14 @@ An edit to any of these survives until the next build and no further.
 The sqlc output is the exception worth remembering: it is the only generated
 tree that is committed, so a diff in `api/internal/models/` is expected in any
 change that touches the SQL — and a *missing* one means you edited the schema
-without regenerating.
+without regenerating. `scripts/check-sql-layer.sh` (run by `scripts/check.sh`
+and by CI) regenerates into a scratch copy and fails if the committed files
+differ, so that omission is now caught rather than merged. `extra.go` is
+hand-written and exempt.
+
+Keep `api/sql/queries.sql` ASCII-only. sqlc expands `SELECT *` by byte offset,
+and a single multi-byte character anywhere in the file — an em dash in a
+comment will do it — corrupts every query after it into a parse error.
 
 Asset URLs are content-hashed and read once at startup, so **rebuilding is not
 enough — restart the server** or the browser keeps loading the old hash.

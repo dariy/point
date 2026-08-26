@@ -1,0 +1,59 @@
+/* ===========================
+   Tags manager — drag and drop
+   Drag handles and drop indicators driven by
+   frontend/src/components/light/tags/tagGestures.js.
+   =========================== */
+
+.tm-drag-handle {
+    flex-shrink: 0;
+    width: var(--tm-drag-handle-width);
+    color: var(--text-muted);
+    font-size: var(--tm-drag-handle-font-size);
+    letter-spacing: calc(var(--tm-drag-handle-letter-spacing) * -1);
+    opacity: 0;
+    cursor: grab;
+    user-select: none;
+    transition: opacity var(--transition-fast);
+}
+
+.tm-row:hover .tm-drag-handle {
+    opacity: 0.5;
+}
+
+.tm-row[draggable="true"] {
+    cursor: default;
+}
+
+.tm-row.tm-dragging {
+    opacity: 0.4;
+}
+
+/* Drop indicators */
+
+.tm-row.tm-drop-before::before,
+.tm-row.tm-drop-after::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--tm-rowtm-drop-before--height);
+    background-color: var(--color-primary);
+    border-radius: var(--tm-rowtm-drop-before--border-radius);
+    z-index: 10;
+    pointer-events: none;
+}
+
+.tm-row.tm-drop-before::before {
+    top: calc(var(--tm-rowtm-drop-before--top) * -1);
+}
+
+.tm-row.tm-drop-after::after {
+    bottom: calc(var(--tm-rowtm-drop-after--bottom) * -1);
+}
+
+.tm-row.tm-drop-on {
+    background-color: var(--color-primary-alpha-08);
+    outline: var(--tm-rowtm-drop-on-outline) solid var(--color-primary);
+    outline-offset: calc(var(--tm-rowtm-drop-on-outline-offset) * -1);
+    border-radius: var(--tm-rowtm-drop-on-border-radius);
+}

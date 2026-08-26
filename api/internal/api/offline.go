@@ -9,6 +9,7 @@ import (
 
 	"point-api/internal/models"
 	"point-api/internal/services"
+	"point-api/internal/services/pageview"
 
 	"github.com/labstack/echo/v4"
 )
@@ -117,7 +118,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 			"meta_description": nullString(p.MetaDescription),
 			"formatter":        p.Formatter,
 			"tags":             postTagsMap[p.ID],
-			"media_url":        extractMediaURL(p.ThumbnailPath, p.Content),
+			"media_url":        pageview.ExtractMediaURL(p.ThumbnailPath, p.Content),
 		}
 		postResponses[i] = resp
 	}
@@ -152,12 +153,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 
 	// 6. Blog settings — only public-safe keys for client-side storage
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
-	publicSettings := make(map[string]string)
-	for k, v := range allSettings {
-		if pagePublicSettingKeys[k] {
-			publicSettings[k] = v
-		}
-	}
+	publicSettings := pageview.PublicSettings(allSettings)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"posts":             postResponses,

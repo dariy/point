@@ -1,48 +1,25 @@
+import { html, raw } from "../utils/helpers.js";
 /**
- * Unified tag link renderer — the single source of truth for rendering
- * public-facing tag <a> elements across all components.
+ * The shared tag flyout — one dropdown element, reused by every surface that
+ * shows a tag family or a header menu (PostCard, PostContent, PublicFooter,
+ * the breadcrumb, the nav "More" panel).
  *
- * Also owns the singleton flyout used for tag family display
- * (setupTagFlyout — shared across PostCard, PostContent, PublicFooter, etc.).
+ * It is a singleton on purpose: only one dropdown may be open at a time, and
+ * the surfaces that open it do not know about each other. That is also why
+ * hideFlyoutWithin exists — see its doc comment.
+ *
+ * Pure tag helpers (tagHref, renderTagLink, buildTagIndex, …) live in
+ * tagLinks.js; the scrollable strip that hosts these triggers on a card is in
+ * tagStrip.js.
  */
 
-import { escapeHtml, setupLongPress } from './helpers.js';
-import { CHEVRON_SVG, LOCK_SVG } from './icons.js';
+import { setupLongPress } from './helpers.js';
+import { LOCK_SVG } from './icons.js';
 import { hasFinePointer, eventPointerType } from './pointerMode.js';
+import { tagHref, getTagAncestors } from './tagLinks.js';
 
 /** Hover-intent delay before a header dropdown opens, in ms. */
 export const HOVER_OPEN_MS = 180;
-
-/**
- * Build a tag URL whose `path` query carries the ancestor slug chain the user
- * drilled through to reach it. Empty chain → bare /tags/<slug>.
- *
- * @param {string} slug
- * @param {string[]} [pathSlugs] ancestor slugs, root-first (current tag excluded)
- */
-export function tagHref(slug, pathSlugs = []) {
-  const chain = (pathSlugs || []).filter(Boolean);
-  return chain.length
-    ? `/tags/${slug}?path=${chain.join('/')}`
-    : `/tags/${slug}`;
-}
-
-/**
- * Inverse of {@link tagHref}: split a `/tags/<slug>?path=<trail>` href into its
- * decoded tag slug and navigation trail. Used by flyout navigateFns so the
- * `path` query survives instead of being swept into the tag slug (which would
- * then get percent-encoded into a broken `/tags/slug%3Fpath%3D…` URL).
- *
- * @param {string} url
- * @returns {{ tag: string, navPath: string|null }}
- */
-export function parseTagUrl(url) {
-  const u = new URL(url, window.location.origin);
-  return {
-    tag: decodeURIComponent(u.pathname.replace('/tags/', '')),
-    navPath: u.searchParams.get('path') || null,
-  };
-}
 
 // ── Hot-zone tracker ─────────────────────────────────────────────────────────
 
@@ -51,22 +28,26 @@ export function parseTagUrl(url) {
  * returned by getEls.
  */
 export function createHotZone(getEls, onLeave, pad = 8) {
-  const check = (e) => {
-    const inside = getEls().some((el) => {
+  const check = e => {
+    const inside = getEls().some(el => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
-      return (
-        e.clientX >= r.left  - pad &&
-        e.clientX <= r.right + pad &&
-        e.clientY >= r.top   - pad &&
-        e.clientY <= r.bottom + pad
-      );
+      return e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad;
     });
-    if (!inside) { stop(); onLeave(); }
+    if (!inside) {
+      stop();
+      onLeave();
+    }
   };
-  document.addEventListener('mousemove', check, { passive: true });
-  function stop() { document.removeEventListener('mousemove', check); }
-  return { stop };
+  document.addEventListener('mousemove', check, {
+    passive: true
+  });
+  function stop() {
+    document.removeEventListener('mousemove', check);
+  }
+  return {
+    stop
+  };
 }
 
 // ── Flyout singleton ─────────────────────────────────────────────────────────
@@ -78,7 +59,6 @@ let _hotZone = null;
 let _openTimer = null;
 let _flyoutShowTime = 0;
 let _flyoutDismiss = null;
-
 function _getFlyoutEl() {
   if (!_flyoutEl) {
     _flyoutEl = document.createElement('div');
@@ -87,24 +67,20 @@ function _getFlyoutEl() {
   }
   return _flyoutEl;
 }
-
 function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   const entry = index.get(slug);
   if (!entry) return;
-
   const ancestors = getTagAncestors(slug, index);
-  const ancestorSlugs = ancestors.map((t) => t.slug);
+  const ancestorSlugs = ancestors.map(t => t.slug);
   const children = entry.children || [];
-
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
-
   const createItem = (t, className, href) => {
     const a = document.createElement('a');
     a.href = href || `/tags/${t.slug}`;
     a.className = `flyout-item ${className}`;
-    a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count}</span>`;
-    a.addEventListener('click', (e) => {
+    a.innerHTML = html`<span class="name">${t.name}</span> <span class="count">${t.count}</span>`;
+    a.addEventListener('click', e => {
       e.preventDefault();
       _hideFlyout();
       navigateFn(a.pathname + a.search + a.hash);
@@ -116,18 +92,14 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   if (ancestors.length) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-ancestors';
-    ancestors.forEach((t, i) =>
-      section.appendChild(
-        createItem(t, 'ancestor-link', tagHref(t.slug, ancestorSlugs.slice(0, i))),
-      ),
-    );
+    ancestors.forEach((t, i) => section.appendChild(createItem(t, 'ancestor-link', tagHref(t.slug, ancestorSlugs.slice(0, i)))));
     flyout.appendChild(section);
   }
 
   // 2. Current Tag
   const currentSection = document.createElement('div');
   currentSection.className = 'flyout-section flyout-current';
-  currentSection.innerHTML = `<span class="name">${escapeHtml(entry.tag.name)}</span> <span class="count">${entry.tag.count}</span>`;
+  currentSection.innerHTML = html`<span class="name">${entry.tag.name}</span> <span class="count">${entry.tag.count}</span>`;
   flyout.appendChild(currentSection);
 
   // 3. Children — drilling down appends the current tag to the path chain.
@@ -135,15 +107,11 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     const childPath = [...ancestorSlugs, slug];
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-children';
-    children.forEach((t) =>
-      section.appendChild(createItem(t, 'child-link', tagHref(t.slug, childPath))),
-    );
+    children.forEach(t => section.appendChild(createItem(t, 'child-link', tagHref(t.slug, childPath))));
     flyout.appendChild(section);
   }
-
   flyout.style.visibility = 'hidden';
   flyout.classList.remove('hidden');
-
   const isMobile = window.innerWidth < 640;
   if (isMobile) {
     flyout.classList.add('bottom-sheet');
@@ -155,17 +123,13 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     const flyW = flyout.offsetWidth;
     const anchorRect = anchorEl.getBoundingClientRect();
     const gap = 8;
-    
     let top = anchorRect.top - flyH - gap;
     if (top < 8) top = anchorRect.bottom + gap;
-    
     let left = anchorRect.left + anchorRect.width / 2 - flyW / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
-    
     flyout.style.top = `${top}px`;
     flyout.style.left = `${left}px`;
   }
-
   flyout.style.visibility = '';
   anchorEl.classList.add('is-flyout-open');
   anchorEl.classList.add('is-active');
@@ -173,14 +137,12 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   _activeLink = anchorEl;
   _activeCard = anchorEl.closest('.post-card');
   if (_activeCard) _activeCard.classList.add('has-flyout-open');
-
   if (!isMobile) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [_activeCard, anchorEl, _flyoutEl], () => _hideFlyout());
   }
-
   if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
-  _flyoutDismiss = (e) => {
+  _flyoutDismiss = e => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
     if (_flyoutEl.contains(e.target)) return;
     if (excludeEl && excludeEl.contains(e.target)) return;
@@ -190,7 +152,6 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   // overlay, and the flyout must still dismiss when the tap lands there.
   document.addEventListener('click', _flyoutDismiss, true);
 }
-
 function _hideFlyout() {
   _activeLink?.classList.remove('is-flyout-open');
   _activeLink?.classList.remove('is-active');
@@ -213,11 +174,14 @@ function _hideFlyout() {
     _flyoutDismiss = null;
   }
 }
-
-export function hideFlyout() { _hideFlyout(); }
+export function hideFlyout() {
+  _hideFlyout();
+}
 
 /** The shared flyout element, or null before anything has ever opened one. */
-export function flyoutEl() { return _flyoutEl; }
+export function flyoutEl() {
+  return _flyoutEl;
+}
 
 /**
  * Hide the shared flyout only when its trigger lives inside `root`.
@@ -250,31 +214,27 @@ function _anchorFlyoutTo(anchorEl) {
   const spaceBelow = window.innerHeight - anchorRect.bottom - gap - margin;
   const spaceAbove = anchorRect.top - gap - margin;
   const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
-  flyout.style.maxHeight = `${Math.max(160, (openUp ? spaceAbove : spaceBelow))}px`;
+  flyout.style.maxHeight = `${Math.max(160, openUp ? spaceAbove : spaceBelow)}px`;
   flyout.style.overflowY = 'auto';
-
   const flyW = flyout.offsetWidth;
   const flyH = flyout.offsetHeight;
-  const top = openUp ? anchorRect.bottom - anchorRect.height - flyH - gap
-                     : anchorRect.bottom + gap;
+  const top = openUp ? anchorRect.bottom - anchorRect.height - flyH - gap : anchorRect.bottom + gap;
 
   // Prefer aligning the panel's left edge with the trigger; clamp to viewport.
   let left = anchorRect.left;
   left = Math.max(margin, Math.min(left, window.innerWidth - flyW - margin));
-
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
 }
-
 function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
   const a = document.createElement('a');
   a.href = item.href || `/tags/${item.slug}`;
   a.className = `flyout-item ${extraClass}`.trim();
-  const lock = item.is_hidden ? LOCK_SVG : '';
+  const lock = item.is_hidden ? raw(LOCK_SVG) : '';
   // No count badge for countless items (custom menu links have no posts).
   const count = item.count ?? item.post_count;
-  a.innerHTML = `<span class="name">${lock}${escapeHtml(item.name)}</span>${count ? ` <span class="count">${count}</span>` : ''}`;
-  a.addEventListener('click', (e) => {
+  a.innerHTML = html`<span class="name">${lock}${item.name}</span>${count ? html` <span class="count">${count}</span>` : ''}`;
+  a.addEventListener('click', e => {
     e.preventDefault();
     _hideFlyout();
     navigateFn(a.pathname + a.search + a.hash);
@@ -303,9 +263,8 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
   _hideFlyout();
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
-
-  const path     = Array.isArray(spec) ? []   : (spec?.path || []);
-  const children = Array.isArray(spec) ? spec  : (spec?.children || []);
+  const path = Array.isArray(spec) ? [] : spec?.path || [];
+  const children = Array.isArray(spec) ? spec : spec?.children || [];
   if (!path.length && !children.length) return;
 
   // Path section — ancestor links + highlighted current crumb. Only worth
@@ -313,12 +272,12 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
   if (path.length > 1) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-path';
-    path.forEach((c) => {
+    path.forEach(c => {
       if (c.current || !c.href) {
         const span = document.createElement('span');
         span.className = 'flyout-item flyout-path-current';
-        const lock = c.is_hidden ? LOCK_SVG : '';
-        span.innerHTML = `<span class="name">${lock}${escapeHtml(c.name)}</span>`;
+        const lock = c.is_hidden ? raw(LOCK_SVG) : '';
+        span.innerHTML = html`<span class="name">${lock}${c.name}</span>`;
         section.appendChild(span);
       } else {
         _appendFlyoutLink(section, c, navigateFn, 'ancestor-link');
@@ -326,34 +285,28 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
     });
     flyout.appendChild(section);
   }
-
   if (children.length) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-children';
-    children.forEach((t) => _appendFlyoutLink(section, t, navigateFn, 'child-link'));
+    children.forEach(t => _appendFlyoutLink(section, t, navigateFn, 'child-link'));
     flyout.appendChild(section);
   }
-
   flyout.classList.remove('bottom-sheet');
   flyout.style.minWidth = 'max-content';
   flyout.style.visibility = 'hidden';
   flyout.classList.remove('hidden');
-
   _anchorFlyoutTo(anchorEl);
-
   flyout.style.visibility = '';
   anchorEl.classList.add('is-flyout-open');
   _flyoutShowTime = Date.now();
   _activeLink = anchorEl;
   _activeCard = null;
-
   if (hasFinePointer()) {
     _hotZone?.stop();
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }
-
   if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
-  _flyoutDismiss = (e) => {
+  _flyoutDismiss = e => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
     if (_flyoutEl.contains(e.target)) return;
     if (excludeEl && excludeEl.contains(e.target)) return;
@@ -378,19 +331,17 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
  */
 export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
   let timer = null;
-  const cancel = () => { clearTimeout(timer); timer = null; };
-
-  el.addEventListener('pointerenter', (e) => {
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  el.addEventListener('pointerenter', e => {
     if (e.pointerType !== 'mouse') return;
     cancel();
-    timer = setTimeout(
-      () => showCrumbDropdown(el, getSpec(), navigateFn, excludeEl),
-      HOVER_OPEN_MS,
-    );
+    timer = setTimeout(() => showCrumbDropdown(el, getSpec(), navigateFn, excludeEl), HOVER_OPEN_MS);
   });
   el.addEventListener('pointerleave', cancel);
-
-  el.addEventListener('click', (e) => {
+  el.addEventListener('click', e => {
     cancel();
     // Ask this click what produced it rather than the session-wide verdict: a
     // tap reports pointerType 'touch' even on a machine that has a mouse (and
@@ -408,7 +359,10 @@ export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
     const fromMouse = pointerType ? pointerType === 'mouse' : hasFinePointer();
     // With a mouse the dropdown is already showing from hover, so a click means
     // "go to this item" — let the link navigate.
-    if (fromMouse) { _hideFlyout(); return; }
+    if (fromMouse) {
+      _hideFlyout();
+      return;
+    }
     // Coarse pointer: first tap opens the dropdown, second tap follows the link.
     if (el.classList.contains('is-flyout-open')) {
       const href = el.getAttribute('href');
@@ -423,14 +377,11 @@ export function attachFlyoutTrigger(el, getSpec, navigateFn, excludeEl = null) {
     showCrumbDropdown(el, getSpec(), navigateFn, excludeEl);
   });
 }
-
 export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
   if (!tagIndex) return () => {};
-
   const excludeEl = hostEl || containerEl;
   const cleanups = [];
-
-  containerEl.querySelectorAll('.tag-link').forEach((link) => {
+  containerEl.querySelectorAll('.tag-link').forEach(link => {
     const href = link.getAttribute('href');
     if (!href || href.startsWith('http') || !href.startsWith('/tags/')) return;
     const slug = href.replace('/tags/', '').split('?')[0];
@@ -458,155 +409,25 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     }, 350));
 
     // One click = navigate
-    link.addEventListener('click', (e) => {
+    link.addEventListener('click', e => {
       e.stopPropagation();
       clearTimeout(_openTimer);
       _hideFlyout();
     });
   });
-
   const dismissOnScroll = () => {
     if (Date.now() - _flyoutShowTime < 300) return;
     _hideFlyout();
   };
-  window.addEventListener('scroll', dismissOnScroll, { passive: true });
-
+  window.addEventListener('scroll', dismissOnScroll, {
+    passive: true
+  });
   return () => {
     cleanups.forEach(fn => fn());
     clearTimeout(_openTimer);
-    window.removeEventListener('scroll', dismissOnScroll, { passive: true });
+    window.removeEventListener('scroll', dismissOnScroll, {
+      passive: true
+    });
     _hideFlyout();
   };
-}
-
-export function setupScrollableStrip(trackEl, scrollEl) {
-  if (!trackEl || !scrollEl) return () => {};
-  const btnLeft  = trackEl.querySelector('.tags-scroll-btn--left');
-  const btnRight = trackEl.querySelector('.tags-scroll-btn--right');
-  const overlay = trackEl.closest('.post-card')?.querySelector('.post-card-content.overlay');
-
-  // On a card whose overlay is still transparent — touch, before the reveal tap —
-  // the arrows are invisible but still hit-testable, so a tap meant to reveal the
-  // card would land on one and scroll a strip nobody can see. Decline those and
-  // let the click bubble to the card's own reveal handler.
-  const isRevealed = () => !overlay || getComputedStyle(overlay).opacity !== '0';
-  const update = () => {
-    const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
-    trackEl.classList.toggle('has-scroll-left',  scrollLeft > 1);
-    trackEl.classList.toggle('has-scroll-right', scrollLeft < scrollWidth - clientWidth - 1);
-  };
-  // The strip can live inside a fully clickable post card — once an arrow acts on
-  // a click, stop it reaching the card's "navigate to post" handler.
-  const scrollBy = (dx) => (e) => {
-    if (!isRevealed()) return;
-    e.preventDefault();
-    e.stopPropagation();
-    scrollEl.scrollBy({ left: dx, behavior: 'smooth' });
-  };
-  const onLeft  = scrollBy(-200);
-  const onRight = scrollBy(200);
-  btnLeft?.addEventListener('click',  onLeft);
-  btnRight?.addEventListener('click', onRight);
-  scrollEl.addEventListener('scroll', update, { passive: true });
-  const ro = new ResizeObserver(update);
-  ro.observe(scrollEl);
-  requestAnimationFrame(update);
-  return () => {
-    btnLeft?.removeEventListener('click',  onLeft);
-    btnRight?.removeEventListener('click', onRight);
-    scrollEl.removeEventListener('scroll', update);
-    ro.disconnect();
-  };
-}
-
-/**
- * The post's own tags, as a horizontally scrollable strip.
- *
- * Page endpoints expand each post's tags with their ancestors so a post can be
- * matched against a whole subtree (see expandPostTagsWithAncestors), and mark
- * those extras `inherited`. A card must show what the post is tagged with, not
- * that closure — otherwise one photo of a fern lists location/country/city/…
- * while the post page lists three tags.
- */
-export function renderTagStrip(postTags) {
-  const visibleTags = (postTags || []).filter((t) => !t.inherited);
-  const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
-  if (!tagsHtml) return '';
-  return `
-    <div class="tag-strip-track">
-      <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${CHEVRON_SVG}</button>
-      <div class="tag-strip-scroll" aria-label="Tags">${tagsHtml}</div>
-      <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">${CHEVRON_SVG}</button>
-    </div>`;
-}
-
-export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
-  const track = container.querySelector('.tag-strip-track');
-  const tagsEl = container.querySelector('.tag-strip-scroll');
-  if (!tagsEl) return () => {};
-  const cleanups = [];
-  const stop = (e) => e.stopPropagation();
-  tagsEl.addEventListener('touchstart', stop, { passive: true });
-  tagsEl.addEventListener('touchmove',  stop, { passive: true });
-  cleanups.push(() => {
-    tagsEl.removeEventListener('touchstart', stop);
-    tagsEl.removeEventListener('touchmove',  stop);
-  });
-  cleanups.push(setupScrollableStrip(track, tagsEl));
-  cleanups.push(setupTagFlyout(tagsEl, tagIndex, navigateFn, hostEl));
-  return () => cleanups.forEach(fn => fn());
-}
-
-/**
- * Classify a tag into a colour bucket — the single source of truth shared by
- * the tag pills, the Atlas cloud and the tags graph. Mirrors the original
- * AtlasPage._kindOf / tagGraph._classifyTag logic so every surface agrees.
- *
- * Buckets: 'year' (a year/decade tag), 'geo' (carries lat/long), else 'tag'.
- */
-export function tagKind(tag) {
-  if (!tag || typeof tag === 'string') return 'tag';
-  if (tag.kind === 'year') return 'year';
-  if (typeof tag.latitude === 'number' && typeof tag.longitude === 'number') return 'geo';
-  return 'tag';
-}
-
-export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
-  const name = typeof tag === 'string' ? tag : tag.name;
-  const slug = typeof tag === 'string' ? tag : tag.slug;
-  const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tags/${slug}`;
-  const classes = ['tag-link', `tag-kind-${tagKind(tag)}`, active ? 'active' : '', extra].filter(Boolean).join(' ');
-  const isExternal = /^https?:\/\//.test(href);
-  const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return `<a href="${escapeHtml(href)}" class="${classes}"${externalAttrs}>${prefix}${escapeHtml(name)}${suffix}</a>`;
-}
-
-export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
-  for (const tag of navTags) {
-    const children = (tag.children || []).map(c => ({ name: c.name, slug: c.slug, count: c.post_count }));
-    map.set(tag.slug, { 
-      tag: { name: tag.name, slug: tag.slug, count: tag.post_count }, 
-      parentSlug, 
-      isLeaf: !children.length, 
-      children,
-      showInAncestors: tag.show_in_ancestors !== false 
-    });
-    if (tag.children?.length) buildTagIndex(tag.children, tag.slug, map);
-  }
-  return map;
-}
-
-export function getTagAncestors(slug, index) {
-  const ancestors = [];
-  const visited = new Set([slug]);
-  let entry = index.get(slug);
-  while (entry?.parentSlug) {
-    if (visited.has(entry.parentSlug)) break;
-    visited.add(entry.parentSlug);
-    entry = index.get(entry.parentSlug);
-    if (entry && !entry.tag.slug.startsWith('_') && entry.showInAncestors !== false) {
-      ancestors.unshift(entry.tag);
-    }
-  }
-  return ancestors;
 }

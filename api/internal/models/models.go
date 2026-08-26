@@ -62,6 +62,19 @@ type Medium struct {
 	IsPublic         int64          `json:"is_public"`
 }
 
+type OauthClient struct {
+	ClientID     string    `json:"client_id"`
+	RedirectUris string    `json:"redirect_uris"`
+	RegisteredAt time.Time `json:"registered_at"`
+}
+
+type OauthToken struct {
+	TokenHash string       `json:"token_hash"`
+	ClientID  string       `json:"client_id"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	CreatedAt time.Time    `json:"created_at"`
+}
+
 type Post struct {
 	ID                   int64          `json:"id"`
 	Title                string         `json:"title"`

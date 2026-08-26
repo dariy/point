@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"point-api/internal/repository"
 	"point-api/internal/services"
+	"point-api/internal/services/pageview"
 
 	"github.com/labstack/echo/v4"
 )
@@ -58,49 +60,52 @@ func baseURL(c echo.Context) string {
 func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Try cache first (TTL 1 hour)
-	if data, err := h.cacheService.GetWithTTL(ctx, "feed.xml", 1*time.Hour); err == nil {
-		return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", data)
-	}
+	// One render per expiry, however many aggregators arrive at once: this is a
+	// whole-feed rebuild — twenty posts, each one rendered from Markdown.
+	//
+	// The absolute URLs come from the winning request's Host, as they always
+	// have: the key is "feed.xml" for every caller, so whoever fills it decides
+	// the base for the rest of the hour. That is the cache's assumption of one
+	// site per instance, unchanged here.
+	render := func(ctx context.Context) ([]byte, error) {
+		settings, _ := h.settingsService.GetAllSettings(ctx)
+		blogTitle := pageview.SettingOr(settings, "blog_title", "Blog")
+		blogDesc := pageview.SettingOr(settings, "blog_subtitle", "")
+		authorName := pageview.SettingOr(settings, "author_name", "Author")
+		language := pageview.SettingOr(settings, "default_language", "en")
 
-	settings, _ := h.settingsService.GetAllSettings(ctx)
-	blogTitle := getSettingOr(settings, "blog_title", "Blog")
-	blogDesc := getSettingOr(settings, "blog_subtitle", "")
-	authorName := getSettingOr(settings, "author_name", "Author")
-	language := getSettingOr(settings, "default_language", "en")
-
-	posts, err := h.repo.GetPublishedPostsForFeed(ctx, 20)
-	if err != nil {
-		return MapError(err)
-	}
-
-	base := baseURL(c)
-	buildDate := time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT")
-
-	var items strings.Builder
-	for _, post := range posts {
-		pubDate := post.CreatedAt
-		if post.PublishedAt.Valid {
-			pubDate = post.PublishedAt.Time
+		posts, err := h.repo.GetPublishedPostsForFeed(ctx, 20)
+		if err != nil {
+			return nil, MapError(err)
 		}
 
-		htmlContent, _ := h.postService.RenderContent(post.Content)
-		excerpt := ""
-		if post.Excerpt.Valid {
-			excerpt = post.Excerpt.String
+		base := baseURL(c)
+		buildDate := time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT")
+
+		var items strings.Builder
+		for _, post := range posts {
+			pubDate := post.CreatedAt
+			if post.PublishedAt.Valid {
+				pubDate = post.PublishedAt.Time
+			}
+
+			htmlContent, _ := h.postService.RenderContent(post.Content)
+			excerpt := ""
+			if post.Excerpt.Valid {
+				excerpt = post.Excerpt.String
+			}
+
+			fmt.Fprintf(&items, "    <item>\n")
+			fmt.Fprintf(&items, "      <title>%s</title>\n", xmlEscape(post.Title))
+			fmt.Fprintf(&items, "      <link>%s/posts/%s</link>\n", base, post.Slug)
+			fmt.Fprintf(&items, "      <guid isPermaLink=\"true\">%s/posts/%s</guid>\n", base, post.Slug)
+			fmt.Fprintf(&items, "      <pubDate>%s</pubDate>\n", pubDate.UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
+			fmt.Fprintf(&items, "      <description>%s</description>\n", xmlEscape(excerpt))
+			fmt.Fprintf(&items, "      <content:encoded><![CDATA[%s]]></content:encoded>\n", htmlContent)
+			fmt.Fprintf(&items, "    </item>\n")
 		}
 
-		fmt.Fprintf(&items, "    <item>\n")
-		fmt.Fprintf(&items, "      <title>%s</title>\n", xmlEscape(post.Title))
-		fmt.Fprintf(&items, "      <link>%s/posts/%s</link>\n", base, post.Slug)
-		fmt.Fprintf(&items, "      <guid isPermaLink=\"true\">%s/posts/%s</guid>\n", base, post.Slug)
-		fmt.Fprintf(&items, "      <pubDate>%s</pubDate>\n", pubDate.UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
-		fmt.Fprintf(&items, "      <description>%s</description>\n", xmlEscape(excerpt))
-		fmt.Fprintf(&items, "      <content:encoded><![CDATA[%s]]></content:encoded>\n", htmlContent)
-		fmt.Fprintf(&items, "    </item>\n")
-	}
-
-	xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+		xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>%s</title>
@@ -111,91 +116,90 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
     <managingEditor>%s</managingEditor>
 %s  </channel>
 </rss>`,
-		xmlEscape(blogTitle),
-		base,
-		xmlEscape(blogDesc),
-		xmlEscape(language),
-		buildDate,
-		xmlEscape(authorName),
-		items.String(),
-	)
+			xmlEscape(blogTitle),
+			base,
+			xmlEscape(blogDesc),
+			xmlEscape(language),
+			buildDate,
+			xmlEscape(authorName),
+			items.String(),
+		)
 
-	// Save to cache
-	_ = h.cacheService.Set(ctx, "feed.xml", []byte(xml))
+		return []byte(xml), nil
+	}
 
-	return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", []byte(xml))
+	data, err := h.cacheService.GetOrRender(ctx, "feed.xml", 1*time.Hour, render)
+	if err != nil {
+		return err
+	}
+	return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", data)
 }
 
 func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Try cache first (TTL 6 hours)
-	if data, err := h.cacheService.GetWithTTL(ctx, "sitemap.xml", 6*time.Hour); err == nil {
-		return c.Blob(http.StatusOK, "application/xml; charset=utf-8", data)
-	}
+	// As for the feed: crawlers arrive in bursts, and this walks every published
+	// post and every public tag.
+	render := func(ctx context.Context) ([]byte, error) {
+		base := baseURL(c)
+		today := time.Now().Format("2006-01-02")
 
-	base := baseURL(c)
-	today := time.Now().Format("2006-01-02")
-
-	posts, err := h.repo.GetPublishedPostsForSitemap(ctx)
-	if err != nil {
-		return MapError(err)
-	}
-
-	tags, err := h.repo.GetPublicTagsForSitemap(ctx)
-	if err != nil {
-		return MapError(err)
-	}
-
-	settings, _ := h.settingsService.GetAllSettings(ctx)
-	minPostsStr := getSettingOr(settings, "min_tag_posts_to_show", "0")
-	minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-	snap, _ := h.tagService.GetTagSnapshot(ctx)
-	var excludeIDs map[int64]bool
-	if snap != nil {
-		excludeIDs = snap.PublicHiddenTagIDs(minPosts)
-	}
-
-	var urls strings.Builder
-	writeURL := func(loc, lastmod, priority string) {
-		fmt.Fprintf(&urls, "  <url>\n")
-		fmt.Fprintf(&urls, "    <loc>%s</loc>\n", loc)
-		fmt.Fprintf(&urls, "    <lastmod>%s</lastmod>\n", lastmod)
-		fmt.Fprintf(&urls, "    <priority>%s</priority>\n", priority)
-		fmt.Fprintf(&urls, "  </url>\n")
-	}
-
-	writeURL(base+"/", today, "1.0")
-
-	for _, post := range posts {
-		writeURL(base+"/posts/"+post.Slug, post.UpdatedAt.Format("2006-01-02"), "0.8")
-	}
-
-	for _, tag := range tags {
-		if !excludeIDs[tag.ID] {
-			writeURL(base+"/tags/"+tag.Slug, today, "0.6")
+		posts, err := h.repo.GetPublishedPostsForSitemap(ctx)
+		if err != nil {
+			return nil, MapError(err)
 		}
-	}
 
-	xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+		tags, err := h.repo.GetPublicTagsForSitemap(ctx)
+		if err != nil {
+			return nil, MapError(err)
+		}
+
+		settings, _ := h.settingsService.GetAllSettings(ctx)
+		minPostsStr := pageview.SettingOr(settings, "min_tag_posts_to_show", "0")
+		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+		snap, _ := h.tagService.GetTagSnapshot(ctx)
+		var excludeIDs map[int64]bool
+		if snap != nil {
+			excludeIDs = snap.PublicHiddenTagIDs(minPosts)
+		}
+
+		var urls strings.Builder
+		writeURL := func(loc, lastmod, priority string) {
+			fmt.Fprintf(&urls, "  <url>\n")
+			fmt.Fprintf(&urls, "    <loc>%s</loc>\n", loc)
+			fmt.Fprintf(&urls, "    <lastmod>%s</lastmod>\n", lastmod)
+			fmt.Fprintf(&urls, "    <priority>%s</priority>\n", priority)
+			fmt.Fprintf(&urls, "  </url>\n")
+		}
+
+		writeURL(base+"/", today, "1.0")
+
+		for _, post := range posts {
+			writeURL(base+"/posts/"+post.Slug, post.UpdatedAt.Format("2006-01-02"), "0.8")
+		}
+
+		for _, tag := range tags {
+			if !excludeIDs[tag.ID] {
+				writeURL(base+"/tags/"+tag.Slug, today, "0.6")
+			}
+		}
+
+		xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 %s</urlset>`, urls.String())
 
-	// Save to cache
-	_ = h.cacheService.Set(ctx, "sitemap.xml", []byte(xml))
+		return []byte(xml), nil
+	}
 
-	return c.Blob(http.StatusOK, "application/xml; charset=utf-8", []byte(xml))
+	data, err := h.cacheService.GetOrRender(ctx, "sitemap.xml", 6*time.Hour, render)
+	if err != nil {
+		return err
+	}
+	return c.Blob(http.StatusOK, "application/xml; charset=utf-8", data)
 }
 
 func (h *FeedsHandler) RobotsTxt(c echo.Context) error {
 	base := baseURL(c)
 	content := fmt.Sprintf("User-agent: *\nAllow: /\nDisallow: /light/\nDisallow: /api/\nSitemap: %s/sitemap.xml\n", base)
 	return c.String(http.StatusOK, content)
-}
-
-func getSettingOr(settings map[string]string, key, fallback string) string {
-	if v, ok := settings[key]; ok && v != "" {
-		return v
-	}
-	return fallback
 }

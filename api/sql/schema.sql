@@ -52,6 +52,17 @@ CREATE INDEX IF NOT EXISTS idx_posts_published_at ON posts(published_at);
 CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_posts_preview_token ON posts(preview_token);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_instagram_id ON posts(instagram_id) WHERE instagram_id IS NOT NULL;
+-- The feed's sort key, restricted to the rows a feed can show. All three
+-- columns are needed, and in this order: whatever the ORDER BY leaves to a temp
+-- B-tree is most of what the index was meant to remove. id is spelled out
+-- because it is the tiebreak the queries name, and DESC because the rowid an
+-- index carries implicitly is ascending.
+CREATE INDEX IF NOT EXISTS idx_posts_live ON posts(published_at DESC, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+-- deleted_at is NULL for all but a handful of rows, so an index over the whole
+-- column is one SQLite will happily seek for `deleted_at IS NULL` — reading
+-- nearly every post through it and then sorting the feed by hand. Partial on
+-- IS NOT NULL, it holds only the trash and cannot be chosen for the feed.
+CREATE INDEX IF NOT EXISTS idx_posts_trashed ON posts(deleted_at DESC) WHERE deleted_at IS NOT NULL;
 
 -- Tags
 CREATE TABLE IF NOT EXISTS tags (
@@ -80,6 +91,11 @@ CREATE TABLE IF NOT EXISTS post_tags (
     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (post_id, tag_id)
 );
+-- The PRIMARY KEY indexes post_id first, but every list query looks post_tags
+-- up by tag_id alone — the tag filter, and the hides_posts exclusion that runs
+-- on every public page. post_id trails so the lookup stays inside the index
+-- instead of fetching each matching row from the table.
+CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id_post_id ON post_tags(tag_id, post_id);
 
 -- TagRelationships (Hierarchy)
 CREATE TABLE IF NOT EXISTS tag_relationships (

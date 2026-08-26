@@ -1,3 +1,5 @@
+import { raw } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.js";
 /**
  * BackupsSection — the database-backup block for the `backups` plugin.
  *
@@ -9,16 +11,7 @@
  */
 
 import { Component } from "../../Component.js";
-import {
-  listBackups,
-  createBackup,
-  restoreBackup,
-  deleteBackup,
-  authorizeBackupDownload,
-  backupDownloadUrl,
-  uploadBackupArchive,
-  restartServer,
-} from "../../../api/system.js";
+import { listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer } from "../../../api/system.js";
 import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
 import { store } from "../../../store.js";
@@ -27,7 +20,6 @@ import { formatFileSize } from "../../../utils/formatters.js";
 import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 import { GestureController } from "../../../core/gestures.js";
-
 export class BackupsSection extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -41,15 +33,17 @@ export class BackupsSection extends Component {
       // Backup automation settings (loaded alongside the list).
       enableBackup: true,
       intervalDays: 1,
-      keep: 7,
+      keep: 7
     };
   }
-
   _renderSettings() {
-    const { enableBackup, intervalDays, keep } = this.state;
+    const {
+      enableBackup,
+      intervalDays,
+      keep
+    } = this.state;
     const preset = [1, 7, 30].includes(intervalDays);
-    const opt = (v, label) =>
-      `<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
+    const opt = (v, label) => `<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
     return `
       <div class="backup-settings">
         <label class="backup-setting-row">
@@ -102,25 +96,21 @@ export class BackupsSection extends Component {
           <div class="backup-sub">
             <span class="backup-sub-date">${escapeHtml(new Date(b.created_at).toLocaleString())}</span>
             <span class="backup-sub-size">${escapeHtml(formatFileSize(b.size))}</span>
-            ${
-              b.sha256
-                ? `<span class="backup-sub-sha font-mono" title="SHA-256: ${escapeHtml(b.sha256)}">sha256 ${escapeHtml(b.sha256.slice(0, 10))}…</span>`
-                : ""
-            }
+            ${b.sha256 ? `<span class="backup-sub-sha font-mono" title="SHA-256: ${escapeHtml(b.sha256)}">sha256 ${escapeHtml(b.sha256.slice(0, 10))}…</span>` : ""}
           </div>
         </div>
       </li>`;
   }
-
   render() {
-    const { loading, backups, creatingBackup, uploading, uploadPct } = this.state;
-    const backupInProgress = backups.some((b) => b.in_progress);
-    const items = loading
-      ? '<li class="backup-empty">Loading…</li>'
-      : backups.length
-        ? backups.map((b) => this._renderItem(b)).join("")
-        : '<li class="backup-empty">No backups found.</li>';
-
+    const {
+      loading,
+      backups,
+      creatingBackup,
+      uploading,
+      uploadPct
+    } = this.state;
+    const backupInProgress = backups.some(b => b.in_progress);
+    const items = loading ? '<li class="backup-empty">Loading…</li>' : backups.length ? backups.map(b => this._renderItem(b)).join("") : '<li class="backup-empty">No backups found.</li>';
     const creating = creatingBackup || backupInProgress;
     // Rendered flush inside the plugin drawer, which supplies the "Backups" title.
     return `
@@ -137,12 +127,8 @@ export class BackupsSection extends Component {
         </button>
         <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
       </div>
-      ${
-        uploading
-          ? `<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
-             <p class="progress-text">Uploading archive… ${uploadPct}%</p>`
-          : ""
-      }
+      ${uploading ? `<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
+             <p class="progress-text">Uploading archive… ${uploadPct}%</p>` : ""}
       <div class="section-block">
         <h3 class="section-subhead">Schedule</h3>
         ${this._renderSettings()}
@@ -152,10 +138,8 @@ export class BackupsSection extends Component {
         <ul class="backup-list">${items}</ul>
       </div>`;
   }
-
   afterRender() {
     this.$("#create-backup-btn")?.addEventListener("click", () => this._handleCreate());
-
     const uploadInput = this.$("#upload-backup-input");
     this.$("#upload-backup-btn")?.addEventListener("click", () => uploadInput?.click());
     uploadInput?.addEventListener("change", () => {
@@ -163,38 +147,28 @@ export class BackupsSection extends Component {
       uploadInput.value = ""; // allow re-picking the same file later
       if (file) this._handleUpload(file);
     });
-
     this.$("#restart-server-btn")?.addEventListener("click", () => this._handleRestartServer());
-
     this._bindSettings();
-
     this._bindSwipe();
-
-    this.$$(".download-backup-btn").forEach((btn) => {
+    this.$$(".download-backup-btn").forEach(btn => {
       btn.addEventListener("click", () => this._handleDownload(btn.dataset.filename));
     });
-
-    this.$$(".restore-backup-btn").forEach((btn) => {
+    this.$$(".restore-backup-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const file = btn.dataset.filename;
         showPrompt({
           title: "Restore backup",
-          message:
-            `Apply "${file}"? This replaces ALL current data — posts, media, settings, ` +
-            `and your login password — with the contents of the archive, then restarts the ` +
-            `server to take effect. This cannot be undone.\n` +
-            `Enter your password to confirm:`,
+          message: `Apply "${file}"? This replaces ALL current data — posts, media, settings, ` + `and your login password — with the contents of the archive, then restarts the ` + `server to take effect. This cannot be undone.\n` + `Enter your password to confirm:`,
           inputType: "password",
           variant: "danger",
           confirmText: "Restore & restart",
-          onConfirm: (password) => {
+          onConfirm: password => {
             if (password) this._handleRestore(file, password);
-          },
+          }
         });
       });
     });
-
-    this.$$(".delete-backup-btn").forEach((btn) => {
+    this.$$(".delete-backup-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const file = btn.dataset.filename;
         showConfirm({
@@ -202,7 +176,7 @@ export class BackupsSection extends Component {
           message: `Delete backup "${file}"? This cannot be undone.`,
           confirmText: "Delete",
           variant: "danger",
-          onConfirm: () => this._handleDelete(file),
+          onConfirm: () => this._handleDelete(file)
         });
       });
     });
@@ -219,10 +193,9 @@ export class BackupsSection extends Component {
   _bindSwipe() {
     this._destroySwipe();
     this._itemGestures = [];
-
     const items = [...this.$$(".backup-swipe-item")];
-    const closeAll = (except) => {
-      items.forEach((it) => {
+    const closeAll = except => {
+      items.forEach(it => {
         if (it === except) return;
         const c = it.querySelector(".backup-swipe-content");
         c.style.transition = "";
@@ -230,11 +203,9 @@ export class BackupsSection extends Component {
         it.classList.remove("is-open");
       });
     };
-
-    items.forEach((item) => {
+    items.forEach(item => {
       const content = item.querySelector(".backup-swipe-content");
       const actions = item.querySelector(".backup-swipe-actions");
-
       const open = () => {
         closeAll(item);
         content.style.transition = "";
@@ -246,8 +217,7 @@ export class BackupsSection extends Component {
         content.style.transform = "translateX(0)";
         item.classList.remove("is-open");
       };
-      const snap = () => (item.classList.contains("is-open") ? open() : close());
-
+      const snap = () => item.classList.contains("is-open") ? open() : close();
       const g = new GestureController(content, {
         swipeThresholdPx: 24,
         onSwipeMove: (mx, my) => {
@@ -259,22 +229,19 @@ export class BackupsSection extends Component {
           content.style.transition = "none";
           content.style.transform = `translateX(${x}px)`;
         },
-        onSwipeCommit: (dir) => {
-          if (dir === "left") open();
-          else if (dir === "right") close();
-          else snap();
+        onSwipeCommit: dir => {
+          if (dir === "left") open();else if (dir === "right") close();else snap();
         },
         onSwipeCancel: snap,
         onTap: () => {
           if (item.classList.contains("is-open")) close();
-        },
+        }
       });
       this._itemGestures.push(g);
     });
   }
-
   _destroySwipe() {
-    this._itemGestures?.forEach((g) => g.destroy());
+    this._itemGestures?.forEach(g => g.destroy());
     this._itemGestures = [];
   }
 
@@ -285,7 +252,6 @@ export class BackupsSection extends Component {
     const freq = this.$("#bk-freq");
     const freqDays = this.$("#bk-freq-days");
     const keep = this.$("#bk-keep");
-
     enable?.addEventListener("change", () => {
       // Enable/disable the cadence controls in place without a full re-render.
       const on = enable.checked;
@@ -293,16 +259,13 @@ export class BackupsSection extends Component {
       if (freqDays) freqDays.disabled = !on;
       this._saveSettings();
     });
-
     freq?.addEventListener("change", () => {
       if (freqDays) freqDays.style.display = freq.value === "custom" ? "" : "none";
       this._saveSettings();
     });
-
     freqDays?.addEventListener("change", () => this._saveSettings());
     keep?.addEventListener("change", () => this._saveSettings());
   }
-
   async _saveSettings() {
     const enable = this.$("#bk-enable")?.checked ?? true;
     const freq = this.$("#bk-freq")?.value;
@@ -314,16 +277,21 @@ export class BackupsSection extends Component {
     this.state.enableBackup = enable;
     this.state.intervalDays = interval;
     this.state.keep = keep;
-
     try {
       await updateSettings({
         enable_backup: String(enable),
         backup_interval_days: String(interval),
-        backup_keep: String(keep),
+        backup_keep: String(keep)
       });
-      store.set("toast", { message: "Backup settings saved.", type: "success" });
+      store.set("toast", {
+        message: "Backup settings saved.",
+        type: "success"
+      });
     } catch (err) {
-      store.set("toast", { message: err.message || "Could not save settings.", type: "error" });
+      store.set("toast", {
+        message: err.message || "Could not save settings.",
+        type: "error"
+      });
     }
   }
 
@@ -331,34 +299,33 @@ export class BackupsSection extends Component {
   beforeRender() {
     this._destroySwipe();
   }
-
   beforeUnmount() {
     this._destroySwipe();
     this._stopPoll();
   }
-
   mount() {
     super.mount();
     this._load();
   }
-
   async _load() {
     try {
-      const [backups, settings] = await Promise.all([
-        listBackups().catch(() => []),
-        getAllSettings().catch(() => ({})),
-      ]);
+      const [backups, settings] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => ({}))]);
       this.setState({
         loading: false,
         backups: Array.isArray(backups) ? backups : [],
         enableBackup: (settings.enable_backup ?? "true") === "true",
         intervalDays: parseInt(settings.backup_interval_days, 10) || 1,
-        keep: settings.backup_keep != null ? parseInt(settings.backup_keep, 10) || 0 : 7,
+        keep: settings.backup_keep != null ? parseInt(settings.backup_keep, 10) || 0 : 7
       });
       this._syncPoll();
     } catch (err) {
-      this.setState({ loading: false });
-      store.set("toast", { message: err.message || "Could not load backups.", type: "error" });
+      this.setState({
+        loading: false
+      });
+      store.set("toast", {
+        message: err.message || "Could not load backups.",
+        type: "error"
+      });
     }
   }
 
@@ -367,7 +334,9 @@ export class BackupsSection extends Component {
   async _refreshBackups() {
     try {
       const backups = await listBackups();
-      this.setState({ backups: Array.isArray(backups) ? backups : this.state.backups });
+      this.setState({
+        backups: Array.isArray(backups) ? backups : this.state.backups
+      });
     } catch {
       /* keep the last list; try again on the next tick */
     }
@@ -380,10 +349,9 @@ export class BackupsSection extends Component {
   // a grace window — the background job writes the .partial file a moment after the
   // request returns, so a single immediate refresh can miss it.
   _syncPoll() {
-    const active = this.state.backups.some((b) => b.in_progress);
+    const active = this.state.backups.some(b => b.in_progress);
     if (active) this._awaitingBackupStart = false; // now tracked by its in-progress row
-    const awaitingStart =
-      this._awaitingBackupStart && Date.now() - this._backupInitiatedAt < 30000;
+    const awaitingStart = this._awaitingBackupStart && Date.now() - this._backupInitiatedAt < 30000;
     const shouldPoll = active || awaitingStart;
     if (shouldPoll && !this._pollTimer) {
       this._pollTimer = setInterval(() => this._refreshBackups(), 2000);
@@ -392,32 +360,37 @@ export class BackupsSection extends Component {
       this._stopPoll();
     }
   }
-
   _stopPoll() {
     if (this._pollTimer) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
     }
   }
-
   async _handleCreate() {
-    this.setState({ creatingBackup: true });
+    this.setState({
+      creatingBackup: true
+    });
     try {
       await createBackup();
-      store.set("toast", { message: "Backup started…", type: "info" });
+      store.set("toast", {
+        message: "Backup started…",
+        type: "info"
+      });
       // The background job creates the .partial a moment later; poll until it
       // appears (then until it completes) instead of relying on one refresh.
       this._backupInitiatedAt = Date.now();
       this._awaitingBackupStart = true;
       await this._refreshBackups();
     } catch (err) {
-      const msg =
-        err?.status === 409
-          ? "A backup is already in progress."
-          : err.message || "Backup failed.";
-      store.set("toast", { message: msg, type: "error" });
+      const msg = err?.status === 409 ? "A backup is already in progress." : err.message || "Backup failed.";
+      store.set("toast", {
+        message: msg,
+        type: "error"
+      });
     } finally {
-      this.setState({ creatingBackup: false });
+      this.setState({
+        creatingBackup: false
+      });
     }
   }
 
@@ -434,12 +407,14 @@ export class BackupsSection extends Component {
     } catch (err) {
       this._unmountRestartOverlay();
       const msg = err?.status === 403 ? "Incorrect password." : err.message || "Restore failed.";
-      store.set("toast", { message: msg, type: "error" });
+      store.set("toast", {
+        message: msg,
+        type: "error"
+      });
       return;
     }
     await this._restartAndReload("Restarting server…");
   }
-
   _handleRestartServer() {
     showConfirm({
       title: "Restart server",
@@ -449,7 +424,7 @@ export class BackupsSection extends Component {
       onConfirm: () => {
         this._mountRestartOverlay("Restarting server…");
         this._restartAndReload("Restarting server…");
-      },
+      }
     });
   }
 
@@ -461,14 +436,16 @@ export class BackupsSection extends Component {
       await restartServer();
     } catch (err) {
       this._unmountRestartOverlay();
-      store.set("toast", { message: err.message || "Restart failed.", type: "error" });
+      store.set("toast", {
+        message: err.message || "Restart failed.",
+        type: "error"
+      });
       return;
     }
     this._mountRestartOverlay(text); // update the label if it was showing something else
     await this._awaitServerBack();
     location.reload();
   }
-
   _mountRestartOverlay(text = "Restarting server…") {
     if (this._restartOverlay) {
       const label = this._restartOverlay.querySelector(".restart-overlay-text");
@@ -481,16 +458,12 @@ export class BackupsSection extends Component {
     el.setAttribute("aria-live", "polite");
     const card = document.createElement("div");
     card.className = "restart-overlay-card";
-    card.innerHTML =
-      '<span class="restart-overlay-spinner" aria-hidden="true"></span>' +
-      '<p class="restart-overlay-text"></p>' +
-      '<p class="restart-overlay-sub">This will only take a moment.</p>';
+    card.innerHTML = html`${raw('<span class="restart-overlay-spinner" aria-hidden="true"></span>' + '<p class="restart-overlay-text"></p>' + '<p class="restart-overlay-sub">This will only take a moment.</p>')}`;
     card.querySelector(".restart-overlay-text").textContent = text;
     el.appendChild(card);
     document.body.appendChild(el);
     this._restartOverlay = el;
   }
-
   _unmountRestartOverlay() {
     this._restartOverlay?.remove();
     this._restartOverlay = null;
@@ -500,20 +473,19 @@ export class BackupsSection extends Component {
   // even a 401 after a restore invalidates the session — means it's serving).
   // Falls back to resolving on a timeout so we never hang forever.
   _awaitServerBack() {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const start = Date.now();
       let sawDown = false;
-      const ping = () =>
-        fetch("/api/system/version", { cache: "no-store" })
-          .then(() => true)
-          .catch(() => false);
+      const ping = () => fetch("/api/system/version", {
+        cache: "no-store"
+      }).then(() => true).catch(() => false);
       const tick = async () => {
         const up = await ping();
         if (!up) sawDown = true;
         const elapsed = Date.now() - start;
         // Reload when it has cycled down→up, or it's clearly up and we never caught
         // the (very brief) down window, or after a hard 60s cap.
-        if ((sawDown && up) || (up && elapsed > 8000) || elapsed > 60000) {
+        if (sawDown && up || up && elapsed > 8000 || elapsed > 60000) {
           resolve();
           return;
         }
@@ -522,14 +494,19 @@ export class BackupsSection extends Component {
       tick();
     });
   }
-
   async _handleDelete(filename) {
     try {
       await deleteBackup(filename);
-      store.set("toast", { message: "Backup deleted.", type: "success" });
+      store.set("toast", {
+        message: "Backup deleted.",
+        type: "success"
+      });
       this._load();
     } catch (err) {
-      store.set("toast", { message: err.message || "Delete failed.", type: "error" });
+      store.set("toast", {
+        message: err.message || "Delete failed.",
+        type: "error"
+      });
     }
   }
 
@@ -541,11 +518,13 @@ export class BackupsSection extends Component {
       message: `Confirm your password to download "${filename}".`,
       inputType: "password",
       confirmText: "Download",
-      onConfirm: async (password) => {
+      onConfirm: async password => {
         if (!password) return;
         try {
           const hashed = await sha256(password);
-          const { token } = await authorizeBackupDownload(filename, hashed);
+          const {
+            token
+          } = await authorizeBackupDownload(filename, hashed);
           const a = document.createElement("a");
           a.href = backupDownloadUrl(filename, token);
           a.download = filename;
@@ -553,9 +532,12 @@ export class BackupsSection extends Component {
           a.click();
           a.remove();
         } catch (err) {
-          store.set("toast", { message: err.message || "Download failed.", type: "error" });
+          store.set("toast", {
+            message: err.message || "Download failed.",
+            type: "error"
+          });
         }
-      },
+      }
     });
   }
 
@@ -567,22 +549,34 @@ export class BackupsSection extends Component {
       message: `Add "${file.name}" to your backups? It won't be applied — you can Restore it afterward if you want to.`,
       confirmText: "Upload",
       onConfirm: async () => {
-        this.setState({ uploading: true, uploadPct: 0 });
+        this.setState({
+          uploading: true,
+          uploadPct: 0
+        });
         try {
-          const res = await uploadBackupArchive(file, (frac) => {
-            this.setState({ uploading: true, uploadPct: Math.round(frac * 100) });
+          const res = await uploadBackupArchive(file, frac => {
+            this.setState({
+              uploading: true,
+              uploadPct: Math.round(frac * 100)
+            });
           });
           store.set("toast", {
             message: res.message || "Archive uploaded to backups. Use Restore to apply it.",
-            type: "success",
+            type: "success"
           });
           await this._load();
         } catch (err) {
-          store.set("toast", { message: err.message || "Upload failed.", type: "error" });
+          store.set("toast", {
+            message: err.message || "Upload failed.",
+            type: "error"
+          });
         } finally {
-          this.setState({ uploading: false, uploadPct: 0 });
+          this.setState({
+            uploading: false,
+            uploadPct: 0
+          });
         }
-      },
+      }
     });
   }
 }

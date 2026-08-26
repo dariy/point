@@ -7,9 +7,10 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { escapeHtml, html } from "../../utils/helpers.js";
 import { store } from "../../store.js";
-import { buildTagIndex, parseTagUrl, setupTagFlyout } from "../../utils/tags.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
+import { setupTagFlyout } from "../../utils/tagFlyout.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
 export class ExploreBlock extends Component {
@@ -21,7 +22,7 @@ export class ExploreBlock extends Component {
       .slice(0, 20) // Limit to top 20
       .map(
         (t) => `
-        <a href="/tags/${escapeHtml(t.slug)}" class="tag-link"
+        <a ${html`href="/tags/${t.slug}"`.toString()} class="tag-link"
            title="${escapeHtml(t.name)} (${escapeHtml(String(t.count))} posts)">
           ${escapeHtml(t.name)}
           <span class="count">${escapeHtml(String(t.count))}</span>

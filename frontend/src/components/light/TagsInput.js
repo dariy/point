@@ -1,3 +1,4 @@
+import { html } from "../../utils/helpers.js";
 /**
  * TagsInput — inline tag-badge input with autocomplete.
  *
@@ -10,9 +11,7 @@ import { Component } from '../Component.js';
 import { listTags, createTag } from '../../api/tags.js';
 import { escapeHtml, debounce } from '../../utils/helpers.js';
 import { openTagFamilyPopover } from './TagFamilyPopover.js';
-
 let _tagInputCounter = 0;
-
 export class TagsInput extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -23,21 +22,19 @@ export class TagsInput extends Component {
       suggestions: [],
       showSuggestions: false,
       isPopoverOpen: false,
-      selectedIndex: -1,
+      selectedIndex: -1
     };
     this._allTags = [];
     this._fetchSuggestions = debounce(this._fetchSuggestions.bind(this), 200);
   }
-
   render() {
-    const { tags } = this.state;
-    const badges = tags.map((t) =>
-      `<span class="tag tag-chip" data-tag="${escapeHtml(t)}">
+    const {
+      tags
+    } = this.state;
+    const badges = tags.map(t => `<span class="tag tag-chip" data-tag="${escapeHtml(t)}">
          ${escapeHtml(t)}
          <button class="tag-remove" data-tag="${escapeHtml(t)}" type="button" aria-label="Remove ${escapeHtml(t)}">×</button>
-       </span>`
-    ).join('');
-
+       </span>`).join('');
     return `
       <div class="tags-input" id="${this._uid}-box">
         ${badges}
@@ -46,11 +43,10 @@ export class TagsInput extends Component {
         <div class="tags-suggestions" id="${this._uid}-suggestions"></div>
       </div>`;
   }
-
   afterRender() {
     // Family popover
-    this.$$('.tag-chip').forEach((chip) => {
-      chip.addEventListener('click', (e) => {
+    this.$$('.tag-chip').forEach(chip => {
+      chip.addEventListener('click', e => {
         if (e.target.classList.contains('tag-remove')) return;
         const tagName = chip.dataset.tag;
         const tagObj = this._allTags.find(t => t.name === tagName);
@@ -59,11 +55,13 @@ export class TagsInput extends Component {
     });
 
     // Remove-tag buttons
-    this.$$('.tag-remove').forEach((btn) => {
+    this.$$('.tag-remove').forEach(btn => {
       btn.addEventListener('click', () => {
         const tag = btn.dataset.tag;
-        const tags = this.state.tags.filter((t) => t !== tag);
-        this.setState({ tags });
+        const tags = this.state.tags.filter(t => t !== tag);
+        this.setState({
+          tags
+        });
         this.props.onChange?.(tags);
       });
     });
@@ -71,8 +69,7 @@ export class TagsInput extends Component {
     // Text input
     const input = this.$(`#${this._uid}-text`);
     if (!input) return;
-
-    input.addEventListener('input', (e) => {
+    input.addEventListener('input', e => {
       // Android virtual keyboards fire Enter as insertLineBreak (no keydown key).
       if (e.inputType === 'insertLineBreak') {
         input.value = input.value.replace(/\n/g, '');
@@ -80,7 +77,6 @@ export class TagsInput extends Component {
         if (val) this._addTag(val);
         return;
       }
-
       const raw = e.target.value;
 
       // Handle comma as a delimiter (needed on Android where keydown may not fire).
@@ -97,7 +93,6 @@ export class TagsInput extends Component {
         }
         return;
       }
-
       this.state.input = raw;
       if (raw.trim()) {
         this._fetchSuggestions(raw.trim());
@@ -105,29 +100,26 @@ export class TagsInput extends Component {
         this._hideSuggestions();
       }
     });
-
-    input.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', e => {
       const box = this.$(`#${this._uid}-suggestions`);
       const isBoxVisible = box && box.classList.contains('show');
       const items = isBoxVisible ? Array.from(box.querySelectorAll('.suggestion-item')) : [];
-
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         if (!isBoxVisible || !items.length) return;
         e.preventDefault();
-        
         if (this.state.selectedIndex >= 0 && items[this.state.selectedIndex]) {
           items[this.state.selectedIndex].classList.remove('selected');
         }
-
         if (e.key === 'ArrowDown') {
           this.state.selectedIndex = (this.state.selectedIndex + 1) % items.length;
         } else {
           this.state.selectedIndex = this.state.selectedIndex - 1;
           if (this.state.selectedIndex < 0) this.state.selectedIndex = items.length - 1;
         }
-
         items[this.state.selectedIndex].classList.add('selected');
-        items[this.state.selectedIndex].scrollIntoView({ block: 'nearest' });
+        items[this.state.selectedIndex].scrollIntoView({
+          block: 'nearest'
+        });
       } else if (e.key === 'Enter' || e.key === ',') {
         e.preventDefault();
         if (isBoxVisible && this.state.selectedIndex >= 0 && items[this.state.selectedIndex]) {
@@ -146,14 +138,15 @@ export class TagsInput extends Component {
         }
       } else if (e.key === 'Backspace' && !input.value && this.state.tags.length) {
         const tags = this.state.tags.slice(0, -1);
-        this.setState({ tags });
+        this.setState({
+          tags
+        });
         this.props.onChange?.(tags);
         this.$(`#${this._uid}-text`)?.focus();
       } else if (e.key === 'Escape') {
         this._hideSuggestions();
       }
     });
-
     input.addEventListener('blur', () => {
       // Delay to allow suggestion click to register first.
       setTimeout(() => {
@@ -168,14 +161,17 @@ export class TagsInput extends Component {
   _addTag(name) {
     if (!name || this.state.tags.includes(name)) return;
     const tags = [...this.state.tags, name];
-    this.setState({ tags });
+    this.setState({
+      tags
+    });
     this.props.onChange?.(tags);
-
     const input = this.$(`#${this._uid}-text`);
-    if (input) { input.value = ''; input.focus(); }
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
     this._hideSuggestions();
   }
-
   async _fetchSuggestions(q) {
     try {
       if (!this._allTags.length) {
@@ -183,15 +179,12 @@ export class TagsInput extends Component {
         this._allTags = res.tags || [];
       }
       const lower = q.toLowerCase();
-      const matches = this._allTags.filter(
-        (t) => t.name.toLowerCase().includes(lower) && !this.state.tags.includes(t.name)
-      ).slice(0, 8);
+      const matches = this._allTags.filter(t => t.name.toLowerCase().includes(lower) && !this.state.tags.includes(t.name)).slice(0, 8);
       this._showSuggestions(matches, q);
     } catch {
       this._hideSuggestions();
     }
   }
-
   _showSuggestions(suggestions, input) {
     this.state.selectedIndex = -1;
     const box = this.$(`#${this._uid}-suggestions`);
@@ -208,14 +201,13 @@ export class TagsInput extends Component {
         box.classList.remove('drop-up');
       }
     }
-
     if (!suggestions.length) {
       // Show option to create a new tag.
       box.textContent = '';
       const item = document.createElement('div');
       item.className = 'suggestion-item suggestion-create';
       item.textContent = `＋ Create "${input}"…`;
-      item.addEventListener('mousedown', (e) => {
+      item.addEventListener('mousedown', e => {
         e.preventDefault();
         this._showCreateTagPopover(input);
       });
@@ -223,13 +215,12 @@ export class TagsInput extends Component {
       box.classList.add('show');
       return;
     }
-
     box.textContent = '';
-    suggestions.forEach((s) => {
+    suggestions.forEach(s => {
       const item = document.createElement('div');
       item.className = 'suggestion-item';
       item.textContent = s.name_path || s.name;
-      item.addEventListener('mousedown', (e) => {
+      item.addEventListener('mousedown', e => {
         e.preventDefault();
         this._addTag(s.name);
       });
@@ -242,28 +233,25 @@ export class TagsInput extends Component {
       createItem.className = 'suggestion-item suggestion-create';
       createItem.textContent = `＋ Create "${input}"…`;
       createItem.style.borderTop = '1px solid var(--border-primary)';
-      createItem.addEventListener('mousedown', (e) => {
+      createItem.addEventListener('mousedown', e => {
         e.preventDefault();
         this._showCreateTagPopover(input);
       });
       box.appendChild(createItem);
     }
-
     box.classList.add('show');
   }
-
   _showCreateTagPopover(name) {
     const box = this.$(`#${this._uid}-suggestions`);
     if (!box) return;
-
     this.state.isPopoverOpen = true;
     box.textContent = '';
     const popover = document.createElement('div');
     popover.className = 'tag-create-popover';
-    popover.innerHTML = `
+    popover.innerHTML = html`
       <div class="field">
         <label class="form-label">Name</label>
-        <input type="text" class="new-tag-name form-input" value="${escapeHtml(name)}">
+        <input type="text" class="new-tag-name form-input" value="${name}">
       </div>
       <div class="field">
         <label class="form-label">Parent (optional)</label>
@@ -277,20 +265,17 @@ export class TagsInput extends Component {
         <button type="button" class="btn btn-primary btn-create">Create</button>
       </div>
     `;
-
     box.appendChild(popover);
     box.classList.add('show');
-
     const nameInput = popover.querySelector('.new-tag-name');
     const parentInput = popover.querySelector('.new-tag-parent');
     const parentSuggestions = popover.querySelector('.parent-suggestions');
     const createBtn = popover.querySelector('.btn-create');
     const cancelBtn = popover.querySelector('.btn-cancel');
-
     let selectedParentId = null;
 
     // Parent autocomplete logic
-    const fetchParentSuggestions = debounce(async (q) => {
+    const fetchParentSuggestions = debounce(async q => {
       const lower = q.toLowerCase();
       const matches = this._allTags.filter(t => t.name.toLowerCase().includes(lower)).slice(0, 5);
       parentSuggestions.textContent = '';
@@ -302,7 +287,7 @@ export class TagsInput extends Component {
         const item = document.createElement('div');
         item.className = 'suggestion-item';
         item.textContent = m.name_path || m.name;
-        item.addEventListener('mousedown', (e) => {
+        item.addEventListener('mousedown', e => {
           e.preventDefault();
           parentInput.value = m.name;
           selectedParentId = m.id;
@@ -313,8 +298,7 @@ export class TagsInput extends Component {
       });
       parentSuggestions.classList.add('show');
     }, 200);
-
-    parentInput.addEventListener('input', (e) => {
+    parentInput.addEventListener('input', e => {
       const q = e.target.value.trim();
       if (!q) {
         parentSuggestions.textContent = '';
@@ -324,12 +308,13 @@ export class TagsInput extends Component {
       }
       fetchParentSuggestions(q);
     });
-
     const doCreate = async () => {
       const finalName = nameInput.value.trim();
       if (!finalName) return;
       try {
-        const params = { name: finalName };
+        const params = {
+          name: finalName
+        };
         if (selectedParentId) {
           params.parent_ids = [selectedParentId];
         }
@@ -342,11 +327,9 @@ export class TagsInput extends Component {
         alert('Failed to create tag. It may already exist.');
       }
     };
-
     createBtn.addEventListener('click', doCreate);
     cancelBtn.addEventListener('click', () => this._hideSuggestions());
-
-    popover.addEventListener('keydown', (e) => {
+    popover.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         e.preventDefault();
         doCreate();
@@ -354,10 +337,8 @@ export class TagsInput extends Component {
         this._hideSuggestions();
       }
     });
-
     nameInput.focus();
   }
-
   _hideSuggestions() {
     this.state.isPopoverOpen = false;
     const box = this.$(`#${this._uid}-suggestions`);

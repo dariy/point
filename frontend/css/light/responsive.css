@@ -305,8 +305,7 @@
         flex-shrink: 1;
     }
 
-    /* Hide flag badges on portrait — accessible via editor modal */
-    .tm-flags-row,
+    /* Hide status badges on portrait — accessible via editor modal */
     .tm-badges-row {
         display: none;
     }
@@ -359,11 +358,6 @@
     /* Tag editor modal — full width on small screens */
     .tag-editor-modal {
         width: calc(100vw - var(--tag-editor-modal-width));
-    }
-
-    /* Flags grid: single column instead of two */
-    .tag-flags-grid {
-        grid-template-columns: 1fr;
     }
 }
 

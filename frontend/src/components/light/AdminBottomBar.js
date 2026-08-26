@@ -4,7 +4,7 @@ import {
   TAGS_SVG, MENU_SVG as NAV_MENU_SVG, THEMES_SVG, PLUGINS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
   SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG, COMMENTS_SVG
 } from '../../utils/icons.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html, raw } from '../../utils/helpers.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 
@@ -15,10 +15,10 @@ export class AdminBottomBar extends Component {
     const navItem = (href, icon, label, exact = false) => {
       const active = exact ? currentPath === href : currentPath === href || currentPath.startsWith(href + '/');
       const ariaCurrent = active ? ' aria-current="page"' : '';
-      return `
-        <a href="${escapeHtml(href)}"${ariaCurrent} class="bottom-bar-item ${active ? 'active' : ''}">
-          <div class="bottom-bar-icon">${icon}</div>
-          <span class="bottom-bar-label">${escapeHtml(label)}</span>
+      return html`
+        <a href="${href}"${raw(ariaCurrent)} class="bottom-bar-item ${active ? 'active' : ''}">
+          <div class="bottom-bar-icon">${raw(icon)}</div>
+          <span class="bottom-bar-label">${label}</span>
         </a>`;
     };
 
@@ -58,10 +58,10 @@ export class AdminBottomBar extends Component {
               <span class="icon-moon">${MOON_SVG}</span>
               <span>Theme</span>
             </button>
-            <a href="${escapeHtml(this.props.publicUrl || '/')}" class="more-footer-btn">
-              ${EXTERNAL_LINK_SVG}
+            ${html`<a href="${this.props.publicUrl || '/'}" class="more-footer-btn">
+              ${raw(EXTERNAL_LINK_SVG)}
               <span>View Site</span>
-            </a>
+            </a>`}
             <button type="button" class="more-footer-btn text-danger" id="sheet-logout">
               ${LOGOUT_SVG}
               <span>Logout</span>
@@ -74,10 +74,10 @@ export class AdminBottomBar extends Component {
 
   _renderMoreItem(href, icon, label) {
     const active = this.props.currentPath === href || this.props.currentPath?.startsWith(href + '/');
-    return `
-      <a href="${escapeHtml(href)}" class="more-grid-item ${active ? 'active' : ''}">
-        <div class="more-item-icon">${icon}</div>
-        <span class="more-item-label">${escapeHtml(label)}</span>
+    return html`
+      <a href="${href}" class="more-grid-item ${active ? 'active' : ''}">
+        <div class="more-item-icon">${raw(icon)}</div>
+        <span class="more-item-label">${label}</span>
       </a>`;
   }
 

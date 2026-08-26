@@ -1,5 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { setupDOM, fire, click } from './helpers/dom.js';
 import { store } from '../src/store.js';
@@ -26,6 +28,12 @@ import { PostCard } from '../src/components/public/PostCard.js';
  *     at a time — revealing one card closes every other. The card that loses
  *     its overlay has to lose its clip with it, which no single instance can
  *     arrange on its own.
+ *
+ * What these cannot see is where any of it lands: linkedom has no layout, so a
+ * preview that plays perfectly outside the card's box passes every assertion
+ * above — which is exactly how it once shipped. The stylesheet rules that put
+ * the clip over the poster instead of under the card are therefore read out of
+ * post-grid.css and asserted directly, at the end of this file.
  */
 
 const POST = {
@@ -154,6 +162,8 @@ describe('PostCard video preview', () => {
       assert.ok(poster, 'the poster image should still be in the card');
       assert.match(poster.getAttribute('src'), /clip\.mp4\?s=\d+/);
       assert.equal(bg.getAttribute('style'), null, 'nothing paints via inline style');
+      assert.equal(bg.lastElementChild, videoIn(card),
+        'the clip is stacked on the poster by document order, so it goes last');
     });
 
     test('a video with no stored poster leaves the card blank, not broken', () => {
@@ -301,6 +311,39 @@ describe('PostCard video preview', () => {
     });
   });
 
+  describe('a video missing its poster frame', () => {
+    test('falls back to a paused video element if the poster 404s', () => {
+      const { card } = mount();
+      
+      const poster = card.querySelector('.post-card-background img');
+      assert.ok(poster, 'the poster image is initially rendered');
+      assert.equal(videoIn(card), null, 'no video element yet');
+
+      fire(poster, 'error');
+
+      assert.equal(card.querySelector('.post-card-background img'), null,
+        'the broken image is removed');
+      
+      const v = videoIn(card);
+      assert.ok(v, 'a paused video fallback is appended');
+      assert.equal(v.muted, true);
+      assert.equal(v.playsInline, true);
+      assert.equal(v.preload, 'metadata');
+      assert.ok(v.src.endsWith('#t=0.001'), '#t=0.001 is appended to seek to the first frame');
+      assert.equal(v.pauseCalls || 0, 0, 'it does not call play or pause directly');
+    });
+
+    test('a regular image missing its poster frame stays unpainted', () => {
+      const { card } = mount({ ...POST, media_url: '/2026/03/photo.jpg' });
+      
+      const poster = card.querySelector('.post-card-background img');
+      fire(poster, 'error');
+
+      assert.equal(card.querySelector('.post-card-background img'), null);
+      assert.equal(videoIn(card), null, 'no video fallback for a regular image');
+    });
+  });
+
   describe('when the card should stay a still', () => {
     test('the setting off means no clip on hover or on tap', () => {
       const { card } = mount(POST, {});
@@ -371,5 +414,82 @@ describe('PostCard video preview', () => {
 
       assert.equal(v.pauseCalls, 1, 'the old element belongs to a DOM that is gone');
     });
+  });
+});
+
+/**
+ * The stylesheet half of the preview.
+ *
+ * The clip is appended into `.post-card-background` next to a poster `<img>`
+ * that is already there, so where it ends up is decided entirely in CSS. Left
+ * in normal flow the two boxes stack vertically and the video is laid out below
+ * the card, which `.post-card { overflow: hidden }` then clips away — a preview
+ * that plays, streams and tears down exactly as every test above asserts, and
+ * is never once visible. Nothing in a DOM without layout can catch that, so the
+ * rules it depends on are read out of the stylesheet and checked by name.
+ *
+ * Source CSS only: light.css/main.css are built from these by build-css.sh.
+ */
+describe('PostCard video preview — layout rules', () => {
+  const CSS = readFileSync(
+    fileURLToPath(new URL('../css/public/post-grid.css', import.meta.url)),
+    'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '');
+
+  /**
+   * Every declaration that reaches `selector`, as a Map.
+   *
+   * A rule counts when the selector appears in its comma-separated list, so a
+   * pair written as one rule and as two read the same. At-rule wrappers are not
+   * modelled — the inner rules simply read as top-level, which is accurate
+   * enough here because none of the selectors below are nested in one.
+   */
+  function declsFor(selector) {
+    const decls = new Map();
+    for (const [, sel, body] of CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!sel.split(',').some((s) => s.trim() === selector)) continue;
+      for (const d of body.split(';')) {
+        const i = d.indexOf(':');
+        if (i > 0) decls.set(d.slice(0, i).trim(), d.slice(i + 1).trim());
+      }
+    }
+    return decls;
+  }
+
+  for (const selector of ['.post-card-background img', '.post-card-background video']) {
+    test(`${selector} is taken out of flow, so both fill the same box`, () => {
+      const d = declsFor(selector);
+      assert.equal(d.get('position'), 'absolute',
+        'in flow the two children stack vertically instead of overlapping');
+      assert.equal(d.get('inset'), '0', 'and the box they share is the card');
+      assert.equal(d.get('object-fit'), 'cover');
+    });
+  }
+
+  test('the poster is hidden while the clip is running', () => {
+    assert.equal(
+      declsFor('.post-card.is-playing .post-card-background img').get('opacity'), '0',
+      'otherwise a still is painted over the first frames of its own footage');
+    assert.equal(
+      declsFor('.post-card.is-playing .post-card-background img').get('transition'), undefined,
+      'fading it back would leave the card blank — the video element is already gone');
+  });
+
+  test('the hover scale still reaches whichever of the two is showing', () => {
+    for (const el of ['img', 'video']) {
+      assert.equal(
+        declsFor(`:where(html.pointer-fine) .post-card:hover .post-card-background ${el}`)
+          .get('transform'),
+        'scale(1.05)');
+    }
+  });
+
+  test('nothing paints through the container itself any more', () => {
+    // The poster was a background-image on this box before it needed a srcset.
+    const d = declsFor('.post-card-background');
+    for (const prop of ['background', 'background-image', 'background-size',
+      'background-position', 'background-repeat']) {
+      assert.equal(d.get(prop), undefined, `${prop} is a leftover of that arrangement`);
+    }
   });
 });

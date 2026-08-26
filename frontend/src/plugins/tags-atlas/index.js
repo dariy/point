@@ -19,6 +19,7 @@ import { pluginHost } from "../../core/pluginHost.js";
 import { getTagsGraph, getTagCloud } from "../../api/pages.js";
 import { store } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { setPageTitle } from "../../utils/documentTitle.js";
 import {
   escapeHtml,
   navigate,
@@ -26,7 +27,8 @@ import {
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
-import { tagKind } from "../../utils/tags.js";
+import { html } from "../../utils/helpers.js";
+import { tagKind } from "../../utils/tagLinks.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { isRevelioOn } from "../../utils/revelio.js";
 
@@ -379,7 +381,7 @@ export default class AtlasPage extends Component {
       const token = ++this._graphReq;
       const data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
       if (token !== this._graphReq) return; // a scope change overtook this load
-      document.title = "Atlas";
+      setPageTitle("Atlas");
       setCanonical(`${window.location.origin}/tags`);
       this._buildIndexes(data);
       this.setState({ loading: false, data, error: null });
@@ -945,7 +947,7 @@ export default class AtlasPage extends Component {
       const thumbUrl = node.thumb && safeUrl(node.thumb);
       const thumbHtml =
         thumbUrl && thumbUrl !== "#"
-          ? `<img class="atlas-node__thumb" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" decoding="async" />`
+          ? html`<img class="atlas-node__thumb" src="${thumbUrl}" alt="" loading="lazy" decoding="async" />`.toString()
           : "";
       const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
       // Owner-only chips carry the site-wide lock plus a dashed ring, so a cloud

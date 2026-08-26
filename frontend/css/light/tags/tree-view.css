@@ -1,0 +1,237 @@
+/* ===========================
+   Tags manager — tree view
+   The tag forest of frontend/src/components/light/tags/TagTreeView.js:
+   rows, status badges, the Unfiled group and per-row actions.
+   =========================== */
+
+/* Row status badges — nav / hidden / inherited / year / coords / multi-parent */
+
+.tm-badges-row {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    min-width: 0;
+}
+
+.tm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--tm-count-badge-padding-y) var(--tm-count-badge-padding-x);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    border: var(--border-width) solid transparent;
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.tm-badge-nav {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.tm-badge-hidden {
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+.tm-badge-inherited {
+    background: var(--color-warning-light);
+    color: var(--color-warning);
+}
+
+.tm-badge-year {
+    background: var(--color-purple-50);
+    color: var(--color-purple-500);
+}
+
+.tm-badge-coords {
+    background: var(--color-success-light);
+    color: var(--color-success);
+}
+
+.tm-badge-coords:hover {
+    filter: brightness(0.95);
+}
+
+.tm-badge-multi {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+}
+
+/* Inline "open ancestor" button rendered inside an inherited badge / modal chip */
+
+.tm-badge-via-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.tm-badge-via-btn:hover {
+    opacity: 0.8;
+}
+
+.tags-tree-container {
+    padding: var(--spacing-xs) 0;
+}
+
+.tm-unfiled-group {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+.tm-unfiled-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: left;
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-unfiled-toggle:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-unfiled-toggle:active {
+    scale: 1 !important;
+}
+
+.tm-unfiled-toggle svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+}
+
+.tm-unfiled-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.tm-unfiled-count {
+    color: var(--text-muted);
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+}
+
+.tm-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tm-tree:not(.level-0) {
+    padding-left: var(--tm-treelevel-1-padding-left-alt1);
+    border-left: var(--border-width) dashed var(--border-primary);
+    margin-left: var(--tm-treelevel-1-margin-left-alt1);
+    margin-top: var(--tm-treelevel-1-margin-top);
+    margin-bottom: var(--tm-treelevel-1-margin-bottom);
+}
+
+.tm-node {
+    display: flex;
+    flex-direction: column;
+}
+
+.tm-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--tm-row-gap);
+    padding: var(--tm-row-padding-y) var(--tm-row-padding-x);
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast);
+    min-height: var(--tm-row-min-height);
+}
+
+.tm-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-toggle {
+    flex-shrink: 0;
+    width: var(--tm-toggle-width);
+    height: var(--tm-toggle-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--tm-toggle-font-size);
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-toggle:hover {
+    background: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.tm-toggle-spacer {
+    flex-shrink: 0;
+    width: var(--tm-toggle-spacer-width);
+}
+
+.tm-row .tm-tag-name {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.tm-node-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--tm-node-body-gap);
+}
+
+.tm-row-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--tm-row-meta-gap);
+    flex-shrink: 0;
+    min-width: var(--tm-row-meta-min-width);
+}
+
+.tm-actions {
+    display: flex;
+    gap: var(--tm-actions-gap);
+    opacity: 0.3;
+    transition: opacity var(--transition-fast);
+    text-wrap-mode: nowrap;
+}
+
+.tm-row:hover .tm-actions,
+.tm-row:focus-within .tm-actions,
+.tm-tag-row:hover .tm-actions,
+.tm-tag-row:focus-within .tm-actions {
+    opacity: 1;
+}
+
+/* Always show on touch devices where hover is unavailable.
+   Scoped to :not(.pointer-fine) — see utils/pointerMode.js — because `hover:
+   none` is a claim about the primary pointer, not proof there's no mouse. */
+@media (hover: none) {
+    :where(html:not(.pointer-fine)) .tm-actions {
+        opacity: 1;
+    }
+}

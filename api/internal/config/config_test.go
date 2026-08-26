@@ -56,6 +56,31 @@ func TestDeploymentInjectionEnv(t *testing.T) {
 	}
 }
 
+// The page cache budget is the only thing standing between a rarely-published
+// blog and a cache directory that grows until the volume is full, so both its
+// default and the operator's override have to actually arrive.
+func TestPageCacheBudget(t *testing.T) {
+	viper.Reset()
+	hermeticEnv(t)
+
+	config, err := LoadConfig(t.TempDir())
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if config.PageCacheBudgetMB != 64 {
+		t.Errorf("default PageCacheBudgetMB = %d, want 64", config.PageCacheBudgetMB)
+	}
+
+	t.Setenv("PAGE_CACHE_BUDGET_MB", "256")
+	config, err = LoadConfig(t.TempDir())
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if config.PageCacheBudgetMB != 256 {
+		t.Errorf("PageCacheBudgetMB = %d, want the 256 from the environment", config.PageCacheBudgetMB)
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	viper.Reset()
 	hermeticEnv(t)

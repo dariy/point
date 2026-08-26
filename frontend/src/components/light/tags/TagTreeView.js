@@ -73,22 +73,22 @@ export function renderTagForest({ navRoots, otherRoots, unfiled }, view) {
   const total = navRoots.length + otherRoots.length + unfiled.length;
   if (!total) return '<p class="empty-state">No tags found.</p>';
 
-  let html = '<div class="tm-tree-root">';
+  let _html = '<div class="tm-tree-root">';
 
   if (navRoots.length) {
-    html += `<ul class="tm-tree level-0">${navRoots.map(n => renderTagNode(n, 0, null, view)).join('')}</ul>`;
+    _html += `<ul class="tm-tree level-0">${navRoots.map(n => renderTagNode(n, 0, null, view)).join('')}</ul>`;
   }
 
   if (otherRoots.length) {
-    html += `<ul class="tm-tree level-0">${otherRoots.map(n => renderTagNode(n, 0, null, view)).join('')}</ul>`;
+    _html += `<ul class="tm-tree level-0">${otherRoots.map(n => renderTagNode(n, 0, null, view)).join('')}</ul>`;
   }
 
   if (unfiled.length) {
-    html += renderUnfiledGroup(unfiled, view);
+    _html += renderUnfiledGroup(unfiled, view);
   }
 
-  html += '</div>';
-  return html;
+  _html += '</div>';
+  return _html;
 }
 
 export function renderTagTree(nodes, level = 0, parentId = null, view) {

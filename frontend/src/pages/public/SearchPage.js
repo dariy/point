@@ -1,3 +1,4 @@
+import { html } from "../../utils/helpers.js";
 /**
  * SearchPage — public search results.
  *
@@ -13,8 +14,6 @@
  */
 import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
-
-
 import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
@@ -22,12 +21,17 @@ import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { setPageTitle } from '../../utils/documentTitle.js';
 import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, refitPage } from '../../utils/gridFit.js';
-
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, data: null, tags: [], error: null };
+    this.state = {
+      loading: true,
+      data: null,
+      tags: [],
+      error: null
+    };
     // Stops the viewport fit chasing a per_page whose own chrome moves the
     // target — see createFitLatch.
     this._fitLatch = createFitLatch();
@@ -36,20 +40,26 @@ export default class SearchPage extends Component {
     this._pager = new GridPager({
       gridMount: () => this.$('#grid-mount'),
       gestureRoot: () => this.$('.site-main'),
-      fetchPosts: async (page) => {
-        const data = await listPosts(this._buildParams({ ...ViewContext.current(), page }));
+      fetchPosts: async page => {
+        const data = await listPosts(this._buildParams({
+          ...ViewContext.current(),
+          page
+        }));
         return data.posts || [];
       },
-      gotoPage: (p) => ViewContext.update({ page: p }),
+      gotoPage: p => ViewContext.update({
+        page: p
+      }),
       onZoomCommit: () => {
         this._fitLatch.reset(); // a new column count is a new question to fit
-        this._reconcilePerPage({ fromResize: true });
+        this._reconcilePerPage({
+          fromResize: true
+        });
       },
       isAlive: () => !this._unmounted,
-      emptyHtml: '<p class="empty-state">No posts matched your search.</p>',
+      emptyHtml: '<p class="empty-state">No posts matched your search.</p>'
     });
   }
-
   onRouteUpdate(params, query) {
     const prevVc = this._loadedVc;
     this.props.params = params;
@@ -64,15 +74,15 @@ export default class SearchPage extends Component {
       this._load();
     }
   }
-
   _canPartialUpdate(prev, next) {
     if (!prev || !this.state.data || this.state.error) return false;
     return prev.query === next.query && prev.tag === next.tag;
   }
-
   render() {
-    const { loading, error } = this.state;
-
+    const {
+      loading,
+      error
+    } = this.state;
     if (loading) {
       return `
         <div class="site-wrapper">
@@ -83,7 +93,6 @@ export default class SearchPage extends Component {
           <div id="footer-mount"></div>
         </div>`;
     }
-
     if (error) {
       return `
         <div class="site-wrapper">
@@ -94,7 +103,6 @@ export default class SearchPage extends Component {
           <div id="footer-mount"></div>
         </div>`;
     }
-
     return `
       <div class="site-wrapper search-page">
         <div id="header-mount"></div>
@@ -109,7 +117,6 @@ export default class SearchPage extends Component {
         <div id="footer-mount"></div>
       </div>`;
   }
-
   afterRender() {
     document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     // Reset the footer paginator's feed; _mountPostContent republishes it when
@@ -125,35 +132,33 @@ export default class SearchPage extends Component {
     const resultCount = this.state.data?.total;
     const breadcrumb = [{
       name: 'search',
-      ...(q && resultCount !== undefined
-        ? { tooltip: `${resultCount} post${resultCount !== 1 ? 's' : ''} found` }
-        : {}),
+      ...(q && resultCount !== undefined ? {
+        tooltip: `${resultCount} post${resultCount !== 1 ? 's' : ''} found`
+      } : {})
     }];
-
     pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       navTags: rootMenu,
       currentPath: '/search',
       breadcrumb,
       total: this.state.data?.total || 0,
-      timelineVisible: false,
+      timelineVisible: false
     }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._children.push(comps[0]);
       }
     });
-    pluginHost.fill('footer', this.$('#footer-mount'), { settings }).then(comps => {
+    pluginHost.fill('footer', this.$('#footer-mount'), {
+      settings
+    }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._children.push(comps[0]);
       }
     });
-
     if (this.state.tags.length > 0) {
       this._renderTagResults();
     }
-
     if (this.state.loading || !this.state.data) return;
-
     this._mountPostContent();
   }
 
@@ -162,45 +167,50 @@ export default class SearchPage extends Component {
   // place — see _refreshPostContent.
   async _mountPostContent() {
     const settings = store.get('settings') || {};
-    const { posts = [], page, pages, total } = this.state.data;
-
+    const {
+      posts = [],
+      page,
+      pages,
+      total
+    } = this.state.data;
     this._postChildren = [];
 
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.
     this._pager.resetGridStyles();
-
     let active = 'simple-post-list';
     if (pluginHost.isEnabled('dynamic-post-list')) active = 'dynamic-post-list';
-
     let gridComp = null;
     if (pluginHost.hasSlot('post-list')) {
       gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), {
         posts,
         showViewCount: !!settings.show_view_counts,
-        emptyMessage: 'No posts matched your search.',
+        emptyMessage: 'No posts matched your search.'
       });
     } else {
-      const mod = active === 'dynamic-post-list'
-        ? await import('../../plugins/dynamic-post-list/index.js')
-        : await import('../../plugins/simple-post-list/index.js');
+      const mod = active === 'dynamic-post-list' ? await import('../../plugins/dynamic-post-list/index.js') : await import('../../plugins/simple-post-list/index.js');
       gridComp = mod.mount(this.$('#grid-mount'), {
         posts,
         showViewCount: !!settings.show_view_counts,
-        emptyMessage: 'No posts matched your search.',
+        emptyMessage: 'No posts matched your search.'
       });
     }
-
     if (this._unmounted) {
       if (gridComp) gridComp.unmount();
       return;
     }
-
     this._postChildren.push(gridComp);
     this._children.push(gridComp);
-
-    this._syncPagination({ page, pages, total });
-    this._pager.arm({ page, pages, total });
+    this._syncPagination({
+      page,
+      pages,
+      total
+    });
+    this._pager.arm({
+      page,
+      pages,
+      total
+    });
 
     // After the real grid has laid out, fit per_page to the viewport — then keep
     // watching, because the chrome it has to measure around itself arrives later
@@ -215,20 +225,33 @@ export default class SearchPage extends Component {
    * instead). Kept apart from _mountPostContent so a refit can re-point it
    * without the grid beside it being rebuilt.
    */
-  _syncPagination({ page, pages, total }) {
+  _syncPagination({
+    page,
+    pages,
+    total
+  }) {
     const existing = this._postChildren[1];
     if (pages > 1) {
-      const props = { page, pages, total, onPage: (p) => ViewContext.update({ page: p }) };
-      if (existing) existing.setProps(props);
-      else this._postChildren[1] = this.mountChild(Pagination, '#pagination-mount', props);
+      const props = {
+        page,
+        pages,
+        total,
+        onPage: p => ViewContext.update({
+          page: p
+        })
+      };
+      if (existing) existing.setProps(props);else this._postChildren[1] = this.mountChild(Pagination, '#pagination-mount', props);
     } else if (existing) {
       existing.unmount();
       const at = this._children.indexOf(existing);
       if (at !== -1) this._children.splice(at, 1);
       this._postChildren.length = 1;
     }
-
-    store.set('pagination', pages > 1 ? { page, pages, total } : null);
+    store.set('pagination', pages > 1 ? {
+      page,
+      pages,
+      total
+    } : null);
   }
 
   /**
@@ -240,14 +263,26 @@ export default class SearchPage extends Component {
    */
   _applyRefit() {
     const grid = this._postChildren?.[0];
-    const { posts = [], page, pages, total } = this.state.data || {};
+    const {
+      posts = [],
+      page,
+      pages,
+      total
+    } = this.state.data || {};
     if (!grid?.reconcile?.(posts)) return false;
-    this._syncPagination({ page, pages, total });
-    this._pager.arm({ page, pages, total });
+    this._syncPagination({
+      page,
+      pages,
+      total
+    });
+    this._pager.arm({
+      page,
+      pages,
+      total
+    });
     this._watchChrome();
     return true;
   }
-
   _clearPostContent() {
     for (const c of this._postChildren || []) {
       c.unmount();
@@ -275,28 +310,29 @@ export default class SearchPage extends Component {
     // turn — it updates in place instead (_applyRefit).
     const refit = this._refitRefresh;
     this._refitRefresh = false;
-
     const seamless = this._pager.takeSeamless();
     const fromSwipe = seamless || this._pager.isMidSwipe();
-
     let fadeOut = Promise.resolve();
     if (gridMount && !fromSwipe && !refit) {
       gridMount.style.transition = 'opacity 0.2s ease-in';
       gridMount.style.opacity = '0';
-      fadeOut = new Promise((resolve) => setTimeout(resolve, 200));
+      fadeOut = new Promise(resolve => setTimeout(resolve, 200));
     }
-
     let data;
     try {
       data = await listPosts(this._buildParams(vc));
     } catch (err) {
-      this.setState({ loading: false, data: null, tags: [], error: err.message || 'Failed to search.' });
+      this.setState({
+        loading: false,
+        data: null,
+        tags: [],
+        error: err.message || 'Failed to search.'
+      });
       return;
     }
     if (this._unmounted) return;
     await fadeOut;
     if (this._unmounted) return;
-
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
@@ -305,7 +341,6 @@ export default class SearchPage extends Component {
     if (refit && this._applyRefit()) return;
     this._clearPostContent();
     await this._mountPostContent();
-
     const newGrid = this.$('#grid-mount');
     if (seamless) {
       // The real grid is mounted and centred directly under the committed ghost;
@@ -321,17 +356,20 @@ export default class SearchPage extends Component {
       newGrid.style.opacity = '1';
     }
   }
-
   _minPerPage() {
     return (store.get('settings') || {}).posts_per_page || 10;
   }
-
   _buildParams(vc) {
     // per_page is the device-fit value from the URL, or the cached estimate for
     // a fresh load that hasn't been reconciled against the real grid yet.
     const perPage = vc.perPage || cachedPerPage(this._minPerPage());
     this._loadedPerPage = perPage;
-    const params = { q: vc.query, page: vc.page, per_page: perPage, status: 'published' };
+    const params = {
+      q: vc.query,
+      page: vc.page,
+      per_page: perPage,
+      status: 'published'
+    };
     if (vc.tag) params.tag = vc.tag;
     return params;
   }
@@ -339,7 +377,10 @@ export default class SearchPage extends Component {
   // Measure the rendered grid and, if the viewport fits a different number of
   // posts than we loaded, persist the new per_page to the URL — recomputing the
   // page so the first post currently shown stays visible on the resized list.
-  _reconcilePerPage({ fromResize = false, settling = false } = {}) {
+  _reconcilePerPage({
+    fromResize = false,
+    settling = false
+  } = {}) {
     if (this._unmounted) return;
     const grid = this.$('.posts-grid');
     if (!grid) return;
@@ -361,9 +402,13 @@ export default class SearchPage extends Component {
     // Tells the refresh this update provokes that it is a refit, not a
     // navigation — see _refreshPostContent.
     this._refitRefresh = true;
-    ViewContext.update({ per_page: next, page: newPage }, { replace: true });
+    ViewContext.update({
+      per_page: next,
+      page: newPage
+    }, {
+      replace: true
+    });
   }
-
   _onResize() {
     // Reset on the event, not on the debounced re-fit: the chrome observer fires
     // sooner than 200ms, and a settling pass that ran against the old latch
@@ -371,27 +416,29 @@ export default class SearchPage extends Component {
     // flicker cycle before the new viewport settles.
     this._fitLatch.reset();
     clearTimeout(this._resizeTimer);
-    this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
+    this._resizeTimer = setTimeout(() => this._reconcilePerPage({
+      fromResize: true
+    }), 200);
   }
 
   /** (Re)arm the settling re-fit for the chrome around the grid — see watchChromeFit. */
   _watchChrome() {
     this._unwatchChrome?.();
-    this._unwatchChrome = watchChromeFit(this.container, () => this._reconcilePerPage({ settling: true }));
+    this._unwatchChrome = watchChromeFit(this.container, () => this._reconcilePerPage({
+      settling: true
+    }));
   }
-
   _renderTagResults() {
     const mount = this.$('#tag-results-mount');
     if (!mount) return;
-
     const tagsHtml = this.state.tags.map(t => `
-      <a href="/tags/${escapeHtml(t.slug)}" class="search-tag-chip">
+      <a ${html`href="/tags/${t.slug}"`.toString()} class="search-tag-chip">
         <span class="search-tag-chip-name">${escapeHtml(t.name)}</span>
         <span class="search-tag-chip-count">${t.post_count}</span>
       </a>
     `).join('');
-// <h3 class="search-tag-results-title">Tags</h3>
-    mount.innerHTML = `
+    // <h3 class="search-tag-results-title">Tags</h3>
+    mount.innerHTML = html`
       <div class="search-tag-results">
 
         <div class="search-tag-strip">
@@ -400,7 +447,6 @@ export default class SearchPage extends Component {
       </div>
     `;
   }
-
   mount() {
     // Seed the per_page cache from the window size so the first fetch is sized
     // before the grid exists to be measured.
@@ -411,7 +457,6 @@ export default class SearchPage extends Component {
     super.mount();
     this._load();
   }
-
   beforeUnmount() {
     // Non-grid pages share the footer — don't leave a stale paginator feed behind.
     store.set('pagination', null);
@@ -421,33 +466,47 @@ export default class SearchPage extends Component {
     this._unwatchChrome?.();
     this._unwatchChrome = null;
   }
-
   async _load() {
     const vc = ViewContext.current();
     this._loadedVc = vc;
     // A full render rebuilds the grid anyway; don't leave the flag set for
     // whatever refresh comes next.
     this._refitRefresh = false;
-
     let titleQuery = vc.query || '';
     if (vc.tag) titleQuery += ` in ${vc.tag}`;
-
-    document.title = titleQuery ? `Search: ${titleQuery} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
-
+    setPageTitle(titleQuery ? `Search: ${titleQuery}` : 'Search');
     if (!vc.query?.trim()) {
-      this.setState({ loading: false, data: { posts: [], total: 0, page: 1, pages: 1 }, tags: [], error: null });
+      this.setState({
+        loading: false,
+        data: {
+          posts: [],
+          total: 0,
+          page: 1,
+          pages: 1
+        },
+        tags: [],
+        error: null
+      });
       return;
     }
-
     try {
-      const [data, tagsData] = await Promise.all([
-        listPosts(this._buildParams(vc)),
-        listTags({ q: vc.query, include_empty: false })
-      ]);
-
-      this.setState({ loading: false, data, tags: tagsData.tags || [], error: null });
+      const [data, tagsData] = await Promise.all([listPosts(this._buildParams(vc)), listTags({
+        q: vc.query,
+        include_empty: false
+      })]);
+      this.setState({
+        loading: false,
+        data,
+        tags: tagsData.tags || [],
+        error: null
+      });
     } catch (err) {
-      this.setState({ loading: false, data: null, tags: [], error: err.message || 'Failed to search.' });
+      this.setState({
+        loading: false,
+        data: null,
+        tags: [],
+        error: err.message || 'Failed to search.'
+      });
     }
   }
 }

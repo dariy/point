@@ -15,7 +15,7 @@
  * tests, and a shell a service worker serves offline.
  */
 
-import { escapeHtml } from "./helpers.js";
+import { escapeHtml, html } from "./helpers.js";
 
 /**
  * The ladder as of this build, and the fallback when `window.__MEDIA__` is
@@ -171,7 +171,7 @@ export function thumbSrcset(path, { sizes, width, height } = {}) {
 export function thumbAttrs(path, opts = {}) {
   const { src, srcset, sizes } = thumbSrcset(path, opts);
   if (!src) return "";
-  const parts = [`src="${escapeHtml(src)}"`, `srcset="${escapeHtml(srcset)}"`];
+  const parts = [html`src="${src}"`.toString(), html`srcset="${srcset}"`.toString()];
   if (sizes) parts.push(`sizes="${escapeHtml(sizes)}"`);
   return parts.join(" ");
 }

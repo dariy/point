@@ -19,6 +19,7 @@ import { getPublicSettings } from "./api/settings.js";
 
 import { getVersion } from "./api/system.js";
 import { normalizeSettings } from "./utils/helpers.js";
+import { setPageTitle } from "./utils/documentTitle.js";
 import { pluginHost } from "./core/pluginHost.js";
 import { ToastContainer } from "./components/shared/Toast.js";
 import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
@@ -147,9 +148,10 @@ async function bootstrap() {
     }
   }
   store.set("settings", settings);
-  if (settings.blog_title) {
-    document.title = settings.blog_title;
-  }
+  // The shell ships a generic <title>; now that the blog's own name is in the
+  // store, show it. Every later navigation goes through the router, which resets
+  // the title per route (see the `title` field in the route table below).
+  setPageTitle();
 
   // 2. Apply theme before first render to avoid flash.
   loadTheme(settings);
@@ -248,6 +250,10 @@ async function resolveTagsModule() {
   return import("./pages/public/RedirectHome.js");
 }
 
+// The route table. `title` is the tab title's page-specific part; the router
+// applies it on every mount, so a page with a fixed name needs nothing else.
+// Pages whose name is only known after a fetch (a post, a tag, a search query)
+// leave it unset and call setPageTitle() themselves once loaded.
 const routes = [
   // Standalone login page (public — no auth required). Reached via a hard
   // navigation so it loads in its own document, isolated from the guest UI and
@@ -256,6 +262,7 @@ const routes = [
     path: "/light/login",
     load: () => import("./pages/light/LoginPage.js"),
     public: true,
+    title: "Sign in · Light",
   },
 
   // First-run setup wizard (public — no auth required)
@@ -263,6 +270,7 @@ const routes = [
     path: "/setup",
     load: () => import("./pages/light/SetupPage.js"),
     public: true,
+    title: "Setup",
   },
 
   // Password reset (public — no auth required)
@@ -270,11 +278,13 @@ const routes = [
     path: "/light/pss",
     load: () => import("./pages/light/PasswordResetPage.js"),
     public: true,
+    title: "Password reset · Light",
   },
   {
     path: "/light/pss/:token",
     load: () => import("./pages/light/PasswordResetPage.js"),
     public: true,
+    title: "Password reset · Light",
   },
 
   // Public blog
@@ -309,41 +319,75 @@ const routes = [
   },
 
   // Admin (Light) — protected
-  { path: "/light", load: () => import("./pages/light/DashboardPage.js") },
+  {
+    path: "/light",
+    load: () => import("./pages/light/DashboardPage.js"),
+    title: "Light",
+  },
   {
     path: "/light/posts",
     load: () => import("./pages/light/PostsListPage.js"),
+    title: "Posts · Light",
   },
-  { path: "/light/media", load: () => import("./pages/light/MediaPage.js") },
+  {
+    path: "/light/media",
+    load: () => import("./pages/light/MediaPage.js"),
+    title: "Media · Light",
+  },
   {
     path: "/light/posts/new",
     load: () => import("./pages/light/PostEditPage.js"),
+    title: "New post · Light",
   },
   {
     path: "/light/posts/:id/edit",
     load: () => import("./pages/light/PostEditPage.js"),
+    title: "Edit post · Light",
   },
   {
     path: "/light/tags",
     load: () => import("./pages/light/TagsManagerPage.js"),
+    title: "Tags · Light",
   },
   {
     path: "/light/tags/:slug",
     load: () => import("./pages/light/TagsManagerPage.js"),
+    title: "Tags · Light",
   },
 
-  { path: "/light/themes", load: () => import("./pages/light/ThemesPage.js") },
-  { path: "/light/plugins", load: () => import("./pages/light/PluginsPage.js") },
+  {
+    path: "/light/themes",
+    load: () => import("./pages/light/ThemesPage.js"),
+    title: "Themes · Light",
+  },
+  {
+    path: "/light/plugins",
+    load: () => import("./pages/light/PluginsPage.js"),
+    title: "Plugins · Light",
+  },
   {
     path: "/light/settings",
     load: () => import("./pages/light/SettingsPage.js"),
+    title: "Settings · Light",
   },
   {
     path: "/light/security",
     load: () => import("./pages/light/SecurityPage.js"),
+    title: "Security · Light",
   },
-  { path: "/light/system", load: () => import("./pages/light/SystemPage.js") },
+  {
+    path: "/light/system",
+    load: () => import("./pages/light/SystemPage.js"),
+    title: "System · Light",
+  },
 ];
+
+/** "/light/comments" → "Comments" — a readable name for a plugin admin page. */
+function adminRouteLabel(path) {
+  const segment = path.split("/").filter(Boolean).pop() || "";
+  const words = segment.replace(/[-_]+/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 // Merge manifest-provided plugin routes into the static table. Each route plugin
 // (with a built chunk) contributes its declared paths, loaded from its chunk.
@@ -362,6 +406,10 @@ for (const entry of pluginHost.routes()) {
       path,
       load: () => pluginHost.loadEntry(entry),
       public: !path.startsWith("/light"),
+      // The manifest carries no display name, so the path's last segment is the
+      // best available one: /light/comments → "Comments · Light". Without it a
+      // plugin page would inherit whatever title the previous page left.
+      title: `${adminRouteLabel(path)} · Light`,
     });
   }
 }

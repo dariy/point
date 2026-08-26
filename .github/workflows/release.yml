@@ -164,7 +164,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4.37.6
+        uses: github/codeql-action/upload-sarif@v4.37.7
         if: always()
         with:
           sarif_file: trivy-results.sarif
@@ -248,7 +248,7 @@ jobs:
         run: cat /tmp/point-native.log || true
 
       - name: Upload tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tarballs
           path: dist/
@@ -272,7 +272,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: tarballs
           path: dist

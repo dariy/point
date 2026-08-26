@@ -138,9 +138,9 @@ func posterFromForm(c echo.Context) ([]byte, error) {
 // thumbnail. It backfills videos that arrived without one — anything uploaded
 // before posters existed, or ingested over the API/MCP rather than the admin UI.
 func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := parseIDParam(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+		return err
 	}
 
 	poster, err := posterFromForm(c)

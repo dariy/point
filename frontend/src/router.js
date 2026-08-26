@@ -29,10 +29,11 @@
  */
 
 import { store } from "./store.js";
+import { setPageTitle } from "./utils/documentTitle.js";
 
 class Router {
   constructor() {
-    /** @type {Array<{ path: string, load: Function, public?: boolean }>} */
+    /** @type {Array<{ path: string, load: Function, public?: boolean, title?: string }>} */
     this._routes = [];
     /** @type {HTMLElement|null} */
     this._mountPoint = null;
@@ -44,7 +45,7 @@ class Router {
     this._setupPath = "/setup";
     /** @type {import('./components/Component.js').Component|null} */
     this._currentPage = null;
-    /** @type {{ path: string, load: Function, public?: boolean }|null} */
+    /** @type {{ path: string, load: Function, public?: boolean, title?: string }|null} */
     this._currentRoute = null;
 
     this._onPopState = this._onPopState.bind(this);
@@ -57,7 +58,7 @@ class Router {
   /**
    * Initialise the router and render the current URL.
    *
-   * @param {Array<{ path: string, load: Function, public?: boolean }>} routes
+   * @param {Array<{ path: string, load: Function, public?: boolean, title?: string }>} routes
    * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string }} opts
    */
   init(
@@ -345,6 +346,16 @@ class Router {
       this._currentRoute = null;
     }
 
+    // A page is being replaced, so the title the outgoing one set is now stale.
+    // Reset it here — the one funnel every navigation passes through, including
+    // back/forward — rather than asking fifteen pages to remember. Routes with a
+    // fixed name declare it in the table (see app.js); routes whose name depends
+    // on loaded data (a post, a tag, a search query) declare nothing and call
+    // setPageTitle() themselves once the fetch resolves, which lands after this.
+    // Deliberately *not* on the same-route path above: there the page instance
+    // survives and owns its own title across an in-place refresh.
+    setPageTitle(matchedRoute.title);
+
     store.set("route", { pathname, params, query });
 
     try {
@@ -375,6 +386,7 @@ class Router {
    * @param {string} body
    */
   _showFallback(heading, body) {
+    setPageTitle(heading === "404" ? "Page not found" : heading);
     if (this._currentPage) {
       this._currentPage.unmount();
       this._currentPage = null;

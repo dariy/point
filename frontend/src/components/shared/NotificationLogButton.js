@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 /**
  * NotificationLogButton — floating action button for the notification log.
  *
@@ -12,26 +14,27 @@
  */
 
 import { Component } from '../Component.js';
-import { store }     from '../../store.js';
-import { Modal }     from './Modal.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { store } from '../../store.js';
+import { Modal } from './Modal.js';
+
 import { getRecentEntries } from '../../utils/notificationLog.js';
-
-const TYPE_LABELS = { success: '✓', error: '✕', warning: '!', info: 'i' };
-
+const TYPE_LABELS = {
+  success: '✓',
+  error: '✕',
+  warning: '!',
+  info: 'i'
+};
 export class NotificationLogButton extends Component {
   constructor() {
     const container = document.createElement('div');
     container.className = 'notification-log-fab';
     document.body.appendChild(container);
-
     super(container, {});
-    this._isOpen        = false;
-    this._activeModal   = null;
-    this._modalEl       = null;
-    this._pruneTimer    = null;
+    this._isOpen = false;
+    this._activeModal = null;
+    this._modalEl = null;
+    this._pruneTimer = null;
   }
-
   render() {
     // Bell icon (inline SVG — no external dependency).
     return `
@@ -44,17 +47,14 @@ export class NotificationLogButton extends Component {
         </svg>
       </button>`;
   }
-
   afterRender() {
     this.$('.notification-log-btn')?.addEventListener('click', () => this._openModal());
-
-    this.subscribeStore(store, 'toast_log', (entries) => {
+    this.subscribeStore(store, 'toast_log', entries => {
       this._updateVisibility(entries, store.get('route'));
       this._schedulePruneTimer(entries);
       if (this._isOpen) this._refreshModalContent();
     });
-
-    this.subscribeStore(store, 'route', (route) => {
+    this.subscribeStore(store, 'route', route => {
       this._updateVisibility(store.get('toast_log'), route);
     });
 
@@ -62,7 +62,6 @@ export class NotificationLogButton extends Component {
     this._updateVisibility(store.get('toast_log'), store.get('route'));
     this._schedulePruneTimer(store.get('toast_log'));
   }
-
   beforeUnmount() {
     if (this._pruneTimer) clearTimeout(this._pruneTimer);
     this._closeModal();
@@ -71,9 +70,8 @@ export class NotificationLogButton extends Component {
   // ── Visibility ────────────────────────────────────────────────────────────
 
   _updateVisibility(entries, route) {
-    const isAdmin   = route?.pathname?.startsWith('/light');
+    const isAdmin = route?.pathname?.startsWith('/light');
     const hasRecent = Array.isArray(entries) && entries.length > 0;
-
     if (isAdmin && hasRecent) {
       this.container.classList.add('active');
     } else {
@@ -89,10 +87,8 @@ export class NotificationLogButton extends Component {
   _schedulePruneTimer(entries) {
     if (this._pruneTimer) clearTimeout(this._pruneTimer);
     if (!entries || entries.length === 0) return;
-
     const expiresIn = entries[0].timestamp + 10 * 60 * 1000 - Date.now();
     if (expiresIn <= 0) return;
-
     this._pruneTimer = setTimeout(() => {
       store.set('toast_log', getRecentEntries());
     }, expiresIn + 100); // small buffer to ensure _prune runs after expiry
@@ -103,24 +99,19 @@ export class NotificationLogButton extends Component {
   _openModal() {
     if (this._isOpen) return;
     this._isOpen = true;
-
     this._modalEl = document.createElement('div');
     document.body.appendChild(this._modalEl);
-
     this._activeModal = new Modal(this._modalEl, {
-      title:    'Notification History',
+      title: 'Notification History',
       maxWidth: '540px',
-      onClose:  () => this._closeModal(),
+      onClose: () => this._closeModal()
     });
     this._activeModal.mount();
-
     this._refreshModalContent();
   }
-
   _closeModal() {
     if (!this._isOpen) return;
     this._isOpen = false;
-
     if (this._activeModal) {
       this._activeModal.unmount();
       this._activeModal = null;
@@ -130,21 +121,17 @@ export class NotificationLogButton extends Component {
       this._modalEl = null;
     }
   }
-
   _refreshModalContent() {
     if (!this._activeModal) return;
     const bodyMount = this._activeModal.getBodyMount();
     if (!bodyMount) return;
-
     const entries = store.get('toast_log') ?? [];
-    bodyMount.innerHTML = entries.length === 0
-      ? `<p class="notification-log-empty">No recent notifications.</p>`
-      : `<ul class="notification-log-list">${[...entries].reverse().map((e) => {
-          const safeType = TYPE_LABELS[e.type] ? e.type : 'info';
-          return `<li class="notification-log-item notification-log-item-${safeType}">
+    bodyMount.innerHTML = html`${raw(entries.length === 0 ? `<p class="notification-log-empty">No recent notifications.</p>` : `<ul class="notification-log-list">${[...entries].reverse().map(e => {
+      const safeType = TYPE_LABELS[e.type] ? e.type : 'info';
+      return `<li class="notification-log-item notification-log-item-${safeType}">
             <span class="notification-log-icon" aria-hidden="true">${TYPE_LABELS[safeType]}</span>
-            <span class="notification-log-message">${escapeHtml(e.message)}</span>
+            <span class="notification-log-message">${e.message}</span>
           </li>`;
-        }).join('')}</ul>`;
+    }).join('')}</ul>`)}`;
   }
 }

@@ -10,7 +10,7 @@
  *   edges:  hierarchy (tag→tag parent/child) | membership (post→tag)
  */
 
-import { tagKind } from '../../utils/tags.js';
+import { tagKind } from '../../utils/tagLinks.js';
 
 // Deterministic PRNG so the initial layout is stable across reloads.
 function mulberry32(seed) {

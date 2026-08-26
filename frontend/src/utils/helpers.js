@@ -42,7 +42,7 @@ export function linkify(text) {
     const t = trim.exec(raw);
     if (t) { tail = raw.slice(t.index); raw = raw.slice(0, t.index); }
     const href = raw.startsWith('http') ? raw : `https://${raw}`;
-    out += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(raw)}</a>${escapeHtml(tail)}`;
+    out += html`<a href="${href}" target="_blank" rel="noopener noreferrer">${raw}</a>${tail}`.toString();
     last = m.index + m[0].length;
   }
   out += escapeHtml(str.slice(last));
@@ -58,8 +58,15 @@ export function linkify(text) {
  */
 export function safeUrl(url) {
   if (!url) return '#';
-  if (url.startsWith('/') || url.startsWith('https://') || url.startsWith('http://')) {
-    return url;
+  // Strip control characters and leading/trailing whitespace
+  // eslint-disable-next-line no-control-regex
+  const str = String(url).replace(/^[\s\u0000-\u001F\u007F-\u009F]+|[\s\u0000-\u001F\u007F-\u009F]+$/g, '');
+  if (
+    (str.startsWith('/') && !str.startsWith('//')) ||
+    str.startsWith('https://') ||
+    str.startsWith('http://')
+  ) {
+    return escapeHtml(str);
   }
   return '#';
 }
@@ -164,7 +171,7 @@ export function dropBrokenImages(root) {
   root.addEventListener(
     'error',
     (e) => {
-      if (e.target instanceof HTMLImageElement) e.target.remove();
+      if (e.target.tagName === 'IMG') e.target.remove();
     },
     true,
   );
@@ -288,4 +295,50 @@ export function setupLongPress(el, callback, duration = 400) {
     el.removeEventListener('touchend', cancel);
     el.removeEventListener('touchmove', cancel);
   };
+}
+
+class RawHtml extends String {}
+
+/**
+ * Wrap a string so the html tag leaves it unescaped.
+ *
+ * @param {string} str
+ * @returns {RawHtml}
+ */
+export function raw(str) {
+  if (str instanceof RawHtml) return str;
+  return new RawHtml(str);
+}
+
+function processValue(val, isUrl) {
+  if (Array.isArray(val)) {
+    return val.map(v => processValue(v, isUrl)).join('');
+  }
+  if (val instanceof RawHtml) {
+    return val.toString();
+  }
+  if (val === null || val === undefined) {
+    return '';
+  }
+  return isUrl ? safeUrl(val) : escapeHtml(val);
+}
+
+/**
+ * Template literal tag for safely building HTML strings.
+ * Escapes interpolations by default. Applies safeUrl() instead of escapeHtml()
+ * if the interpolation lands in a URL attribute.
+ *
+ * @param {TemplateStringsArray} strings
+ * @param {...any} values
+ * @returns {RawHtml}
+ */
+export function html(strings, ...values) {
+  let out = strings[0];
+  for (let i = 0; i < values.length; i++) {
+    const prev = strings[i];
+    const isUrl = /(?:href|src|formaction|xlink:href)="$/i.test(prev);
+    out += processValue(values[i], isUrl);
+    out += strings[i + 1];
+  }
+  return new RawHtml(out);
 }

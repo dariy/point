@@ -13,6 +13,7 @@ import { PostContent, shouldUseImmersive } from '../../components/public/PostCon
 import { previewPost } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { setPageTitle } from '../../utils/documentTitle.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 
 export default class PreviewPage extends Component {
@@ -104,7 +105,7 @@ export default class PreviewPage extends Component {
     }
     try {
       const post = await previewPost(token);
-      document.title = `Preview: ${post.title}`;
+      setPageTitle(`Preview: ${post.title}`);
 
       // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
       const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);

@@ -7,6 +7,7 @@ import (
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
+	"point-api/internal/services/pageview"
 )
 
 func TestNullFloat64(t *testing.T) {
@@ -132,25 +133,25 @@ func TestTagLocationsResponse(t *testing.T) {
 func TestExtractMediaURL(t *testing.T) {
 	// thumbnail takes priority
 	thumb := sql.NullString{String: "/thumbs/photo.jpg", Valid: true}
-	p := extractMediaURL(thumb, "<video src='/vid.mp4'>")
+	p := pageview.ExtractMediaURL(thumb, "<video src='/vid.mp4'>")
 	if p == nil || *p != "/thumbs/photo.jpg" {
 		t.Errorf("expected thumbnail path, got %v", p)
 	}
 
 	// video src when no thumbnail
-	p = extractMediaURL(sql.NullString{Valid: false}, `<video src="/media/vid.mp4"></video>`)
+	p = pageview.ExtractMediaURL(sql.NullString{Valid: false}, `<video src="/media/vid.mp4"></video>`)
 	if p == nil || *p != "/media/vid.mp4" {
 		t.Errorf("expected video src, got %v", p)
 	}
 
 	// bare media path
-	p = extractMediaURL(sql.NullString{Valid: false}, "/2026/01/audio.mp3")
+	p = pageview.ExtractMediaURL(sql.NullString{Valid: false}, "/2026/01/audio.mp3")
 	if p == nil || *p != "/2026/01/audio.mp3" {
 		t.Errorf("expected bare path, got %v", p)
 	}
 
 	// no media
-	p = extractMediaURL(sql.NullString{Valid: false}, "just text")
+	p = pageview.ExtractMediaURL(sql.NullString{Valid: false}, "just text")
 	if p != nil {
 		t.Errorf("expected nil, got %v", p)
 	}
@@ -319,12 +320,12 @@ func TestNullInt64Coverage(t *testing.T) {
 func TestGetSettingOr(t *testing.T) {
 	settings := map[string]string{"key1": "val1"}
 
-	got := getSettingOr(settings, "key1", "default")
+	got := pageview.SettingOr(settings, "key1", "default")
 	if got != "val1" {
 		t.Errorf("expected 'val1', got %s", got)
 	}
 
-	got = getSettingOr(settings, "missing", "fallback")
+	got = pageview.SettingOr(settings, "missing", "fallback")
 	if got != "fallback" {
 		t.Errorf("expected 'fallback', got %s", got)
 	}

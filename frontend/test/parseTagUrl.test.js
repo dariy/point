@@ -13,7 +13,7 @@ describe('parseTagUrl', () => {
 
   before(async () => {
     globalThis.window = { location: { origin: 'https://example.com' } };
-    ({ parseTagUrl, tagHref } = await import('../src/utils/tags.js'));
+    ({ parseTagUrl, tagHref } = await import('../src/utils/tagLinks.js'));
   });
 
   test('splits the ancestor trail out of the slug', () => {

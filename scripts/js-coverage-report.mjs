@@ -19,8 +19,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const LINE_FLOOR = 44; // % of lines, across files the tests actually reach
-const UNREACHED_MAX = 58; // src files no test imports at all
+const LINE_FLOOR = 65; // % of lines, across files the tests actually reach
+const UNREACHED_MAX = 40; // src files no test imports at all
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC_DIR = join(ROOT, "frontend", "src");

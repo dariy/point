@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 )
@@ -54,12 +55,15 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Fatalf("AddPostViewCount: %v", err)
 		}
 
+		// status must be 'scheduled' for the bulk publisher to see the row —
+		// a past scheduled_at alone is not enough.
 		past := time.Now().Add(-time.Minute).UTC()
 		_, err = q.UpdatePost(ctx, UpdatePostParams{
 			ID:          p.ID,
 			AuthorID:    u.ID,
 			Title:       "Sched",
 			Slug:        "sched",
+			Status:      "scheduled",
 			ScheduledAt: sql.NullTime{Time: past, Valid: true},
 		})
 		if err != nil {
@@ -70,7 +74,41 @@ func TestQueries_MissingCoverage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("BulkPublishScheduledPosts: %v", err)
 		}
-		_ = published
+		if len(published) != 1 {
+			t.Fatalf("expected 1 published post, got %d", len(published))
+		}
+		if published[0].ID != p.ID {
+			t.Errorf("published post id = %d, want %d", published[0].ID, p.ID)
+		}
+		if published[0].Status != "published" {
+			t.Errorf("published post status = %q, want %q", published[0].Status, "published")
+		}
+		if !published[0].PublishedAt.Valid {
+			t.Error("expected published_at to be set")
+		}
+		if published[0].ViewCount != 5 {
+			t.Errorf("view_count = %d, want 5 (AddPostViewCount)", published[0].ViewCount)
+		}
+	})
+
+	t.Run("UpdateUserEmail", func(t *testing.T) {
+		if err := q.UpdateUserEmail(ctx, UpdateUserEmailParams{ID: u.ID, Email: "moved@test.com"}); err != nil {
+			t.Fatalf("UpdateUserEmail: %v", err)
+		}
+		got, err := q.GetUserByEmail(ctx, "moved@test.com")
+		if err != nil {
+			t.Fatalf("GetUserByEmail after update: %v", err)
+		}
+		if got.ID != u.ID {
+			t.Errorf("GetUserByEmail returned user %d, want %d", got.ID, u.ID)
+		}
+		if _, err := q.GetUserByEmail(ctx, "owner@test.com"); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("old address still resolves: err = %v, want sql.ErrNoRows", err)
+		}
+		// Restore so later subtests keep seeing the original address.
+		if err := q.UpdateUserEmail(ctx, UpdateUserEmailParams{ID: u.ID, Email: "owner@test.com"}); err != nil {
+			t.Fatalf("UpdateUserEmail restore: %v", err)
+		}
 	})
 
 	t.Run("SoftDeletePost, CountTrashedPosts, ListTrashedPosts, RestorePost", func(t *testing.T) {
@@ -177,6 +215,13 @@ func TestQueries_MissingCoverage(t *testing.T) {
 	})
 
 	t.Run("Analytics and Views", func(t *testing.T) {
+		// Subtests share one database, so measure the delta rather than an
+		// absolute total — earlier subtests publish posts with views of their own.
+		before, err := q.GetPostAnalytics(ctx)
+		if err != nil {
+			t.Fatalf("GetPostAnalytics baseline: %v", err)
+		}
+
 		p1, err := q.CreatePost(ctx, CreatePostParams{Title: "V1", Slug: "v1", AuthorID: u.ID, Status: "published"})
 		if err != nil {
 			t.Fatalf("CreatePost: %v", err)
@@ -199,26 +244,12 @@ func TestQueries_MissingCoverage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPostAnalytics: %v", err)
 		}
-		if stats.TotalViews != 30 {
-			t.Errorf("expected 30 total views, got %d", stats.TotalViews)
+		if got := stats.TotalViews - before.TotalViews; got != 30 {
+			t.Errorf("expected 30 added views, got %d", got)
 		}
 
-		posts, err := q.ListPostsByViews(ctx, ListPostsByViewsParams{
-			StatusFilter:   false,
-			IncludeDrafts:  true,
-			IncludeHidden:  false,
-			FeaturedFilter: false,
-			Limit:          10,
-			Offset:         0,
-		})
-		if err != nil {
-			t.Fatalf("ListPostsByViews: %v", err)
-		}
-		if len(posts) < 2 {
-			t.Errorf("expected at least 2 posts, got %d", len(posts))
-		}
-		if posts[0].ID != p2.ID {
-			t.Errorf("expected p2 to be first (most views), got %d", posts[0].ID)
-		}
+		// Ordering by view count is exercised in
+		// repository.TestRepository_ListPostsByViews: the repository owns that
+		// query, and the generated method this used to call never ran.
 	})
 }

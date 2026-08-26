@@ -22,7 +22,6 @@
     .tag-link, 
     .chip-label, 
     .tm-toggle, 
-    .tm-flag-toggle, 
     .tm-sortable-header, 
     .tm-view-toggle .btn, 
     .mb-folder-chip, 
@@ -59,11 +58,6 @@
     .media-item-name, 
     .media-item-preview--clickable, 
     .checkbox-label,
-    .tm-checkbox-label, 
-    .sort-link, 
-    .slug-link, 
-    .tag-count-link, 
-    .flag-item, 
     .suggestion-item, 
     .tag-toggle-btn, 
     .tm-section-toggle, 
@@ -88,7 +82,7 @@
     scale: 0.96;
 }
 
-/* Per-type tag pill accent. renderTagLink() (utils/tags.js) tags every pill
+/* Per-type tag pill accent. renderTagLink() (utils/tagLinks.js) tags every pill
    with a tag-kind-* class from tagKind(); each maps to a shared --tag-type-*
    token, exposed to the pill styles as --tag-accent. Plain tags fall back to
    the brand colour, so nothing changes for them. */

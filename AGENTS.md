@@ -36,6 +36,7 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
 | Regenerate SQL layer | `cd api && sqlc generate` <!-- verify:skip needs the sqlc binary, which is not part of the documented toolchain --> |
+| Check the SQL layer | `./scripts/check-sql-layer.sh` — no shadowed queries, generated models match `api/sql/` |
 | Release tarball | `./scripts/build-tarball.sh` — `dist/point-linux-{amd64,arm64}.tar.gz`, what `install.sh --method=native` downloads <!-- verify:skip cross-compiles both arches; the release workflow builds and boots it on every tag --> |
 
 `check.sh` also needs `golangci-lint` and `govulncheck` on your `PATH`; everything else in this
@@ -57,8 +58,17 @@ command you add cannot run unattended, mark it in the source with
   `asset-manifest.json` — edit the sources in `frontend/css/{light,common,public}/*.css`, then run
   `./scripts/build-css.sh`.
 - `frontend/js/`, `frontend/js-debug/` — edit `frontend/src/`, then `./scripts/build-js.sh`.
-- `api/internal/models/queries.sql.go` — edit `api/sql/queries.sql` (and `schema.sql` for DDL), then
-  `cd api && sqlc generate`. Config lives in `api/sqlc.yaml`.
+- `api/internal/models/queries.sql.go`, `models.go`, `querier.go`, `db.go` — edit
+  `api/sql/queries.sql` (and `schema.sql` for DDL), then `cd api && sqlc generate`. Config lives in
+  `api/sqlc.yaml`. `extra.go` in the same package is hand-written. Keep `queries.sql` ASCII: sqlc
+  expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
+
+**Do not add a query whose name is already a method on `*sqliteRepository`.** The repository embeds
+`*models.Queries`, and a hand-written method shadows the promoted one — the generated query
+compiles and never runs, with nothing to catch it. `scripts/check-sql-layer.sh` (part of
+`check.sh` and CI) fails on any such collision, and on generated files that no longer match the
+SQL. When the repository needs dynamic SQL sqlc cannot express, the query belongs only in
+`api/internal/repository/queries_*.go`, declared on the `Repository` interface in `db.go`.
 
 **Integration tests run by default.** They live in `*_integration_test.go` files carrying
 `//go:build !unit` and use a real in-memory SQLite. A plain `go test ./...` builds and runs them.
@@ -90,6 +100,7 @@ you need to reach the dev server from another device.
 | Serving media bytes / frontend assets | `api/cmd/api/media.go`, `api/cmd/api/assets.go`; cache headers for HTML and API responses in `api/cmd/api/cache.go` |
 | Request handling / validation | `api/internal/api/` |
 | Business logic | `api/internal/services/` |
+| A BFF page aggregate (`/api/pages/...`) | `api/internal/services/pageview/` composes the view; `api/internal/api/pages.go` renders it to JSON |
 | Database access | `api/internal/repository/` (hand-written) and `api/internal/models/` (sqlc-generated) |
 | The schema | `api/sql/schema.sql` + a migration in `api/internal/migrations/` |
 | Auth, sessions, API keys | `api/internal/api/middleware.go`, `api/internal/services/auth_service.go` |

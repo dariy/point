@@ -17,12 +17,8 @@ import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { store } from "../../store.js";
-import {
-  buildTagIndex,
-  parseTagUrl,
-  renderTagStrip,
-  setupTagStrip,
-} from "../../utils/tags.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
+import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
 const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
@@ -143,13 +139,30 @@ export class PostCard extends Component {
     // component, so they arrange the same thing by delegation — see
     // dropBrokenImages.)
     const poster = card.querySelector(".post-card-background img");
+    const mediaUrl = post.media_url || null;
+
     if (poster) {
-      poster.addEventListener("error", () => poster.remove(), { once: true });
+      poster.addEventListener("error", () => {
+        poster.remove();
+        // If a video has no poster frame, it 404s and leaves the card blank.
+        // To fix "unhovered state shows no preview", we fall back to a paused
+        // <video> element to display the first frame.
+        if (mediaUrl && VIDEO_RE.test(mediaUrl)) {
+          const bg = card.querySelector(".post-card-background");
+          if (bg) {
+            const v = document.createElement("video");
+            v.src = safeUrl(mediaUrl) + "#t=0.001";
+            v.muted = true;
+            v.playsInline = true;
+            v.preload = "metadata";
+            bg.appendChild(v);
+          }
+        }
+      }, { once: true });
     }
 
     // Hover-to-play is opt-in per site (post-list plugin setting). Off, a video
     // card stays a poster frame until the reader opens the post.
-    const mediaUrl = post.media_url || null;
     const hoverAutoplay = !!(store.get("settings") || {})
       .enable_video_hover_autoplay;
     if (hoverAutoplay && mediaUrl && VIDEO_RE.test(mediaUrl)) {

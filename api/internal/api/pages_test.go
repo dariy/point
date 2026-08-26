@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -361,15 +364,10 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 		t.Fatalf("tag creation failed: %v", err)
 	}
 
-	// An image post co-tagged with "food", plus 11 more text posts on the place —
-	// 12 in total, so the 10-cap drops the oldest two.
-	if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
-		Title: "Photo", Status: "published", AuthorID: userID,
-		ThumbnailPath: "/media/originals/photo.jpg",
-		Tags:          []string{place.Name, "food"},
-	}); err != nil {
-		t.Fatalf("image post creation failed: %v", err)
-	}
+	// Eleven text posts on the place, then an image post co-tagged with "food"
+	// — 12 in total, so the 10-cap drops the oldest two. Every post here lands
+	// in the same second, so it is the id tiebreak in the sort that decides
+	// which is "newest"; the image post is created last to be that one.
 	for i := 0; i < 11; i++ {
 		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
 			Title: fmt.Sprintf("Post %d", i), Status: "published", AuthorID: userID,
@@ -377,6 +375,13 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("post %d creation failed: %v", i, err)
 		}
+	}
+	if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Photo", Status: "published", AuthorID: userID,
+		ThumbnailPath: "/media/originals/photo.jpg",
+		Tags:          []string{place.Name, "food"},
+	}); err != nil {
+		t.Fatalf("image post creation failed: %v", err)
 	}
 
 	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "true", "string")
@@ -747,7 +752,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	}
 
 	// Case 1: post carries only botany → nature is added as an inherited ancestor.
-	got := ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got := ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {{ID: botany.ID, Name: botany.Name, Slug: botany.Slug}},
 	}, true)
 	m := byID(got[1])
@@ -761,7 +766,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	// Case 2: post carries BOTH botany and its parent nature → nature is the
 	// post's own tag, so it must stay non-inherited even though the walk from
 	// botany also reaches it (Pass 1 claims it before Pass 2 runs).
-	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got = ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {
 			{ID: botany.ID, Name: botany.Name, Slug: botany.Slug},
 			{ID: nature.ID, Name: nature.Name, Slug: nature.Slug},
@@ -774,7 +779,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 
 	// Case 3: publicOnly drops a hidden ancestor. Post carries visible, whose
 	// only parent hush is hidden → hush is not surfaced.
-	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got = ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {{ID: visible.ID, Name: visible.Name, Slug: visible.Slug}},
 	}, true)
 	m = byID(got[1])
@@ -786,7 +791,7 @@ func TestPagesHandler_ExpandPostTagsWithAncestors(t *testing.T) {
 	}
 
 	// Case 4: with publicOnly=false the hidden ancestor is included and inherited.
-	got = ph.expandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
+	got = ph.pages.ExpandPostTagsWithAncestors(ctx, map[int64][]repository.PostTagInfo{
 		1: {{ID: visible.ID, Name: visible.Name, Slug: visible.Slug}},
 	}, false)
 	m = byID(got[1])
@@ -1283,5 +1288,98 @@ func TestPagesHandler_GetTagCloud_HiddenMarking(t *testing.T) {
 	}
 	if _, ok := guestPosts["Published"]["status"]; ok {
 		t.Error("guest cloud must never carry status")
+	}
+}
+
+// TestPagesHandler_PathScopedTagPageCaches covers the cache key composition for
+// the two hot public reads. The tag-page key mixes in the breadcrumb `path`
+// chain, which contains separators; embedded raw, that key was rejected by
+// CacheService and every path-scoped tag page re-rendered from scratch — with
+// both the Get and the Set error discarded, so nothing surfaced it.
+//
+// The assertion is deliberately end-to-end: fire the request, then overwrite
+// whatever file landed in the cache directory with a sentinel and fire again.
+// A second response carrying the sentinel proves Set and Get agreed on a key
+// the cache actually accepts.
+func TestPagesHandler_PathScopedTagPageCaches(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	cacheDir := filepath.Join(h.cfg.StoragePath, "cache")
+
+	location, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Location", Slug: "location", InBreadcrumbs: true})
+	ukraine, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Ukraine", Slug: "ukraine", InBreadcrumbs: true, ParentIDs: []int64{location.ID}})
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Kyiv", Slug: "kyiv", ParentIDs: []int64{ukraine.ID}})
+
+	// cachedFile returns the single file the cache directory holds, failing if
+	// the handler wrote none (the bug) or more than one.
+	cachedFile := func(t *testing.T) string {
+		t.Helper()
+		entries, err := os.ReadDir(cacheDir)
+		if err != nil {
+			t.Fatalf("read cache dir: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("expected exactly 1 cache entry, got %d", len(entries))
+		}
+		return filepath.Join(cacheDir, entries[0].Name())
+	}
+
+	get := func(t *testing.T, target string, params ...string) *httptest.ResponseRecorder {
+		t.Helper()
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if len(params) == 2 {
+			c.SetParamNames(params[0])
+			c.SetParamValues(params[1])
+		}
+		if err := ph.GetTagPage(c); err != nil {
+			t.Fatalf("GetTagPage failed: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rec.Code)
+		}
+		return rec
+	}
+
+	const target = "/tags/kyiv?path=location/ukraine"
+	get(t, target, "slug", "kyiv")
+
+	const sentinel = `{"served":"from-cache"}`
+	if err := os.WriteFile(cachedFile(t), []byte(sentinel), 0644); err != nil {
+		t.Fatalf("overwrite cache entry: %v", err)
+	}
+
+	if body := get(t, target, "slug", "kyiv").Body.String(); body != sentinel {
+		t.Errorf("second request was not served from cache: got %s", body)
+	}
+}
+
+// TestPagesHandler_HomePageCaches is the homepage half of the same key
+// composition — no user input in this key, but it is hashed alongside the tag
+// key and must keep round-tripping.
+func TestPagesHandler_HomePageCaches(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/posts", nil)
+	rec := httptest.NewRecorder()
+	if err := ph.GetHomePage(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetHomePage failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(h.cfg.StoragePath, "cache"))
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected exactly 1 cache entry, got %d", len(entries))
+	}
+	if !strings.HasPrefix(entries[0].Name(), "homepage_") || !strings.HasSuffix(entries[0].Name(), ".json") {
+		t.Errorf("unexpected cache filename %q", entries[0].Name())
 	}
 }

@@ -1,3 +1,5 @@
+import { raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 /**
  * AdminLayout — shared layout helpers for all /light pages.
  *
@@ -11,7 +13,7 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import { store } from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
-import { navigate, escapeHtml } from "../../utils/helpers.js";
+import { navigate } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
 /**
@@ -23,12 +25,11 @@ export function adminLayoutTemplate({
   actions = "",
   banner = "",
   content = "",
-  contentClass = "",
+  contentClass = ""
 }) {
   const offline = store.get("offline_status") || {};
   const autosave = store.get("autosave_status") || {};
   const syncPill = renderSyncPill(offline, autosave);
-
   return `
     <div class="light-layout">
       <div id="sidebar-mount"></div>
@@ -55,10 +56,11 @@ export function adminLayoutTemplate({
  * Shared behavior for admin pages.
  * To be used inside component.afterRender().
  */
-export function setupAdminLayout(component, { currentPath, publicUrl }) {
-  component._cleanupHeaderCompact = setupHeaderCompact(
-    component.$(".light-header"),
-  );
+export function setupAdminLayout(component, {
+  currentPath,
+  publicUrl
+}) {
+  component._cleanupHeaderCompact = setupHeaderCompact(component.$(".light-header"));
 
   // Public-site link — icon button pinned to the right edge of the header
   // actions. Deliberately a plain in-app link: the public site and the admin
@@ -69,15 +71,13 @@ export function setupAdminLayout(component, { currentPath, publicUrl }) {
   // visitor then looked at.
   const headerActions = component.$(".header-actions");
   if (headerActions) {
-    headerActions.insertAdjacentHTML(
-      "beforeend",
-      `<a href="${escapeHtml(publicUrl || "/")}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${EXTERNAL_LINK_SVG}</a>`,
-    );
+    headerActions.insertAdjacentHTML("beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${raw(EXTERNAL_LINK_SVG)}</a>`);
   }
-
   const onLogout = async () => {
     try {
-      const { logout } = await import("../../api/auth.js");
+      const {
+        logout
+      } = await import("../../api/auth.js");
       await logout();
     } catch {
       /* ignore */
@@ -88,45 +88,31 @@ export function setupAdminLayout(component, { currentPath, publicUrl }) {
     // public-footer logout.
     window.location.assign("/");
   };
-
   component.mountChild(LightSidebar, "#sidebar-mount", {
     currentPath,
     publicUrl,
     user: store.get("user") || {},
-    onLogout,
+    onLogout
   });
-
   component.mountChild(AdminBottomBar, "#bottom-bar-mount", {
     currentPath,
     publicUrl,
-    onLogout,
+    onLogout
   });
-
   component.mountChild(CommandPalette, "#command-palette-mount");
   component.mountChild(ShortcutHelp, "#shortcut-help-mount");
-
-  component
-    .$("#sync-pill-btn")
-    ?.addEventListener("click", () => onSyncPillClick());
-
-  const unsubOffline = store.subscribe("offline_status", () =>
-    updateSyncPill(component),
-  );
-  const unsubAutosave = store.subscribe("autosave_status", () =>
-    updateSyncPill(component),
-  );
-
+  component.$("#sync-pill-btn")?.addEventListener("click", () => onSyncPillClick());
+  const unsubOffline = store.subscribe("offline_status", () => updateSyncPill(component));
+  const unsubAutosave = store.subscribe("autosave_status", () => updateSyncPill(component));
   return () => {
     unsubOffline();
     unsubAutosave();
     component._cleanupHeaderCompact?.();
   };
 }
-
 function renderSyncPill(offline, autosave = {}) {
   let text = "";
   let cls = "sync-pill";
-
   if (autosave.status === "saving") {
     text = "Saving…";
     cls += " syncing";
@@ -152,14 +138,11 @@ function renderSyncPill(offline, autosave = {}) {
   } else {
     return "";
   }
-
   return `<button class="${cls}" id="sync-pill-btn" type="button">${text}</button>`;
 }
-
 function onSyncPillClick() {
   const offline = store.get("offline_status") || {};
   const autosave = store.get("autosave_status") || {};
-
   if (autosave.status === "failed") {
     window.dispatchEvent(new CustomEvent("autosave:retry"));
   } else if (offline.failed) {
@@ -168,21 +151,16 @@ function onSyncPillClick() {
     syncQueue();
   }
 }
-
 function updateSyncPill(component) {
   const offline = store.get("offline_status") || {};
   const autosave = store.get("autosave_status") || {};
   const newPill = renderSyncPill(offline, autosave);
   const titleRow = component.$(".header-title-row");
   if (!titleRow) return;
-
   const existing = component.$(".sync-pill");
   if (existing) existing.remove();
-
   if (newPill) {
-    titleRow.insertAdjacentHTML("beforeend", newPill);
-    component
-      .$("#sync-pill-btn")
-      ?.addEventListener("click", () => onSyncPillClick());
+    titleRow.insertAdjacentHTML("beforeend", html`${raw(newPill)}`);
+    component.$("#sync-pill-btn")?.addEventListener("click", () => onSyncPillClick());
   }
 }
