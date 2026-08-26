@@ -39,6 +39,7 @@ import {
   TILE_LIGHT,
   TILE_DARK,
   TILE_ATTR,
+  TILE_MAX_NATIVE_ZOOM,
   loadLeaflet,
 } from "../../utils/leaflet.js";
 
@@ -445,6 +446,7 @@ export default class AtlasPage extends Component {
     this._tileLayer = L.tileLayer(isDarkTheme() ? TILE_DARK : TILE_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 18,
+      maxNativeZoom: TILE_MAX_NATIVE_ZOOM,
       noWrap: true,
       bounds: [
         [-90, -180],
