@@ -137,18 +137,18 @@ export class NavMenu {
 
     // Inline links + More shell + tags icon.
     this.navItemsEl.innerHTML = html`
-      ${this._inline.map((it, i) => `
+      ${this._inline.map((it, i) => html`
         <a href="${it.href || '#'}"
            class="nav-menu-link${isActive(it.href) ? ' active' : ''}${it.children.length ? ' has-children' : ''}"
-           data-nav-i="${i}">${it.name}</a>`).join('')}
+           data-nav-i="${i}">${it.name}</a>`)}
       <span class="nav-more is-empty">
         <button type="button" class="nav-menu-link nav-more-btn"
                 aria-haspopup="true" aria-expanded="false">${settings.nav_more_title || 'More'}<span class="nav-more-caret" aria-hidden="true">▾</span></button>
         <div class="nav-more-panel"></div>
       </span>
-      ${tagsVisible ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
+      ${tagsVisible ? html`<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
                   aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
-                 ${tagsMeta.icon}
+                 ${raw(tagsMeta.icon)}
                </a>` : ''}
     `;
     this._wireInline();
@@ -162,7 +162,7 @@ export class NavMenu {
 
     // Burger sitemap.
     this.burgerSitemapEl.innerHTML = html`
-      ${tagsVisible ? `<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
+      ${tagsVisible ? html`<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
       <a href="/light" class="burger-link">${user ? 'Admin' : 'About'}</a>
     `;
 
