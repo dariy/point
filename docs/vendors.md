@@ -14,7 +14,7 @@ and reviewable, in `frontend/vendor/`:
 
 | Library | Version | Used for |
 |---|---|---|
-| [Leaflet](https://leafletjs.com) | 1.9.4 | Interactive maps — geo-tagged posts, the Tags Map view (`frontend/src/plugins/tags-map/`). Tiles from CartoDB basemaps (`{s}.basemaps.cartocdn.com`). |
+| [Leaflet](https://leafletjs.com) | 1.9.4 | Interactive maps — geo-tagged posts, the Tags Map view (`frontend/src/plugins/tags-map/`). Tiles from Esri's Light/Dark Gray Canvas basemaps (`server.arcgisonline.com`), which need no API key. |
 | [Prism.js](https://prismjs.com) | core + per-language grammars | Syntax highlighting for fenced code blocks in rendered Markdown and in the post editor. |
 | [CodeJar](https://github.com/antonmedv/codejar) | vendored, unversioned | Minimal code-editing textarea (line editing, indent/outdent, bracket auto-close) backing the CSS editor and code blocks in the Markdown/Visual editor. |
 
@@ -76,7 +76,7 @@ the packages above.
 
 Point's default Content-Security-Policy is deliberately narrow. The only
 third-party origins allowed out of the box are:
-- `*.basemaps.cartocdn.com` (map tiles for Leaflet)
+- `server.arcgisonline.com` (Esri Gray Canvas map tiles for Leaflet)
 - `github.com` and `*.githubusercontent.com` (for GitHub avatars when using the Remark42 comments sidecar)
 
 Anything else — analytics, verification scripts — is
