@@ -196,7 +196,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// bootstrap script's hash is appended where index.html is served (see
 	// bootstrapScript).
 	scriptSrc := strings.Join(append([]string{"'self'"}, inlineScriptHashes(filepath.Join(cfg.FrontendDir, "index.html"))...), " ")
-	connectSrc := "'self' https://*.basemaps.cartocdn.com"
+	connectSrc := "'self' https://server.arcgisonline.com"
 	// Deployment-supplied extra CSP origins. They let an operator allow-list a
 	// script injected via HEAD_HTML (analytics, verification, …) without the
 	// open-source engine hardcoding any third-party domain. Empty by default, so
@@ -219,7 +219,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		// object-src does fall back to default-src, but 'none' is stated outright
 		// so the plugin surface stays closed even if default-src is ever widened;
 		// no <object>/<embed>/<applet> exists in the frontend.
-		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		// HSTS: instruct browsers to only reach this origin over HTTPS for a year,
 		// including subdomains. Echo only emits the header when the request is

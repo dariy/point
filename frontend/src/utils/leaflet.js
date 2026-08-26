@@ -5,12 +5,20 @@ export const CA_PROVINCES_GEOJSON =
   "/assets/vendor/leaflet/canada-provinces.geojson";
 export const US_STATES_GEOJSON = "/assets/vendor/leaflet/us-states.geojson";
 
-export const TILE_LIGHT =
-  "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-export const TILE_DARK =
-  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+// Esri's Light/Dark Gray Canvas basemaps: keyless, unwatermarked, and a matched
+// light/dark pair, so the theme swap below is a URL change and not a CSS filter.
+// (CARTO's basemaps served the same role until they began stamping keyless tiles
+// with "API KEY REQUIRED".) Note the ArcGIS path order is {z}/{y}/{x}, and there
+// are no {s} subdomains or {r} retina variants.
+const ESRI_CANVAS = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
+export const TILE_LIGHT = `${ESRI_CANVAS}/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
+export const TILE_DARK = `${ESRI_CANVAS}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
+// Gray Canvas has no tiles past z16 — above it the service returns a "map data
+// not available" placeholder. maxNativeZoom makes Leaflet upscale z16 instead,
+// so the maps keep zooming to 18 (blurrier, but continuous).
+export const TILE_MAX_NATIVE_ZOOM = 16;
 export const TILE_ATTR =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  'Tiles &copy; <a href="https://www.esri.com">Esri</a> &mdash; Esri, DeLorme, NAVTEQ';
 
 /** Load Leaflet once; return the L global. */
 export async function loadLeaflet() {

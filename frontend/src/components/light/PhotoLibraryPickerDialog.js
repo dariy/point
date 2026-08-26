@@ -258,7 +258,7 @@ export class PhotoLibraryPickerDialog extends Component {
           data-path="${file.path}" title="${file.name}">
           <img class="photo-library-thumb" src="${url}" alt="" loading="lazy" decoding="async">
           <span class="photo-library-item-label">${file.name}</span>
-          ${isSelected ? raw('<span class="photo-library-check" aria-hidden="true">✓</span>') : ''}
+          ${isSelected ? html`<span class="photo-library-check" aria-hidden="true">✓</span>` : ''}
         </button>`;
     })}</div>`;
   }
