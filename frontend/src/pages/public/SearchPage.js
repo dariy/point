@@ -431,12 +431,12 @@ export default class SearchPage extends Component {
   _renderTagResults() {
     const mount = this.$('#tag-results-mount');
     if (!mount) return;
-    const tagsHtml = this.state.tags.map(t => `
-      <a ${html`href="/tags/${t.slug}"`.toString()} class="search-tag-chip">
-        <span class="search-tag-chip-name">${escapeHtml(t.name)}</span>
+    const tagsHtml = this.state.tags.map(t => html`
+      <a href="/tags/${t.slug}" class="search-tag-chip">
+        <span class="search-tag-chip-name">${t.name}</span>
         <span class="search-tag-chip-count">${t.post_count}</span>
       </a>
-    `).join('');
+    `);
     // <h3 class="search-tag-results-title">Tags</h3>
     mount.innerHTML = html`
       <div class="search-tag-results">

@@ -369,9 +369,9 @@ export class MediaBrowser extends Component {
       <div class="media-item-actions">
         <a href="${m.path || ""}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
-        ${isImage ? `<button class="btn btn-sm create-post-btn"
-                data-id="${escapeHtml(String(m.id))}"
-                data-path="${escapeHtml(m.path || "")}" title="Create post with this image" aria-label="Create post with this image">${PLUS_SVG}</button>` : ""}
+        ${isImage ? html`<button class="btn btn-sm create-post-btn"
+                data-id="${String(m.id)}"
+                data-path="${m.path || ""}" title="Create post with this image" aria-label="Create post with this image">${raw(PLUS_SVG)}</button>` : ""}
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
                 data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${EDIT_SVG}</button>

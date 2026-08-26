@@ -564,10 +564,10 @@ export class Timeline extends Component {
       });
       if (this._unmounted || this.state.popover !== popoverEl) return;
       popoverEl.classList.remove("loading");
-      const yearItem = `
+      const yearItem = html`
         <li class="timeline-popover-year">
-          ${renderTagLink(pill)}
-          <span class="count">${escapeHtml(pill.post_count)}</span>
+          ${raw(renderTagLink(pill))}
+          <span class="count">${pill.post_count}</span>
         </li>
       `;
       if (locations.length === 0) {

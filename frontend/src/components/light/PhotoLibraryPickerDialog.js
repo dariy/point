@@ -253,14 +253,14 @@ export class PhotoLibraryPickerDialog extends Component {
     el.innerHTML = html`<div class="photo-library-grid">${files.map(file => {
       const isSelected = selected.has(file.path);
       const url = getPhotoLibraryFileUrl(file.path);
-      return `
+      return html`
         <button class="photo-library-item${isSelected ? ' selected' : ''}"
           data-path="${file.path}" title="${file.name}">
           <img class="photo-library-thumb" src="${url}" alt="" loading="lazy" decoding="async">
           <span class="photo-library-item-label">${file.name}</span>
-          ${isSelected ? '<span class="photo-library-check" aria-hidden="true">✓</span>' : ''}
+          ${isSelected ? html`<span class="photo-library-check" aria-hidden="true">✓</span>` : ''}
         </button>`;
-    }).join('')}</div>`;
+    })}</div>`;
   }
   _patchImportBtn(count, importing) {
     const btn = this.$('#plpd-import-btn');
