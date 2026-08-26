@@ -253,14 +253,14 @@ export class Slideshow {
     bar.className = 'slideshow-bar';
     bar.innerHTML = html`
       <div class="slideshow-stepper">
-        <button type="button" class="slideshow-bar-btn" data-step="-1" aria-label="Slower">${MINUS_SVG}</button>
+        <button type="button" class="slideshow-bar-btn" data-step="-1" aria-label="Slower">${raw(MINUS_SVG)}</button>
         <span class="slideshow-interval" aria-live="polite">${this.interval}s</span>
-        <button type="button" class="slideshow-bar-btn" data-step="1" aria-label="Faster">${PLUS_SVG}</button>
+        <button type="button" class="slideshow-bar-btn" data-step="1" aria-label="Faster">${raw(PLUS_SVG)}</button>
       </div>
       <button type="button" class="slideshow-bar-btn slideshow-loop${this.loop ? ' active' : ''}"
-              aria-label="Loop" aria-pressed="${this.loop}">${REPEAT_SVG}</button>
+              aria-label="Loop" aria-pressed="${this.loop}">${raw(REPEAT_SVG)}</button>
       <button type="button" class="slideshow-bar-btn slideshow-shuffle${this.shuffle ? ' active' : ''}"
-              aria-label="Shuffle" aria-pressed="${this.shuffle}">${SHUFFLE_SVG}</button>`;
+              aria-label="Shuffle" aria-pressed="${this.shuffle}">${raw(SHUFFLE_SVG)}</button>`;
     // Keep taps on the bar from reaching the viewer's close/hide handler.
     bar.addEventListener('click', e => e.stopPropagation());
     bar.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));

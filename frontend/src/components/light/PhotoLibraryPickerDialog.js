@@ -1,5 +1,5 @@
 
-import { html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 /**
  * PhotoLibraryPickerDialog — browse the external photo library and selectively
  * import photos into site media.

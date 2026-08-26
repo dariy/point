@@ -374,11 +374,11 @@ export class MediaBrowser extends Component {
                 data-path="${m.path || ""}" title="Create post with this image" aria-label="Create post with this image">${raw(PLUS_SVG)}</button>` : ""}
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${EDIT_SVG}</button>
+                data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${raw(EDIT_SVG)}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">${TRASH_SVG}</button>
-        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${INFO_SVG}</button>
+                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">${raw(TRASH_SVG)}</button>
+        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${raw(INFO_SVG)}</button>
 
       </div>`;
     return `
