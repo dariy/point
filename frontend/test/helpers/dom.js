@@ -109,7 +109,8 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   win.location = nav.location;
   win.history = nav.history;
 
-  const unpatch = combine(patchFormReflection(win), patchAbortSignal(win), patchTextSelection(win));
+  const unpatch = combine(patchFormReflection(win), patchAbortSignal(win), patchTextSelection(win),
+    patchSelectValue(win), patchLayoutGeometry(win));
 
   return {
     window: win,
@@ -304,6 +305,77 @@ function patchTextSelection(win) {
     undo.push(() => { delete proto.setSelectionRange; });
   }
   return () => undo.forEach(fn => fn());
+}
+
+/**
+ * Report zero for the layout metrics linkedom does not implement.
+ *
+ * The comment above about geometry reading as zeros was aspirational: linkedom
+ * defines none of these properties, so they read `undefined`, and `undefined`
+ * poisons arithmetic into NaN rather than producing a harmless zero. That is
+ * the difference between a self-correcting sizing pass deciding it has nothing
+ * to do and one that recomputes a NaN page size, reloads, and recomputes it
+ * again — an infinite loop inside a single test.
+ *
+ * They stay writable so a test that wants to simulate a real viewport can
+ * assign one and have the code under test read it back.
+ */
+function patchLayoutGeometry(win) {
+  const proto = win.HTMLElement?.prototype;
+  if (!proto) return () => {};
+  const METRICS = ['offsetTop', 'offsetLeft', 'offsetWidth', 'offsetHeight',
+    'clientTop', 'clientLeft', 'clientWidth', 'clientHeight',
+    'scrollWidth', 'scrollHeight'];
+  const undo = [];
+  for (const name of METRICS) {
+    if (Object.getOwnPropertyDescriptor(proto, name)) continue;
+    const KEY = Symbol(name);
+    Object.defineProperty(proto, name, {
+      configurable: true,
+      get() { return this[KEY] ?? 0; },
+      set(v) { this[KEY] = v; },
+    });
+    undo.push(() => { delete proto[name]; });
+  }
+  return () => undo.forEach(fn => fn());
+}
+
+/**
+ * Give <select> the `value` a browser gives it — readable AND writable.
+ *
+ * linkedom derives `select.value` from whichever option carries the `selected`
+ * attribute and offers no setter at all, so the two things pages do with a
+ * select both diverge: reading one nothing has touched yields `undefined` where
+ * a browser yields the first option's value, and `select.value = 'scheduled'`
+ * — the line behind every "set the status for me" action — throws
+ * `Cannot set property value` from strict-mode module code rather than
+ * selecting anything.
+ *
+ * The setter moves the `selected` attribute, which is what linkedom's `:checked`
+ * / `option.selected` and the FormData shim above already agree on, so a form
+ * read back after an assignment reports what a browser would submit.
+ */
+function patchSelectValue(win) {
+  const proto = win.HTMLSelectElement?.prototype;
+  const original = proto && Object.getOwnPropertyDescriptor(proto, 'value');
+  if (!original) return () => {};
+  Object.defineProperty(proto, 'value', {
+    configurable: true,
+    get() {
+      const current = original.get.call(this);
+      if (current !== undefined && current !== null) return current;
+      const first = this.querySelector('option');
+      return first ? (first.getAttribute('value') ?? first.textContent) : '';
+    },
+    set(v) {
+      for (const option of this.querySelectorAll('option')) {
+        const optionValue = option.getAttribute('value') ?? option.textContent;
+        if (optionValue === String(v)) option.setAttribute('selected', '');
+        else option.removeAttribute('selected');
+      }
+    },
+  });
+  return () => { Object.defineProperty(proto, 'value', original); };
 }
 
 function patchFormReflection(win) {

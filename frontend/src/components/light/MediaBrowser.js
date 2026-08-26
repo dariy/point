@@ -369,16 +369,16 @@ export class MediaBrowser extends Component {
       <div class="media-item-actions">
         <a href="${m.path || ""}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
-        ${isImage ? `<button class="btn btn-sm create-post-btn"
+        ${raw(isImage ? `<button class="btn btn-sm create-post-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-path="${escapeHtml(m.path || "")}" title="Create post with this image" aria-label="Create post with this image">${PLUS_SVG}</button>` : ""}
+                data-path="${escapeHtml(m.path || "")}" title="Create post with this image" aria-label="Create post with this image">${PLUS_SVG}</button>` : "")}
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${EDIT_SVG}</button>
+                data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${raw(EDIT_SVG)}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">${TRASH_SVG}</button>
-        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${INFO_SVG}</button>
+                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">${raw(TRASH_SVG)}</button>
+        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${raw(INFO_SVG)}</button>
 
       </div>`;
     return `
