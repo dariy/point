@@ -1,4 +1,4 @@
-import { html } from "./utils/helpers.js";
+import { html } from "../../frontend/src/utils/helpers.js";
 /**
  * Demo-only UI: an explanatory banner, a reset control, and a login hint.
  *
