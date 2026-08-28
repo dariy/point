@@ -217,6 +217,14 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+    /* The column above is 100dvh, so its bottom edge — and this footer with it —
+       moves by the full toolbar height every time a tablet toolbar collapses
+       under a scroll. --toolbar-drift is how much of the current height is that
+       reclaimed toolbar space (utils/toolbarDrift.js); spending it here pushes
+       the footer's content back to where it was and leaves the extra as dark
+       column below it. Unset on every browser without a collapsing toolbar,
+       which makes this a no-op there. */
+    padding-bottom: calc(var(--spacing-md) + var(--toolbar-drift, 0px));
 }
 
 .sidebar-version {
@@ -650,7 +658,12 @@ body {
     z-index: 200;
     background-color: var(--header-bg);
     border-top: var(--border-width) solid var(--header-border);
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    /* Same correction as .sidebar-footer, on top of the safe-area inset: fixed
+       bottom:0 is the dynamic viewport's bottom, so the bar's items ride a
+       collapsing toolbar unless the reclaimed space is padded back out. The
+       bar's own background still fills it, so no strip of page shows through. */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--toolbar-drift, 0px));
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 

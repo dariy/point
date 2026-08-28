@@ -13,6 +13,7 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import { store } from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
+import { setupToolbarDrift } from "../../utils/toolbarDrift.js";
 import { navigate } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
@@ -61,6 +62,9 @@ export function setupAdminLayout(component, {
   publicUrl
 }) {
   component._cleanupHeaderCompact = setupHeaderCompact(component.$(".light-header"));
+  // Keeps the sidebar footer and the mobile bottom bar from riding a tablet
+  // toolbar up and down the screen mid-scroll — see utils/toolbarDrift.js.
+  component._cleanupToolbarDrift = setupToolbarDrift();
 
   // Public-site link — icon button pinned to the right edge of the header
   // actions. Deliberately a plain in-app link: the public site and the admin
@@ -108,6 +112,7 @@ export function setupAdminLayout(component, {
     unsubOffline();
     unsubAutosave();
     component._cleanupHeaderCompact?.();
+    component._cleanupToolbarDrift?.();
   };
 }
 function renderSyncPill(offline, autosave = {}) {

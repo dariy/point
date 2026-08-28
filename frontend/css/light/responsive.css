@@ -23,7 +23,10 @@
     .light-main,
     .light-layout--collapsed .light-main {
         margin-left: 0;
-        padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0));
+        /* Clears the fixed .admin-bottom-bar, --toolbar-drift included: the bar
+           grows by that much when a tablet toolbar collapses, and content that
+           did not grow with it would end up underneath. */
+        padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + var(--toolbar-drift, 0px));
     }
 
     .light-header {
