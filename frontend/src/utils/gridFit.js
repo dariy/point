@@ -360,6 +360,55 @@ export function createFitLatch() {
 }
 
 /**
+ * How much of a height-only viewport change is browser furniture rather than a
+ * new viewport. iOS/iPadOS toolbars are ~44-90px and Android URL bars ~56-112px;
+ * 150 clears all of them with room for the ones that grow a tab strip, and is
+ * still far under the ~220px a row of cards occupies, so no genuine resize a
+ * reader performs lands inside the band without also changing the width.
+ */
+export const TOOLBAR_BAND_PX = 150;
+
+/**
+ * Tells a genuine viewport change from a browser-chrome transition.
+ *
+ * A `resize` on a desktop is something the reader did on purpose, so re-fitting
+ * per_page to it is right. On a tablet it is mostly a *side effect of
+ * scrolling*: collapsing or expanding the Safari toolbar changes the viewport
+ * height and fires `resize`, and re-fitting there refetches the grid and
+ * rebuilds it under the reader's finger — the footer walks away mid-scroll.
+ *
+ * What separates them is the width. Every genuine reason a tablet viewport
+ * changes — rotation, entering or leaving Split View or Slide Over, dragging
+ * the Split View divider — changes the width; a toolbar transition never does.
+ * So a resize is ignored only when the width is unchanged *and* the height
+ * moved by no more than TOOLBAR_BAND_PX.
+ *
+ * The baseline is the size of the last *accepted* resize, not the last one
+ * seen: a rejected event must not creep the reference, or a viewport that
+ * shrinks in several toolbar-sized steps would never be re-fitted at all.
+ *
+ * @returns {{accept: (width?: number, height?: number) => boolean}}
+ */
+export function createResizeGate(
+  width = window.innerWidth,
+  height = window.innerHeight,
+) {
+  let last = { width, height };
+  return {
+    /**
+     * @param {number} [w]  viewport width now (defaults to the window).
+     * @param {number} [h]  viewport height now.
+     * @returns {boolean} true when the change deserves a re-fit.
+     */
+    accept(w = window.innerWidth, h = window.innerHeight) {
+      if (w === last.width && Math.abs(h - last.height) <= TOOLBAR_BAND_PX) return false;
+      last = { width: w, height: h };
+      return true;
+    },
+  };
+}
+
+/**
  * Resolve a CSS length expression (possibly nested var(), rem, calc, …) to
  * pixels by letting the browser compute it on a throwaway probe element.
  * @param {string} expr  e.g. 'var(--spacing-xl)'

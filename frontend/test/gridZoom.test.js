@@ -33,6 +33,7 @@ globalThis.document = {
 
 const {
   getZoom, setZoom, clampZoom, maxZoomCols, createFitLatch,
+  createResizeGate, TOOLBAR_BAND_PX,
   applyZoomVar, applyRowsVar, zoomCapacity,
   cardImageSizes, applyCardImageSizes,
 } = await import('../src/utils/gridFit.js');
@@ -143,6 +144,64 @@ describe('fit latch', () => {
     assert.equal(latch.accept(2, 4), null);
     latch.reset();
     assert.equal(latch.accept(2, 4), 4);    // new viewport, new decision
+  });
+});
+
+describe('resize gate', () => {
+  // iPad portrait; the toolbar transition that fires resize while scrolling is
+  // ~90px of height and no width at all.
+  const PAD = { w: 834, h: 1194 };
+
+  test('ignores a chrome-sized height change at the same width', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    assert.equal(gate.accept(PAD.w, PAD.h - 90), false); // toolbar collapsed
+    assert.equal(gate.accept(PAD.w, PAD.h), false);      // and back again
+  });
+
+  test('accepts a height change larger than the band', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    assert.equal(gate.accept(PAD.w, PAD.h - 400), true); // a real resize
+  });
+
+  test('accepts any width change, however small the height moved', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    // Split View divider: width moves, height barely.
+    assert.equal(gate.accept(PAD.w - 320, PAD.h - 10), true);
+  });
+
+  test('rotation is accepted', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    assert.equal(gate.accept(PAD.h, PAD.w), true);       // 834x1194 → 1194x834
+  });
+
+  test('the band is inclusive at its edge', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    assert.equal(gate.accept(PAD.w, PAD.h - TOOLBAR_BAND_PX), false);
+    assert.equal(gate.accept(PAD.w, PAD.h - TOOLBAR_BAND_PX - 1), true);
+  });
+
+  test('a rejected resize does not creep the baseline', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    // Three toolbar-sized steps in the same direction still measure against the
+    // height the last accepted fit ran at, so the third one is a real change.
+    assert.equal(gate.accept(PAD.w, PAD.h - 90), false);
+    assert.equal(gate.accept(PAD.w, PAD.h - 140), false);
+    assert.equal(gate.accept(PAD.w, PAD.h - 200), true);
+  });
+
+  test('an accepted resize becomes the new baseline', () => {
+    const gate = createResizeGate(PAD.w, PAD.h);
+    assert.equal(gate.accept(PAD.h, PAD.w), true);       // rotated
+    assert.equal(gate.accept(PAD.h, PAD.w - 90), false); // toolbar, landscape
+  });
+
+  test('defaults to the live window when called with no arguments', () => {
+    const gate = createResizeGate();                     // seeded at 1200x800
+    window.innerHeight = 800 - 90;
+    assert.equal(gate.accept(), false);
+    window.innerHeight = 800 - 300;
+    assert.equal(gate.accept(), true);
+    window.innerHeight = 800;                            // restore
   });
 });
 
