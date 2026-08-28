@@ -82,6 +82,13 @@ jobs:
       # Required to publish the Trivy image-scan SARIF to code scanning.
       security-events: write
 
+    # The tag this leg actually pushes. Without the flavor suffix the slim leg
+    # names the full leg's image: the SBOM and the CVE scan then describe the
+    # wrong artifact, and when slim wins the race they fail outright on a tag
+    # the parallel job has not pushed yet.
+    env:
+      IMAGE_REF: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}${{ matrix.flavor == 'slim' && '-slim' || '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -142,9 +149,9 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}
-          artifact-name: point-sbom.spdx.json
-          output-format: spdx-json
+          image: ${{ env.IMAGE_REF }}
+          artifact-name: point-sbom-${{ matrix.flavor }}.spdx.json
+          format: spdx-json
 
       # Scan the image we just pushed for known CVEs in OS packages and Go
       # dependencies. The SBOM records what shipped; this says whether any of
@@ -153,9 +160,9 @@ jobs:
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}
+          image-ref: ${{ env.IMAGE_REF }}
           format: sarif
-          output: trivy-results.sarif
+          output: trivy-results-${{ matrix.flavor }}.sarif
           severity: CRITICAL,HIGH
           # Report, don't gate: a release must not be blocked by a CVE
           # disclosed in a base-image package between build and publish, with
@@ -167,8 +174,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4.37.7
         if: always()
         with:
-          sarif_file: trivy-results.sarif
-          category: trivy-image
+          sarif_file: trivy-results-${{ matrix.flavor }}.sarif
+          category: trivy-image-${{ matrix.flavor }}
 
       - name: Sign images
         env:
