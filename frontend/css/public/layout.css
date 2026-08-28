@@ -7,6 +7,22 @@ html {
     overscroll-behavior-y: contain;
 }
 
+/* The grid pages are fitted to exactly one viewport (utils/gridFit.js), so there
+   is nothing below the fold to reach — and `contain` only stops the scroll
+   chaining, not the bounce, so iPadOS still let the whole page be dragged off
+   the top and sprung back. Measured on an iPad in Chrome: the document never
+   grew (scrollHeight stayed equal to innerHeight at every rest) while
+   window.scrollY ran to 607 with visualViewport.offsetTop tracking it exactly
+   and visualViewport.height shrinking by the same amount. Nothing was
+   scrolling; the viewport was being dragged. `none` drops that affordance.
+
+   Scoped through :has() so a long post or a search page keeps its bounce, and
+   written on <html> rather than <body>: a value on the root wins over the one
+   the body would otherwise propagate to the viewport. */
+html:has(body.grid-zoomable) {
+    overscroll-behavior-y: none;
+}
+
 body {
     line-height: 1.6;
     color: var(--text-primary);

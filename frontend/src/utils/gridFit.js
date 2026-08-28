@@ -14,6 +14,14 @@
 import { pluginHost } from '../core/pluginHost.js';
 
 const MAX_PER_PAGE = 60;
+// Shaved off the height the rows are fitted into. The fit currently lands the
+// page at exactly the viewport height (document.scrollHeight === innerHeight on
+// every public grid view), so it has no slack at all: one sub-pixel of rounding
+// in the row arithmetic below turns a deliberately non-scrolling page into a
+// scrolling one, and on iPad a scroll starts the toolbar collapse that moves
+// the footer out from under the reader. Two pixels of headroom is invisible and
+// cannot cost a row. Do not remove it.
+const FIT_SLACK = 2;
 
 // ── Pinch-zoom ──────────────────────────────────────────────────────────────
 // "Zoom" is just a chosen column count (a personal, sticky preference). Rows
@@ -352,20 +360,95 @@ export function createFitLatch() {
 }
 
 /**
+ * How much of a height-only viewport change is browser furniture rather than a
+ * new viewport. iOS/iPadOS toolbars are ~44-90px and Android URL bars ~56-112px;
+ * 150 clears all of them with room for the ones that grow a tab strip, and is
+ * still far under the ~220px a row of cards occupies, so no genuine resize a
+ * reader performs lands inside the band without also changing the width.
+ */
+export const TOOLBAR_BAND_PX = 150;
+
+/**
+ * Tells a genuine viewport change from a browser-chrome transition.
+ *
+ * A `resize` on a desktop is something the reader did on purpose, so re-fitting
+ * per_page to it is right. On a tablet it is mostly a *side effect of
+ * scrolling*: collapsing or expanding the Safari toolbar changes the viewport
+ * height and fires `resize`, and re-fitting there refetches the grid and
+ * rebuilds it under the reader's finger — the footer walks away mid-scroll.
+ *
+ * What separates them is the width. Every genuine reason a tablet viewport
+ * changes — rotation, entering or leaving Split View or Slide Over, dragging
+ * the Split View divider — changes the width; a toolbar transition never does.
+ * So a resize is ignored only when the width is unchanged *and* the height
+ * moved by no more than TOOLBAR_BAND_PX.
+ *
+ * The baseline is the size of the last *accepted* resize, not the last one
+ * seen: a rejected event must not creep the reference, or a viewport that
+ * shrinks in several toolbar-sized steps would never be re-fitted at all.
+ *
+ * @returns {{accept: (width?: number, height?: number) => boolean}}
+ */
+export function createResizeGate(
+  width = window.innerWidth,
+  height = window.innerHeight,
+) {
+  let last = { width, height };
+  return {
+    /**
+     * @param {number} [w]  viewport width now (defaults to the window).
+     * @param {number} [h]  viewport height now.
+     * @returns {boolean} true when the change deserves a re-fit.
+     */
+    accept(w = window.innerWidth, h = window.innerHeight) {
+      if (w === last.width && Math.abs(h - last.height) <= TOOLBAR_BAND_PX) return false;
+      last = { width: w, height: h };
+      return true;
+    },
+  };
+}
+
+/**
  * Resolve a CSS length expression (possibly nested var(), rem, calc, …) to
  * pixels by letting the browser compute it on a throwaway probe element.
  * @param {string} expr  e.g. 'var(--spacing-xl)'
  * @param {HTMLElement} [parent]
+ * @param {'width'|'height'} [axis]  Which side of the probe to read. Viewport
+ *   units differ per axis (100dvh is not 100dvw), so a height expression must
+ *   be read off the height.
  * @returns {number}
  */
-function tokenPx(expr, parent = document.body) {
+function tokenPx(expr, parent = document.body, axis = 'width') {
   if (!parent) return 0;
   const probe = document.createElement('div');
   probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;width:${expr};height:${expr}`;
   parent.appendChild(probe);
-  const px = probe.offsetWidth;
+  const px = axis === 'height' ? probe.offsetHeight : probe.offsetWidth;
   probe.remove();
-  return px;
+  return px || 0;
+}
+
+/**
+ * The height the layout box actually gets — the quantity the fit must divide.
+ *
+ * NOT `window.innerHeight`. The box being filled is `.site-wrapper` (public) /
+ * `.light-layout` (admin), and both are sized `min-height: 100dvh` with a
+ * `100vh` line above it as the cascade fallback. On iPadOS Safari those are two
+ * different numbers around every toolbar transition: `innerHeight` follows the
+ * layout viewport, `dvh` the dynamic (currently visible) one — that divergence
+ * is the whole reason the unit exists. Resolving `100dvh` through the same
+ * probe the CSS would use is, by construction, the number the box gets, and it
+ * degrades through `100vh` to `innerHeight` on engines without `dvh` exactly as
+ * the stylesheet does.
+ * @returns {number}
+ */
+export function layoutViewportHeight() {
+  return (
+    tokenPx('100dvh', document.body, 'height') ||
+    tokenPx('100vh', document.body, 'height') ||
+    window.innerHeight ||
+    0
+  );
 }
 
 function columnsForWidth(width, colW, gap) {
@@ -404,6 +487,8 @@ export function computePerPage(minPerPage, gridEl = null) {
   let rowH;
   let gap;
   let top;
+  // One measurement for the whole fit — the estimate and the divide must agree.
+  const vh = layoutViewportHeight();
   // The grid's own width, which is the width of a full-row card (the hero) and,
   // divided by the columns, of a regular one — see applyCardImageSizes.
   let gridW = 0;
@@ -453,7 +538,7 @@ export function computePerPage(minPerPage, gridEl = null) {
     }
     // No grid yet — assume it starts a little below the header band. The post-
     // mount re-measure corrects this once the real geometry is known.
-    top = Math.min(window.innerHeight * 0.25, 220);
+    top = Math.min(vh * 0.25, 220);
   }
 
   // Cards are sized by their grid track, so the track is also what their
@@ -467,7 +552,7 @@ export function computePerPage(minPerPage, gridEl = null) {
     return floor;
   }
 
-  const avail = Math.max(rowH, window.innerHeight - top - reserve);
+  const avail = Math.max(rowH, vh - top - reserve - FIT_SLACK);
   // Floor (not round): a partial row would spill over the reserved footer band.
   // Zoom is the exception: its rows are minmax(0, 1fr) so they compress as
   // happily as they stretch — round to whichever count is nearer square

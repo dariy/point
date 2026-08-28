@@ -466,6 +466,7 @@ body.drag-active::after {
 .ve-lightbox img {
     max-width: 92vw;
     max-height: 92vh;
+    max-height: 92dvh;
     object-fit: contain;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-lg);
@@ -671,6 +672,7 @@ textarea.is-maximized,
     z-index: 10000 !important;
     width: 100vw !important;
     height: 100vh !important;
+    height: 100dvh !important;
     margin: 0 !important;
     border: none !important;
     border-radius: 0 !important;
@@ -743,6 +745,7 @@ textarea.is-maximized,
     position: sticky;
     top: var(--spacing-md);
     max-height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
+    max-height: calc(100dvh - var(--header-height) - var(--spacing-xl) * 2);
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -1112,6 +1115,9 @@ textarea.is-maximized,
         width: auto;
         display: flex;
         max-height: 85vh;
+        /* Bottom-anchored on mobile; dvh keeps the cap tracking the visible
+           viewport rather than the toolbar-hidden one. */
+        max-height: 85dvh;
         border: none;
         border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
         box-shadow: var(--shadow-lg);
@@ -1315,6 +1321,7 @@ textarea.is-maximized,
         position: sticky;
         top: var(--spacing-md);
         height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
+        height: calc(100dvh - var(--header-height) - var(--spacing-xl) * 2);
         overflow-y: auto;
         border: var(--border-width) solid var(--border-primary);
         border-radius: var(--border-radius);

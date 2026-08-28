@@ -1,5 +1,6 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { Pagination } from '../src/components/shared/Pagination.js';
 
 // ── Minimal DOM so gridPager.js runs under node ───────────────────────────────
 // The pager only ever touches inline styles, classList, listeners and a couple
@@ -31,6 +32,60 @@ function makeEl(extra = {}) {
 /** Dispatch to the handlers registered on a stub element. */
 function fire(el, type, event) {
   for (const fn of el.listeners[type] || []) fn(event);
+}
+
+/**
+ * Put a phone-width paginator on the page: six controls to a line, each line
+ * 30px tall, laid out from the real Pagination markup. `← 1 2 … 40 →` fits on
+ * one line; page 2's extra number wraps it onto two — the 30px the incoming
+ * grid does not get, and the whole reason the pager measures ahead.
+ *
+ * The mount reports the height of whichever paginator is currently visible in
+ * it, so the pager's swap-measure-restore reads the destination markup the way
+ * a real layout would.
+ *
+ * @returns {() => void} restores the document stubs.
+ */
+function stubWrappingPaginator(page, pages, total = pages * 10) {
+  const restore = { qs: document.querySelector, qsa: document.querySelectorAll, ce: document.createElement };
+  const rows = (markup) =>
+    Math.ceil((markup.match(/class="page-btn|page-ellipsis/g) || []).length / 6) || 1;
+  const heightOf = (markup) => 30 * rows(markup);
+
+  const paginator = (markup) => makeEl({
+    _markup: markup,
+    getBoundingClientRect() {
+      return { width: 300, height: this.style.display === 'none' ? 0 : heightOf(this._markup) };
+    },
+    querySelector: (sel) => (sel === '.page-info' ? makeEl() : null),
+  });
+  const live = paginator(new Pagination(null, { page, pages, total }).render());
+  // The band the grid is fitted around: whatever paginator is laid out in it.
+  const mount = makeEl({
+    getBoundingClientRect() {
+      return { width: 300, height: this.children.reduce((h, c) => h + c.getBoundingClientRect().height, 0) };
+    },
+  });
+  mount.appendChild(live);
+
+  document.querySelector = (sel) => (sel === '#pagination-mount' ? mount : null);
+  document.querySelectorAll = (sel) => (sel.includes('.pagination') ? [live] : []);
+  document.createElement = () => {
+    const el = makeEl();
+    Object.defineProperty(el, 'innerHTML', {
+      get() { return this._html || ''; },
+      set(v) {
+        this._html = v;
+        this.firstElementChild = v.includes('class="pagination"') ? paginator(v) : null;
+      },
+    });
+    return el;
+  };
+  return () => {
+    document.querySelector = restore.qs;
+    document.querySelectorAll = restore.qsa;
+    document.createElement = restore.ce;
+  };
 }
 
 let GridPager;
@@ -175,6 +230,67 @@ describe('GridPager', () => {
     for (const g of container.children.slice(1)) {
       assert.equal(g.style.top, '40px');
       assert.equal(g.style.height, '600px');
+    }
+  });
+
+  // The paginator is chrome the grid is fitted around, and its height depends on
+  // which page is current: the run of numbers widens as you move into the deck,
+  // and on a phone the extra button wraps the strip onto a second line. A ghost
+  // pinned to the live grid's height therefore laid the incoming cards out one
+  // wrap too tall, and the hand-off to the real grid resized them — the jump.
+  test('sizes a ghost to the paginator the destination page will have', async () => {
+    const { pager } = setup({ page: 1, pages: 40 });
+    const done = stubWrappingPaginator(1, 40);
+    try {
+      pager.arm({ page: 1, pages: 40, total: 400 });
+      await flush();
+
+      const ghost = container.children[1];
+      assert.equal(ghost.dataset.edge, 'next');
+      assert.equal(ghost.style.height, '570px',
+        'the ghost must give up the line the destination paginator takes');
+    } finally {
+      done();
+    }
+  });
+
+  // A step the other way is the same measurement with the sign flipped: page 1's
+  // paginator is the shorter one, so the ghost coming back gets a taller box.
+  test('gives a ghost the room back when the destination paginator is shorter', async () => {
+    const { pager } = setup({ page: 2, pages: 40 });
+    const done = stubWrappingPaginator(2, 40);
+    try {
+      pager.arm({ page: 2, pages: 40, total: 400 });
+      await flush();
+
+      const prev = container.children.slice(1).find((g) => g.dataset.edge === 'prev');
+      assert.equal(prev.style.height, '630px');
+    } finally {
+      done();
+    }
+  });
+
+  // A ghost is cut moments after the grid mounts, while the footer — an async
+  // plugin slot — is still on its way, so the grid it was measured against is
+  // taller than the one it will slide into. A refit re-arms the pager and
+  // rebuilds them, but a settling pass that keeps the same per_page does not, so
+  // the stale box has to be corrected on the way into the drag.
+  test('re-measures the grid box at touch-down, not just at preload', async () => {
+    const { pager } = setup({ page: 2, pages: 4 });
+    pager.arm({ page: 2, pages: 4 });
+    await flush();
+    for (const g of container.children.slice(1)) assert.equal(g.style.height, '600px');
+
+    gridMount.offsetHeight = 544; // the footer landed; the grid gave up its band
+    // A real touch, since the gesture recogniser listens on the same element.
+    fire(siteMain, 'touchstart', {
+      touches: [{ clientX: 200, clientY: 300 }],
+      target: { closest: () => null },
+    });
+
+    for (const g of container.children.slice(1)) {
+      assert.equal(g.style.height, '544px',
+        'the incoming page must be cut to the box it is actually sliding into');
     }
   });
 

@@ -55,7 +55,11 @@
     margin-top: 0;
 }
 
-@media (min-width: 769px), (orientation: landscape) {
+/* Wider than the stacked tier below, or any landscape viewport. Written as
+   the exact complement of `max-width: 48em` rather than `min-width:
+   48.0625em` so no viewport width can fall between the two and leave the
+   footer in neither state. em, not px: see the tier note at the bottom. */
+@media not all and (max-width: 48em), (orientation: landscape) {
     .footer-pagination,
     .footer-center:has(> .footer-pagination) {
         display: block;
@@ -246,7 +250,15 @@ body.grid-zoomable .footer-zoom {
     text-decoration: underline;
 }
 
-@media (max-width: 768px) {
+/* The stacked footer, defined once. The tier is em rather than px to match
+   public/responsive.css, which switches the grid at the same 48em: media-query
+   em resolves against the browser's *initial* font size, so a reader who has
+   raised it (Safari's per-site page zoom does exactly this) moves both tiers
+   together. In px the footer would stack while the grid stayed in its desktop
+   columns, or the reverse.
+   public/responsive.css's 32em tier tightens the gap on top of this — it does
+   not redefine the layout. */
+@media (max-width: 48em) {
     .footer-content {
         display: flex;
         flex-direction: column;

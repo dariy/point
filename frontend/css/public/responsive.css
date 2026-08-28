@@ -57,15 +57,14 @@
         padding-top: var(--spacing-md);
     }
 
+    /* The stacked layout itself is public/footer.css's 48em tier; this is only
+       the tighter phone gap, deliberately overriding the --spacing-lg it sets
+       there for the reason above. footer.css is bundled first, so this wins.
+       (An `order: 2` on .footer-copyright used to sit here. It has been inert
+       since the copyright was wrapped in .footer-left: order applies to flex
+       items, and .footer-copyright is a block child of one.) */
     .footer-content {
-        display: flex;
-        flex-direction: column;
         gap: var(--spacing-md);
-        text-align: center;
-    }
-
-    .footer-copyright {
-        order: 2;
     }
 
     .tags-grid {

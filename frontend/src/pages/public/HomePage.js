@@ -20,7 +20,7 @@ import { escapeHtml, isShortViewport, normalizeSettings } from '../../utils/help
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, refitPage } from '../../utils/gridFit.js';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -29,6 +29,9 @@ export default class HomePage extends Component {
     // Stops the viewport fit chasing a per_page whose own chrome moves the
     // target — see createFitLatch.
     this._fitLatch = createFitLatch();
+    // Keeps an iPad's toolbar collapsing mid-scroll from counting as a resize
+    // — see createResizeGate.
+    this._resizeGate = createResizeGate();
     // Swipe/trackpad/keyboard pagination and pinch zoom for the grid — see
     // core/gridPager.js. Shared with TagPage and SearchPage.
     this._pager = new GridPager({
@@ -199,6 +202,9 @@ export default class HomePage extends Component {
   }
 
   _onResize() {
+    // A height-only change inside the browser-chrome band is a toolbar
+    // transition, i.e. a scroll — not a viewport worth re-fitting to.
+    if (!this._resizeGate.accept()) return;
     // Reset on the event, not on the debounced re-fit: the chrome observer fires
     // sooner than 200ms, and a settling pass that ran against the old latch
     // would have its decision cleared out from under it — one whole extra

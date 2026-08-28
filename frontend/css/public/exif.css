@@ -143,6 +143,7 @@
   width: max-content;
   max-width: min(20rem, calc(100vw - 2 * var(--spacing-lg)));
   max-height: 60vh;
+  max-height: 60dvh;
   border-radius: var(--border-radius);
   transform: translateY(-8px);
   z-index: 60;

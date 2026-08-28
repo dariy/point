@@ -23,7 +23,9 @@
     .light-main,
     .light-layout--collapsed .light-main {
         margin-left: 0;
-        padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0));
+        /* Clears the fixed .admin-bottom-bar exactly — the bar's own height is
+           this same token, so the two cannot drift apart. */
+        padding-bottom: var(--bottom-bar-reserve);
     }
 
     .light-header {

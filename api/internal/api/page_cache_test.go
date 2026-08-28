@@ -37,40 +37,34 @@ func TestPageCacheKey(t *testing.T) {
 	}
 }
 
-// TestClampGridPageSize pins the two things the clamp has to get right: it
-// never hands back more posts than were asked for (a grid sized to keep the
-// footer on screen must not be overfilled), and it collapses the continuum of
-// viewport-fitted values onto a small set so the cache is keyed by bucket
-// rather than by browser-window height.
+// TestClampGridPageSize pins the contract the clamp now has: inside the
+// ceiling a request is honoured exactly, because how many posts fill a grid is
+// the client's decision — it is the only side that knows its column count.
+// The server's only interest is not rendering an absurd one.
 func TestClampGridPageSize(t *testing.T) {
-	const site = 10
-
 	tests := []struct {
-		name       string
-		perPage    int32
-		sitePerPag int32
-		want       int32
+		name    string
+		perPage int32
+		want    int32
 	}{
-		{"exact ladder value passes through", 12, site, 12},
-		{"between ladder values snaps down", 17, site, 15},
-		{"just under a step snaps down", 59, site, 55},
-		{"small fits are exact", 4, site, 4},
-		{"one is the floor", 1, site, 1},
-		{"non-positive is floored", 0, site, 1},
-		{"above the ladder is capped", 1000000, site, 60},
-		{"max int32 is capped", 2147483647, site, 60},
-		{"site setting passes through even off-ladder", 7, 7, 7},
-		{"site setting does not raise a smaller request", 5, 7, 5},
-		{"site setting is not preferred over a higher ladder value", 9, 7, 8},
-		{"site setting above the ladder is honoured", 100, 100, 100},
-		{"site setting above the ladder still caps a bigger request", 500, 100, 100},
+		{"a 3x3 grid gets all nine cells", 9, 9},
+		{"a 2x4 grid gets eight", 8, 8},
+		{"a 4x2 grid gets the same eight", 8, 8},
+		{"an odd fit is honoured, not rounded", 17, 17},
+		{"so is a prime one", 23, 23},
+		{"one is the floor", 1, 1},
+		{"non-positive is floored", 0, 1},
+		{"the ceiling passes through", 60, 60},
+		{"above the ceiling is capped", 61, 60},
+		{"far above the ceiling is capped", 1000000, 60},
+		{"max int32 is capped", 2147483647, 60},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := clampGridPageSize(tt.perPage, tt.sitePerPag)
+			got := clampGridPageSize(tt.perPage)
 			if got != tt.want {
-				t.Errorf("clampGridPageSize(%d, %d) = %d, want %d", tt.perPage, tt.sitePerPag, got, tt.want)
+				t.Errorf("clampGridPageSize(%d) = %d, want %d", tt.perPage, got, tt.want)
 			}
 			if tt.perPage >= 1 && got > tt.perPage {
 				t.Errorf("clamp returned %d for a request of %d — a grid must never be overfilled", got, tt.perPage)
@@ -79,15 +73,16 @@ func TestClampGridPageSize(t *testing.T) {
 	}
 }
 
-// The key space the cache has to hold is the point of the clamp: without it,
-// every per_page a client can name is its own entry.
+// The clamp no longer buckets, so the thing it still has to guarantee is that
+// the cache key space it feeds stays finite: every per_page a client can name,
+// including a hand-typed one, collapses onto at most maxGridPageSize values.
 func TestClampGridPageSize_BoundsTheKeySpace(t *testing.T) {
 	seen := map[int32]bool{}
-	for pp := int32(1); pp <= 5000; pp++ {
-		seen[clampGridPageSize(pp, 10)] = true
+	for pp := int32(-5000); pp <= 5000; pp++ {
+		seen[clampGridPageSize(pp)] = true
 	}
-	if len(seen) > len(gridPageSizes) {
-		t.Errorf("clamp produced %d distinct values from 5000 inputs, ladder has %d", len(seen), len(gridPageSizes))
+	if len(seen) > maxGridPageSize {
+		t.Errorf("clamp produced %d distinct values, ceiling is %d", len(seen), maxGridPageSize)
 	}
 }
 
