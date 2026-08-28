@@ -84,6 +84,26 @@ describe('viewport fit measures the box the CSS sizes', () => {
     assert.equal(layoutViewportHeight(), 1000);   // window.innerHeight
   });
 
+  // The end of the chain. Every caller subtracts chrome from this height and
+  // then divides by a row, so the last resort has to be a *number*: an engine
+  // that resolves neither viewport unit and reports no innerHeight yields 0, and
+  // the fit degrades to the single row `avail` is floored at. Returning
+  // undefined instead would carry NaN through the subtraction and the divide,
+  // and Math.max(1, NaN) is NaN — a per_page the whole feed would then be
+  // fetched with.
+  test('layoutViewportHeight bottoms out at 0, never undefined', () => {
+    const real = window.innerHeight;
+    try {
+      window.innerHeight = 0;
+      layout({}); // no dvh, no vh
+      assert.equal(layoutViewportHeight(), 0);
+      // avail = max(rowH, 0 - 0 - 0 - slack) = one row; cols = 1200/300 = 4.
+      assert.equal(computePerPage(7), 4);
+    } finally {
+      window.innerHeight = real;
+    }
+  });
+
   test('computePerPage follows the probe, not window.innerHeight', () => {
     layout({ '100dvh': 900, '100vh': 800 });
     // top = min(900*0.25, 220) = 220; avail = 900 - 220 - 2 slack = 678
