@@ -99,7 +99,20 @@ body {
     bottom: 0;
     /* Pin to the dynamic viewport so the dark column always fills the visible
        height. Relying on bottom:0 alone leaves a white gap below the column on
-       touch devices when the browser toolbar collapses on scroll. */
+       touch devices when the browser toolbar collapses on scroll.
+
+       Do NOT add a toolbar correction to .sidebar-footer below. That was tried
+       (--toolbar-drift, reverted) on the theory that a collapsing toolbar drags
+       this column's bottom edge — and hence the footer — down the screen. It
+       does not. An iPad carries no bottom browser chrome: Safari and Chrome
+       both keep their toolbars at the top, so a collapse grows the viewport
+       UPWARD. The bottom edge is already pinned to the glass; correcting for a
+       drift that is not there is what makes the footer jump. Measured on an
+       iPad in Chrome, 744x1133, four fixed markers across a toolbar
+       transition: bottom:0 held still, this column's 100dvh bottom edge
+       flickered for the length of the transition and settled back, and a
+       marker held 100svh below the top — where the correction put the footer —
+       moved by the full 80px toolbar height and back. */
     height: 100vh;
     height: 100dvh;
     width: var(--sidebar-width);
@@ -217,14 +230,6 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
-    /* The column above is 100dvh, so its bottom edge — and this footer with it —
-       moves by the full toolbar height every time a tablet toolbar collapses
-       under a scroll. --toolbar-drift is how much of the current height is that
-       reclaimed toolbar space (utils/toolbarDrift.js); spending it here pushes
-       the footer's content back to where it was and leaves the extra as dark
-       column below it. Unset on every browser without a collapsing toolbar,
-       which makes this a no-op there. */
-    padding-bottom: calc(var(--spacing-md) + var(--toolbar-drift, 0px));
 }
 
 .sidebar-version {
@@ -664,11 +669,6 @@ body {
     background-color: var(--header-bg);
     border-top: var(--border-width) solid var(--header-border);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    /* Same correction as .sidebar-footer, on top of the safe-area inset: fixed
-       bottom:0 is the dynamic viewport's bottom, so the bar's items ride a
-       collapsing toolbar unless the reclaimed space is padded back out. The
-       bar's own background still fills it, so no strip of page shows through. */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--toolbar-drift, 0px));
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 

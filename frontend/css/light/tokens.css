@@ -29,10 +29,10 @@
        for it come from one number and cannot drift: a label that wrapped to a
        second line would otherwise grow the bar past a reserve that knows
        nothing about it, and the last row of content would sit underneath.
-       The reserve carries the safe-area inset and --toolbar-drift, both of
-       which the bar itself spends as bottom padding — see .admin-bottom-bar. */
+       The reserve carries the safe-area inset, which the bar itself spends as
+       bottom padding — see .admin-bottom-bar. */
     --bottom-bar-height: 3.5rem;
-    --bottom-bar-reserve: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom, 0px) + var(--toolbar-drift, 0px));
+    --bottom-bar-reserve: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom, 0px));
 
     /* Semantic Colors */
     --bg-primary: var(--pt-colors-bg-secondary);

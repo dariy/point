@@ -24,10 +24,7 @@
     .light-layout--collapsed .light-main {
         margin-left: 0;
         /* Clears the fixed .admin-bottom-bar exactly — the bar's own height is
-           this same token, so the two cannot drift apart. --toolbar-drift is
-           inside it: the bar grows by that much when a tablet toolbar
-           collapses, and content that did not grow with it would end up
-           underneath. */
+           this same token, so the two cannot drift apart. */
         padding-bottom: var(--bottom-bar-reserve);
     }
 
