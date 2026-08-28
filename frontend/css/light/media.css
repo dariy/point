@@ -505,7 +505,9 @@
     width: 90vw;
     max-width: var(--media-picker-modal-max-width);
     height: 85vh;
+    height: 85dvh;
     max-height: 90vh;
+    max-height: 90dvh;
 }
 
 /* Upload joins the title on the header line (see MediaPickerDialog), pushed to
@@ -728,6 +730,7 @@
     width: 90vw;
     max-width: var(--media-picker-modal-max-width);
     height: 85vh;
+    height: 85dvh;
     display: flex;
     flex-direction: column;
 }

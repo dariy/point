@@ -768,6 +768,11 @@ body {
 .admin-more-sheet {
     width: 100%;
     max-height: 80vh;
+    /* Bottom-anchored sheet, so svh is arguable: dvh lets the cap breathe
+       while the iOS toolbar animates. Kept on dvh because the cap is not
+       binding at the current item count (measured 277px of a 906px cap at
+       744x1133) and dvh is the house default. */
+    max-height: 80dvh;
     overflow-y: auto;
     background: var(--surface-card);
     border-top-left-radius: var(--border-radius-lg);

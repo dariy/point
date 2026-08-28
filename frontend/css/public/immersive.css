@@ -427,6 +427,7 @@ video.immersive-bg-image {
     width: 100%;
     max-width: var(--post-info-card-max-width);
     max-height: 80vh;
+    max-height: 80dvh;
     /* Leave some space */
     display: flex;
     flex-direction: column;

@@ -25,6 +25,7 @@
 
 .map-container {
     height: calc(100vh - var(--map-container-height));
+    height: calc(100dvh - var(--map-container-height));
     min-height: var(--map-container-min-height);
     width: 100%;
     border-radius: var(--border-radius-xl);
