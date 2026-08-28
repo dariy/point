@@ -656,6 +656,11 @@ body {
     left: 0;
     right: 0;
     z-index: 200;
+    /* Pinned, not content-sized: box-sizing is border-box (common/reset.css),
+       so this is the whole bar — border, items, and the safe-area/drift padding
+       below them. .light-main reserves the identical value; see
+       --bottom-bar-reserve in light/tokens.css. */
+    height: var(--bottom-bar-reserve);
     background-color: var(--header-bg);
     border-top: var(--border-width) solid var(--header-border);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -669,6 +674,9 @@ body {
 
 .bottom-bar-item {
     flex: 1;
+    /* Five items share the width; a long label truncates (see
+       .bottom-bar-label) rather than widening the bar past the screen. */
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -710,8 +718,15 @@ body {
     height: 1.25rem;
 }
 
+/* One line, always. The bar's height is fixed, so a label that wrapped would
+   overflow it instead of growing it — truncate instead. Nothing in the shipped
+   set is close to wrapping; this is for a translation or a larger text size. */
 .bottom-bar-label {
     display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bottom-bar-add {

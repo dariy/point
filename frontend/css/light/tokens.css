@@ -23,6 +23,17 @@
     --header-height: var(--size-4);
     --content-max-width: var(--size-87-5);
 
+    /* Mobile bottom bar (below 48em). The bar is pinned to this height instead
+       of being sized by its items, and --bottom-bar-reserve is the only thing
+       .light-main pads by, so the height the bar occupies and the room reserved
+       for it come from one number and cannot drift: a label that wrapped to a
+       second line would otherwise grow the bar past a reserve that knows
+       nothing about it, and the last row of content would sit underneath.
+       The reserve carries the safe-area inset and --toolbar-drift, both of
+       which the bar itself spends as bottom padding — see .admin-bottom-bar. */
+    --bottom-bar-height: 3.5rem;
+    --bottom-bar-reserve: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom, 0px) + var(--toolbar-drift, 0px));
+
     /* Semantic Colors */
     --bg-primary: var(--pt-colors-bg-secondary);
     --text-primary: var(--pt-colors-text-primary);
