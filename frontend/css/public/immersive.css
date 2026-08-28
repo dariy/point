@@ -213,8 +213,11 @@ html:has(.immersive-layout),
 }
 
 /* Small screens: stack the immersive footer as tags, then buttons, then
-   copyright — overrides the generic footer column order for tag context. */
-@media (max-width: 768px) {
+   copyright — overrides the generic footer column order for tag context.
+   Same 48em tier as public/footer.css's stacked footer, and em for the same
+   reason: the two must flip on the same width whatever the reader's font
+   size, or the immersive footer stacks while the plain one does not. */
+@media (max-width: 48em) {
     .immersive-layout .footer-content {
         flex-direction: column;
         align-items: center;
