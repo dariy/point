@@ -49,8 +49,9 @@ func viewError(err error, notFoundMessage string) error {
 }
 
 // feedParams reads the pagination and timeline scope a feed endpoint takes.
-// perPage is snapped to the grid ladder here rather than in pageview, because
-// the reason for snapping is the cache key this handler is about to build.
+// perPage is bounded here rather than in pageview, because the ceiling is a
+// property of what this handler is willing to render and cache, not of the
+// view being built.
 func feedParams(c echo.Context, settings map[string]string, publicOnly bool) pageview.FeedParams {
 	defaultPerPage64, _ := strconv.ParseInt(pageview.SettingOr(settings, "posts_per_page", "10"), 10, 32)
 	defaultPerPage := int(defaultPerPage64)
@@ -59,7 +60,7 @@ func feedParams(c echo.Context, settings map[string]string, publicOnly bool) pag
 	p := pageview.FeedParams{
 		PublicOnly: publicOnly,
 		Page:       page,
-		PerPage:    clampGridPageSize(perPage, int32(defaultPerPage)),
+		PerPage:    clampGridPageSize(perPage),
 	}
 	// ParsePaginationParams has already clamped a non-positive page away, so the
 	// raw value is read back for the one caller that needs it: the scheduled
@@ -82,8 +83,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	// per_page is part of the key: it's device-fit / pinch-zoom controlled, so the
 	// same page at a different post count must not serve a stale-sized blob. It
-	// has been snapped to the gridPageSizes ladder, which is what keeps that from
-	// meaning one entry per browser-window height.
+	// has been capped at maxGridPageSize, which is what bounds how many distinct
+	// entries one page number can spread across.
 	cacheKey := pageCacheKey("homepage", fmt.Sprintf("p%d_pp%d", params.Page, params.PerPage))
 	// An owner's feed carries drafts, hidden posts and the scheduled queue, and a
 	// timeline scope is a long tail of one-off ranges. Neither is shared between
@@ -160,9 +161,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		Path:       pageview.SplitPathParam(c.QueryParam("path")),
 	}
 
-	// per_page is part of the key (device-fit / pinch-zoom controlled, snapped to
-	// the gridPageSizes ladder) so the same page at a different post count isn't
-	// served a stale-sized cached blob.
+	// per_page is part of the key (device-fit / pinch-zoom controlled, capped at
+	// maxGridPageSize) so the same page at a different post count isn't served a
+	// stale-sized cached blob.
 	cacheKey := pageCacheKey("tagpage", fmt.Sprintf("%s_path-%s_p%d_pp%d",
 		params.Slug, strings.Join(params.Path, "/"), params.Page, params.PerPage))
 	// As on the home feed: an owner's archive and a timeline scope are not shared

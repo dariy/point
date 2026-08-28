@@ -61,7 +61,6 @@ export function setupAdminLayout(component, {
   publicUrl
 }) {
   component._cleanupHeaderCompact = setupHeaderCompact(component.$(".light-header"));
-
   // Public-site link — icon button pinned to the right edge of the header
   // actions. Deliberately a plain in-app link: the public site and the admin
   // are one SPA, so this is a route change, not a document load. Opening it in

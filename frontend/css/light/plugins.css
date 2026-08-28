@@ -386,6 +386,7 @@
     right: 0;
     z-index: 10001;
     height: 100vh;
+    height: 100dvh;
     width: 480px;
     max-width: 92vw;
     display: flex;

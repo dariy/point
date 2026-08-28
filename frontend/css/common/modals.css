@@ -40,6 +40,7 @@
     max-width: 90%;
     width: var(--modal-width);
     max-height: 90vh;
+    max-height: 90dvh;
     display: flex;
     flex-direction: column;
     animation: slideUp 0.3s ease-out;
@@ -61,6 +62,7 @@
     box-shadow: 0 var(--modal-content-box-shadow-1) var(--modal-content-box-shadow-2) var(--color-black-alpha-30);
     min-width: var(--modal-content-min-width);
     max-height: 90vh;
+    max-height: 90dvh;
     display: flex;
     flex-direction: column;
     animation: slideUp 0.3s ease-out;

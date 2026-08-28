@@ -40,50 +40,35 @@ func pageCacheKey(prefix, identity string) string {
 	return fmt.Sprintf("%s_%x.json", prefix, sha256.Sum256([]byte(identity)))
 }
 
-// gridPageSizes is the ladder a public grid's per_page is snapped down to, in
-// ascending order.
+// maxGridPageSize is the most posts one feed request may ask for.
 //
-// per_page on the home feed and the tag archives is not a user setting: the
-// client measures the viewport and asks for exactly the columns x rows that
-// fit, so every distinct window size is a distinct number, and a hand-written
-// query string can be any int32 at all. Both land in the cache key. Unbucketed
-// that means an entry per pixel-height of browser window — a cache that grows
-// with the audience rather than with the content, and one an attacker can grow
-// on purpose by walking per_page.
+// It is a resource guard, not a layout decision: per_page reaches the query
+// straight from the URL, so without a ceiling a hand-written ?per_page=2000000
+// is a full-table scan rendered to JSON. Sixty is comfortably above any real
+// viewport fit — six columns of ten rows — so no grid the client measures ever
+// meets it, and the only requests it truncates are ones no browser produced.
 //
-// The steps are fine at the bottom, where a phone's grid is one or two columns
-// and a single card matters, and coarser at the top, where a fit that large
-// implies five or six columns. Snapping *down* is what makes that safe: the
-// client sized the grid so the paginator and footer stay on screen, and fewer
-// posts than it asked for keeps that true, where more would push them off. The
-// cost is at most a partial row of empty space, and the return is that the
-// visitors either side of a boundary share one rendered entry instead of
-// missing separately.
-var gridPageSizes = []int32{1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 21, 24, 28, 32, 36, 40, 45, 50, 55, 60}
+// It also bounds the page cache's key space as a side effect. per_page is part
+// of every feed cache key, and capping it means at most sixty values per page
+// number rather than one per pixel of browser-window height. That is the whole
+// of the server's interest in per_page: the number of posts to return is the
+// client's business, because only the client knows its column count, and a
+// server that returns eight for a nine-cell grid is making a layout decision it
+// cannot see the inputs to.
+const maxGridPageSize = 60
 
-// clampGridPageSize snaps a requested per_page down to the nearest value the
-// page cache is willing to key on.
-//
-// sitePerPage — the blog's own `posts_per_page` — is allowed through as-is
-// alongside the ladder. It is what a client that sends no per_page at all gets
-// handed, and silently serving nine posts to a blog configured for ten would be
-// the clamp changing a setting rather than bounding a key space. It is one
-// extra value, set by the owner, so it costs the key space nothing.
-func clampGridPageSize(perPage, sitePerPage int32) int32 {
+// clampGridPageSize bounds a requested per_page to something the server is
+// willing to render. Within the ceiling the request is honoured exactly — a
+// 3x3 grid asking for 9 gets 9, and a 2x4 and a 4x2 grid both asking for 8 get
+// the same 8, because from here they are the same request.
+func clampGridPageSize(perPage int32) int32 {
 	if perPage < 1 {
 		return 1
 	}
-	best := gridPageSizes[0]
-	for _, v := range gridPageSizes {
-		if v > perPage {
-			break
-		}
-		best = v
+	if perPage > maxGridPageSize {
+		return maxGridPageSize
 	}
-	if sitePerPage > best && sitePerPage <= perPage {
-		best = sitePerPage
-	}
-	return best
+	return perPage
 }
 
 // servePageJSON answers a BFF page request with render's payload, going through

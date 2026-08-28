@@ -99,7 +99,20 @@ body {
     bottom: 0;
     /* Pin to the dynamic viewport so the dark column always fills the visible
        height. Relying on bottom:0 alone leaves a white gap below the column on
-       touch devices when the browser toolbar collapses on scroll. */
+       touch devices when the browser toolbar collapses on scroll.
+
+       Do NOT add a toolbar correction to .sidebar-footer below. That was tried
+       (--toolbar-drift, reverted) on the theory that a collapsing toolbar drags
+       this column's bottom edge — and hence the footer — down the screen. It
+       does not. An iPad carries no bottom browser chrome: Safari and Chrome
+       both keep their toolbars at the top, so a collapse grows the viewport
+       UPWARD. The bottom edge is already pinned to the glass; correcting for a
+       drift that is not there is what makes the footer jump. Measured on an
+       iPad in Chrome, 744x1133, four fixed markers across a toolbar
+       transition: bottom:0 held still, this column's 100dvh bottom edge
+       flickered for the length of the transition and settled back, and a
+       marker held 100svh below the top — where the correction put the footer —
+       moved by the full 80px toolbar height and back. */
     height: 100vh;
     height: 100dvh;
     width: var(--sidebar-width);
@@ -648,14 +661,22 @@ body {
     left: 0;
     right: 0;
     z-index: 200;
+    /* Pinned, not content-sized: box-sizing is border-box (common/reset.css),
+       so this is the whole bar — border, items, and the safe-area/drift padding
+       below them. .light-main reserves the identical value; see
+       --bottom-bar-reserve in light/tokens.css. */
+    height: var(--bottom-bar-reserve);
     background-color: var(--header-bg);
     border-top: var(--border-width) solid var(--header-border);
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 .bottom-bar-item {
     flex: 1;
+    /* Five items share the width; a long label truncates (see
+       .bottom-bar-label) rather than widening the bar past the screen. */
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -697,8 +718,15 @@ body {
     height: 1.25rem;
 }
 
+/* One line, always. The bar's height is fixed, so a label that wrapped would
+   overflow it instead of growing it — truncate instead. Nothing in the shipped
+   set is close to wrapping; this is for a translation or a larger text size. */
 .bottom-bar-label {
     display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bottom-bar-add {
@@ -740,6 +768,11 @@ body {
 .admin-more-sheet {
     width: 100%;
     max-height: 80vh;
+    /* Bottom-anchored sheet, so svh is arguable: dvh lets the cap breathe
+       while the iOS toolbar animates. Kept on dvh because the cap is not
+       binding at the current item count (measured 277px of a 906px cap at
+       744x1133) and dvh is the house default. */
+    max-height: 80dvh;
     overflow-y: auto;
     background: var(--surface-card);
     border-top-left-radius: var(--border-radius-lg);
