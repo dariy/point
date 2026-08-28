@@ -33,6 +33,7 @@ import { html } from "../utils/helpers.js";
  */
 
 import { PostCard } from '../components/public/PostCard.js';
+import { Pagination } from '../components/shared/Pagination.js';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
 import { store } from '../store.js';
 import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gridFit.js';
@@ -250,6 +251,7 @@ export class GridPager {
     // layout mid-drag.
     this._onTouchDown = () => {
       this._stride = this._swipeStride();
+      this._repinGhosts();
     };
     root.addEventListener('touchstart', this._onTouchDown, {
       passive: true
@@ -509,6 +511,104 @@ export class GridPager {
   }
 
   /**
+   * How much more room the chrome below the grid takes once the paginator is
+   * showing `page` — the band gridFit's belowGridReserve measures, and exactly
+   * what the destination page's grid box is short by.
+   *
+   * The paginator's height is a function of *which* page is current: the run of
+   * numbers around it widens as you move into the deck (`1 2 … 108` on page 1,
+   * `1 2 3 … 108` on page 2), and where the strip runs out of width it wraps
+   * onto a second line. Which paginator that happens to is a media query's
+   * business, not this file's — the in-flow one below the grid on portrait
+   * phones, the footer's compact copy on everything wider and on every
+   * landscape viewport (css/public/footer.css) — so both mounts are measured
+   * and neither is named.
+   *
+   * Measured by standing the destination paginator in the live one's place for
+   * the length of one synchronous layout, rather than by predicting where the
+   * strip wraps. Prediction would have to know the digit widths, the gap, the
+   * container width and — for the footer copy — whether the paginator is even
+   * the tallest thing in its row; the layout engine knows all four. Nothing
+   * paints between the swap and the restore, and a ResizeObserver compares
+   * against the size it last reported, so watchChromeFit never sees it.
+   *
+   * @param {number} page  the page the ghost is being built for.
+   * @returns {number} destination band height − current band height. Negative
+   *   when the destination paginator is the shorter one (swiping back towards
+   *   page 1), 0 when there is nothing laid out to compare against.
+   */
+  _belowGridGrowth(page) {
+    const mounts = ['#pagination-mount', '#footer-mount']
+      .map(sel => document.querySelector(sel))
+      .filter(Boolean);
+    // The copy that is actually laid out; the other one is display:none and
+    // measures 0, which is also what an unpaginated view measures.
+    const live = [...(document.querySelectorAll?.(
+      '#pagination-mount .pagination, .footer-pagination .pagination') || [])]
+      .find(el => el.getBoundingClientRect().height > 0);
+    if (!live || !mounts.length) return 0;
+    const band = () => mounts.reduce((h, m) => h + m.getBoundingClientRect().height, 0);
+    const pag = this._pagination;
+    const holder = document.createElement('div');
+    holder.innerHTML = html`${raw(new Pagination(document.createElement('div'), {
+      page,
+      pages: pag.pages,
+      minPage: GridPager.minPage(pag),
+      total: pag.total,
+      // The footer's copy is compact — the item count is a tooltip rather than
+      // a label beside the strip, and that is a whole flex item of width.
+      // Read off the live node so the probe matches whichever copy is on
+      // screen without the pager having to know who mounted it.
+      compact: !live.querySelector('.page-info')
+    }).render())}`;
+    const probe = holder.firstElementChild;
+    if (!probe) return 0;
+    const before = band();
+    const display = live.style.display;
+    try {
+      live.style.display = 'none';
+      live.parentElement.appendChild(probe);
+      return band() - before;
+    } finally {
+      probe.remove();
+      live.style.display = display;
+    }
+  }
+
+  /**
+   * Re-pin the parked ghosts to the live grid box as it stands *now*.
+   *
+   * A ghost is built moments after the grid mounts, and at that point the chrome
+   * around the grid has not finished arriving: the footer is an async plugin
+   * slot, so the grid is still as much as a footer taller than it will settle at
+   * (56px on a 770px-wide window here). A per_page refit re-arms the pager and
+   * rebuilds the ghosts against the settled layout — but a settling pass that
+   * lands on the same per_page does not re-arm anything, and then the ghost
+   * outlives the measurement it was cut from. That is the incoming page arriving
+   * at the wrong size and snapping straight after: not the destination's chrome,
+   * the *outgoing* page's, measured too early.
+   *
+   * Touch-down is the last moment before a slide and already where the stride is
+   * cached, so the box is re-read here rather than watched: one layout read, no
+   * observer, and nothing measured during the drag itself. The destination's own
+   * paginator growth was measured at build time and is reused as-is — it is a
+   * property of the page being slid to, not of when the question is asked.
+   */
+  _repinGhosts() {
+    const liveGrid = this._o.gridMount();
+    if (!liveGrid) return;
+    const height = liveGrid.offsetHeight;
+    const top = liveGrid.offsetTop;
+    if (!height) return;
+    for (const dir of ['prev', 'next']) {
+      const ghost = this._pageGhosts?.[dir];
+      if (!ghost?.el) continue;
+      ghost.el.style.height = `${Math.max(0, height - (ghost.growth || 0))}px`;
+      if (top) ghost.el.style.top = `${top}px`;
+    }
+  }
+
+  /**
    * The off-screen slide distance for a page swipe: the live grid's width plus
    * the inter-column gap. Driving every neighbour position (rest, drag, reset,
    * commit) from this single value keeps the gap between the outgoing and
@@ -559,6 +659,13 @@ export class GridPager {
     const build = async dir => {
       const page = dir === 'next' ? pag.page + 1 : pag.page - 1;
       if (page < minPage || page > pag.pages) return;
+      // The box the *destination* page gets, though, is the live one minus
+      // whatever its own paginator takes on top of the current one. Measured
+      // here, before the slide, so the incoming cards are laid out once at the
+      // height they will keep rather than being resized by the hand-off to the
+      // real grid — see _belowGridGrowth.
+      const growth = this._belowGridGrowth(page);
+      const ghostHeight = gridHeight ? Math.max(0, gridHeight - growth) : 0;
       let posts;
       try {
         posts = await this._o.fetchPosts(page);
@@ -569,7 +676,7 @@ export class GridPager {
       const el = document.createElement('div');
       el.className = 'grid-preview-placeholder';
       el.dataset.edge = dir;
-      if (gridHeight) el.style.height = `${gridHeight}px`;
+      if (ghostHeight) el.style.height = `${ghostHeight}px`;
       if (gridTop) el.style.top = `${gridTop}px`;
       el.innerHTML = html`${raw(this._buildGridHtml(posts || [], page))}`;
       // The ghost's cards are static markup with no component behind them, so
@@ -592,7 +699,8 @@ export class GridPager {
       el.style.opacity = '0';
       this._pageGhosts[dir] = {
         page,
-        el
+        el,
+        growth
       };
     };
     await Promise.all([build('prev'), build('next')]);
