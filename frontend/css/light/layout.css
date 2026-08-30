@@ -97,24 +97,35 @@ body {
     left: 0;
     top: 0;
     bottom: 0;
-    /* Pin to the dynamic viewport so the dark column always fills the visible
-       height. Relying on bottom:0 alone leaves a white gap below the column on
-       touch devices when the browser toolbar collapses on scroll.
+    /* Anchor the column to the initial containing block (top:0 + bottom:0),
+       NOT to 100dvh.
 
-       Do NOT add a toolbar correction to .sidebar-footer below. That was tried
-       (--toolbar-drift, reverted) on the theory that a collapsing toolbar drags
-       this column's bottom edge — and hence the footer — down the screen. It
-       does not. An iPad carries no bottom browser chrome: Safari and Chrome
-       both keep their toolbars at the top, so a collapse grows the viewport
-       UPWARD. The bottom edge is already pinned to the glass; correcting for a
-       drift that is not there is what makes the footer jump. Measured on an
-       iPad in Chrome, 744x1133, four fixed markers across a toolbar
-       transition: bottom:0 held still, this column's 100dvh bottom edge
-       flickered for the length of the transition and settled back, and a
-       marker held 100svh below the top — where the correction put the footer —
-       moved by the full 80px toolbar height and back. */
-    height: 100vh;
-    height: 100dvh;
+       Measured on an iPad in Chrome, 744x1133, four fixed markers held across
+       a toolbar transition (toolbar height 80px):
+
+         bottom:0                  held still
+         top:0; height:100dvh      flickered for the length of the transition,
+                                   then settled back
+         top:0; height:100svh      moved the full 80px and back
+
+       This column used to be the second of those, so its bottom edge — and
+       the .sidebar-footer riding it as the last flex child — blinked on every
+       collapse. bottom:0 is the anchor that does not move: an iPad carries no
+       bottom browser chrome (Safari and Chrome both keep the toolbar at the
+       top), so a collapse grows the viewport UPWARD and the ICB bottom edge is
+       already pinned to the glass. top:0 is unchanged from the blinking
+       version, which is what establishes it does not land under the toolbar.
+
+       Do NOT reintroduce a toolbar correction on .sidebar-footer. That was
+       tried (--toolbar-drift, reverted) on the theory that a collapse drags
+       this column's bottom edge down the screen. It does not, and correcting
+       for a drift that is not there is what made the footer jump by the full
+       toolbar height — the 100svh row above is where that correction put it.
+
+       Do NOT reintroduce height:100dvh either. It arrived (PR #222) against a
+       white gap seen below the column on "touch devices" when the toolbar
+       collapses. That predates the measurement above, and the ::after backstop
+       below covers the gap without putting the footer back on a moving edge. */
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     color: var(--sidebar-text);
@@ -122,6 +133,24 @@ body {
     flex-direction: column;
     z-index: 100;
     transition: background-color var(--transition-theme);
+}
+
+/* Paint backstop for the gap that height:100dvh used to cover. If the ICB
+   bottom edge ever lags the glass mid-transition, this keeps the column's own
+   colour under the shortfall instead of letting the page background show
+   through. It sits below the sidebar's bottom edge, so it is off-screen at
+   rest and costs nothing; 100vh is the large viewport, which is always at
+   least a toolbar taller than the small one. */
+.light-sidebar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    transition: background-color var(--transition-theme);
+    pointer-events: none;
 }
 
 .sidebar-header {
