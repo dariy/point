@@ -28,6 +28,7 @@ import { renderFields, collectUpdates } from "./settingsFields.js";
 import { updateSettings } from "../../api/settings.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
+import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.js";
 import { CHECK_SVG, X_SVG } from "../../utils/icons.js";
 import { BackupsSection } from "./sections/BackupsSection.js";
 import { InstagramImportSection } from "./sections/InstagramImportSection.js";
@@ -135,14 +136,11 @@ export class PluginSettingsPanel extends Component {
 
   afterRender() {
     // Lock the page behind the drawer so swiping the panel doesn't scroll it.
-    // Capture the pre-lock value only once: afterRender re-runs on every
-    // setState (e.g. the save spinner), and re-capturing here would record the
-    // already-locked "hidden" and restore *that* on close — leaving the admin
-    // page unscrollable until reload (point-ti5d).
-    if (this._prevBodyOverflow === undefined) {
-      this._prevBodyOverflow = document.body.style.overflow;
-    }
-    document.body.style.overflow = "hidden";
+    // afterRender re-runs on every setState (e.g. the save spinner); the lock is
+    // idempotent per owner, so the pre-lock overflow is captured once and a
+    // repeat acquire cannot record the already-locked "hidden" and restore
+    // *that* on close — which used to leave the page unscrollable (point-ti5d).
+    acquireScrollLock(this);
 
     // Slide in on the next frame so the CSS transition runs from off-screen —
     // but only for the first render. `is-open` is also part of render()'s output
@@ -230,8 +228,7 @@ export class PluginSettingsPanel extends Component {
 
   beforeUnmount() {
     if (this._onKeydown) document.removeEventListener("keydown", this._onKeydown);
-    document.body.style.overflow = this._prevBodyOverflow ?? "";
-    this._prevBodyOverflow = undefined;
+    releaseScrollLock(this);
     this._gestures?.destroy();
   }
 

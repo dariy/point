@@ -19,6 +19,7 @@ import { html, raw } from "../../utils/helpers.js";
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.js';
 export class PhotoLibraryPickerDialog extends Component {
@@ -120,7 +121,7 @@ export class PhotoLibraryPickerDialog extends Component {
     this._patchContent(null, new Set());
     this._patchImportBtn(0, false);
     this.container.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    acquireScrollLock(this);
     this._keyHandler = e => {
       if (e.key === 'Escape') this.close();
     };
@@ -129,11 +130,16 @@ export class PhotoLibraryPickerDialog extends Component {
   }
   close() {
     this.container.classList.remove('active');
-    document.body.style.overflow = '';
+    releaseScrollLock(this);
     if (this._keyHandler) {
       document.removeEventListener('keydown', this._keyHandler);
       this._keyHandler = null;
     }
+  }
+  // Torn down while open, close() never runs — release the lock here so the
+  // page behind does not stay unscrollable (p-overlay-scroll-lock-leak).
+  beforeUnmount() {
+    releaseScrollLock(this);
   }
   destroy() {
     this.close();

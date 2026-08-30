@@ -707,10 +707,6 @@ textarea.is-maximized,
 }
 
 
-.textarea-maximized-body-lock {
-    overflow: hidden !important;
-}
-
 /* Placeholder for CodeJar */
 .codejar-editor:empty:before {
     content: attr(data-placeholder);

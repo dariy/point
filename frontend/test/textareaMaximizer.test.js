@@ -61,6 +61,10 @@ describe('textareaMaximizer', () => {
           add: () => {},
           remove: () => {}
         },
+        // The maximizer locks page scrolling through utils/scrollLock.js, which
+        // writes document.body.style.overflow — without a style bag the lock is
+        // silently skipped and this suite would stop covering it.
+        style: {},
         appendChild: () => {}
       }
     };
@@ -162,11 +166,13 @@ describe('textareaMaximizer', () => {
     assert.strictEqual(maximized, true, 'Textarea should be maximized');
     assert.strictEqual(btn.title, 'Minimize');
     assert.ok(saveBtn.classList.has('is-maximized'), 'Save button should be marked as maximized');
+    assert.strictEqual(document.body.style.overflow, 'hidden', 'page scrolling is locked behind it');
 
     btn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
     assert.strictEqual(maximized, false, 'Textarea should be minimized');
     assert.strictEqual(btn.title, 'Maximize');
     assert.ok(!saveBtn.classList.has('is-maximized'), 'Save button should not be marked as maximized');
+    assert.strictEqual(document.body.style.overflow, '', 'and released again');
   });
 
   test('should dispatch save event on save button click', () => {

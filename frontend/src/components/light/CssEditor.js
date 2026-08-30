@@ -3,6 +3,7 @@ import { html } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 // Import Prism core and ensure it is global before importing language components
 import Prism from '../../../vendor/prismjs/prism-core.js';
@@ -47,7 +48,7 @@ export class CssEditor extends Component {
     const saveBtn = this.container.querySelector('.textarea-save-btn');
     if (!editorElement) return;
     if (this.isMaximized) {
-      document.body.classList.add('textarea-maximized-body-lock');
+      acquireScrollLock(this);
     }
 
     // Highlight function using Prism
@@ -111,7 +112,7 @@ export class CssEditor extends Component {
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
     const container = editorElement.closest('.css-editor-container');
     if (this.isMaximized) {
-      document.body.classList.add('textarea-maximized-body-lock');
+      acquireScrollLock(this);
       // Move container to body to avoid z-index/stacking context traps
       if (container) {
         this._placeholder = document.createElement('div');
@@ -121,7 +122,7 @@ export class CssEditor extends Component {
         document.body.appendChild(container);
       }
     } else {
-      document.body.classList.remove('textarea-maximized-body-lock');
+      releaseScrollLock(this);
       // Restore container
       if (container && this._placeholder) {
         this._placeholder.parentNode.insertBefore(container, this._placeholder);
@@ -137,9 +138,7 @@ export class CssEditor extends Component {
     }));
   }
   beforeUnmount() {
-    if (this.isMaximized) {
-      document.body.classList.remove('textarea-maximized-body-lock');
-    }
+    releaseScrollLock(this);
     if (this.jar) {
       this.jar.destroy();
       this.jar = null;

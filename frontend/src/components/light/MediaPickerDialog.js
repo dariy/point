@@ -12,6 +12,7 @@
  */
 
 import { Component } from '../Component.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 import { MediaBrowser } from './MediaBrowser.js';
 import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
 import { store } from '../../store.js';
@@ -71,7 +72,7 @@ export class MediaPickerDialog extends Component {
     if (this._activeBrowser) return; // already open
     this._onConfirmOverride = onConfirmOverride || null;
     this.container.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    acquireScrollLock(this);
 
     const mountEl = this.$('#mpd-browser-mount');
     if (mountEl) {
@@ -86,7 +87,7 @@ export class MediaPickerDialog extends Component {
   close() {
     this._onConfirmOverride = null;
     this.container.classList.remove('active');
-    document.body.style.overflow = '';
+    releaseScrollLock(this);
 
     // Unmount the browser child without re-rendering the whole dialog
     if (this._activeBrowser) {
@@ -100,6 +101,13 @@ export class MediaPickerDialog extends Component {
       document.removeEventListener('keydown', this._keyHandler);
       this._keyHandler = null;
     }
+  }
+
+  // The dialog can be torn down while open — its owner unmounts, or a
+  // re-render replaces it — and close() never runs then. Without this the page
+  // behind it stays unscrollable (p-overlay-scroll-lock-leak).
+  beforeUnmount() {
+    releaseScrollLock(this);
   }
 
   destroy() {

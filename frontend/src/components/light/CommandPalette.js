@@ -3,6 +3,7 @@ import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
 import { SEARCH_SVG, POSTS_SVG, TAGS_SVG, SETTINGS_SVG, DASHBOARD_SVG } from '../../utils/icons.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 const STATIC_PAGES = [
   { href: '/light', label: 'Dashboard', icon: DASHBOARD_SVG },
@@ -99,12 +100,18 @@ export class CommandPalette extends Component {
 
   open() {
     this.setState({ isOpen: true, query: '', results: this._getDefaultResults(), selectedIndex: 0 });
-    document.body.style.overflow = 'hidden';
+    acquireScrollLock(this);
   }
 
   close() {
     this.setState({ isOpen: false });
-    document.body.style.overflow = '';
+    releaseScrollLock(this);
+  }
+
+  beforeUnmount() {
+    // A page setState() unmounts this palette without ever calling close(); the
+    // lock has to come off here or the page stays unscrollable (p-overlay-scroll-lock-leak).
+    releaseScrollLock(this);
   }
 
   _onKeyDownGlobal(e) {
