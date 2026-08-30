@@ -3,6 +3,7 @@ import { html } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 import Prism from '../../../vendor/prismjs/prism-core.js';
 window.Prism = Prism;
 import '../../../vendor/prismjs/prism-markup.js';
@@ -54,7 +55,7 @@ export class MarkdownEditor extends Component {
     const saveBtn = this.container.querySelector('.textarea-save-btn');
     if (!editorElement) return;
     if (this.isMaximized) {
-      document.body.classList.add('textarea-maximized-body-lock');
+      acquireScrollLock(this);
     }
     const lang = Prism.languages['point-md'] || Prism.languages.markdown;
     const langKey = Prism.languages['point-md'] ? 'point-md' : 'markdown';
@@ -106,7 +107,8 @@ export class MarkdownEditor extends Component {
     if (saveBtn) saveBtn.classList.toggle('is-maximized', this.isMaximized);
     btn.innerHTML = html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`;
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
-    document.body.classList.toggle('textarea-maximized-body-lock', this.isMaximized);
+    if (this.isMaximized) acquireScrollLock(this);
+    else releaseScrollLock(this);
     this.container.dispatchEvent(new CustomEvent('textarea:maximize', {
       bubbles: true,
       detail: {
@@ -115,9 +117,7 @@ export class MarkdownEditor extends Component {
     }));
   }
   beforeUnmount() {
-    if (this.isMaximized) {
-      document.body.classList.remove('textarea-maximized-body-lock');
-    }
+    releaseScrollLock(this);
     if (this.jar) {
       this.jar.destroy();
       this.jar = null;

@@ -1,5 +1,6 @@
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 const SHORTCUTS = [
   { group: 'Global', items: [
@@ -74,12 +75,17 @@ export class ShortcutHelp extends Component {
 
   open() {
     this.setState({ isOpen: true });
-    document.body.style.overflow = 'hidden';
+    acquireScrollLock(this);
   }
 
   close() {
     this.setState({ isOpen: false });
-    document.body.style.overflow = '';
+    releaseScrollLock(this);
+  }
+
+  beforeUnmount() {
+    // Unmounted rather than closed (a page setState) must still unlock the page.
+    releaseScrollLock(this);
   }
 
   _onKeyDownGlobal(e) {

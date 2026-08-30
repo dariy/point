@@ -7,6 +7,7 @@ import {
 import { html, raw } from '../../utils/helpers.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 export class AdminBottomBar extends Component {
   render() {
@@ -93,12 +94,12 @@ export class AdminBottomBar extends Component {
 
     const open = () => {
       overlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
+      acquireScrollLock(this);
     };
 
     const close = () => {
       overlay.classList.remove('active');
-      document.body.style.overflow = '';
+      releaseScrollLock(this);
     };
 
     moreBtn?.addEventListener('click', open);
@@ -121,5 +122,18 @@ export class AdminBottomBar extends Component {
       close();
       if (this.props.onLogout) this.props.onLogout();
     });
+  }
+
+  // The More sheet's open state lives only in the overlay's `active` class, so
+  // it does not survive a re-render — this component re-renders itself on
+  // `plugin_toggled`, and AdminLayout mounts it on every admin page, so a page
+  // setState() unmounts it outright. Either way the sheet is gone from the
+  // screen and the lock has to go with it (p-overlay-scroll-lock-leak).
+  beforeRender() {
+    releaseScrollLock(this);
+  }
+
+  beforeUnmount() {
+    releaseScrollLock(this);
   }
 }

@@ -1,6 +1,7 @@
 import { raw } from "../utils/helpers.js";
 import { html } from "../utils/helpers.js";
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from './icons.js';
+import { acquireScrollLock, releaseScrollLock } from './scrollLock.js';
 
 /**
  * Setup "Maximize" buttons for all raw textareas in the given container.
@@ -30,7 +31,7 @@ export function setupTextareaMaximizer(container) {
     saveBtn.title = 'Save';
     saveBtn.innerHTML = html`${raw(CHECK_SVG)}`;
     if (isInitialMaximized) {
-      document.body.classList.add('textarea-maximized-body-lock');
+      acquireScrollLock(textarea);
     }
 
     // We need the parent to be relative to position the button
@@ -52,7 +53,7 @@ export function setupTextareaMaximizer(container) {
 
       // Prevent body scrolling and stacking context traps when maximized
       if (isMaximized) {
-        document.body.classList.add('textarea-maximized-body-lock');
+        acquireScrollLock(textarea);
         if (parent) {
           textarea._placeholder = document.createElement('div');
           textarea._placeholder.className = 'textarea-placeholder';
@@ -61,7 +62,7 @@ export function setupTextareaMaximizer(container) {
           document.body.appendChild(parent);
         }
       } else {
-        document.body.classList.remove('textarea-maximized-body-lock');
+        releaseScrollLock(textarea);
         if (parent && textarea._placeholder) {
           textarea._placeholder.parentNode.insertBefore(parent, textarea._placeholder);
           textarea._placeholder.remove();
