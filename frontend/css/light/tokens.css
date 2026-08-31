@@ -364,3 +364,10 @@
     --from-transform: var(--size-1-25);
     --from-transform-alt1: var(--size-0-875);
 }
+
+@supports (-webkit-touch-callout: none) {
+    :root,
+    [data-theme="light"] {
+        --bottom-bar-reserve: calc(var(--bottom-bar-height) + max(env(safe-area-inset-bottom, 0px), 1.25rem));
+    }
+}

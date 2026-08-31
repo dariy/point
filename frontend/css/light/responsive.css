@@ -16,7 +16,8 @@
         --sidebar-width: 0;
     }
 
-    .light-sidebar {
+    .light-sidebar,
+    .sidebar-footer {
         display: none;
     }
 

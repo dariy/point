@@ -38,7 +38,7 @@ body {
 
 .light-sidebar.is-collapsed .site-name,
 .light-sidebar.is-collapsed .nav-label,
-.light-sidebar.is-collapsed .sidebar-version,
+.sidebar-footer.is-collapsed .sidebar-version,
 .light-sidebar.is-collapsed .nav-group-title {
     display: none;
 }
@@ -48,7 +48,7 @@ body {
    sideways — just drop the right padding so the narrow column fits. */
 .light-sidebar.is-collapsed .sidebar-header,
 .light-sidebar.is-collapsed .nav-item a,
-.light-sidebar.is-collapsed .sidebar-footer {
+.sidebar-footer.is-collapsed {
     padding-right: 0;
 }
 
@@ -73,19 +73,19 @@ body {
 /* Collapsed: stack footer actions one per line like nav-items, left-aligned
    on the same icon rail. DOM order is logout then theme-toggle; reverse so
    theme-toggle is first and the exit/logout action is last. */
-.light-sidebar.is-collapsed .sidebar-footer-actions {
+.sidebar-footer.is-collapsed .sidebar-footer-actions {
     flex-direction: column-reverse;
     align-items: flex-start;
     gap: var(--spacing-sm);
 }
 
-.light-sidebar.is-collapsed .user-info {
+.sidebar-footer.is-collapsed .user-info {
     flex: 0 0 auto;
 }
 
 /* Collapsed: reset the theme-toggle's fixed dimensions and border so it
    sits flush-left on the same icon rail as the logout button. */
-.light-sidebar.is-collapsed .theme-toggle {
+.sidebar-footer.is-collapsed .theme-toggle {
     width: auto;
     height: auto;
     border: none;
@@ -309,6 +309,7 @@ body:has(.light-layout) {
     position: fixed;
     bottom: 0;
     left: 0;
+    z-index: 101;
     width: var(--sidebar-width);
     height: var(--sidebar-footer-height);
     padding: var(--spacing-md) var(--spacing-lg);
@@ -320,7 +321,7 @@ body:has(.light-layout) {
     gap: var(--spacing-sm);
 }
 
-.light-sidebar.is-collapsed .sidebar-footer {
+.sidebar-footer.is-collapsed {
     width: var(--sidebar-collapsed-width, var(--size-4));
 }
 
@@ -763,7 +764,7 @@ body:has(.light-layout) {
     height: var(--bottom-bar-reserve);
     background-color: var(--header-bg);
     border-top: var(--border-width) solid var(--header-border);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: calc(var(--bottom-bar-reserve) - var(--bottom-bar-height));
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
