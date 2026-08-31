@@ -36,6 +36,10 @@ import { html, isRawHtml, raw } from '../utils/helpers.js';
  *     before storing it (a post body). Nothing else.
  *   - Dynamic text nodes can still be set via element.textContent in
  *     afterRender(); that stays the simplest safe option for a lone string.
+ *   - A markup helper with nothing to render returns '' rather than html``.
+ *     html`` yields a String OBJECT, so an empty one is still truthy, and the
+ *     `frag ? html`<div>${frag}</div>` : ''` shape callers reach for would emit
+ *     the empty wrapper. render() itself may return html`` — nothing tests it.
  */
 
 /**

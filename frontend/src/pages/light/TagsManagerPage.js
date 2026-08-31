@@ -1,12 +1,10 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * TagsManagerPage — hierarchical tag management.
  *
  * Tree view: nav roots (by nav_order) → filed roots → Unfiled(N) group.
  * List view: tabular with search and parent filters.
  * Editor modal: Identity / Visibility / Display / Kind / Structure / Coordinates.
- * All user-supplied strings are escaped with escapeHtml() before interpolation.
+ * Markup is built with the html`` tag, which escapes every interpolation.
  */
 
 import { Component } from '../../components/Component.js';
@@ -15,7 +13,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html, raw } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
@@ -81,18 +79,20 @@ export default class TagsManagerPage extends Component {
       tags,
       view
     } = this.state;
+    // The tags views still return hand-escaped strings; the raw() calls go when
+    // components/light/tags moves to html``.
     let content;
     if (loading) {
-      content = `<div class="loading-spinner" aria-label="Loading tags…"></div>`;
+      content = html`<div class="loading-spinner" aria-label="Loading tags…"></div>`;
     } else if (error) {
-      content = `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+      content = html`<p class="error-state" role="alert">${error}</p>`;
     } else if (view === 'tree') {
-      content = `<div class="tags-tree-container">${renderTagForest(buildTagTree(tags), this._treeView())}</div>`;
+      content = html`<div class="tags-tree-container">${raw(renderTagForest(buildTagTree(tags), this._treeView()))}</div>`;
     } else {
-      content = renderTagList(tags, this._listView());
+      content = raw(renderTagList(tags, this._listView()));
     }
-    return `
-            ${this.state.selectMode && !loading && !error ? renderBulkToolbar() : ''}
+    return html`
+            ${this.state.selectMode && !loading && !error ? raw(renderBulkToolbar()) : ''}
             <div class="card tm-card">
               <div class="card-body">
                 ${content}

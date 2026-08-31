@@ -19,6 +19,8 @@ import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 import { Component } from '../src/components/Component.js';
 import { html, raw } from '../src/utils/helpers.js';
+import { renderTagStrip } from '../src/utils/tagStrip.js';
+import { thumbAttrs } from '../src/utils/mediaUrl.js';
 
 describe('Component.render() markup contract', () => {
   let dom;
@@ -64,6 +66,17 @@ describe('Component.render() markup contract', () => {
     // adoptLegacyMarkup() can go with it.
     const el = mount(() => '<p class="legacy">hand-escaped</p>');
     assert.strictEqual(el.querySelector('p.legacy')?.textContent, 'hand-escaped');
+  });
+
+  test('a markup helper with nothing to render returns something falsy', () => {
+    // html`` yields a String OBJECT, so an empty one is truthy — and callers
+    // gate a wrapper on the fragment: `frag ? html`<div>${frag}</div>` : ''`.
+    // Returning html`` from the empty branch emitted the empty wrapper.
+    const wrap = (frag) => String(frag ? html`<div class="w">${frag}</div>` : '');
+    assert.strictEqual(wrap(renderTagStrip([])), '');
+    assert.strictEqual(wrap(renderTagStrip([{ name: 'a', slug: 'a', inherited: true }])), '');
+    assert.strictEqual(wrap(thumbAttrs('')), '');
+    assert.match(wrap(renderTagStrip([{ name: 'a', slug: 'a' }])), /^<div class="w">/);
   });
 
   test('an empty render() leaves the container empty either way', () => {

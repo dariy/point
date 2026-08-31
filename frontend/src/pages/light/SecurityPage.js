@@ -12,7 +12,7 @@ import {
   changePassword, changeEmail, getMe
 } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 
 export default class SecurityPage extends Component {
@@ -38,10 +38,10 @@ export default class SecurityPage extends Component {
   _renderContent() {
     const { loading, error, sessions, changingPassword, changingEmail, email } = this.state;
 
-    if (loading) return '<div class="loading-spinner" aria-label="Loading security info…"></div>';
-    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    if (loading) return html`<div class="loading-spinner" aria-label="Loading security info…"></div>`;
+    if (error) return html`<p class="error-state" role="alert">${error}</p>`;
 
-    return `
+    return html`
       <div class="security-grid">
         <section class="card">
           <div class="card-header"><h2>Change Password</h2></div>
@@ -71,7 +71,7 @@ export default class SecurityPage extends Component {
               <div class="form-group">
                 <label class="form-label" for="account-email">Email</label>
                 <input type="email" id="account-email" class="form-input" required autocomplete="email"
-                       value="${escapeHtml(email)}">
+                       value="${email}">
               </div>
               <div class="form-group">
                 <label class="form-label" for="email-password">Current Password</label>
@@ -100,18 +100,18 @@ export default class SecurityPage extends Component {
                   </tr>
                 </thead>
                 <tbody>
-                  ${sessions.map(s => `
+                  ${sessions.map(s => html`
                     <tr class="${s.is_current ? 'session-current' : ''}">
                       <td>
-                        <strong>${escapeHtml(s.ua_browser || 'Unknown')} on ${escapeHtml(s.ua_os || 'Unknown')}</strong>
-                        ${s.is_current ? ' <span class="badge badge-success">Current</span>' : ''}
+                        <strong>${s.ua_browser || 'Unknown'} on ${s.ua_os || 'Unknown'}</strong>
+                        ${s.is_current ? html` <span class="badge badge-success">Current</span>` : ''}
                       </td>
-                      <td>${escapeHtml(formatDateShort(s.last_active))}</td>
+                      <td>${formatDateShort(s.last_active)}</td>
                       <td class="text-right">
-                        ${!s.is_current ? `<button class="btn btn-sm btn-danger delete-session-btn" data-id="${s.id}">Logout</button>` : ''}
+                        ${!s.is_current ? html`<button class="btn btn-sm btn-danger delete-session-btn" data-id="${s.id}">Logout</button>` : ''}
                       </td>
                     </tr>
-                  `).join('')}
+                  `)}
                 </tbody>
               </table>
             </div>

@@ -111,7 +111,7 @@ export class MediaViewer extends Component {
    * like every other renderer.
    */
   _renderExtras() {
-    return html``;
+    return '';
   }
 
   /** Hook: whether to create the floating EXIF flyout control. Subclasses that

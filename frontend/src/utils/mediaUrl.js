@@ -171,7 +171,8 @@ export function thumbSrcset(path, { sizes, width, height } = {}) {
  */
 export function thumbAttrs(path, opts = {}) {
   const { src, srcset, sizes } = thumbSrcset(path, opts);
-  if (!src) return html``;
+  // Falsy, not html``: RawHtml('') is a String object and therefore truthy.
+  if (!src) return '';
   // srcset is a comma-separated candidate list, not one URL, so it takes the
   // text policy — safeUrl() would reject the whole list. Each candidate URL in
   // it was built by thumbUrl() from the same path `src` carries.

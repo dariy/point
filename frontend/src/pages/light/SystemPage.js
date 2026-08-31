@@ -21,7 +21,7 @@ import {
   getHealth,
 } from "../../api/system.js";
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { formatFileSize } from "../../utils/formatters.js";
 
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
@@ -56,14 +56,14 @@ export default class SystemPage extends Component {
       this.state;
 
     if (loading)
-      return '<div class="loading-spinner" aria-label="Loading system info…"></div>';
+      return html`<div class="loading-spinner" aria-label="Loading system info…"></div>`;
     if (error)
-      return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+      return html`<p class="error-state" role="alert">${error}</p>`;
 
     const diskSection = diskInfo ? this._renderDiskSection(diskInfo) : "";
     const healthSection = this._renderHealthSection(health);
 
-    return `
+    return html`
       <div class="system-grid">
         <section class="card">
           <div class="card-header"><h2>Cache</h2></div>
@@ -80,7 +80,7 @@ export default class SystemPage extends Component {
             <button id="update-coords-btn" class="btn btn-secondary" ${updatingCoords ? "disabled" : ""}>
               ${updatingCoords ? "Updating…" : "Update Map Coords"}
             </button>
-            ${coordsResult ? `<p class="system-msg success">${escapeHtml(coordsResult)}</p>` : ""}
+            ${coordsResult ? html`<p class="system-msg success">${coordsResult}</p>` : ""}
           </div>
         </section>
 
@@ -102,7 +102,7 @@ export default class SystemPage extends Component {
         <section class="card system-full-width system-collapsible${migrationsCollapsed ? " collapsed" : ""}" data-collapsible="migrations">
           <div class="card-header" role="button" tabindex="0" aria-expanded="${migrationsCollapsed ? "false" : "true"}">
             <h2>Database Migrations</h2>
-            ${CHEVRON}
+            ${raw(CHEVRON)}
           </div>
           <div class="card-body">
             <div class="table-container">
@@ -116,14 +116,13 @@ export default class SystemPage extends Component {
                 <tbody>
                   ${migrations
                     .map(
-                      (m) => `
+                      (m) => html`
                     <tr>
-                      <td>${escapeHtml(m.name)}</td>
-                      <td class="text-right">${m.applied_at ? escapeHtml(new Date(m.applied_at).toLocaleString()) : '<span class="text-muted">Pending</span>'}</td>
+                      <td>${m.name}</td>
+                      <td class="text-right">${m.applied_at ? new Date(m.applied_at).toLocaleString() : html`<span class="text-muted">Pending</span>`}</td>
                     </tr>
                   `,
-                    )
-                    .join("")}
+                    )}
                 </tbody>
               </table>
             </div>
@@ -138,43 +137,42 @@ export default class SystemPage extends Component {
    * @param {{tasks: object[], degraded: number, uptime: number}|null} health
    */
   _renderHealthSection(health) {
-    if (!health) return "";
+    if (!health) return '';
 
     const rows = (health.tasks || [])
       .map((t) => {
         const state = t.healthy
-          ? '<span class="badge badge-success">OK</span>'
-          : '<span class="badge badge-danger">Failing</span>';
+          ? html`<span class="badge badge-success">OK</span>`
+          : html`<span class="badge badge-danger">Failing</span>`;
         const err = t.last_error
-          ? `<div class="job-health-error">${escapeHtml(t.last_error)}</div>`
+          ? html`<div class="job-health-error">${t.last_error}</div>`
           : "";
-        return `
+        return html`
           <tr>
-            <td>${escapeHtml(t.name)}${err}</td>
+            <td>${t.name}${err}</td>
             <td>${state}</td>
             <td>${this._ago(t.last_run)}</td>
             <td>${this._ago(t.last_success)}</td>
             <td>${t.failures || 0} / ${t.runs || 0}</td>
           </tr>`;
-      })
-      .join("");
+      });
 
     // No rows is the normal state moments after a restart, not an error.
-    const body = rows
-      ? `<table class="table">
+    const body = rows.length
+      ? html`<table class="table">
            <thead>
              <tr><th>Job</th><th>State</th><th>Last run</th><th>Last success</th><th>Failures</th></tr>
            </thead>
            <tbody>${rows}</tbody>
          </table>`
-      : "<p>No background jobs have reported yet.</p>";
+      : html`<p>No background jobs have reported yet.</p>`;
 
     const summary =
       health.degraded > 0
-        ? `<p class="error-state" role="alert">${health.degraded} job${health.degraded === 1 ? "" : "s"} failing.</p>`
+        ? html`<p class="error-state" role="alert">${health.degraded} job${health.degraded === 1 ? "" : "s"} failing.</p>`
         : "";
 
-    return `
+    return html`
       <section class="card system-full-width">
         <div class="card-header"><h2>Background Jobs</h2></div>
         <div class="card-body">
@@ -202,11 +200,11 @@ export default class SystemPage extends Component {
   }
 
   _renderLinkAudit(audit) {
-    if (!audit) return "";
+    if (!audit) return '';
     if (!audit.issues.length) {
-      return `<p class="system-msg success">No broken internal links — checked ${audit.scanned} public posts.</p>`;
+      return html`<p class="system-msg success">No broken internal links — checked ${audit.scanned} public posts.</p>`;
     }
-    return `
+    return html`
       <p class="system-msg error" role="alert">${audit.issues.length} broken link${audit.issues.length === 1 ? "" : "s"} found (checked ${audit.scanned} public posts):</p>
       <div class="table-container">
         <table class="table">
@@ -216,15 +214,14 @@ export default class SystemPage extends Component {
           <tbody>
             ${audit.issues
               .map(
-                (i) => `
+                (i) => html`
               <tr>
-                <td><a href="/light/posts/${i.source_id}/edit">${escapeHtml(i.source_title || i.source_slug)}</a></td>
-                <td><code>/posts/${escapeHtml(i.target_slug)}</code></td>
-                <td>${escapeHtml(i.reason)}</td>
+                <td><a href="/light/posts/${i.source_id}/edit">${i.source_title || i.source_slug}</a></td>
+                <td><code>/posts/${i.target_slug}</code></td>
+                <td>${i.reason}</td>
               </tr>
             `,
-              )
-              .join("")}
+              )}
           </tbody>
         </table>
       </div>`;
@@ -234,17 +231,17 @@ export default class SystemPage extends Component {
     const usagePercent = Math.round((disk.used / disk.total) * 100);
     const barClass =
       usagePercent >= 90 ? "danger" : usagePercent >= 70 ? "warning" : "";
-    return `
+    return html`
       <section class="card">
         <div class="card-header"><h2>Disk Usage (Server)</h2></div>
         <div class="card-body">
           <p>
-            ${escapeHtml(formatFileSize(disk.used))} of ${escapeHtml(formatFileSize(disk.total))} used (${usagePercent}%)
+            ${formatFileSize(disk.used)} of ${formatFileSize(disk.total)} used (${usagePercent}%)
           </p>
           <div class="storage-bar">
             <div class="storage-bar-fill ${barClass}" style="width: ${usagePercent}%"></div>
           </div>
-          <p class="form-hint" style="margin-top: var(--spacing-sm)">Path: <code>${escapeHtml(disk.path)}</code></p>
+          <p class="form-hint" style="margin-top: var(--spacing-sm)">Path: <code>${disk.path}</code></p>
         </div>
       </section>`;
   }

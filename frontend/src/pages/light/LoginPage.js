@@ -13,7 +13,7 @@
 import { Component } from '../../components/Component.js';
 import { login, loginWithPasskey } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { html, navigate } from '../../utils/helpers.js';
 
 export default class LoginPage extends Component {
   constructor(container, props = {}) {
@@ -48,11 +48,11 @@ export default class LoginPage extends Component {
   render() {
     const { loading, error, passkeySupported } = this.state;
 
-    return `
+    return html`
       <div class="login-overlay-backdrop" id="login-backdrop">
         <div class="login-modal-box">
-          ${error ? `<p class="login-modal-error" role="alert">${escapeHtml(error)}</p>` : ''}
-          ${passkeySupported ? `
+          ${error ? html`<p class="login-modal-error" role="alert">${error}</p>` : ''}
+          ${passkeySupported ? html`
           <button id="passkey-btn" class="btn btn-secondary login-passkey-btn" ${loading ? 'disabled' : ''}>
             Sign in with Passkey
           </button>

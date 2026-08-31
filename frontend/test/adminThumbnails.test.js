@@ -12,8 +12,10 @@ import { setupDOM } from './helpers/dom.js';
  * assertions here are about what reaches the markup: a `srcset`, a `sizes`
  * narrow enough to be worth having, and the `v` off the document bootstrap.
  *
- * render() is props → HTML string on all three, so a null container is enough;
- * a DOM is installed only because these modules touch globals as they load.
+ * render() is props → markup on all three, so a null container is enough; a DOM
+ * is installed only because these modules touch globals as they load. The
+ * renderers return the RawHtml html`` produces, so each result is put through
+ * String() before it meets an assertion that wants a primitive.
  */
 
 let dom;
@@ -36,7 +38,7 @@ beforeEach(() => {
 afterEach(() => dom.cleanup());
 
 /** Every `<img …>` open tag in a chunk of markup. */
-const imgs = (html) => html.match(/<img\b[^>]*>/g) || [];
+const imgs = (html) => String(html).match(/<img\b[^>]*>/g) || [];
 
 const POST = {
   id: 1,
@@ -55,7 +57,7 @@ describe('PostsListPage thumbnails', () => {
   };
 
   test('a card row asks for a candidate set scoped to its 48px thumb', () => {
-    const row = page([])._renderCardRow({ ...POST, media_url: '/2026/03/photo.jpg' });
+    const row = String(page([])._renderCardRow({ ...POST, media_url: '/2026/03/photo.jpg' }));
     const [img] = imgs(row);
     assert.ok(img, 'the card renders an <img>');
     assert.match(img, /src="\/2026\/03\/photo\.jpg\?s=512&amp;v=c0ffee01"/);

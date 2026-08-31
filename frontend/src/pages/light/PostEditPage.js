@@ -1,5 +1,3 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * PostEditPage — create or edit a blog post.
  *
@@ -20,7 +18,7 @@ import { uploadMedia } from "../../api/media.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
-import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import { html, navigate, raw, debounce } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
@@ -142,8 +140,8 @@ export default class PostEditPage extends Component {
     } = this.state;
     const analyzing = this._analyzing;
     const anyActionInProgress = saving || analyzing || deleting || generatingPreview || publishingToInstagram || !!analyzingField;
-    if (loading) return `<div class="loading-spinner"></div>`;
-    if (error) return `<p class="error-state">${escapeHtml(error)}</p>`;
+    if (loading) return html`<div class="loading-spinner"></div>`;
+    if (error) return html`<p class="error-state">${error}</p>`;
     const groups = buildFieldGroups({
       post,
       isNew,
@@ -596,13 +594,15 @@ export default class PostEditPage extends Component {
       if (!this.state.showLivePreview || this._unmounted) return;
       const data = this._collectFormData();
       try {
-        const {
-          html
-        } = await previewRender(data.content);
+        // Not `html` — that name is the markup tag this module imports, and
+        // shadowing it here turned every preview into a TypeError the catch
+        // below swallowed. The body comes back rendered and sanitized by the
+        // same server pipeline that stores it, so it goes in as raw().
+        const { html: rendered } = await previewRender(data.content);
         const mount = this.$("#preview-content");
         if (mount) {
-          const titleHtml = data.title ? `<h1 class="post-title">${escapeHtml(data.title)}</h1>` : "";
-          mount.innerHTML = html`${raw(titleHtml + html)}`;
+          const titleHtml = data.title ? html`<h1 class="post-title">${data.title}</h1>` : "";
+          mount.innerHTML = html`${titleHtml}${raw(rendered)}`;
         }
       } catch (_err) {/* ignore */}
     }, 1000);

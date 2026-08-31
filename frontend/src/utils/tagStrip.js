@@ -26,7 +26,9 @@ export function renderTagStrip(postTags) {
   // renderTagLink still returns a hand-escaped string; raw() until tagLinks.js
   // moves to html`` with the rest of the tags subsystem.
   const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
-  if (!tagsHtml) return html``;
+  // Falsy, not html``: RawHtml('') is a String object and therefore truthy,
+  // and PostContent gates its wrapper <div> on this result.
+  if (!tagsHtml) return '';
   return html`
     <div class="tag-strip-track">
       <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${raw(CHEVRON_SVG)}</button>

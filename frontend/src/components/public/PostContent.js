@@ -227,7 +227,7 @@ export class PostContent extends Component {
   }
 
   _renderNormalPostArrows(prevPost, nextPost) {
-    if (!prevPost && !nextPost) return html``;
+    if (!prevPost && !nextPost) return '';
     const prev = prevPost ? html`<a href="/posts/${prevPost.slug}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>` : "";
     const next = nextPost ? html`<a href="/posts/${nextPost.slug}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>` : "";
     return html`<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
@@ -295,7 +295,7 @@ export class PostContent extends Component {
   }
 
   _renderNav(prev, next) {
-    if (!prev && !next) return html``;
+    if (!prev && !next) return '';
     const prevLink = prev ? html`<a href="/posts/${prev.slug}" class="post-nav-link prev" rel="prev"><span class="nav-label">Previous</span><span class="nav-title">${prev.title}</span></a>` : html`<span></span>`;
     const nextLink = next ? html`<a href="/posts/${next.slug}" class="post-nav-link next" rel="next"><span class="nav-label">Next</span><span class="nav-title">${next.title}</span></a>` : html`<span></span>`;
     return html`<nav class="post-navigation" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
