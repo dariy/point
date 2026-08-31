@@ -124,8 +124,11 @@ body {
 
        Do NOT reintroduce height:100dvh either. It arrived (PR #222) against a
        white gap seen below the column on "touch devices" when the toolbar
-       collapses. That predates the measurement above, and the ::after backstop
-       below covers the gap without putting the footer back on a moving edge. */
+       collapses. That gap is real and still reproduces here, but a dvh-tall
+       column hides it only by growing its own bottom edge as the viewport
+       grows — which is precisely the moving edge the footer must not ride.
+       The gap is covered from the page canvas instead; see the body rule
+       below. */
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     color: var(--sidebar-text);
@@ -135,22 +138,38 @@ body {
     transition: background-color var(--transition-theme);
 }
 
-/* Paint backstop for the gap that height:100dvh used to cover. If the ICB
-   bottom edge ever lags the glass mid-transition, this keeps the column's own
-   colour under the shortfall instead of letting the page background show
-   through. It sits below the sidebar's bottom edge, so it is off-screen at
-   rest and costs nothing; 100vh is the large viewport, which is always at
-   least a toolbar taller than the small one. */
-.light-sidebar::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 100%;
-    height: 100vh;
-    background-color: var(--sidebar-bg);
-    transition: background-color var(--transition-theme);
-    pointer-events: none;
+/* The sidebar's colour is painted into the page canvas as well as onto the
+   column itself.
+
+   During an upward scroll gesture iOS translates the entire fixed layer — the
+   column and anything painted inside it — while the visible viewport grows,
+   leaving a strip of bare page between the column's bottom edge and the glass.
+   Nothing inside .light-sidebar can cover that: a pseudo-element hung below it
+   was tried and travels with the column. Measured on an iPad across four
+   variants held side by side (backstop / inner scroller / neither / both), the
+   white strip appeared under all four, in sync. The canvas is the one surface
+   that does not move, so the strip is already the right colour before the
+   column's edge leaves it.
+
+   html carries no background (common/reset.css), so body's propagates to the
+   canvas and is painted across the whole viewport regardless of scroll
+   position or overscroll — which is exactly the area that needs covering.
+
+   --sidebar-width is 0 below 48em (light/responsive.css), so the strip
+   disappears on its own wherever the sidebar itself does. */
+body:has(.light-layout) {
+    --sidebar-strip: var(--sidebar-width);
+}
+
+body:has(.light-layout--collapsed) {
+    --sidebar-strip: var(--sidebar-collapsed-width, var(--size-4));
+}
+
+body:has(.light-layout) {
+    /* Two stops at the same position: a hard edge, no interpolation. */
+    background-image: linear-gradient(to right,
+        var(--sidebar-bg) 0 var(--sidebar-strip),
+        transparent var(--sidebar-strip));
 }
 
 .sidebar-header {
