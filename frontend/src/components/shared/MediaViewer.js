@@ -23,7 +23,7 @@ import { html } from "../../utils/helpers.js";
  */
 
 import { Component } from '../../components/Component.js';
-import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
+import { safeUrl, navigate } from '../../utils/helpers.js';
 import { X_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
@@ -117,16 +117,17 @@ export class MediaViewer extends Component {
   }
   _renderItem(item) {
     if (item.type === 'html') {
-      return `<div class="immersive-text-slide"><div class="immersive-text-content">${item.html}</div></div>`;
+      // Post body markup, already sanitised server-side by the bluemonday policy.
+      return html`<div class="immersive-text-slide"><div class="immersive-text-content">${raw(item.html)}</div></div>`;
     }
-    const url = safeUrl(item.url);
+    const url = item.url;
     if (item.type === 'video') {
-      return `<video src="${url}" class="immersive-bg-image" autoplay muted loop playsinline></video>`;
+      return html`<video src="${url}" class="immersive-bg-image" autoplay muted loop playsinline></video>`;
     }
     if (item.type === 'audio') {
-      return `<div class="immersive-audio-container"><audio src="${url}" class="immersive-audio-player" controls></audio></div>`;
+      return html`<div class="immersive-audio-container"><audio src="${url}" class="immersive-audio-player" controls></audio></div>`;
     }
-    return `<img src="${url}" alt="${escapeHtml(item.alt || '')}" class="immersive-bg-image" loading="lazy" decoding="async">`;
+    return html`<img src="${url}" alt="${item.alt || ''}" class="immersive-bg-image" loading="lazy" decoding="async">`;
   }
   _renderPostNav(prev, next) {
     const {
@@ -447,7 +448,7 @@ export class MediaViewer extends Component {
     const el = document.createElement('div');
     el.className = 'carousel-slide edge-ghost';
     el.dataset.edge = dir;
-    el.innerHTML = html`${raw(this._renderItem(item))}`;
+    el.innerHTML = html`${this._renderItem(item)}`;
     el.style.opacity = '0';
     visuals.appendChild(el);
     this._ghost[dir] = el;

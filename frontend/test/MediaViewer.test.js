@@ -195,3 +195,62 @@ describe('ImmersiveSheetViewer', () => {
     assert.strictEqual(viewer._sheetOpen, true);
   });
 });
+
+// Slide markup is written straight to innerHTML. Every media URL reaching it
+// must go through the URL policy, not the text policy — escapeHtml leaves
+// `javascript:` intact, so an attribute-safe value can still be scheme-unsafe.
+describe('MediaViewer slide escaping', () => {
+  let dom;
+
+  beforeEach(() => {
+    dom = setupDOM();
+    store.set('settings', { immersive_nav_direction: 'chronological' });
+  });
+
+  afterEach(() => {
+    dom.cleanup();
+  });
+
+  const mountWith = (item) => {
+    const viewer = new MediaViewer(dom.document.body, { items: [item], startIndex: 0 });
+    viewer.mount();
+    return viewer;
+  };
+
+  test('a javascript: image url is neutralised to #', () => {
+    mountWith({ type: 'image', url: 'javascript:alert(1)' });
+
+    assert.strictEqual(dom.document.querySelector('.immersive-bg-image').getAttribute('src'), '#');
+  });
+
+  test('a protocol-relative video url is neutralised to #', () => {
+    mountWith({ type: 'video', url: '//evil.example/x.mp4' });
+
+    assert.strictEqual(dom.document.querySelector('video').getAttribute('src'), '#');
+  });
+
+  test('an attribute-breakout audio url cannot add an event handler', () => {
+    mountWith({ type: 'audio', url: '/a.mp3" onerror="alert(1)' });
+
+    const audio = dom.document.querySelector('audio');
+    assert.strictEqual(audio.getAttribute('onerror'), null);
+    assert.ok(!dom.document.body.innerHTML.includes('onerror="'));
+  });
+
+  test('a script tag in alt text renders as an attribute value, not an element', () => {
+    mountWith({ type: 'image', url: '/a.jpg', alt: '<script>alert(1)</script>' });
+
+    const img = dom.document.querySelector('img');
+    assert.strictEqual(dom.document.querySelector('script'), null);
+    assert.strictEqual(img.getAttribute('alt'), '<script>alert(1)</script>');
+    assert.strictEqual(img.getAttribute('src'), '/a.jpg');
+  });
+
+  test('an ordinary image slide is unaffected', () => {
+    mountWith({ type: 'image', url: '/photo.jpg', alt: 'A photo' });
+
+    const img = dom.document.querySelector('img');
+    assert.strictEqual(img.getAttribute('src'), '/photo.jpg');
+    assert.strictEqual(img.getAttribute('alt'), 'A photo');
+  });
+});
