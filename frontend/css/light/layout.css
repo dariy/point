@@ -11,11 +11,25 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    /* dvh (dynamic) wins: it tracks the mobile toolbar collapsing on scroll so
-       the layout grows to fill the enlarged viewport. Do NOT pin to svh — svh
-       can't grow past the toolbar-shown height, so scrolling to hide the toolbar
-       opens a toolbar-tall dead space below the footer. */
-    min-height: 100dvh;
+    /* lvh (large) — the height the viewport has once the mobile toolbar has
+       collapsed. All three units were tried and the choice is between their
+       failure modes, not their merits:
+
+         svh  can't grow past the toolbar-shown height, so hiding the toolbar
+              opens a toolbar-tall dead space below the footer.
+         dvh  tracks the toolbar, so the box grows mid-gesture — the layout
+              changes size underneath the reader on the first scroll of every
+              page, which is the jump this is here to remove.
+         lvh  is already the post-collapse size, so the collapse changes
+              nothing. The cost is that the page is a toolbar-height scrollable
+              while the toolbar is still showing, with no content down there.
+              That scroll is what collapses the toolbar, after which the two
+              agree exactly.
+
+       On any engine without a collapsing toolbar lvh, svh and dvh are the same
+       number, so this is a no-op on desktop. */
+    min-height: 100vh;
+    min-height: 100lvh;
 }
 
 .light-sidebar.is-collapsed {
@@ -24,7 +38,7 @@ body {
 
 .light-sidebar.is-collapsed .site-name,
 .light-sidebar.is-collapsed .nav-label,
-.light-sidebar.is-collapsed .sidebar-version,
+.sidebar-footer.is-collapsed .sidebar-version,
 .light-sidebar.is-collapsed .nav-group-title {
     display: none;
 }
@@ -34,7 +48,7 @@ body {
    sideways — just drop the right padding so the narrow column fits. */
 .light-sidebar.is-collapsed .sidebar-header,
 .light-sidebar.is-collapsed .nav-item a,
-.light-sidebar.is-collapsed .sidebar-footer {
+.sidebar-footer.is-collapsed {
     padding-right: 0;
 }
 
@@ -59,19 +73,19 @@ body {
 /* Collapsed: stack footer actions one per line like nav-items, left-aligned
    on the same icon rail. DOM order is logout then theme-toggle; reverse so
    theme-toggle is first and the exit/logout action is last. */
-.light-sidebar.is-collapsed .sidebar-footer-actions {
+.sidebar-footer.is-collapsed .sidebar-footer-actions {
     flex-direction: column-reverse;
     align-items: flex-start;
     gap: var(--spacing-sm);
 }
 
-.light-sidebar.is-collapsed .user-info {
+.sidebar-footer.is-collapsed .user-info {
     flex: 0 0 auto;
 }
 
 /* Collapsed: reset the theme-toggle's fixed dimensions and border so it
    sits flush-left on the same icon rail as the logout button. */
-.light-sidebar.is-collapsed .theme-toggle {
+.sidebar-footer.is-collapsed .theme-toggle {
     width: auto;
     height: auto;
     border: none;
@@ -97,24 +111,38 @@ body {
     left: 0;
     top: 0;
     bottom: 0;
-    /* Pin to the dynamic viewport so the dark column always fills the visible
-       height. Relying on bottom:0 alone leaves a white gap below the column on
-       touch devices when the browser toolbar collapses on scroll.
+    /* Anchor the column to the initial containing block (top:0 + bottom:0),
+       NOT to 100dvh.
 
-       Do NOT add a toolbar correction to .sidebar-footer below. That was tried
-       (--toolbar-drift, reverted) on the theory that a collapsing toolbar drags
-       this column's bottom edge — and hence the footer — down the screen. It
-       does not. An iPad carries no bottom browser chrome: Safari and Chrome
-       both keep their toolbars at the top, so a collapse grows the viewport
-       UPWARD. The bottom edge is already pinned to the glass; correcting for a
-       drift that is not there is what makes the footer jump. Measured on an
-       iPad in Chrome, 744x1133, four fixed markers across a toolbar
-       transition: bottom:0 held still, this column's 100dvh bottom edge
-       flickered for the length of the transition and settled back, and a
-       marker held 100svh below the top — where the correction put the footer —
-       moved by the full 80px toolbar height and back. */
-    height: 100vh;
-    height: 100dvh;
+       Measured on an iPad in Chrome, 744x1133, four fixed markers held across
+       a toolbar transition (toolbar height 80px):
+
+         bottom:0                  held still
+         top:0; height:100dvh      flickered for the length of the transition,
+                                   then settled back
+         top:0; height:100svh      moved the full 80px and back
+
+       This column used to be the second of those, so its bottom edge — and
+       the .sidebar-footer riding it as the last flex child — blinked on every
+       collapse. bottom:0 is the anchor that does not move: an iPad carries no
+       bottom browser chrome (Safari and Chrome both keep the toolbar at the
+       top), so a collapse grows the viewport UPWARD and the ICB bottom edge is
+       already pinned to the glass. top:0 is unchanged from the blinking
+       version, which is what establishes it does not land under the toolbar.
+
+       Do NOT reintroduce a toolbar correction on .sidebar-footer. That was
+       tried (--toolbar-drift, reverted) on the theory that a collapse drags
+       this column's bottom edge down the screen. It does not, and correcting
+       for a drift that is not there is what made the footer jump by the full
+       toolbar height — the 100svh row above is where that correction put it.
+
+       Do NOT reintroduce height:100dvh either. It arrived (PR #222) against a
+       white gap seen below the column on "touch devices" when the toolbar
+       collapses. That gap is real and still reproduces here, but a dvh-tall
+       column hides it only by growing its own bottom edge as the viewport
+       grows — which is precisely the moving edge the footer must not ride.
+       The gap is covered from the page canvas instead; see the body rule
+       below. */
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     color: var(--sidebar-text);
@@ -122,6 +150,40 @@ body {
     flex-direction: column;
     z-index: 100;
     transition: background-color var(--transition-theme);
+}
+
+/* The sidebar's colour is painted into the page canvas as well as onto the
+   column itself.
+
+   During an upward scroll gesture iOS translates the entire fixed layer — the
+   column and anything painted inside it — while the visible viewport grows,
+   leaving a strip of bare page between the column's bottom edge and the glass.
+   Nothing inside .light-sidebar can cover that: a pseudo-element hung below it
+   was tried and travels with the column. Measured on an iPad across four
+   variants held side by side (backstop / inner scroller / neither / both), the
+   white strip appeared under all four, in sync. The canvas is the one surface
+   that does not move, so the strip is already the right colour before the
+   column's edge leaves it.
+
+   html carries no background (common/reset.css), so body's propagates to the
+   canvas and is painted across the whole viewport regardless of scroll
+   position or overscroll — which is exactly the area that needs covering.
+
+   --sidebar-width is 0 below 48em (light/responsive.css), so the strip
+   disappears on its own wherever the sidebar itself does. */
+body:has(.light-layout) {
+    --sidebar-strip: var(--sidebar-width);
+}
+
+body:has(.light-layout--collapsed) {
+    --sidebar-strip: var(--sidebar-collapsed-width, var(--size-4));
+}
+
+body:has(.light-layout) {
+    /* Two stops at the same position: a hard edge, no interpolation. */
+    background-image: linear-gradient(to right,
+        var(--sidebar-bg) 0 var(--sidebar-strip),
+        transparent var(--sidebar-strip));
 }
 
 .sidebar-header {
@@ -197,6 +259,9 @@ body {
     flex: 1;
     list-style: none;
     padding: var(--spacing-md) 0;
+    /* Room for the pinned .sidebar-footer, which is out of this column's flow.
+       Same token the footer is sized by — see --sidebar-footer-height. */
+    padding-bottom: var(--sidebar-footer-height);
     overflow-y: auto;
 }
 
@@ -224,12 +289,40 @@ body {
     flex-shrink: 0;
 }
 
+/* Pinned to the viewport's bottom edge rather than riding the bottom of the
+   column, because those two edges are not the same thing during an iOS scroll
+   gesture. Measured on an iPad with markers held side by side: `fixed;
+   bottom:0` with its own height sat still through both gestures, while every
+   variant sized from top+bottom — plain column, with an inner scroller, with a
+   pseudo-element, with both — drifted in sync on the upward one and settled
+   back only when the gesture ended. As the last flex child of the column this
+   footer rode that drifting edge; on its own bottom:0 anchor it does not.
+
+   .light-sidebar is position:fixed and carries a stacking context, but neither
+   makes it a containing block for fixed descendants (only transform, filter,
+   backdrop-filter, will-change and contain do that), so this anchors to the
+   viewport while staying exactly where it is in the markup.
+
+   Below 48em .light-sidebar is display:none, which removes this subtree with
+   it — no separate guard needed. */
 .sidebar-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 101;
+    width: var(--sidebar-width);
+    height: var(--sidebar-footer-height);
     padding: var(--spacing-md) var(--spacing-lg);
     border-top: var(--border-width) solid var(--sidebar-border);
+    background-color: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: var(--spacing-sm);
+}
+
+.sidebar-footer.is-collapsed {
+    width: var(--sidebar-collapsed-width, var(--size-4));
 }
 
 .sidebar-version {
@@ -379,8 +472,11 @@ body {
        is border-box, so it stays inside this clamp rather than adding to it. */
     flex: 0 0 auto;
     min-height: 0;
+    /* lvh, not dvh — see .light-layout. This box IS the scrollport for the
+       inner table, so sizing it from a unit that changes mid-gesture resizes
+       that scrollport under the reader's finger. */
     height: 100vh;
-    height: 100dvh;
+    height: 100lvh;
     overflow: hidden;
 }
 
@@ -668,7 +764,7 @@ body {
     height: var(--bottom-bar-reserve);
     background-color: var(--header-bg);
     border-top: var(--border-width) solid var(--header-border);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: calc(var(--bottom-bar-reserve) - var(--bottom-bar-height));
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 

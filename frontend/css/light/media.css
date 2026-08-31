@@ -22,8 +22,9 @@
            in light/layout.css for the full note. */
         flex: 0 0 auto;
         min-height: 0;
+        /* lvh, not dvh — see .light-layout in light/layout.css. */
         height: 100vh;
-        height: 100dvh;
+        height: 100lvh;
         overflow: hidden;
     }
 

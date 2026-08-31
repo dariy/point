@@ -116,20 +116,20 @@ export class LightSidebar extends Component {
             <ul class="nav-group-items">${manageItemsHtml}</ul>
           </div>
         </nav>
+      </aside>
 
-        <div class="sidebar-footer">
-          <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}<span class="sidebar-build sidebar-build-${DEBUG ? 'debug' : 'release'}" title="Frontend bundle">${DEBUG ? 'debug' : 'release'}</span></div>
-          <div class="sidebar-footer-actions">
-            <div class="user-info">
-              <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
-            </div>
-            <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button" title="Toggle Theme">
-              <span class="icon-sun">${SUN_SVG}</span>
-              <span class="icon-moon">${MOON_SVG}</span>
-            </button>
+      <div class="sidebar-footer${collapsed ? ' is-collapsed' : ''}">
+        <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}<span class="sidebar-build sidebar-build-${DEBUG ? 'debug' : 'release'}" title="Frontend bundle">${DEBUG ? 'debug' : 'release'}</span></div>
+        <div class="sidebar-footer-actions">
+          <div class="user-info">
+            <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
           </div>
+          <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button" title="Toggle Theme">
+            <span class="icon-sun">${SUN_SVG}</span>
+            <span class="icon-moon">${MOON_SVG}</span>
+          </button>
         </div>
-      </aside>`;
+      </div>`;
   }
 
   afterRender() {
