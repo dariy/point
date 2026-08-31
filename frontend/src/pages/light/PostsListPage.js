@@ -323,7 +323,7 @@ export default class PostsListPage extends Component {
             <div id="pagination-mount"></div>`;
   }
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/posts"
     });
 
@@ -675,7 +675,6 @@ export default class PostsListPage extends Component {
     window.addEventListener("resize", this._onResize);
   }
   beforeUnmount() {
-    this._cleanupAdminLayout?.();
     if (this._onResize) window.removeEventListener("resize", this._onResize);
     this._teardownPageControls();
   }

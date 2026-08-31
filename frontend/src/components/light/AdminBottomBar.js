@@ -83,10 +83,7 @@ export class AdminBottomBar extends Component {
   }
 
   afterRender() {
-    if (!this._subscribedPluginToggled) {
-      this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
-      this._subscribedPluginToggled = true;
-    }
+    this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
 
     const overlay = this.$('#more-sheet-overlay');
     const moreBtn = this.$('#bottom-bar-more');

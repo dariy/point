@@ -197,7 +197,7 @@ export default class TagsManagerPage extends Component {
   }
   afterRender() {
     const tagSlug = this.props?.params?.slug;
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: '/light/tags',
       publicUrl: tagSlug ? `/tags/${tagSlug}` : '/'
     });
@@ -316,7 +316,6 @@ export default class TagsManagerPage extends Component {
     this._bindSwipeToReveal();
   }
   beforeUnmount() {
-    this._cleanupAdminLayout?.();
     this._closeModal();
     this._swipeCleanup?.();
     this._swipeCleanup = null;

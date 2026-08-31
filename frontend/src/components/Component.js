@@ -13,6 +13,19 @@ import { html } from "../utils/helpers.js";
  *     -> setProps(delta)  merges props and re-renders
  *     -> unmount()        beforeUnmount() then container cleared
  *
+ * Resource contract:
+ *   afterRender() runs again on every re-render, so anything it acquires —
+ *   an observer, a store subscription, a listener on document/window, a node
+ *   appended outside the container — must be released before the next one
+ *   runs, or it accumulates once per setState() for the life of the page.
+ *   registerCleanup() is that release: the list is drained before each
+ *   re-render and again on unmount, so a resource acquired in afterRender()
+ *   lives exactly as long as the render that acquired it. subscribeStore()
+ *   and mountChild() are built on it; reach for it directly for everything
+ *   else. Guarding an acquisition with a "have I done this already?" flag is
+ *   the wrong fix and now an actively broken one — the flag survives the
+ *   cleanup that released the resource, so the second render gets neither.
+ *
  * Security contract for subclasses:
  *   - escapeHtml() MUST wrap every user-supplied string inside render().
  *   - Dynamic text nodes should be set via element.textContent in afterRender(),
@@ -33,8 +46,12 @@ export class Component {
     this.state = {};
     /** @type {Component[]} */
     this._children = [];
-    /** @type {Function[]} */
-    this._storeUnsubs = [];
+    /**
+     * Teardowns for resources acquired by the current render. Drained before
+     * every re-render and on unmount.
+     * @type {Function[]}
+     */
+    this._cleanups = [];
     this._unmounted = false;
   }
 
@@ -58,7 +75,9 @@ export class Component {
 
   /**
    * Called just before this component is removed from the DOM.
-   * Override to cancel timers or unsubscribe from the store.
+   * Override to release things that outlive a single render — a poll timer
+   * started in the constructor, say. Anything acquired in afterRender()
+   * belongs in registerCleanup() instead, which also runs between renders.
    */
   beforeUnmount() {}
 
@@ -102,8 +121,7 @@ export class Component {
    */
   unmount() {
     this._unmounted = true;
-    this._storeUnsubs.forEach(fn => fn());
-    this._storeUnsubs = [];
+    this._runCleanups();
     this._unmountChildren();
     this.beforeUnmount();
     this.container.textContent = '';
@@ -132,14 +150,30 @@ export class Component {
   }
 
   /**
-   * Subscribe to a store key, auto-unsubscribed on unmount.
+   * Register a teardown for a resource acquired by the current render.
+   *
+   * Called before the next re-render and again on unmount, whichever comes
+   * first, then forgotten — so afterRender() re-registers on every pass and
+   * needs no guard. Safe to call from anywhere the component is alive; a
+   * cleanup registered outside afterRender() simply lives until the next
+   * render boundary like any other.
+   *
+   * @param {Function} [fn]  Teardown; ignored when not a function, so the
+   *                         return value of a setup helper can be passed
+   *                         straight through.
+   */
+  registerCleanup(fn) {
+    if (typeof fn === 'function') this._cleanups.push(fn);
+  }
+
+  /**
+   * Subscribe to a store key for the lifetime of the current render.
    * @param {object} storeInstance
    * @param {string} key
    * @param {Function} callback
    */
   subscribeStore(storeInstance, key, callback) {
-    const unsub = storeInstance.subscribe(key, callback);
-    this._storeUnsubs.push(unsub);
+    this.registerCleanup(storeInstance.subscribe(key, callback));
   }
 
   /**
@@ -163,6 +197,9 @@ export class Component {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _rerender() {
+    // Release what the previous render acquired, while its DOM is still in
+    // place: registered teardowns first, then the imperative hook.
+    this._runCleanups();
     // Optional hook called before every re-render including the first.
     // Override in subclasses to release resources (timers, observers, DOM nodes
     // appended outside the container) before the container is replaced.
@@ -179,5 +216,23 @@ export class Component {
   _unmountChildren() {
     this._children.forEach(c => c.unmount());
     this._children = [];
+  }
+
+  /**
+   * Drain the cleanup list. Cleared first so a teardown that re-renders (or
+   * registers something new) cannot run the same entry twice, and one that
+   * throws cannot strand the ones behind it — a leaked resource is exactly
+   * what this list exists to prevent.
+   */
+  _runCleanups() {
+    const fns = this._cleanups;
+    this._cleanups = [];
+    for (const fn of fns) {
+      try {
+        fn();
+      } catch (err) {
+        console.error(`${this.constructor.name}: cleanup failed`, err);
+      }
+    }
   }
 }

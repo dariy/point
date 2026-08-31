@@ -461,7 +461,7 @@ export default class PluginsPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/plugins",
     });
 
@@ -566,7 +566,6 @@ export default class PluginsPage extends Component {
   }
 
   beforeUnmount() {
-    this._cleanupAdminLayout?.();
     this._closePanel();
   }
 

@@ -121,7 +121,7 @@ export default class SecurityPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: '/light/security',
     });
 
@@ -148,10 +148,6 @@ export default class SecurityPage extends Component {
         this._handleDeleteSession(btn.dataset.id);
       });
     });
-  }
-
-  beforeUnmount() {
-    this._cleanupAdminLayout?.();
   }
 
   mount() {

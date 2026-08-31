@@ -169,10 +169,7 @@ export class PostCard extends Component {
       this._setupHoverVideo(card, mediaUrl);
     }
 
-    if (!this._subscribed) {
-      this.subscribeStore(store, "navTags", () => this._rerender());
-      this._subscribed = true;
-    }
+    this.subscribeStore(store, "navTags", () => this._rerender());
 
     const go = () => {
       this._stopHoverVideo?.();

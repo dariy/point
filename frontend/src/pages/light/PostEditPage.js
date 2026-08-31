@@ -421,7 +421,7 @@ export default class PostEditPage extends Component {
   }
   afterRender() {
     const postSlug = this.state.post?.slug;
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/posts",
       publicUrl: postSlug ? `/posts/${postSlug}` : "/"
     });
@@ -873,7 +873,6 @@ export default class PostEditPage extends Component {
     }
   }
   beforeUnmount() {
-    this._cleanupAdminLayout?.();
     this._detachReorder?.();
     this._unmounted = true;
     if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);

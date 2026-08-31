@@ -43,8 +43,20 @@ class Store {
    */
   set(key, value) {
     this._state[key] = value;
-    if (this._listeners[key]) {
-      this._listeners[key].forEach((fn) => fn(value));
+    const listeners = this._listeners[key];
+    if (!listeners) return;
+    // Dispatch over a snapshot, skipping anyone unsubscribed along the way.
+    //
+    // Both halves matter because subscribers re-render, and a Component's
+    // re-render releases the current render's subscriptions and takes out
+    // fresh ones (see Component.registerCleanup). Iterating the live Set
+    // would visit those replacements — Set.forEach visits entries added
+    // during iteration — and each would re-render and resubscribe again,
+    // which does not terminate. The `has` check is the other direction: a
+    // subscriber torn down by an earlier callback in this same dispatch must
+    // not be called after it has gone.
+    for (const fn of [...listeners]) {
+      if (this._listeners[key]?.has(fn)) fn(value);
     }
   }
 

@@ -105,7 +105,7 @@ export default class SettingsPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/settings",
     });
 
@@ -130,7 +130,6 @@ export default class SettingsPage extends Component {
   }
 
   beforeUnmount() {
-    this._cleanupAdminLayout?.();
     this._logoPicker?.destroy();
     this._logoPicker = null;
   }
