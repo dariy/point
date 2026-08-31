@@ -31,6 +31,15 @@
        nothing about it, and the last row of content would sit underneath.
        The reserve carries the safe-area inset, which the bar itself spends as
        bottom padding — see .admin-bottom-bar. */
+    /* Sidebar footer (48em and up). Pinned to this height for the same reason
+       the bottom bar is: it is position:fixed so it can hold the one anchor
+       that survives an iOS scroll gesture, which takes it out of the column's
+       flex flow, so .sidebar-nav has to reserve the room instead. One number
+       does both, so they cannot drift apart. Measured content is 95px in every
+       state — expanded (version + actions) and collapsed (actions only, the
+       version display:none) both land there. */
+    --sidebar-footer-height: 6rem;
+
     --bottom-bar-height: 3.5rem;
     --bottom-bar-reserve: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom, 0px));
 

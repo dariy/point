@@ -11,11 +11,25 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    /* dvh (dynamic) wins: it tracks the mobile toolbar collapsing on scroll so
-       the layout grows to fill the enlarged viewport. Do NOT pin to svh — svh
-       can't grow past the toolbar-shown height, so scrolling to hide the toolbar
-       opens a toolbar-tall dead space below the footer. */
-    min-height: 100dvh;
+    /* lvh (large) — the height the viewport has once the mobile toolbar has
+       collapsed. All three units were tried and the choice is between their
+       failure modes, not their merits:
+
+         svh  can't grow past the toolbar-shown height, so hiding the toolbar
+              opens a toolbar-tall dead space below the footer.
+         dvh  tracks the toolbar, so the box grows mid-gesture — the layout
+              changes size underneath the reader on the first scroll of every
+              page, which is the jump this is here to remove.
+         lvh  is already the post-collapse size, so the collapse changes
+              nothing. The cost is that the page is a toolbar-height scrollable
+              while the toolbar is still showing, with no content down there.
+              That scroll is what collapses the toolbar, after which the two
+              agree exactly.
+
+       On any engine without a collapsing toolbar lvh, svh and dvh are the same
+       number, so this is a no-op on desktop. */
+    min-height: 100vh;
+    min-height: 100lvh;
 }
 
 .light-sidebar.is-collapsed {
@@ -245,6 +259,9 @@ body:has(.light-layout) {
     flex: 1;
     list-style: none;
     padding: var(--spacing-md) 0;
+    /* Room for the pinned .sidebar-footer, which is out of this column's flow.
+       Same token the footer is sized by — see --sidebar-footer-height. */
+    padding-bottom: var(--sidebar-footer-height);
     overflow-y: auto;
 }
 
@@ -272,12 +289,39 @@ body:has(.light-layout) {
     flex-shrink: 0;
 }
 
+/* Pinned to the viewport's bottom edge rather than riding the bottom of the
+   column, because those two edges are not the same thing during an iOS scroll
+   gesture. Measured on an iPad with markers held side by side: `fixed;
+   bottom:0` with its own height sat still through both gestures, while every
+   variant sized from top+bottom — plain column, with an inner scroller, with a
+   pseudo-element, with both — drifted in sync on the upward one and settled
+   back only when the gesture ended. As the last flex child of the column this
+   footer rode that drifting edge; on its own bottom:0 anchor it does not.
+
+   .light-sidebar is position:fixed and carries a stacking context, but neither
+   makes it a containing block for fixed descendants (only transform, filter,
+   backdrop-filter, will-change and contain do that), so this anchors to the
+   viewport while staying exactly where it is in the markup.
+
+   Below 48em .light-sidebar is display:none, which removes this subtree with
+   it — no separate guard needed. */
 .sidebar-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: var(--sidebar-width);
+    height: var(--sidebar-footer-height);
     padding: var(--spacing-md) var(--spacing-lg);
     border-top: var(--border-width) solid var(--sidebar-border);
+    background-color: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: var(--spacing-sm);
+}
+
+.light-sidebar.is-collapsed .sidebar-footer {
+    width: var(--sidebar-collapsed-width, var(--size-4));
 }
 
 .sidebar-version {
@@ -427,8 +471,11 @@ body:has(.light-layout) {
        is border-box, so it stays inside this clamp rather than adding to it. */
     flex: 0 0 auto;
     min-height: 0;
+    /* lvh, not dvh — see .light-layout. This box IS the scrollport for the
+       inner table, so sizing it from a unit that changes mid-gesture resizes
+       that scrollport under the reader's finger. */
     height: 100vh;
-    height: 100dvh;
+    height: 100lvh;
     overflow: hidden;
 }
 
