@@ -291,13 +291,13 @@ export class NavMenu {
     // Parents only — a parent with children reveals them in the shared
     // dropdown (like inline links) rather than flattening the whole subtree.
     const panel = more.querySelector('.nav-more-panel');
-    panel.innerHTML = html`${raw(panelItems.map((it, i) => {
+    panel.innerHTML = html`${panelItems.map((it, i) => {
       const hasChildren = this._childItems(it).length > 0;
-      const caret = hasChildren ? `<span class="nav-more-item-caret" aria-hidden="true">›</span>` : '';
-      return `<a href="${it.href || '#'}"
+      const caret = hasChildren ? html`<span class="nav-more-item-caret" aria-hidden="true">›</span>` : '';
+      return html`<a href="${it.href || '#'}"
          class="nav-more-item${hasChildren ? ' has-children' : ''}"
          data-more-i="${i}">${it.name}${caret}</a>`;
-    }).join(''))}`;
+    })}`;
     panel.querySelectorAll('.nav-more-item.has-children').forEach(el => {
       const childItems = this._childItems(panelItems[Number(el.dataset.moreI)]);
       if (childItems.length) this._wireChildFlyout(el, childItems);
