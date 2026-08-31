@@ -24,7 +24,7 @@ import { getTagPage } from "../../api/pages.js";
 import { getPostBySlug, getPostNavigation } from "../../api/posts.js";
 import { store } from "../../store.js";
 import {
-  escapeHtml,
+  html,
   isShortViewport,
   setCanonical,
   removeCanonical,
@@ -262,7 +262,7 @@ export default class TagPage extends Component {
     const { loading, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main" aria-busy="true">
@@ -273,18 +273,18 @@ export default class TagPage extends Component {
     }
 
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <p class="error-message" role="alert">${error}</p>
           </main>
           <div id="footer-mount"></div>
         </div>`;
     }
 
     if (this._isPostView()) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
@@ -296,7 +296,7 @@ export default class TagPage extends Component {
         </div>`;
     }
 
-    return `
+    return html`
       <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>

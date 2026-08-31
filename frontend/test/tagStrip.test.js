@@ -48,11 +48,11 @@ describe('renderTagStrip visibility filter', () => {
 
   test('renders nothing when every tag is inherited', () => {
     const html = renderTagStrip([{ name: 'location', slug: 'location', inherited: true }]);
-    assert.strictEqual(html, '');
+    assert.strictEqual(String(html), '');
   });
 
   test('handles a missing tag list', () => {
-    assert.strictEqual(renderTagStrip(undefined), '');
-    assert.strictEqual(renderTagStrip([]), '');
+    assert.strictEqual(String(renderTagStrip(undefined)), '');
+    assert.strictEqual(String(renderTagStrip([])), '');
   });
 });

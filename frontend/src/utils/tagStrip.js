@@ -8,6 +8,7 @@
  */
 
 import { CHEVRON_SVG } from './icons.js';
+import { html, raw } from './helpers.js';
 import { renderTagLink } from './tagLinks.js';
 import { setupTagFlyout } from './tagFlyout.js';
 
@@ -22,13 +23,15 @@ import { setupTagFlyout } from './tagFlyout.js';
  */
 export function renderTagStrip(postTags) {
   const visibleTags = (postTags || []).filter((t) => !t.inherited);
+  // renderTagLink still returns a hand-escaped string; raw() until tagLinks.js
+  // moves to html`` with the rest of the tags subsystem.
   const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
-  if (!tagsHtml) return '';
-  return `
+  if (!tagsHtml) return html``;
+  return html`
     <div class="tag-strip-track">
-      <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${CHEVRON_SVG}</button>
-      <div class="tag-strip-scroll" aria-label="Tags">${tagsHtml}</div>
-      <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">${CHEVRON_SVG}</button>
+      <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${raw(CHEVRON_SVG)}</button>
+      <div class="tag-strip-scroll" aria-label="Tags">${raw(tagsHtml)}</div>
+      <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">${raw(CHEVRON_SVG)}</button>
     </div>`;
 }
 

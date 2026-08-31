@@ -297,7 +297,12 @@ export function setupLongPress(el, callback, duration = 400) {
   };
 }
 
-class RawHtml extends String {}
+/**
+ * Markup that has already been escaped — what html`` returns, and what raw()
+ * asserts about a string. Extends String, so it stringifies anywhere a string
+ * is expected (innerHTML, .toString() comparisons in tests).
+ */
+export class RawHtml extends String {}
 
 /**
  * Wrap a string so the html tag leaves it unescaped.
@@ -308,6 +313,17 @@ class RawHtml extends String {}
 export function raw(str) {
   if (str instanceof RawHtml) return str;
   return new RawHtml(str);
+}
+
+/**
+ * True for a value html`` (or raw()) produced. Lets a caller tell markup that
+ * carries its own escaping from a bare string that does not.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isRawHtml(value) {
+  return value instanceof RawHtml;
 }
 
 function processValue(val, isUrl) {

@@ -15,7 +15,7 @@
 
 import { Component } from '../Component.js';
 import { PostCard } from './PostCard.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 import { measureCardImageSizes } from '../../utils/gridFit.js';
 
 export class PostGrid extends Component {
@@ -23,7 +23,7 @@ export class PostGrid extends Component {
     const { posts = [], emptyMessage = 'No posts yet.', reversed = false } = this.props;
 
     if (!posts.length) {
-      return `<p class="empty-state">${escapeHtml(emptyMessage)}</p>`;
+      return html`<p class="empty-state">${emptyMessage}</p>`;
     }
 
     // Only the first featured post gets the hero slot (grid-column: 1/-1).
@@ -32,10 +32,10 @@ export class PostGrid extends Component {
 
     const slots = posts.map((_, i) => {
       const cls = i === heroIndex ? ' featured-post' : '';
-      return `<div class="post-card-slot${cls}" data-index="${i}"></div>`;
-    }).join('');
+      return html`<div class="post-card-slot${cls}" data-index="${i}"></div>`;
+    });
 
-    return `<div class="posts-grid${reversed ? ' posts-grid-reversed' : ''}">${slots}</div>`;
+    return html`<div class="posts-grid${reversed ? ' posts-grid-reversed' : ''}">${slots}</div>`;
   }
 
   afterRender() {

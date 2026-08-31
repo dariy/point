@@ -15,7 +15,7 @@
  * tests, and a shell a service worker serves offline.
  */
 
-import { escapeHtml, html } from "./helpers.js";
+import { html } from "./helpers.js";
 
 /**
  * The ladder as of this build, and the fallback when `window.__MEDIA__` is
@@ -160,18 +160,21 @@ export function thumbSrcset(path, { sizes, width, height } = {}) {
 }
 
 /**
- * thumbSrcset rendered as escaped `src`/`srcset`/`sizes` attributes, for the
- * call sites that build their markup as strings. Returns "" for an empty path,
- * so an `<img>` is never emitted with a bare `src`.
+ * thumbSrcset rendered as `src`/`srcset`/`sizes` attributes, for the call sites
+ * that build an `<img>` as markup. Returns empty markup for an empty path, so
+ * an `<img>` is never emitted with a bare `src`.
  *
  * @param {string} path
  * @param {{ sizes?: string, width?: number, height?: number }} [opts]
- * @returns {string}
+ * @returns {import("./helpers.js").RawHtml} the attributes, already escaped —
+ *   interpolate it into an html`` template, or into a string that becomes one.
  */
 export function thumbAttrs(path, opts = {}) {
   const { src, srcset, sizes } = thumbSrcset(path, opts);
-  if (!src) return "";
-  const parts = [html`src="${src}"`.toString(), html`srcset="${srcset}"`.toString()];
-  if (sizes) parts.push(`sizes="${escapeHtml(sizes)}"`);
-  return parts.join(" ");
+  if (!src) return html``;
+  // srcset is a comma-separated candidate list, not one URL, so it takes the
+  // text policy — safeUrl() would reject the whole list. Each candidate URL in
+  // it was built by thumbUrl() from the same path `src` carries.
+  const attrs = html`src="${src}" srcset="${srcset}"`;
+  return sizes ? html`${attrs} sizes="${sizes}"` : attrs;
 }

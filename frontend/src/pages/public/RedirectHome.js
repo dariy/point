@@ -7,11 +7,11 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { navigate } from "../../utils/helpers.js";
+import { html, navigate } from "../../utils/helpers.js";
 
 export default class RedirectHome extends Component {
   render() {
-    return "";
+    return html``;
   }
 
   afterRender() {

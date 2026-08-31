@@ -16,7 +16,7 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { store } from '../../store.js';
-import { escapeHtml, isShortViewport, normalizeSettings } from '../../utils/helpers.js';
+import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
@@ -224,7 +224,7 @@ export default class HomePage extends Component {
     const { loading, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main" aria-busy="true">
@@ -235,11 +235,11 @@ export default class HomePage extends Component {
     }
 
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <p class="error-message" role="alert">${error}</p>
           </main>
           <div id="footer-mount"></div>
         </div>`;
@@ -249,15 +249,15 @@ export default class HomePage extends Component {
     const { data } = this.state;
     const isStaticHomePage = data && !data.pagination?.scheduled && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
 
-    return `
+    return html`
       <div class="site-wrapper">
         <div id="header-mount"></div>
-        ${isStaticHomePage ? '' : '<div id="tag-cloud-mount"></div>'}
-        ${isStaticHomePage ? '' : '<div id="timeline-mount"></div>'}
+        ${isStaticHomePage ? '' : html`<div id="tag-cloud-mount"></div>`}
+        ${isStaticHomePage ? '' : html`<div id="timeline-mount"></div>`}
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
-            ${isStaticHomePage ? '' : '<div id="pagination-mount"></div>'}
+            ${isStaticHomePage ? '' : html`<div id="pagination-mount"></div>`}
           </div>
         </main>
         <div id="footer-mount"></div>

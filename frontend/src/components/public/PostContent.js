@@ -12,7 +12,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, html, navigate } from "../../utils/helpers.js";
+import { html, navigate, raw } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import { buildTagIndex } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
@@ -60,30 +60,31 @@ export function shouldUseImmersive(post) {
   if (!post) return false;
   if (post.immersive_mode === "immersive") return true;
   if (post.immersive_mode === "non-immersive") return false;
-  const html = post.content_html || "";
-  if (html.includes("<hr>") || html.includes("<hr/>") || html.includes("<hr />")) return true;
+  // Not `html` — that name is the markup tag this module imports.
+  const body = post.content_html || "";
+  if (body.includes("<hr>") || body.includes("<hr/>") || body.includes("<hr />")) return true;
   if (post.type === "page" || post.status === "page") return false;
   const media = post.media || [];
   if (media.length && media.every((m) => m.type === "audio")) return false;
-  const text = stripHtml(html).replace(/&nbsp;/g, " ").trim();
+  const text = stripHtml(body).replace(/&nbsp;/g, " ").trim();
   if (text.length !== 0) {
     const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
     const allMedia = lines.every((l) => /^(?:https?:\/\/|\/)\S+$/.test(l) && mediaTypeFromPath(l));
     if (!allMedia) return false;
   }
   const hasVisualMedia = media.some((m) => m.type !== "audio");
-  const hasContentMedia = html.trim().length > 0;
+  const hasContentMedia = body.trim().length > 0;
   return hasVisualMedia || hasContentMedia;
 }
 
 export class PostContent extends Component {
   render() {
     const { post, prevPost, nextPost, forceImmersive = false } = this.props;
-    if (!post) return "";
+    if (!post) return html``;
 
     const immersive = forceImmersive || shouldUseImmersive(post);
     if (immersive) {
-      return `<div id="media-viewer-mount"></div>`;
+      return html`<div id="media-viewer-mount"></div>`;
     }
 
     return this._renderNormal(post, prevPost, nextPost);
@@ -199,22 +200,25 @@ export class PostContent extends Component {
   _renderNormal(post, prevPost, nextPost) {
     const tags = renderTagStrip(post.tags);
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
-    const postCss = post.css ? `<style id="post-css">${post.css}</style>` : "";
+    // Both raw()s are server-sanitized content: the per-post CSS through
+    // SanitizePostCSS, the body through the bluemonday policy, each before it
+    // was stored. Escaping either here would render it as visible source.
+    const postCss = post.css ? html`<style id="post-css">${raw(post.css)}</style>` : "";
     // Post navigation (prev/next) is its own toggleable plugin (point-8re1):
     // when manifest-driven and disabled, drop the block from article pages.
     const navEnabled = pluginHost.size === 0 || pluginHost.isEnabled("post-navigation");
     const date = post.published_at || post.created_at;
 
-    return `
+    return html`
       <article class="post-single${isHidden ? " is-hidden" : ""}" itemscope itemtype="https://schema.org/BlogPosting">
         ${postCss}
         <div class="post-layout-grid">
           <div class="post-meta-rail">
-            <time datetime="${escapeHtml(date || "")}" class="post-date">${escapeHtml(formatDate(date))}</time>
-            ${tags ? `<div class="post-tags-vertical">${tags}</div>` : ""}
+            <time datetime="${date || ""}" class="post-date">${formatDate(date)}</time>
+            ${tags ? html`<div class="post-tags-vertical">${tags}</div>` : ""}
           </div>
           <div class="post-main">
-            <div class="post-content" itemprop="articleBody">${post.content_html || ""}</div>
+            <div class="post-content" itemprop="articleBody">${raw(post.content_html || "")}</div>
           </div>
         </div>
         ${navEnabled ? this._renderNav(prevPost, nextPost) : ""}
@@ -223,10 +227,10 @@ export class PostContent extends Component {
   }
 
   _renderNormalPostArrows(prevPost, nextPost) {
-    if (!prevPost && !nextPost) return "";
-    const prev = prevPost ? `<a ${html`href="/posts/${prevPost.slug}"`.toString()} class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>` : "";
-    const next = nextPost ? `<a ${html`href="/posts/${nextPost.slug}"`.toString()} class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>` : "";
-    return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
+    if (!prevPost && !nextPost) return html``;
+    const prev = prevPost ? html`<a href="/posts/${prevPost.slug}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>` : "";
+    const next = nextPost ? html`<a href="/posts/${nextPost.slug}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>` : "";
+    return html`<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
   }
 
   _enhanceLinks(body) {
@@ -291,10 +295,10 @@ export class PostContent extends Component {
   }
 
   _renderNav(prev, next) {
-    if (!prev && !next) return "";
-    const prevLink = prev ? `<a ${html`href="/posts/${prev.slug}"`.toString()} class="post-nav-link prev" rel="prev"><span class="nav-label">Previous</span><span class="nav-title">${escapeHtml(prev.title)}</span></a>` : "<span></span>";
-    const nextLink = next ? `<a ${html`href="/posts/${next.slug}"`.toString()} class="post-nav-link next" rel="next"><span class="nav-label">Next</span><span class="nav-title">${escapeHtml(next.title)}</span></a>` : "<span></span>";
-    return `<nav class="post-navigation" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
+    if (!prev && !next) return html``;
+    const prevLink = prev ? html`<a href="/posts/${prev.slug}" class="post-nav-link prev" rel="prev"><span class="nav-label">Previous</span><span class="nav-title">${prev.title}</span></a>` : html`<span></span>`;
+    const nextLink = next ? html`<a href="/posts/${next.slug}" class="post-nav-link next" rel="next"><span class="nav-label">Next</span><span class="nav-title">${next.title}</span></a>` : html`<span></span>`;
+    return html`<nav class="post-navigation" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
   }
 
   // Runs before every re-render (including the first) — tear down the previous

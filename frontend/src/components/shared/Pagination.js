@@ -14,42 +14,42 @@
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 
 export class Pagination extends Component {
   render() {
     const { page, pages, total, compact } = this.props;
     const minPage = this._minPage();
-    if (!pages || pages - minPage < 1) return '';
+    if (!pages || pages - minPage < 1) return html``;
 
     const items = this._buildItems(page, pages, minPage);
 
     const buttons = items.map((item) => {
       if (item === '…') {
-        return `<span class="page-ellipsis" aria-hidden="true">…</span>`;
+        return html`<span class="page-ellipsis" aria-hidden="true">…</span>`;
       }
       const classes = ['page-btn'];
       if (item === page) classes.push('active');
       // A scheduled page is not part of the published site; mark it so the
       // paginator reads as two halves rather than one odd run of numbers.
       if (item < 1) classes.push('page-scheduled');
-      const current = item === page ? ' aria-current="page"' : '';
-      return `<button class="${classes.join(' ')}"${current} data-page="${escapeHtml(item)}" type="button">${escapeHtml(item)}</button>`;
-    }).join('');
+      const current = item === page ? html` aria-current="page"` : '';
+      return html`<button class="${classes.join(' ')}"${current} data-page="${item}" type="button">${item}</button>`;
+    });
 
-    const prevDisabled = page <= minPage ? ' disabled' : '';
-    const nextDisabled = page >= pages ? ' disabled' : '';
+    const prevDisabled = page <= minPage ? html` disabled` : '';
+    const nextDisabled = page >= pages ? html` disabled` : '';
 
     const info = compact
       ? ''
-      : `<span class="page-info" aria-live="polite">${escapeHtml(total)} items</span>`;
-    const title = compact ? ` title="${escapeHtml(total)} items"` : '';
+      : html`<span class="page-info" aria-live="polite">${total} items</span>`;
+    const title = compact ? html` title="${total} items"` : '';
 
-    return `
+    return html`
       <nav class="pagination"${title} aria-label="Page navigation">
-        <button class="page-btn page-prev" data-page="${escapeHtml(page - 1)}" type="button"${prevDisabled} aria-label="Previous page">&#8592;</button>
+        <button class="page-btn page-prev" data-page="${page - 1}" type="button"${prevDisabled} aria-label="Previous page">&#8592;</button>
         <span class="page-numbers">${buttons}</span>
-        <button class="page-btn page-next" data-page="${escapeHtml(page + 1)}" type="button"${nextDisabled} aria-label="Next page">&#8594;</button>
+        <button class="page-btn page-next" data-page="${page + 1}" type="button"${nextDisabled} aria-label="Next page">&#8594;</button>
         ${info}
       </nav>`;
   }

@@ -1,5 +1,5 @@
-import { raw } from "../utils/helpers.js";
-import { html } from "../utils/helpers.js";
+import { html, isRawHtml, raw } from '../utils/helpers.js';
+
 /**
  * Base Component class.
  *
@@ -27,13 +27,37 @@ import { html } from "../utils/helpers.js";
  *   cleanup that released the resource, so the second render gets neither.
  *
  * Security contract for subclasses:
- *   - escapeHtml() MUST wrap every user-supplied string inside render().
- *   - Dynamic text nodes should be set via element.textContent in afterRender(),
- *     not interpolated into the HTML string.
- *   - Only server-generated HTML (post body, already sanitized server-side)
- *     may be rendered as-is.
- *   - URL attributes must start with '/' or 'https://' only.
+ *   - render() builds its markup with the html`` tag from utils/helpers.js and
+ *     returns what that tag returns. Interpolations are escaped by the tag —
+ *     with safeUrl() in href/src position, escapeHtml() everywhere else — so a
+ *     subclass never applies either by hand and never forgets to.
+ *   - raw() opts a value out of that. It belongs around module-level constants
+ *     (the SVG blobs in utils/icons.js) and around HTML the server sanitized
+ *     before storing it (a post body). Nothing else.
+ *   - Dynamic text nodes can still be set via element.textContent in
+ *     afterRender(); that stays the simplest safe option for a lone string.
  */
+
+/**
+ * The migration escape hatch: adopt a render() result that is still a plain
+ * string, built the old way with hand-applied escapeHtml() calls.
+ *
+ * Sixty-three render() methods cannot flip in one commit, so plain strings keep
+ * working — but only through here, so the trust is stated in one place instead
+ * of being implied by every subclass. What is left to migrate is what still
+ * escapes by hand:
+ *
+ *   grep -rn 'escapeHtml(' frontend/src --include='*.js'
+ *
+ * Do not add callers. This function disappears with the strict flip, which
+ * turns a plain string from render() into an error.
+ *
+ * @param {unknown} markup
+ * @returns {import('../utils/helpers.js').RawHtml}
+ */
+function adoptLegacyMarkup(markup) {
+  return raw(markup);
+}
 
 export class Component {
   /**
@@ -58,9 +82,10 @@ export class Component {
   // ── Subclass interface ────────────────────────────────────────────────────
 
   /**
-   * Return an HTML string describing this component.
-   * Must be overridden. All user-provided values MUST be wrapped in escapeHtml().
-   * @returns {string}
+   * Return the markup describing this component, built with the html`` tag.
+   * Must be overridden.
+   * @returns {import('../utils/helpers.js').RawHtml|string} html`` output; a
+   *   plain string is still accepted while the migration to html`` runs.
    */
   render() {
     throw new Error(`${this.constructor.name}.render() not implemented`);
@@ -208,9 +233,10 @@ export class Component {
     this._unmountChildren();
     this._children = [];
     const markup = this.render();
-    // render() must escape all user-supplied values with escapeHtml().
-    // Server-generated HTML is sanitized server-side before storage.
-    this.container.innerHTML = html`${raw(markup)}`;
+    // html`` already escaped every interpolation in there, so the result goes
+    // in untouched. A render() that has not been migrated yet returns a plain
+    // string instead, and adoptLegacyMarkup() is the one place that is trusted.
+    this.container.innerHTML = html`${isRawHtml(markup) ? markup : adoptLegacyMarkup(markup)}`;
     this.afterRender();
   }
   _unmountChildren() {

@@ -14,7 +14,8 @@ describe('Pagination', () => {
     ({ Pagination } = await import('../src/components/shared/Pagination.js'));
   });
 
-  const html = (props) => new Pagination(null, props).render();
+  // render() returns the RawHtml html`` produces; String() for assert equality.
+  const html = (props) => String(new Pagination(null, props).render());
   /** The page numbers the paginator offers, in order. */
   const items = (props) =>
     [...html(props).matchAll(/data-page="(-?\d+)"[^>]*>(-?\d+)</g)].map((m) => Number(m[2]));

@@ -13,7 +13,7 @@
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 
 const DURATION_MS = 4000;
 const MAX_TOASTS = 5;
@@ -26,7 +26,7 @@ export class ToastContainer extends Component {
   }
 
   render() {
-    return ''; // Container starts empty; toasts are appended dynamically.
+    return html``; // Container starts empty; toasts are appended dynamically.
   }
 
   afterRender() {
@@ -45,7 +45,9 @@ export class ToastContainer extends Component {
     }
 
     const el = document.createElement('div');
-    el.className = `toast toast-${escapeHtml(type)}`;
+    // A DOM property, not markup: escapeHtml() here only ever risked putting an
+    // entity into a class name. `type` is the store's own enum in any case.
+    el.className = `toast toast-${type}`;
     el.setAttribute('role', 'alert');
     el.setAttribute('data-id', String(id));
 
