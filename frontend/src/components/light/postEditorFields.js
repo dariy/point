@@ -9,7 +9,7 @@
  */
 
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { defaultPostTitle } from "../../utils/formatters.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, GRIP_SVG } from "../../utils/icons.js";
@@ -30,7 +30,7 @@ export function toDatetimeLocal(isoStr) {
 export function scheduleSummary(scheduledAt) {
   if (!scheduledAt) return "not set";
   const d = new Date(scheduledAt);
-  return isNaN(d) ? "not set" : escapeHtml(d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+  return isNaN(d) ? "not set" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export const toTagNames = (tags) =>
@@ -46,18 +46,18 @@ function instagramGroup(post, igStatus, publishingToInstagram, anyActionInProgre
   return {
     label: "Instagram",
     summary: igShare ? "on" : "off",
-    body: `
+    body: html`
         <div class="form-group ig-post-section">
           <div class="ig-controls">
             <label class="setting-pill">
               <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
               <span class="setting-pill-label">Share to Instagram</span>
             </label>
-            ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
-            ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
+            ${igSt !== "none" ? html`<span class="badge ${igStatusBadgeClass}" title="${igError}">${igSt}</span>` : ""}
+            ${canPublishNow ? html`<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
           </div>
-          ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
-          <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
+          ${igError ? html`<p class="ig-error-msg">${igError}</p>` : ""}
+          <span class="ig-connection-note">${igStatus.connected ? html`Connected as @${igStatus.username}` : html`Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
         </div>`,
   };
 }
@@ -69,8 +69,8 @@ function instagramGroup(post, igStatus, publishingToInstagram, anyActionInProgre
  */
 export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igStatus, publishingToInstagram, anyActionInProgress }) {
   const p = post || {};
-  const title = escapeHtml(p.title || "");
-  const slug = escapeHtml(p.slug || "");
+  const title = p.title || "";
+  const slug = p.slug || "";
   // "Page" is surfaced as a status in the UI but is really type=page (always
   // published). Show "Page" selected whenever the post is a page.
   const status = p.type === "page" ? "page" : (p.status || "draft");
@@ -78,25 +78,25 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
   const excerpt = p.excerpt || "";
 
   const statusOpts = ["draft", "published", "scheduled", "hidden", "page"]
-    .map(s => `<option value="${s}"${status === s ? " selected" : ""}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`)
-    .join("");
+    .map(s => html`<option value="${s}"${status === s ? " selected" : ""}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`);
 
-  const aiBtn = (field) => pluginHost.isEnabled("ai-analysis") ? `<button class="field-ai-btn" data-field="${field}" type="button" title="Fill with AI" ${anyActionInProgress ? "disabled" : ""} aria-label="AI fill ${field}">${SPARKLE_SVG}</button>` : '';
+  const aiBtn = (field) => pluginHost.isEnabled("ai-analysis") ? html`<button class="field-ai-btn" data-field="${field}" type="button" title="Fill with AI" ${anyActionInProgress ? "disabled" : ""} aria-label="AI fill ${field}">${raw(SPARKLE_SVG)}</button>` : '';
 
-  const modeToggle = `
+  const modeToggle = html`
       <div class="editor-mode-toggle">
         <button id="mode-text-btn" type="button" class="${editorMode === "text" ? "active" : ""}">Text</button>
         <button id="mode-visual-btn" type="button" class="${editorMode === "visual" ? "active" : ""}">Visual</button>
       </div>`;
 
   const contentArea = editorMode === "visual"
-      ? `<div id="visual-editor-mount"></div>`
-      : `<label class="form-label" for="content-editor">Content</label><div id="content-editor-mount"></div>`;
+      ? html`<div id="visual-editor-mount"></div>`
+      : html`<label class="form-label" for="content-editor">Content</label><div id="content-editor-mount"></div>`;
 
+  // Summaries are plain text — renderGroup escapes them on the way into markup.
   const featuredSummary = featured ? " · ★" : "";
-  const statusSummary = escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + featuredSummary;
+  const statusSummary = status.charAt(0).toUpperCase() + status.slice(1) + featuredSummary;
   const slugSummary = slug || "auto";
-  const excerptSummary = excerpt.trim() ? escapeHtml(truncate(excerpt.trim())) : "auto";
+  const excerptSummary = excerpt.trim() ? truncate(excerpt.trim()) : "auto";
   const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
   const cssSummary = (p.css || "").trim() ? "custom" : "none";
   const tagNames = toTagNames(p.tags);
@@ -104,19 +104,19 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
   const groups = {
     title: {
       label: "Post title",
-      summary: title ? escapeHtml(truncate(p.title)) : "auto",
-      body: `
+      summary: title ? truncate(p.title) : "auto",
+      body: html`
           <div class="title-row">
             <div class="title-input-wrapper">
-              <input type="text" id="title-input" class="form-input editor-title" placeholder="${escapeHtml(defaultPostTitle(store.get("settings")))}" title="Leave blank to title this post with today's date" value="${title}">
+              <input type="text" id="title-input" class="form-input editor-title" placeholder="${defaultPostTitle(store.get("settings"))}" title="Leave blank to title this post with today's date" value="${title}">
               ${aiBtn("title")}
             </div>
           </div>`,
     },
     tags: {
       label: "Tags",
-      summary: tagNames.length ? escapeHtml(truncate(tagNames.join(", "))) : "none",
-      body: `
+      summary: tagNames.length ? truncate(tagNames.join(", ")) : "none",
+      body: html`
           <div class="tags-row">
             <div class="tags-input-wrapper">
               <div id="tags-input-mount" class="tags-row-input"></div>
@@ -127,18 +127,18 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
     status: {
       label: "Status &amp; visibility",
       summary: statusSummary,
-      body: `
+      body: html`
           <div class="details-split-row">
             <div class="form-group">
               <label class="form-label" for="status-select">Status</label>
-              <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
+              <select id="status-select" class="status-select badge-${status}" ${anyActionInProgress ? "disabled" : ""}>
                 ${statusOpts}
               </select>
             </div>
             <div class="form-group featured-toggle-group">
               <label class="form-label">Featured</label>
               <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
-                ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
+                ${raw(featured ? STAR_SVG : STAR_OUTLINE_SVG)}
               </button>
               <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
             </div>
@@ -150,7 +150,7 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
       label: "Schedule",
       summary: scheduleSummary(p.scheduled_at),
       hidden: status !== "scheduled",
-      body: `
+      body: html`
           <div class="schedule-row" id="schedule-row">
             <div class="schedule-input-wrapper">
               <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
@@ -160,8 +160,8 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
     },
     slug: {
       label: "Slug",
-      summary: escapeHtml(slugSummary),
-      body: `
+      summary: slugSummary,
+      body: html`
           <div class="slug-row">
             <div class="slug-input-wrapper">
               <span class="slug-prefix">/posts/</span>
@@ -172,9 +172,9 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
     excerpt: {
       label: "Excerpt",
       summary: excerptSummary,
-      body: `
+      body: html`
           <div class="form-group excerpt-row">
-            <textarea id="excerpt-editor" class="form-input editor-excerpt ${maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+            <textarea id="excerpt-editor" class="form-input editor-excerpt ${maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${excerpt}</textarea>
             ${aiBtn("excerpt")}
           </div>`,
     },
@@ -182,12 +182,12 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
       label: "Content",
       summary: "",
       fixed: true,
-      body: `${modeToggle}${contentArea}`,
+      body: html`${modeToggle}${contentArea}`,
     },
     immersive: {
       label: "Immersive mode",
       summary: immersiveSummary,
-      body: `
+      body: html`
           <div class="form-group">
             <select id="immersive-mode-select" class="form-input immersive-mode-select">
               <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
@@ -202,7 +202,7 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
     groups.css = {
       label: "Custom CSS",
       summary: cssSummary,
-      body: `<div class="form-group"><div id="css-editor-mount"></div></div>`,
+      body: html`<div class="form-group"><div id="css-editor-mount"></div></div>`,
     };
   }
   if (pluginHost.isEnabled("instagram") && igStatus?.enabled) {
@@ -222,12 +222,15 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
  */
 export function renderGroup(key, group, pinned) {
   const plain = group.label.replace(/&amp;/g, "&");
-  return `
+  // The labels are literals in this module and one of them carries an entity
+  // ("Status &amp; visibility"), so the title span takes it raw; `plain` is the
+  // decoded copy the tag re-escapes for the aria-label.
+  return html`
       <details class="details-group${pinned ? " is-pinned" : ""}${group.fixed ? " is-fixed" : ""}${group.hidden ? " is-hidden" : ""}" data-group="${key}"${pinned ? " open" : ""}>
         <summary class="details-group-summary-row">
           <button type="button" class="details-group-handle" data-handle="${key}"
-                  aria-label="Move ${escapeHtml(plain)}" title="Drag to reorder, or across the lists to move it — arrow keys do both">${GRIP_SVG}</button>
-          <span class="details-group-title">${group.label}</span>
+                  aria-label="Move ${plain}" title="Drag to reorder, or across the lists to move it — arrow keys do both">${raw(GRIP_SVG)}</button>
+          <span class="details-group-title">${raw(group.label)}</span>
           <span class="details-group-summary" id="summary-${key}">${group.summary}</span>
         </summary>
         <div class="details-group-body">${group.body}</div>

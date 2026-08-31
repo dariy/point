@@ -20,7 +20,8 @@ function renderAt(path, stored) {
   prefs.clear();
   if (stored !== null) prefs.set('sidebar_manage_expanded', stored);
   const sidebar = new LightSidebar({}, { currentPath: path });
-  return { html: sidebar.render(), sidebar };
+  // render() returns the RawHtml html`` produces; String() for the assertions.
+  return { html: String(sidebar.render()), sidebar };
 }
 
 /** The class list of the Manage group in a rendered sidebar. */

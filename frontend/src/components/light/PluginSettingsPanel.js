@@ -27,7 +27,7 @@ import { GestureController } from "../../core/gestures.js";
 import { renderFields, collectUpdates } from "./settingsFields.js";
 import { updateSettings } from "../../api/settings.js";
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.js";
 import { CHECK_SVG, X_SVG } from "../../utils/icons.js";
 import { BackupsSection } from "./sections/BackupsSection.js";
@@ -68,9 +68,9 @@ export class PluginSettingsPanel extends Component {
     let formHtml = "";
     if (this._hasForm) {
       const { inputs, toggles } = renderFields(this.props.keys, settings, {});
-      const toggleSection = toggles ? `<div class="settings-toggles">${toggles}</div>` : "";
+      const toggleSection = toggles ? html`<div class="settings-toggles">${toggles}</div>` : "";
       const connection = pluginId === "instagram" ? this._renderInstagramConnection() : "";
-      formHtml = `
+      formHtml = html`
         <form id="plugin-settings-form" class="plugin-settings-form">
           ${inputs}
           ${toggleSection}
@@ -80,23 +80,22 @@ export class PluginSettingsPanel extends Component {
 
     const sectionsHtml =
       Array.isArray(sections) && sections.length
-        ? `<div class="plugin-settings-sections">${sections
-            .map((_, i) => `<div class="plugin-section-mount" data-section-index="${i}"></div>`)
-            .join("")}</div>`
+        ? html`<div class="plugin-settings-sections">${sections
+            .map((_, i) => html`<div class="plugin-section-mount" data-section-index="${i}"></div>`)}</div>`
         : "";
 
     const saveBtn = this._hasForm
-      ? `<button type="submit" form="plugin-settings-form" class="btn btn-primary" ${saving ? "disabled" : ""}>
-           ${CHECK_SVG}<span class="btn-label">${saving ? "Saving…" : "Save"}</span>
+      ? html`<button type="submit" form="plugin-settings-form" class="btn btn-primary" ${saving ? "disabled" : ""}>
+           ${raw(CHECK_SVG)}<span class="btn-label">${saving ? "Saving…" : "Save"}</span>
          </button>`
       : "";
 
-    return `
+    return html`
       <div class="plugin-settings-overlay" data-close></div>
-      <aside class="plugin-settings-drawer${this._opened ? " is-open" : ""}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)} settings">
+      <aside class="plugin-settings-drawer${this._opened ? " is-open" : ""}" role="dialog" aria-modal="true" aria-label="${title} settings">
         <header class="plugin-settings-header">
-          <h2 class="plugin-settings-title">${escapeHtml(title)}</h2>
-          <button type="button" class="plugin-settings-close" data-close aria-label="Close">${X_SVG}</button>
+          <h2 class="plugin-settings-title">${title}</h2>
+          <button type="button" class="plugin-settings-close" data-close aria-label="Close">${raw(X_SVG)}</button>
         </header>
         <div class="plugin-settings-body">
           ${formHtml}
@@ -120,14 +119,14 @@ export class PluginSettingsPanel extends Component {
     if (!isEnabled || !igStatus) return "";
 
     if (igStatus.connected) {
-      return `
+      return html`
         <div class="ig-connection-status connected">
-          <p>Connected as <strong>@${escapeHtml(igStatus.username)}</strong></p>
+          <p>Connected as <strong>@${igStatus.username}</strong></p>
           <button type="button" class="btn btn-sm btn-danger" id="ig-disconnect-btn">Disconnect Instagram</button>
         </div>`;
     }
     const authUrl = `/api/instagram/connect?state=${encodeURIComponent(location.origin + "/light/plugins")}`;
-    return `
+    return html`
       <div class="ig-connection-status disconnected">
         <p>Cross-posting is on but Instagram isn't connected.</p>
         <a href="${authUrl}" class="btn btn-sm btn-primary">Connect Instagram</a>

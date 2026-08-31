@@ -40,6 +40,9 @@ afterEach(() => dom.cleanup());
 /** Every `<img …>` open tag in a chunk of markup. */
 const imgs = (html) => String(html).match(/<img\b[^>]*>/g) || [];
 
+/** render() output as a primitive, for assert.match and friends. */
+const str = (markup) => String(markup);
+
 const POST = {
   id: 1,
   title: 'A Post',
@@ -123,17 +126,17 @@ describe('MediaBrowser thumbnails', () => {
   test('a source smaller than the top rung stops short of it', () => {
     // A 600px-wide upload has no 1024 rung on disk; the server would hand back
     // the original, so the original takes that slot under its own URL.
-    const html = browser()._renderItem(
+    const html = str(browser()._renderItem(
       { ...IMAGE, width: 600, height: 400 },
       new Set(),
-    );
+    ));
     const [img] = imgs(html);
     assert.match(img, /srcset="[^"]*, \/2026\/03\/photo\.jpg 600w"/);
     assert.doesNotMatch(img, /s=1024/);
   });
 
   test('a video with a poster renders it under the play glyph', () => {
-    const html = browser()._renderItem(
+    const html = str(browser()._renderItem(
       {
         ...IMAGE,
         file_type: 'video',
@@ -142,7 +145,7 @@ describe('MediaBrowser thumbnails', () => {
         thumbnail_path: '/2026/03/clip.mp4?s=512&v=c0ffee01',
       },
       new Set(),
-    );
+    ));
     assert.strictEqual(imgs(html).length, 1);
     assert.match(html, /file-icon--overlay/);
     // The stored dimensions describe the video, not the poster fitted into the
@@ -153,26 +156,26 @@ describe('MediaBrowser thumbnails', () => {
   test('a video with no poster keeps the bare glyph', () => {
     // thumbnail_path is null exactly when no admin browser has captured a frame,
     // and MediaBrowser reads that as "this video needs a capture".
-    const html = browser()._renderItem(
+    const html = str(browser()._renderItem(
       { ...IMAGE, file_type: 'video', thumbnail_path: null },
       new Set(),
-    );
+    ));
     assert.strictEqual(imgs(html).length, 0);
     assert.match(html, /class="file-icon"/);
   });
 
   test('a non-visual file keeps its glyph', () => {
-    const html = browser()._renderItem(
+    const html = str(browser()._renderItem(
       { ...IMAGE, file_type: 'audio', filename: 'song.mp3', thumbnail_path: null },
       new Set(),
-    );
+    ));
     assert.strictEqual(imgs(html).length, 0);
   });
 });
 
 describe('VisualEditor thumbnails', () => {
   const render = (nodes, mediaByPath = {}) =>
-    new VisualEditor(null, { nodes, mediaByPath }).render();
+    String(new VisualEditor(null, { nodes, mediaByPath }).render());
 
   test('an editor card scopes to its 80px thumb and keeps data-full on the original', () => {
     const html = render([{ type: 'image', path: '/2026/03/photo.jpg' }]);

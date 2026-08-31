@@ -1,7 +1,7 @@
 import { Component } from '../Component.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
+import { html, navigate, raw, debounce } from '../../utils/helpers.js';
 import { SEARCH_SVG, POSTS_SVG, TAGS_SVG, SETTINGS_SVG, DASHBOARD_SVG } from '../../utils/icons.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
@@ -29,29 +29,29 @@ export class CommandPalette extends Component {
 
   render() {
     const { isOpen, query, results, selectedIndex } = this.state;
-    if (!isOpen) return '';
+    if (!isOpen) return html``;
 
-    return `
+    return html`
       <div class="cp-overlay" id="cp-overlay">
         <div class="cp-dialog" id="cp-dialog" role="dialog" aria-modal="true" aria-label="Command Palette">
           <div class="cp-search-row">
-            ${SEARCH_SVG}
-            <input type="text" id="cp-input" class="cp-input" placeholder="Search posts, tags, pages…" value="${escapeHtml(query)}" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="cp-results" aria-expanded="true" role="combobox">
+            ${raw(SEARCH_SVG)}
+            <input type="text" id="cp-input" class="cp-input" placeholder="Search posts, tags, pages…" value="${query}" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="cp-results" aria-expanded="true" role="combobox">
             <kbd class="cp-esc-hint">ESC</kbd>
           </div>
           <div class="cp-results" id="cp-results" role="listbox" aria-label="Search results">
-            ${results.map((r, i) => `
+            ${results.map((r, i) => html`
               <div class="cp-result-item ${i === selectedIndex ? 'selected' : ''}" 
                    data-index="${i}" role="option" aria-selected="${i === selectedIndex}">
-                <div class="cp-result-icon">${r.icon}</div>
+                <div class="cp-result-icon">${raw(r.icon)}</div>
                 <div class="cp-result-info">
-                  <div class="cp-result-label">${escapeHtml(r.label)}</div>
-                  ${r.sublabel ? `<div class="cp-result-sublabel">${escapeHtml(r.sublabel)}</div>` : ''}
+                  <div class="cp-result-label">${r.label}</div>
+                  ${r.sublabel ? html`<div class="cp-result-sublabel">${r.sublabel}</div>` : ''}
                 </div>
-                ${r.type ? `<div class="cp-result-type">${escapeHtml(r.type)}</div>` : ''}
+                ${r.type ? html`<div class="cp-result-type">${r.type}</div>` : ''}
               </div>
-            `).join('')}
-            ${results.length === 0 && query ? '<div class="cp-no-results">No results found</div>' : ''}
+            `)}
+            ${results.length === 0 && query ? html`<div class="cp-no-results">No results found</div>` : ''}
           </div>
           <div class="cp-footer">
             <span class="cp-hint"><strong>↑↓</strong> to navigate</span>

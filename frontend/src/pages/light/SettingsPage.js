@@ -12,7 +12,7 @@ import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";
 
@@ -86,11 +86,9 @@ export default class SettingsPage extends Component {
   }
 
   _renderGroup(group, settings, posts) {
-    // renderFields still hands back hand-escaped strings; raw() until
-    // components/light/settingsFields.js moves to html``.
     const { inputs, toggles } = renderFields(group.keys, settings, { posts });
     const toggleSection = toggles
-      ? html`<div class="settings-toggles">${raw(toggles)}</div>`
+      ? html`<div class="settings-toggles">${toggles}</div>`
       : "";
 
     let extra = "";
@@ -99,7 +97,7 @@ export default class SettingsPage extends Component {
       <section class="settings-group" id="group-${group.title.toLowerCase().replace(/\s+/g, "-")}">
         <h2 class="settings-group-title">${group.title}</h2>
         <div class="settings-group-body">
-          ${raw(inputs)}
+          ${inputs}
           ${toggleSection}
           ${extra}
         </div>

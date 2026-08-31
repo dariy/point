@@ -1,4 +1,3 @@
-import { html } from "../../utils/helpers.js";
 /**
  * TagsInput — inline tag-badge input with autocomplete.
  *
@@ -9,7 +8,7 @@ import { html } from "../../utils/helpers.js";
 
 import { Component } from '../Component.js';
 import { listTags, createTag } from '../../api/tags.js';
-import { escapeHtml, debounce } from '../../utils/helpers.js';
+import { html, debounce } from '../../utils/helpers.js';
 import { openTagFamilyPopover } from './TagFamilyPopover.js';
 let _tagInputCounter = 0;
 export class TagsInput extends Component {
@@ -31,11 +30,11 @@ export class TagsInput extends Component {
     const {
       tags
     } = this.state;
-    const badges = tags.map(t => `<span class="tag tag-chip" data-tag="${escapeHtml(t)}">
-         ${escapeHtml(t)}
-         <button class="tag-remove" data-tag="${escapeHtml(t)}" type="button" aria-label="Remove ${escapeHtml(t)}">×</button>
-       </span>`).join('');
-    return `
+    const badges = tags.map(t => html`<span class="tag tag-chip" data-tag="${t}">
+         ${t}
+         <button class="tag-remove" data-tag="${t}" type="button" aria-label="Remove ${t}">×</button>
+       </span>`);
+    return html`
       <div class="tags-input" id="${this._uid}-box">
         ${badges}
         <input type="text" id="${this._uid}-text" class="tag-text-field"
