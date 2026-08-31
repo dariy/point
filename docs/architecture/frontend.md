@@ -62,6 +62,8 @@ export class Component {
     this.props = props;
     this.state = {};
     this._children = []; // child Component instances for lifecycle propagation
+    this._cleanups = []; // teardowns for THIS render's resources (see 2.3)
+    this._unmounted = false;
   }
 
   /**
@@ -84,9 +86,18 @@ export class Component {
 
   /**
    * Called before the component is removed from the DOM.
-   * Override to unsubscribe from store, cancel timers, etc.
+   * Override to release what outlives a single render — a poll timer started
+   * in the constructor, say. Anything afterRender() acquires belongs in
+   * registerCleanup() instead, which also runs BETWEEN renders.
    */
   beforeUnmount() {}
+
+  /**
+   * Optional hook, called before every render including the first.
+   * The imperative sibling of registerCleanup(); override it when the teardown
+   * is easier to write as one method than as a closure per resource.
+   */
+  beforeRender() {}
 
   /**
    * Merges newState into this.state and re-renders.
@@ -114,17 +125,39 @@ export class Component {
   }
 
   /**
-   * Cleans up: call beforeUnmount on self and all children, clear container.
+   * Cleans up: release this render's resources, unmount children, call
+   * beforeUnmount, clear container.
    */
   unmount() {
+    this._unmounted = true;
+    this._runCleanups();
     this._unmountChildren();
     this.beforeUnmount();
     this.container.textContent = '';
   }
 
+  /**
+   * Helper: register a teardown for something this render acquired.
+   * Runs before the next re-render, or on unmount — whichever comes first —
+   * and is then forgotten, so afterRender() re-registers freely.
+   */
+  registerCleanup(fn) {
+    if (typeof fn === 'function') this._cleanups.push(fn);
+  }
+
+  /**
+   * Helper: subscribe to a store key for the lifetime of the current render.
+   */
+  subscribeStore(storeInstance, key, callback) {
+    this.registerCleanup(storeInstance.subscribe(key, callback));
+  }
+
   // ── Private ──────────────────────────────────────────────────────────────
 
   _rerender() {
+    // Release the previous render while its DOM is still in place.
+    this._runCleanups();
+    this.beforeRender?.();
     this._unmountChildren();
     this._children = [];
     // SECURITY: render() returns trusted HTML only (see Security Model section)
@@ -135,6 +168,15 @@ export class Component {
   _unmountChildren() {
     for (const child of this._children) {
       child.unmount();
+    }
+    this._children = [];
+  }
+
+  _runCleanups() {
+    const fns = this._cleanups;
+    this._cleanups = [];   // cleared first: a teardown may re-render
+    for (const fn of fns) {
+      try { fn(); } catch (err) { console.error('cleanup failed', err); }
     }
   }
 
@@ -185,16 +227,20 @@ new Component(container, props)
         v
   .mount()
         |
+        |-- _runCleanups()            (empty on the first pass)
+        |-- beforeRender()            (imperative teardown hook)
         |-- _unmountChildren()        (clean up any previous children)
         |-- container.innerHTML = render()
-        `-- afterRender()             (attach events, mount children)
-                |
+        `-- afterRender()             (attach events, mount children,
+                |                      registerCleanup() what you acquire)
                 v (user interaction or async data)
         .setState(delta)
                 |
                 |-- merge state
                 `-- _rerender()
                         |
+                        |-- _runCleanups()   <- releases the PREVIOUS render
+                        |-- beforeRender()
                         |-- _unmountChildren()
                         |-- container.innerHTML = render()
                         `-- afterRender()
@@ -202,12 +248,61 @@ new Component(container, props)
                 v (navigation away or parent re-renders)
         .unmount()
                 |
+                |-- _runCleanups()     (the last render's resources)
                 |-- _unmountChildren()
-                |-- beforeUnmount()    (clean up subscriptions, timers)
+                |-- beforeUnmount()    (whatever outlived a single render)
                 `-- container.textContent = ''
 ```
 
-### 2.3 — Example: Simple Component
+Note where `_runCleanups()` sits: at the *top* of `_rerender()`, not the
+bottom. A teardown therefore runs while the DOM it was wired to is still on
+screen, which is what makes `removeEventListener` and observer `disconnect()`
+land on the right nodes.
+
+### 2.3 — Resource Lifetime
+
+`afterRender()` runs again on **every** `setState()` / `setProps()`, so it is
+not a mount hook. Anything it acquires — a `ResizeObserver`, a store
+subscription, a listener on `document`/`window`, a node appended outside the
+container, an `AbortController`, a timer — has to be released before the next
+pass acquires its own copy. `registerCleanup()` is how:
+
+```javascript
+afterRender() {
+  const ro = new ResizeObserver(() => this._refit());
+  ro.observe(this.$('.panel'));
+  this.registerCleanup(() => ro.disconnect());
+
+  const onKey = (e) => this._onKey(e);
+  document.addEventListener('keydown', onKey);
+  this.registerCleanup(() => document.removeEventListener('keydown', onKey));
+
+  // subscribeStore() and mountChild() are already built on it.
+  this.subscribeStore(store, 'settings', () => this.setState({}));
+}
+```
+
+The list is drained before each re-render and again on `unmount()`, then
+forgotten — so re-registering on every pass is correct and expected.
+
+**Do not guard an acquisition with an "already done this" flag.** It looks like
+it prevents a leak and does the opposite now: the flag survives the cleanup
+that released the resource, so the second render gets neither the old
+subscription nor a new one. Twelve admin pages carried the mirror-image bug —
+they stored `setupAdminLayout`'s teardown in an instance field, overwrote it on
+every render and only ever called the last one, leaking an observer and two
+store subscriptions per `setState()`. Each leaked subscription closed over the
+same live page, so a single `autosave_status` update rewrote the header once
+per leaked copy (`frontend/test/componentCleanup.test.js`).
+
+Use `beforeRender()` instead when the teardown is genuinely one method rather
+than one closure per resource (`PostContent`, `PublicHeader`, `BackupsSection`).
+It runs in the same place, right after the cleanup list.
+
+Reach for `beforeUnmount()` only for what outlives a render — a poll timer
+started in the constructor, a portal node created once.
+
+### 2.4 — Example: Simple Component
 
 ```javascript
 // frontend/src/components/Pagination.js
@@ -250,7 +345,7 @@ export class Pagination extends Component {
 }
 ```
 
-### 2.4 — Example: Async Component (loads data)
+### 2.5 — Example: Async Component (loads data)
 
 ```javascript
 // frontend/src/pages/public/HomePage.js
@@ -557,8 +652,15 @@ class Store {
 
   set(key, value) {
     this._state[key] = value;
-    if (this._listeners[key]) {
-      this._listeners[key].forEach(fn => fn(value));
+    const listeners = this._listeners[key];
+    if (!listeners) return;
+    // Snapshot, and skip anyone unsubscribed along the way. Subscribers
+    // re-render, and a re-render swaps this render's subscription for a fresh
+    // one — iterating the live Set would visit the replacement (and its
+    // replacement, forever), while calling a callback torn down earlier in
+    // the same dispatch would run it against a dead component.
+    for (const fn of [...listeners]) {
+      if (this._listeners[key]?.has(fn)) fn(value);
     }
   }
 
@@ -829,19 +931,30 @@ frontend/
 
 ### AdminLayout
 
-All `/light/*` pages (except login) are wrapped in `AdminLayout`:
+`AdminLayout` is not a wrapper component but a pair of helpers each `/light/*`
+page calls itself — a template for `render()` and a setup for `afterRender()`:
 
-```
-AdminLayout renders:
-  <div class="admin-layout">
-    <aside class="sidebar" id="sidebar-mount"></aside>
-    <main class="admin-main" id="page-content-mount"></main>
-  </div>
+```javascript
+render() {
+  return adminLayoutTemplate({ title: 'Tags', actions, content });
+}
 
-Then mounts:
-  - Sidebar into #sidebar-mount
-  - The actual page component into #page-content-mount
+afterRender() {
+  setupAdminLayout(this, { currentPath: '/light/tags', publicUrl });
+  // ...the page's own wiring
+}
 ```
+
+`adminLayoutTemplate` emits the shell — `.light-header` with its title row and
+sync pill, `.light-content`, and mount points for the sidebar, bottom bar,
+command palette and shortcut help. `setupAdminLayout` fills those in, adds the
+public-site link, and takes out the header's resize observer and the two store
+subscriptions behind the sync pill.
+
+**It returns nothing on purpose.** Everything it acquires is registered on the
+page's per-render cleanup list (see [2.3](#23--resource-lifetime)), so the next
+re-render releases it. Pages must not store a teardown handle or call anything
+from `beforeUnmount()` — that is precisely the shape that leaked.
 
 ### PostEditPage
 

@@ -54,13 +54,19 @@ export function adminLayoutTemplate({
 
 /**
  * Shared behavior for admin pages.
- * To be used inside component.afterRender().
+ *
+ * Call from component.afterRender() and ignore the return value: everything
+ * acquired here is registered on the component's per-render cleanup list, so
+ * the next re-render releases it. There is nothing for the caller to store or
+ * to call from beforeUnmount() — it used to return a teardown closure, and
+ * every page overwrote its handle on the next render without ever calling it,
+ * which leaked an observer and two store subscriptions per setState().
  */
 export function setupAdminLayout(component, {
   currentPath,
   publicUrl
 }) {
-  component._cleanupHeaderCompact = setupHeaderCompact(component.$(".light-header"));
+  component.registerCleanup(setupHeaderCompact(component.$(".light-header")));
   // Public-site link — icon button pinned to the right edge of the header
   // actions. Deliberately a plain in-app link: the public site and the admin
   // are one SPA, so this is a route change, not a document load. Opening it in
@@ -101,13 +107,8 @@ export function setupAdminLayout(component, {
   component.mountChild(CommandPalette, "#command-palette-mount");
   component.mountChild(ShortcutHelp, "#shortcut-help-mount");
   component.$("#sync-pill-btn")?.addEventListener("click", () => onSyncPillClick());
-  const unsubOffline = store.subscribe("offline_status", () => updateSyncPill(component));
-  const unsubAutosave = store.subscribe("autosave_status", () => updateSyncPill(component));
-  return () => {
-    unsubOffline();
-    unsubAutosave();
-    component._cleanupHeaderCompact?.();
-  };
+  component.subscribeStore(store, "offline_status", () => updateSyncPill(component));
+  component.subscribeStore(store, "autosave_status", () => updateSyncPill(component));
 }
 function renderSyncPill(offline, autosave = {}) {
   let text = "";

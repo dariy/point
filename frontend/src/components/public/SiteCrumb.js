@@ -74,10 +74,7 @@ export class SiteCrumb extends Component {
 
     // The payload lands after first paint; re-render then so the crumb picks up
     // its dropdown, and let the header re-measure — it grew by a caret.
-    if (!this._subscribed) {
-      this._subscribed = true;
-      this.subscribeStore(store, 'rootTags', () => this._rerender());
-    }
+    this.subscribeStore(store, 'rootTags', () => this._rerender());
 
     // Same trigger as every other crumb: hover-with-intent on a mouse, tap on
     // touch. The list is read at open time, never captured at wiring time.

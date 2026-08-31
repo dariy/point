@@ -133,21 +133,15 @@ export class LightSidebar extends Component {
   }
 
   afterRender() {
-    if (!this._subscribedPluginToggled) {
-      this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
-      this._subscribedPluginToggled = true;
-    }
+    this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
 
     const { collapsed } = this.state;
     document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
 
-    if (!this._subscribedVersion) {
-      this.subscribeStore(store, 'version', (v) => {
-        const el = this.$('.sidebar-version');
-        if (el) el.textContent = v;
-      });
-      this._subscribedVersion = true;
-    }
+    this.subscribeStore(store, 'version', (v) => {
+      const el = this.$('.sidebar-version');
+      if (el) el.textContent = v;
+    });
 
     this.$('#manage-toggle')?.addEventListener('click', () => {
       // Toggle away from what is on screen, which on an untoggled sidebar is

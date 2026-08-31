@@ -352,7 +352,7 @@ export default class MenuPage extends Component {
     this._previewFolds = [];
   }
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: '/light/menu'
     });
     setupTextareaMaximizer(this.container);
@@ -506,7 +506,6 @@ export default class MenuPage extends Component {
   }
   beforeUnmount() {
     this._destroyPreviews();
-    this._cleanupAdminLayout?.();
   }
 
   /**

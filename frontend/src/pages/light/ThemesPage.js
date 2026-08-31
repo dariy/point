@@ -112,7 +112,7 @@ export default class ThemesPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/themes",
     });
 
@@ -141,10 +141,6 @@ export default class ThemesPage extends Component {
 
       this.container.addEventListener("textarea:save", () => this._handleSaveCSS());
     }
-  }
-
-  beforeUnmount() {
-    this._cleanupAdminLayout?.();
   }
 
   mount() {

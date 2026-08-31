@@ -250,7 +250,7 @@ export default class SystemPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/system",
     });
 
@@ -283,10 +283,6 @@ export default class SystemPage extends Component {
         }
       });
     }
-  }
-
-  beforeUnmount() {
-    this._cleanupAdminLayout?.();
   }
 
   mount() {

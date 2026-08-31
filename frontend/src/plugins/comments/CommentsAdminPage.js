@@ -241,7 +241,7 @@ export default class CommentsAdminPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: "/light/comments",
     });
 
@@ -664,7 +664,6 @@ export default class CommentsAdminPage extends Component {
 
   beforeUnmount() {
     this._swipeCleanup?.();
-    this._cleanupAdminLayout?.();
     super.beforeUnmount?.();
   }
 }

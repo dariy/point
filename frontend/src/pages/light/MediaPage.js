@@ -26,7 +26,7 @@ export default class MediaPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: '/light/media',
     });
 
@@ -37,9 +37,5 @@ export default class MediaPage extends Component {
     const browser = this.mountChild(MediaBrowser, '#media-browser-mount', { pickerMode: false });
 
     this.$('#media-upload-btn')?.addEventListener('click', () => browser.openFilePicker());
-  }
-
-  beforeUnmount() {
-    this._cleanupAdminLayout?.();
   }
 }

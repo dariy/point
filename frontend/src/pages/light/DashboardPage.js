@@ -186,7 +186,7 @@ export default class DashboardPage extends Component {
   }
 
   afterRender() {
-    this._cleanupAdminLayout = setupAdminLayout(this, {
+    setupAdminLayout(this, {
       currentPath: '/light',
     });
 
@@ -228,10 +228,6 @@ export default class DashboardPage extends Component {
         navigate(`/light/posts/new?content=${encodeURIComponent(content)}&openMedia=1`);
       });
     }
-  }
-
-  beforeUnmount() {
-    this._cleanupAdminLayout?.();
   }
 
   mount() {
