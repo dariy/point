@@ -17,7 +17,7 @@
 import { Component } from '../../components/Component.js';
 
 import { getTagsGraph } from '../../api/pages.js';
-import { store } from '../../store.js';
+import { getNavTags, getSettings } from '../../store.js';
 import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
@@ -106,7 +106,7 @@ export default class TagsPage extends Component {
   }
 
   afterRender() {
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     this._updateBreadcrumb(null);
     pluginHost.fill('footer', this.$('#footer-mount'), { settings }).then(comps => {
       if (comps[0] && !this._unmounted) this._children.push(comps[0]);
@@ -228,8 +228,8 @@ export default class TagsPage extends Component {
       }
     }
 
-    const settings = store.get('settings') || {};
-    const navTags = store.get('navTags') || [];
+    const settings = getSettings() || {};
+    const navTags = getNavTags() || [];
     const filterSlot = loaded
       ? html`<div class="tag-filter-box header-tag-filter">
            ${raw(SEARCH_SVG)}

@@ -21,7 +21,7 @@ import {
   auditPostLinks,
   getHealth,
 } from "../../api/system.js";
-import { store } from "../../store.js";
+import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { formatFileSize } from "../../utils/formatters.js";
 
@@ -318,9 +318,9 @@ export default class SystemPage extends Component {
   async _handleClearCache() {
     try {
       await clearCache();
-      store.set("toast", { message: "Cache cleared.", type: "success" });
+      setToast({ message: "Cache cleared.", type: "success" });
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Failed to clear cache.",
         type: "error",
       });
@@ -334,7 +334,7 @@ export default class SystemPage extends Component {
       this.setState({ auditingLinks: false, linkAudit });
     } catch (err) {
       this.setState({ auditingLinks: false });
-      store.set("toast", {
+      setToast({
         message: err.message || "Link audit failed.",
         type: "error",
       });
@@ -351,7 +351,7 @@ export default class SystemPage extends Component {
       });
     } catch (err) {
       this.setState({ updatingCoords: false });
-      store.set("toast", {
+      setToast({
         message: err.message || "Update failed.",
         type: "error",
       });

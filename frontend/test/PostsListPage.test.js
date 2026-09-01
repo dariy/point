@@ -18,7 +18,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire, type, check } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { getToast, setSettings, setToast, setUser } from '../src/store.js';
 import { clearPostReadCache } from '../src/api/posts.js';
 
 const settle = () => new Promise(r => setImmediate(r));
@@ -95,9 +95,9 @@ describe('PostsListPage', () => {
       'PATCH /api/posts': ({ body, path }) => ({ id: Number(path.split('/')[3]), status: (body.status || 'draft').toUpperCase(), type: 'post', tags: (body.tags || []).map(n => ({ name: n, slug: n })) }),
     };
     fakeFetch();
-    store.set('user', { username: 'owner', is_admin: true });
-    store.set('settings', { blog_title: 'Test blog' });
-    store.set('toast', null);
+    setUser({ username: 'owner', is_admin: true });
+    setSettings({ blog_title: 'Test blog' });
+    setToast(null);
     ({ default: PostsListPage } = await import('../src/pages/light/PostsListPage.js'));
   });
 
@@ -132,7 +132,7 @@ describe('PostsListPage', () => {
 
       await mountPage();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(page.state.loading, false);
       assert.equal(page.state.posts.length, 0);
     });
@@ -252,7 +252,7 @@ describe('PostsListPage', () => {
 
       assert.equal(sent('PATCH', '/api/posts/2/status').at(-1).body.status, 'published');
       assert.equal(page.state.posts.find(p => p.id === 2).status, 'published');
-      assert.equal(store.get('toast').type, 'success');
+      assert.equal(getToast().type, 'success');
     });
 
     test('choosing "scheduled" hands off to the editor, where a date can be picked', async () => {
@@ -272,7 +272,7 @@ describe('PostsListPage', () => {
       await page._updatePostStatus(1, 'draft', select);
 
       assert.equal(select.value, 'published', 'reverted to the status it had');
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(select.classList.contains('badge-loading'), false);
     });
 
@@ -302,7 +302,7 @@ describe('PostsListPage', () => {
       await settle();
 
       assert.equal(sent('DELETE', '/api/posts/1').length, 1);
-      assert.match(store.get('toast').message, /Trash/);
+      assert.match(getToast().message, /Trash/);
     });
 
     test('a failed delete reports the reason', async () => {
@@ -311,7 +311,7 @@ describe('PostsListPage', () => {
 
       await page._deletePost(1);
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('restore puts a trashed post back', async () => {
@@ -320,7 +320,7 @@ describe('PostsListPage', () => {
       await page._restorePost(1, 'Harbour lights');
 
       assert.equal(sent('POST', '/api/posts/1/restore').length, 1);
-      assert.match(store.get('toast').message, /restored/);
+      assert.match(getToast().message, /restored/);
     });
 
     test('a failed restore reports the reason', async () => {
@@ -329,7 +329,7 @@ describe('PostsListPage', () => {
 
       await page._restorePost(1, 'Harbour lights');
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('permanent delete is irreversible, so it asks too', async () => {
@@ -342,7 +342,7 @@ describe('PostsListPage', () => {
       await settle();
 
       assert.equal(sent('DELETE', '/api/posts/1/permanent').length, 1);
-      assert.match(store.get('toast').message, /permanently/i);
+      assert.match(getToast().message, /permanently/i);
     });
 
     test('a failed permanent delete reports the reason', async () => {
@@ -351,7 +351,7 @@ describe('PostsListPage', () => {
 
       await page._permanentlyDeletePost(1);
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('cancelling a confirmation destroys nothing', async () => {
@@ -379,7 +379,7 @@ describe('PostsListPage', () => {
       await page._copyPreviewLink(1);
 
       assert.equal(copied, 'http://localhost/preview/abc');
-      assert.match(store.get('toast').message, /copied/i);
+      assert.match(getToast().message, /copied/i);
     });
 
     test('without a clipboard the link itself is shown', async () => {
@@ -389,7 +389,7 @@ describe('PostsListPage', () => {
 
       await page._copyPreviewLink(1);
 
-      assert.equal(store.get('toast').message, 'http://localhost/preview/abc');
+      assert.equal(getToast().message, 'http://localhost/preview/abc');
     });
 
     test('a failure to generate one is reported', async () => {
@@ -398,7 +398,7 @@ describe('PostsListPage', () => {
 
       await page._copyPreviewLink(1);
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
   });
 
@@ -476,7 +476,7 @@ describe('PostsListPage', () => {
 
       assert.equal(sent('PATCH', '/api/posts/1/status').length, 1);
       assert.equal(sent('PATCH', '/api/posts/2/status').length, 1);
-      assert.match(store.get('toast').message, /All 2 posts updated/);
+      assert.match(getToast().message, /All 2 posts updated/);
       assert.equal(page.state.selectMode, false, 'and the selection is spent');
     });
 
@@ -489,8 +489,8 @@ describe('PostsListPage', () => {
       await page._handleBulkApply();
       await settle();
 
-      assert.match(store.get('toast').message, /1 of 2 posts updated\. 1 failed/);
-      assert.equal(store.get('toast').type, 'error');
+      assert.match(getToast().message, /1 of 2 posts updated\. 1 failed/);
+      assert.equal(getToast().type, 'error');
     });
 
     test('bulk delete asks once for the whole selection', async () => {
@@ -505,7 +505,7 @@ describe('PostsListPage', () => {
 
       assert.equal(sent('DELETE', '/api/posts/1').length, 1);
       assert.equal(sent('DELETE', '/api/posts/2').length, 1);
-      assert.match(store.get('toast').message, /2 posts moved to Trash/);
+      assert.match(getToast().message, /2 posts moved to Trash/);
     });
 
     test('a partial bulk delete failure is counted', async () => {
@@ -518,7 +518,7 @@ describe('PostsListPage', () => {
       acceptConfirm();
       await settle();
 
-      assert.match(store.get('toast').message, /1 of 2 posts moved to Trash\. 1 failed/);
+      assert.match(getToast().message, /1 of 2 posts moved to Trash\. 1 failed/);
     });
   });
 
@@ -536,7 +536,7 @@ describe('PostsListPage', () => {
 
       assert.deepEqual(sent('PATCH', '/api/posts/1/tags').at(-1).body.tags, ['harbour', 'boats']);
       assert.deepEqual(post.tags.map(t => t.name), ['harbour', 'boats']);
-      assert.match(store.get('toast').message, /Tags saved/);
+      assert.match(getToast().message, /Tags saved/);
     });
 
     test('a failure to save tags is reported', async () => {
@@ -548,7 +548,7 @@ describe('PostsListPage', () => {
       await editor.props.onChange(['harbour']);
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('a row that is no longer on screen is skipped', async () => {

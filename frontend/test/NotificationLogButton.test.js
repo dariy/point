@@ -2,7 +2,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { setToastLog } from '../src/store.js';
 import { NotificationLogButton } from '../src/components/shared/NotificationLogButton.js';
 
 // Toast log entries carry API error text and filenames — values the admin did
@@ -23,12 +23,12 @@ describe('NotificationLogButton modal escaping', () => {
   });
 
   afterEach(() => {
-    store.set('toast_log', []);
+    setToastLog([]);
     dom.cleanup();
   });
 
   test('an img onerror payload in a message renders as text, not as an element', () => {
-    store.set('toast_log', [
+    setToastLog([
       { type: 'error', message: '<img src=x onerror=alert(1)>', timestamp: Date.now() },
     ]);
     btn._refreshModalContent();
@@ -41,7 +41,7 @@ describe('NotificationLogButton modal escaping', () => {
   });
 
   test('a hostile type falls back to info and cannot inject a class', () => {
-    store.set('toast_log', [
+    setToastLog([
       { type: '" onmouseover="alert(1)', message: 'hi', timestamp: Date.now() },
     ]);
     btn._refreshModalContent();
@@ -52,7 +52,7 @@ describe('NotificationLogButton modal escaping', () => {
   });
 
   test('an ordinary entry still renders its icon and message', () => {
-    store.set('toast_log', [
+    setToastLog([
       { type: 'success', message: 'Saved', timestamp: Date.now() },
     ]);
     btn._refreshModalContent();
@@ -62,7 +62,7 @@ describe('NotificationLogButton modal escaping', () => {
   });
 
   test('an empty log renders the empty state', () => {
-    store.set('toast_log', []);
+    setToastLog([]);
     btn._refreshModalContent();
 
     assert.ok(body.querySelector('.notification-log-empty'));

@@ -13,7 +13,7 @@ import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/Ad
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
-import { store } from '../../store.js';
+import { getTagsView, setToast } from '../../store.js';
 import { html, setHTML, raw } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
@@ -38,7 +38,7 @@ export default class TagsManagerPage extends Component {
       sortOrder: 'asc',
       selectMode: false,
       selectedIds: new Set(),
-      view: store.get('tags_view') || 'tree'
+      view: getTagsView() || 'tree'
     };
     this._modal = null;
     this._modalKeyHandler = null;
@@ -434,7 +434,7 @@ export default class TagsManagerPage extends Component {
         targetId,
         onDone: () => this._afterFlow()
       }),
-      onInvalidReorder: () => store.set('toast', {
+      onInvalidReorder: () => setToast({
         message: 'Drop ON a tag to reparent. Reordering only works within the same parent.',
         type: 'error'
       }),
@@ -446,7 +446,7 @@ export default class TagsManagerPage extends Component {
           });
           this._load();
         } catch (err) {
-          store.set('toast', {
+          setToast({
             message: err.message || 'Reorder failed.',
             type: 'error'
           });
@@ -545,13 +545,13 @@ export default class TagsManagerPage extends Component {
           const result = await geocodeTag(f.id);
           latInput.value = result.latitude;
           lngInput.value = result.longitude;
-          store.set('toast', {
+          setToast({
             message: 'Coordinates fetched from Nominatim.',
             type: 'success'
           });
         }
       } catch (err) {
-        store.set('toast', {
+        setToast({
           message: err.message || 'Failed to get coordinates.',
           type: 'error'
         });
@@ -637,7 +637,7 @@ export default class TagsManagerPage extends Component {
       }
     } catch (err) {
       console.error('[TagsManagerPage] load error:', err);
-      store.set('toast', {
+      setToast({
         message: 'Could not load tags.',
         type: 'error'
       });
@@ -700,7 +700,7 @@ export default class TagsManagerPage extends Component {
         if (!_arraysEqual(newChildIds, this._initialChildIds)) {
           await setTagChildren(tagId, newChildIds);
         }
-        store.set('toast', {
+        setToast({
           message: 'Tag updated.',
           type: 'success'
         });
@@ -721,7 +721,7 @@ export default class TagsManagerPage extends Component {
           parent_ids: newParentIds,
           child_ids: newChildIds
         });
-        store.set('toast', {
+        setToast({
           message: 'Tag created.',
           type: 'success'
         });
@@ -730,7 +730,7 @@ export default class TagsManagerPage extends Component {
       this._load();
       this._refreshNavTags();
     } catch (err) {
-      store.set('toast', {
+      setToast({
         message: err.message || 'Save failed.',
         type: 'error'
       });
@@ -761,14 +761,14 @@ export default class TagsManagerPage extends Component {
   async _handleDelete(id) {
     try {
       await deleteTag(id);
-      store.set('toast', {
+      setToast({
         message: 'Tag deleted.',
         type: 'success'
       });
       this._load();
       this._refreshNavTags();
     } catch (err) {
-      store.set('toast', {
+      setToast({
         message: err.message || 'Delete failed.',
         type: 'error'
       });
@@ -777,13 +777,13 @@ export default class TagsManagerPage extends Component {
   async _handleRecalc() {
     try {
       await recalculateCounts();
-      store.set('toast', {
+      setToast({
         message: 'Counts recalculated.',
         type: 'success'
       });
       this._load();
     } catch (err) {
-      store.set('toast', {
+      setToast({
         message: err.message || 'Recalculation failed.',
         type: 'error'
       });

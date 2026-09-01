@@ -5,7 +5,7 @@ import assert from 'node:assert';
 describe('RebuildThumbnailsSection', () => {
   let dom;
   let RebuildThumbnailsSection;
-  let store;
+  let onToast, setToast;
   let originalFetch;
   let fetchCalls = [];
   let click;
@@ -18,8 +18,7 @@ describe('RebuildThumbnailsSection', () => {
     const mod = await import('../src/components/light/sections/RebuildThumbnailsSection.js');
     RebuildThumbnailsSection = mod.RebuildThumbnailsSection;
 
-    const storeMod = await import('../src/store.js');
-    store = storeMod.store;
+    ({ onToast, setToast } = await import('../src/store.js'));
   });
 
   after(() => {
@@ -52,7 +51,7 @@ describe('RebuildThumbnailsSection', () => {
       }
       return createMockResponse({});
     };
-    store.set('toast', null);
+    setToast(null);
   });
 
   afterEach(() => {
@@ -80,7 +79,7 @@ describe('RebuildThumbnailsSection', () => {
     
     let resolveToast;
     const toastPromise = new Promise(resolve => resolveToast = resolve);
-    const unsub = store.subscribe('toast', (t) => {
+    const unsub = onToast((t) => {
       if (t) {
         resolveToast(t);
         unsub();
@@ -133,7 +132,7 @@ describe('RebuildThumbnailsSection', () => {
 
     let resolveToast;
     const toastPromise = new Promise(resolve => resolveToast = resolve);
-    const unsub = store.subscribe('toast', (t) => {
+    const unsub = onToast((t) => {
       if (t) {
         resolveToast(t);
         unsub();

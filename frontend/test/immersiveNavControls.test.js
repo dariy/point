@@ -9,7 +9,7 @@ import assert from 'node:assert';
 describe('Immersive navigation controls', () => {
   let PublicHeader;
   let ImmersiveSheetViewer;
-  let store;
+  let setRoute, setUser;
   let container;
 
   before(async () => {
@@ -48,9 +48,8 @@ describe('Immersive navigation controls', () => {
       disconnect() {}
     };
 
-    const storeMod = await import('../src/store.js');
-    store = storeMod.store;
-    store.set('route', { pathname: '/posts/demo', params: {}, query: {} });
+    ({ setRoute, setUser } = await import('../src/store.js'));
+    setRoute({ pathname: '/posts/demo', params: {}, query: {} });
 
     ({ PublicHeader } = await import('../src/plugins/public-header/PublicHeader.js'));
     ({ ImmersiveSheetViewer } = await import('../src/plugins/immersive/ImmersiveSheetViewer.js'));
@@ -93,23 +92,23 @@ describe('Immersive navigation controls', () => {
   // ── Details sheet actions ──────────────────────────────────────────────────
 
   test('sheet actions have no Article button', () => {
-    store.set('user', { id: 1 });
+    setUser({ id: 1 });
     const markup = ImmersiveSheetViewer.prototype._renderActions.call({
       props: { editUrl: '/light/posts/1/edit' },
     });
     assert.ok(!markup.includes('data-action="article"'));
     assert.ok(!markup.includes('>Article<'));
-    store.set('user', null);
+    setUser(null);
   });
 
   test('sheet actions keep Edit (when signed in) and Share', () => {
-    store.set('user', { id: 1 });
+    setUser({ id: 1 });
     const markup = ImmersiveSheetViewer.prototype._renderActions.call({
       props: { editUrl: '/light/posts/1/edit' },
     });
     assert.ok(markup.includes('data-action="edit"'));
     assert.ok(markup.includes('data-action="share"'));
-    store.set('user', null);
+    setUser(null);
   });
 
   test('sheet actions hide Edit for anonymous visitors', () => {

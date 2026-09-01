@@ -10,7 +10,7 @@ import {
 } from "../../components/light/AdminLayout.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { api } from "../../api/client.js";
-import { store } from "../../store.js";
+import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import {
@@ -505,10 +505,10 @@ export default class CommentsAdminPage extends Component {
   async _run(fn, okMsg) {
     try {
       await fn();
-      store.set("toast", { message: okMsg, type: "success" });
+      setToast({ message: okMsg, type: "success" });
       this._load();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Action failed.",
         type: "error",
       });
@@ -579,11 +579,11 @@ export default class CommentsAdminPage extends Component {
               ),
             ),
           );
-          store.set("toast", { message: "Comments deleted.", type: "success" });
+          setToast({ message: "Comments deleted.", type: "success" });
           this.setState({ selectMode: false, selectedIds: new Set() });
           this._load();
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Delete failed.",
             type: "error",
           });
@@ -615,11 +615,11 @@ export default class CommentsAdminPage extends Component {
               ),
             ),
           );
-          store.set("toast", { message: "Authors blocked.", type: "success" });
+          setToast({ message: "Authors blocked.", type: "success" });
           this.setState({ selectMode: false, selectedIds: new Set() });
           this._load();
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Block failed.",
             type: "error",
           });
@@ -647,11 +647,11 @@ export default class CommentsAdminPage extends Component {
               ),
             ),
           );
-          store.set("toast", { message: "Users unblocked.", type: "success" });
+          setToast({ message: "Users unblocked.", type: "success" });
           this.setState({ selectMode: false, selectedIds: new Set() });
           this._load();
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Unblock failed.",
             type: "error",
           });

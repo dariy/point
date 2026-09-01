@@ -23,7 +23,13 @@ import { Pagination } from "../../components/shared/Pagination.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getTagPage } from "../../api/pages.js";
 import { getPostBySlug, getPostNavigation } from "../../api/posts.js";
-import { store } from "../../store.js";
+import {
+  getNavTags,
+  getSettings,
+  getTagBreadcrumb,
+  setPagination,
+  setTagBreadcrumb,
+} from "../../store.js";
 import {
   html,
   isShortViewport,
@@ -191,7 +197,7 @@ export default class TagPage extends Component {
   }
 
   _minPerPage() {
-    return (store.get("settings") || {}).posts_per_page || 10;
+    return (getSettings() || {}).posts_per_page || 10;
   }
 
   _buildParams(vc) {
@@ -313,11 +319,11 @@ export default class TagPage extends Component {
   afterRender() {
     // Reset the footer paginator's feed; _mountPostContent republishes it when
     // the grid view has pages, so the post/loading/error views show none.
-    store.set("pagination", null);
+    setPagination(null);
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._pager.disarm();
-    const settings = store.get("settings") || {};
-    const rootMenu = store.get("navTags") || [];
+    const settings = getSettings() || {};
+    const rootMenu = getNavTags() || [];
     const isCustomMenu = settings.nav_menu_mode === "custom";
     // Use the full hierarchical menu tree from the page response so every crumb
     // (site root, ancestors, current tag) can resolve its children for ▾ carets.
@@ -391,11 +397,10 @@ export default class TagPage extends Component {
               ]
             : []),
         ];
-    const bcCacheKey = `bc:tag:${slug}`;
-    if (data) store.set(bcCacheKey, computedBreadcrumb);
+    if (data) setTagBreadcrumb(slug, computedBreadcrumb);
     const breadcrumb = computedBreadcrumb.length
       ? computedBreadcrumb
-      : store.get(bcCacheKey) || [];
+      : getTagBreadcrumb(slug) || [];
 
     if (this._isPostView() && post) {
       // ── Post immersive view within tag context ──────────────────────────────
@@ -487,7 +492,7 @@ export default class TagPage extends Component {
   // timeline-scope or page change can refresh just this in place — see
   // _refreshPostContent — without remounting the timeline.
   async _mountPostContent() {
-    const settings = store.get("settings") || {};
+    const settings = getSettings() || {};
     const slug = this.props.params?.slug || "";
     const page = parseInt(this.props.query?.page || "1", 10);
     const { posts = [], pagination = {} } = this.state.data || {};
@@ -576,7 +581,7 @@ export default class TagPage extends Component {
       this._postChildren.length = 1;
     }
 
-    store.set("pagination", multiPage
+    setPagination(multiPage
       ? { page: pagination.page, pages: pagination.pages, minPage, total: pagination.total }
       : null);
   }
@@ -611,7 +616,7 @@ export default class TagPage extends Component {
   beforeUnmount() {
     // Non-grid pages (post, search) share the footer — don't leave a stale
     // paginator feed behind.
-    store.set("pagination", null);
+    setPagination(null);
     this._pager.destroy();
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);

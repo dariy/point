@@ -21,7 +21,7 @@
  */
 
 import { Component } from '../Component.js';
-import { store } from '../../store.js';
+import { getRootTags, onRootTags } from '../../store.js';
 import { html, navigate } from '../../utils/helpers.js';
 import { loadNav } from '../../api/nav.js';
 import { tagHref } from '../../utils/tagLinks.js';
@@ -57,7 +57,7 @@ export class SiteCrumb extends Component {
    */
   _items() {
     if (!this._dropdownEnabled()) return [];
-    return (store.get('rootTags') || []).map((t) => ({
+    return (getRootTags() || []).map((t) => ({
       name: t.name,
       slug: t.slug,
       count: t.post_count,
@@ -75,7 +75,7 @@ export class SiteCrumb extends Component {
 
     // The payload lands after first paint; re-render then so the crumb picks up
     // its dropdown, and let the header re-measure — it grew by a caret.
-    this.subscribeStore(store, 'rootTags', () => this._rerender());
+    this.subscribeStore(onRootTags, () => this._rerender());
 
     // Same trigger as every other crumb: hover-with-intent on a mouse, tap on
     // touch. The list is read at open time, never captured at wiring time.

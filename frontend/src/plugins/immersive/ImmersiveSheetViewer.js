@@ -22,7 +22,7 @@
 
 import { MediaViewer } from '../../components/shared/MediaViewer.js';
 import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.js';
-import { store } from '../../store.js';
+import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { renderTagLink, buildTagIndex } from '../../utils/tagLinks.js';
@@ -59,7 +59,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       navPrev,
       navNext
     } = this.props;
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     if (!post) return html`<div class="immersive-sheet" aria-hidden="true"></div>`;
     const showViews = settings.show_view_counts && post.view_count != null;
     const viewsLine = showViews ? html`<div class="immersive-sheet-meta">${`${post.view_count} views`}</div>` : '';
@@ -95,13 +95,13 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const {
       editUrl
     } = this.props;
-    const user = store.get('user');
+    const user = getUser();
     const editBtn = user && editUrl ? html`<a class="immersive-sheet-action" href="${editUrl}" data-action="edit">${raw(EDIT_SVG)}<span>Edit</span></a>` : '';
     const shareBtn = html`<button class="immersive-sheet-action" type="button" data-action="share">${raw(SHARE_SVG)}<span>Share</span></button>`;
     return html`<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
   }
   _renderFooter(prev, next) {
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     // Same renderer as the site footer — the admin-editable `footer_copyright`
     // template, so the sheet can't show a different line than the home page.
     const copyright = html`<p class="immersive-sheet-copyright">${renderCopyright(settings)}</p>`;
@@ -143,9 +143,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // Per-slide EXIF metadata for the inline block (mirrors MediaViewer's
     // floating control, which we suppressed via _useFloatingExif()).
     this._sheetExifMeta = null;
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const media = this.props.media || [];
-    if (exifVisible(settings, store.get('user')) && media.length) {
+    if (exifVisible(settings, getUser()) && media.length) {
       const exifMap = buildExifMap(media);
       const meta = (this.props.items || []).map(it => it.type === 'image' && it.url ? metadataForSrc(exifMap, it.url) : null);
       if (meta.some(Boolean)) this._sheetExifMeta = meta;
@@ -155,7 +155,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // Tag flyouts inside the sheet.
     const tagsEl = this.$('.immersive-sheet-tags');
     if (tagsEl) {
-      const navTags = store.get('navTags') || [];
+      const navTags = getNavTags() || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
       this._sheetFlyoutCleanup = setupTagFlyout(tagsEl, tagIndex, url => {
         const slug = url.replace('/tags/', '');
@@ -225,8 +225,8 @@ export class ImmersiveSheetViewer extends MediaViewer {
     });
     this.on(this.$('.immersive-sheet-theme'), 'click', e => {
       e.stopPropagation();
-      const current = store.get('theme') || 'auto';
-      store.set('theme', current === 'dark' ? 'light' : 'dark');
+      const current = getTheme() || 'auto';
+      setTheme(current === 'dark' ? 'light' : 'dark');
     });
   }
 

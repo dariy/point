@@ -33,7 +33,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, type } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { getSettings, getToast, setSettings, setToast, setUser } from '../src/store.js';
 
 /** Home, About > Team, Blog — one nested branch, roots either side of it. */
 const MARKDOWN = [
@@ -112,9 +112,9 @@ describe('MenuPage', () => {
       more_title: 'More',
     };
     fakeFetch();
-    store.set('user', { username: 'owner', is_admin: true });
-    store.set('settings', { blog_title: 'Test blog' });
-    store.set('toast', null);
+    setUser({ username: 'owner', is_admin: true });
+    setSettings({ blog_title: 'Test blog' });
+    setToast(null);
     ({ default: MenuPage } = await import('../src/plugins/nav-menu/MenuPage.js'));
   });
 
@@ -566,9 +566,9 @@ describe('MenuPage', () => {
       await settle();
 
       assert.equal(navChanged, 1);
-      assert.equal(store.get('settings').nav_menu_mode, 'custom');
-      assert.equal(store.get('settings').nav_inline_max, '4');
-      assert.equal(store.get('toast').type, 'success');
+      assert.equal(getSettings().nav_menu_mode, 'custom');
+      assert.equal(getSettings().nav_inline_max, '4');
+      assert.equal(getToast().type, 'success');
     });
 
     // Saving must not repaint the editor. `state.items` is stale by exactly
@@ -642,7 +642,7 @@ describe('MenuPage', () => {
       click(q('#save-menu-btn'));
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.ok(!q('#save-menu-btn').disabled, 'save stayed disabled after a failure');
     });
   });

@@ -8,7 +8,7 @@
  */
 
 import { Component } from '../Component.js';
-import { store } from '../../store.js';
+import { getAppVersion, getTheme, onAppVersion, onPluginToggled, setTheme } from '../../store.js';
 import { html, raw } from '../../utils/helpers.js';
 import { DEBUG } from '../../utils/debug.js';
 import { pluginHost } from '../../core/pluginHost.js';
@@ -50,7 +50,7 @@ export class LightSidebar extends Component {
   render() {
     const { currentPath = '' } = this.props;
     const { collapsed } = this.state;
-    const version = store.get('version') || '';
+    const version = getAppVersion() || '';
 
     // Plugin-provided pages join the Manage group only while their plugin is
     // enabled (the manifest is enabled-only, so a disabled plugin disappears).
@@ -132,12 +132,12 @@ export class LightSidebar extends Component {
   }
 
   afterRender() {
-    this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
+    this.subscribeStore(onPluginToggled, () => this.setState({}));
 
     const { collapsed } = this.state;
     document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
 
-    this.subscribeStore(store, 'version', (v) => {
+    this.subscribeStore(onAppVersion, (v) => {
       const el = this.$('.sidebar-version');
       if (el) el.textContent = v;
     });
@@ -156,9 +156,9 @@ export class LightSidebar extends Component {
     }
 
     this.$('#sidebar-theme-toggle')?.addEventListener('click', () => {
-      const current = store.get('theme') || 'auto';
+      const current = getTheme() || 'auto';
       const next = current === 'dark' ? 'light' : 'dark';
-      store.set('theme', next);
+      setTheme(next);
     });
 
     this.$('#sidebar-collapse-btn')?.addEventListener('click', () => {

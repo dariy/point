@@ -16,7 +16,7 @@
  * there before the first render). Settings win when both exist.
  */
 
-import { store } from "../../store.js";
+import { getSettings, mergeSettings } from "../../store.js";
 
 /**
  * Seeds the order, and orders anything missing from a stored one — a future
@@ -40,7 +40,7 @@ export const ORDER_STORAGE_KEY = "point:editor:field-order";
 
 /** The stored value of one preference: account settings first, then localStorage. */
 function readRaw(settingsKey, storageKey) {
-  const settings = store.get("settings") || {};
+  const settings = getSettings() || {};
   if (settings[settingsKey]) return settings[settingsKey];
   try { return localStorage.getItem(storageKey); } catch { return null; }
 }
@@ -52,7 +52,7 @@ function persistRaw(settingsKey, storageKey, raw, label) {
     updateSettings({ [settingsKey]: raw }).catch((err) => {
       console.error(`Failed to save ${label} to global set:`, err);
     });
-    store.merge("settings", { [settingsKey]: raw });
+    mergeSettings({ [settingsKey]: raw });
   });
 }
 

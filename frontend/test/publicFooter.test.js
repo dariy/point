@@ -98,7 +98,7 @@ describe('PublicFooter copyright template', () => {
  * that there is something to see.
  */
 describe('PublicFooter revelio toggle', () => {
-  let PublicFooter, store, setRevelio;
+  let PublicFooter, setUser, setRevelio;
 
   before(async () => {
     // The suite above stubs localStorage as a black hole (it only renders the
@@ -112,7 +112,7 @@ describe('PublicFooter revelio toggle', () => {
     };
     global.window.localStorage = global.localStorage;
     ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.js'));
-    ({ store } = await import('../src/store.js'));
+    ({ setUser } = await import('../src/store.js'));
     ({ setRevelio } = await import('../src/utils/revelio.js'));
   });
 
@@ -120,13 +120,13 @@ describe('PublicFooter revelio toggle', () => {
   const render = () => String(new PublicFooter(null, { settings: {} }).render());
 
   test('a guest never sees the switch', () => {
-    store.set('user', null);
+    setUser(null);
     setRevelio(true);
     assert.ok(!render().includes('revelio-toggle'));
   });
 
   test('the owner gets it, reading as "revealing" by default', () => {
-    store.set('user', { id: 1 });
+    setUser({ id: 1 });
     setRevelio(true);
     const html = render();
     assert.match(html, /id="revelio-toggle"/);
@@ -135,7 +135,7 @@ describe('PublicFooter revelio toggle', () => {
   });
 
   test('switched off, it offers to reveal again', () => {
-    store.set('user', { id: 1 });
+    setUser({ id: 1 });
     setRevelio(false);
     const html = render();
     assert.match(html, /aria-pressed="false"/);

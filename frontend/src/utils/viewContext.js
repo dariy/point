@@ -1,4 +1,4 @@
-import { store } from '../store.js';
+import { getRoute } from '../store.js';
 import { navigate } from './helpers.js';
 
 /**
@@ -76,7 +76,7 @@ export class ViewContext {
    */
   static current() {
     /** @type {{pathname: string, query: Record<string, string>}} */
-    const route = store.get('route') || { pathname: window.location.pathname, query: {} };
+    const route = getRoute() || { pathname: window.location.pathname, query: {} };
     return new ViewContext(route.pathname, route.query);
   }
 

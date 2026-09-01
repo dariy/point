@@ -229,6 +229,15 @@ describe('Component.subscribeStoreSelector', () => {
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom.cleanup(); });
 
+  /**
+   * An `on*Selector`-shaped subscriber for a probe key.
+   *
+   * subscribeStoreSelector() takes one of store.js's accessors, not a store
+   * and a string key; this test is about how long the subscription lives, not
+   * about any real key, so it binds a throwaway one in the same shape.
+   */
+  const onKeySelector = key => (select, cb) => store.subscribeSelector(key, select, cb);
+
   test('is released and retaken per render, like subscribeStore', () => {
     const key = freshKey();
     store.set(key, { title: 'Point', other: 1 });
@@ -237,7 +246,7 @@ describe('Component.subscribeStoreSelector', () => {
     class C extends Component {
       render() { return html`<p>x</p>`; }
       afterRender() {
-        this.subscribeStoreSelector(store, key, (s) => s.title, seen);
+        this.subscribeStoreSelector(onKeySelector(key), (s) => s.title, seen);
       }
     }
 

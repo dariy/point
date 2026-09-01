@@ -8,7 +8,7 @@ import assert from 'node:assert';
 // is authored links rather than the tag tree.
 describe('loadNav', () => {
   let loadNav;
-  let store;
+  let getNavTags, getRootTags, setNavTags, setRootTags;
   let calls;
   let respond;
 
@@ -23,7 +23,7 @@ describe('loadNav', () => {
       };
     };
     ({ loadNav } = await import('../src/api/nav.js'));
-    ({ store } = await import('../src/store.js'));
+    ({ getNavTags, getRootTags, setNavTags, setRootTags } = await import('../src/store.js'));
   });
 
   test('custom mode: menu keeps the links, rootTags carries the tag tree', async () => {
@@ -35,8 +35,8 @@ describe('loadNav', () => {
 
     await loadNav();
 
-    assert.deepStrictEqual(store.get('navTags').map((i) => i.name), ['About']);
-    assert.deepStrictEqual(store.get('rootTags').map((i) => i.name), ['Travel']);
+    assert.deepStrictEqual(getNavTags().map((i) => i.name), ['About']);
+    assert.deepStrictEqual(getRootTags().map((i) => i.name), ['Travel']);
     assert.strictEqual(calls, 1);
   });
 
@@ -50,7 +50,7 @@ describe('loadNav', () => {
     // tags mode sends no `tags` — the menu already is the tree.
     await loadNav({ force: true });
     assert.strictEqual(calls, 1);
-    assert.deepStrictEqual(store.get('rootTags').map((i) => i.name), ['Travel']);
+    assert.deepStrictEqual(getRootTags().map((i) => i.name), ['Travel']);
   });
 
   test('concurrent callers share one request', async () => {
@@ -63,14 +63,14 @@ describe('loadNav', () => {
   });
 
   test('a failed fetch resolves and leaves the last good data in place', async () => {
-    store.set('navTags', [{ name: 'Travel', slug: 'travel' }]);
-    store.set('rootTags', [{ name: 'Travel', slug: 'travel' }]);
+    setNavTags([{ name: 'Travel', slug: 'travel' }]);
+    setRootTags([{ name: 'Travel', slug: 'travel' }]);
     const ok = global.fetch;
     global.fetch = async () => { throw new Error('offline'); };
 
     await loadNav({ force: true });
 
-    assert.deepStrictEqual(store.get('rootTags').map((i) => i.name), ['Travel']);
+    assert.deepStrictEqual(getRootTags().map((i) => i.name), ['Travel']);
     global.fetch = ok;
   });
 });

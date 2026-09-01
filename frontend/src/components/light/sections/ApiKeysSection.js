@@ -7,7 +7,7 @@
 
 import { Component } from "../../Component.js";
 import { getApiKeys, createApiKey, deleteApiKey } from "../../../api/auth.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
@@ -97,7 +97,7 @@ export class ApiKeysSection extends Component {
           });
           this._load();
         } catch (err) {
-          store.set("toast", { message: err.message || "Failed to create API key.", type: "error" });
+          setToast({ message: err.message || "Failed to create API key.", type: "error" });
         }
       },
     });
@@ -114,7 +114,7 @@ export class ApiKeysSection extends Component {
           await deleteApiKey(id);
           this._load();
         } catch (err) {
-          store.set("toast", { message: err.message || "Failed to delete API key.", type: "error" });
+          setToast({ message: err.message || "Failed to delete API key.", type: "error" });
         }
       },
     });

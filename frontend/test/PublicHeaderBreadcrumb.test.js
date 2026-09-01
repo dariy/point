@@ -4,7 +4,7 @@ import assert from 'node:assert';
 
 describe('Breadcrumbs plugin', () => {
   let BreadcrumbsComponent;
-  let store;
+  let setRoute;
   let container;
 
   before(async () => {
@@ -44,8 +44,7 @@ describe('Breadcrumbs plugin', () => {
       disconnect() {}
     };
 
-    const storeMod = await import('../src/store.js');
-    store = storeMod.store;
+    ({ setRoute } = await import('../src/store.js'));
 
     const mod = await import('../src/plugins/breadcrumbs/Breadcrumbs.js');
     BreadcrumbsComponent = mod.Breadcrumbs;
@@ -61,7 +60,7 @@ describe('Breadcrumbs plugin', () => {
 
   // Helper: render the trail with given props and a given route
   function renderWith(routeOverride, propsOverride = {}) {
-    store.set('route', routeOverride);
+    setRoute(routeOverride);
     const header = new BreadcrumbsComponent(container, {
       settings: { blog_title: 'Test Blog' },
       navTags: [],

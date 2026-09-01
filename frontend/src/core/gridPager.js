@@ -34,7 +34,7 @@ import { html, setHTML } from "../utils/helpers.js";
 import { PostCard } from '../components/public/PostCard.js';
 import { Pagination } from '../components/shared/Pagination.js';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
-import { store } from '../store.js';
+import { getSettings } from '../store.js';
 import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gridFit.js';
 import { thumbSrcset } from '../utils/mediaUrl.js';
 import { dropBrokenImages } from '../utils/helpers.js';
@@ -767,7 +767,7 @@ export class GridPager {
   _buildGridHtml(posts, page) {
     if (!posts.length) return this._o.emptyHtml;
     /** @type {Record<string, any>} */
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const heroIndex = posts.findIndex(p => p.is_featured);
     const dummy = document.createElement('div');
     const slots = posts.map((post, i) => {

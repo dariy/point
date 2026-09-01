@@ -16,7 +16,7 @@ import { Component } from '../Component.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 import { MediaBrowser } from './MediaBrowser.js';
 import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
-import { store } from '../../store.js';
+import { setToast } from '../../store.js';
 import { UPLOAD_SVG } from '../../utils/icons.js';
 import { html, raw } from "../../utils/helpers.js";
 
@@ -141,7 +141,7 @@ export class MediaPickerDialog extends Component {
     if (!this._activeBrowser) return;
     const items = this._activeBrowser.getSelectedItems();
     if (items.length === 0) {
-      store.set('toast', { message: 'Select at least one item.', type: 'warning' });
+      setToast({ message: 'Select at least one item.', type: 'warning' });
       return;
     }
     const cb = this._onConfirmOverride || this.props.onConfirm;

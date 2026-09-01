@@ -12,7 +12,7 @@ import { html, setHTML, raw } from "../../utils/helpers.js";
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
-import { store } from '../../store.js';
+import { getSettings, mergeSettings, setToast } from '../../store.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { HeaderFold } from '../../utils/headerFold.js';
 import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.js';
@@ -286,7 +286,7 @@ export default class MenuPage extends Component {
   _updatePreviews() {
     this._destroyPreviews();
     const items = this._previewItems();
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const title = settings.blog_title || 'My blog';
     const inlineMax = this.state.inlineMax;
     this.container.querySelectorAll('.menu-preview-vp').forEach(vp => {
@@ -615,18 +615,18 @@ export default class MenuPage extends Component {
 
       // Sync the public settings store so the header reflects the change
       // without a reload, then let nav consumers refetch the menu.
-      store.merge('settings', {
+      mergeSettings({
         nav_menu_mode: this.state.mode,
         nav_inline_max: String(this.state.inlineMax),
         nav_more_title: this.state.moreTitle
       });
       document.dispatchEvent(new CustomEvent('nav-changed'));
-      store.set('toast', {
+      setToast({
         message: 'Menu saved.',
         type: 'success'
       });
     } catch (err) {
-      store.set('toast', {
+      setToast({
         message: err.message || 'Save failed.',
         type: 'error'
       });

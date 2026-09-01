@@ -17,7 +17,7 @@ import { html, navigate, raw } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import { buildTagIndex } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
-import { store } from "../../store.js";
+import { getNavTags, getSettings, getUser } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -139,7 +139,7 @@ export class PostContent extends Component {
             // not the site default. The URL rarely carries per_page, so fall back
             // to gridFit's cached value — the same one the grid fetched with.
             const vc = ViewContext.current();
-            const minPerPage = (store.get("settings") || {}).posts_per_page || 10;
+            const minPerPage = (getSettings() || {}).posts_per_page || 10;
             const params = tagSlug ? { tag: tagSlug } : {};
             params.per_page = vc.perPage || cachedPerPage(minPerPage);
             const data = await getPostPageLocation(post.slug, params);
@@ -189,7 +189,7 @@ export class PostContent extends Component {
   _setupTagStrip() {
     const tagsContainer = this.$(".post-footer") || this.$(".post-tags-vertical");
     if (tagsContainer) {
-      const navTags = store.get("navTags") || [];
+      const navTags = getNavTags() || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
       this.registerCleanup(setupTagStrip(tagsContainer, tagIndex, (url) => {
         const slug = url.replace('/tags/', '');
@@ -266,8 +266,8 @@ export class PostContent extends Component {
     body.querySelectorAll("audio, video").forEach((el) => el.setAttribute("controls", ""));
 
     // EXIF info buttons — per-image camera data, when visibility allows.
-    const settings = store.get("settings") || {};
-    if (exifVisible(settings, store.get("user")) && post?.media?.length) {
+    const settings = getSettings() || {};
+    if (exifVisible(settings, getUser()) && post?.media?.length) {
       const exifMap = buildExifMap(post.media);
       body.querySelectorAll("img").forEach((img) => {
         // Skip linked images — wrapping them would let the ⓘ button trigger the link.

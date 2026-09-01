@@ -13,7 +13,7 @@ import {
   triggerInstagramImport,
   getInstagramImportStatus,
 } from "../../../api/instagram.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
 
@@ -123,7 +123,7 @@ export class InstagramImportSection extends Component {
       this._startPoll();
     } catch (err) {
       this.setState({ importing: false });
-      store.set("toast", { message: err.message || "Import failed to start.", type: "error" });
+      setToast({ message: err.message || "Import failed to start.", type: "error" });
     }
   }
 
@@ -137,7 +137,7 @@ export class InstagramImportSection extends Component {
           clearInterval(this._pollTimer);
           this._pollTimer = null;
           if (status.imported > 0) {
-            store.set("toast", {
+            setToast({
               message: `Import done: ${status.imported} imported, ${status.skipped} skipped.`,
               type: "success",
             });

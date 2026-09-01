@@ -13,7 +13,7 @@ import { Component } from "../../Component.js";
 import { listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer } from "../../../api/system.js";
 import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { html, setHTML, raw } from "../../../utils/helpers.js";
 import { formatFileSize } from "../../../utils/formatters.js";
 import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
@@ -282,12 +282,12 @@ export class BackupsSection extends Component {
         backup_interval_days: String(interval),
         backup_keep: String(keep)
       });
-      store.set("toast", {
+      setToast({
         message: "Backup settings saved.",
         type: "success"
       });
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Could not save settings.",
         type: "error"
       });
@@ -321,7 +321,7 @@ export class BackupsSection extends Component {
       this.setState({
         loading: false
       });
-      store.set("toast", {
+      setToast({
         message: err.message || "Could not load backups.",
         type: "error"
       });
@@ -371,7 +371,7 @@ export class BackupsSection extends Component {
     });
     try {
       await createBackup();
-      store.set("toast", {
+      setToast({
         message: "Backup started…",
         type: "info"
       });
@@ -382,7 +382,7 @@ export class BackupsSection extends Component {
       await this._refreshBackups();
     } catch (err) {
       const msg = err?.status === 409 ? "A backup is already in progress." : err.message || "Backup failed.";
-      store.set("toast", {
+      setToast({
         message: msg,
         type: "error"
       });
@@ -406,7 +406,7 @@ export class BackupsSection extends Component {
     } catch (err) {
       this._unmountRestartOverlay();
       const msg = err?.status === 403 ? "Incorrect password." : err.message || "Restore failed.";
-      store.set("toast", {
+      setToast({
         message: msg,
         type: "error"
       });
@@ -435,7 +435,7 @@ export class BackupsSection extends Component {
       await restartServer();
     } catch (err) {
       this._unmountRestartOverlay();
-      store.set("toast", {
+      setToast({
         message: err.message || "Restart failed.",
         type: "error"
       });
@@ -496,13 +496,13 @@ export class BackupsSection extends Component {
   async _handleDelete(filename) {
     try {
       await deleteBackup(filename);
-      store.set("toast", {
+      setToast({
         message: "Backup deleted.",
         type: "success"
       });
       this._load();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Delete failed.",
         type: "error"
       });
@@ -531,7 +531,7 @@ export class BackupsSection extends Component {
           a.click();
           a.remove();
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Download failed.",
             type: "error"
           });
@@ -559,13 +559,13 @@ export class BackupsSection extends Component {
               uploadPct: Math.round(frac * 100)
             });
           });
-          store.set("toast", {
+          setToast({
             message: res.message || "Archive uploaded to backups. Use Restore to apply it.",
             type: "success"
           });
           await this._load();
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Upload failed.",
             type: "error"
           });

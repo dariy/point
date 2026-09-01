@@ -6,7 +6,7 @@ import assert from 'node:assert';
 // its root-tag dropdown) survive that plugin being switched off.
 describe('SiteCrumb', () => {
   let SiteCrumb;
-  let store;
+  let setRootTags;
   let container;
 
   before(async () => {
@@ -38,7 +38,7 @@ describe('SiteCrumb', () => {
     };
     global.localStorage = { getItem: () => null, setItem: () => {} };
 
-    ({ store } = await import('../src/store.js'));
+    ({ setRootTags } = await import('../src/store.js'));
     ({ SiteCrumb } = await import('../src/components/public/SiteCrumb.js'));
 
     container = {
@@ -51,7 +51,7 @@ describe('SiteCrumb', () => {
   });
 
   function renderWith(props = {}, rootTags = []) {
-    store.set('rootTags', rootTags);
+    setRootTags(rootTags);
     return new SiteCrumb(container, {
       settings: { blog_title: 'Test Blog' },
       hasTrail: false,

@@ -21,7 +21,7 @@
  * openTagPickerDialog and openOverlay insert what they are given as-is.
  */
 
-import { store } from '../../../store.js';
+import { setToast } from '../../../store.js';
 import { html, setHTML } from '../../../utils/helpers.js';
 import { setTagParents, deleteTag, patchTag, moveTag, mergeTags } from '../../../api/tags.js';
 import { openTagPickerDialog, openOverlay } from './TagPickerDialog.js';
@@ -120,7 +120,7 @@ export async function runBulk(ids, op, successMessage, {
       console.error(`[tagFlows] bulk operation failed for tag ${id}:`, err);
     }
   }
-  store.set('toast', bulkOutcome(done, ids.length, successMessage));
+  setToast(bulkOutcome(done, ids.length, successMessage));
   onDone?.();
 }
 
@@ -168,7 +168,7 @@ export function openBulkMoveDialog({
   if (!ids.length) return null;
   const available = candidateTags(tags, ids);
   if (!available.length) {
-    store.set('toast', {
+    setToast({
       message: 'No tag left to move these under.',
       type: 'error'
     });
@@ -192,7 +192,7 @@ export function openBulkMoveDialog({
     cancelId: 'tm-bulk-move-cancel-btn',
     confirmId: 'tm-bulk-move-confirm-btn',
     confirmLabel: 'Move',
-    onEmpty: () => store.set('toast', {
+    onEmpty: () => setToast({
       message: 'Select a parent first.',
       type: 'error'
     }),
@@ -247,7 +247,7 @@ export function openMergeDialog({
     cancelId: 'tm-merge-cancel-btn',
     confirmId: 'tm-merge-confirm-btn',
     confirmLabel: 'Merge Tags',
-    onEmpty: () => store.set('toast', {
+    onEmpty: () => setToast({
       message: 'Select a destination tag first.',
       type: 'error'
     }),
@@ -259,12 +259,12 @@ export function openMergeDialog({
           keep_redirect: keepRedirect
         });
         onDone?.();
-        store.set('toast', {
+        setToast({
           message: 'Tags merged successfully.',
           type: 'success'
         });
       } catch (err) {
-        store.set('toast', {
+        setToast({
           message: err.message || 'Merge failed.',
           type: 'error'
         });
@@ -313,7 +313,7 @@ export function openMoveDialog({
     cancelId: 'tm-move-cancel-btn',
     confirmId: 'tm-move-confirm-btn',
     confirmLabel: 'Move',
-    onEmpty: () => store.set('toast', {
+    onEmpty: () => setToast({
       message: 'Select a parent first.',
       type: 'error'
     }),
@@ -338,12 +338,12 @@ export function openMoveDialog({
           after_id: afterId
         });
         onDone?.();
-        store.set('toast', {
+        setToast({
           message: 'Tag moved.',
           type: 'success'
         });
       } catch (err) {
-        store.set('toast', {
+        setToast({
           message: err.message || 'Move failed.',
           type: 'error'
         });
@@ -399,7 +399,7 @@ export function openDropOnConfirm({
       await setTagParents(dragId, [targetId]);
       onDone?.();
     } catch (err) {
-      store.set('toast', {
+      setToast({
         message: err.message || 'Move failed.',
         type: 'error'
       });
@@ -412,7 +412,7 @@ export function openDropOnConfirm({
       if (nextParents) await setTagParents(dragId, nextParents);
       onDone?.();
     } catch (err) {
-      store.set('toast', {
+      setToast({
         message: err.message || 'Move failed.',
         type: 'error'
       });

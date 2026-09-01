@@ -13,7 +13,7 @@ import { Component } from "../../components/Component.js";
 
 import { pluginHost } from "../../core/pluginHost.js";
 import { getMapPage } from "../../api/pages.js";
-import { store } from "../../store.js";
+import { getSettings } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -148,7 +148,7 @@ export default class MapPage extends Component {
     const vc = ViewContext.current();
     const initialRange = vc.years ? { from: vc.years[0], to: vc.years[1] } : null;
 
-    const settings = store.get("settings") || {};
+    const settings = getSettings() || {};
     const canShowTimeline = pluginHost.hasSlot("timeline");
     this._canShowTimeline = canShowTimeline;
     pluginHost.fill("header", this.$("#header-mount"), {

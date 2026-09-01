@@ -18,7 +18,13 @@ import { getInstagramStatus } from "../../api/instagram.js";
 import { uploadMedia } from "../../api/media.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
-import { store } from "../../store.js";
+import {
+  getAutosaveStatus,
+  getOfflineStatus,
+  setAutosaveStatus,
+  setOfflineStatus,
+  setToast,
+} from "../../store.js";
 import { html, setHTML, navigate, raw, debounce } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.js";
@@ -692,7 +698,7 @@ export default class PostEditPage extends Component {
     try {
       await deletePost(id);
       this.state.hasPendingEdits = false;
-      store.set("toast", {
+      setToast({
         message: "Post moved to Trash.",
         type: "success"
       });
@@ -701,7 +707,7 @@ export default class PostEditPage extends Component {
       this.setState({
         deleting: false
       });
-      store.set("toast", {
+      setToast({
         message: err.message || "Move to Trash failed.",
         type: "error"
       });
@@ -718,7 +724,7 @@ export default class PostEditPage extends Component {
     // focus on every keystroke. (Component.setState always re-renders.)
     this.state.hasPendingEdits = true;
     this._updateDetailsSummaries();
-    store.set('autosave_status', {
+    setAutosaveStatus({
       status: 'idle'
     });
 
@@ -742,7 +748,7 @@ export default class PostEditPage extends Component {
     // An untitled post is fine — the backend titles it after today. A brand new
     // one with nothing in it at all is not worth a draft row yet.
     if (this.state.isNew && !data.title && !data.content.trim()) return;
-    store.set('autosave_status', {
+    setAutosaveStatus({
       status: 'saving'
     });
     try {
@@ -764,15 +770,15 @@ export default class PostEditPage extends Component {
         this.state.post = result;
       }
       this.state.hasPendingEdits = false;
-      store.set('autosave_status', {
+      setAutosaveStatus({
         status: 'saved',
         lastSaved: Date.now()
       });
       if (this._chipInterval) clearInterval(this._chipInterval);
       this._chipInterval = setInterval(() => {
-        if (store.get('autosave_status')?.status === 'saved') {
-          store.set('offline_status', {
-            ...store.get('offline_status')
+        if (getAutosaveStatus()?.status === 'saved') {
+          setOfflineStatus({
+            ...getOfflineStatus()
           }); // trigger re-render of sync pill
         } else {
           clearInterval(this._chipInterval);
@@ -780,7 +786,7 @@ export default class PostEditPage extends Component {
       }, 5000);
     } catch (err) {
       console.error("Autosave failed:", err);
-      store.set('autosave_status', {
+      setAutosaveStatus({
         status: 'failed'
       });
     }
@@ -809,7 +815,7 @@ export default class PostEditPage extends Component {
     this.setState({
       saving: true
     });
-    store.set('autosave_status', {
+    setAutosaveStatus({
       status: 'saving'
     });
     try {
@@ -827,11 +833,11 @@ export default class PostEditPage extends Component {
         saving: false,
         post: result
       });
-      store.set('autosave_status', {
+      setAutosaveStatus({
         status: 'saved',
         lastSaved: Date.now()
       });
-      store.set("toast", {
+      setToast({
         message: "Saved.",
         type: "success"
       });
@@ -839,10 +845,10 @@ export default class PostEditPage extends Component {
       this.setState({
         saving: false
       });
-      store.set('autosave_status', {
+      setAutosaveStatus({
         status: 'failed'
       });
-      store.set("toast", {
+      setToast({
         message: err.message || "Save failed.",
         type: "error"
       });
@@ -928,12 +934,12 @@ export default class PostEditPage extends Component {
       } : n);
       this._mountVisualEditor();
       this._onInput();
-      store.set("toast", {
+      setToast({
         message: "File renamed.",
         type: "success"
       });
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Rename failed.",
         type: "error"
       });
@@ -1035,7 +1041,7 @@ export default class PostEditPage extends Component {
           content: content.trim()
         });
       } catch (err) {
-        store.set("toast", {
+        setToast({
           message: `Failed to save offline share: ${err.message}`,
           type: "error"
         });
@@ -1044,7 +1050,7 @@ export default class PostEditPage extends Component {
     try {
       await clearShareEntries();
     } catch (_e) {/* ignore */}
-    if (backlog.length > 0) store.set("toast", {
+    if (backlog.length > 0) setToast({
       message: `${backlog.length} offline shares saved as draft.`,
       type: "success"
     });
@@ -1074,7 +1080,7 @@ export default class PostEditPage extends Component {
         igStatus
       });
     } catch (_err) {
-      store.set("toast", {
+      setToast({
         message: "Could not load post.",
         type: "error"
       });
@@ -1176,15 +1182,15 @@ export default class PostEditPage extends Component {
           slug: name
         }));
       } else if (field === "excerpt" && result.excerpt) post.excerpt = result.excerpt;
-      if (isEmpty) store.set("toast", {
+      if (isEmpty) setToast({
         message: "AI disabled or no suggestions.",
         type: "info"
-      });else store.set("toast", {
+      });else setToast({
         message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`,
         type: "success"
       });
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Analysis failed.",
         type: "error"
       });
@@ -1222,7 +1228,7 @@ export default class PostEditPage extends Component {
         }))
       };
       if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
-      store.set("toast", {
+      setToast({
         message: "Analysis complete.",
         type: "success"
       });
@@ -1248,7 +1254,7 @@ export default class PostEditPage extends Component {
         }))
       };
       if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
-      store.set("toast", {
+      setToast({
         message: err.message || "Analysis failed.",
         type: "error"
       });
@@ -1267,7 +1273,7 @@ export default class PostEditPage extends Component {
         path: result.path
       }]);else if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(result.path);
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: `Upload failed: ${err.message || file.name}`,
         type: "error"
       });
@@ -1288,13 +1294,13 @@ export default class PostEditPage extends Component {
       // The backend writes "error"; "failed" is accepted too so older rows and
       // any future rename both still surface as a failure rather than as the
       // neutral "triggered" fallback.
-      if (st === "published") store.set("toast", {
+      if (st === "published") setToast({
         message: "Published to Instagram.",
         type: "success"
-      });else if (st === "error" || st === "failed") store.set("toast", {
+      });else if (st === "error" || st === "failed") setToast({
         message: result.instagram_error || "Instagram publish failed.",
         type: "error"
-      });else store.set("toast", {
+      });else setToast({
         message: "Instagram publish triggered.",
         type: "info"
       });
@@ -1302,7 +1308,7 @@ export default class PostEditPage extends Component {
       this.setState({
         publishingToInstagram: false
       });
-      store.set("toast", {
+      setToast({
         message: err.message || "Instagram publish failed.",
         type: "error"
       });
@@ -1319,7 +1325,7 @@ export default class PostEditPage extends Component {
       } = await generatePreviewLink(this.state.postId);
       try {
         await navigator.clipboard.writeText(preview_url);
-        store.set("toast", {
+        setToast({
           message: "Preview link copied to clipboard.",
           type: "success"
         });
@@ -1327,7 +1333,7 @@ export default class PostEditPage extends Component {
         this._showPreviewLinkDialog(preview_url);
       }
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Could not generate preview link.",
         type: "error"
       });

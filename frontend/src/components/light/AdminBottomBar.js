@@ -5,7 +5,7 @@ import {
   SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG, COMMENTS_SVG
 } from '../../utils/icons.js';
 import { html, raw } from '../../utils/helpers.js';
-import { store } from '../../store.js';
+import { getTheme, onPluginToggled, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
@@ -83,7 +83,7 @@ export class AdminBottomBar extends Component {
   }
 
   afterRender() {
-    this.subscribeStore(store, 'plugin_toggled', () => this.setState({}));
+    this.subscribeStore(onPluginToggled, () => this.setState({}));
 
     const overlay = this.$('#more-sheet-overlay');
     const moreBtn = this.$('#bottom-bar-more');
@@ -110,9 +110,9 @@ export class AdminBottomBar extends Component {
     });
 
     this.$('#sheet-theme-toggle')?.addEventListener('click', () => {
-      const current = store.get('theme') || 'auto';
+      const current = getTheme() || 'auto';
       const next = current === 'dark' ? 'light' : 'dark';
-      store.set('theme', next);
+      setTheme(next);
     });
 
     this.$('#sheet-logout')?.addEventListener('click', () => {

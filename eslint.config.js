@@ -106,6 +106,16 @@ const rules = {
       message: "raw() must not wrap a call. If the value is genuinely pre-escaped, say why on an eslint-disable-next-line."
     },
     {
+      // store.js binds every key to a get/set/subscribe triple and exports
+      // those; the string form is what the accessors exist to replace. A typo
+      // in a key is undefined at runtime — a component that renders empty
+      // forever — where a typo in a named import is an esbuild error naming
+      // the closest match. store.js itself is not linted against this: it is
+      // where the literals live.
+      selector: "CallExpression[callee.object.name='store'][callee.property.name=/^(get|set|subscribe|subscribeSelector|merge)$/] > Literal:first-child",
+      message: "Use an accessor from store.js (getUser/setUser/onUser, …) — a string key is not checked by anything."
+    },
+    {
       // An interpolation landing straight after `attr=` is unquoted, and the
       // helper's URL-position scan only works on quoted attributes. The name
       // must be preceded by whitespace so a query string inside a quoted value
@@ -201,6 +211,19 @@ export default [
       },
     },
     rules,
+  },
+  {
+    // The key literals themselves live in store.js — that is the whole point
+    // of the rule above, so the file that owns them is exempt from it.
+    files: ["frontend/src/store.js"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...rules["no-restricted-syntax"].slice(1).filter(
+          (r) => !r.selector.startsWith("CallExpression[callee.object.name='store']"),
+        ),
+      ],
+    },
   },
   // Service worker — ServiceWorkerGlobalScope, not Window (no document/window).
   {

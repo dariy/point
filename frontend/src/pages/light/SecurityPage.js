@@ -12,7 +12,7 @@ import {
   getSessions, deleteSession, deleteAllOtherSessions,
   changePassword, changeEmail, getMe
 } from '../../api/auth.js';
-import { store } from '../../store.js';
+import { setToast } from '../../store.js';
 import { html } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 
@@ -180,11 +180,11 @@ export default class SecurityPage extends Component {
     this.setState({ changingPassword: true });
     try {
       await changePassword(oldPassword, newPassword);
-      store.set('toast', { message: 'Password updated successfully.', type: 'success' });
+      setToast({ message: 'Password updated successfully.', type: 'success' });
       oldEl.value = '';
       newEl.value = '';
     } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to update password.', type: 'error' });
+      setToast({ message: err.message || 'Failed to update password.', type: 'error' });
     } finally {
       this.setState({ changingPassword: false });
     }
@@ -199,10 +199,10 @@ export default class SecurityPage extends Component {
     this.setState({ changingEmail: true });
     try {
       await changeEmail(password, email);
-      store.set('toast', { message: 'Email updated successfully.', type: 'success' });
+      setToast({ message: 'Email updated successfully.', type: 'success' });
       this.setState({ changingEmail: false, email });
     } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to update email.', type: 'error' });
+      setToast({ message: err.message || 'Failed to update email.', type: 'error' });
       this.setState({ changingEmail: false });
     }
   }
@@ -210,10 +210,10 @@ export default class SecurityPage extends Component {
   async _handleLogoutOthers() {
     try {
       await deleteAllOtherSessions();
-      store.set('toast', { message: 'Other sessions logged out.', type: 'success' });
+      setToast({ message: 'Other sessions logged out.', type: 'success' });
       this._load();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to logout other sessions.', type: 'error' });
+      setToast({ message: err.message || 'Failed to logout other sessions.', type: 'error' });
     }
   }
 
@@ -222,7 +222,7 @@ export default class SecurityPage extends Component {
       await deleteSession(id);
       this._load();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to delete session.', type: 'error' });
+      setToast({ message: err.message || 'Failed to delete session.', type: 'error' });
     }
   }
 

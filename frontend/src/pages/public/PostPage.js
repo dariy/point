@@ -10,7 +10,7 @@ import { Component } from '../../components/Component.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
-import { store } from '../../store.js';
+import { getNavTags, getSettings } from '../../store.js';
 import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
@@ -85,8 +85,8 @@ export default class PostPage extends Component {
       </div>`;
   }
   afterRender() {
-    const settings = store.get('settings') || {};
-    const navTags = store.get('navTags') || [];
+    const settings = getSettings() || {};
+    const navTags = getNavTags() || [];
     const {
       post,
       nav
@@ -166,7 +166,7 @@ export default class PostPage extends Component {
     if (immersive || !isSlideshowRunning()) return false;
     const {
       fwd
-    } = immersiveNavTargets(store.get('settings'), nav?.prev, nav?.next);
+    } = immersiveNavTargets(getSettings(), nav?.prev, nav?.next);
     if (!fwd?.slug) return false; // end of the feed — let the show stop here
     ViewContext.update({
       postSlug: fwd.slug
@@ -254,8 +254,8 @@ export default class PostPage extends Component {
       startIndex,
       forceImmersive
     };
-    const settings = store.get('settings') || {};
-    const navTags = store.get('navTags') || [];
+    const settings = getSettings() || {};
+    const navTags = getNavTags() || [];
     const immersive = forceImmersive || shouldUseImmersive(post);
     if (this._skipNonImmersiveDuringShow(post, nav, immersive)) return;
     const dateStr = formatDate(post.published_at || post.created_at);
@@ -344,7 +344,7 @@ export default class PostPage extends Component {
   }
   _injectJsonLd(post, descText, ogImageObj) {
     document.getElementById('json-ld-blogposting')?.remove();
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const canonicalUrl = `${window.location.origin}/posts/${post.slug}`;
     const datePublished = post.published_at || post.created_at;
     const ld = {

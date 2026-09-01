@@ -43,7 +43,7 @@ function fakeFetch(payload) {
 
 describe('AtlasPage lazy cloud loading', () => {
   let AtlasPage;
-  let store;
+  let setRoute;
 
   before(async () => {
     global.document = {
@@ -65,11 +65,11 @@ describe('AtlasPage lazy cloud loading', () => {
     };
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
-    ({ store } = await import('../src/store.js'));
+    ({ setRoute } = await import('../src/store.js'));
   });
 
   afterEach(() => {
-    store.set('route', { pathname: '/atlas', query: {} });
+    setRoute({ pathname: '/atlas', query: {} });
     delete global.fetch;
   });
 
@@ -117,7 +117,7 @@ describe('AtlasPage lazy cloud loading', () => {
   });
 
   test('forwards the active timeline range and caches per year scope', async () => {
-    store.set('route', { pathname: '/atlas', query: { timeline: '2020-2021' } });
+    setRoute({ pathname: '/atlas', query: { timeline: '2020-2021' } });
     const page = loaded();
     const berlin = activate(page, 1);
     page._spawnCloud = () => {};
@@ -155,7 +155,7 @@ describe('AtlasPage lazy cloud loading', () => {
 // graph is refetched for the range and the places redrawn from it.
 describe('AtlasPage timeline filtering', () => {
   let AtlasPage;
-  let store;
+  let setRoute;
 
   // Only Berlin survives a narrow range, and with a smaller (in-range) count.
   const SCOPED_GRAPH = {
@@ -168,11 +168,11 @@ describe('AtlasPage timeline filtering', () => {
   before(async () => {
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
-    ({ store } = await import('../src/store.js'));
+    ({ setRoute } = await import('../src/store.js'));
   });
 
   afterEach(() => {
-    store.set('route', { pathname: '/atlas', query: {} });
+    setRoute({ pathname: '/atlas', query: {} });
     delete global.fetch;
   });
 
@@ -186,7 +186,7 @@ describe('AtlasPage timeline filtering', () => {
   }
 
   test('a timeline change refetches the graph for the range and redraws', async () => {
-    store.set('route', { pathname: '/atlas', query: { timeline: '2018-2019' } });
+    setRoute({ pathname: '/atlas', query: { timeline: '2018-2019' } });
     const page = mounted();
     let redrew = false;
     page._redrawPlaces = () => { redrew = true; };
@@ -202,7 +202,7 @@ describe('AtlasPage timeline filtering', () => {
   });
 
   test('the initial load carries a year range from the URL', async () => {
-    store.set('route', { pathname: '/atlas', query: { timeline: '2020-2021' } });
+    setRoute({ pathname: '/atlas', query: { timeline: '2020-2021' } });
     const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
     page.setState = (s) => Object.assign(page.state, s);
     const calls = fakeFetch(SCOPED_GRAPH);
@@ -363,7 +363,7 @@ describe('AtlasPage owner-only marking', () => {
 // it redraws the place layer — a hidden country must lose its fill, not just
 // its marker.
 describe('AtlasPage hidden-node filter', () => {
-  let AtlasPage, isConcealed, store, setRevelio;
+  let AtlasPage, isConcealed, setUser, setRevelio;
 
   const MIXED = {
     tags: [
@@ -377,12 +377,12 @@ describe('AtlasPage hidden-node filter', () => {
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
     ({ isConcealed } = mod);
-    ({ store } = await import('../src/store.js'));
+    ({ setUser } = await import('../src/store.js'));
     ({ setRevelio } = await import('../src/utils/revelio.js'));
   });
 
   afterEach(() => {
-    store.set('user', null);
+    setUser(null);
     setRevelio(true);
   });
 
@@ -395,9 +395,9 @@ describe('AtlasPage hidden-node filter', () => {
 
   test('the filter is offered only to a viewer who can be sent hidden nodes', () => {
     const p = page();
-    store.set('user', null);
+    setUser(null);
     assert.equal(p._canFilterHidden(), false, 'a guest gets a payload with nothing hidden in it');
-    store.set('user', { id: 1 });
+    setUser({ id: 1 });
     assert.equal(p._canFilterHidden(), true);
     setRevelio(false);
     assert.equal(p._canFilterHidden(), false, 'concealing already removed the hidden nodes');

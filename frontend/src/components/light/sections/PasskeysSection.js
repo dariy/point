@@ -6,7 +6,7 @@
 
 import { Component } from "../../Component.js";
 import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { showConfirm } from "../../../utils/dialogs.js";
 import { html } from "../../../utils/helpers.js";
 
@@ -69,11 +69,11 @@ export class PasskeysSection extends Component {
     this.setState({ working: true });
     try {
       await registerPasskey();
-      store.set("toast", { message: "Passkey registered.", type: "success" });
+      setToast({ message: "Passkey registered.", type: "success" });
       this._load();
     } catch (err) {
       if (err.name !== "NotAllowedError") {
-        store.set("toast", { message: err.message || "Failed to register passkey.", type: "error" });
+        setToast({ message: err.message || "Failed to register passkey.", type: "error" });
       }
     } finally {
       this.setState({ working: false });
@@ -90,10 +90,10 @@ export class PasskeysSection extends Component {
         this.setState({ working: true });
         try {
           await deletePasskey();
-          store.set("toast", { message: "Passkey removed.", type: "success" });
+          setToast({ message: "Passkey removed.", type: "success" });
           this._load();
         } catch (err) {
-          store.set("toast", { message: err.message || "Failed to remove passkey.", type: "error" });
+          setToast({ message: err.message || "Failed to remove passkey.", type: "error" });
         } finally {
           this.setState({ working: false });
         }

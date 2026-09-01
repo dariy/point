@@ -12,7 +12,16 @@
  *   5. Define all routes and start the router.
  */
 
-import { store } from "./store.js";
+import {
+  getSettings,
+  getUser,
+  onRoute,
+  onTheme,
+  setAppVersion,
+  setSettings,
+  setTheme,
+  setUser,
+} from "./store.js";
 import { router } from "./router.js";
 import { getMe } from "./api/auth.js";
 import { getPublicSettings } from "./api/settings.js";
@@ -90,7 +99,7 @@ _applySection(location.pathname);
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme || "auto");
-  store.set("theme", theme || "auto");
+  setTheme(theme || "auto");
 }
 
 function loadTheme(settings) {
@@ -109,7 +118,7 @@ function loadTheme(settings) {
   applyTheme(saved || settings?.default_theme || "auto");
 }
 
-store.subscribe("theme", (theme) => {
+onTheme((theme) => {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem("theme", theme);
   // Notify components that the theme has changed
@@ -124,12 +133,12 @@ async function bootstrap() {
   if (offlineEntry && offlineEntry.entry) {
     try {
       const mod = await pluginHost.loadEntry(offlineEntry);
-      if (mod && mod.mount) await mod.mount(store);
+      if (mod && mod.mount) await mod.mount();
     } catch { /* ignore */ }
   } else if (!pluginHost.size || pluginHost.isEnabled("offline-sync")) {
     try {
       const mod = await import("./plugins/offline-sync/index.js");
-      if (mod && mod.mount) await mod.mount(store);
+      if (mod && mod.mount) await mod.mount();
     } catch { /* ignore */ }
   }
 
@@ -148,7 +157,7 @@ async function bootstrap() {
       /* ignore */
     }
   }
-  store.set("settings", settings);
+  setSettings(settings);
   // The shell ships a generic <title>; now that the blog's own name is in the
   // store, show it. Every later navigation goes through the router, which resets
   // the title per route (see the `title` field in the route table below).
@@ -164,7 +173,7 @@ async function bootstrap() {
   } catch {
     // Offline or server unreachable — proceed as unauthenticated.
   }
-  store.set("user", user);
+  setUser(user);
 
   // 3.1 Fetch version info (non-blocking). Admin-only: /api/system/version
   // returns 401 for guests, and that 401 would otherwise resolve after the
@@ -173,7 +182,7 @@ async function bootstrap() {
   if (user) {
     getVersion()
       .then((ver) => {
-        store.set("version", ver.current);
+        setAppVersion(ver.current);
       })
       .catch(() => {
         // If it fails, we can try to fall back to the stamped version in index.html if we want,
@@ -189,19 +198,19 @@ async function bootstrap() {
     const toastContainer = new ToastContainer(toastsEl);
     toastContainer.mount();
   }
-  initNotificationLog(store);
+  initNotificationLog();
   if (user) {
     const notificationLogBtn = new NotificationLogButton();
     notificationLogBtn.mount();
   }
 
   // 5. Subscribe to route changes to swap CSS bundles before each page mounts.
-  store.subscribe("route", ({ pathname }) => _applySection(pathname));
+  onRoute(({ pathname }) => _applySection(pathname));
 
   // 6. Start the router.
   router.init(routes, {
     mountPoint: document.getElementById("app"),
-    authGuard: () => !!store.get("user"),
+    authGuard: () => !!getUser(),
     loginPath: "/light/login",
   });
 
@@ -229,9 +238,9 @@ const TAGS_VIZ_PLUGINS = ["tags-atlas", "tags-map", "tags-graph"];
 // admins-only for a logged-out visitor) sends the visitor home.
 async function resolveTagsModule() {
   /** @type {Record<string, any>} */
-  const settings = store.get("settings") || {};
+  const settings = getSettings() || {};
   const visibility = settings.tags_visibility || "hidden";
-  const isAdmin = !!store.get("user");
+  const isAdmin = !!getUser();
 
   // Active viz = the enabled tags-viz plugin. Before the manifest loads
   // (size 0) fall back to the Atlas default so the route resolves.

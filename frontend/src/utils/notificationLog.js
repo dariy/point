@@ -7,11 +7,13 @@
  *
  * Usage:
  *   import { initNotificationLog, getRecentEntries } from './notificationLog.js';
- *   initNotificationLog(store);
+ *   initNotificationLog();
  *
  * Entry shape (preserved for future use):
  *   { id: number, message: string, type: string, timestamp: number }
  */
+
+import { onToast, setToastLog } from '../store.js';
 
 const MAX_AGE_MS  = 10 * 60 * 1000; // 10 minutes
 const MAX_ENTRIES = 100;
@@ -21,12 +23,11 @@ const _log = [];
 let _nextId = 1;
 
 /**
- * Start listening to the 'toast' store key and logging notifications.
+ * Start listening for toasts and logging them.
  * Call once at app startup before the router starts.
- * @param {object} storeInstance  The singleton store from store.js
  */
-export function initNotificationLog(storeInstance) {
-  storeInstance.subscribe('toast', (payload) => {
+export function initNotificationLog() {
+  onToast((payload) => {
     if (!payload) return;
     _log.push({
       id:        _nextId++,
@@ -35,7 +36,7 @@ export function initNotificationLog(storeInstance) {
       timestamp: Date.now(),
     });
     _prune();
-    storeInstance.set('toast_log', getRecentEntries());
+    setToastLog(getRecentEntries());
   });
 }
 

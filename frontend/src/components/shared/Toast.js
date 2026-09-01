@@ -4,15 +4,15 @@
  * Subscribes to store key 'toast' and displays transient notifications.
  * Mount once at application startup inside #toasts.
  *
- * store.set('toast', { message: 'Saved!', type: 'success' });
- * store.set('toast', { message: 'Error', type: 'error' });
- * store.set('toast', { message: 'Info', type: 'info' });
+ * setToast({ message: 'Saved!', type: 'success' });
+ * setToast({ message: 'Error', type: 'error' });
+ * setToast({ message: 'Info', type: 'info' });
  *
  * Types: 'success' | 'error' | 'info' | 'warning'
  */
 
 import { Component } from '../Component.js';
-import { store } from '../../store.js';
+import { onToast } from '../../store.js';
 import { html } from '../../utils/helpers.js';
 
 const DURATION_MS = 4000;
@@ -30,7 +30,7 @@ export class ToastContainer extends Component {
   }
 
   afterRender() {
-    this.subscribeStore(store, 'toast', (payload) => {
+    this.subscribeStore(onToast, (payload) => {
       if (payload) this._add(payload);
     });
   }

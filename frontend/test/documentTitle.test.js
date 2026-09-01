@@ -16,7 +16,7 @@ describe('document title', () => {
   let setPageTitle;
   let siteTitle;
   let router;
-  let store;
+  let setSettings;
   let mounted;
 
   /** A page class that records its mount and optionally names itself. */
@@ -48,13 +48,13 @@ describe('document title', () => {
     });
     ({ setPageTitle, siteTitle } = await import('../src/utils/documentTitle.js'));
     ({ router } = await import('../src/router.js'));
-    ({ store } = await import('../src/store.js'));
+    ({ setSettings } = await import('../src/store.js'));
   });
 
   beforeEach(() => {
     dom = setupDOM('<!doctype html><html><head><title>Loading…</title></head><body><div id="app"></div></body></html>');
     mounted = [];
-    store.set('settings', { blog_title: 'My Blog' });
+    setSettings({ blog_title: 'My Blog' });
     router._routes = routes();
     router._mountPoint = document.getElementById('app');
     router._authGuard = () => true;
@@ -81,11 +81,11 @@ describe('document title', () => {
   });
 
   test('an unconfigured blog still gets a title, not "undefined"', () => {
-    store.set('settings', {});
+    setSettings({});
     assert.strictEqual(siteTitle(), 'Point');
     setPageTitle('Posts · Light');
     assert.strictEqual(document.title, 'Posts · Light — Point');
-    store.set('settings', { blog_title: 'My Blog' });
+    setSettings({ blog_title: 'My Blog' });
   });
 
   // ── The router funnel ─────────────────────────────────────────────────────

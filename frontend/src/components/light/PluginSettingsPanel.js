@@ -27,7 +27,7 @@ import { Component } from "../Component.js";
 import { GestureController } from "../../core/gestures.js";
 import { renderFields, collectUpdates } from "./settingsFields.js";
 import { updateSettings } from "../../api/settings.js";
-import { store } from "../../store.js";
+import { mergeSettings, setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.js";
 import { CHECK_SVG, X_SVG } from "../../utils/icons.js";
@@ -263,12 +263,12 @@ export class PluginSettingsPanel extends Component {
       await updateSettings(updates);
       // Reflect changes immediately in the global settings store.
       const { normalizeSettings } = await import("../../utils/helpers.js");
-      store.merge("settings", normalizeSettings(updates));
-      store.set("toast", { message: "Settings saved.", type: "success" });
+      mergeSettings(normalizeSettings(updates));
+      setToast({ message: "Settings saved.", type: "success" });
       this._close();
     } catch (err) {
       console.error("[PluginSettingsPanel] save error:", err);
-      store.set("toast", { message: err.message || "Could not save settings.", type: "error" });
+      setToast({ message: err.message || "Could not save settings.", type: "error" });
       this.setState({ saving: false });
     }
   }
@@ -277,10 +277,10 @@ export class PluginSettingsPanel extends Component {
     try {
       const { disconnectInstagram } = await import("../../api/instagram.js");
       await disconnectInstagram();
-      store.set("toast", { message: "Instagram disconnected.", type: "success" });
+      setToast({ message: "Instagram disconnected.", type: "success" });
       this._close();
     } catch (err) {
-      store.set("toast", { message: err.message || "Failed to disconnect.", type: "error" });
+      setToast({ message: err.message || "Failed to disconnect.", type: "error" });
     }
   }
 }

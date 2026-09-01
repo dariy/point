@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { store } from '../src/store.js';
+import { setSettings } from '../src/store.js';
 import {
   DEFAULT_ORDER,
   DEFAULT_PINNED,
@@ -28,13 +28,13 @@ describe('editor field layout preferences', () => {
 
   beforeEach(() => {
     savedStorage = globalThis.localStorage;
-    store.set('settings', undefined);
+    setSettings(undefined);
   });
   afterEach(() => {
     Object.defineProperty(globalThis, 'localStorage', {
       value: savedStorage, writable: true, configurable: true,
     });
-    store.set('settings', undefined);
+    setSettings(undefined);
   });
 
   const useStorage = (seed) => Object.defineProperty(globalThis, 'localStorage', {
@@ -56,7 +56,7 @@ describe('editor field layout preferences', () => {
 
     test('account settings beat localStorage — the preference follows the user', () => {
       useStorage({ [ORDER_STORAGE_KEY]: JSON.stringify(['excerpt']) });
-      store.set('settings', { editor_field_order: JSON.stringify(['slug']) });
+      setSettings({ editor_field_order: JSON.stringify(['slug']) });
       assert.strictEqual(readFieldOrder()[0], 'slug');
     });
 
@@ -106,7 +106,7 @@ describe('editor field layout preferences', () => {
 
     test('account settings beat localStorage', () => {
       useStorage({ [PINNED_STORAGE_KEY]: JSON.stringify(['slug']) });
-      store.set('settings', { editor_pinned: JSON.stringify(['excerpt']) });
+      setSettings({ editor_pinned: JSON.stringify(['excerpt']) });
       assert.ok(readPinnedFields().has('excerpt'));
       assert.ok(!readPinnedFields().has('slug'));
     });

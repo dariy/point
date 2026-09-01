@@ -17,7 +17,7 @@ import { Component } from '../../components/Component.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { store } from '../../store.js';
+import { getNavTags, getSettings, setPagination } from '../../store.js';
 import { html, setHTML } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -124,10 +124,10 @@ export default class SearchPage extends Component {
     document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     // Reset the footer paginator's feed; _mountPostContent republishes it when
     // the results run to more than one page.
-    store.set('pagination', null);
+    setPagination(null);
     this._pager.disarm();
-    const settings = store.get('settings') || {};
-    const rootMenu = store.get('navTags') || [];
+    const settings = getSettings() || {};
+    const rootMenu = getNavTags() || [];
     const q = this.props.query?.q || '';
 
     // Only the "search" crumb — the query itself is rendered by Breadcrumbs as a
@@ -169,7 +169,7 @@ export default class SearchPage extends Component {
   // Kept separate from the page chrome so a page change can refresh just this in
   // place — see _refreshPostContent.
   async _mountPostContent() {
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const {
       posts = [],
       page,
@@ -250,7 +250,7 @@ export default class SearchPage extends Component {
       if (at !== -1) this._children.splice(at, 1);
       this._postChildren.length = 1;
     }
-    store.set('pagination', pages > 1 ? {
+    setPagination(pages > 1 ? {
       page,
       pages,
       total
@@ -360,7 +360,7 @@ export default class SearchPage extends Component {
     }
   }
   _minPerPage() {
-    return (store.get('settings') || {}).posts_per_page || 10;
+    return (getSettings() || {}).posts_per_page || 10;
   }
   _buildParams(vc) {
     // per_page is the device-fit value from the URL, or the cached estimate for
@@ -465,7 +465,7 @@ export default class SearchPage extends Component {
   }
   beforeUnmount() {
     // Non-grid pages share the footer — don't leave a stale paginator feed behind.
-    store.set('pagination', null);
+    setPagination(null);
     this._pager.destroy();
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
