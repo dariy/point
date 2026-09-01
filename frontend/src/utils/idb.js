@@ -17,14 +17,15 @@ const DB_NAME = 'point-share';
 const STORE   = 'queue';
 const VERSION = 1;
 
+/** @returns {Promise<IDBDatabase>} */
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, VERSION);
-    req.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(STORE, { keyPath: 'id' });
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE, { keyPath: 'id' });
     };
-    req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror   = (e) => reject(e.target.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
   });
 }
 

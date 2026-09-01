@@ -52,6 +52,7 @@ export function attachWindowFileDrop({ onFile }) {
       .forEach((f) => onFile(f));
   };
 
+  /** @type {Array<[string, (e: Event) => void]>} */
   const handlers = [
     ["dragstart", onDragStart],
     ["dragend", onDragEnd],

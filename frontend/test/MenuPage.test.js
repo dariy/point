@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * MenuPage — the custom-menu editor at /light/menu, in both of its formats.
  *

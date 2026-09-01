@@ -425,9 +425,9 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   return () => {
     cleanups.forEach(fn => fn());
     clearTimeout(_openTimer);
-    window.removeEventListener('scroll', dismissOnScroll, {
-      passive: true
-    });
+    // No options on removal: listeners match on type + capture, and `passive`
+    // is not part of that identity.
+    window.removeEventListener('scroll', dismissOnScroll);
     _hideFlyout();
   };
 }

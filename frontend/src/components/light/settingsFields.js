@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * settingsFields — shared rendering & collection for admin settings inputs.
  *

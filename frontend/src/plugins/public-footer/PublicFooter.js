@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * Public site footer — copyright, pagination slot (normal), or post tags (immersive).
  *

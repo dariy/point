@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * AtlasPage — experimental "tags on the map" view.
  *

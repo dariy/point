@@ -95,6 +95,33 @@ import { setHTML, isRawHtml } from '../utils/helpers.js';
  *     the empty wrapper. render() itself may return html`` — nothing tests it.
  */
 
+/**
+ * The optional hooks a subclass may declare. None of them exist on the base
+ * class — every call site tests for one before calling it — so reading them off
+ * a Component needs the checker told that the absence is the point.
+ *
+ * @typedef {object} SubclassHooks
+ * @property {(prevProps: object, prevState: object) => unknown} [update]
+ *   In-place update. Exactly `true` means handled; see _rerender().
+ * @property {() => void} [beforeRender]
+ *   Release what the previous render acquired, before the container is replaced.
+ * @property {Record<string, (event: Event, el: Element) => unknown>} [actions]
+ *   Delegated handlers, keyed by `data-action` name or `'<type>:<name>'`, called
+ *   with the component as `this` — see _dispatchAction().
+ * @property {(params: object, query: object) => void} [onRouteUpdate]
+ *   Same-route navigation: refresh in place instead of remounting (router.js).
+ */
+
+/**
+ * A component's subclass hooks. A cast, not a check — see {@link SubclassHooks}.
+ *
+ * @param {Component} component
+ * @returns {SubclassHooks}
+ */
+export function subclassHooks(component) {
+  return /** @type {SubclassHooks} */ (/** @type {unknown} */ (component));
+}
+
 export class Component {
   /**
    * @param {HTMLElement} container  The DOM node this component renders into
@@ -229,7 +256,7 @@ export class Component {
     if (!el) {
       throw new Error(`${this.constructor.name}.mountChild: target "${target}" not found`);
     }
-    const child = new Cls(el, props);
+    const child = new Cls(/** @type {HTMLElement} */ (el), props);
     child.mount();
     this._children.push(child);
     return child;
@@ -288,9 +315,10 @@ export class Component {
    *
    * @param {EventTarget|null|undefined} target
    * @param {string} type
-   * @param {Function} handler
-   * @param {boolean|object} [options]  Passed to both add and remove, so a
-   *                                    capture listener detaches correctly.
+   * @param {EventListenerOrEventListenerObject} handler
+   * @param {boolean|AddEventListenerOptions} [options]  Passed to both add and
+   *                                    remove, so a capture listener detaches
+   *                                    correctly.
    * @returns {EventTarget|null} target, for chaining; null when there was none.
    */
   on(target, type, handler, options) {
@@ -367,8 +395,12 @@ export class Component {
 
   /**
    * Query all within this component's container.
+   *
+   * Typed as HTMLElements to match $(): a component queries the markup its own
+   * render() produced, and every caller here treats the results as elements.
+   *
    * @param {string} selector
-   * @returns {NodeList}
+   * @returns {NodeListOf<HTMLElement>}
    */
   $$(selector) {
     return this.container.querySelectorAll(selector);
@@ -386,8 +418,9 @@ export class Component {
     // declared update(). Returning true means "handled": the DOM below is left
     // exactly as it is, which is the whole point, so the cleanups, children and
     // listeners belonging to it are left alone too.
-    if (this._rendered && typeof this.update === 'function'
-        && this.update(prevProps ?? this.props, prevState ?? this.state) === true) {
+    const hooks = subclassHooks(this);
+    if (this._rendered && typeof hooks.update === 'function'
+        && hooks.update(prevProps ?? this.props, prevState ?? this.state) === true) {
       return;
     }
 
@@ -398,7 +431,7 @@ export class Component {
     // Override in subclasses to release resources (timers, observers, DOM nodes
     // appended outside the container) before the container is replaced.
     // Unlike beforeUnmount() this also runs on setState() / setProps() calls.
-    this.beforeRender?.();
+    hooks.beforeRender?.();
     this._unmountChildren();
     this._children = [];
     const markup = this.render();
@@ -434,7 +467,7 @@ export class Component {
    * button that silently does nothing.
    */
   _bindActions() {
-    const actions = this.actions;
+    const { actions } = subclassHooks(this);
     if (!actions || !this.container?.addEventListener) return;
     if (this._actionTeardowns.length) return; // already bound; mount() is idempotent
 
@@ -472,10 +505,10 @@ export class Component {
    * @param {Event} event
    */
   _dispatchAction(event) {
-    const actions = this.actions;
+    const { actions } = subclassHooks(this);
     if (!actions) return;
 
-    const el = event.target?.closest?.('[data-action]');
+    const el = /** @type {Element} */ (event.target)?.closest?.('[data-action]');
     if (!el || !this.container.contains(el)) return;
 
     for (const child of this._children) {

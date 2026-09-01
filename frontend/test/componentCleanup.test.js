@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * Component — resources acquired in afterRender() last exactly one render.
  *

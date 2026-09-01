@@ -75,13 +75,14 @@ export class ViewContext {
    * @returns {ViewContext}
    */
   static current() {
+    /** @type {{pathname: string, query: Record<string, string>}} */
     const route = store.get('route') || { pathname: window.location.pathname, query: {} };
     return new ViewContext(route.pathname, route.query);
   }
 
   /**
    * Navigate to a new context by merging changes into the current one.
-   * @param {Partial<{tag: string|null, navPath: string|null, years: [number, number]|null, query: string|null, page: number, postSlug: string|null}>} changes
+   * @param {Partial<{tag: string|null, navPath: string|null, years: [number, number]|null, query: string|null, page: number, per_page: number, postSlug: string|null}>} changes
    * @param {{ replace?: boolean }} [opts]
    */
   static update(changes, { replace = false } = {}) {

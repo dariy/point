@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * BackupsSection — the database-backup block for the `backups` plugin.
  *

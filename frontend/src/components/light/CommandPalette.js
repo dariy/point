@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { Component } from '../Component.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';

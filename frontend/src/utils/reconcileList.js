@@ -109,7 +109,8 @@ export function reconcileList(container, items, keyOf, ops) {
 
   /** @type {Map<string, HTMLElement>} */
   const existing = new Map();
-  for (const node of Array.from(container.children)) {
+  for (const child of Array.from(container.children)) {
+    const node = /** @type {HTMLElement} */ (child);
     const key = node.dataset?.[KEY];
     if (key !== undefined) existing.set(key, node);
   }

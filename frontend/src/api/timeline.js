@@ -8,6 +8,7 @@ import { api } from './client.js';
  * @returns {Promise<Object>}
  */
 export function getTimeline({ context } = {}) {
+  /** @type {Record<string, string|number|boolean>} */
   const params = {};
   if (context) params.context = context;
   return api.get('/api/timeline', params);
@@ -22,7 +23,8 @@ export function getTimeline({ context } = {}) {
  * @param {number} [params.limit]   Optional results limit (default 10)
  * @returns {Promise<Array>}
  */
-export function getTimelineLocations({ tag, context, limit } = {}) {
+export function getTimelineLocations({ tag, context, limit }) {
+  /** @type {Record<string, string|number|boolean>} */
   const params = { tag };
   if (context) params.context = context;
   if (limit) params.limit = limit;

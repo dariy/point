@@ -39,6 +39,9 @@ export async function syncQueue() {
           const formData = new FormData();
           formData.append('file', new Blob([blob.data], { type: blob.type }), blob.name);
 
+          // The wire shape is only ever read for the server-assigned id, so
+          // that is all the annotation claims.
+          /** @type {{id?: unknown}} */
           const uploadResp = await api.request(resolvedUrl, {
             method: 'POST',
             body: formData,
@@ -48,6 +51,7 @@ export async function syncQueue() {
           }
         } else {
           // 4. Execute request (bypass offline interceptor)
+          /** @type {{id?: unknown}} */
           let resp;
           const method = op.method;
           const headers = { 'Content-Type': 'application/json' };
@@ -106,11 +110,12 @@ function resolveTempIds(obj, idMap) {
 const DB_NAME = 'point-offline';
 const VERSION = 1;
 
+/** @returns {Promise<IDBDatabase>} */
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, VERSION);
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 

@@ -42,11 +42,18 @@ class Store {
 
   /**
    * Read a value.
+   *
+   * The store holds `unknown` because any key may hold anything; `T` lets a
+   * caller that knows the shape say so, either by annotating the variable it
+   * reads into or by declaring it on the function that returns it. Unstated,
+   * it stays `unknown` and the caller has to narrow.
+   *
+   * @template [T=unknown]
    * @param {string} key
-   * @returns {unknown}
+   * @returns {T}
    */
   get(key) {
-    return this._state[key];
+    return /** @type {T} */ (this._state[key]);
   }
 
   /**
@@ -140,7 +147,7 @@ class Store {
    * @param {object} patch
    */
   merge(key, patch) {
-    const current = this._state[key];
+    const current = /** @type {object|undefined} */ (this._state[key]);
     const next = { ...current, ...patch };
     if (current && typeof current === 'object' && shallowEqual(current, next)) return;
     this.set(key, next);

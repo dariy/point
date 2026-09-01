@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 // Comments (Remark42) — embeds the remark42 widget below post content via the
 // `post-comments` slot (see PostContent). The widget is served by the remark42
 // sidecar through the plugin-gated /comments reverse proxy, so disabling the

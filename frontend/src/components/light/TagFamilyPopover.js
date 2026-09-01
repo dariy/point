@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { Component } from '../Component.js';
 import { getTag } from '../../api/tags.js';
 import { html, navigate } from '../../utils/helpers.js';

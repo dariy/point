@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * tagSelection — select mode in the tags manager: the bulk toolbar, the ways
  * into and out of selecting, and the selection itself.

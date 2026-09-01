@@ -165,7 +165,8 @@ export function applyCardImageSizes(cardW, rowW, root = document) {
   if (card === _cardSizes && hero === _heroSizes) return;
   _cardSizes = card;
   _heroSizes = hero;
-  for (const img of root.querySelectorAll?.('.post-card-background img') || []) {
+  for (const el of root.querySelectorAll?.('.post-card-background img') || []) {
+    const img = /** @type {HTMLImageElement} */ (el);
     img.sizes = img.closest?.('.featured-post') ? hero : card;
   }
 }

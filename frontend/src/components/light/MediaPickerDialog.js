@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * MediaPickerDialog — body-mounted media picker dialog for the post editor.
  *

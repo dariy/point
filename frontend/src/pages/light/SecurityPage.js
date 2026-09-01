@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * SecurityPage — account security and session management.
  *

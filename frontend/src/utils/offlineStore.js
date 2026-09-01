@@ -16,12 +16,13 @@
 const DB_NAME = 'point-offline';
 const VERSION = 1;
 
+/** @returns {Promise<IDBDatabase>} */
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, VERSION);
 
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
+    request.onupgradeneeded = () => {
+      const db = request.result;
 
       if (!db.objectStoreNames.contains('posts')) {
         db.createObjectStore('posts', { keyPath: 'id' });
@@ -49,8 +50,8 @@ function openDB() {
       }
     };
 
-    request.onsuccess = (event) => resolve(event.target.result);
-    request.onerror = (event) => reject(event.target.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 
@@ -117,7 +118,7 @@ export async function listPosts() {
       const posts = request.result.sort((a, b) => {
         const dateA = a.published_at || a.created_at;
         const dateB = b.published_at || b.created_at;
-        return new Date(dateB) - new Date(dateA);
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
       });
       resolve(posts);
     };

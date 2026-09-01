@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { html, setHTML, raw } from "../../utils/helpers.js";
 /**
  * MenuPage — custom navigation menu editor.
