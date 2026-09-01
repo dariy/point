@@ -15,6 +15,7 @@ import { store } from "../../store.js";
 import { html, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
+import { captureInteraction } from "../../utils/preserveInteraction.js";
 import { EDIT_SVG, X_SVG, LINK_SVG, CHECK_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG, SELECT_SVG, PLUS_SVG } from "../../utils/icons.js";
 const STATUS_LABELS = {
   published: "Published",
@@ -354,15 +355,16 @@ export default class PostsListPage extends Component {
       this._setupPageControls(this.state.pagination);
     }
 
-    // Restore focus to search input after a re-render triggered by _load
+    // Put the caret back where _load() found it. The snapshot is taken before
+    // the fetch, so it has to be replayed here rather than wrapped around a
+    // synchronous rebuild — see captureInteraction.
+    const restore = this._restoreInteraction;
+    if (restore) {
+      this._restoreInteraction = null;
+      restore();
+    }
     const searchInput = this.container.querySelector("#search-input");
     if (searchInput) {
-      if (this._restoreSearchFocus) {
-        this._restoreSearchFocus = false;
-        const len = searchInput.value.length;
-        searchInput.focus();
-        searchInput.setSelectionRange(len, len);
-      }
       searchInput.addEventListener("input", debounce(e => {
         // Update state without re-rendering — the input already shows the new value
         this.state.search = e.target.value;
@@ -782,9 +784,9 @@ export default class PostsListPage extends Component {
     history.replaceState(null, "", url);
   }
   async _load(overrides = {}) {
-    // Check focus before any DOM mutation so we can restore it after re-render
-    const searchEl = this.container.querySelector("#search-input");
-    const searchHadFocus = searchEl && document.activeElement === searchEl;
+    // Snapshot focus and caret before any DOM mutation, so the search box a
+    // user is still typing in survives the reload it just triggered.
+    const restoreInteraction = captureInteraction(this.container);
 
     // Show loading indicator in-place — no full re-render, no focus loss.
     // The strings are fully static (no user data), so innerHTML is safe here.
@@ -814,7 +816,7 @@ export default class PostsListPage extends Component {
     this._syncUrl(overrides);
     try {
       const data = await listPosts(params);
-      this._restoreSearchFocus = searchHadFocus;
+      this._restoreInteraction = restoreInteraction;
       this.setState({
         loading: false,
         posts: (data.posts || data.items || []).map(p => ({
@@ -829,7 +831,7 @@ export default class PostsListPage extends Component {
         }
       });
     } catch (err) {
-      this._restoreSearchFocus = searchHadFocus;
+      this._restoreInteraction = restoreInteraction;
       console.error("[PostsListPage] load error:", err);
       store.set("toast", {
         message: "Could not load posts.",

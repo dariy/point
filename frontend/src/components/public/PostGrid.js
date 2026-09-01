@@ -17,6 +17,7 @@ import { Component } from '../Component.js';
 import { PostCard } from './PostCard.js';
 import { html } from '../../utils/helpers.js';
 import { measureCardImageSizes } from '../../utils/gridFit.js';
+import { reconcileList, setKey } from '../../utils/reconcileList.js';
 
 export class PostGrid extends Component {
   render() {
@@ -50,7 +51,11 @@ export class PostGrid extends Component {
 
     this._cards = posts.map((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
-      return slot ? this.mountChild(PostCard, slot, this._cardProps(post, i === heroIndex)) : null;
+      if (!slot) return null;
+      // What lets the next update be a reconcile rather than a rebuild: the
+      // slot is told which post it stands for, here where that is known.
+      setKey(slot, post.id);
+      return this.mountChild(PostCard, slot, this._cardProps(post, i === heroIndex));
     });
 
     const grid = this.container.querySelector('.posts-grid');
@@ -81,9 +86,25 @@ export class PostGrid extends Component {
   }
 
   /**
-   * Update the grid in place for a post list that only grew or shrank at the
-   * end — the per_page refit case, where the viewport now holds a different
-   * number of the same posts.
+   * The in-place path for a plain `setProps({ posts })`.
+   *
+   * Only the list may differ: a surviving card keeps the props it was mounted
+   * with, so a change to `showViewCount` or `tagSlug` has to go through the
+   * rebuild or half the grid would still be showing the old answer.
+   *
+   * @param {object} prevProps
+   * @returns {boolean} true when the grid was updated in place.
+   */
+  update(prevProps) {
+    for (const key of new Set([...Object.keys(prevProps), ...Object.keys(this.props)])) {
+      if (key !== 'posts' && prevProps[key] !== this.props[key]) return false;
+    }
+    return this._reconcileTo(this.props.posts || [], prevProps.posts || []);
+  }
+
+  /**
+   * Update the grid in place for a new post list — the per_page refit case,
+   * where the viewport now holds a different number of the same posts.
    *
    * The cards that are staying keep their DOM nodes, so their images stay
    * decoded and never repaint; a re-render would blank them for a frame (the
@@ -91,56 +112,84 @@ export class PostGrid extends Component {
    * would have to crossfade over it, which reads as a page change rather than
    * a resize.
    *
+   * Kept as a method rather than folded into update() because the callers need
+   * the answer: HomePage and SearchPage fall back to remounting the whole post
+   * region when the grid cannot take the list, and setProps() would give them
+   * a grid that had already rebuilt itself on the way to saying no.
+   *
    * @param {object[]} posts  the refit list.
    * @returns {boolean} false when the lists diverge — caller re-renders instead.
    */
   reconcile(posts = []) {
-    const current = this.props.posts || [];
+    const handled = this._reconcileTo(posts, this.props.posts || []);
+    if (handled) this.props = { ...this.props, posts };
+    return handled;
+  }
+
+  /**
+   * @param {object[]} posts    the list to end up showing
+   * @param {object[]} current  the list currently on screen
+   * @returns {boolean}
+   */
+  _reconcileTo(posts, current) {
     const grid = this.container.querySelector('.posts-grid');
     // An empty list on either side is the empty-state markup, not a grid.
     if (!grid || !current.length || !posts.length || !this._cards) return false;
-    // The hero spans a whole row; moving it re-flows everything below, so that
-    // is a re-render, not an append.
-    if (posts.findIndex((p) => p.is_featured) !== current.findIndex((p) => p.is_featured)) return false;
-    // Only a common prefix can be reused — anything else is a different page.
-    const shared = Math.min(current.length, posts.length);
-    for (let i = 0; i < shared; i++) {
-      if (posts[i].id !== current[i].id) return false;
-    }
+    // The hero spans a whole row, so moving it re-flows everything below it —
+    // and `isHero` is a mounted prop, which a surviving card cannot be talked
+    // out of. So the hero has to be the same post in the same place, not just
+    // a hero in the same place: promoting a card that is already on screen
+    // would leave it rendered as the regular card it was mounted as.
+    const heroIndex = posts.findIndex((p) => p.is_featured);
+    if (heroIndex !== current.findIndex((p) => p.is_featured)) return false;
+    if (heroIndex !== -1 && posts[heroIndex].id !== current[heroIndex].id) return false;
+    // Nothing in common is a different page, not an update to this one.
+    // Reconciling it would be a correct grid arrived at by dissolving every
+    // card and playing the arrival animation on its replacement.
+    const showing = new Set(current.map((p) => p.id));
+    if (!posts.some((p) => showing.has(p.id))) return false;
 
     // A refit follows a zoom step often enough that the shape here is not the
     // shape the surviving cards were rendered into — re-measure before the
     // arrivals read it.
     measureCardImageSizes(grid);
 
-    const heroIndex = posts.findIndex((p) => p.is_featured);
-    for (let i = current.length - 1; i >= posts.length; i--) {
-      this._dropCard(i);
-    }
-    for (let i = current.length; i < posts.length; i++) {
-      const slot = document.createElement('div');
-      slot.className = `post-card-slot${i === heroIndex ? ' featured-post' : ''} is-entering`;
-      slot.dataset.index = String(i);
-      slot.addEventListener('animationend', () => slot.classList.remove('is-entering'), { once: true });
-      grid.appendChild(slot);
-      this._cards[i] = this.mountChild(PostCard, slot, this._cardProps(posts[i], i === heroIndex));
-    }
+    /** @type {Map<string, import('./PostCard.js').PostCard>} */
+    const cards = new Map();
+    current.forEach((post, i) => {
+      if (this._cards[i]) cards.set(String(post.id), this._cards[i]);
+    });
+
+    const { nodes } = reconcileList(grid, posts, (p) => p.id, {
+      create: (post, i) => {
+        const slot = document.createElement('div');
+        slot.className = `post-card-slot${i === heroIndex ? ' featured-post' : ''} is-entering`;
+        slot.dataset.index = String(i);
+        slot.addEventListener('animationend', () => slot.classList.remove('is-entering'), { once: true });
+        return slot;
+      },
+      // A card that survived may have moved, and afterRender() finds its slot
+      // by data-index.
+      update: (slot, post, i) => { slot.dataset.index = String(i); },
+      remove: (slot, key) => {
+        const card = cards.get(key);
+        if (!card) return;
+        cards.delete(key);
+        card.unmount();
+        const at = this._children.indexOf(card);
+        if (at !== -1) this._children.splice(at, 1);
+      },
+    });
+
+    // Mounted after the walk, not inside create(): PostCard measures the grid
+    // it is landing in, and a slot that is not in the document yet has no
+    // geometry to measure.
+    this._cards = posts.map((post, i) => cards.get(String(post.id))
+      ?? this.mountChild(PostCard, nodes[i], this._cardProps(post, i === heroIndex)));
+
     // A step that shrank the grid may have hidden cards it was about to drop;
     // whatever survived the refit belongs on screen (see .is-zoom-surplus).
     grid.querySelectorAll('.is-zoom-surplus').forEach((el) => el.classList.remove('is-zoom-surplus'));
-    this.props = { ...this.props, posts };
     return true;
-  }
-
-  /** Unmount the card at `i` and remove its slot, keeping _children in step. */
-  _dropCard(i) {
-    const card = this._cards[i];
-    this._cards.length = i;
-    if (!card) return;
-    const slot = card.container;
-    card.unmount();
-    const at = this._children.indexOf(card);
-    if (at !== -1) this._children.splice(at, 1);
-    slot.remove();
   }
 }

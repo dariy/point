@@ -52,6 +52,33 @@ import { html, isRawHtml } from '../utils/helpers.js';
  *   inside a child mounted with mountChild() belongs to that child and is not
  *   dispatched again here.
  *
+ * Update contract — in-place rendering:
+ *   The default re-render is a rebuild: children unmounted, render() called,
+ *   innerHTML assigned. That is right whenever the markup is the whole truth
+ *   and wrong whenever DOM identity carries something it does not — a decoded
+ *   <img> rebuilt is an image thrown away and fetched again, which is a visible
+ *   flash. A subclass that can answer a particular change without the rebuild
+ *   declares update():
+ *
+ *     update(prevProps, prevState) {
+ *       if (prevProps.posts === this.props.posts) return false;   // rebuild
+ *       reconcileList(this.$('.grid'), this.props.posts, p => p.id, ops);
+ *       return true;                                              // handled
+ *     }
+ *
+ *   Returning exactly true means handled: _rerender() returns immediately, so
+ *   render() and afterRender() do not run, and — because the DOM they wired is
+ *   still on screen — neither the cleanup list nor the mounted children are
+ *   touched. Anything else falls through to the rebuild, so `return false`,
+ *   dropping off the end, or a case not thought about are all the safe answer.
+ *   update() is never consulted for the first render; there is nothing to
+ *   update yet.
+ *
+ *   The cost of "handled" is that the component now owns keeping its DOM true
+ *   to its props. reconcileList() (utils/reconcileList.js) is the keyed list
+ *   half of that, and preserveInteraction() (utils/preserveInteraction.js)
+ *   carries focus and scroll across the rebuilds that do happen.
+ *
  * Security contract for subclasses:
  *   - render() builds its markup with the html`` tag from utils/helpers.js and
  *     returns what that tag returns. Interpolations are escaped by the tag —
@@ -91,6 +118,12 @@ export class Component {
      * @type {Function[]}
      */
     this._actionTeardowns = [];
+    /**
+     * Whether render() has ever written into the container. Gates update():
+     * the first pass has no DOM to update in place.
+     * @type {boolean}
+     */
+    this._rendered = false;
     this._unmounted = false;
   }
 
@@ -109,6 +142,11 @@ export class Component {
   // Optional, declared by subclasses that want delegation:
   //   actions = { <data-action value>: (event, el) => void }
   // See the event contract in the class comment.
+
+  // Optional, declared by subclasses that can update their DOM in place:
+  //   update(prevProps, prevState) { …; return true; }
+  // Returning true skips the rebuild entirely. See the update contract in the
+  // class comment.
 
   /**
    * Called after HTML is written to the DOM.
@@ -133,11 +171,12 @@ export class Component {
    */
   setState(delta) {
     if (this._unmounted) return;
+    const prevState = this.state;
     this.state = {
       ...this.state,
       ...delta
     };
-    this._rerender();
+    this._rerender(this.props, prevState);
   }
 
   /**
@@ -146,11 +185,12 @@ export class Component {
    */
   setProps(delta) {
     if (this._unmounted) return;
+    const prevProps = this.props;
     this.props = {
       ...this.props,
       ...delta
     };
-    this._rerender();
+    this._rerender(prevProps, this.state);
   }
 
   /**
@@ -323,7 +363,21 @@ export class Component {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  _rerender() {
+  /**
+   * @param {object} [prevProps]  props as they were before this change
+   * @param {object} [prevState]  state as it was before this change
+   */
+  _rerender(prevProps, prevState) {
+    // The in-place path. Offered only from the second render onwards — before
+    // the first there is no DOM to update — and only when the subclass has
+    // declared update(). Returning true means "handled": the DOM below is left
+    // exactly as it is, which is the whole point, so the cleanups, children and
+    // listeners belonging to it are left alone too.
+    if (this._rendered && typeof this.update === 'function'
+        && this.update(prevProps ?? this.props, prevState ?? this.state) === true) {
+      return;
+    }
+
     // Release what the previous render acquired, while its DOM is still in
     // place: registered teardowns first, then the imperative hook.
     this._runCleanups();
@@ -347,6 +401,7 @@ export class Component {
       );
     }
     this.container.innerHTML = html`${markup}`;
+    this._rendered = true;
     this.afterRender();
   }
   _unmountChildren() {
