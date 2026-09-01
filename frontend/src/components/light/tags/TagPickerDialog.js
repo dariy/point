@@ -16,7 +16,7 @@
  * builds it, here or in the caller — nothing relies on a caller remembering.
  */
 
-import { html } from '../../../utils/helpers.js';
+import { html, setHTML } from '../../../utils/helpers.js';
 
 /**
  * Create an active modal overlay, append it to <body>, and wire the two
@@ -29,10 +29,7 @@ import { html } from '../../../utils/helpers.js';
 export function openOverlay(modalHtml) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay active';
-  // Written through a computed key so CodeQL does not flag it as an XSS sink.
-  // The value is html`` output, so every interpolation in it is already
-  // escaped — this is a false positive, not an unsanitised assignment.
-  overlay['inner' + 'HTML'] = html`${modalHtml}`;
+  setHTML(overlay, html`${modalHtml}`);
   document.body.appendChild(overlay);
 
   const close = () => overlay.remove();
