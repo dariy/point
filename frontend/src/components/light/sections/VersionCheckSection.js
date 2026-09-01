@@ -16,7 +16,7 @@
 import { Component } from "../../Component.js";
 import { getVersion, checkVersionNow } from "../../../api/system.js";
 import { store } from "../../../store.js";
-import { escapeHtml } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.js";
 import { formatDatetime, isoDatetime } from "../../../utils/formatters.js";
 
 export class VersionCheckSection extends Component {
@@ -31,26 +31,26 @@ export class VersionCheckSection extends Component {
     // Rendered flush inside the plugin drawer, which supplies the "Version
     // Check" title — no inner card header of its own (matching the passkeys,
     // backups and API-key sections).
-    if (loading) return '<div class="loading-spinner btn-sm"></div>';
-    if (error) return `<p class="empty-state" role="alert">${escapeHtml(error)}</p>`;
+    if (loading) return html`<div class="loading-spinner btn-sm"></div>`;
+    if (error) return html`<p class="empty-state" role="alert">${error}</p>`;
 
-    return `
+    return html`
       <div class="version-headline">
         <span class="version-headline-label">Running</span>
-        <code class="version-current">${escapeHtml(info.current || "unknown")}</code>
+        <code class="version-current">${info.current || "unknown"}</code>
       </div>
       ${this._renderVerdict(info)}
       <dl class="version-facts">
         <div class="version-fact">
           <dt>Latest upstream</dt>
-          <dd>${info.latest ? `<code>${escapeHtml(info.latest)}</code>` : `<span class="version-unknown">not known yet</span>`}</dd>
+          <dd>${info.latest ? html`<code>${info.latest}</code>` : html`<span class="version-unknown">not known yet</span>`}</dd>
         </div>
         <div class="version-fact">
           <dt>Last checked</dt>
           <dd>${
             info.checked_at
-              ? `<time datetime="${escapeHtml(isoDatetime(info.checked_at))}">${escapeHtml(formatDatetime(info.checked_at))}</time>`
-              : `<span class="version-unknown">never</span>`
+              ? html`<time datetime="${isoDatetime(info.checked_at)}">${formatDatetime(info.checked_at)}</time>`
+              : html`<span class="version-unknown">never</span>`
           }</dd>
         </div>
       </dl>
@@ -62,7 +62,7 @@ export class VersionCheckSection extends Component {
           // "fetched" means this very request reached GitHub — worth saying once,
           // right after a manual check, since that round-trip is what was asked for.
           justChecked && info.fetched
-            ? `<span class="version-fresh">Answer came from GitHub just now.</span>`
+            ? html`<span class="version-fresh">Answer came from GitHub just now.</span>`
             : ""
         }
       </div>
@@ -76,17 +76,17 @@ export class VersionCheckSection extends Component {
   /** The one-line answer: broken, update available, unknown, or current. */
   _renderVerdict(info) {
     if (info.error) {
-      return `<p class="version-verdict is-error" role="alert">Check failed: ${escapeHtml(info.error)}</p>`;
+      return html`<p class="version-verdict is-error" role="alert">Check failed: ${info.error}</p>`;
     }
     if (info.update_available) {
-      return `<p class="version-verdict is-update">
-        Point ${escapeHtml(info.latest)} is available. Update with <code>./update.sh</code>.
+      return html`<p class="version-verdict is-update">
+        Point ${info.latest} is available. Update with <code>./update.sh</code>.
       </p>`;
     }
     if (!info.latest) {
-      return `<p class="version-verdict">No upstream version known yet — run a check.</p>`;
+      return html`<p class="version-verdict">No upstream version known yet — run a check.</p>`;
     }
-    return `<p class="version-verdict is-ok">You're running the latest release.</p>`;
+    return html`<p class="version-verdict is-ok">You're running the latest release.</p>`;
   }
 
   afterRender() {

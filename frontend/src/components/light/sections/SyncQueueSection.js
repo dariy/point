@@ -8,7 +8,7 @@ import { Component } from "../../Component.js";
 import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.js";
 import { syncQueue } from "../../../utils/sync.js";
 import { store } from "../../../store.js";
-import { escapeHtml } from "../../../utils/helpers.js";
+import { html, raw } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
 import { WARNING_SVG } from "../../../utils/icons.js";
 
@@ -25,34 +25,33 @@ export class SyncQueueSection extends Component {
 
     let rows;
     if (loading) {
-      rows = '<div class="loading-spinner btn-sm"></div>';
+      rows = html`<div class="loading-spinner btn-sm"></div>`;
     } else if (!queue.length) {
-      rows = '<p class="empty-state">No pending operations.</p>';
+      rows = html`<p class="empty-state">No pending operations.</p>`;
     } else {
       rows = queue
         .map((op) => {
-          const icon = op.failed ? WARNING_SVG : "●";
+          const icon = op.failed ? raw(WARNING_SVG) : "●";
           const statusCls = op.failed ? "status-failed" : "status-pending";
-          return `
+          return html`
           <div class="sync-queue-item ${statusCls}">
             <span class="sync-icon">${icon}</span>
             <div class="sync-details">
-              <div class="sync-op"><strong>${escapeHtml(op.method)}</strong> ${escapeHtml(op.url)}</div>
-              ${op.error ? `<div class="sync-error">${escapeHtml(op.error)}</div>` : ""}
+              <div class="sync-op"><strong>${op.method}</strong> ${op.url}</div>
+              ${op.error ? html`<div class="sync-error">${op.error}</div>` : ""}
             </div>
             <div class="sync-meta">${formatDateShort(op.timestamp)}</div>
           </div>`;
-        })
-        .join("");
+        });
     }
 
-    return `
+    return html`
       <section class="card">
         <div class="card-header">
           <h2>Pending Sync Queue</h2>
           <div class="header-actions">
-            ${failedCount > 0 ? '<button id="reset-sync-btn" class="btn btn-sm btn-secondary">Retry Failed</button>' : ""}
-            ${pendingCount > 0 ? '<button id="sync-now-btn" class="btn btn-sm btn-primary">Sync Now</button>' : ""}
+            ${failedCount > 0 ? html`<button id="reset-sync-btn" class="btn btn-sm btn-secondary">Retry Failed</button>` : ""}
+            ${pendingCount > 0 ? html`<button id="sync-now-btn" class="btn btn-sm btn-primary">Sync Now</button>` : ""}
           </div>
         </div>
         <div class="card-body">

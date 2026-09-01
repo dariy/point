@@ -7,7 +7,7 @@
 import { Component } from "../../Component.js";
 import { getApiKeys, createApiKey, deleteApiKey } from "../../../api/auth.js";
 import { store } from "../../../store.js";
-import { escapeHtml } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 
@@ -21,10 +21,10 @@ export class ApiKeysSection extends Component {
     const { loading, apiKeys } = this.state;
 
     const list = loading
-      ? '<p class="empty-state">Loading…</p>'
+      ? html`<p class="empty-state">Loading…</p>`
       : !apiKeys.length
-        ? '<p class="empty-state">No API keys found.</p>'
-        : `
+        ? html`<p class="empty-state">No API keys found.</p>`
+        : html`
           <div class="table-container">
             <table class="table">
               <thead>
@@ -38,23 +38,22 @@ export class ApiKeysSection extends Component {
               <tbody>
                 ${apiKeys
                   .map(
-                    (k) => `
+                    (k) => html`
                   <tr>
-                    <td><strong>${escapeHtml(k.name)}</strong></td>
-                    <td><code class="font-mono">${escapeHtml(k.prefix)}…</code></td>
-                    <td>${escapeHtml(formatDateShort(k.created_at))}</td>
+                    <td><strong>${k.name}</strong></td>
+                    <td><code class="font-mono">${k.prefix}…</code></td>
+                    <td>${formatDateShort(k.created_at)}</td>
                     <td class="text-right">
                       <button class="btn btn-sm btn-danger delete-api-key-btn" data-id="${k.id}" title="Delete">Delete</button>
                     </td>
                   </tr>`,
-                  )
-                  .join("")}
+                  )}
               </tbody>
             </table>
           </div>`;
 
     // Rendered flush inside the plugin drawer, which supplies the "Api Keys" title.
-    return `
+    return html`
       <div class="section-actions">
         <span class="section-actions-spacer"></span>
         <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create API Key</button>

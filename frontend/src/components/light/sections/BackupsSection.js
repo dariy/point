@@ -1,5 +1,3 @@
-import { raw } from "../../../utils/helpers.js";
-import { html } from "../../../utils/helpers.js";
 /**
  * BackupsSection — the database-backup block for the `backups` plugin.
  *
@@ -15,7 +13,7 @@ import { listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackup
 import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
 import { store } from "../../../store.js";
-import { escapeHtml } from "../../../utils/helpers.js";
+import { html, raw } from "../../../utils/helpers.js";
 import { formatFileSize } from "../../../utils/formatters.js";
 import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
@@ -43,8 +41,8 @@ export class BackupsSection extends Component {
       keep
     } = this.state;
     const preset = [1, 7, 30].includes(intervalDays);
-    const opt = (v, label) => `<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
-    return `
+    const opt = (v, label) => html`<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
+    return html`
       <div class="backup-settings">
         <label class="backup-setting-row">
           <input type="checkbox" id="bk-enable"${enableBackup ? " checked" : ""}>
@@ -59,7 +57,7 @@ export class BackupsSection extends Component {
             <option value="custom"${preset ? "" : " selected"}>Every N days…</option>
           </select>
           <input type="number" id="bk-freq-days" class="form-input backup-num" min="1" step="1"
-                 value="${intervalDays}"${preset ? ' style="display:none"' : ""}${enableBackup ? "" : " disabled"}>
+                 value="${intervalDays}"${preset ? raw(' style="display:none"') : ""}${enableBackup ? "" : " disabled"}>
         </div>
         <div class="backup-setting-row">
           <label for="bk-keep">Keep last</label>
@@ -73,30 +71,30 @@ export class BackupsSection extends Component {
   // still being written, otherwise the normal swipe row with actions.
   _renderItem(b) {
     if (b.in_progress) {
-      return `
+      return html`
         <li class="backup-item backup-in-progress">
           <span class="backup-spinner" aria-hidden="true"></span>
           <div class="backup-progress-content">
-            <div class="backup-name font-mono">${escapeHtml(b.filename)}</div>
+            <div class="backup-name font-mono">${b.filename}</div>
             <div class="backup-sub">
-              <span class="backup-sub-status">Creating… ${escapeHtml(formatFileSize(b.size))} so far</span>
+              <span class="backup-sub-status">Creating… ${formatFileSize(b.size)} so far</span>
             </div>
           </div>
         </li>`;
     }
-    return `
+    return html`
       <li class="backup-swipe-item">
         <div class="backup-swipe-actions">
-          <button class="btn download-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Download" aria-label="Download">${DOWNLOAD_SVG}</button>
-          <button class="btn restore-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Restore" aria-label="Restore">${RESTORE_SVG}</button>
-          <button class="btn btn-danger delete-backup-btn" data-filename="${escapeHtml(b.filename)}" title="Delete" aria-label="Delete">${X_SVG}</button>
+          <button class="btn download-backup-btn" data-filename="${b.filename}" title="Download" aria-label="Download">${raw(DOWNLOAD_SVG)}</button>
+          <button class="btn restore-backup-btn" data-filename="${b.filename}" title="Restore" aria-label="Restore">${raw(RESTORE_SVG)}</button>
+          <button class="btn btn-danger delete-backup-btn" data-filename="${b.filename}" title="Delete" aria-label="Delete">${raw(X_SVG)}</button>
         </div>
         <div class="backup-swipe-content">
-          <div class="backup-name font-mono">${escapeHtml(b.filename)}</div>
+          <div class="backup-name font-mono">${b.filename}</div>
           <div class="backup-sub">
-            <span class="backup-sub-date">${escapeHtml(new Date(b.created_at).toLocaleString())}</span>
-            <span class="backup-sub-size">${escapeHtml(formatFileSize(b.size))}</span>
-            ${b.sha256 ? `<span class="backup-sub-sha font-mono" title="SHA-256: ${escapeHtml(b.sha256)}">sha256 ${escapeHtml(b.sha256.slice(0, 10))}…</span>` : ""}
+            <span class="backup-sub-date">${new Date(b.created_at).toLocaleString()}</span>
+            <span class="backup-sub-size">${formatFileSize(b.size)}</span>
+            ${b.sha256 ? html`<span class="backup-sub-sha font-mono" title="SHA-256: ${b.sha256}">sha256 ${b.sha256.slice(0, 10)}…</span>` : ""}
           </div>
         </div>
       </li>`;
@@ -110,24 +108,24 @@ export class BackupsSection extends Component {
       uploadPct
     } = this.state;
     const backupInProgress = backups.some(b => b.in_progress);
-    const items = loading ? '<li class="backup-empty">Loading…</li>' : backups.length ? backups.map(b => this._renderItem(b)).join("") : '<li class="backup-empty">No backups found.</li>';
+    const items = loading ? html`<li class="backup-empty">Loading…</li>` : backups.length ? backups.map(b => this._renderItem(b)) : html`<li class="backup-empty">No backups found.</li>`;
     const creating = creatingBackup || backupInProgress;
     // Rendered flush inside the plugin drawer, which supplies the "Backups" title.
-    return `
+    return html`
       <div class="section-actions">
         <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creating || uploading ? "disabled" : ""}>
           ${creating ? "Creating…" : "Create backup"}
         </button>
         <button id="upload-backup-btn" class="btn btn-sm btn-secondary" ${creating || uploading ? "disabled" : ""} title="Add a local archive to your backups (apply it later with Restore)">
-          ${UPLOAD_SVG}<span>Upload archive</span>
+          ${raw(UPLOAD_SVG)}<span>Upload archive</span>
         </button>
         <span class="section-actions-spacer"></span>
         <button id="restart-server-btn" class="btn btn-sm section-action-muted" title="Restart the server (applies a scheduled restore)">
-          ${REFRESH_SVG}<span>Restart</span>
+          ${raw(REFRESH_SVG)}<span>Restart</span>
         </button>
         <input type="file" id="upload-backup-input" accept=".gz,.tar.gz,application/gzip" hidden>
       </div>
-      ${uploading ? `<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
+      ${uploading ? html`<div class="progress-bar"><div class="progress-fill" style="width:${uploadPct}%"></div></div>
              <p class="progress-text">Uploading archive… ${uploadPct}%</p>` : ""}
       <div class="section-block">
         <h3 class="section-subhead">Schedule</h3>
@@ -458,7 +456,7 @@ export class BackupsSection extends Component {
     el.setAttribute("aria-live", "polite");
     const card = document.createElement("div");
     card.className = "restart-overlay-card";
-    card.innerHTML = html`${raw('<span class="restart-overlay-spinner" aria-hidden="true"></span>' + '<p class="restart-overlay-text"></p>' + '<p class="restart-overlay-sub">This will only take a moment.</p>')}`;
+    card.innerHTML = html`<span class="restart-overlay-spinner" aria-hidden="true"></span><p class="restart-overlay-text"></p><p class="restart-overlay-sub">This will only take a moment.</p>`;
     card.querySelector(".restart-overlay-text").textContent = text;
     el.appendChild(card);
     document.body.appendChild(el);
