@@ -58,7 +58,6 @@ export class MediaBrowser extends Component {
       referringPostsState: {}
     };
     this._dragCount = 0;
-    this._dragListeners = [];
     this._lightbox = this.props.pickerMode ? null : new MediaLightbox();
     // Swipe-to-page and pinch-to-zoom on the grid, like the public post grids
     // (core/mediaPager.js). Standalone only: the picker is a modal that owns its
@@ -1106,12 +1105,9 @@ export class MediaBrowser extends Component {
     }, true);
   }
   _wireDragDrop(fileInput, pickerMode) {
-    // Remove any previously registered listeners before re-registering.
-    // afterRender fires on every setState re-render, so without this cleanup
-    // each render accumulates an extra set of document-level drop handlers.
-    for (const [t, ev, fn] of this._dragListeners) t.removeEventListener(ev, fn);
-    this._dragListeners = [];
-
+    // this.on() releases each of these at the next render boundary, which is
+    // what afterRender() firing on every setState re-render requires — the
+    // document-level ones would otherwise accumulate a set per render.
     // In picker mode, scope drag-drop to the component container to avoid
     // conflicting with PostEditPage's document-level drag handler.
     const target = pickerMode ? this.container : document;
@@ -1151,19 +1147,14 @@ export class MediaBrowser extends Component {
       const files = Array.from(e.dataTransfer?.files || []);
       if (files.length) this._uploadFiles(files);
     };
-    target.addEventListener("dragenter", onEnter);
-    target.addEventListener("dragleave", onLeave);
-    target.addEventListener("dragover", onOver);
-    target.addEventListener("drop", onDrop);
-    document.addEventListener("dragstart", onDragStart);
-    document.addEventListener("dragend", onDragEnd);
-    this._dragListeners = [[target, "dragenter", onEnter], [target, "dragleave", onLeave], [target, "dragover", onOver], [target, "drop", onDrop], [document, "dragstart", onDragStart], [document, "dragend", onDragEnd]];
+    this.on(target, "dragenter", onEnter);
+    this.on(target, "dragleave", onLeave);
+    this.on(target, "dragover", onOver);
+    this.on(target, "drop", onDrop);
+    this.on(document, "dragstart", onDragStart);
+    this.on(document, "dragend", onDragEnd);
   }
   beforeUnmount() {
-    for (const [target, event, fn] of this._dragListeners) {
-      target.removeEventListener(event, fn);
-    }
-    this._dragListeners = [];
     this._lightbox?.destroy();
     this._pager?.destroy();
     this._dragCount = 0;

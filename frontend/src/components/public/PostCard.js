@@ -125,7 +125,6 @@ export class PostCard extends Component {
     const card = this.$(".post-card");
     if (!card) return;
 
-    this._cleanupStrip?.();
     this._stopHoverVideo?.();
     this._stopHoverVideo = null;
     this._startTouchVideo = null;
@@ -220,6 +219,10 @@ export class PostCard extends Component {
           // touch without ever loading video for a card merely scrolled past.
           this._startTouchVideo?.();
 
+          // Taken on a tap rather than in afterRender, and released either by
+          // the dismissing tap or by the next render boundary — a card revealed
+          // and then re-rendered (navTags landing, say) used to leave this on
+          // document for the life of the page.
           const dismiss = (ev) => {
             if (!card.contains(ev.target)) {
               card.classList.remove("is-touched");
@@ -227,7 +230,7 @@ export class PostCard extends Component {
               document.removeEventListener("click", dismiss, true);
             }
           };
-          document.addEventListener("click", dismiss, true);
+          this.on(document, "click", dismiss, true);
         } else {
           go();
         }
@@ -255,10 +258,10 @@ export class PostCard extends Component {
     // Unified tag strip scrolling and flyout setup
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    this._cleanupStrip = setupTagStrip(card, tagIndex, (url) => {
+    this.registerCleanup(setupTagStrip(card, tagIndex, (url) => {
       const { tag, navPath } = parseTagUrl(url);
       ViewContext.update({ tag, navPath, postSlug: null, query: null });
-    }, card);
+    }, card));
   }
 
   /**
@@ -331,7 +334,6 @@ export class PostCard extends Component {
   }
 
   beforeUnmount() {
-    this._cleanupStrip?.();
     this._stopHoverVideo?.();
     if (touchPreview === this) touchPreview = null;
   }

@@ -191,11 +191,11 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this._measureSheet();
   }
   _wireSheetControls() {
-    this._on(this.$('.immersive-sheet-hint'), 'click', e => {
+    this.on(this.$('.immersive-sheet-hint'), 'click', e => {
       e.stopPropagation();
       this._openSheet();
     });
-    this._on(this.$('.immersive-sheet-grip'), 'click', e => {
+    this.on(this.$('.immersive-sheet-grip'), 'click', e => {
       e.stopPropagation();
       this._closeSheet();
     });
@@ -203,14 +203,14 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // Tapping the photo strip while the sheet is open collapses it (instead of
     // letting MediaViewer's background-tap close the whole viewer).
     const visuals = this.$('.immersive-visuals');
-    this._on(visuals, 'click', e => {
+    this.on(visuals, 'click', e => {
       if (this._sheetOpen) {
         e.stopPropagation();
         this._closeSheet();
       }
     }, true);
     const actions = this.$('.immersive-sheet-actions');
-    this._on(actions, 'click', e => {
+    this.on(actions, 'click', e => {
       const el = e.target.closest('[data-action]');
       if (!el) return;
       const action = el.dataset.action;
@@ -222,7 +222,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
         url: window.location.href
       });
     });
-    this._on(this.$('.immersive-sheet-theme'), 'click', e => {
+    this.on(this.$('.immersive-sheet-theme'), 'click', e => {
       e.stopPropagation();
       const current = store.get('theme') || 'auto';
       store.set('theme', current === 'dark' ? 'light' : 'dark');

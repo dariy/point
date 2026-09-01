@@ -730,15 +730,38 @@ describe('MediaBrowser', () => {
   // ── Teardown ──────────────────────────────────────────────────────────────
 
   describe('teardown', () => {
+    /** Drop `files` on the document, the way a drag from the desktop ends. */
+    const dropFiles = (files) => {
+      const evt = new globalThis.Event('drop', { bubbles: true, cancelable: true });
+      evt.dataTransfer = { types: ['Files'], files };
+      dom.document.dispatchEvent(evt);
+    };
+
     test('unmounting drops the drag listeners it registered', async () => {
       await mountBrowser();
-      assert.ok(browser._dragListeners.length > 0);
+      const uploaded = [];
+      browser._uploadFiles = (files) => uploaded.push(files);
+
+      dropFiles([{ name: 'a.jpg' }]);
+      assert.equal(uploaded.length, 1, 'the browser answers a desktop drop while mounted');
 
       browser.unmount();
-      const listeners = browser._dragListeners;
+      dropFiles([{ name: 'b.jpg' }]);
       browser = null;
 
-      assert.equal(listeners.length, 0);
+      assert.equal(uploaded.length, 1, 'and nothing after it is gone');
+    });
+
+    test('re-rendering does not accumulate a second set of drop handlers', async () => {
+      await mountBrowser();
+      const uploaded = [];
+      browser._uploadFiles = (files) => uploaded.push(files);
+
+      browser.setState({ view: 'list' });
+      browser.setState({ view: 'grid' });
+      dropFiles([{ name: 'a.jpg' }]);
+
+      assert.equal(uploaded.length, 1, 'one upload, not one per render');
     });
   });
 });

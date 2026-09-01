@@ -34,7 +34,7 @@ export class Pagination extends Component {
       // paginator reads as two halves rather than one odd run of numbers.
       if (item < 1) classes.push('page-scheduled');
       const current = item === page ? html` aria-current="page"` : '';
-      return html`<button class="${classes.join(' ')}"${current} data-page="${item}" type="button">${item}</button>`;
+      return html`<button class="${classes.join(' ')}"${current} data-action="page" data-page="${item}" type="button">${item}</button>`;
     });
 
     const prevDisabled = page <= minPage ? html` disabled` : '';
@@ -47,24 +47,29 @@ export class Pagination extends Component {
 
     return html`
       <nav class="pagination"${title} aria-label="Page navigation">
-        <button class="page-btn page-prev" data-page="${page - 1}" type="button"${prevDisabled} aria-label="Previous page">&#8592;</button>
+        <button class="page-btn page-prev" data-action="page" data-page="${page - 1}" type="button"${prevDisabled} aria-label="Previous page">&#8592;</button>
         <span class="page-numbers">${buttons}</span>
-        <button class="page-btn page-next" data-page="${page + 1}" type="button"${nextDisabled} aria-label="Next page">&#8594;</button>
+        <button class="page-btn page-next" data-action="page" data-page="${page + 1}" type="button"${nextDisabled} aria-label="Next page">&#8594;</button>
         ${info}
       </nav>`;
   }
 
-  afterRender() {
-    const minPage = this._minPage();
-    this.container.querySelectorAll('.page-btn:not([disabled])').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const p = parseInt(btn.dataset.page, 10);
-        if (p >= minPage && p <= this.props.pages && this.props.onPage) {
-          this.props.onPage(p);
-        }
-      });
-    });
-  }
+  /**
+   * Every button in here is a page jump, and the whole strip is rebuilt on each
+   * render — so it is bound once, at the container, rather than button by
+   * button on every pass. The bounds check stays: prev/next at either end are
+   * `disabled` in the markup, and a disabled control is the one case where the
+   * attribute, not the handler, is what stops the navigation.
+   */
+  actions = {
+    page(e, el) {
+      if (el.disabled) return;
+      const p = parseInt(el.dataset.page, 10);
+      if (p >= this._minPage() && p <= this.props.pages && this.props.onPage) {
+        this.props.onPage(p);
+      }
+    },
+  };
 
   /** First reachable page — 1 unless a caller opened the feed to the left. */
   _minPage() {

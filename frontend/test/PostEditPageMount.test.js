@@ -306,11 +306,30 @@ describe('PostEditPage (mounted)', () => {
   // ── The overflow menu ─────────────────────────────────────────────────────
 
   describe('menu actions', () => {
+    /**
+     * Invoke a menu action the way its delegated click would.
+     *
+     * Several of these items are rendered only for a status the fixture post
+     * does not have (Publish now is draft-only), so the map is called directly;
+     * the delegation that reaches it is covered by its own test below.
+     */
+    const menuAction = (action) => page.actions[action].call(page);
+
+    test('a click on a menu item reaches its action through the container', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      // A published post's menu offers Unpublish — a real button, clicked for real.
+      click(q('[data-action="unpublish"]'));
+      await settle();
+
+      assert.equal(sent('PUT', '/api/posts/7').at(-1).body.status, 'draft');
+    });
+
     test('publish-now, mark-hidden and unpublish each send their status', async () => {
       await mountPage({ params: { id: '7' } });
 
       for (const [action, status] of [['publish-now', 'published'], ['mark-hidden', 'hidden'], ['unpublish', 'draft']]) {
-        page._handleMenuAction(action);
+        menuAction(action);
         await settle();
         assert.equal(sent('PUT', '/api/posts/7').at(-1).body.status, status, action);
       }
@@ -319,7 +338,7 @@ describe('PostEditPage (mounted)', () => {
     test('schedule flips the status select and reveals the schedule group', async () => {
       await mountPage({ params: { id: '7' } });
 
-      page._handleMenuAction('schedule');
+      menuAction('schedule');
 
       assert.equal(q('#status-select').value, 'scheduled');
     });
@@ -327,7 +346,7 @@ describe('PostEditPage (mounted)', () => {
     test('arrange turns on the reordering mode and Escape turns it back off', async () => {
       await mountPage({ params: { id: '7' } });
 
-      page._handleMenuAction('arrange');
+      menuAction('arrange');
       assert.equal(page.state.arranging, true);
       assert.equal(q('#arrange-bar').hidden, false);
 
@@ -340,7 +359,7 @@ describe('PostEditPage (mounted)', () => {
     test('delete asks first, then trashes the post and leaves', async () => {
       await mountPage({ params: { id: '7' } });
 
-      page._handleMenuAction('delete');
+      menuAction('delete');
       const dialog = dom.document.querySelector('.confirm-dialog, .modal-overlay');
       assert.ok(dialog, 'a confirmation is shown before anything is destroyed');
       assert.equal(sent('DELETE', '/api/posts/7').length, 0);

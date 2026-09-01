@@ -48,7 +48,6 @@ export class MediaViewer extends Component {
       x: 0,
       y: 0
     };
-    this._listeners = [];
     this._lastShowTime = 0;
     // Cross-post peek: preloaded media of the adjacent posts, keyed by carousel
     // direction ('back' = step below index 0, 'fwd' = step past the last index).
@@ -258,13 +257,13 @@ export class MediaViewer extends Component {
     this._goTo = goTo;
 
     // Nav panels
-    this._on(this.$('.immersive-nav-prev'), 'click', e => this._panelClick(e, () => goTo(this._index - 1)));
-    this._on(this.$('.immersive-nav-next'), 'click', e => this._panelClick(e, () => goTo(this._index + 1)));
-    dots.forEach((d, i) => this._on(d, 'click', () => goTo(i)));
+    this.on(this.$('.immersive-nav-prev'), 'click', e => this._panelClick(e, () => goTo(this._index - 1)));
+    this.on(this.$('.immersive-nav-next'), 'click', e => this._panelClick(e, () => goTo(this._index + 1)));
+    dots.forEach((d, i) => this.on(d, 'click', () => goTo(i)));
 
     // Close
-    this._on(this.$('.lightbox-close'), 'click', () => onClose?.());
-    this._on(wrapper, 'click', e => {
+    this.on(this.$('.lightbox-close'), 'click', () => onClose?.());
+    this.on(wrapper, 'click', e => {
       if (Date.now() - lastTapTime < 500) return;
       if (e.target === wrapper || e.target === visuals) {
         onClose?.();
@@ -355,7 +354,7 @@ export class MediaViewer extends Component {
     });
 
     // Keyboard
-    this._on(document, 'keydown', e => this._onKeyDown(e));
+    this.on(document, 'keydown', e => this._onKeyDown(e));
     this._lastShowTime = Date.now();
 
     // Preload the adjacent posts' edge media so they can peek in during a drag.
@@ -779,20 +778,12 @@ export class MediaViewer extends Component {
     hideFlyout();
     document.body.classList.add('ui-hidden');
   }
-  _on(t, e, s, i) {
-    if (t) {
-      t.addEventListener(e, s, i);
-      this._listeners.push([t, e, s, i]);
-    }
-  }
   /** Point the EXIF control at the active slide (no-op when no EXIF present). */
   _updateExif() {
     if (!this._exifControl || !this._exifMeta) return;
     this._exifControl.setMetadata(this._exifMeta[this._index] || null);
   }
   _cleanup() {
-    this._listeners.forEach(([t, e, s, i]) => t.removeEventListener(e, s, i));
-    this._listeners = [];
     this._gesture?.destroy();
     this._trackpad?.destroy();
     // Unmount slot plugins (share button, slideshow) so their listeners/timers
