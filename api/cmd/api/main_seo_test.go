@@ -190,6 +190,11 @@ func TestPrerenderPostCanonical(t *testing.T) {
 		`og:type" content="article"`,
 	)
 	mustNotContain(t, body, "utm_source")
+
+	// A post is one document however the reader arrived at it: the ?page= they
+	// came through belongs to the feed behind it, not to this URL.
+	mustContain(t, get("/posts/the-ring-road?page=2").Body.String(),
+		`<link rel="canonical" href="http://example.com/posts/the-ring-road">`)
 }
 
 // A tag the public is not shown must not describe itself to a crawler — and a
@@ -409,4 +414,127 @@ func TestPrerenderSkipsAdminSection(t *testing.T) {
 	_, get := seoFixture(t)
 	body := get("/light/posts").Body.String()
 	mustNotContain(t, body, "og:title", "canonical", "Field Notes")
+}
+
+// getWith is env.get for the cases where the request's headers are the subject:
+// a proxied request, a spoofed one.
+func (env *seoEnv) getWith(path string, headers map[string]string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	env.e.ServeHTTP(rec, req)
+	return rec
+}
+
+// A published post can still be one the public may not read: a tag carrying
+// hides_posts withholds every post filed under it, and the post API 404s an
+// anonymous reader who asks for it by slug. The head must agree with that —
+// otherwise the crawler gets the title, the excerpt and a link to a photograph
+// it cannot fetch, for a post whose own page renders "Not found".
+func TestPrerenderWithholdsPostsHiddenByTag(t *testing.T) {
+	env, get := seoFixture(t)
+	ctx := context.Background()
+
+	if _, err := env.repo.CreatePost(ctx, models.CreatePostParams{
+		Title: "Buried Lede", Slug: "buried-lede", AuthorID: 1, Status: "published", Content: "x",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	post, err := env.svcs.Post.GetPostBySlug(ctx, "buried-lede")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Untagged, it describes itself — so what follows is the tag doing the work.
+	mustContain(t, get("/posts/buried-lede").Body.String(), `og:title" content="Buried Lede"`)
+
+	if _, err := env.svcs.Tag.CreateTag(ctx, services.CreateTagParams{
+		Name: "Private Set", Slug: "private-set", HidesPosts: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.svcs.Post.UpdatePostTags(ctx, post.ID, []string{"Private Set"}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := get("/posts/buried-lede").Body.String()
+	mustNotContain(t, body, "Buried Lede", "og:title", "og:type")
+	mustContain(t, body, "<title>Loading…</title>")
+}
+
+// Reading a post from inside a tag archive keeps the archive's URL and carries
+// the post in ?slug= (frontend/src/utils/viewContext.js) — so that URL, the one
+// a reader copies while reading, is about the post and not about the archive.
+func TestPrerenderPostOpenedInsideATagArchive(t *testing.T) {
+	env, get := seoFixture(t)
+	ctx := context.Background()
+
+	if _, err := env.svcs.Tag.CreateTag(ctx, services.CreateTagParams{
+		Name: "Iceland", Slug: "iceland", Description: "Two weeks around the ring road.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.repo.CreatePost(ctx, models.CreatePostParams{
+		Title: "The Ring Road", Slug: "the-ring-road", AuthorID: 1, Status: "published", Content: "x",
+		MetaDescription: sql.NullString{String: "Nine days, one road.", Valid: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.repo.CreatePost(ctx, models.CreatePostParams{
+		Title: "Unfinished Secret", Slug: "unfinished", AuthorID: 1, Status: "draft", Content: "x",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := get("/tags/iceland?path=europe&slug=the-ring-road").Body.String()
+	mustContain(t, body,
+		// TagPage.js titles this view "<post> — <tag>", so the tab does not
+		// rename itself on hydration.
+		"<title>The Ring Road — Iceland</title>",
+		`og:title" content="The Ring Road"`,
+		`og:type" content="article"`,
+		`name="description" content="Nine days, one road."`,
+		// The post's own URL is where this view canonicalises, which is also
+		// where TagPage.js points the canonical once it hydrates.
+		`<link rel="canonical" href="http://example.com/posts/the-ring-road">`,
+	)
+	mustNotContain(t, body, "Two weeks around the ring road.", "— Posts")
+
+	// The archive's page number came through the URL with it, and is not part
+	// of the post's identity either.
+	mustContain(t, get("/tags/iceland?page=2&slug=the-ring-road").Body.String(),
+		`<link rel="canonical" href="http://example.com/posts/the-ring-road">`)
+
+	// A ?slug= that is not a post the public may read falls back to describing
+	// the archive, and names nothing of the post.
+	fallback := get("/tags/iceland?slug=unfinished").Body.String()
+	mustContain(t, fallback,
+		`og:title" content="Iceland — Posts"`,
+		`<link rel="canonical" href="http://example.com/tags/iceland">`,
+	)
+	mustNotContain(t, fallback, "Unfinished Secret")
+}
+
+// Absolute URLs are built from X-Forwarded-Proto because a TLS-terminating
+// proxy is the normal deployment — but the header is a client-supplied string
+// that lands in an href, and a chain of proxies appends to it rather than
+// replacing it.
+func TestPrerenderForwardedProtoIsReadAsAnEnum(t *testing.T) {
+	env, _ := seoFixture(t)
+
+	for _, tc := range []struct{ name, header, want string }{
+		{"terminating proxy", "https", "https://example.com/"},
+		// Two proxies deep: the first entry is the scheme the client used.
+		{"proxy chain", "https, http", "https://example.com/"},
+		{"junk falls back to the connection", `" onload="alert(1)`, "http://example.com/"},
+		{"unknown scheme falls back", "javascript", "http://example.com/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := env.getWith("/", map[string]string{"X-Forwarded-Proto": tc.header}).Body.String()
+			mustContain(t, body, `<link rel="canonical" href="`+tc.want+`">`)
+			mustNotContain(t, body, "onload", "javascript:", "https, http")
+		})
+	}
 }

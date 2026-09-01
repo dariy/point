@@ -10,15 +10,18 @@ package main
 // requested URL is about and splices the answer into the shell it was going to
 // serve anyway.
 //
-// Three route families are covered: the homepage, a tag archive and a post.
-// Everything else — the admin section, /search, a 404 — gets nothing and keeps
-// the shell's placeholder head, because guessing is worse than staying quiet.
+// Three route families are covered: the homepage, a tag archive and a post —
+// the last of which is also reachable *as* a tag archive URL, since a post
+// opened from inside one is served at /tags/<tag>?slug=<post>. Everything else
+// — the admin section, /search, a 404 — gets nothing and keeps the shell's
+// placeholder head, because guessing is worse than staying quiet.
 //
 // Two rules hold across all of them:
 //
 //   - Nothing is described that an anonymous reader could not already read. A
-//     draft, a scheduled post and a tag the public is not shown all resolve to
-//     the zero value, i.e. to the generic shell.
+//     draft, a scheduled post, a post withheld by a hides_posts tag and a tag
+//     the public is not shown all resolve to the zero value, i.e. to the
+//     generic shell.
 //   - The <title> is composed exactly the way setPageTitle() composes it on the
 //     client, so hydration is not a visible title change.
 
@@ -190,6 +193,21 @@ func tagMeta(c echo.Context, svcs *AppServices, settings map[string]string, slug
 		return seoMeta{}
 	}
 
+	// A post opened from inside the archive is served at the archive's URL:
+	// ViewContext serialises that view as /tags/<tag>?slug=<post>
+	// (frontend/src/utils/viewContext.js), and it is what a reader copies out of
+	// the address bar while reading. The document is about the post then, so it
+	// is described as one — and canonicalises to the post's own URL, which is
+	// where TagPage.js points the canonical after it hydrates.
+	if openPost := c.QueryParam("slug"); openPost != "" {
+		if pm := postMeta(c, svcs, settings, openPost); pm != (seoMeta{}) {
+			// TagPage.js titles this view "<post> — <tag>", not "<post> —
+			// <site>": the tab keeps naming the archive being read through.
+			pm.Title = titleWithSite(pm.CardTitle, tag.Name)
+			return pm
+		}
+	}
+
 	site := pageview.SettingOr(settings, "blog_title", "")
 	// Mirrors TagPage.js's setPageTitle(`${name} — Posts`), so the tab does not
 	// rename itself the moment the bundle boots.
@@ -211,10 +229,10 @@ func tagMeta(c echo.Context, svcs *AppServices, settings map[string]string, slug
 		// breadcrumb branches is three URLs for one archive, and ?path= is a
 		// navigation aid, not a different page. Same for ?per_page=.
 		CanonicalURL: canonicalURL(c, "/tags/"+tag.Slug),
-		// The site image, not a post's: picking a photo out of the archive
-		// would mean re-deriving the per-post visibility rules (a post hidden
-		// through a hides_posts tag is still filed under this one) in a path
-		// that must not get that wrong.
+		// The site image, not a post's: an archive has no one photograph, and
+		// picking one would mean running the per-post visibility gate
+		// (postHiddenByTag — a post withheld by a hides_posts tag is still
+		// filed under this one) over candidates until one passes.
 		ImageURL: siteCardImage(c, settings),
 	}
 }
@@ -229,6 +247,9 @@ func postMeta(c echo.Context, svcs *AppServices, settings map[string]string, slu
 	if err != nil || !strings.EqualFold(post.Status, "published") {
 		return seoMeta{}
 	}
+	if postHiddenByTag(c, svcs, post.ID) {
+		return seoMeta{}
+	}
 
 	desc := post.MetaDescription.String
 	if !post.MetaDescription.Valid || desc == "" {
@@ -237,18 +258,49 @@ func postMeta(c echo.Context, svcs *AppServices, settings map[string]string, slu
 	site := pageview.SettingOr(settings, "blog_title", "")
 
 	m := seoMeta{
-		Title:        titleWithSite(post.Title, site),
-		CardTitle:    post.Title,
-		SiteName:     site,
-		Description:  desc,
-		OGType:       "article",
-		CanonicalURL: canonicalURL(c, "/posts/"+post.Slug),
+		Title:       titleWithSite(post.Title, site),
+		CardTitle:   post.Title,
+		SiteName:    site,
+		Description: desc,
+		OGType:      "article",
+		// The post's own URL, page number and all else dropped: a post is one
+		// document however the reader got to it, and ?page= belongs to the feed
+		// they came through. PostPage.js sets the same canonical after it
+		// hydrates.
+		CanonicalURL: requestOrigin(c) + "/posts/" + post.Slug,
 	}
 	if img := postCardImage(c, svcs, settings, post); img != "" {
 		m.ImageURL = img
 		m.LargeCard = true
 	}
 	return m
+}
+
+// postHiddenByTag reports whether a published post is one the public may not
+// read after all: a post filed under a tag carrying hides_posts (or under a
+// descendant of one) is 404'd to an anonymous reader by the post API itself
+// (GetPostBySlug in internal/api/posts.go), so describing it here would put a
+// title, an excerpt and a private photograph in front of a crawler that cannot
+// fetch the post behind them.
+//
+// A graph that fails to load counts as hidden, the same way tagMeta treats an
+// unreadable snapshot: staying quiet costs a card, guessing costs the rule.
+func postHiddenByTag(c echo.Context, svcs *AppServices, postID int64) bool {
+	ctx := c.Request().Context()
+	snap, err := svcs.Tag.GetTagSnapshot(ctx)
+	if err != nil || snap == nil {
+		return true
+	}
+	tags, err := svcs.Post.GetTagsForPost(ctx, postID)
+	if err != nil {
+		return true
+	}
+	for _, t := range tags {
+		if snap.EffectiveHidesPosts[t.ID] {
+			return true
+		}
+	}
+	return false
 }
 
 // postCardImage picks the post's first media that can actually render a card. A
@@ -324,10 +376,11 @@ func titleWithSite(part, site string) string {
 	return part + " — " + site
 }
 
-// canonicalURL is the absolute URL a page asks to be indexed as: the clean path
-// plus the page number, and nothing else. Dropping the rest of the query string
-// is the point — ?path=, ?per_page= and every campaign parameter address the
-// same archive, and each one left in would be a duplicate of it.
+// canonicalURL is the absolute URL a paginated page — the feed, a tag archive —
+// asks to be indexed as: the clean path plus the page number, and nothing else.
+// Dropping the rest of the query string is the point — ?path=, ?per_page= and
+// every campaign parameter address the same archive, and each one left in would
+// be a duplicate of it.
 //
 // Page 2 canonicalises to itself, not to page 1: a self-referencing canonical
 // keeps the deeper pages crawlable instead of asking for them to be collapsed
@@ -350,8 +403,19 @@ func canonicalURL(c echo.Context, path string) string {
 // canonical and og:url.
 func requestOrigin(c echo.Context) string {
 	scheme := c.Scheme()
+	// Read as an enum, not as a string. A chain of proxies appends to this
+	// header rather than replacing it ("https, http"), and nothing stops a
+	// client from sending one directly — so the only two values a browser could
+	// have arrived under are recognised, and every other one leaves the scheme
+	// echo already derived from the connection alone.
 	if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
-		scheme = fwd
+		first, _, _ := strings.Cut(fwd, ",")
+		switch strings.ToLower(strings.TrimSpace(first)) {
+		case "https":
+			scheme = "https"
+		case "http":
+			scheme = "http"
+		}
 	}
 	return scheme + "://" + c.Request().Host
 }
