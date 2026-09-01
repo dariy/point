@@ -2,6 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 import { NavMenu } from '../src/plugins/nav-menu/NavMenu.js';
+import { store } from '../src/store.js';
 
 // The More ▾ panel renders admin-authored menu items into the PUBLIC header.
 // It used to be built with a bare template literal wrapped in raw(), which put
@@ -81,5 +82,57 @@ describe('NavMenu More panel escaping', () => {
 
     assert.ok(link.classList.contains('has-children'));
     assert.ok(link.querySelector('.nav-more-item-caret'));
+  });
+});
+
+// The nav reads four settings out of a key that holds every public setting and
+// is rewritten by every page fetch. Subscribing to the whole key meant any
+// save — a blog title, a posts-per-page — rebuilt the menu and closed whatever
+// dropdown was open in it.
+describe('NavMenu settings subscription', () => {
+  let dom;
+  let menu;
+  let renders;
+
+  beforeEach(() => {
+    dom = setupDOM();
+    store.set('settings', { blog_title: 'Point', nav_menu_mode: 'tags', nav_inline_max: '4' });
+    renders = 0;
+    menu = new NavMenu({
+      navItemsEl: dom.document.createElement('div'),
+      burgerTagsEl: dom.document.createElement('div'),
+      burgerSitemapEl: dom.document.createElement('div'),
+      ctx: {},
+    });
+    menu.render = () => { renders++; };
+    menu.mount();
+    renders = 0;  // mount() renders once; count only what the store causes.
+  });
+
+  afterEach(() => {
+    menu.unmount();
+    dom.cleanup();
+  });
+
+  test('a settings write the menu does not read costs no render', () => {
+    store.merge('settings', { blog_title: 'Somewhere else' });
+    assert.strictEqual(renders, 0);
+  });
+
+  test('a re-fetch of identical settings costs no render', () => {
+    store.merge('settings', { nav_menu_mode: 'tags', nav_inline_max: '4' });
+    assert.strictEqual(renders, 0);
+  });
+
+  test('a settings write the menu does read renders once', () => {
+    store.merge('settings', { nav_inline_max: '2' });
+    assert.strictEqual(renders, 1);
+  });
+
+  test('unmount stops the subscription', () => {
+    menu.unmount();
+    store.merge('settings', { nav_more_title: 'Plus' });
+    assert.strictEqual(renders, 0);
+    menu.unmount = () => {};  // afterEach must not unmount twice.
   });
 });

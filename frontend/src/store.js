@@ -17,6 +17,19 @@
  *   const unsub = store.subscribe('user', (value) => { ... });
  *   // Later:
  *   unsub(); // stop listening
+ *
+ *   // Subscribe to one slice, so unrelated writes to the key are free
+ *   store.subscribeSelector('settings', s => s.blog_title, (title) => { ... });
+ *
+ *   // Patch an object key, keeping its identity when nothing actually changed
+ *   store.merge('settings', { blog_title: 'Point' });
+ *
+ * Two guards keep a write from costing a repaint it does not owe. set() does
+ * not notify when the value is the one already there (Object.is), and
+ * subscribeSelector() does not notify when the selected slice is unchanged.
+ * Both matter because the usual subscriber calls setState(), which tears down
+ * and rebuilds the component's whole subtree — the most expensive possible
+ * response to "nothing happened".
  */
 
 class Store {
@@ -38,10 +51,19 @@ class Store {
 
   /**
    * Write a value and notify subscribers.
+   *
+   * A write of the value already in place is dropped: no assignment, no
+   * dispatch. The comparison is Object.is, so it catches primitives and
+   * preserved references but says nothing about two objects with equal
+   * contents. A payload rebuilt on every fetch — settings parsed from JSON,
+   * say — is a fresh reference each time and will never be caught here; that
+   * is what merge() is for.
+   *
    * @param {string} key
    * @param {unknown} value
    */
   set(key, value) {
+    if (Object.is(this._state[key], value) && key in this._state) return;
     this._state[key] = value;
     const listeners = this._listeners[key];
     if (!listeners) return;
@@ -71,6 +93,69 @@ class Store {
     this._listeners[key].add(callback);
     return () => this._listeners[key].delete(callback);
   }
+
+  /**
+   * Subscribe to one slice of a key.
+   *
+   * The well-known keys below are coarse on purpose — 'settings' is every
+   * public setting in one object — and a subscriber of the whole key wakes up
+   * for every write to any part of it. This is the escape valve: a header
+   * watching the blog title stays asleep while an unrelated setting is saved.
+   *
+   * The selector runs on every write; keep it a plain read. Its result is
+   * compared with Object.is, so return a primitive or a stable reference —
+   * `s => ({ a: s.a })` builds a new object each time and never compares equal.
+   *
+   * @param {string} key
+   * @param {Function} select    Maps the key's value to the slice to watch
+   * @param {Function} callback  Called with (slice, value) when the slice changes
+   * @returns {Function}  Unsubscribe function
+   */
+  subscribeSelector(key, select, callback) {
+    let previous = select(this._state[key]);
+    return this.subscribe(key, (value) => {
+      const next = select(value);
+      if (Object.is(previous, next)) return;
+      previous = next;
+      callback(next, value);
+    });
+  }
+
+  /**
+   * Patch an object-valued key, keeping the current object when the patch
+   * changes nothing.
+   *
+   * `store.set(key, { ...store.get(key), ...patch })` — the shape every
+   * settings writer used before this existed — hands set() a fresh reference
+   * whatever the patch contains, so the Object.is guard there never fires and
+   * a re-fetch of unchanged settings repaints everything subscribed to them.
+   * merge() compares the merged result against what is there, one level deep,
+   * and returns without writing when they match.
+   *
+   * Shallow by design: values are compared with Object.is, so a nested object
+   * rebuilt by the caller counts as a change. The settings payload is flat
+   * primitives after normalizeSettings(), which is what makes this enough.
+   *
+   * @param {string} key
+   * @param {object} patch
+   */
+  merge(key, patch) {
+    const current = this._state[key];
+    const next = { ...current, ...patch };
+    if (current && typeof current === 'object' && shallowEqual(current, next)) return;
+    this.set(key, next);
+  }
+}
+
+/**
+ * Same keys, and every value Object.is-equal.
+ * @param {object} a
+ * @param {object} b
+ */
+function shallowEqual(a, b) {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((k) => Object.is(a[k], b[k]));
 }
 
 /**

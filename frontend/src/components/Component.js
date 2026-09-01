@@ -263,6 +263,19 @@ export class Component {
   }
 
   /**
+   * Subscribe to one slice of a store key for the lifetime of the current
+   * render, so writes to the rest of that key cost nothing here.
+   *
+   * @param {object} storeInstance
+   * @param {string} key
+   * @param {Function} select    Maps the key's value to the slice to watch
+   * @param {Function} callback  Called when the slice changes
+   */
+  subscribeStoreSelector(storeInstance, key, select, callback) {
+    this.registerCleanup(storeInstance.subscribeSelector(key, select, callback));
+  }
+
+  /**
    * Add an event listener released at the next render boundary.
    *
    * The whole point is that the safe form is the short one: no handler stored

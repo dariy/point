@@ -193,9 +193,8 @@ export default class SettingsPage extends Component {
       await updateSettings(updates);
       store.set("toast", { message: "Settings saved.", type: "success" });
       // Update global store with the new settings immediately so the UI reflects changes (like blog title).
-      const currentSettings = store.get("settings") || {};
       const { normalizeSettings } = await import('../../utils/helpers.js');
-      store.set("settings", { ...currentSettings, ...normalizeSettings(updates) });
+      store.merge("settings", normalizeSettings(updates));
       this.setState({ saving: false, settings: { ...this.state.settings, ...updates } });
     } catch (err) {
       console.error("[SettingsPage] save error:", err);

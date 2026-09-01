@@ -261,9 +261,8 @@ export class PluginSettingsPanel extends Component {
     try {
       await updateSettings(updates);
       // Reflect changes immediately in the global settings store.
-      const currentSettings = store.get("settings") || {};
       const { normalizeSettings } = await import("../../utils/helpers.js");
-      store.set("settings", { ...currentSettings, ...normalizeSettings(updates) });
+      store.merge("settings", normalizeSettings(updates));
       store.set("toast", { message: "Settings saved.", type: "success" });
       this._close();
     } catch (err) {

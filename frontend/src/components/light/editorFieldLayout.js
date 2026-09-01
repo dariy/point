@@ -52,8 +52,7 @@ function persistRaw(settingsKey, storageKey, raw, label) {
     updateSettings({ [settingsKey]: raw }).catch((err) => {
       console.error(`Failed to save ${label} to global set:`, err);
     });
-    const settings = store.get("settings") || {};
-    store.set("settings", { ...settings, [settingsKey]: raw });
+    store.merge("settings", { [settingsKey]: raw });
   });
 }
 

@@ -834,6 +834,11 @@ class Store {
   }
 
   set(key, value) {
+    // A write of the value already there is dropped. The usual subscriber
+    // answers by calling setState(), which rebuilds its whole subtree, so a
+    // notification for a write that changed nothing is the most expensive
+    // no-op in the frontend.
+    if (Object.is(this._state[key], value) && key in this._state) return;
     this._state[key] = value;
     const listeners = this._listeners[key];
     if (!listeners) return;
@@ -853,10 +858,44 @@ class Store {
     // Return unsubscribe function
     return () => this._listeners[key].delete(callback);
   }
+
+  // Fire only when the selected slice moves. The result is compared with
+  // Object.is, so a selector must return a primitive or a stable reference.
+  subscribeSelector(key, select, callback) {
+    let previous = select(this._state[key]);
+    return this.subscribe(key, (value) => {
+      const next = select(value);
+      if (Object.is(previous, next)) return;
+      previous = next;
+      callback(next, value);
+    });
+  }
+
+  // Patch an object key, keeping the current object — and skipping the
+  // dispatch — when the patch changes nothing one level deep.
+  merge(key, patch) {
+    const current = this._state[key];
+    const next = { ...current, ...patch };
+    if (current && typeof current === 'object' && shallowEqual(current, next)) return;
+    this.set(key, next);
+  }
 }
 
 export const store = new Store();
 ```
+
+`set()`'s guard is reference equality, which is exactly what a re-fetched
+payload does not have: settings come back parsed from JSON on every page load,
+a fresh object every time. That is what `merge()` is for — writers patch the
+key (`store.merge('settings', normalizeSettings(data.settings))`) instead of
+rebuilding it with a spread, so an unchanged payload keeps the object that is
+already there and nothing repaints.
+
+`subscribeSelector()` is the escape valve for the coarse keys: `settings` holds
+every public setting, so a subscriber of the key wakes for every write to any
+part of it. `NavMenu` watches the four settings it renders from and stays
+asleep for the rest. `Component.subscribeStoreSelector()` is the same thing
+released at the next render boundary, alongside `subscribeStore()`.
 
 **Store keys used across the app:**
 

@@ -8,6 +8,18 @@ import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 const DEFAULT_INLINE_MAX = 4;
 
 /**
+ * The settings this menu actually renders from, as one comparable string.
+ * A primitive, because subscribeSelector compares with Object.is.
+ * @param {object} [settings]
+ */
+const navSlice = (settings = {}) => [
+  settings?.nav_menu_mode,
+  settings?.nav_inline_max,
+  settings?.nav_more_title,
+  settings?.tags_visibility,
+].join('\u0000');
+
+/**
  * NavMenu — the header's nav zone plus the burger's menu section.
  *
  * Renders the menu (custom links or nav tags — one model, see /api/pages/nav)
@@ -41,7 +53,11 @@ export class NavMenu {
   }
   mount() {
     this._unsubscribeNav = store.subscribe('navTags', () => this.render());
-    this._unsubscribeSettings = store.subscribe('settings', () => this.render());
+    // 'settings' is every public setting in one object and is rewritten by
+    // every page fetch; this menu reads four of them. Watching the joined
+    // slice keeps an unrelated save — a changed blog title, a new posts count
+    // — from rebuilding the nav and closing whatever dropdown is open in it.
+    this._unsubscribeSettings = store.subscribeSelector('settings', navSlice, () => this.render());
 
     // Fold stage 30: inline links fold right-to-left into More ▾ before the
     // whole nav zone collapses into the burger (stage 40, PublicHeader).
