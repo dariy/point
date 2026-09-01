@@ -4,26 +4,26 @@
  * Props:
  *   title        {string}    Modal header title
  *   onClose      {Function}  Called when close button or backdrop is clicked
- *   footer       {string}    Optional HTML for footer buttons
+ *   footer       {RawHtml}   Optional footer buttons, built with html``
  *   maxWidth     {string}    Optional max-width (e.g. '500px')
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 
 export class Modal extends Component {
   render() {
     const { title = '', footer = '', maxWidth = '500px' } = this.props;
 
-    return `
+    return html`
       <div class="modal-overlay active" id="modal-backdrop">
-        <div class="modal" style="max-width: ${escapeHtml(maxWidth)}">
+        <div class="modal" style="max-width: ${maxWidth}">
           <header class="modal-header">
-            <h3>${escapeHtml(title)}</h3>
+            <h3>${title}</h3>
             <button class="modal-close" id="modal-close-btn" aria-label="Close">×</button>
           </header>
           <div class="modal-body" id="modal-body-mount"></div>
-          ${footer ? `<footer class="modal-footer">${footer}</footer>` : ''}
+          ${footer ? html`<footer class="modal-footer">${footer}</footer>` : ''}
         </div>
       </div>`;
   }

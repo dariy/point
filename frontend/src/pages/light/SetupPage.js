@@ -1,5 +1,5 @@
 import { Component } from '../../components/Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html, raw } from '../../utils/helpers.js';
 import { api } from '../../api/client.js';
 import { sha256 } from '../../api/auth.js';
 import { APP_LOGO_SVG } from '../../utils/icons.js';
@@ -19,22 +19,22 @@ export default class SetupPage extends Component {
   render() {
     const { loading, error, blog_title, author_name, email } = this.state;
 
-    return `
+    return html`
       <div class="setup-page-container">
         <div class="card">
           <div class="card-header">
-            ${APP_LOGO_SVG}
+            ${raw(APP_LOGO_SVG)}
             <h2>Welcome to Point</h2>
             <p class="text-muted text-small">Complete this one-time setup to create your blog.</p>
           </div>
           <div class="card-body">
-            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ''}
+            ${error ? html`<div class="error-message" role="alert">${error}</div>` : ''}
 
             <form id="setup-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="blog_title">Blog Title</label>
                 <input type="text" id="blog_title" name="blog_title" class="form-input"
-                       value="${escapeHtml(blog_title)}" required placeholder="My Photo Blog"
+                       value="${blog_title}" required placeholder="My Photo Blog"
                        autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
@@ -42,7 +42,7 @@ export default class SetupPage extends Component {
               <div class="form-group">
                 <label class="form-label" for="author_name">Your Name</label>
                 <input type="text" id="author_name" name="author_name" class="form-input"
-                       value="${escapeHtml(author_name)}" required placeholder="Jane Doe"
+                       value="${author_name}" required placeholder="Jane Doe"
                        autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
@@ -50,7 +50,7 @@ export default class SetupPage extends Component {
               <div class="form-group">
                 <label class="form-label" for="email">Email Address</label>
                 <input type="text" id="email" name="email" class="form-input"
-                       value="${escapeHtml(email)}" placeholder="you@example.com"
+                       value="${email}" placeholder="you@example.com"
                        autocomplete="off"
                        ${loading ? 'disabled' : ''}>
                 <span class="form-help">(used for password reset)</span>

@@ -1,5 +1,5 @@
-import { raw } from "../utils/helpers.js";
-import { html } from "../utils/helpers.js";
+import { html, isRawHtml } from '../utils/helpers.js';
+
 /**
  * Base Component class.
  *
@@ -27,12 +27,19 @@ import { html } from "../utils/helpers.js";
  *   cleanup that released the resource, so the second render gets neither.
  *
  * Security contract for subclasses:
- *   - escapeHtml() MUST wrap every user-supplied string inside render().
- *   - Dynamic text nodes should be set via element.textContent in afterRender(),
- *     not interpolated into the HTML string.
- *   - Only server-generated HTML (post body, already sanitized server-side)
- *     may be rendered as-is.
- *   - URL attributes must start with '/' or 'https://' only.
+ *   - render() builds its markup with the html`` tag from utils/helpers.js and
+ *     returns what that tag returns. Interpolations are escaped by the tag —
+ *     with safeUrl() in href/src position, escapeHtml() everywhere else — so a
+ *     subclass never applies either by hand and never forgets to.
+ *   - raw() opts a value out of that. It belongs around module-level constants
+ *     (the SVG blobs in utils/icons.js) and around HTML the server sanitized
+ *     before storing it (a post body). Nothing else.
+ *   - Dynamic text nodes can still be set via element.textContent in
+ *     afterRender(); that stays the simplest safe option for a lone string.
+ *   - A markup helper with nothing to render returns '' rather than html``.
+ *     html`` yields a String OBJECT, so an empty one is still truthy, and the
+ *     `frag ? html`<div>${frag}</div>` : ''` shape callers reach for would emit
+ *     the empty wrapper. render() itself may return html`` — nothing tests it.
  */
 
 export class Component {
@@ -58,9 +65,10 @@ export class Component {
   // ── Subclass interface ────────────────────────────────────────────────────
 
   /**
-   * Return an HTML string describing this component.
-   * Must be overridden. All user-provided values MUST be wrapped in escapeHtml().
-   * @returns {string}
+   * Return the markup describing this component, built with the html`` tag.
+   * Must be overridden.
+   * @returns {import('../utils/helpers.js').RawHtml|string} html`` output; a
+   *   plain string is still accepted while the migration to html`` runs.
    */
   render() {
     throw new Error(`${this.constructor.name}.render() not implemented`);
@@ -208,9 +216,18 @@ export class Component {
     this._unmountChildren();
     this._children = [];
     const markup = this.render();
-    // render() must escape all user-supplied values with escapeHtml().
-    // Server-generated HTML is sanitized server-side before storage.
-    this.container.innerHTML = html`${raw(markup)}`;
+    // The contract, enforced rather than documented: a plain string here would
+    // reach innerHTML with nothing having escaped it, which is the whole class
+    // of bug the html`` tag exists to remove. There is no escape hatch — build
+    // the markup with the tag, and use raw() for the pieces that need it.
+    if (!isRawHtml(markup)) {
+      throw new TypeError(
+        `${this.constructor.name}.render() must return html\`\` output, got ` +
+        `${markup === null ? 'null' : typeof markup}. Build it with the html tag ` +
+        'from utils/helpers.js.',
+      );
+    }
+    this.container.innerHTML = html`${markup}`;
     this.afterRender();
   }
   _unmountChildren() {

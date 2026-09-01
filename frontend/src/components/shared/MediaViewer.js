@@ -1,5 +1,4 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 /**
  * MediaViewer — Unified carousel component for immersive posts and lightbox.
  * (point-x52z.19)
@@ -72,28 +71,28 @@ export class MediaViewer extends Component {
       navPrev,
       navNext
     } = this.props;
-    if (!items.length) return '';
-    const slides = items.map((item, i) => `
+    if (!items.length) return html``;
+    const slides = items.map((item, i) => html`
       <div class="carousel-slide${i === this._index ? ' active' : ''}" data-index="${i}">
         ${this._renderItem(item)}
       </div>
-    `).join('');
-    const dots = items.map((_, i) => `
+    `);
+    const dots = items.map((_, i) => html`
       <button class="carousel-dot${i === this._index ? ' active' : ''}"
               data-index="${i}" aria-label="Media ${i + 1} of ${items.length}"></button>
-    `).join('');
-    const closeBtn = showClose ? `<button class="lightbox-close" aria-label="Close">${X_SVG}</button>` : '';
+    `);
+    const closeBtn = showClose ? html`<button class="lightbox-close" aria-label="Close">${raw(X_SVG)}</button>` : '';
 
     // If single item, show post nav arrows if provided
     const showPostNav = items.length === 1 && (navPrev || navNext);
     const postNav = showPostNav ? this._renderPostNav(navPrev, navNext) : '';
-    return `
+    return html`
       <div class="media-viewer-wrapper">
         <div class="immersive-visuals" id="media-viewer-visuals">
           ${slides}
         </div>
         ${closeBtn}
-        ${items.length > 1 ? `
+        ${items.length > 1 ? html`
           <div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous"><div class="immersive-nav-gradient"></div></div>
           <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
           <div class="carousel-indicators">${dots}</div>
@@ -104,7 +103,8 @@ export class MediaViewer extends Component {
 
   /**
    * Hook for subclasses to inject extra markup inside the viewer wrapper
-   * (e.g. the immersive sheet overlay). Returns '' by default.
+   * (e.g. the immersive sheet overlay). Returns nothing by default; an override
+   * returns the RawHtml html`` yields.
    */
   _renderExtras() {
     return '';
@@ -134,9 +134,9 @@ export class MediaViewer extends Component {
       back,
       fwd
     } = immersiveNavTargets(store.get('settings'), prev, next);
-    const prevHtml = back ? `<div class="immersive-nav-panel immersive-nav-prev" data-nav="back"><div class="immersive-nav-gradient"></div></div>` : '';
-    const nextHtml = fwd ? `<div class="immersive-nav-panel immersive-nav-next" data-nav="fwd"><div class="immersive-nav-gradient"></div></div>` : '';
-    return prevHtml + nextHtml;
+    const prevHtml = back ? html`<div class="immersive-nav-panel immersive-nav-prev" data-nav="back"><div class="immersive-nav-gradient"></div></div>` : '';
+    const nextHtml = fwd ? html`<div class="immersive-nav-panel immersive-nav-next" data-nav="fwd"><div class="immersive-nav-gradient"></div></div>` : '';
+    return html`${prevHtml}${nextHtml}`;
   }
   afterRender() {
     this._initInteractivity();

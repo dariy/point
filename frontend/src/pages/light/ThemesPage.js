@@ -8,7 +8,7 @@ import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { STAR_SVG, MOON_SVG } from "../../utils/icons.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
@@ -42,15 +42,15 @@ export default class ThemesPage extends Component {
   _renderContent() {
     const { loading, error, themes, activeTheme, saving, savingCSS } = this.state;
 
-    if (loading) return `<div class="loading-spinner" aria-label="Loading themes…"></div>`;
-    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    if (loading) return html`<div class="loading-spinner" aria-label="Loading themes…"></div>`;
+    if (error) return html`<p class="error-state" role="alert">${error}</p>`;
 
-    return `
+    return html`
         <div class="themes-grid">
-          ${themes.map((theme) => this._renderThemeCard(theme, activeTheme, saving)).join("")}
+          ${themes.map((theme) => this._renderThemeCard(theme, activeTheme, saving))}
         </div>
         
-        ${pluginHost.isEnabled("custom-css") ? `
+        ${pluginHost.isEnabled("custom-css") ? html`
         <section class="custom-css-section card">
           <div class="card-header">
             <h2>Custom CSS</h2>
@@ -85,7 +85,7 @@ export default class ThemesPage extends Component {
       `--swatch-accent:${this._color(theme.preview_color, "#71717a")}`,
     ].join(";");
 
-    return `
+    return html`
       <article class="theme-card ${isActive ? "active" : ""}">
         <div class="theme-swatch" style="${swatch}" aria-hidden="true">
           <span class="theme-swatch-bar"></span>
@@ -97,15 +97,15 @@ export default class ThemesPage extends Component {
         </div>
         <div class="theme-card-info">
           <h3 class="theme-name">
-            ${escapeHtml(theme.name)}
-            ${theme.has_dark_mode ? `<span class="theme-dark-badge" title="Ships a dark mode">${MOON_SVG}</span>` : ""}
+            ${theme.name}
+            ${theme.has_dark_mode ? html`<span class="theme-dark-badge" title="Ships a dark mode">${raw(MOON_SVG)}</span>` : ""}
           </h3>
-          ${theme.description ? `<p class="theme-description">${escapeHtml(theme.description)}</p>` : ""}
+          ${theme.description ? html`<p class="theme-description">${theme.description}</p>` : ""}
         </div>
         <div class="theme-card-action">
           <button class="btn btn-sm ${isActive ? "btn-secondary" : "btn-primary"} set-active-btn"
-                  data-name="${escapeHtml(theme.name)}" ${isActive || saving ? "disabled" : ""}>
-            ${isActive ? STAR_SVG + " Active" : "Set Active"}
+                  data-name="${theme.name}" ${isActive || saving ? "disabled" : ""}>
+            ${isActive ? html`${raw(STAR_SVG)} Active` : "Set Active"}
           </button>
         </div>
       </article>`;

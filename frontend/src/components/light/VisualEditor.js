@@ -9,7 +9,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { updateMedia, reextractMediaEXIF } from "../../api/media.js";
 import { store } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
@@ -26,7 +26,7 @@ export class VisualEditor extends Component {
     const { nodes = [] } = this.props;
 
     const insertZone = (index) =>
-      `<div class="ve-insert-zone" data-insert-at="${index}">
+      html`<div class="ve-insert-zone" data-insert-at="${index}">
          <div class="ve-insert-actions">
            <button class="ve-insert-btn ve-insert-text" type="button" title="Insert text node">+ Text</button>
            <button class="ve-insert-btn ve-insert-media" type="button" title="Insert media node">+ Media</button>
@@ -39,13 +39,13 @@ export class VisualEditor extends Component {
           const filename = node.path.split("/").pop();
           const mediaByPath = this.props.mediaByPath || {};
           const media = mediaByPath[node.path];
-          const mediaId = media ? escapeHtml(String(media.id)) : "";
+          const mediaId = media ? String(media.id) : "";
 
           const exifBtn = mediaId
-            ? `<button class="ve-exif-toggle btn btn-sm" data-media-id="${mediaId}" type="button" title="Edit EXIF">\u2139</button>`
+            ? html`<button class="ve-exif-toggle btn btn-sm" data-media-id="${mediaId}" type="button" title="Edit EXIF">\u2139</button>`
             : "";
           const exifPanel = mediaId
-            ? `<div class="ve-exif-panel" data-media-id="${mediaId}" hidden>
+            ? html`<div class="ve-exif-panel" data-media-id="${mediaId}" hidden>
                ${this._renderVeExifRows(media)}
                <div class="exif-actions">
                  <button class="btn btn-sm ve-exif-add-btn" type="button">+ Add field</button>
@@ -55,7 +55,7 @@ export class VisualEditor extends Component {
              </div>`
             : "";
 
-          return `
+          return html`
           ${insertZone(i)}
           <div class="ve-card" data-index="${i}">
             <div class="ve-handle" title="Drag to reorder">
@@ -66,11 +66,11 @@ export class VisualEditor extends Component {
               width: media?.width,
               height: media?.height,
             })}
-                 alt="${escapeHtml(filename)}"
-                 data-full="${escapeHtml(node.path)}"
+                 alt="${filename}"
+                 data-full="${node.path}"
                  loading="lazy" decoding="async" draggable="false">
             <div class="ve-card-row">
-              <span class="ve-path">${escapeHtml(node.path)}</span>
+              <span class="ve-path">${node.path}</span>
               ${exifBtn}
               <button class="ve-remove" data-index="${i}" type="button"
                       aria-label="Remove image" title="Remove">&times;</button>
@@ -78,7 +78,7 @@ export class VisualEditor extends Component {
             ${exifPanel}
           </div>`;
         } else {
-          return `
+          return html`
           ${insertZone(i)}
           <div class="ve-card ve-card--text" data-index="${i}">
             <div class="ve-handle" title="Drag to reorder">
@@ -87,22 +87,21 @@ export class VisualEditor extends Component {
             <span class="ve-text-icon" aria-hidden="true">¶</span>
             <div class="ve-text-body">
               <input class="ve-block-class" type="text" placeholder="Block class (optional)"
-                     value="${escapeHtml(node.blockClass || "")}" aria-label="Block class">
-              <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${escapeHtml(node.text || "")}</textarea>
+                     value="${node.blockClass || ""}" aria-label="Block class">
+              <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${node.text || ""}</textarea>
             </div>
             <button class="ve-remove" data-index="${i}" type="button"
                     aria-label="Remove text block" title="Remove">&times;</button>
           </div>`;
         }
-      })
-      .join("");
+      });
 
     const empty =
       nodes.length === 0
-        ? `<p class="ve-empty">No content yet. Use the buttons to add text or media.</p>`
+        ? html`<p class="ve-empty">No content yet. Use the buttons to add text or media.</p>`
         : "";
 
-    return `
+    return html`
       <div class="ve-root">
         <div class="ve-list" id="ve-list">
           ${cards}
@@ -128,14 +127,13 @@ export class VisualEditor extends Component {
     const rows = Object.entries(metadata)
       .map(
         ([k, v]) =>
-          `<tr>
-        <td><input class="exif-key" value="${escapeHtml(String(k))}" placeholder="Field name" aria-label="EXIF field name"></td>
-        <td><input class="exif-val" value="${escapeHtml(String(v))}" placeholder="Value" aria-label="EXIF value"></td>
+          html`<tr>
+        <td><input class="exif-key" value="${String(k)}" placeholder="Field name" aria-label="EXIF field name"></td>
+        <td><input class="exif-val" value="${String(v)}" placeholder="Value" aria-label="EXIF value"></td>
         <td><button class="exif-delete-btn" type="button" title="Remove">\u00d7</button></td>
       </tr>`,
-      )
-      .join("");
-    return `<table class="exif-table"><thead><tr><th>Field</th><th>Value</th><th></th></tr></thead><tbody class="exif-rows">${rows}</tbody></table>`;
+      );
+    return html`<table class="exif-table"><thead><tr><th>Field</th><th>Value</th><th></th></tr></thead><tbody class="exif-rows">${rows}</tbody></table>`;
   }
 
   _bindVeExif() {

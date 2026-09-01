@@ -1,5 +1,3 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * PostPage — single post view.
  *
@@ -12,7 +10,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
+import { html, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -55,7 +53,7 @@ export default class PostPage extends Component {
       error
     } = this.state;
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main" aria-busy="true">
@@ -65,16 +63,16 @@ export default class PostPage extends Component {
         </div>`;
     }
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <p class="error-message" role="alert">${error}</p>
           </main>
           <div id="footer-mount"></div>
         </div>`;
     }
-    return `
+    return html`
       <div class="site-wrapper">
         <div id="header-mount"></div>
         <main class="site-main">

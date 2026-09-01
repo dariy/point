@@ -1,6 +1,6 @@
 import { Component } from '../Component.js';
 import { getTag } from '../../api/tags.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { html, navigate } from '../../utils/helpers.js';
 
 export class TagFamilyPopover extends Component {
   constructor(container, props = {}) {
@@ -14,39 +14,39 @@ export class TagFamilyPopover extends Component {
 
   render() {
     const { loading, tag, error } = this.state;
-    if (loading) return '<div class="tfp-popover loading">Loading family…</div>';
-    if (error) return `<div class="tfp-popover error">${escapeHtml(error)}</div>`;
-    if (!tag) return '';
+    if (loading) return html`<div class="tfp-popover loading">Loading family…</div>`;
+    if (error) return html`<div class="tfp-popover error">${error}</div>`;
+    if (!tag) return html``;
 
-    const renderTagLink = (t) => `<button class="tfp-tag-link" data-id="${t.id}">${escapeHtml(t.name)}</button>`;
+    const renderTagLink = (t) => html`<button class="tfp-tag-link" data-id="${t.id}">${t.name}</button>`;
 
-    return `
+    return html`
       <div class="tfp-popover">
         <div class="tfp-header">
-          <div class="tfp-title">${escapeHtml(tag.name)}</div>
-          <div class="tfp-path">${escapeHtml(tag.name_path)}</div>
+          <div class="tfp-title">${tag.name}</div>
+          <div class="tfp-path">${tag.name_path}</div>
         </div>
         <div class="tfp-body">
-          ${tag.parents?.length ? `
+          ${tag.parents?.length ? html`
             <div class="tfp-section">
               <label>Parents</label>
-              <div class="tfp-tags">${tag.parents.map(renderTagLink).join('')}</div>
+              <div class="tfp-tags">${tag.parents.map(renderTagLink)}</div>
             </div>` : ''}
           
-          ${tag.siblings?.length ? `
+          ${tag.siblings?.length ? html`
             <div class="tfp-section">
               <label>Siblings</label>
-              <div class="tfp-tags">${tag.siblings.map(renderTagLink).join('')}</div>
+              <div class="tfp-tags">${tag.siblings.map(renderTagLink)}</div>
             </div>` : ''}
 
-          ${tag.children?.length ? `
+          ${tag.children?.length ? html`
             <div class="tfp-section">
               <label>Children</label>
-              <div class="tfp-tags">${tag.children.map(renderTagLink).join('')}</div>
+              <div class="tfp-tags">${tag.children.map(renderTagLink)}</div>
             </div>` : ''}
         </div>
         <div class="tfp-footer">
-          <button class="btn btn-primary btn-sm tfp-view-posts-btn" data-slug="${escapeHtml(tag.slug)}">View Posts</button>
+          <button class="btn btn-primary btn-sm tfp-view-posts-btn" data-slug="${tag.slug}">View Posts</button>
         </div>
       </div>
     `;

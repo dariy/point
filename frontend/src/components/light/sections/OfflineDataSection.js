@@ -11,7 +11,7 @@ import { preCacheImages, clearImageCache } from "../../../utils/imageCache.js";
 import { thumbUrl } from "../../../utils/mediaUrl.js";
 import { mediaTypeFromPath } from "../../../utils/postMedia.js";
 import { store } from "../../../store.js";
-import { escapeHtml } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../../utils/formatters.js";
 
 export class OfflineDataSection extends Component {
@@ -32,12 +32,12 @@ export class OfflineDataSection extends Component {
 
     let body;
     if (loading) {
-      body = '<div class="loading-spinner btn-sm"></div>';
+      body = html`<div class="loading-spinner btn-sm"></div>`;
     } else if (!stats) {
-      body = '<p class="error-state">Could not load offline stats.</p>';
+      body = html`<p class="error-state">Could not load offline stats.</p>`;
     } else {
       const syncText = lastSync ? `Last updated: ${formatDateShort(lastSync)}` : "Never updated";
-      body = `
+      body = html`
         <div class="offline-stats">
           <div class="stat-row"><span>Posts:</span> <strong>${stats.post_count}</strong></div>
           <div class="stat-row"><span>Media:</span> <strong>${stats.image_count}</strong> (${formatFileSize((stats.original_bytes || 0) + (stats.thumbnail_bytes || 0))})</div>
@@ -50,16 +50,16 @@ export class OfflineDataSection extends Component {
         </div>
         ${
           downloading
-            ? `
+            ? html`
           <div class="progress-container" style="margin-top: var(--spacing-md)">
             <div class="progress-bar"><div class="progress-fill" style="width: ${progress}%"></div></div>
-            <p class="progress-text">${escapeHtml(statusText)} (${Math.round(progress)}%)</p>
+            <p class="progress-text">${statusText} (${Math.round(progress)}%)</p>
           </div>`
             : ""
         }`;
     }
 
-    return `
+    return html`
       <section class="card">
         <div class="card-header"><h2>Offline Data (Local)</h2></div>
         <div class="card-body">${body}</div>

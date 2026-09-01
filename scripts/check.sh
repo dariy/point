@@ -63,6 +63,11 @@ run_step "JS lint" bash -c "
         demo/mock demo/*.mjs demo/scripts/*.mjs
 "
 
+# ── html`` conventions ────────────────────────────────────────────────────────
+# What the AST rules in eslint.config.js cannot see: hand-applied escapeHtml in
+# an interpolation, and growth in the set of raw() exceptions.
+run_step "html escaping" "$SCRIPT_DIR/check-html-escaping.sh"
+
 if [ -n "$LINT_ONLY" ]; then
     if [ ${#FAIL[@]} -gt 0 ]; then
         echo ""

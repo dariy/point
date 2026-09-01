@@ -8,6 +8,7 @@ import { Component } from "../../Component.js";
 import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.js";
 import { store } from "../../../store.js";
 import { showConfirm } from "../../../utils/dialogs.js";
+import { html } from "../../../utils/helpers.js";
 
 export class PasskeysSection extends Component {
   constructor(container, props = {}) {
@@ -25,22 +26,22 @@ export class PasskeysSection extends Component {
 
     // Rendered flush inside the plugin drawer, which supplies the "Passkeys" title.
     if (!supported) {
-      return '<p class="text-muted">Passkeys are not supported by this browser.</p>';
+      return html`<p class="text-muted">Passkeys are not supported by this browser.</p>`;
     }
     if (loading) {
-      return '<div class="loading-spinner btn-sm"></div>';
+      return html`<div class="loading-spinner btn-sm"></div>`;
     }
     if (!status?.configured) {
-      return '<p class="text-muted">Passkeys are not configured on this server.</p>';
+      return html`<p class="text-muted">Passkeys are not configured on this server.</p>`;
     }
     if (status?.has_passkey) {
-      return `
+      return html`
         <div class="passkey-status success">
           <p>Passkey is registered.</p>
           <button id="delete-passkey-btn" class="btn btn-sm btn-danger" ${working ? "disabled" : ""}>Remove Passkey</button>
         </div>`;
     }
-    return `
+    return html`
       <p>Register a passkey for faster, more secure login.</p>
       <button id="register-passkey-btn" class="btn btn-primary" ${working ? "disabled" : ""}>Register Passkey</button>`;
   }

@@ -14,7 +14,7 @@ import {
   getInstagramImportStatus,
 } from "../../../api/instagram.js";
 import { store } from "../../../store.js";
-import { escapeHtml } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
 
 export class InstagramImportSection extends Component {
@@ -33,19 +33,19 @@ export class InstagramImportSection extends Component {
 
     let body;
     if (loading) {
-      body = '<div class="loading-spinner btn-sm"></div>';
+      body = html`<div class="loading-spinner btn-sm"></div>`;
     } else if (!connected) {
-      body = `<p class="text-muted">Connect Instagram above to import your posts.</p>`;
+      body = html`<p class="text-muted">Connect Instagram above to import your posts.</p>`;
     } else {
       const running = importStatus?.running || importing;
       const btnLabel = running ? "Importing…" : "Import / Sync Now";
-      body = `
+      body = html`
         <p>Import all Instagram posts into Point as drafts. Already-imported posts are skipped (idempotent).</p>
         <button id="ig-import-btn" class="btn btn-secondary" ${running ? "disabled" : ""}>${btnLabel}</button>
         ${this._statusHtml(importStatus, running)}`;
     }
 
-    return `
+    return html`
       <section class="card">
         <div class="card-header"><h2>Instagram Import</h2></div>
         <div class="card-body">${body}</div>
@@ -57,7 +57,7 @@ export class InstagramImportSection extends Component {
     if (running && status.progress) {
       const p = status.progress;
       const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-      return `
+      return html`
         <div class="progress-container" style="margin-top:var(--spacing-sm)">
           <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
           <p class="progress-text">${p.done}/${p.total} — imported: ${p.imported}, skipped: ${p.skipped}, errors: ${p.errors}</p>
@@ -71,17 +71,20 @@ export class InstagramImportSection extends Component {
     if (status.errors !== undefined) parts.push(`Errors: ${status.errors}`);
     if (status.finished_at) parts.push(`Last run: ${formatDateShort(status.finished_at)}`);
 
-    let _html = parts.length ? `<p class="system-msg">${escapeHtml(parts.join(" · "))}</p>` : "";
-    if (status.error) _html += `<p class="system-msg error">${escapeHtml(status.error)}</p>`;
+    // Collected rather than concatenated: `+=` on html`` output would drop it
+    // back to a plain string, and the caller interpolates the result as markup.
+    const pieces = [];
+    if (parts.length) pieces.push(html`<p class="system-msg">${parts.join(" · ")}</p>`);
+    if (status.error) pieces.push(html`<p class="system-msg error">${status.error}</p>`);
     if (Array.isArray(status.messages) && status.messages.length) {
-      const items = status.messages.map((m) => `<li>${escapeHtml(m)}</li>`).join("");
-      _html += `
+      const items = status.messages.map((m) => html`<li>${m}</li>`);
+      pieces.push(html`
         <details class="ig-import-details">
           <summary>${status.messages.length} message${status.messages.length === 1 ? "" : "s"}</summary>
           <ul class="ig-import-messages">${items}</ul>
-        </details>`;
+        </details>`);
     }
-    return _html;
+    return pieces.length ? html`${pieces}` : "";
   }
 
   afterRender() {

@@ -175,7 +175,7 @@ describe('mediaUrl', () => {
   describe('thumbAttrs', () => {
     test('renders escaped attributes', () => {
       bootstrap({ gen: 'a&b', sizes: [128, 256] });
-      const attrs = thumbAttrs('/2026/03/photo.jpg', { sizes: '(max-width: 48em) 50vw, 220px' });
+      const attrs = String(thumbAttrs('/2026/03/photo.jpg', { sizes: '(max-width: 48em) 50vw, 220px' }));
       assert.strictEqual(
         attrs,
         'src="/2026/03/photo.jpg?s=256&amp;v=a%26b" ' +
@@ -186,13 +186,13 @@ describe('mediaUrl', () => {
     });
 
     test('omits sizes when the caller has none', () => {
-      const attrs = thumbAttrs('/a.jpg');
+      const attrs = String(thumbAttrs('/a.jpg'));
       assert.ok(!attrs.includes('sizes='));
     });
 
     test('renders nothing for an empty path, so no bare <img> is emitted', () => {
-      assert.strictEqual(thumbAttrs(''), '');
-      assert.strictEqual(thumbAttrs(null), '');
+      assert.strictEqual(String(thumbAttrs('')), '');
+      assert.strictEqual(String(thumbAttrs(null)), '');
     });
   });
 });

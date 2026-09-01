@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { renderCopyright } from "../src/utils/copyright.js";
+import { renderCopyright as render } from "../src/utils/copyright.js";
+
+// renderCopyright returns the RawHtml html`` produces; String() to compare.
+const renderCopyright = (settings) => String(render(settings));
 
 test("renderCopyright", async (t) => {
   await t.test("defaults to author with powered by engine", () => {
@@ -46,6 +49,14 @@ test("renderCopyright", async (t) => {
   await t.test("rejects protocol-relative urls", () => {
     const html = renderCopyright({ footer_copyright: "[Hack](//evil.com)" });
     assert.equal(html, "[Hack](//evil.com)");
+  });
+
+  await t.test("an ampersand in a link url is escaped once, not twice", () => {
+    const html = renderCopyright({ footer_copyright: "[Shop](https://example.com/?a=1&b=2)" });
+    assert.equal(
+      html,
+      '<a href="https://example.com/?a=1&amp;b=2" target="_blank" rel="noopener noreferrer">Shop</a>',
+    );
   });
 
   await t.test("escapes literal text", () => {

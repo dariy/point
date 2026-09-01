@@ -10,10 +10,10 @@
  * the page; only the predicate it applies lives here, so that the page and
  * "Select all" cannot drift apart on what "filtered" means.
  *
- * All user-supplied strings are escaped with escapeHtml() before interpolation.
+ * All markup is built with the html`` tag, which escapes every interpolation.
  */
 
-import { escapeHtml } from '../../../utils/helpers.js';
+import { html, raw } from '../../../utils/helpers.js';
 import { EDIT_SVG, X_SVG, MAP_SVG } from '../../../utils/icons.js';
 
 /**
@@ -65,16 +65,19 @@ export function sortTagsForList(tags, sortField, sortOrder) {
  * has the icon, so a chip changed shape the moment anything touched the row.
  */
 export function renderFilterChips(filterParents = []) {
-  return filterParents.map(p =>
-    `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">${X_SVG}</span></button>`
-  ).join('');
+  const chips = filterParents.map(p =>
+    html`<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${p.name} <span class="tm-chip-remove">${raw(X_SVG)}</span></button>`
+  );
+  // Falsy when there are none: renderTagList gates the wrapper on this, and
+  // html`` yields a String object, which is truthy even when blank.
+  return chips.length ? html`${chips}` : '';
 }
 
 export function renderSortHeader(field, label, className = '', title = '', { sortField, sortOrder } = {}) {
   const isActive = sortField === field;
   const icon = isActive ? (sortOrder === 'asc' ? ' ▴' : ' ▾') : '';
 
-  return `
+  return html`
       <th class="tm-sortable-header ${className} ${isActive ? 'active' : ''}"
           data-field="${field}"
           title="${title || 'Sort by ' + label}">
@@ -86,60 +89,59 @@ export function renderSortHeader(field, label, className = '', title = '', { sor
 }
 
 export function renderTagList(tags, view) {
-  if (!tags.length) return '<p class="empty-state">No tags found.</p>';
+  if (!tags.length) return html`<p class="empty-state">No tags found.</p>`;
 
   const { sortField, sortOrder, selectMode, selectedIds, search, filterParents } = view;
   const sorted = sortTagsForList(tags, sortField, sortOrder);
 
   const rows = sorted.map(tag => {
     const parentBadges = (tag.parents || [])
-      .map(p => `<button type="button" class="tm-parent-filter-btn tm-rel-badge" data-parent-id="${p.id}" data-parent-name="${escapeHtml(p.name)}" title="Filter by ${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`)
-      .join('');
+      .map(p => html`<button type="button" class="tm-parent-filter-btn tm-rel-badge" data-parent-id="${p.id}" data-parent-name="${p.name}" title="Filter by ${p.name}">${p.name}</button>`);
 
     const hasLocation = tag.locations?.length > 0;
     const isSelected = selectedIds.has(tag.id);
 
-    return `
+    return html`
         <tr class="tm-tag-row${isSelected ? ' is-selected' : ''}" data-id="${tag.id}">
-          ${selectMode ? `<td class="tm-check-col"><input type="checkbox" class="tm-select-cb" data-id="${tag.id}"${isSelected ? ' checked' : ''} aria-label="Select ${escapeHtml(tag.name)}"></td>` : ''}
-          <td class="tm-col-name"><span class="tm-tag-name">${escapeHtml(tag.name)}</span></td>
-          <td class="tm-col-slug"><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
-          <td class="text-center tm-col-count"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
+          ${selectMode ? html`<td class="tm-check-col"><input type="checkbox" class="tm-select-cb" data-id="${tag.id}"${isSelected ? raw(' checked') : ''} aria-label="Select ${tag.name}"></td>` : ''}
+          <td class="tm-col-name"><span class="tm-tag-name">${tag.name}</span></td>
+          <td class="tm-col-slug"><code class="tm-slug">${tag.slug}</code></td>
+          <td class="text-center tm-col-count"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${tag.slug}">${tag.post_count || 0}</a></td>
           <td class="text-center tm-col-coords">
-            ${hasLocation ? `
+            ${hasLocation ? html`
               <a href="/map?tag=${encodeURIComponent(tag.slug)}" class="btn btn-sm tm-flag-link active tm-flag-location" title="View on map">
-                ${MAP_SVG}<span class="btn-label"> Map</span>
-              </a>` : `
-              <span class="tm-flag-static tm-flag-location" title="No coordinates">${MAP_SVG}</span>
+                ${raw(MAP_SVG)}<span class="btn-label"> Map</span>
+              </a>` : html`
+              <span class="tm-flag-static tm-flag-location" title="No coordinates">${raw(MAP_SVG)}</span>
             `}
           </td>
-          <td class="tm-col-parents"><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">—</span>'}</div></td>
+          <td class="tm-col-parents"><div class="tm-parents-cell">${parentBadges.length ? parentBadges : html`<span class="text-muted">—</span>`}</div></td>
           <td class="tm-actions-cell">
             <div class="tm-actions">
-              <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+              <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">${raw(EDIT_SVG)}</button>
               <button class="btn btn-sm merge-tag-btn"  data-id="${tag.id}" title="Merge into…">Merge…</button>
-              <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
+              <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${raw(X_SVG)}</button>
             </div>
           </td>
         </tr>`;
-  }).join('');
+  });
 
   const chips = renderFilterChips(filterParents);
   const hasFilters = search || filterParents.length > 0;
 
-  return `
+  return html`
       <div class="tm-list-filter-bar">
         <div class="tm-list-search-row">
-          <input type="text" class="form-input tm-list-search" placeholder="Search name, slug, parents…" value="${escapeHtml(search || '')}">
-          ${hasFilters ? '<button type="button" class="btn btn-sm btn-secondary tm-clear-filters">Clear</button>' : ''}
+          <input type="text" class="form-input tm-list-search" placeholder="Search name, slug, parents…" value="${search || ''}">
+          ${hasFilters ? html`<button type="button" class="btn btn-sm btn-secondary tm-clear-filters">Clear</button>` : ''}
         </div>
-        ${chips ? `<div class="tm-filter-chips" id="tm-filter-chips">${chips}</div>` : '<div class="tm-filter-chips" id="tm-filter-chips"></div>'}
+        ${chips ? html`<div class="tm-filter-chips" id="tm-filter-chips">${chips}</div>` : html`<div class="tm-filter-chips" id="tm-filter-chips"></div>`}
       </div>
       <div class="table-container">
         <table class="table tm-tags-table">
           <thead>
             <tr>
-              ${selectMode ? '<th class="tm-check-col"></th>' : ''}
+              ${selectMode ? html`<th class="tm-check-col"></th>` : ''}
               ${renderSortHeader('name', 'Name', 'tm-col-name', '', view)}
               ${renderSortHeader('slug', 'Slug', 'tm-col-slug', '', view)}
               ${renderSortHeader('post_count', 'Posts', 'text-center tm-col-count', '', view)}

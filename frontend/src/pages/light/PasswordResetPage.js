@@ -1,5 +1,5 @@
 import { Component } from "../../components/Component.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { sha256 } from "../../api/auth.js";
 import { api } from "../../api/client.js";
 
@@ -25,7 +25,7 @@ export default class PasswordResetPage extends Component {
   }
 
   _renderRequestForm(loading, error, success) {
-    return `
+    return html`
       <div class="setup-page-container">
         <div class="card">
           <div class="card-header">
@@ -33,11 +33,11 @@ export default class PasswordResetPage extends Component {
             <p class="text-muted text-small">Enter your email address to receive a reset link.</p>
           </div>
           <div class="card-body">
-            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ""}
+            ${error ? html`<div class="error-message" role="alert">${error}</div>` : ""}
             ${
               success
-                ? `<div class="pss-success">${escapeHtml(success)}</div>`
-                : `
+                ? html`<div class="pss-success">${success}</div>`
+                : html`
             <form id="pss-request-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="pss-email">Email Address</label>
@@ -64,7 +64,7 @@ export default class PasswordResetPage extends Component {
   }
 
   _renderResetForm(loading, error, success) {
-    return `
+    return html`
       <div class="setup-page-container">
         <div class="card">
           <div class="card-header">
@@ -72,16 +72,16 @@ export default class PasswordResetPage extends Component {
             <p class="text-muted text-small">Choose a strong password for your blog.</p>
           </div>
           <div class="card-body">
-            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ""}
+            ${error ? html`<div class="error-message" role="alert">${error}</div>` : ""}
             ${
               success
-                ? `
-            <div class="pss-success">${escapeHtml(success)}</div>
+                ? html`
+            <div class="pss-success">${success}</div>
             <div class="pss-back" style="margin-top:var(--spacing-lg)">
               <a href="/light/login" class="btn btn-primary setup-submit-btn">Go to Login</a>
             </div>
             `
-                : `
+                : html`
             <form id="pss-reset-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="pss-password">New Password</label>

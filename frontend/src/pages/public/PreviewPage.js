@@ -12,7 +12,7 @@ import { Component } from '../../components/Component.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { previewPost } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 
@@ -26,7 +26,7 @@ export default class PreviewPage extends Component {
     const { loading, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main" aria-busy="true">
@@ -37,17 +37,17 @@ export default class PreviewPage extends Component {
     }
 
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <p class="error-message" role="alert">${error}</p>
           </main>
           <div id="footer-mount"></div>
         </div>`;
     }
 
-    return `
+    return html`
       <div class="site-wrapper">
         <div id="header-mount"></div>
         <div class="preview-banner" role="status">

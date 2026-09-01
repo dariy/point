@@ -1,5 +1,3 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * Public site header — blog logo, unified breadcrumb (tag path + active
  * facets), and nav buttons.
@@ -22,7 +20,7 @@ import { Component } from '../../components/Component.js';
 import { SiteCrumb } from '../../components/public/SiteCrumb.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
+import { html, navigate, raw, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
@@ -37,17 +35,19 @@ export class PublicHeader extends Component {
       editUrl = null,
       showShare = false,
       onToggleImmersive = null,
+      // A markup slot by design: a caller drops rendered markup in, so it goes
+      // through raw() below. No caller passes one today.
       slot = ''
     } = this.props;
     const user = store.get('user');
-    const subtitle = escapeHtml(settings.blog_subtitle || '');
-    const logoHtml = settings.logo_url ? html`<img class="app-logo" src="${settings.logo_url}" alt="${settings.blog_title || 'Logo'}" decoding="async">`.toString() : APP_LOGO_SVG;
-    const shareButtonHtml = showShare ? `<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
-           ${SHARE_SVG}
+    const subtitle = settings.blog_subtitle || '';
+    const logoHtml = settings.logo_url ? html`<img class="app-logo" src="${settings.logo_url}" alt="${settings.blog_title || 'Logo'}" decoding="async">` : raw(APP_LOGO_SVG);
+    const shareButtonHtml = showShare ? html`<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
+           ${raw(SHARE_SVG)}
          </button>` : '';
-    const immersiveToggleHtml = onToggleImmersive ? `<button type="button" class="header-action-btn immersive-toggle-btn"
+    const immersiveToggleHtml = onToggleImmersive ? html`<button type="button" class="header-action-btn immersive-toggle-btn"
                  title="Immersive mode" aria-label="Immersive mode">
-           ${EXPAND_SVG}
+           ${raw(EXPAND_SVG)}
          </button>` : '';
     const vc = ViewContext.current();
 
@@ -57,7 +57,7 @@ export class PublicHeader extends Component {
     // its container's innerHTML; both wrappers are `display: contents`, so the
     // crumbs stay direct flex children of `.site-breadcrumb`.
     this._hasTrail = pluginHost.hasSlot('breadcrumbs') && !!(breadcrumb.length || vc.years && !this.props.timelineVisible || vc.query);
-    const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">
+    const crumbHtml = html`<nav class="site-breadcrumb" aria-label="Breadcrumb">
             <span class="site-crumb-mount"></span>
             <span class="breadcrumb-trail"></span>
           </nav>`;
@@ -73,8 +73,8 @@ export class PublicHeader extends Component {
     const editButtonBurger = user && editUrl ? html`<a href="${editUrl}" class="header-action-btn" title="Edit" aria-label="Edit post">
            ${raw(EDIT_SVG)}
          </a>` : '';
-    const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
-    return `
+    const searchPlaceholder = vc.tag ? `Search ${vc.tag}...` : "Search...";
+    return html`
       <div class="site-header-group">
         <div id="search-typeahead-mount" class="search-typeahead-mount"></div>
         <div class="site-header-inner">
@@ -87,19 +87,19 @@ export class PublicHeader extends Component {
               <h1 class="site-title">
                 ${logoHtml}
               </h1>
-              ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
+              ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? html`<p class="site-subtitle">${subtitle}</p>` : ''}
             </a>
           </div>
 
           <!-- Zone: context — breadcrumbs + count (the only elastic zone) -->
           ${crumbHtml}
-          ${immersiveToggleHtml || shareButtonHtml || editButtonHeader ? `<div class="branding-actions">
+          ${immersiveToggleHtml || shareButtonHtml || editButtonHeader ? html`<div class="branding-actions">
             ${immersiveToggleHtml}
             ${shareButtonHtml}
             ${editButtonHeader}
           </div>` : ''}
 
-          ${slot ? `<div class="site-nav-slot">${slot}</div>` : ''}
+          ${slot ? html`<div class="site-nav-slot">${raw(slot)}</div>` : ''}
 
           <!-- Zone: nav — visible menu links (filled by the nav-menu plugin);
                folds into the burger as a whole (fold-nav). -->
@@ -113,18 +113,18 @@ export class PublicHeader extends Component {
             <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
               <input type="search" name="q" placeholder="${searchPlaceholder}" aria-label="Search posts" tabindex="-1">
               <button type="button" aria-label="Toggle search" class="header-action-btn search-toggle-btn">
-                ${SEARCH_SVG}
+                ${raw(SEARCH_SVG)}
               </button>
             </form>
 
             <!-- Burger (shown when fold-nav active) -->
             <div class="nav-burger" id="nav-burger">
               <button class="header-action-btn burger-toggle" type="button" aria-label="Menu" aria-expanded="false">
-                ${MENU_SVG}
+                ${raw(MENU_SVG)}
               </button>
               <div class="burger-dropdown">
                 <form class="burger-search-form" action="/search" method="get" role="search">
-                  ${SEARCH_SVG}
+                  ${raw(SEARCH_SVG)}
                   <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
                 </form>
 
@@ -134,8 +134,8 @@ export class PublicHeader extends Component {
 
                 <div class="burger-actions">
                   <button class="theme-toggle" id="burger-theme-toggle" type="button" aria-label="Toggle theme">
-                    <span class="icon-sun">${SUN_SVG}</span>
-                    <span class="icon-moon">${MOON_SVG}</span>
+                    <span class="icon-sun">${raw(SUN_SVG)}</span>
+                    <span class="icon-moon">${raw(MOON_SVG)}</span>
                   </button>
                   ${immersiveToggleHtml}
                   ${shareButtonHtml}
@@ -509,34 +509,36 @@ export class PublicHeader extends Component {
     mount.style.left = `${inputRect.left}px`;
     mount.style.width = `${inputRect.width}px`;
     mount.classList.add('is-open');
-    let _html = '';
+    // Collected rather than concatenated: `+=` would drop html`` output back to
+    // a plain string.
+    const parts = [];
     if (recent.length) {
-      _html += `<div class="typeahead-section"><div class="typeahead-label">Recent</div>`;
+      parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Recent</div>`);
       recent.forEach(s => {
-        _html += html`<a href="#" class="typeahead-item recent-item" data-q="${s}">${s}</a>`.toString();
+        parts.push(html`<a href="#" class="typeahead-item recent-item" data-q="${s}">${s}</a>`);
       });
-      _html += `</div>`;
+      parts.push(html`</div>`);
     } else {
       if (tags.length) {
-        _html += `<div class="typeahead-section"><div class="typeahead-label">Tags</div>`;
+        parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Tags</div>`);
         tags.forEach(t => {
-          _html += `<a href="/tags/${t.slug}" class="typeahead-item tag-item">
-            <span class="name">${escapeHtml(t.name)}</span>
+          parts.push(html`<a href="/tags/${t.slug}" class="typeahead-item tag-item">
+            <span class="name">${t.name}</span>
             <span class="count">${t.post_count}</span>
-          </a>`;
+          </a>`);
         });
-        _html += `</div>`;
+        parts.push(html`</div>`);
       }
       if (posts.length) {
-        _html += `<div class="typeahead-section"><div class="typeahead-label">Posts</div>`;
+        parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Posts</div>`);
         posts.forEach(p => {
-          _html += html`<a href="/posts/${p.slug}" class="typeahead-item post-item">${p.title}</a>`.toString();
+          parts.push(html`<a href="/posts/${p.slug}" class="typeahead-item post-item">${p.title}</a>`);
         });
-        _html += `</div>`;
+        parts.push(html`</div>`);
       }
-      _html += html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`.toString();
+      parts.push(html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`);
     }
-    mount.innerHTML = html`${raw(_html)}`;
+    mount.innerHTML = html`${parts}`;
     mount.querySelectorAll('.typeahead-item').forEach(item => {
       item.addEventListener('click', e => {
         e.preventDefault();

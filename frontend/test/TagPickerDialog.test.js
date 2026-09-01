@@ -2,6 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, type, check } from './helpers/dom.js';
+import { html, raw } from '../src/utils/helpers.js';
 
 /** Let the confirm handler's async body settle. */
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -27,7 +28,7 @@ const open = (over = {}) => TagPickerDialog.openTagPickerDialog({
   modalClass: 'tm-picker-modal',
   tags,
   radioName: 'pick',
-  renderItem: t => `<label class="item"><input type="radio" name="pick" value="${t.id}"><span class="nm">${t.name}</span></label>`,
+  renderItem: t => html`<label class="item"><input type="radio" name="pick" value="${t.id}"><span class="nm">${t.name}</span></label>`,
   itemClass: 'item',
   nameClass: 'nm',
   listClass: 'list',
@@ -42,20 +43,20 @@ const open = (over = {}) => TagPickerDialog.openTagPickerDialog({
 
 describe('openOverlay', () => {
   test('appends an active overlay to the body', () => {
-    const { overlay } = TagPickerDialog.openOverlay('<div class="modal">hi</div>');
+    const { overlay } = TagPickerDialog.openOverlay(html`<div class="modal">hi</div>`);
     assert.equal(document.body.children.length, 1);
     assert.equal(overlay.className, 'modal-overlay active');
     assert.match(overlay.innerHTML, /hi/);
   });
 
   test('close() removes it', () => {
-    const { close } = TagPickerDialog.openOverlay('<div class="modal">hi</div>');
+    const { close } = TagPickerDialog.openOverlay(html`<div class="modal">hi</div>`);
     close();
     assert.equal(document.body.children.length, 0);
   });
 
   test('clicking the backdrop closes; clicking inside does not', () => {
-    const { overlay } = TagPickerDialog.openOverlay('<div class="modal">hi</div>');
+    const { overlay } = TagPickerDialog.openOverlay(html`<div class="modal">hi</div>`);
     click(overlay.querySelector('.modal'));
     assert.equal(document.body.children.length, 1, 'a click inside the modal is not a dismissal');
     click(overlay);
@@ -63,14 +64,14 @@ describe('openOverlay', () => {
   });
 
   test('the × button closes when the markup has one', () => {
-    TagPickerDialog.openOverlay('<div class="modal"><button class="modal-close">x</button></div>');
+    TagPickerDialog.openOverlay(html`<div class="modal"><button class="modal-close">x</button></div>`);
     click(document.querySelector('.modal-close'));
     assert.equal(document.body.children.length, 0);
   });
 
   test('markup without a × button still opens', () => {
     // The drop-confirm dialog has no close button — this must not throw.
-    assert.doesNotThrow(() => TagPickerDialog.openOverlay('<div class="modal">no close</div>'));
+    assert.doesNotThrow(() => TagPickerDialog.openOverlay(html`<div class="modal">no close</div>`));
     assert.equal(document.body.children.length, 1);
   });
 });
@@ -89,7 +90,7 @@ describe('openTagPickerDialog', () => {
   });
 
   test('places beforeList and afterList around the list', () => {
-    const { overlay } = open({ beforeList: '<p id="pre">before</p>', afterList: '<p id="post">after</p>' });
+    const { overlay } = open({ beforeList: html`<p id="pre">before</p>`, afterList: html`<p id="post">after</p>` });
     const body = overlay.querySelector('.modal-body').innerHTML;
     assert.ok(body.indexOf('id="pre"') < body.indexOf('class="list"'));
     assert.ok(body.indexOf('class="list"') < body.indexOf('id="post"'));
@@ -140,7 +141,7 @@ describe('openTagPickerDialog', () => {
     test('collect runs before the close, onConfirm after', async () => {
       const order = [];
       const { overlay } = open({
-        afterList: '<input type="checkbox" id="extra" checked>',
+        afterList: html`<input type="checkbox" id="extra" checked>`,
         collect: ov => {
           order.push('collect');
           // Still attached: reading the extra control here is the whole point.
@@ -204,7 +205,7 @@ describe('openTagPickerDialog', () => {
   test('onMount receives the live overlay and the close function', () => {
     let seen = null;
     const { overlay, close } = open({
-      afterList: '<select id="pos"><option value="">x</option></select>',
+      afterList: html`<select id="pos"><option value="">x</option></select>`,
       onMount: (ov, cl) => { seen = { hasSelect: !!ov.querySelector('#pos'), closes: typeof cl }; },
     });
     assert.deepEqual(seen, { hasSelect: true, closes: 'function' });

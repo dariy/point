@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { linkify } from "../src/utils/helpers.js";
+import { linkify as _linkify } from "../src/utils/helpers.js";
+
+// linkify returns the RawHtml html`` produces; assert.equal wants a primitive.
+const linkify = (...a) => String(_linkify(...a));
 import { beforeEach, afterEach } from "node:test";
 import { setupDOM } from "./helpers/dom.js";
 

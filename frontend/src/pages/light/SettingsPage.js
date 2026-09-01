@@ -12,7 +12,7 @@ import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";
 
@@ -60,9 +60,9 @@ export default class SettingsPage extends Component {
   render() {
     const { saving } = this.state;
 
-    const actions = `
+    const actions = html`
         <button type="submit" form="settings-form" class="btn btn-primary" title="Save Settings" ${saving ? "disabled" : ""}>
-          ${CHECK_SVG}<span class="btn-label">${saving ? "Saving…" : "Save Settings"}</span>
+          ${raw(CHECK_SVG)}<span class="btn-label">${saving ? "Saving…" : "Save Settings"}</span>
         </button>
     `;
 
@@ -76,24 +76,24 @@ export default class SettingsPage extends Component {
   _renderContent() {
     const { loading, settings, posts, error } = this.state;
 
-    if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
-    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    if (loading) return html`<div class="loading-spinner" aria-label="Loading…"></div>`;
+    if (error) return html`<p class="error-state" role="alert">${error}</p>`;
 
-    return `
+    return html`
         <form id="settings-form" class="settings-grid">
-          ${SETTING_GROUPS.map((group) => this._renderGroup(group, settings, posts)).join("")}
+          ${SETTING_GROUPS.map((group) => this._renderGroup(group, settings, posts))}
         </form>`;
   }
 
   _renderGroup(group, settings, posts) {
     const { inputs, toggles } = renderFields(group.keys, settings, { posts });
     const toggleSection = toggles
-      ? `<div class="settings-toggles">${toggles}</div>`
+      ? html`<div class="settings-toggles">${toggles}</div>`
       : "";
 
     let extra = "";
 
-    return `
+    return html`
       <section class="settings-group" id="group-${group.title.toLowerCase().replace(/\s+/g, "-")}">
         <h2 class="settings-group-title">${group.title}</h2>
         <div class="settings-group-body">

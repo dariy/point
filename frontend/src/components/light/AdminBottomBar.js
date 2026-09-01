@@ -23,16 +23,16 @@ export class AdminBottomBar extends Component {
         </a>`;
     };
 
-    return `
+    return html`
       <nav class="admin-bottom-bar" aria-label="Mobile navigation">
         ${navItem('/light', DASHBOARD_SVG, 'Home', true)}
         ${navItem('/light/posts', POSTS_SVG, 'Posts')}
         <a href="/light/posts/new" class="bottom-bar-item bottom-bar-add" aria-label="New Post">
-          <div class="add-icon-wrap">${PLUS_SVG}</div>
+          <div class="add-icon-wrap">${raw(PLUS_SVG)}</div>
         </a>
         ${navItem('/light/media', MEDIA_SVG, 'Media')}
         <button type="button" class="bottom-bar-item" id="bottom-bar-more" aria-label="More">
-          <div class="bottom-bar-icon">${MENU_SVG}</div>
+          <div class="bottom-bar-icon">${raw(MENU_SVG)}</div>
           <span class="bottom-bar-label">More</span>
         </button>
       </nav>
@@ -55,16 +55,16 @@ export class AdminBottomBar extends Component {
           <hr class="more-sheet-divider">
           <div class="more-sheet-footer">
             <button type="button" class="more-footer-btn" id="sheet-theme-toggle">
-              <span class="icon-sun">${SUN_SVG}</span>
-              <span class="icon-moon">${MOON_SVG}</span>
+              <span class="icon-sun">${raw(SUN_SVG)}</span>
+              <span class="icon-moon">${raw(MOON_SVG)}</span>
               <span>Theme</span>
             </button>
-            ${html`<a href="${this.props.publicUrl || '/'}" class="more-footer-btn">
+            <a href="${this.props.publicUrl || '/'}" class="more-footer-btn">
               ${raw(EXTERNAL_LINK_SVG)}
               <span>View Site</span>
-            </a>`}
+            </a>
             <button type="button" class="more-footer-btn text-danger" id="sheet-logout">
-              ${LOGOUT_SVG}
+              ${raw(LOGOUT_SVG)}
               <span>Logout</span>
             </button>
           </div>

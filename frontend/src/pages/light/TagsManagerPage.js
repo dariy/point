@@ -1,12 +1,10 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * TagsManagerPage — hierarchical tag management.
  *
  * Tree view: nav roots (by nav_order) → filed roots → Unfiled(N) group.
  * List view: tabular with search and parent filters.
  * Editor modal: Identity / Visibility / Display / Kind / Structure / Coordinates.
- * All user-supplied strings are escaped with escapeHtml() before interpolation.
+ * Markup is built with the html`` tag, which escapes every interpolation.
  */
 
 import { Component } from '../../components/Component.js';
@@ -15,7 +13,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html, raw } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
@@ -56,17 +54,17 @@ export default class TagsManagerPage extends Component {
       view,
       selectMode
     } = this.state;
-    const actions = `
+    const actions = html`
       <div class="tm-view-toggle">
-        <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG}<span class="btn-label"> Tree</span></button>
-        <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG}<span class="btn-label"> List</span></button>
+        <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${raw(TREE_SVG)}<span class="btn-label"> Tree</span></button>
+        <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${raw(LIST_SVG)}<span class="btn-label"> List</span></button>
       </div>
-      ${view === 'tree' && !selectMode ? `
+      ${view === 'tree' && !selectMode ? html`
       <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
       <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>` : ''}
-      <button id="tm-select-btn" class="btn btn-sm btn-secondary" title="${selectMode ? 'Cancel selection' : 'Select tags'}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label"> ${selectMode ? 'Cancel' : 'Select'}</span></button>
-      <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${PLUS_SVG}<span class="btn-label"> New Tag</span></button>
-      <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
+      <button id="tm-select-btn" class="btn btn-sm btn-secondary" title="${selectMode ? 'Cancel selection' : 'Select tags'}">${raw(selectMode ? X_SVG : SELECT_SVG)}<span class="btn-label"> ${selectMode ? 'Cancel' : 'Select'}</span></button>
+      <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${raw(PLUS_SVG)}<span class="btn-label"> New Tag</span></button>
+      <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${raw(REFRESH_SVG)}</button>
     `;
     return adminLayoutTemplate({
       title: 'Tags',
@@ -83,15 +81,15 @@ export default class TagsManagerPage extends Component {
     } = this.state;
     let content;
     if (loading) {
-      content = `<div class="loading-spinner" aria-label="Loading tags…"></div>`;
+      content = html`<div class="loading-spinner" aria-label="Loading tags…"></div>`;
     } else if (error) {
-      content = `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+      content = html`<p class="error-state" role="alert">${error}</p>`;
     } else if (view === 'tree') {
-      content = `<div class="tags-tree-container">${renderTagForest(buildTagTree(tags), this._treeView())}</div>`;
+      content = html`<div class="tags-tree-container">${renderTagForest(buildTagTree(tags), this._treeView())}</div>`;
     } else {
       content = renderTagList(tags, this._listView());
     }
-    return `
+    return html`
             ${this.state.selectMode && !loading && !error ? renderBulkToolbar() : ''}
             <div class="card tm-card">
               <div class="card-body">
@@ -129,7 +127,7 @@ export default class TagsManagerPage extends Component {
   _updateFilterChips() {
     const chips = this.container.querySelector('#tm-filter-chips');
     if (!chips) return;
-    chips.innerHTML = html`${raw(renderFilterChips(this._listFilterParents))}`;
+    chips.innerHTML = html`${renderFilterChips(this._listFilterParents)}`;
     chips.querySelectorAll('.tm-filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const id = parseInt(chip.dataset.removeId, 10);

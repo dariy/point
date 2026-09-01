@@ -34,7 +34,7 @@ import { getAllSettings } from "../../api/settings.js";
 import { getInstagramStatus } from "../../api/instagram.js";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { store } from "../../store.js";
-import { escapeHtml, html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 
 // Slot cardinalities that make a slot's candidates alternatives (at most one
@@ -163,7 +163,7 @@ export default class PluginsPage extends Component {
   render() {
     return adminLayoutTemplate({
       title: "Plugins",
-      actions: `
+      actions: html`
         <button type="button" class="btn btn-sm btn-secondary" id="expand-all-groups" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
         <button type="button" class="btn btn-sm btn-secondary" id="collapse-all-groups" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>
       `,
@@ -174,17 +174,17 @@ export default class PluginsPage extends Component {
   _renderContent() {
     const { loading, error } = this.state;
 
-    if (loading) return `<div class="loading-spinner" aria-label="Loading plugins…"></div>`;
-    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    if (loading) return html`<div class="loading-spinner" aria-label="Loading plugins…"></div>`;
+    if (error) return html`<p class="error-state" role="alert">${error}</p>`;
 
-    return `
+    return html`
       <p class="page-intro">
         Toggle features on or off. Disabled plugins are removed from the public
         site entirely — their code is never served and their routes return 404.
       </p>
       ${this._renderPresets()}
       ${this._renderMap()}
-      ${TYPE_GROUPS.map((g) => this._renderGroup(g)).join("")}`;
+      ${TYPE_GROUPS.map((g) => this._renderGroup(g))}`;
   }
 
   /**
@@ -199,13 +199,13 @@ export default class PluginsPage extends Component {
     // leftover (no visual spot) list below can be derived, never hand-kept.
     this._mappedIds = new Set();
 
-    const headerRow = (extra = "") => `
+    const headerRow = (extra = "") => html`
       <div class="pmap-row pmap-hdr">
         ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
       </div>`;
 
     const bodies = {
-      home: `
+      home: html`
         ${headerRow(this._mr("distraction-free", "Focus"))}
         ${this._mr("tag-cloud", "Tag cloud", "pmap-band")}
         ${this._mr("timeline", "Timeline", "pmap-band")}
@@ -213,28 +213,28 @@ export default class PluginsPage extends Component {
           ${this._mr("simple-post-list", "Simple")}${this._mr("dynamic-post-list", "Dynamic")}
         </div>
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
-      post: `
+      post: html`
         ${headerRow()}
         ${this._ms("Post content · photos", "pmap-main")}
         ${this._mr("custom-css", "Custom CSS", "pmap-band")}
         ${this._mr("post-navigation", "Prev / Next", "pmap-band")}
         ${this._mr("comments", "Comments", "pmap-band")}
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
-      tags: `
+      tags: html`
         ${headerRow()}
         <div class="pmap-main pmap-choice" aria-label="One tag visualization owns /tags">
           ${this._mr("tags-atlas", "Atlas")}${this._mr("tags-map", "Map")}${this._mr("tags-graph", "Graph")}
         </div>
         ${this._mr("timeline", "Timeline", "pmap-band")}
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
-      viewer: `
+      viewer: html`
         <div class="pmap-row">
           ${this._mr("slideshow", "Slideshow")}${this._mr("immersive-share", "Share")}
         </div>
         <div class="pmap-main pmap-choice" aria-label="One immersive viewer is active">
           ${this._mr("immersive", "Standard")}${this._mr("immersive-sheet", "Sheet")}
         </div>`,
-      admin: `
+      admin: html`
         ${this._ms("/light — Dashboard", "pmap-band")}
         ${this._ms("/light/posts", "pmap-band")}
         ${this._ms("/light/media", "pmap-band")}
@@ -243,12 +243,12 @@ export default class PluginsPage extends Component {
     };
 
     const panels = MAP_PANELS.map(
-      (p) => `
+      (p) => html`
         <div class="pmap-page">
-          <div class="pmap-page-title">${escapeHtml(p.title)} <code>${escapeHtml(p.path)}</code></div>
+          <div class="pmap-page-title">${p.title} <code>${p.path}</code></div>
           <div class="pmap-frame${p.id === "viewer" ? " pmap-overlay" : ""}">${bodies[p.id]}</div>
         </div>`,
-    ).join("");
+    );
 
     // Everything not placed above has no spot on the public pages (services).
     const offMap = this.state.plugins
@@ -256,18 +256,18 @@ export default class PluginsPage extends Component {
       .map((p) => this._mr(p.id))
       .join("");
 
-    return `
+    return html`
       <section class="card plugins-group pmap-card${collapsed ? " collapsed" : ""}" data-group="map">
         <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
           <div class="plugins-group-heading">
             <h2 class="plugins-group-title">Site map</h2>
             <p class="plugins-group-hint">Where each plugin sits. Hover to match it with the list below; click to jump to it.</p>
           </div>
-          ${CHEVRON}
+          ${raw(CHEVRON)}
         </div>
         <div class="card-body">
           <div class="pmap-grid">${panels}</div>
-          ${offMap ? `<div class="pmap-offmap"><span class="pmap-offmap-label">Server-side, no visual spot:</span>${offMap}</div>` : ""}
+          ${offMap ? html`<div class="pmap-offmap"><span class="pmap-offmap-label">Server-side, no visual spot:</span>${raw(offMap)}</div>` : ""}
         </div>
       </section>`;
   }
@@ -285,13 +285,13 @@ export default class PluginsPage extends Component {
     const tip = known
       .map((p) => `${humanize(p.id, p.title)} — ${p.enabled ? "enabled" : "disabled"}`)
       .join("\n");
-    return `<button type="button" class="pmap-region${cls ? " " + cls : ""}${on ? "" : " is-off"}"
-      data-plugins="${escapeHtml(list.join(" "))}" title="${escapeHtml(tip)}">${escapeHtml(text)}</button>`;
+    return html`<button type="button" class="pmap-region${cls ? " " + cls : ""}${on ? "" : " is-off"}"
+      data-plugins="${list.join(" ")}" title="${tip}">${text}</button>`;
   }
 
   /** Static (non-plugin) wireframe block, for context only. */
   _ms(label, cls = "") {
-    return `<span class="pmap-static${cls ? " " + cls : ""}">${escapeHtml(label)}</span>`;
+    return html`<span class="pmap-static${cls ? " " + cls : ""}">${label}</span>`;
   }
 
   _renderPresets() {
@@ -300,17 +300,17 @@ export default class PluginsPage extends Component {
 
     const pills = PRESETS.map((p) => {
       const selected = editing ? p.id === editingPreset : p.id === activePreset;
-      return `<button type="button" class="preset-pill${selected ? " is-active" : ""}"
-        data-preset="${escapeHtml(p.id)}" title="${escapeHtml(p.hint)}">${escapeHtml(p.title)}</button>`;
-    }).join("");
+      return html`<button type="button" class="preset-pill${selected ? " is-active" : ""}"
+        data-preset="${p.id}" title="${p.hint}">${p.title}</button>`;
+    });
 
     const status = editing
-      ? `Editing <strong>${escapeHtml(PRESET_TITLES[editingPreset] || editingPreset)}</strong> — tick the plugins it should enable.`
+      ? html`Editing <strong>${PRESET_TITLES[editingPreset] || editingPreset}</strong> — tick the plugins it should enable.`
       : activePreset && activePreset !== "custom"
-        ? `Active preset: <strong>${escapeHtml(PRESET_TITLES[activePreset] || activePreset)}</strong>`
-        : `Active preset: <strong>Custom</strong>`;
+        ? html`Active preset: <strong>${PRESET_TITLES[activePreset] || activePreset}</strong>`
+        : html`Active preset: <strong>Custom</strong>`;
 
-    return `
+    return html`
       <section class="card plugin-presets-card">
         <div class="card-header plugin-presets-header" data-static>
           <h2>Presets</h2>
@@ -321,7 +321,7 @@ export default class PluginsPage extends Component {
         <div class="card-body">
           <div class="preset-pill-group" role="group" aria-label="Plugin presets">${pills}</div>
           <p class="preset-status">${status}</p>
-          ${editing ? `<p class="preset-edit-hint">Editing only changes what the preset enables — apply it afterwards to take effect.</p>` : ""}
+          ${editing ? html`<p class="preset-edit-hint">Editing only changes what the preset enables — apply it afterwards to take effect.</p>` : ""}
         </div>
       </section>`;
   }
@@ -350,29 +350,29 @@ export default class PluginsPage extends Component {
 
     const renderItem = (item) => {
       if (item.type === 'slot-group') {
-        return `
+        return html`
           <div class="plugins-slot-group">
-            <div class="plugins-slot-group-title">Alternatives for <code>${escapeHtml(item.slot)}</code></div>
+            <div class="plugins-slot-group-title">Alternatives for <code>${item.slot}</code></div>
             <div class="plugins-slot-group-items">
-              ${item.items.map(p => this._renderPlugin(p)).join("")}
+              ${item.items.map(p => this._renderPlugin(p))}
             </div>
           </div>`;
       }
       return this._renderPlugin(item.plugin);
     };
 
-    return `
-      <section class="card plugins-group${collapsed ? " collapsed" : ""}" data-group="${escapeHtml(group.type)}">
+    return html`
+      <section class="card plugins-group${collapsed ? " collapsed" : ""}" data-group="${group.type}">
         <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
           <div class="plugins-group-heading">
-            <h2 class="plugins-group-title">${escapeHtml(group.title)}</h2>
-            <p class="plugins-group-hint">${escapeHtml(group.hint)}</p>
+            <h2 class="plugins-group-title">${group.title}</h2>
+            <p class="plugins-group-hint">${group.hint}</p>
           </div>
-          ${CHEVRON}
+          ${raw(CHEVRON)}
         </div>
         <div class="card-body">
           <div class="plugins-list">
-            ${grouped.map(renderItem).join("")}
+            ${grouped.map(renderItem)}
           </div>
         </div>
       </section>`;
@@ -392,18 +392,22 @@ export default class PluginsPage extends Component {
     // Rows competing for the same single-claim slot say so, so it is obvious why
     // enabling one switched another off.
     if (SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1) {
-      meta.push(`<span class="plugin-badge">Alternative</span>`);
+      meta.push(html`<span class="plugin-badge">Alternative</span>`);
     }
-    if (plugin.slot) meta.push(`<span class="plugin-meta-text">slot: ${escapeHtml(plugin.slot)}</span>`);
+    if (plugin.slot) meta.push(html`<span class="plugin-meta-text">slot: ${plugin.slot}</span>`);
     if (Array.isArray(plugin.routes) && plugin.routes.length) {
-      meta.push(`<span class="plugin-meta-text">${escapeHtml(plugin.routes.join(", "))}</span>`);
+      meta.push(html`<span class="plugin-meta-text">${plugin.routes.join(", ")}</span>`);
     }
 
-    return `
-      <div class="plugin-card${plugin.enabled ? " is-enabled" : ""}" data-id="${escapeHtml(plugin.id)}">
+    // Every meta entry is html`` output already; raw() covers only the join,
+    // which is what turns the array back into a plain string.
+    // eslint-disable-next-line no-restricted-syntax -- see above.
+    const metaJoined = raw(meta.join(" · "));
+    return html`
+      <div class="plugin-card${plugin.enabled ? " is-enabled" : ""}" data-id="${plugin.id}">
         <div class="plugin-info">
-          <span class="plugin-name">${escapeHtml(humanize(plugin.id, plugin.title))}</span>
-          ${meta.length ? `<span class="plugin-meta">${meta.join(" · ")}</span>` : ""}
+          <span class="plugin-name">${humanize(plugin.id, plugin.title)}</span>
+          ${meta.length ? html`<span class="plugin-meta">${metaJoined}</span>` : ""}
         </div>
         <div class="plugin-actions">
           ${editing ? this._renderInclude(plugin) : this._renderRowControls(plugin, pending)}
@@ -417,7 +421,7 @@ export default class PluginsPage extends Component {
     // plugins whose settings were extracted here, else a link to its admin page.
     let settingsLink = "";
     if (plugin.enabled && PLUGIN_SETTINGS[plugin.id]) {
-      settingsLink = `<button type="button" class="plugin-settings-link" data-settings-id="${escapeHtml(plugin.id)}">Settings</button>`;
+      settingsLink = html`<button type="button" class="plugin-settings-link" data-settings-id="${plugin.id}">Settings</button>`;
     } else if (plugin.enabled && SETTINGS_PAGE_PATHS[plugin.id]) {
       settingsLink = html`<a class="plugin-settings-link" href="${SETTINGS_PAGE_PATHS[plugin.id]}">Settings</a>`;
     }
@@ -427,20 +431,20 @@ export default class PluginsPage extends Component {
     if (plugin.locked && !isAlternative) {
       // Required slot with NO alternatives: dead end.
       const lockHint = "Required — this slot must keep an enabled plugin";
-      return `${settingsLink}
-        <span class="plugin-pill plugin-pill-locked" title="${escapeHtml(lockHint)}">
+      return html`${settingsLink}
+        <span class="plugin-pill plugin-pill-locked" title="${lockHint}">
           <span class="plugin-lock" aria-hidden="true">🔒</span>
           <span class="setting-pill-label">Required</span>
         </span>`;
     }
 
     const inputType = isAlternative ? "radio" : "checkbox";
-    const nameAttr = isAlternative ? ` name="slot-${escapeHtml(plugin.slot)}"` : "";
+    const nameAttr = isAlternative ? html` name="slot-${plugin.slot}"` : "";
 
-    return `${settingsLink}
+    return html`${settingsLink}
       <label class="setting-pill plugin-pill">
         <input type="${inputType}"${nameAttr} class="setting-pill-input plugin-toggle"
-          data-id="${escapeHtml(plugin.id)}" ${plugin.enabled ? "checked" : ""} ${pending ? "disabled" : ""}>
+          data-id="${plugin.id}" ${plugin.enabled ? "checked" : ""} ${pending ? "disabled" : ""}>
         <span class="setting-pill-label">${plugin.enabled ? "Enabled" : "Disabled"}</span>
       </label>`;
   }
@@ -452,10 +456,10 @@ export default class PluginsPage extends Component {
     // Sole candidate for a slot that requires one: on regardless of the preset.
     const forced = REQUIRED_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) <= 1;
 
-    return `
+    return html`
       <label class="setting-pill plugin-pill plugin-include">
         <input type="checkbox" class="setting-pill-input plugin-include-toggle"
-          data-id="${escapeHtml(plugin.id)}" ${included || forced ? "checked" : ""} ${forced ? "disabled" : ""}>
+          data-id="${plugin.id}" ${included || forced ? "checked" : ""} ${forced ? "disabled" : ""}>
         <span class="setting-pill-label">${forced ? "Always on" : "Include"}</span>
       </label>`;
   }

@@ -12,7 +12,6 @@ import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { HeaderFold } from '../../utils/headerFold.js';
 import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.js';
@@ -110,9 +109,9 @@ export default class MenuPage extends Component {
       items,
       saving
     } = this.state;
-    if (loading) return '<div class="loading-spinner" aria-label="Loading menu\u2026"></div>';
-    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
-    const customEditor = mode === 'custom' ? `
+    if (loading) return html`<div class="loading-spinner" aria-label="Loading menu\u2026"></div>`;
+    if (error) return html`<p class="error-state" role="alert">${error}</p>`;
+    const customEditor = mode === 'custom' ? html`
       <div class="menu-editor-card card">
         <div class="card-header">
           <div class="menu-editor-tabs">
@@ -125,7 +124,7 @@ export default class MenuPage extends Component {
         </div>
       </div>
     ` : '';
-    return `
+    return html`
       <div class="menu-page-container">
         <section class="menu-mode-selector card">
           <div class="card-body">
@@ -165,7 +164,7 @@ export default class MenuPage extends Component {
           </div>
         </section>
 
-        ${mode !== 'none' ? `
+        ${mode !== 'none' ? html`
         <section class="menu-inline-cap card">
           <div class="card-body menu-inline-cap-row">
             <label for="inline-max-input" class="menu-inline-cap-label">
@@ -184,7 +183,7 @@ export default class MenuPage extends Component {
               <small>The text to display for the overflow menu link.</small>
             </label>
             <input id="more-title-input" type="text"
-                   class="form-input menu-inline-max-input" value="${escapeHtml(this.state.moreTitle)}">
+                   class="form-input menu-inline-max-input" value="${this.state.moreTitle}">
           </div>
         </section>` : ''}
 
@@ -206,12 +205,12 @@ export default class MenuPage extends Component {
   // mouse at all. Dragging is armed on mousedown over the handle (afterRender)
   // and disarmed on dragend, mirroring VisualEditor's card list.
   _renderVisualEditor(items) {
-    const rows = items.map((item, index) => `
+    const rows = items.map((item, index) => html`
       <div class="menu-row" data-index="${index}" data-depth="${item.depth}" style="margin-left: ${item.depth * 24}px">
         <span class="drag-handle" style="cursor: grab;">\u22ee\u22ee</span>
         <div class="menu-row-inputs">
-          <input type="text" class="form-input menu-label-input item-label" placeholder="Label" value="${escapeHtml(item.label)}">
-          <input type="text" class="form-input menu-url-input item-url" placeholder="URL (optional)" value="${escapeHtml(item.url)}">
+          <input type="text" class="form-input menu-label-input item-label" placeholder="Label" value="${item.label}">
+          <input type="text" class="form-input menu-url-input item-url" placeholder="URL (optional)" value="${item.url}">
         </div>
         <div class="menu-row-actions">
           <button class="row-btn indent-btn" title="Indent">\u21e5</button>
@@ -219,8 +218,8 @@ export default class MenuPage extends Component {
           <button class="row-btn row-btn-delete delete-item-btn" title="Remove">&times;</button>
         </div>
       </div>
-    `).join('');
-    return `
+    `);
+    return html`
       <div class="menu-visual-editor">
         <div class="menu-items" id="menu-items-list">${rows}</div>
         <div class="menu-add-bar">
@@ -230,7 +229,7 @@ export default class MenuPage extends Component {
   }
   _renderMarkdownEditor(items) {
     const text = serializeMarkdown(items);
-    return `<textarea id="menu-markdown-input" class="form-input font-mono" rows="15" placeholder="- [Label](url)">${escapeHtml(text)}</textarea>`;
+    return html`<textarea id="menu-markdown-input" class="form-input font-mono" rows="15" placeholder="- [Label](url)">${text}</textarea>`;
   }
 
   /**
@@ -239,16 +238,16 @@ export default class MenuPage extends Component {
    */
   _renderPreviewSection() {
     const widths = [['Desktop', 900], ['Mobile landscape', 640], ['Mobile portrait', 360]];
-    return `
+    return html`
       <section class="menu-preview card">
         <div class="card-header"><strong>Preview</strong></div>
         <div class="card-body">
           <div class="menu-preview-strip">
-            ${widths.map(([label, w]) => `
+            ${widths.map(([label, w]) => html`
               <figure class="menu-preview-fig">
                 <figcaption class="menu-preview-caption">${label} · ${w}px</figcaption>
                 <div class="menu-preview-vp" data-w="${w}" style="width:${w}px"></div>
-              </figure>`).join('')}
+              </figure>`)}
           </div>
         </div>
       </section>`;

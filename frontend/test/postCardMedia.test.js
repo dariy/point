@@ -16,8 +16,8 @@ import assert from 'node:assert';
  * background-image has one URL and no way to say that the same card is 380px
  * wide alone on a phone and 320px wide three-across on a desktop.
  *
- * render() is a pure props → HTML string, so it is exercised directly with a
- * null container, no DOM needed. The playback behaviour that the poster frame
+ * render() is a pure props → markup function, so it is exercised directly with
+ * a null container, no DOM needed. The playback behaviour that the poster frame
  * defers to — hover and tap previews — lives in afterRender and is covered
  * against a real DOM in postCardVideoPreview.test.js.
  */
@@ -32,7 +32,8 @@ const POST = {
   published_at: '2026-03-01T00:00:00Z',
 };
 
-const render = (post) => new PostCard(null, { post }).render();
+// render() returns the RawHtml html`` produces; String() for the assertions.
+const render = (post) => String(new PostCard(null, { post }).render());
 
 describe('PostCard media', () => {
   before(async () => {

@@ -21,7 +21,7 @@
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { html, navigate } from '../../utils/helpers.js';
 import { loadNav } from '../../api/nav.js';
 import { tagHref } from '../../utils/tagLinks.js';
 import { attachFlyoutTrigger, hideFlyoutWithin } from '../../utils/tagFlyout.js';
@@ -30,14 +30,14 @@ export class SiteCrumb extends Component {
   render() {
     const { settings = {}, hasTrail = false } = this.props;
 
-    const title = escapeHtml(settings.blog_title || 'Photo Blog');
+    const title = settings.blog_title || 'Photo Blog';
     const crumbClass = hasTrail ? 'breadcrumb-link' : 'breadcrumb-current';
     const hasDropdown = this._items().length > 0;
 
-    return `<span class="crumb-pair" id="site-crumb-pair">
+    return html`<span class="crumb-pair" id="site-crumb-pair">
       <a href="/" class="${crumbClass} crumb-site${hasDropdown ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="${title}"${hasDropdown ? ' aria-haspopup="true"' : ''}>${title}</a>
-      ${hasTrail ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
+         aria-label="${title}"${hasDropdown ? html` aria-haspopup="true"` : ''}>${title}</a>
+      ${hasTrail ? html`<span class="breadcrumb-separator" aria-hidden="true"></span>` : ''}
     </span>`;
   }
 

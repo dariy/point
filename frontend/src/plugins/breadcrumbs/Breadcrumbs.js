@@ -7,7 +7,7 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { html, navigate, raw } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { tagHref } from '../../utils/tagLinks.js';
@@ -45,66 +45,71 @@ export class Breadcrumbs extends Component {
 
     const tagCrumbsHtml = breadcrumb.map((crumb, i) => {
       const isLast = i === breadcrumb.length - 1;
-      const lockIcon = crumb.is_hidden ? LOCK_SVG : '';
-      const tooltipAttr = crumb.tooltip ? ` title="${escapeHtml(crumb.tooltip)}"` : '';
+      const lockIcon = crumb.is_hidden ? raw(LOCK_SVG) : '';
+      const tooltipAttr = crumb.tooltip ? html` title="${crumb.tooltip}"` : '';
+      const popupAttr = (has) => (has ? raw(' aria-haspopup="true"') : '');
 
       if (isLast) {
         const hasChildren = this._crumbHasChildren(crumb, navTags);
+        // The raw href goes in: href= puts the tag's URL policy in play, which
+        // is the point — escapeHtml never touched `javascript:`.
         const href = crumb.href
-          ? escapeHtml(crumb.href)
+          ? crumb.href
           : crumb.slug
-            ? `/tags/${escapeHtml(crumb.slug)}`
+            ? `/tags/${crumb.slug}`
             : null;
         const hasFacets = yearLabel || queryLabel;
         if (hasFacets) {
           if (href) {
-            return `<span class="crumb-pair">
+            return html`<span class="crumb-pair">
               <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-                 data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
+                 data-crumb-slug="${crumb.slug}"${tooltipAttr}${popupAttr(hasChildren)}>${lockIcon}${crumb.name}</a>
               <span class="breadcrumb-separator" aria-hidden="true"></span>
             </span>`;
           }
-          return `<span class="crumb-pair">
-            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>
+          return html`<span class="crumb-pair">
+            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${crumb.name}</span>
             <span class="breadcrumb-separator" aria-hidden="true"></span>
           </span>`;
         }
         if (href) {
-          return `<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-             data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
+          return html`<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
+             data-crumb-slug="${crumb.slug}"${tooltipAttr}${popupAttr(hasChildren)}>${lockIcon}${crumb.name}</a>`;
         }
-        return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
+        return html`<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${crumb.name}</span>`;
       }
 
-      const href = crumb.href || (crumb.slug ? `/tags/${escapeHtml(crumb.slug)}` : '/');
+      const href = crumb.href || (crumb.slug ? `/tags/${crumb.slug}` : '/');
       const hasChildren = this._crumbHasChildren(crumb, navTags);
-      return `<span class="crumb-pair">
+      return html`<span class="crumb-pair">
         <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-           data-crumb-slug="${escapeHtml(crumb.slug || '')}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
+           data-crumb-slug="${crumb.slug || ''}"${tooltipAttr}${popupAttr(hasChildren)}>${lockIcon}${crumb.name}</a>
         <span class="breadcrumb-separator" aria-hidden="true"></span>
       </span>`;
-    }).join('');
+    });
 
-    let facetCrumbsHtml = '';
+    // Collected rather than concatenated: `+=` would drop html`` output back to
+    // a plain string.
+    const facetCrumbs = [];
     if (yearLabel) {
       const isTerminal = !queryLabel;
       if (isTerminal) {
-        facetCrumbsHtml += `<span class="breadcrumb-current breadcrumb-facet breadcrumb-year">${escapeHtml(yearLabel)}</span>`;
+        facetCrumbs.push(html`<span class="breadcrumb-current breadcrumb-facet breadcrumb-year">${yearLabel}</span>`);
       } else {
-        facetCrumbsHtml += `<span class="crumb-pair crumb-facet-pair">
-          <span class="breadcrumb-link breadcrumb-facet breadcrumb-year">${escapeHtml(yearLabel)}</span>
+        facetCrumbs.push(html`<span class="crumb-pair crumb-facet-pair">
+          <span class="breadcrumb-link breadcrumb-facet breadcrumb-year">${yearLabel}</span>
           <span class="breadcrumb-separator" aria-hidden="true"></span>
-        </span>`;
+        </span>`);
       }
     }
     if (queryLabel) {
-      facetCrumbsHtml += `<span class="breadcrumb-current breadcrumb-facet breadcrumb-query">${escapeHtml(queryLabel)}</span>`;
+      facetCrumbs.push(html`<span class="breadcrumb-current breadcrumb-facet breadcrumb-query">${queryLabel}</span>`);
     }
 
-    return `
-      ${ariaLiveText ? `<span class="sr-only" aria-live="polite">${escapeHtml(ariaLiveText)}</span>` : ''}
+    return html`
+      ${ariaLiveText ? html`<span class="sr-only" aria-live="polite">${ariaLiveText}</span>` : ''}
       ${tagCrumbsHtml}
-      ${facetCrumbsHtml}
+      ${facetCrumbs}
     `;
   }
 

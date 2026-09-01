@@ -20,7 +20,7 @@
  */
 
 import { MediaViewer } from '../../components/shared/MediaViewer.js';
-import { escapeHtml, sharePost, linkify , html, raw} from '../../utils/helpers.js';
+import { html, linkify, raw, sharePost } from '../../utils/helpers.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -45,9 +45,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
     return false;
   }
   _renderExtras() {
-    return `
+    return html`
       <button class="immersive-sheet-hint" type="button" aria-label="Show details">
-        <span class="immersive-sheet-hint-chevron">${CHEVRON_SVG}</span>
+        <span class="immersive-sheet-hint-chevron">${raw(CHEVRON_SVG)}</span>
         <span class="immersive-sheet-hint-label">Details</span>
       </button>
       ${this._renderSheet()}`;
@@ -59,19 +59,19 @@ export class ImmersiveSheetViewer extends MediaViewer {
       navNext
     } = this.props;
     const settings = store.get('settings') || {};
-    if (!post) return '<div class="immersive-sheet" aria-hidden="true"></div>';
+    if (!post) return html`<div class="immersive-sheet" aria-hidden="true"></div>`;
     const showViews = settings.show_view_counts && post.view_count != null;
-    const viewsLine = showViews ? `<div class="immersive-sheet-meta">${escapeHtml(`${post.view_count} views`)}</div>` : '';
+    const viewsLine = showViews ? html`<div class="immersive-sheet-meta">${`${post.view_count} views`}</div>` : '';
 
     // The breadcrumb doubles as the title — just the post title, no site crumb.
-    const breadcrumb = `<nav class="immersive-sheet-crumbs" aria-label="Breadcrumb"><span class="immersive-sheet-crumb-current">${escapeHtml(post.title || '')}</span></nav>`;
-    const excerpt = post.excerpt ? `<p class="immersive-sheet-excerpt">${linkify(post.excerpt)}</p>` : '';
+    const breadcrumb = html`<nav class="immersive-sheet-crumbs" aria-label="Breadcrumb"><span class="immersive-sheet-crumb-current">${post.title || ''}</span></nav>`;
+    const excerpt = post.excerpt ? html`<p class="immersive-sheet-excerpt">${linkify(post.excerpt)}</p>` : '';
 
     // The post's own tags — ancestors the page endpoints add for subtree
     // matching are marked `inherited` and belong to the breadcrumb, not here.
     const tags = (post.tags || []).filter(t => !t.inherited);
-    const tagsHtml = tags.length ? `<div class="immersive-sheet-tags">${tags.map(t => renderTagLink(t)).join('')}</div>` : '';
-    return `
+    const tagsHtml = tags.length ? html`<div class="immersive-sheet-tags">${tags.map(t => renderTagLink(t))}</div>` : '';
+    return html`
       <div class="immersive-sheet" aria-hidden="true">
         <button class="immersive-sheet-grip" type="button" aria-label="Collapse details"></button>
         <div class="immersive-sheet-scroll">
@@ -96,14 +96,14 @@ export class ImmersiveSheetViewer extends MediaViewer {
     } = this.props;
     const user = store.get('user');
     const editBtn = user && editUrl ? html`<a class="immersive-sheet-action" href="${editUrl}" data-action="edit">${raw(EDIT_SVG)}<span>Edit</span></a>` : '';
-    const shareBtn = `<button class="immersive-sheet-action" type="button" data-action="share">${SHARE_SVG}<span>Share</span></button>`;
-    return `<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
+    const shareBtn = html`<button class="immersive-sheet-action" type="button" data-action="share">${raw(SHARE_SVG)}<span>Share</span></button>`;
+    return html`<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
   }
   _renderFooter(prev, next) {
     const settings = store.get('settings') || {};
     // Same renderer as the site footer — the admin-editable `footer_copyright`
     // template, so the sheet can't show a different line than the home page.
-    const copyright = `<p class="immersive-sheet-copyright">${renderCopyright(settings)}</p>`;
+    const copyright = html`<p class="immersive-sheet-copyright">${renderCopyright(settings)}</p>`;
 
     // Keep the footer's ‹ left / right › links pointing at the same posts the
     // on-photo nav panels do, under either reading direction — same resolver,
@@ -113,20 +113,20 @@ export class ImmersiveSheetViewer extends MediaViewer {
       fwd: rightPost
     } = immersiveNavTargets(settings, prev, next);
     const navLink = (postObj, side) => {
-      if (!postObj) return '<span></span>';
+      if (!postObj) return html`<span></span>`;
       const rel = postObj === prev ? 'prev' : 'next';
       const label = postObj.title || (side === 'left' ? 'Previous' : 'Next');
       const text = side === 'left' ? `‹ ${label}` : `${label} ›`;
       return html`<a class="immersive-sheet-postnav ${side}" href="/posts/${postObj.slug}" rel="${rel}">${text}</a>`;
     };
-    const nav = leftPost || rightPost ? `<div class="immersive-sheet-postnav-row">${navLink(leftPost, 'left')}${navLink(rightPost, 'right')}</div>` : '';
+    const nav = leftPost || rightPost ? html`<div class="immersive-sheet-postnav-row">${navLink(leftPost, 'left')}${navLink(rightPost, 'right')}</div>` : '';
 
     // RSS + theme toggle live bottom-right, mirroring the footer on other pages.
-    const rssBtn = pluginHost.isEnabled("rss") ? `<a class="footer-action-btn" href="/feed.xml" target="_blank" rel="noopener" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>` : '';
-    const themeBtn = `<button class="footer-action-btn theme-toggle immersive-sheet-theme" type="button" aria-label="Toggle theme">
-        <span class="icon-sun">${SUN_SVG}</span><span class="icon-moon">${MOON_SVG}</span>
+    const rssBtn = pluginHost.isEnabled("rss") ? html`<a class="footer-action-btn" href="/feed.xml" target="_blank" rel="noopener" title="RSS feed" aria-label="RSS feed">${raw(RSS_SVG)}</a>` : '';
+    const themeBtn = html`<button class="footer-action-btn theme-toggle immersive-sheet-theme" type="button" aria-label="Toggle theme">
+        <span class="icon-sun">${raw(SUN_SVG)}</span><span class="icon-moon">${raw(MOON_SVG)}</span>
       </button>`;
-    return `<div class="immersive-sheet-footer">
+    return html`<div class="immersive-sheet-footer">
       ${nav}
       <div class="immersive-sheet-footer-bottom">
         ${copyright}

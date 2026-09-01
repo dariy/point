@@ -17,7 +17,7 @@ import { Component } from '../../components/Component.js';
 
 import { getTagsGraph } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml, html, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
+import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { TagGraph } from "./tagGraph.js";
@@ -37,7 +37,7 @@ export default class TagsPage extends Component {
     const { loading, data, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper site-wrapper--graph">
           <div id="header-mount"></div>
           <main class="site-main site-main--graph" aria-busy="true">
@@ -48,12 +48,12 @@ export default class TagsPage extends Component {
     }
 
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
             <div class="main-container">
-               <p class="error-message" role="alert">${escapeHtml(error)}</p>
+               <p class="error-message" role="alert">${error}</p>
             </div>
           </main>
           <div id="footer-mount"></div>
@@ -66,11 +66,10 @@ export default class TagsPage extends Component {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(
         (t) =>
-          `<li><a ${html`href="/tags/${t.slug}"`.toString()}>${escapeHtml(t.name)} (${escapeHtml(String(t.post_count || 0))})</a></li>`,
-      )
-      .join('');
+          html`<li><a href="/tags/${t.slug}">${t.name} (${String(t.post_count || 0)})</a></li>`,
+      );
 
-    return `
+    return html`
       <div class="site-wrapper site-wrapper--graph">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
@@ -231,9 +230,9 @@ export default class TagsPage extends Component {
     const settings = store.get('settings') || {};
     const navTags = store.get('navTags') || [];
     const filterSlot = loaded
-      ? `<div class="tag-filter-box header-tag-filter">
-           ${SEARCH_SVG}
-           <input type="search" id="tag-filter-input" placeholder="Highlight tags…" value="${escapeHtml(this.state.filter)}" aria-label="Highlight tags in the graph">
+      ? html`<div class="tag-filter-box header-tag-filter">
+           ${raw(SEARCH_SVG)}
+           <input type="search" id="tag-filter-input" placeholder="Highlight tags…" value="${this.state.filter}" aria-label="Highlight tags in the graph">
          </div>`
       : '';
 

@@ -7,7 +7,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { escapeHtml, html } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 import { store } from "../../store.js";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
 import { setupTagFlyout } from "../../utils/tagFlyout.js";
@@ -16,21 +16,20 @@ import { ViewContext } from "../../utils/viewContext.js";
 export class ExploreBlock extends Component {
   render() {
     const { tags = [] } = this.props;
-    if (!tags.length) return "";
+    if (!tags.length) return html``;
 
     const items = tags
       .slice(0, 20) // Limit to top 20
       .map(
-        (t) => `
-        <a ${html`href="/tags/${t.slug}"`.toString()} class="tag-link"
-           title="${escapeHtml(t.name)} (${escapeHtml(String(t.count))} posts)">
-          ${escapeHtml(t.name)}
-          <span class="count">${escapeHtml(String(t.count))}</span>
+        (t) => html`
+        <a href="/tags/${t.slug}" class="tag-link"
+           title="${t.name} (${String(t.count)} posts)">
+          ${t.name}
+          <span class="count">${String(t.count)}</span>
         </a>`,
-      )
-      .join("");
+      );
 
-    return `
+    return html`
       <section class="explore-block" aria-labelledby="explore-title">
         <div class="explore-header">
           <h2 id="explore-title" class="explore-title">Explore</h2>

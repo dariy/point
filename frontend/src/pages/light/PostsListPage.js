@@ -1,5 +1,3 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * PostsListPage — paginated, filterable list of all posts.
  *
@@ -14,7 +12,7 @@ import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { escapeHtml, navigate, debounce, dropBrokenImages } from "../../utils/helpers.js";
+import { html, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { EDIT_SVG, X_SVG, LINK_SVG, CHECK_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG, SELECT_SVG, PLUS_SVG } from "../../utils/icons.js";
@@ -45,7 +43,7 @@ const CARD_THUMB_SIZES = "48px";
  * The poster URL 404s for videos that never got one (see dropBrokenImages),
  * which strips the <img> back to the bare glyph this list has always shown.
  */
-const videoThumb = (mediaUrl, sizes) => `${PLAY_SVG}${mediaUrl ? `<img ${thumbAttrs(mediaUrl, {
+const videoThumb = (mediaUrl, sizes) => html`${raw(PLAY_SVG)}${mediaUrl ? html`<img ${thumbAttrs(mediaUrl, {
   sizes
 })} class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">` : ""}`;
 export default class PostsListPage extends Component {
@@ -70,9 +68,9 @@ export default class PostsListPage extends Component {
       statusFilter
     } = this.state;
     const isTrash = statusFilter === "trash";
-    const actions = `
-      ${!isTrash ? `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
-      <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
+    const actions = html`
+      ${!isTrash ? html`<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${raw(selectMode ? X_SVG : SELECT_SVG)}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
+      <a href="/light/posts/new" class="btn btn-primary" title="New Post">${raw(PLUS_SVG)}<span class="btn-label">New Post</span></a>
     `;
     return adminLayoutTemplate({
       title: "Posts",
@@ -93,60 +91,62 @@ export default class PostsListPage extends Component {
     const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
     let thumbInner = "";
     if (isImage && p.media_url) {
-      thumbInner = `<img ${thumbAttrs(p.media_url, {
+      thumbInner = html`<img ${thumbAttrs(p.media_url, {
         sizes: CARD_THUMB_SIZES
       })} class="post-preview-img" loading="lazy" decoding="async">`;
     } else if (isVideo) {
       thumbInner = videoThumb(p.media_url, CARD_THUMB_SIZES);
     } else if (isAudio) {
-      thumbInner = MUSIC_SVG;
+      thumbInner = raw(MUSIC_SVG);
     }
     if (isTrash) {
       const deletedAt = p.deleted_at?.value ? formatDateShort(p.deleted_at.value) : p.deleted_at ? formatDateShort(p.deleted_at) : "";
-      return `
-        <div class="post-card post-card--trash" data-post-id="${escapeHtml(String(p.id))}">
+      return html`
+        <div class="post-card post-card--trash" data-post-id="${String(p.id)}">
           <div class="post-card-thumb post-card-thumb--muted"></div>
           <div class="post-card-body">
-            <div class="post-card-title muted">${escapeHtml(p.title)}</div>
+            <div class="post-card-title muted">${p.title}</div>
             <div class="post-card-meta">
-              <span class="trash-status-label">Was: ${escapeHtml(STATUS_LABELS[p.status] || p.status)}</span>
-              ${deletedAt ? `· ${escapeHtml(deletedAt)}` : ""}
+              <span class="trash-status-label">Was: ${STATUS_LABELS[p.status] || p.status}</span>
+              ${deletedAt ? html`· ${deletedAt}` : ""}
             </div>
             <div class="post-card-actions">
               <button class="btn btn-sm restore-btn"
-                      data-id="${escapeHtml(String(p.id))}"
-                      data-title="${escapeHtml(p.title)}"
-                      title="Restore">${RESTORE_SVG} Restore</button>
+                      data-id="${String(p.id)}"
+                      data-title="${p.title}"
+                      title="Restore">${raw(RESTORE_SVG)} Restore</button>
               <button class="btn btn-sm btn-danger perm-delete-btn"
-                      data-id="${escapeHtml(String(p.id))}"
-                      data-title="${escapeHtml(p.title)}"
-                      title="Delete permanently">${X_SVG} Delete</button>
+                      data-id="${String(p.id)}"
+                      data-title="${p.title}"
+                      title="Delete permanently">${raw(X_SVG)} Delete</button>
             </div>
           </div>
         </div>`;
     }
-    const cardStatusOptions = ["draft", "published", "scheduled", "hidden", "page"].map(s => `<option value="${s}"${effStatus(p) === s ? " selected" : ""}>${escapeHtml(STATUS_LABELS[s] || s)}</option>`).join("");
+    const cardStatusOptions = ["draft", "published", "scheduled", "hidden", "page"].map(s => html`<option value="${s}"${effStatus(p) === s ? " selected" : ""}>${STATUS_LABELS[s] || s}</option>`);
     const tagChips = (p.tags || []).map(t => {
       const name = typeof t === "string" ? t : t.name;
       const id = typeof t === "object" ? t.id : null;
-      return `<span class="tag-chip tag" ${id ? `data-id="${id}"` : ""}>${escapeHtml(name)}</span>`;
+      return html`<span class="tag-chip tag" ${id ? html`data-id="${id}"` : ""}>${name}</span>`;
     });
+    // Joined rather than left an array because the wrapper is gated on it
+    // being non-empty; every chip is html`` output, so raw() covers the join.
     const chipsHtml = tagChips.join("");
-    return `
-      <div class="post-card${isChecked ? " is-selected" : ""}" data-post-id="${escapeHtml(String(p.id))}" data-status="${escapeHtml(effStatus(p))}" data-slug="${escapeHtml(p.slug || "")}">
+    return html`
+      <div class="post-card${isChecked ? " is-selected" : ""}" data-post-id="${String(p.id)}" data-status="${effStatus(p)}" data-slug="${p.slug || ""}">
         <div class="post-card-thumb">${thumbInner}</div>
         <div class="post-card-body">
           <div class="post-card-top">
-            <span class="post-card-title">${escapeHtml(p.title)}</span>
-            <select class="status-select badge-${escapeHtml(effStatus(p))} status-change-btn" name="status" data-id="${escapeHtml(String(p.id))}">${cardStatusOptions}</select>
+            <span class="post-card-title">${p.title}</span>
+            <select class="status-select badge-${effStatus(p)} status-change-btn" name="status" data-id="${String(p.id)}">${cardStatusOptions}</select>
           </div>
-          ${chipsHtml ? `<div class="post-card-chips">${chipsHtml}</div>` : ""}
+          ${chipsHtml ? html`<div class="post-card-chips">${raw(chipsHtml)}</div>` : ""}
         </div>
         <div class="post-card-swipe-actions">
-          <button class="btn btn-sm swipe-publish-btn" data-id="${escapeHtml(String(p.id))}">${CHECK_SVG}<span>Publish</span></button>
-          <button class="btn btn-sm swipe-preview-btn" data-id="${escapeHtml(String(p.id))}">${LINK_SVG}<span>Link</span></button>
-          <a class="btn btn-sm" ${html`href="/posts/${p.slug}"`.toString()}>${EXTERNAL_LINK_SVG}<span>Open</span></a>
-          <button class="btn btn-sm btn-danger swipe-delete-btn" data-id="${escapeHtml(String(p.id))}" data-title="${escapeHtml(p.title)}">${X_SVG}<span>Delete</span></button>
+          <button class="btn btn-sm swipe-publish-btn" data-id="${String(p.id)}">${raw(CHECK_SVG)}<span>Publish</span></button>
+          <button class="btn btn-sm swipe-preview-btn" data-id="${String(p.id)}">${raw(LINK_SVG)}<span>Link</span></button>
+          <a class="btn btn-sm" href="/posts/${p.slug}">${raw(EXTERNAL_LINK_SVG)}<span>Open</span></a>
+          <button class="btn btn-sm btn-danger swipe-delete-btn" data-id="${String(p.id)}" data-title="${p.title}">${raw(X_SVG)}<span>Delete</span></button>
         </div>
       </div>`;
   }
@@ -161,16 +161,16 @@ export default class PostsListPage extends Component {
     const isTrash = statusFilter === "trash";
     let inner;
     if (loading) {
-      inner = `<p class="post-card-placeholder">Loading…</p>`;
+      inner = html`<p class="post-card-placeholder">Loading…</p>`;
     } else if (error) {
-      inner = `<p class="post-card-placeholder error-state">${escapeHtml(error)}</p>`;
+      inner = html`<p class="post-card-placeholder error-state">${error}</p>`;
     } else if (!posts.length) {
-      inner = `<p class="post-card-placeholder">${isTrash ? "Trash is empty." : "No posts found."}</p>`;
+      inner = html`<p class="post-card-placeholder">${isTrash ? "Trash is empty." : "No posts found."}</p>`;
     } else {
-      inner = posts.map(p => this._renderCardRow(p)).join("");
+      inner = posts.map(p => this._renderCardRow(p));
     }
     const selectClass = selectMode && !isTrash ? " select-mode" : "";
-    return `<div class="posts-card-list${selectClass}" id="posts-card-list">${inner}</div>`;
+    return html`<div class="posts-card-list${selectClass}" id="posts-card-list">${inner}</div>`;
   }
   _renderContent() {
     const {
@@ -186,31 +186,31 @@ export default class PostsListPage extends Component {
     const statusOptions = ["", "draft", "published", "scheduled", "hidden", "page", "trash"].map(s => {
       const label = s ? STATUS_LABELS[s] : "All statuses";
       const sel = statusFilter === s ? " selected" : "";
-      return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
-    }).join("");
+      return html`<option value="${s}"${sel}>${label}</option>`;
+    });
     const colspan = isTrash ? 5 : selectMode ? 5 : 4;
-    const rows = loading ? `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>` : error ? `<tr><td colspan="${colspan}" class="error-state">${escapeHtml(error)}</td></tr>` : !posts.length ? `<tr><td colspan="${colspan}" class="empty-state">${isTrash ? "Trash is empty." : "No posts found."}</td></tr>` : posts.map(p => {
+    const rows = loading ? html`<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>` : error ? html`<tr><td colspan="${colspan}" class="error-state">${error}</td></tr>` : !posts.length ? html`<tr><td colspan="${colspan}" class="empty-state">${isTrash ? "Trash is empty." : "No posts found."}</td></tr>` : posts.map(p => {
       const mediaUrl = p.media_url || "";
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
       const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
       const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
       let previewHtml = "";
       if (isImage && p.media_url) {
-        previewHtml = `<img ${thumbAttrs(p.media_url, {
+        previewHtml = html`<img ${thumbAttrs(p.media_url, {
           sizes: TABLE_THUMB_SIZES
         })} class="post-preview-img" loading="lazy" decoding="async">`;
       } else if (isVideo) {
-        previewHtml = `<div class="post-preview-placeholder" title="Video">${videoThumb(p.media_url, TABLE_POSTER_SIZES)}</div>`;
+        previewHtml = html`<div class="post-preview-placeholder" title="Video">${videoThumb(p.media_url, TABLE_POSTER_SIZES)}</div>`;
       } else if (isAudio) {
-        previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
+        previewHtml = html`<div class="post-preview-placeholder" title="Audio">${raw(MUSIC_SVG)}</div>`;
       } else {
-        previewHtml = `<div class="post-preview-placeholder"></div>`;
+        previewHtml = html`<div class="post-preview-placeholder"></div>`;
       }
       const isChecked = selectedIds.has(p.id);
       if (isTrash) {
         const deletedAt = p.deleted_at?.value ? formatDateShort(p.deleted_at.value) : p.deleted_at ? formatDateShort(p.deleted_at) : "";
-        return `
-                <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
+        return html`
+                <tr data-post-id="${String(p.id)}" class="post-row-main">
                   <td class="preview-col" rowspan="2">
                     <div class="post-preview-placeholder" title="Trashed"></div>
                   </td>
@@ -218,87 +218,87 @@ export default class PostsListPage extends Component {
                     <span class="badge badge-trash">Trash</span>
                   </td>
                   <td class="title-col">
-                    <span class="table-link muted">${escapeHtml(p.title)}</span>
+                    <span class="table-link muted">${p.title}</span>
                   </td>
-                  <td class="updated-col" title="Deleted">${escapeHtml(deletedAt)}</td>
+                  <td class="updated-col" title="Deleted">${deletedAt}</td>
                   <td class="actions-col">
                     <div class="actions">
                       <button class="btn btn-sm restore-btn"
-                              data-id="${escapeHtml(String(p.id))}"
-                              data-title="${escapeHtml(p.title)}"
-                              title="Restore">${RESTORE_SVG}</button>
+                              data-id="${String(p.id)}"
+                              data-title="${p.title}"
+                              title="Restore">${raw(RESTORE_SVG)}</button>
                       <button class="btn btn-sm btn-danger perm-delete-btn"
-                              data-id="${escapeHtml(String(p.id))}"
-                              data-title="${escapeHtml(p.title)}"
-                              title="Delete permanently">${X_SVG}</button>
+                              data-id="${String(p.id)}"
+                              data-title="${p.title}"
+                              title="Delete permanently">${raw(X_SVG)}</button>
                     </div>
                   </td>
                 </tr>
-                <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-tags">
+                <tr data-post-id="${String(p.id)}" class="post-row-tags">
                   <td colspan="4" class="tags-col muted-tags">
-                    <span class="trash-status-label">Was: ${escapeHtml(STATUS_LABELS[p.status] || p.status)}</span>
+                    <span class="trash-status-label">Was: ${STATUS_LABELS[p.status] || p.status}</span>
                   </td>
                 </tr>`;
       }
-      return `
-              <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
-                ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? "checked" : ""}></td>` : ""}
+      return html`
+              <tr data-post-id="${String(p.id)}" class="post-row-main">
+                ${selectMode ? html`<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? "checked" : ""}></td>` : ""}
                 <td class="preview-col" rowspan="2">
-                  <a ${html`href="/light/posts/${String(p.id)}/edit"`.toString()} title="Edit post">
+                  <a href="/light/posts/${String(p.id)}/edit" title="Edit post">
                     ${previewHtml}
                   </a>
                 </td>
                 <td class="status-col">
-                  <select class="status-select badge-${escapeHtml(effStatus(p))} status-change-btn"
-                          name="status" data-id="${escapeHtml(String(p.id))}">
-                    ${["draft", "published", "scheduled", "hidden", "page"].map(s => `
+                  <select class="status-select badge-${effStatus(p)} status-change-btn"
+                          name="status" data-id="${String(p.id)}">
+                    ${["draft", "published", "scheduled", "hidden", "page"].map(s => html`
                       <option value="${s}"${effStatus(p) === s ? " selected" : ""}>
-                        ${escapeHtml(STATUS_LABELS[s] || s)}
+                        ${STATUS_LABELS[s] || s}
                       </option>
-                    `).join("")}
+                    `)}
                   </select>
-                  ${p.status === "scheduled" && p.scheduled_at ? `<span class="scheduled-date">${escapeHtml(new Date(p.scheduled_at).toLocaleString([], {
+                  ${p.status === "scheduled" && p.scheduled_at ? html`<span class="scheduled-date">${new Date(p.scheduled_at).toLocaleString([], {
         month: "short",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit"
-      }))}</span>` : ""}
+      })}</span>` : ""}
                 </td>
                 <td class="title-col">
-                  <a ${html`href="/light/posts/${String(p.id)}/edit"`.toString()} class="table-link">
-                    ${escapeHtml(p.title)}
+                  <a href="/light/posts/${String(p.id)}/edit" class="table-link">
+                    ${p.title}
                   </a>
                 </td>
                 <td class="actions-col">
                   <div class="actions">
-                    <a ${html`href="/light/posts/${String(p.id)}/edit"`.toString()}
-                       class="btn btn-sm" title="Edit" aria-label="Edit post">${EDIT_SVG}</a>
-                    <a ${html`href="/posts/${p.slug}"`.toString()} class="btn btn-sm"
-                       title="View" aria-label="View on public site">${EXTERNAL_LINK_SVG}</a>
+                    <a href="/light/posts/${String(p.id)}/edit"
+                       class="btn btn-sm" title="Edit" aria-label="Edit post">${raw(EDIT_SVG)}</a>
+                    <a href="/posts/${p.slug}" class="btn btn-sm"
+                       title="View" aria-label="View on public site">${raw(EXTERNAL_LINK_SVG)}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
-                            data-id="${escapeHtml(String(p.id))}"
-                            data-title="${escapeHtml(p.title)}"
-                            title="Move to Trash" aria-label="Move to Trash">${X_SVG}</button>
+                            data-id="${String(p.id)}"
+                            data-title="${p.title}"
+                            title="Move to Trash" aria-label="Move to Trash">${raw(X_SVG)}</button>
                   </div>
                 </td>
               </tr>
-              <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-tags">
+              <tr data-post-id="${String(p.id)}" class="post-row-tags">
                 <td colspan="3" class="tags-col">
-                  <div id="tags-cell-${escapeHtml(String(p.id))}"></div>
+                  <div id="tags-cell-${String(p.id)}"></div>
                 </td>
               </tr>`;
-    }).join("");
-    return `
+    });
+    return html`
             <div class="posts-toolbar">
             <div class="filters">
-              <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || "draft")} filter-select">
+              <select id="status-filter" class="status-select badge-${statusFilter || "draft"} filter-select">
                 ${statusOptions}
               </select>
-              ${!isTrash ? `<div id="tag-filter-mount" class="tag-filter-container"></div>
+              ${!isTrash ? html`<div id="tag-filter-mount" class="tag-filter-container"></div>
                      <input type="search" id="search-input" class="form-input filter-search"
-                     placeholder="Search posts…" value="${escapeHtml(search)}">` : ""}
+                     placeholder="Search posts…" value="${search}">` : ""}
             </div>
-            ${selectMode && !isTrash ? `
+            ${selectMode && !isTrash ? html`
             <div class="bulk-toolbar" id="bulk-toolbar">
               <label class="select-all-label"><input type="checkbox" id="select-all-cb"> Select all</label>
               <div class="bulk-actions">
@@ -308,8 +308,8 @@ export default class PostsListPage extends Component {
                   <option value="published">Published</option>
                   <option value="hidden">Hidden</option>
                 </select>
-                <button id="bulk-apply-btn" class="btn btn-sm" disabled title="Apply">${CHECK_SVG}<span class="btn-label">Apply</span></button>
-                <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Move to Trash">${TRASH_SVG}<span class="btn-label">Move to Trash</span></button>
+                <button id="bulk-apply-btn" class="btn btn-sm" disabled title="Apply">${raw(CHECK_SVG)}<span class="btn-label">Apply</span></button>
+                <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Move to Trash">${raw(TRASH_SVG)}<span class="btn-label">Move to Trash</span></button>
               </div>
             </div>
             ` : ""}
@@ -705,13 +705,13 @@ export default class PostsListPage extends Component {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
-    const CHEVRON = d => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = html`${raw(CHEVRON(d))}`;
+      b.innerHTML = html`${CHEVRON(d)}`;
       b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);

@@ -1,9 +1,10 @@
 import { Component } from "../../Component.js";
 import { store } from "../../../store.js";
+import { html } from "../../../utils/helpers.js";
 
 export class RebuildThumbnailsSection extends Component {
   render() {
-    return `
+    return html`
       <div class="section-block">
         <h3 class="section-subhead">Maintenance</h3>
         <button type="button" class="btn btn-secondary" id="rebuild-thumbnails-btn">Rebuild Thumbnails</button>

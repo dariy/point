@@ -1,5 +1,3 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * MediaBrowser — reusable media library component.
  *
@@ -29,7 +27,7 @@ import { MediaPager } from "../../core/mediaPager.js";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { escapeHtml, navigate } from "../../utils/helpers.js";
+import { html, navigate, raw } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.js";
@@ -120,9 +118,9 @@ export class MediaBrowser extends Component {
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
     const data = await listMedia(params);
     const items = data.media || [];
-    if (!items.length) return `<p class="empty-state">No media files.</p>`;
+    if (!items.length) return html`<p class="empty-state">No media files.</p>`;
     const none = new Set();
-    return `<div class="media-grid">${items.map(m => this._renderItem(m, none)).join("")}</div>`;
+    return html`<div class="media-grid">${items.map(m => this._renderItem(m, none))}</div>`;
   }
 
   /**
@@ -150,24 +148,24 @@ export class MediaBrowser extends Component {
       selectedIds
     } = this.state;
     const pickerMode = this.props.pickerMode;
-    const grid = loading ? `<div class="loading-spinner" aria-label="Loading media…"></div>` : error ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>` : !media.length ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>` : `<div class="media-grid">${media.map(m => this._renderItem(m, selectedIds)).join("")}</div>`;
-    const dropOverlay = pickerMode ? `<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
+    const grid = loading ? html`<div class="loading-spinner" aria-label="Loading media…"></div>` : error ? html`<p class="error-state" role="alert">${error}</p>` : !media.length ? html`<p class="empty-state">No media files. Drag &amp; drop to upload.</p>` : html`<div class="media-grid">${media.map(m => this._renderItem(m, selectedIds))}</div>`;
+    const dropOverlay = pickerMode ? html`<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
-         </div>` : `<div class="drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
+         </div>` : html`<div class="drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
          </div>`;
     const selectionBar = !pickerMode && this.state.selectMode ? this._renderSelectionBar() : "";
-    return `
+    return html`
       <div class="media-browser${pickerMode ? " media-browser--picker" : ""}${this.state.selectMode ? " media-browser--select-mode" : ""}">
         <input type="file" id="mb-file-input" multiple accept="image/*,video/*,audio/*" style="display:none">
 
-        ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ""}
+        ${uploading ? html`<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ""}
         ${selectionBar}
         ${this._renderMobileBar(typeFilter)}
         <div class="media-layout">
@@ -198,9 +196,9 @@ export class MediaBrowser extends Component {
   _renderTypeFilter(typeFilter) {
     const typeOptions = ["", "image", "video", "audio", "file"].map(t => {
       const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
-      return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
-    }).join("");
-    return `<select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
+      return html`<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
+    });
+    return html`<select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
   }
 
   /**
@@ -211,12 +209,14 @@ export class MediaBrowser extends Component {
    * those in the header <h1> instead (see afterRender).
    */
   _renderMobileBar(typeFilter) {
-    const chips = folderChips(this.state.folders, this.state.selectedFolder).map(c => `<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${escapeHtml(c.folder)}">${escapeHtml(c.label)}</button>`).join("");
-    const controls = this._renderControls().trim();
-    return `
+    const chips = folderChips(this.state.folders, this.state.selectedFolder).map(c => html`<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${c.folder}">${c.label}</button>`);
+    // .trim() drops back to a primitive string, so the markup goes in raw();
+    // the emptiness test is what the trim is for.
+    const controls = String(this._renderControls()).trim();
+    return html`
       <div class="mb-mobile-bar">
         ${this.props.pickerMode ? this._renderBreadcrumbs() : ""}
-        ${controls ? `<div class="mb-mobile-controls">${controls}</div>` : ""}
+        ${controls ? html`<div class="mb-mobile-controls">${raw(controls)}</div>` : ""}
         <div class="mb-folder-row">
           ${this._renderTypeFilter(typeFilter)}
           <div class="mb-folder-chips" role="group" aria-label="Media folders">${chips}</div>
@@ -252,7 +252,7 @@ export class MediaBrowser extends Component {
     if (this.props.pickerMode) return "";
     const pending = this._posterlessVideos().length;
     if (!pending) return "";
-    return `
+    return html`
       <button class="mb-posters-btn btn btn-sm btn-secondary"
               title="Download each video to capture a thumbnail frame"
               ${this.state.capturingPosters ? "disabled" : ""}>
@@ -304,26 +304,26 @@ export class MediaBrowser extends Component {
     } = this.state;
     const parts = selectedFolder ? selectedFolder.split("/") : [];
     const rootLabel = this.props.pickerMode ? "All Media" : "Media";
-    let crumbs = `<button class="mb-breadcrumb-item" data-folder="">${escapeHtml(rootLabel)}</button>`;
+    const crumbs = [html`<button class="mb-breadcrumb-item" data-folder="">${rootLabel}</button>`];
     let currentPath = "";
     parts.forEach((p, i) => {
       currentPath += (currentPath ? "/" : "") + p;
       const label = i === 1 ? monthLabel(p) : p;
-      crumbs += ` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${escapeHtml(currentPath)}">${escapeHtml(label)}</button>`;
+      crumbs.push(html` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${currentPath}">${label}</button>`);
     });
-    return `<div class="mb-breadcrumbs">${crumbs}</div>`;
+    return html`<div class="mb-breadcrumbs">${crumbs}</div>`;
   }
   _renderSelectionBar() {
     const count = this.state.selectedIds.size;
-    return `
+    return html`
       <div class="mb-selection-bar" role="toolbar" aria-label="Selection actions">
         <span class="mb-selection-count">${count} selected</span>
         <div class="mb-selection-actions">
           <button id="mb-sel-create-post" class="btn btn-sm btn-primary" title="Create new post with selected images" ${count === 0 ? "disabled" : ""}>
-            ${PLUS_SVG} Create post
+            ${raw(PLUS_SVG)} Create post
           </button>
           <button id="mb-sel-delete" class="btn btn-sm btn-danger" title="Delete selected files" ${count === 0 ? "disabled" : ""}>
-            ${TRASH_SVG} Delete (${count})
+            ${raw(TRASH_SVG)} Delete (${count})
           </button>
         </div>
         <button id="mb-sel-cancel" class="btn btn-sm btn-secondary" title="Exit selection mode">✕ Cancel</button>
@@ -348,20 +348,20 @@ export class MediaBrowser extends Component {
     //
     // A video's dimensions describe the video, and its poster is fitted into the
     // same box the ladder caps at, so they are only handed over for an image.
-    const preview = hasStill ? `<img ${thumbAttrs(m.path || m.thumbnail_path, {
+    const preview = hasStill ? html`<img ${thumbAttrs(m.path || m.thumbnail_path, {
       sizes: GRID_THUMB_SIZES,
       width: isImage ? m.width : 0,
       height: isImage ? m.height : 0
-    })} alt="${escapeHtml(m.filename)}" loading="lazy" decoding="async" draggable="false">${isVideo ? `<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>` : ""}` : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"}</div>`;
-    const publicStatus = m.is_public ? "" : `
+    })} alt="${m.filename}" loading="lazy" decoding="async" draggable="false">${isVideo ? html`<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>` : ""}` : html`<div class="file-icon" aria-label="${fileType || "file"}">${isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"}</div>`;
+    const publicStatus = m.is_public ? "" : html`
       <div class="media-item-status" title="Private (hidden from guests)">
-        ${LOCK_SVG}
+        ${raw(LOCK_SVG)}
       </div>`;
     const copyPath = m.path || "";
-    const pickerCheckbox = pickerMode || this.state.selectMode ? `
+    const pickerCheckbox = pickerMode || this.state.selectMode ? html`
       <label class="media-item-checkbox" title="${isSelected ? "Deselect" : "Select"}">
-        <input type="checkbox" class="media-item-check" data-id="${escapeHtml(String(m.id))}"
-               ${isSelected ? "checked" : ""} aria-label="Select ${escapeHtml(m.filename)}">
+        <input type="checkbox" class="media-item-check" data-id="${String(m.id)}"
+               ${isSelected ? "checked" : ""} aria-label="Select ${m.filename}">
       </label>` : "";
     const exifPanel = pickerMode ? "" : this._renderExifPanel(m);
     const refPanel = !pickerMode && isImage ? this._renderReferringPostsInline(m) : "";
@@ -373,29 +373,29 @@ export class MediaBrowser extends Component {
                 data-id="${String(m.id)}"
                 data-path="${m.path || ""}" title="Create post with this image" aria-label="Create post with this image">${raw(PLUS_SVG)}</button>` : ""}
         <button class="btn btn-sm rename-media-btn"
-                data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${raw(EDIT_SVG)}</button>
+                data-id="${String(m.id)}"
+                data-name="${m.filename}" title="Rename" aria-label="Rename file">${raw(EDIT_SVG)}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
-                data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">${raw(TRASH_SVG)}</button>
-        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${raw(INFO_SVG)}</button>
+                data-id="${String(m.id)}"
+                data-name="${m.filename}" title="Delete" aria-label="Delete file">${raw(TRASH_SVG)}</button>
+        <button class="btn btn-sm exif-toggle-btn" data-id="${String(m.id)}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${raw(INFO_SVG)}</button>
 
       </div>`;
-    return `
+    return html`
       <div class="media-item${isSelected ? " media-item--selected" : ""}"
-           data-id="${escapeHtml(String(m.id))}"${isImage ? html` data-src="${m.path || ""}" data-alt="${m.filename}"`.toString() : ""}>
+           data-id="${String(m.id)}"${isImage ? html` data-src="${m.path || ""}" data-alt="${m.filename}"` : ""}>
         ${pickerCheckbox}
         ${publicStatus}
         <div class="media-item-preview${isImage && !pickerMode ? " media-item-preview--clickable" : ""}">${preview}</div>
         <div class="media-item-info">
           <div class="media-item-name-row">
-            <div class="media-item-name" title="Click to select: ${escapeHtml(m.path)}">${escapeHtml(m.path)}</div>
-            ${pickerMode ? "" : `
+            <div class="media-item-name" title="Click to select: ${m.path}">${m.path}</div>
+            ${pickerMode ? "" : html`
               <button class="btn btn-sm copy-path-btn"
-                      data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>`}
+                      data-path="${copyPath}" title="Copy path to clipboard">⎘</button>`}
           </div>
           <div class="media-item-meta">
-            ${escapeHtml(formatFileSize(m.file_size))} · ${escapeHtml(formatDateShort(m.uploaded_at))}
+            ${formatFileSize(m.file_size)} · ${formatDateShort(m.uploaded_at)}
           </div>
         </div>
         ${actions}
@@ -408,9 +408,9 @@ export class MediaBrowser extends Component {
     if (!st) return "";
     let body = "";
     if (st.loading) {
-      body = `<div class="referring-posts-loading">Searching…</div>`;
+      body = html`<div class="referring-posts-loading">Searching…</div>`;
     } else if (st.error) {
-      body = `<div class="referring-posts-error">${escapeHtml(st.error)}</div>`;
+      body = html`<div class="referring-posts-error">${st.error}</div>`;
     } else if (!st.posts || st.posts.length === 0) {
       return "";
     } else {
@@ -422,25 +422,25 @@ export class MediaBrowser extends Component {
           </a>
         </li>`)}</ul>`;
     }
-    return `
-      <div class="referring-posts-panel inline" id="ref-panel-${escapeHtml(String(m.id))}">
+    return html`
+      <div class="referring-posts-panel inline" id="ref-panel-${String(m.id)}">
         <div class="referring-posts-header">
-          <span class="referring-posts-title">${LINK_SVG} Used in posts</span>
+          <span class="referring-posts-title">${raw(LINK_SVG)} Used in posts</span>
         </div>
         ${body}
       </div>`;
   }
   _renderExifPanel(m) {
     const metadata = m.metadata || {};
-    const rows = Object.entries(metadata).map(([k, v]) => `<tr>
-        <td><input class="exif-key" value="${escapeHtml(String(k))}" placeholder="Field name" aria-label="EXIF field name"></td>
-        <td><input class="exif-val" value="${escapeHtml(String(v))}" placeholder="Value" aria-label="EXIF value"></td>
+    const rows = Object.entries(metadata).map(([k, v]) => html`<tr>
+        <td><input class="exif-key" value="${String(k)}" placeholder="Field name" aria-label="EXIF field name"></td>
+        <td><input class="exif-val" value="${String(v)}" placeholder="Value" aria-label="EXIF value"></td>
         <td><button class="exif-delete-btn" type="button" title="Remove field" aria-label="Remove EXIF field">\u00d7</button></td>
-      </tr>`).join("");
-    return `
-      <div class="exif-panel" id="exif-panel-${escapeHtml(String(m.id))}" hidden>
+      </tr>`);
+    return html`
+      <div class="exif-panel" id="exif-panel-${String(m.id)}" hidden>
         <div class="exif-panel-heading">
-          <span class="exif-panel-title">${INFO_SVG} EXIF / Camera data</span>
+          <span class="exif-panel-title">${raw(INFO_SVG)} EXIF / Camera data</span>
         </div>
         <table class="exif-table">
           <thead><tr><th>Field</th><th>Value</th><th></th></tr></thead>
@@ -448,9 +448,9 @@ export class MediaBrowser extends Component {
         </table>
         <div class="exif-actions">
           <button class="btn btn-sm exif-add-btn" type="button">+ Add field</button>
-          <button class="btn btn-sm btn-primary exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
-          <button class="btn btn-sm exif-revert-btn" type="button" data-id="${escapeHtml(String(m.id))}">Revert to original</button>
-          <button class="btn btn-sm exif-reextract-btn" type="button" data-id="${escapeHtml(String(m.id))}">Re-extract from file</button>
+          <button class="btn btn-sm btn-primary exif-save-btn" type="button" data-id="${String(m.id)}">Save EXIF</button>
+          <button class="btn btn-sm exif-revert-btn" type="button" data-id="${String(m.id)}">Revert to original</button>
+          <button class="btn btn-sm exif-reextract-btn" type="button" data-id="${String(m.id)}">Re-extract from file</button>
         </div>
       </div>`;
   }
@@ -732,7 +732,7 @@ export class MediaBrowser extends Component {
     if (!pickerMode) {
       const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
-        h1.innerHTML = html`${raw(this._renderBreadcrumbs())}`;
+        h1.innerHTML = html`${this._renderBreadcrumbs()}`;
         h1.querySelectorAll(".mb-breadcrumb-item").forEach(btn => {
           btn.addEventListener("click", () => {
             this.setState({

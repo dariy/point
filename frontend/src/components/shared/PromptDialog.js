@@ -14,11 +14,11 @@
 
 import { Component } from '../Component.js';
 import { Modal } from './Modal.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 
 export class PromptDialog extends Component {
   render() {
-    return `
+    return html`
       <div id="modal-wrapper"></div>
     `;
   }
@@ -80,9 +80,9 @@ export class PromptDialog extends Component {
   _getFooterHtml() {
     const { confirmText = 'Confirm', variant = 'primary' } = this.props;
     const okClass = variant === 'danger' ? 'btn-danger' : 'btn-primary';
-    return `
+    return html`
       <button class="btn btn-secondary" id="prompt-cancel-btn">Cancel</button>
-      <button class="btn ${okClass}" id="prompt-ok-btn">${escapeHtml(confirmText)}</button>
+      <button class="btn ${okClass}" id="prompt-ok-btn">${confirmText}</button>
     `;
   }
 }

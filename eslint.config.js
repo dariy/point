@@ -78,13 +78,38 @@ const rules = {
       message: "Use the html tagged template helper for insertAdjacentHTML."
     },
     {
-      selector: "TaggedTemplateExpression[tag.name='html'] TemplateElement[value.raw=/=\\s*$/]",
+      // raw() is the one way past the html`` tag's escaping, so what may go
+      // through it is deliberately narrow: a module-level constant (the SVG
+      // blobs), a string literal, or a choice between those. A template literal
+      // argument is markup assembled on the spot — exactly the hand-built
+      // string this migration removed — and a call is a value the reader
+      // cannot check at the call site. Both are errors; the handful of
+      // legitimate calls (Prism.highlight, joins of html`` pieces) carry an
+      // eslint-disable line naming why they are safe.
+      selector: "CallExpression[callee.name='raw'] > TemplateLiteral",
+      message: "raw() must not wrap a template literal — build the markup with html`` instead."
+    },
+    {
+      selector: "CallExpression[callee.name='raw'] > CallExpression",
+      message: "raw() must not wrap a call. If the value is genuinely pre-escaped, say why on an eslint-disable-next-line."
+    },
+    {
+      // An interpolation landing straight after `attr=` is unquoted, and the
+      // helper's URL-position scan only works on quoted attributes. The name
+      // must be preceded by whitespace so a query string inside a quoted value
+      // (href="/map?tag=${slug}") is not mistaken for one.
+      selector: "TaggedTemplateExpression[tag.name='html'] TemplateElement[value.raw=/\\s[\\w:.-]+=\\s*$/]",
       message: "Attribute interpolations must be quoted (e.g. href=\"${url}\")."
     }
   ],
 };
 
 export default [
+  {
+    // `npx eslint .` otherwise walks the runtime storage directory (and the
+    // generated bundles), which is not source and is not always readable.
+    ignores: ["data/**", "frontend/js/**", "frontend/js-debug/**", "frontend/vendor/**"],
+  },
   {
     // demo/mock/ is browser code too — it is bundled into the static demo in
     // place of the normal entry point (demo/scripts/build.sh).

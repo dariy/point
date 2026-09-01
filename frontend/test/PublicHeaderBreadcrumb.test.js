@@ -146,6 +146,44 @@ describe('Breadcrumbs plugin', () => {
     assert.ok(markup.includes('Travel'), 'Should render the tag crumb');
   });
 
+  // ── Crumb hrefs ───────────────────────────────────────────────────────────
+
+  // A crumb's href comes from tag.url, which the owner sets in the tags manager
+  // — and the trail renders on every public page. It used to be interpolated
+  // with escapeHtml (which leaves `javascript:` intact) on the last crumb, and
+  // with nothing at all on the others, so a quote in it closed the attribute
+  // and everything after it became live attributes on the <a>.
+  test('a hostile crumb href cannot escape the attribute or run a protocol', () => {
+    for (const href of ['javascript:alert(1)', 'data:text/html,<script>x</script>', '//evil.example/x']) {
+      const markup = String(renderWith(
+        { pathname: '/', query: {} },
+        { breadcrumb: [{ name: 'A', slug: 'a', href }] },
+      ));
+      assert.match(markup, /href="#"/, href);
+      assert.ok(!markup.includes(href), 'the raw value never reaches the attribute: ' + href);
+    }
+  });
+
+  test('a quote in a non-terminal crumb href stays inside the attribute', () => {
+    const markup = String(renderWith(
+      { pathname: '/', query: {} },
+      { breadcrumb: [{ name: 'A', slug: 'a', href: '/x" onmouseover="alert(1)' },
+                     { name: 'B', slug: 'b' }] },
+    ));
+    // The text is still there, but entity-escaped inside the value rather than
+    // sitting between two real quotes where the parser would read an attribute.
+    assert.ok(!markup.includes('" onmouseover="'), 'no attribute broke out of the href');
+    assert.match(markup, /&quot; onmouseover=&quot;/, 'the quotes are escaped in place');
+  });
+
+  test('an ordinary crumb href is left alone', () => {
+    const markup = String(renderWith(
+      { pathname: '/', query: {} },
+      { breadcrumb: [{ name: 'A', slug: 'a', href: '/tags/a?x=1&y=2' }] },
+    ));
+    assert.match(markup, /href="\/tags\/a\?x=1&amp;y=2"/);
+  });
+
   // ── Aria-live announcement ────────────────────────────────────────────────
 
   test('aria-live text included when active facets exist', () => {

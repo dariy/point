@@ -1,5 +1,5 @@
 import { Component } from '../Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 const SHORTCUTS = [
@@ -25,9 +25,9 @@ export class ShortcutHelp extends Component {
   }
 
   render() {
-    if (!this.state.isOpen) return '';
+    if (!this.state.isOpen) return html``;
 
-    return `
+    return html`
       <div class="sh-overlay" id="sh-overlay">
         <div class="sh-dialog">
           <div class="sh-header">
@@ -35,19 +35,19 @@ export class ShortcutHelp extends Component {
             <button class="sh-close">&times;</button>
           </div>
           <div class="sh-body">
-            ${SHORTCUTS.map(g => `
+            ${SHORTCUTS.map(g => html`
               <div class="sh-group">
-                <h4 class="sh-group-title">${escapeHtml(g.group)}</h4>
+                <h4 class="sh-group-title">${g.group}</h4>
                 <div class="sh-group-items">
-                  ${g.items.map(s => `
+                  ${g.items.map(s => html`
                     <div class="sh-item">
-                      <span class="sh-label">${escapeHtml(s.label)}</span>
-                      <kbd class="sh-key">${escapeHtml(s.key)}</kbd>
+                      <span class="sh-label">${s.label}</span>
+                      <kbd class="sh-key">${s.key}</kbd>
                     </div>
-                  `).join('')}
+                  `)}
                 </div>
               </div>
-            `).join('')}
+            `)}
           </div>
         </div>
       </div>

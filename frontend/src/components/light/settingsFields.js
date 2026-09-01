@@ -9,7 +9,7 @@
  * secrets, then plain text).
  */
 
-import { escapeHtml, html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.js";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
@@ -112,16 +112,13 @@ function inputHtml(key, value, { posts = [] }) {
     const options = posts
       .filter((p) => p.type === "page")
       .map((p) => {
-        const slug = escapeHtml(p.slug);
-        const title = escapeHtml(p.title || p.slug);
         const selected = p.slug === value ? " selected" : "";
-        return `<option value="${slug}"${selected}>${title}</option>`;
-      })
-      .join("");
+        return html`<option value="${p.slug}"${selected}>${p.title || p.slug}</option>`;
+      });
     const previewLink = value
-      ? `<a ${html`href="/posts/${String(value)}"`.toString()} class="settings-preview-link">Preview</a>`
+      ? html`<a href="/posts/${String(value)}" class="settings-preview-link">Preview</a>`
       : "";
-    return `<div class="settings-input-with-preview">
+    return html`<div class="settings-input-with-preview">
         <select name="${key}" id="${key}" class="form-select">
           <option value="">— None —</option>
           ${options}
@@ -130,18 +127,21 @@ function inputHtml(key, value, { posts = [] }) {
       </div>`;
   }
   if (key === "logo_url") {
-    const v = escapeHtml(String(value || ""));
+    const v = String(value || "");
+    // src= puts the tag's URL policy in play, so the preview no longer paints
+    // an admin-typed `javascript:` or `data:` value. The raw `v` goes in, not
+    // an escaped copy — safeUrl() escapes, and escaping twice mangles a query.
     const preview = value
-      ? `<img class="settings-logo-preview" src="${v}" alt="Logo preview" decoding="async">`
+      ? html`<img class="settings-logo-preview" src="${v}" alt="Logo preview" decoding="async">`
       : "";
-    return `<div class="settings-logo-field">
+    return html`<div class="settings-logo-field">
         ${preview}
         <input type="text" name="${key}" id="${key}" class="form-input" value="${v}" placeholder="/media/… or https://…">
         <button type="button" class="btn btn-secondary settings-logo-pick">Choose…</button>
       </div>`;
   }
   if (key === "default_theme") {
-    return `
+    return html`
       <select name="${key}" id="${key}" class="form-select">
         <option value="light"${value === "light" ? " selected" : ""}>Light</option>
         <option value="dark"${value === "dark" ? " selected" : ""}>Dark</option>
@@ -150,7 +150,7 @@ function inputHtml(key, value, { posts = [] }) {
   }
   if (key === "immersive_nav_direction") {
     const isFeed = value === "feed";
-    return `
+    return html`
       <select name="${key}" id="${key}" class="form-select">
         <option value="chronological"${!isFeed ? " selected" : ""}>Chronological (◁ older, ▷ newer)</option>
         <option value="feed"${isFeed ? " selected" : ""}>Feed order (◁ newer, ▷ older)</option>
@@ -158,7 +158,7 @@ function inputHtml(key, value, { posts = [] }) {
   }
   if (key === "exif_visibility") {
     const v = value || "hide";
-    return `
+    return html`
       <select name="${key}" id="${key}" class="form-select">
         <option value="hide"${v === "hide" ? " selected" : ""}>Hide</option>
         <option value="admin"${v === "admin" ? " selected" : ""}>Admins only</option>
@@ -167,21 +167,21 @@ function inputHtml(key, value, { posts = [] }) {
   }
   if (key === "tags_visibility") {
     const v = value || "hidden";
-    return `
+    return html`
       <select name="${key}" id="${key}" class="form-select">
         <option value="hidden"${v === "hidden" ? " selected" : ""}>Admins only</option>
         <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
       </select>`;
   }
   if (key === "footer_copyright") {
-    const v = escapeHtml(String(value || ""));
-    return `<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
+    const v = String(value || "");
+    return html`<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
       <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Links: <code>[text](https://example.com)</code> or <code>[text](/path)</code>. Leave blank for the default.</small>`;
   }
   if (key === "default_post_title_format") {
     const format = String(value || "").trim() || DEFAULT_POST_TITLE_FORMAT;
-    return `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" placeholder="${DEFAULT_POST_TITLE_FORMAT}">
-      <small class="form-hint">A post saved without a title is named after the day it was written. Tokens: <code>YYYY</code> <code>YY</code> <code>MMMM</code> <code>MMM</code> <code>MM</code> <code>DDDD</code> <code>DDD</code> <code>DD</code> <code>HH</code> <code>mm</code> <code>ss</code>. Anything else is literal; use <code>[brackets]</code> for words that contain a token. Today: <strong>${escapeHtml(formatTitleDate(format))}</strong></small>`;
+    return html`<input type="text" name="${key}" id="${key}" class="form-input" value="${String(value)}" placeholder="${DEFAULT_POST_TITLE_FORMAT}">
+      <small class="form-hint">A post saved without a title is named after the day it was written. Tokens: <code>YYYY</code> <code>YY</code> <code>MMMM</code> <code>MMM</code> <code>MM</code> <code>DDDD</code> <code>DDD</code> <code>DD</code> <code>HH</code> <code>mm</code> <code>ss</code>. Anything else is literal; use <code>[brackets]</code> for words that contain a token. Today: <strong>${formatTitleDate(format)}</strong></small>`;
   }
   if (key.startsWith("gemini_prompt_")) {
     // ponytail: placeholders mirror media_service.go's built-in defaults.
@@ -190,23 +190,23 @@ function inputHtml(key, value, { posts = [] }) {
       gemini_prompt_tags: "relevant keyword tags",
       gemini_prompt_excerpt: "a 1-2 sentence description",
     };
-    return `<textarea name="${key}" id="${key}" class="form-input" rows="2" maxlength="200" placeholder="${escapeHtml(defaults[key] || "")}">${escapeHtml(String(value))}</textarea>
+    return html`<textarea name="${key}" id="${key}" class="form-input" rows="2" maxlength="200" placeholder="${defaults[key] || ""}">${String(value)}</textarea>
       <small class="form-hint">Tells the AI what to produce for this field. Leave blank for the default.</small>`;
   }
   if (isNumericKey(key)) {
-    return `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
+    return html`<input type="number" name="${key}" id="${key}" class="form-input" value="${String(value)}">`;
   }
   if (isSecretKey(key)) {
     // Secret values are never echoed back by the API; blank means "keep".
-    const input = `<input type="password" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" autocomplete="new-password" placeholder="Leave blank to keep the current value">`;
+    const input = html`<input type="password" name="${key}" id="${key}" class="form-input" value="${String(value)}" autocomplete="new-password" placeholder="Leave blank to keep the current value">`;
     const oauthProvider = { remark_auth_github_csec: "github", remark_auth_google_csec: "google" }[key];
     if (oauthProvider) {
-      return `${input}
-      <small class="form-hint">Callback URL for the OAuth app: <code>${escapeHtml(window.location.origin)}/comments/auth/${oauthProvider}/callback</code></small>`;
+      return html`${input}
+      <small class="form-hint">Callback URL for the OAuth app: <code>${window.location.origin}/comments/auth/${oauthProvider}/callback</code></small>`;
     }
     return input;
   }
-  return `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
+  return html`<input type="text" name="${key}" id="${key}" class="form-input" value="${String(value)}">`;
 }
 
 /**
@@ -217,7 +217,10 @@ function inputHtml(key, value, { posts = [] }) {
  * @param {string[]} keys
  * @param {Record<string,*>} settings
  * @param {{posts?: Array}} [ctx]
- * @returns {{inputs: string, toggles: string}}
+ * @returns {{inputs: import("../../utils/helpers.js").RawHtml|string,
+ *            toggles: import("../../utils/helpers.js").RawHtml|string}}
+ *   Empty is '' rather than empty markup: callers gate a wrapper on each of
+ *   these, and html`` yields a String object, which is truthy even when blank.
  */
 export function renderFields(keys, settings, ctx = {}) {
   const inputs = [];
@@ -230,7 +233,7 @@ export function renderFields(keys, settings, ctx = {}) {
     if (isToggleKey(key)) {
       const checked =
         value === "true" || value === "1" || value === true || value === 1;
-      toggles.push(`
+      toggles.push(html`
         <label class="setting-pill">
           <input type="checkbox" name="${key}" id="${key}" class="setting-pill-input" ${checked ? "checked" : ""}>
           <span class="setting-pill-label">${label}</span>
@@ -238,14 +241,18 @@ export function renderFields(keys, settings, ctx = {}) {
       continue;
     }
 
-    inputs.push(`
+    inputs.push(html`
       <div class="form-group">
         <label class="form-label" for="${key}">${label}</label>
         ${inputHtml(key, value, ctx)}
       </div>`);
   }
 
-  return { inputs: inputs.join(""), toggles: toggles.join("") };
+  // Every part is html`` output; raw() covers only the join that turns the
+  // array back into one string.
+  // eslint-disable-next-line no-restricted-syntax
+  const join = (parts) => (parts.length ? raw(parts.join("")) : "");
+  return { inputs: join(inputs), toggles: join(toggles) };
 }
 
 /**

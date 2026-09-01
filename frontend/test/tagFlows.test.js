@@ -131,7 +131,7 @@ describe('tagFlows', () => {
 
   describe('positionOptions', () => {
     test('offers the front of the group, then each sibling in stored order', () => {
-      const html = positionOptions(FOREST, 2, 99);
+      const html = String(positionOptions(FOREST, 2, 99));
       assert.match(html, /^<option value="">At beginning<\/option>/);
       assert.deepEqual(html.match(/After "[^"]+"/g), ['After "Kyoto"', 'After "Osaka"']);
       assert.deepEqual(html.match(/value="\d+"/g), ['value="3"', 'value="4"'],
@@ -139,7 +139,7 @@ describe('tagFlows', () => {
     });
 
     test('never offers the moving tag as its own anchor', () => {
-      const html = positionOptions(FOREST, 2, 3);
+      const html = String(positionOptions(FOREST, 2, 3));
       assert.doesNotMatch(html, /Kyoto/);
       assert.match(html, /Osaka/);
     });
@@ -157,7 +157,7 @@ describe('tagFlows', () => {
         tag(1, 'Parent', { children: [{ id: 2 }] }),
         tag(2, 'Food & "<b>Drink</b>"', { parents: [{ id: 1 }] }),
       ];
-      assert.match(positionOptions(tags, 1, 99),
+      assert.match(String(positionOptions(tags, 1, 99)),
         /After "Food &amp; &quot;&lt;b&gt;Drink&lt;\/b&gt;&quot;"/);
     });
   });

@@ -1,5 +1,3 @@
-import { raw } from "../../../utils/helpers.js";
-import { html } from "../../../utils/helpers.js";
 /**
  * tagFlows — the tags manager's mutating flows: Move…, Merge…, the confirm
  * shown when one tag is dragged onto another, and the bulk operations behind
@@ -18,12 +16,12 @@ import { html } from "../../../utils/helpers.js";
  * hold no page state: the tag list comes in as an argument and everything a
  * caller must react to goes out through `onDone`.
  *
- * All user-supplied strings are escaped with escapeHtml() before interpolation;
+ * All markup is built with the html`` tag, which escapes every interpolation;
  * openTagPickerDialog and openOverlay insert what they are given as-is.
  */
 
 import { store } from '../../../store.js';
-import { escapeHtml } from '../../../utils/helpers.js';
+import { html } from '../../../utils/helpers.js';
 import { setTagParents, deleteTag, patchTag, moveTag, mergeTags } from '../../../api/tags.js';
 import { openTagPickerDialog, openOverlay } from './TagPickerDialog.js';
 import { getChildrenOf } from './tagOrdering.js';
@@ -66,7 +64,7 @@ export function parentsWith(tag, parentId) {
  * that way — and the moving tag is never offered as its own anchor.
  */
 export function positionOptions(tags, parentId, movingId) {
-  return [`<option value="">At beginning</option>`, ...getChildrenOf(tags, parentId).filter(t => t.id !== movingId).map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`)].join('');
+  return html`${[html`<option value="">At beginning</option>`, ...getChildrenOf(tags, parentId).filter(t => t.id !== movingId).map(s => html`<option value="${s.id}">After "${s.name}"</option>`)]}`;
 }
 
 /**
@@ -176,20 +174,20 @@ export function openBulkMoveDialog({
     return null;
   }
   return openTagPickerDialog({
-    title: `Move ${pluralTags(ids.length)} under…`,
+    title: html`Move ${pluralTags(ids.length)} under…`,
     modalClass: 'tm-picker-modal',
     tags: available,
     radioName: 'tm-bulk-parent',
-    renderItem: t => `
+    renderItem: t => html`
       <label class="tm-picker-item">
         <input type="radio" name="tm-bulk-parent" value="${t.id}">
-        <span class="tm-picker-name">${escapeHtml(t.name)}</span>
+        <span class="tm-picker-name">${t.name}</span>
       </label>`,
     itemClass: 'tm-picker-item',
     nameClass: 'tm-picker-name',
     listClass: 'tm-picker-list',
     searchClass: 'tm-picker-search',
-    afterList: '<p class="form-hint">Replaces any parents these tags already have.</p>',
+    afterList: html`<p class="form-hint">Replaces any parents these tags already have.</p>`,
     cancelId: 'tm-bulk-move-cancel-btn',
     confirmId: 'tm-bulk-move-confirm-btn',
     confirmLabel: 'Move',
@@ -220,27 +218,27 @@ export function openMergeDialog({
   const loser = tags.find(t => t.id === loserId);
   if (!loser) return null;
   return openTagPickerDialog({
-    title: `Merge "${escapeHtml(loser.name)}" into…`,
+    title: html`Merge "${loser.name}" into…`,
     modalClass: 'tm-picker-modal',
     tags: candidateTags(tags, [loserId]),
     radioName: 'tm-merge-winner',
-    renderItem: t => `
+    renderItem: t => html`
       <label class="tm-picker-item">
         <input type="radio" name="tm-merge-winner" value="${t.id}">
         <div class="tm-picker-item-info">
-          <span class="tm-picker-name">${escapeHtml(t.name)}</span>
-          ${t.name_path ? `<span class="tm-picker-path">${escapeHtml(t.name_path)}</span>` : ''}
+          <span class="tm-picker-name">${t.name}</span>
+          ${t.name_path ? html`<span class="tm-picker-path">${t.name_path}</span>` : ''}
         </div>
       </label>`,
     itemClass: 'tm-picker-item',
     nameClass: 'tm-picker-name',
     listClass: 'tm-picker-list',
     searchClass: 'tm-picker-search',
-    beforeList: '<p class="tm-section-label">Select destination tag</p>',
-    afterList: `
+    beforeList: html`<p class="tm-section-label">Select destination tag</p>`,
+    afterList: html`
           <p class="form-hint" style="margin-top:var(--spacing-md)">
-            Posts tagged <strong>${escapeHtml(loser.name)}</strong> will be re-tagged.
-            Hierarchy will be moved. <strong>${escapeHtml(loser.name)}</strong> will be deleted.
+            Posts tagged <strong>${loser.name}</strong> will be re-tagged.
+            Hierarchy will be moved. <strong>${loser.name}</strong> will be deleted.
           </p>
           <label class="tm-flag-row" style="margin-top:var(--spacing-sm)">
             <input type="checkbox" id="tm-merge-redirect" checked> Keep redirect (not yet implemented)
@@ -294,21 +292,21 @@ export function openMoveDialog({
   const tag = tags.find(t => t.id === tagId);
   if (!tag) return null;
   return openTagPickerDialog({
-    title: `Move "${escapeHtml(tag.name)}"`,
+    title: html`Move "${tag.name}"`,
     modalClass: 'tm-picker-modal',
     tags: candidateTags(tags, [tagId]),
     radioName: 'tm-move-parent',
-    renderItem: t => `
+    renderItem: t => html`
       <label class="tm-picker-item">
         <input type="radio" name="tm-move-parent" value="${t.id}"${t.id === contextParentId ? ' checked' : ''}>
-        <span class="tm-picker-name">${escapeHtml(t.name)}</span>
+        <span class="tm-picker-name">${t.name}</span>
       </label>`,
     itemClass: 'tm-picker-item',
     nameClass: 'tm-picker-name',
     listClass: 'tm-picker-list',
     searchClass: 'tm-picker-search',
-    beforeList: '<p class="tm-section-label">Under parent</p>',
-    afterList: `
+    beforeList: html`<p class="tm-section-label">Under parent</p>`,
+    afterList: html`
           <p class="tm-section-label" style="margin-top:var(--spacing-md)">Position</p>
           <select class="form-input tm-move-position-select">${positionOptions(tags, contextParentId, tagId)}</select>`,
     cancelId: 'tm-move-cancel-btn',
@@ -322,7 +320,7 @@ export function openMoveDialog({
       // Re-offer positions whenever the chosen parent changes.
       overlay.querySelector('.tm-picker-list').addEventListener('change', e => {
         if (e.target.name === 'tm-move-parent') {
-          overlay.querySelector('.tm-move-position-select').innerHTML = html`${raw(positionOptions(tags, parseInt(e.target.value, 10), tagId))}`;
+          overlay.querySelector('.tm-move-position-select').innerHTML = html`${positionOptions(tags, parseInt(e.target.value, 10), tagId)}`;
         }
       });
     },
@@ -373,22 +371,22 @@ export function openDropOnConfirm({
   const {
     overlay,
     close
-  } = openOverlay(`
+  } = openOverlay(html`
       <div class="modal" role="dialog" aria-modal="true" style="max-width:28rem">
         <div class="modal-header">
-          <h3>Move "${escapeHtml(drag.name)}" under "${escapeHtml(target.name)}"?</h3>
+          <h3>Move "${drag.name}" under "${target.name}"?</h3>
         </div>
         <div class="modal-body">
           <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin:0">
-            Choose how to place <strong>${escapeHtml(drag.name)}</strong>:
+            Choose how to place <strong>${drag.name}</strong>:
           </p>
         </div>
         <div class="modal-footer tm-drop-confirm-footer">
           <button class="btn btn-primary" id="drop-move-btn">
-            Move under "${escapeHtml(target.name)}" — replaces other parents
+            Move under "${target.name}" — replaces other parents
           </button>
           <button class="btn btn-secondary" id="drop-also-btn">
-            Also file under "${escapeHtml(target.name)}" — keeps other parents
+            Also file under "${target.name}" — keeps other parents
           </button>
           <button class="btn btn-secondary" id="drop-cancel-btn">Cancel</button>
         </div>

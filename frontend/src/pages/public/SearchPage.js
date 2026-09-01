@@ -1,4 +1,3 @@
-import { html } from "../../utils/helpers.js";
 /**
  * SearchPage — public search results.
  *
@@ -18,7 +17,7 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
@@ -60,7 +59,7 @@ export default class SearchPage extends Component {
         });
       },
       isAlive: () => !this._unmounted,
-      emptyHtml: '<p class="empty-state">No posts matched your search.</p>'
+      emptyHtml: html`<p class="empty-state">No posts matched your search.</p>`
     });
   }
   onRouteUpdate(params, query) {
@@ -87,7 +86,7 @@ export default class SearchPage extends Component {
       error
     } = this.state;
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main" aria-busy="true">
@@ -97,16 +96,16 @@ export default class SearchPage extends Component {
         </div>`;
     }
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <p class="error-message" role="alert">${error}</p>
           </main>
           <div id="footer-mount"></div>
         </div>`;
     }
-    return `
+    return html`
       <div class="site-wrapper search-page">
         <div id="header-mount"></div>
         <main class="site-main">

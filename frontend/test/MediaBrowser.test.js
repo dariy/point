@@ -401,6 +401,23 @@ describe('MediaBrowser', () => {
       assert.deepEqual(browser._renamed, [1, 'sea frontjpg']);
     });
 
+    test('the prompt is prefilled with the real filename, not an escaped copy', async () => {
+      // data-name carries the name from the markup back into the prompt. It was
+      // escaped twice — escapeHtml() inside a template the codemod had already
+      // turned into html`` — so a name with an ampersand came back as
+      // "a &amp; b.png", and confirming the prompt renamed the file to that.
+      routes['GET /api/media'] = () => ({
+        media: [{ ...IMAGE, id: 1, filename: 'a & b.png', path: '/2024/08/a & b.png' }],
+        page: 1, pages: 1, total: 1,
+      });
+      await mountBrowser();
+      const btn = q('.rename-media-btn[data-id="1"]');
+      assert.equal(btn.getAttribute('data-name'), 'a & b.png');
+
+      click(btn);
+      assert.equal(dialog().querySelector('input').value, 'a & b.png');
+    });
+
     test('a name with nothing usable left in it is refused', async () => {
       await mountBrowser();
 

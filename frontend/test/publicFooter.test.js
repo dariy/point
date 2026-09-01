@@ -115,7 +115,8 @@ describe('PublicFooter revelio toggle', () => {
     ({ setRevelio } = await import('../src/utils/revelio.js'));
   });
 
-  const render = () => new PublicFooter(null, { settings: {} }).render();
+  // render() returns the RawHtml html`` produces; assert.match wants a primitive.
+  const render = () => String(new PublicFooter(null, { settings: {} }).render());
 
   test('a guest never sees the switch', () => {
     store.set('user', null);

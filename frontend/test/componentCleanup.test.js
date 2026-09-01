@@ -23,6 +23,7 @@ import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
 import { Component } from '../src/components/Component.js';
+import { html } from '../src/utils/helpers.js';
 import { store } from '../src/store.js';
 
 /** Live subscribers on a store key — the leak, measured at its source. */
@@ -41,7 +42,7 @@ describe('Component — per-render cleanup', () => {
       this.acquired = 0;
       this.released = 0;
     }
-    render() { return '<p>x</p>'; }
+    render() { return html`<p>x</p>`; }
     afterRender() {
       this.acquired++;
       this.registerCleanup(() => { this.released++; });
@@ -89,7 +90,7 @@ describe('Component — per-render cleanup', () => {
     console.error = (...args) => errors.push(args);
 
     class Angry extends Component {
-      render() { return ''; }
+      render() { return html``; }
       afterRender() {
         this.registerCleanup(() => { throw new Error('boom'); });
         this.registerCleanup(() => { tail++; });
@@ -109,7 +110,7 @@ describe('Component — per-render cleanup', () => {
 
   test('registerCleanup ignores a non-function, so a helper may return nothing', () => {
     class Loose extends Component {
-      render() { return ''; }
+      render() { return html``; }
       afterRender() {
         this.registerCleanup(undefined);
         this.registerCleanup(null);
@@ -124,7 +125,7 @@ describe('Component — per-render cleanup', () => {
     const KEY = 'cleanup_probe';
     let fired = 0;
     class Subscriber extends Component {
-      render() { return ''; }
+      render() { return html``; }
       afterRender() { this.subscribeStore(store, KEY, () => { fired++; }); }
     }
     const before = listeners(KEY);
@@ -146,7 +147,7 @@ describe('Component — per-render cleanup', () => {
     const KEY = 'cleanup_reentrant';
     let renders = 0;
     class Reactive extends Component {
-      render() { renders++; return ''; }
+      render() { renders++; return html``; }
       afterRender() { this.subscribeStore(store, KEY, () => this._rerender()); }
     }
     const c = mountIn(Reactive);
@@ -164,14 +165,14 @@ describe('Component — per-render cleanup', () => {
     const KEY = 'cleanup_sibling';
     const seen = [];
     class Parent extends Component {
-      render() { return '<div id="slot"></div>'; }
+      render() { return html`<div id="slot"></div>`; }
       afterRender() {
         this.subscribeStore(store, KEY, () => { seen.push('parent'); this.setState({}); });
         this.mountChild(Child, '#slot');
       }
     }
     class Child extends Component {
-      render() { return ''; }
+      render() { return html``; }
       afterRender() { this.subscribeStore(store, KEY, () => seen.push('child')); }
     }
     const c = mountIn(Parent);

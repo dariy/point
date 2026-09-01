@@ -6,10 +6,10 @@
  * Escape — stays on the page; only the template and the two tree/section
  * renderers it calls live here.
  *
- * All user-supplied strings are escaped with escapeHtml() before interpolation.
+ * All markup is built with the html`` tag, which escapes every interpolation.
  */
 
-import { escapeHtml } from '../../../utils/helpers.js';
+import { html, raw } from '../../../utils/helpers.js';
 
 /** The tag's slug rule: lowercase, punctuation dropped, spaces to dashes. */
 export function slugifyTagName(text) {
@@ -54,21 +54,21 @@ const _html = [
   '<div class="modal tag-editor-modal" role="dialog" aria-modal="true">',
   '  <button class="modal-close" aria-label="Close">×</button>',
   '  <div class="modal-header">',
-  `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}${isEdit ? ` <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(f.slug || '')}" title="View posts tagged ${escapeHtml(f.slug || '')}">${f.post_count || 0}</a>` : ''}</h3>`,
+  html`    <h3>${isEdit ? html`Edit: ${f.name}` : 'New Tag'}${isEdit ? html` <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(f.slug || '')}" title="View posts tagged ${f.slug || ''}">${f.post_count || 0}</a>` : ''}</h3>`,
   '  </div>',
   '  <form id="tag-editor-form">',
   '    <div class="modal-body">',
 
   // — Identity —
   '      <div class="title-row">',
-  `        <input type="text" name="name" class="form-input editor-title" placeholder="Tag name" value="${escapeHtml(f.name || '')}" required>`,
+  html`        <input type="text" name="name" class="form-input editor-title" placeholder="Tag name" value="${f.name || ''}" required>`,
   '      </div>',
   '      <div class="slug-row">',
   '        <span class="slug-prefix">/tags/</span>',
-  `        <input type="text" name="slug" id="modal-slug" class="form-input editor-slug" placeholder="tag-slug" value="${escapeHtml(f.slug || '')}" spellcheck="false">`,
+  html`        <input type="text" name="slug" id="modal-slug" class="form-input editor-slug" placeholder="tag-slug" value="${f.slug || ''}" spellcheck="false">`,
   '      </div>',
   '      <div class="form-group">',
-  `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description…">${escapeHtml(f.description || '')}</textarea>`,
+  html`        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description…">${f.description || ''}</textarea>`,
   '      </div>',
 
   // — Visibility —
@@ -95,7 +95,7 @@ const _html = [
   `          </label>`,
   `          <div class="tm-nav-order-row${inNav ? '' : ' hidden'}" id="nav-order-row">`,
   `            <span class="slug-prefix">Position</span>`,
-  `            <input type="number" name="nav_order" class="form-input editor-slug" min="0" step="1" value="${escapeHtml(String(navOrder))}" placeholder="1, 2, 3…">`,
+  html`            <input type="number" name="nav_order" class="form-input editor-slug" min="0" step="1" value="${String(navOrder)}" placeholder="1, 2, 3…">`,
   `          </div>`,
   `          <label class="tm-flag-row">`,
   `            <input type="checkbox" name="in_breadcrumbs"${f.in_breadcrumbs ? ' checked' : ''}>`,
@@ -174,28 +174,35 @@ const _html = [
   '    </div>',
   '  </form>',
   '</div>',
-].join('\n');
+];
 
-  return _html;
+  // Every line is html`` output; raw() covers only the join that turns the
+  // array back into one string, so the caller gets markup, not a bare string.
+  // Every line is html`` output; raw() covers only the join that turns the
+  // array back into one string.
+  // eslint-disable-next-line no-restricted-syntax
+  return raw(_html.join('\n'));
 }
 
 export function renderVisibilitySection(f) {
   const isEffectivelyHidden = f.effective_hidden && !f.hidden;
   const hiddenViaAncestor = isEffectivelyHidden && f.hidden_via
-    ? `<span class="tm-inherited-chip">inherited — <button type="button" class="tm-badge-via-btn" data-open-tag-id="${f.hidden_via}">change at ancestor</button></span>`
-    : (isEffectivelyHidden ? `<span class="tm-inherited-chip">inherited from ancestor</span>` : '');
+    ? html`<span class="tm-inherited-chip">inherited — <button type="button" class="tm-badge-via-btn" data-open-tag-id="${f.hidden_via}">change at ancestor</button></span>`
+    : (isEffectivelyHidden ? html`<span class="tm-inherited-chip">inherited from ancestor</span>` : '');
 
-  return [
-    `<label class="tm-flag-row">`,
-    `  <input type="checkbox" name="hidden"${f.hidden ? ' checked' : ''}>`,
-    `  Hidden (from public tag cloud and tag pages)`,
-    `</label>`,
+  // Every line is html`` output; raw() covers only the join below.
+  // eslint-disable-next-line no-restricted-syntax
+  return raw([
+    html`<label class="tm-flag-row">`,
+    html`  <input type="checkbox" name="hidden"${f.hidden ? raw(' checked') : ''}>`,
+    html`  Hidden (from public tag cloud and tag pages)`,
+    html`</label>`,
     hiddenViaAncestor,
-    `<label class="tm-flag-row">`,
-    `  <input type="checkbox" name="hides_posts"${f.hides_posts ? ' checked' : ''}>`,
-    `  Hide posts (all posts with this tag are hidden from public)`,
-    `</label>`,
-  ].join('\n');
+    html`<label class="tm-flag-row">`,
+    html`  <input type="checkbox" name="hides_posts"${f.hides_posts ? raw(' checked') : ''}>`,
+    html`  Hide posts (all posts with this tag are hidden from public)`,
+    html`</label>`,
+  ].join('\n'));
 }
 
 
@@ -253,28 +260,28 @@ export function renderTagToggles(inputName, allTags, selfId, selectedIds) {
     const expanded = hasCheckedDesc.has(t.id);
     const nodeId = `tt-${inputName}-${t.id}`;
     const toggleBtn = hasKids
-      ? `<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '▼' : '▶'}</button>`
-      : `<span class="tag-toggle-btn-spacer"></span>`;
+      ? html`<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '▼' : '▶'}</button>`
+      : html`<span class="tag-toggle-btn-spacer"></span>`;
     const childList = hasKids
-      ? `<ul class="tag-toggle-tree level-${level + 1}${expanded ? '' : ' hidden'}" id="${nodeId}">${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
+      ? html`<ul class="tag-toggle-tree level-${level + 1}${expanded ? '' : ' hidden'}" id="${nodeId}">${kids.map(k => renderNode(k, level + 1))}</ul>`
       : '';
     // Indentation inside this literal is part of the emitted HTML — keep it
     // as-is rather than reflowing it to match the surrounding code.
-    return `<li class="tag-toggle-node">
+    return html`<li class="tag-toggle-node">
         <div class="tag-toggle-row">
           ${toggleBtn}
           <label class="tag-toggle">
-            <input type="checkbox" name="${inputName}" value="${t.id}"${selectedSet.has(t.id) ? ' checked' : ''}>
-            <span>${escapeHtml(t.name)}</span>
+            <input type="checkbox" name="${inputName}" value="${t.id}"${selectedSet.has(t.id) ? raw(' checked') : ''}>
+            <span>${t.name}</span>
           </label>
         </div>
         ${childList}
       </li>`;
   };
 
-  const treeInner = roots.map(r => renderNode(r, 0)).join('');
-  return treeInner
-    ? `<ul class="tag-toggle-tree level-0">${treeInner}</ul>`
-    : '<span class="tag-toggles-empty">No other tags available.</span>';
+  const treeInner = roots.map(r => renderNode(r, 0));
+  return treeInner.length
+    ? html`<ul class="tag-toggle-tree level-0">${treeInner}</ul>`
+    : html`<span class="tag-toggles-empty">No other tags available.</span>`;
 }
 

@@ -1,4 +1,3 @@
-import { raw } from "../utils/helpers.js";
 import { html } from "../utils/helpers.js";
 /**
  * GridPager — the gesture layer for a paginated post grid.
@@ -50,12 +49,13 @@ export class GridPager {
    * @param {() => void} opts.onZoomCommit             refit per_page after a zoom step
    * @param {() => boolean} opts.isAlive               false once the host unmounted
    * @param {(post:object, page:number) => object} [opts.cardProps]  extra PostCard props
-   * @param {string} [opts.emptyHtml]                  ghost markup for an empty page
+   * @param {import('../utils/helpers.js').RawHtml} [opts.emptyHtml]  ghost
+   *   markup for an empty page, built with html``
    * @param {boolean} [opts.zoom=true]                 offer pinch/slider zoom
    */
   constructor(opts) {
     this._o = {
-      emptyHtml: '<p class="empty-state">No posts yet.</p>',
+      emptyHtml: html`<p class="empty-state">No posts yet.</p>`,
       zoom: true,
       ...opts
     };
@@ -312,13 +312,13 @@ export class GridPager {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
-    const CHEVRON = d => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = html`${raw(CHEVRON(d))}`;
+      b.innerHTML = html`${CHEVRON(d)}`;
       b.disabled = dir === 'prev' ? pag.page <= minPage : pag.page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);
@@ -550,7 +550,7 @@ export class GridPager {
     const band = () => mounts.reduce((h, m) => h + m.getBoundingClientRect().height, 0);
     const pag = this._pagination;
     const holder = document.createElement('div');
-    holder.innerHTML = html`${raw(new Pagination(document.createElement('div'), {
+    holder.innerHTML = html`${new Pagination(document.createElement('div'), {
       page,
       pages: pag.pages,
       minPage: GridPager.minPage(pag),
@@ -560,7 +560,7 @@ export class GridPager {
       // Read off the live node so the probe matches whichever copy is on
       // screen without the pager having to know who mounted it.
       compact: !live.querySelector('.page-info')
-    }).render())}`;
+    }).render()}`;
     const probe = holder.firstElementChild;
     if (!probe) return 0;
     const before = band();
@@ -678,7 +678,7 @@ export class GridPager {
       el.dataset.edge = dir;
       if (ghostHeight) el.style.height = `${ghostHeight}px`;
       if (gridTop) el.style.top = `${gridTop}px`;
-      el.innerHTML = html`${raw(this._buildGridHtml(posts || [], page))}`;
+      el.innerHTML = html`${this._buildGridHtml(posts || [], page)}`;
       // The ghost's cards are static markup with no component behind them, so
       // the one bit of card behaviour they still need is wired here: a video
       // with no poster frame must leave its card unpainted rather than paint a
@@ -764,12 +764,12 @@ export class GridPager {
         isHero: i === heroIndex,
         ...(this._o.cardProps ? this._o.cardProps(post, page) : {})
       }).render();
-      return `<div class="post-card-slot${cls}">${card}</div>`;
-    }).join('');
+      return html`<div class="post-card-slot${cls}">${card}</div>`;
+    });
     // The scheduled pages run the other way (see PostGrid) — a peek at one has
     // to already be reversed, or the ghost re-flows the moment it lands.
     const gridCls = page < 1 ? 'posts-grid posts-grid-reversed' : 'posts-grid';
-    return `<div class="${gridCls}">${slots}</div>`;
+    return html`<div class="${gridCls}">${slots}</div>`;
   }
 
   /** Remove the off-screen ghost grids and invalidate any in-flight preload. */

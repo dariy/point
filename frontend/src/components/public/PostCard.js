@@ -11,7 +11,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, safeUrl } from "../../utils/helpers.js";
+import { html, raw, safeUrl } from "../../utils/helpers.js";
 import { cardImageSizes } from "../../utils/gridFit.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { formatDateShort } from "../../utils/formatters.js";
@@ -32,7 +32,7 @@ let touchPreview = null;
 export class PostCard extends Component {
   render() {
     const { post, showViewCount = false, isHero = false } = this.props;
-    if (!post) return "";
+    if (!post) return html``;
 
     const mediaUrl = post.media_url || null;
     const isVideo = mediaUrl && VIDEO_RE.test(mediaUrl);
@@ -61,7 +61,7 @@ export class PostCard extends Component {
     ]
       .filter(Boolean)
       .join(" ");
-    const lockIcon = isHidden ? LOCK_SVG : "";
+    const lockIcon = isHidden ? raw(LOCK_SVG) : "";
     // Scheduled posts have no published_at yet, and their created_at is when
     // the draft was started — neither is the date the card is about. Show the
     // time it goes live instead.
@@ -78,12 +78,12 @@ export class PostCard extends Component {
     // in post-grid.css all along, written for the video branch.
     const bgImage =
       posterUrl !== "#"
-        ? `<img ${thumbAttrs(posterUrl, { sizes: cardImageSizes(isHero) })}
+        ? html`<img ${thumbAttrs(posterUrl, { sizes: cardImageSizes(isHero) })}
                 alt="" loading="lazy" decoding="async">`
         : "";
 
     const playIndicator = isVideo
-      ? `
+      ? html`
       <div class="video-play-indicator">
         <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
           <circle cx="26" cy="26" r="25" fill="rgba(0,0,0,0.45)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5"/>
@@ -96,21 +96,21 @@ export class PostCard extends Component {
 
     const viewCount =
       showViewCount && post.view_count != null
-        ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>`
+        ? html`<span class="view-count">${String(post.view_count)} views</span>`
         : "";
 
-    return `
+    return html`
       <article class="${cardClass}" role="button" tabindex="0"
-               data-post-slug="${escapeHtml(post.slug)}">
+               data-post-slug="${post.slug}">
         <div class="post-card-background">${bgImage}</div>
         ${playIndicator}
         <div class="post-card-content${hasMedia ? " overlay" : ""}">
-          <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
-          ${post.excerpt ? `<p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ""}
+          <h2 class="post-card-title">${lockIcon}${post.title}</h2>
+          ${post.excerpt ? html`<p class="post-card-excerpt">${post.excerpt}</p>` : ""}
           <div class="post-card-meta">
-            <time datetime="${escapeHtml(cardDate || "")}"
+            <time datetime="${cardDate || ""}"
                   class="post-date${isScheduled ? " post-date-scheduled" : ""}">
-              ${isScheduled ? "⏱ " : ""}${escapeHtml(formatDateShort(cardDate))}
+              ${isScheduled ? "⏱ " : ""}${formatDateShort(cardDate)}
             </time>
             ${viewCount}
           </div>

@@ -17,6 +17,7 @@ import { MediaBrowser } from './MediaBrowser.js';
 import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
 import { store } from '../../store.js';
 import { UPLOAD_SVG } from '../../utils/icons.js';
+import { html, raw } from "../../utils/helpers.js";
 
 export class MediaPickerDialog extends Component {
   constructor({ onConfirm }) {
@@ -34,11 +35,11 @@ export class MediaPickerDialog extends Component {
   }
 
   render() {
-    return `
+    return html`
       <div class="modal media-picker-modal">
         <header class="modal-header media-picker-header">
           <h3>Insert Media</h3>
-          <button class="btn btn-sm btn-secondary" id="mpd-upload-btn" title="Upload files">${UPLOAD_SVG}<span class="btn-label">Upload</span></button>
+          <button class="btn btn-sm btn-secondary" id="mpd-upload-btn" title="Upload files">${raw(UPLOAD_SVG)}<span class="btn-label">Upload</span></button>
           <button class="modal-close" id="mpd-close-btn" aria-label="Close">\xd7</button>
         </header>
         <div class="modal-body media-picker-body" id="mpd-browser-mount"></div>

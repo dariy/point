@@ -1,10 +1,8 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../core/gestures.js";
 import { renderTagLink } from "../../utils/tagLinks.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 const EDGE_PAD = 48;
 
 // A range change navigates + remounts the Timeline, which would otherwise rebuild
@@ -132,9 +130,9 @@ export class Timeline extends Component {
   }
   render() {
     if (this.state.isLoading || this.state.pills.length === 0) {
-      return "";
+      return html``;
     }
-    return `
+    return html`
       <div class="timeline-container" role="region" aria-label="Date timeline">
         <div class="timeline-track-wrapper">
           <div class="timeline-track">
@@ -142,13 +140,13 @@ export class Timeline extends Component {
               <div class="timeline-axis-ticks"></div>
             </div>
             <div id="histogram-mount" class="timeline-histogram"></div>
-            ${this.props.mode === "filter" ? '<div class="timeline-center-indicator"></div>' : ""}
+            ${this.props.mode === "filter" ? html`<div class="timeline-center-indicator"></div>` : ""}
             <div class="timeline-pills-mount"></div>
           </div>
           <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
           <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
         </div>
-        ${this.props.mode === "filter" ? '<div class="sr-only" aria-live="polite" id="timeline-live-announcer"></div>' : ""}
+        ${this.props.mode === "filter" ? html`<div class="sr-only" aria-live="polite" id="timeline-live-announcer"></div>` : ""}
       </div>
     `;
   }
@@ -566,7 +564,7 @@ export class Timeline extends Component {
       popoverEl.classList.remove("loading");
       const yearItem = html`
         <li class="timeline-popover-year">
-          ${raw(renderTagLink(pill))}
+          ${renderTagLink(pill)}
           <span class="count">${pill.post_count}</span>
         </li>
       `;
@@ -578,7 +576,7 @@ export class Timeline extends Component {
       } else {
         const items = locations.map(loc => html`
           <li>
-            ${raw(renderTagLink(loc))}
+            ${renderTagLink(loc)}
             <span class="count">${loc.post_count}</span>
           </li>
         `);
@@ -615,12 +613,12 @@ export class Timeline extends Component {
     popoverEl.className = "timeline-popover cluster-popover";
     popoverEl.setAttribute("role", "dialog");
     popoverEl.setAttribute("aria-label", "Select a year");
-    const items = clusterPills.map(p => `
+    const items = clusterPills.map(p => html`
       <li>
-        <button class="timeline-pill-btn sub-pill" data-slug="${escapeHtml(p.slug)}">${escapeHtml(p.name)}</button>
+        <button class="timeline-pill-btn sub-pill" data-slug="${p.slug}">${p.name}</button>
       </li>
-    `).join("");
-    popoverEl.innerHTML = html`<ul class="timeline-popover-list">${raw(items)}</ul>`;
+    `);
+    popoverEl.innerHTML = html`<ul class="timeline-popover-list">${items}</ul>`;
     document.body.appendChild(popoverEl);
     this.state.popover = popoverEl;
     this._anchorPopover(el, popoverEl);
@@ -1342,14 +1340,14 @@ export class Timeline extends Component {
     if (!ticksMount) return;
     const startDecade = Math.floor(extent.min / 10) * 10;
     const endDecade = Math.ceil(extent.max / 10) * 10;
-    let ticksHtml = "";
+    const ticks = [];
     for (let y = startDecade; y <= endDecade; y += 10) {
       const x = getX(y);
       if (x >= -50 && x <= trackWidth + 50) {
-        ticksHtml += `<div class="timeline-tick" style="left: ${x}px"></div>`;
+        ticks.push(html`<div class="timeline-tick" style="left: ${x}px"></div>`);
       }
     }
-    ticksMount.innerHTML = html`${raw(ticksHtml)}`;
+    ticksMount.innerHTML = html`${ticks}`;
   }
   _updateNavButtons(trackWidth, getX) {
     const {
@@ -1397,7 +1395,7 @@ export class Timeline extends Component {
       if (x < -20 || x > trackWidth + 20) return "";
       const height = Math.max(2, Math.round(count / maxCount * 14));
       const cls = year >= activeFrom && year <= activeTo ? "is-active" : "";
-      return `<div class="timeline-hist-bar ${cls}" style="left: ${x}px; height: ${height}px"></div>`;
+      return html`<div class="timeline-hist-bar ${cls}" style="left: ${x}px; height: ${height}px"></div>`;
     };
 
     // Each clustered pill (including the collapsed "All years" pill) folds several
@@ -1412,7 +1410,7 @@ export class Timeline extends Component {
       visible: pills,
       clusters: []
     };
-    let _html = "";
+    const bars = [];
     for (const c of clusters) {
       const el = this.$(`.timeline-cluster[data-min="${c.minYear}"][data-max="${c.maxYear}"]`);
       const rect = el?.getBoundingClientRect();
@@ -1437,13 +1435,13 @@ export class Timeline extends Component {
       // edges. A single bar lands at the center, where it already belonged.
       sortedPills.forEach((p, i) => {
         const x = left + (i + 0.5) / n * width;
-        _html += bar(p.post_count, x, p.year);
+        bars.push(bar(p.post_count, x, p.year));
       });
     }
     for (const p of visible) {
-      _html += bar(p.post_count, getX(p.year), p.year);
+      bars.push(bar(p.post_count, getX(p.year), p.year));
     }
-    mount.innerHTML = html`${raw(_html)}`;
+    mount.innerHTML = html`${bars}`;
   }
 }
 export function mount(el, ctx) {

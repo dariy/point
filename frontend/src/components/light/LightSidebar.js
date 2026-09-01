@@ -9,7 +9,7 @@
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
-import { escapeHtml, html, raw } from '../../utils/helpers.js';
+import { html, raw } from '../../utils/helpers.js';
 import { DEBUG } from '../../utils/debug.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import {
@@ -69,9 +69,8 @@ export class LightSidebar extends Component {
       const isActive = item.href === '/light'
         ? currentPath === item.href
         : currentPath === item.href || currentPath.startsWith(item.href + '/');
-      const cls = isActive ? ' class="nav-item active"' : ' class="nav-item"';
       return html`
-        <li${raw(cls)}>
+        <li class="nav-item${isActive ? ' active' : ''}">
           <a href="${item.href}" title="${item.label}">
             ${raw(item.icon)}
             <span class="nav-label">${item.label}</span>
@@ -79,16 +78,16 @@ export class LightSidebar extends Component {
         </li>`;
     };
 
-    const writeItems = WRITE_ITEMS.map(renderItem).join('');
-    const manageItemsHtml = manageItems.map(renderItem).join('');
+    const writeItems = WRITE_ITEMS.map(renderItem);
+    const manageItemsHtml = manageItems.map(renderItem);
 
-    return `
+    return html`
       <aside class="light-sidebar${collapsed ? ' is-collapsed' : ''}">
         <div class="sidebar-header">
           <div class="site-branding">
             <button type="button" id="sidebar-collapse-btn" class="site-title-link" title="Toggle Sidebar" aria-label="Toggle Sidebar">
               <span class="site-title">
-                ${APP_LOGO_SVG}
+                ${raw(APP_LOGO_SVG)}
                 <span class="site-name">Point</span>
               </span>
             </button>
@@ -98,7 +97,7 @@ export class LightSidebar extends Component {
         <nav class="sidebar-nav" aria-label="Admin navigation">
           <div class="sidebar-primary-action">
             <a href="/light/posts/new" class="btn btn-primary btn-block" title="New Post" aria-label="Create new post">
-              ${PLUS_SVG}
+              ${raw(PLUS_SVG)}
               <span class="nav-label">New Post</span>
             </a>
           </div>
@@ -111,7 +110,7 @@ export class LightSidebar extends Component {
           <div class="nav-group ${manageExpanded ? 'is-expanded' : 'is-collapsed'}${isManageActive ? ' has-active' : ''}" id="manage-group">
             <button class="nav-group-toggle" id="manage-toggle" type="button" aria-expanded="${manageExpanded}" title="Manage" aria-label="Toggle Manage group">
               <span class="nav-group-title">Manage</span>
-              <span class="toggle-icon">${CHEVRON_SVG}</span>
+              <span class="toggle-icon">${raw(CHEVRON_SVG)}</span>
             </button>
             <ul class="nav-group-items">${manageItemsHtml}</ul>
           </div>
@@ -119,14 +118,14 @@ export class LightSidebar extends Component {
       </aside>
 
       <div class="sidebar-footer${collapsed ? ' is-collapsed' : ''}">
-        <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}<span class="sidebar-build sidebar-build-${DEBUG ? 'debug' : 'release'}" title="Frontend bundle">${DEBUG ? 'debug' : 'release'}</span></div>
+        <div class="sidebar-version" aria-label="Version">${version}<span class="sidebar-build sidebar-build-${DEBUG ? 'debug' : 'release'}" title="Frontend bundle">${DEBUG ? 'debug' : 'release'}</span></div>
         <div class="sidebar-footer-actions">
           <div class="user-info">
-            <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
+            <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${raw(LOGOUT_SVG)}</button>
           </div>
           <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button" title="Toggle Theme">
-            <span class="icon-sun">${SUN_SVG}</span>
-            <span class="icon-moon">${MOON_SVG}</span>
+            <span class="icon-sun">${raw(SUN_SVG)}</span>
+            <span class="icon-moon">${raw(MOON_SVG)}</span>
           </button>
         </div>
       </div>`;

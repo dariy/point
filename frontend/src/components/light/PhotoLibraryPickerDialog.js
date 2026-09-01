@@ -1,5 +1,5 @@
 
-import { html, raw } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.js";
 /**
  * PhotoLibraryPickerDialog — browse the external photo library and selectively
  * import photos into site media.
@@ -49,7 +49,7 @@ export class PhotoLibraryPickerDialog extends Component {
   // ── Shell (rendered once) ─────────────────────────────────────────────────
 
   render() {
-    return `
+    return html`
       <div class="modal photo-library-modal">
         <header class="modal-header photo-library-header">
           <div class="photo-library-title-row">

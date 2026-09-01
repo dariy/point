@@ -10,8 +10,11 @@ import { ConfirmDialog } from "../components/shared/ConfirmDialog.js";
 import { PromptDialog } from "../components/shared/PromptDialog.js";
 
 /**
- * @param {{title:string, message:string, confirmText?:string,
- *   variant?:'primary'|'danger', allowHtml?:boolean, onConfirm?:Function}} opts
+ * @param {{title:string, message:string|import("../utils/helpers.js").RawHtml,
+ *   confirmText?:string, variant?:'primary'|'danger', allowHtml?:boolean,
+ *   onConfirm?:Function}} opts
+ *   With `allowHtml` the message renders as markup, so it must be built with
+ *   the html`` tag; a plain string is escaped and shows as text.
  */
 export function showConfirm({ title, message, confirmText, variant = "primary", allowHtml, onConfirm }) {
   const mount = document.createElement("div");
