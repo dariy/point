@@ -27,7 +27,7 @@ async function lint(code) {
   return result.messages.map((m) => m.message);
 }
 
-const PRELUDE = "import { html, raw } from './utils/helpers.js';\nconst SVG = '<svg></svg>';\n";
+const PRELUDE = "import { html, raw, setHTML, insertHTML } from './utils/helpers.js';\nconst SVG = '<svg></svg>';\n";
 const messages = (snippet) => lint(PRELUDE + snippet);
 
 describe('html`` lint rules', () => {
@@ -49,19 +49,38 @@ describe('html`` lint rules', () => {
 
     test('a bare innerHTML assignment', async () => {
       const m = await messages('export const f = (el, s) => { el.innerHTML = s; };');
-      assert.ok(m.some((s) => /html tagged template helper for innerHTML/.test(s)), m.join(' | '));
+      assert.ok(m.some((s) => /Use setHTML/.test(s)), m.join(' | '));
+    });
+
+    // The funnel, not the tag, is what the Trusted Types policy is attached to:
+    // markup built correctly and then written straight at the sink still dies
+    // under enforcement, so the lint rule must reject it here rather than let
+    // it through to fail in a browser.
+    test('an innerHTML assignment through the tag but around the funnel', async () => {
+      const m = await messages('export const f = (el, s) => { el.innerHTML = html`<p>${s}</p>`; };');
+      assert.ok(m.some((s) => /Use setHTML/.test(s)), m.join(' | '));
+    });
+
+    test('an outerHTML assignment', async () => {
+      const m = await messages('export const f = (el, s) => { el.outerHTML = html`<p>${s}</p>`; };');
+      assert.ok(m.some((s) => /outerHTML bypasses/.test(s)), m.join(' | '));
     });
 
     test('a bare insertAdjacentHTML', async () => {
       const m = await messages("export const f = (el, s) => el.insertAdjacentHTML('beforeend', s);");
-      assert.ok(m.some((s) => /insertAdjacentHTML/.test(s)), m.join(' | '));
+      assert.ok(m.some((s) => /Use insertHTML/.test(s)), m.join(' | '));
+    });
+
+    test('an insertAdjacentHTML through the tag but around the funnel', async () => {
+      const m = await messages("export const f = (el, s) => el.insertAdjacentHTML('beforeend', html`<p>${s}</p>`);");
+      assert.ok(m.some((s) => /Use insertHTML/.test(s)), m.join(' | '));
     });
   });
 
   describe('what must keep working', () => {
     const clean = async (snippet) => {
       const m = await messages(snippet);
-      assert.deepEqual(m.filter((s) => /raw\(\)|must be quoted|innerHTML|insertAdjacentHTML/.test(s)), []);
+      assert.deepEqual(m.filter((s) => /raw\(\)|must be quoted|innerHTML|outerHTML|insertAdjacentHTML/.test(s)), []);
     };
 
     test('raw() around a module-level constant — the SVG blobs', () =>
@@ -76,7 +95,10 @@ describe('html`` lint rules', () => {
     test('a quoted attribute, including one carrying a query string', () =>
       clean('export const f = (u, s) => html`<a href="${u}"><img src="/map?tag=${s}"></a>`;'));
 
-    test('an innerHTML assignment through the tag', () =>
-      clean('export const f = (el, s) => { el.innerHTML = html`<p>${s}</p>`; };'));
+    test('a write through the funnel', () =>
+      clean('export const f = (el, s) => { setHTML(el, html`<p>${s}</p>`); };'));
+
+    test('an insert through the funnel', () =>
+      clean("export const f = (el, s) => insertHTML(el, 'beforeend', html`<p>${s}</p>`);"));
   });
 });

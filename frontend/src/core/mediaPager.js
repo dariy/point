@@ -1,4 +1,4 @@
-import { html } from "../utils/helpers.js";
+import { html, setHTML } from "../utils/helpers.js";
 /**
  * MediaPager — the gesture layer for the admin media grid (/light/media).
  *
@@ -264,7 +264,7 @@ export class MediaPager {
       const el = document.createElement('div');
       el.className = 'mb-page-ghost';
       el.dataset.edge = dir;
-      el.innerHTML = html`${_html}`;
+      setHTML(el, html`${_html}`);
       document.body.appendChild(el);
       this._ghosts[dir] = el;
       this.applyZoom(); // the ghost is on <body> and inherits no zoom of its own
@@ -600,7 +600,7 @@ export class MediaPager {
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = html`${CHEVRON(d)}`;
+      setHTML(b, html`${CHEVRON(d)}`);
       b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);

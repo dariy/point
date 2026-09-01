@@ -1,4 +1,4 @@
-import { html, raw } from "../utils/helpers.js";
+import { html, setHTML, raw } from "../utils/helpers.js";
 /**
  * The shared tag flyout — one dropdown element, reused by every surface that
  * shows a tag family or a header menu (PostCard, PostContent, PublicFooter,
@@ -79,7 +79,7 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     const a = document.createElement('a');
     a.href = href || `/tags/${t.slug}`;
     a.className = `flyout-item ${className}`;
-    a.innerHTML = html`<span class="name">${t.name}</span> <span class="count">${t.count}</span>`;
+    setHTML(a, html`<span class="name">${t.name}</span> <span class="count">${t.count}</span>`);
     a.addEventListener('click', e => {
       e.preventDefault();
       _hideFlyout();
@@ -99,7 +99,7 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   // 2. Current Tag
   const currentSection = document.createElement('div');
   currentSection.className = 'flyout-section flyout-current';
-  currentSection.innerHTML = html`<span class="name">${entry.tag.name}</span> <span class="count">${entry.tag.count}</span>`;
+  setHTML(currentSection, html`<span class="name">${entry.tag.name}</span> <span class="count">${entry.tag.count}</span>`);
   flyout.appendChild(currentSection);
 
   // 3. Children — drilling down appends the current tag to the path chain.
@@ -233,7 +233,7 @@ function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
   const lock = item.is_hidden ? raw(LOCK_SVG) : '';
   // No count badge for countless items (custom menu links have no posts).
   const count = item.count ?? item.post_count;
-  a.innerHTML = html`<span class="name">${lock}${item.name}</span>${count ? html` <span class="count">${count}</span>` : ''}`;
+  setHTML(a, html`<span class="name">${lock}${item.name}</span>${count ? html` <span class="count">${count}</span>` : ''}`);
   a.addEventListener('click', e => {
     e.preventDefault();
     _hideFlyout();
@@ -277,7 +277,7 @@ export function showCrumbDropdown(anchorEl, spec, navigateFn, excludeEl = null) 
         const span = document.createElement('span');
         span.className = 'flyout-item flyout-path-current';
         const lock = c.is_hidden ? raw(LOCK_SVG) : '';
-        span.innerHTML = html`<span class="name">${lock}${c.name}</span>`;
+        setHTML(span, html`<span class="name">${lock}${c.name}</span>`);
         section.appendChild(span);
       } else {
         _appendFlyoutLink(section, c, navigateFn, 'ancestor-link');

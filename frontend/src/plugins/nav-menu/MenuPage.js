@@ -1,4 +1,4 @@
-import { html, raw } from "../../utils/helpers.js";
+import { html, setHTML, raw } from "../../utils/helpers.js";
 /**
  * MenuPage — custom navigation menu editor.
  *
@@ -294,7 +294,7 @@ export default class MenuPage extends Component {
       const cap = items.length <= inlineMax ? items.length : inlineMax - 1;
       const inline = items.slice(0, cap);
       const overflow = items.length - inline.length;
-      vp.innerHTML = html`
+      setHTML(vp, html`
         <div class="pvh">
           <span class="pvh-brand"><span class="pvh-logo"></span><span class="pvh-title">${title}</span></span>
           <span class="pvh-spacer"></span>
@@ -306,7 +306,7 @@ export default class MenuPage extends Component {
             <span class="pvh-iconbtn">${raw(SEARCH_SVG)}</span>
             <span class="pvh-iconbtn pvh-burger">${raw(MENU_SVG)}</span>
           </span>
-        </div>`;
+        </div>`);
       const root = vp.querySelector('.pvh');
       const nav = root.querySelector('.pvh-nav');
       const more = root.querySelector('.nav-more');
@@ -316,7 +316,7 @@ export default class MenuPage extends Component {
       const syncMore = () => {
         const total = foldedCount + overflow;
         more.classList.toggle('is-empty', total === 0);
-        moreBtn.innerHTML = html`${this.state.moreTitle} (${total})<span class="nav-more-caret">▾</span>`;
+        setHTML(moreBtn, html`${this.state.moreTitle} (${total})<span class="nav-more-caret">▾</span>`);
       };
       syncMore();
       const fold = new HeaderFold({

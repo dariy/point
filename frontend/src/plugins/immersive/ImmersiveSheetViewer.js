@@ -20,7 +20,7 @@
  */
 
 import { MediaViewer } from '../../components/shared/MediaViewer.js';
-import { html, linkify, raw, sharePost } from '../../utils/helpers.js';
+import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -396,7 +396,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       label,
       value
     }) => html`<div class="immersive-sheet-exif-row"><span class="immersive-sheet-exif-key">${label}</span><span class="immersive-sheet-exif-val">${value}</span></div>`);
-    mount.innerHTML = html`<div class="immersive-sheet-exif-title">Camera data</div>${body}`;
+    setHTML(mount, html`<div class="immersive-sheet-exif-title">Camera data</div>${body}`);
     mount.classList.remove('hidden');
     bodyEl?.classList.add('has-exif');
   }

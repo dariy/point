@@ -25,6 +25,37 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// trustedTypesCSP is shipped as Content-Security-Policy-Report-Only, alongside
+// the enforcing policy rather than inside it.
+//
+// require-trusted-types-for 'script' makes every HTML sink — .innerHTML,
+// .outerHTML, insertAdjacentHTML — refuse a plain string; only a value minted
+// by a registered TrustedTypePolicy gets through, and trusted-types names the
+// single policy allowed to exist ("point", registered in utils/helpers.js and
+// held by setHTML()/insertHTML()). Chromium then rejects a write from anywhere
+// else at the sink, which is the point: it moves the escaping rule from lint,
+// which an author can suppress, to the browser, which nobody can. Firefox and
+// Safari ignore the directive entirely, so this is defence in depth on top of
+// the lint rule, never a replacement for it.
+//
+// Report-only for now, deliberately. The frontend's own writes all go through
+// the funnel, but the vendored libraries do not and cannot: leaflet writes
+// innerHTML during feature detection at import time and again for every zoom
+// button, attribution line and popup; Prism.highlightElement (used on code
+// blocks in post content) writes the highlighted markup; codejar restores an
+// undo step the same way. Under enforcement the map and atlas pages would die
+// on load. Report-only surfaces those as console violations and leaves the
+// pages working, which is the state this ships in — the flip to enforcement
+// waits on a decision about the vendored code (patch it, wrap it, or accept a
+// pass-through default policy) and gets its own change.
+//
+// Keeping it in a second header rather than appending to the enforcing policy
+// also keeps the script-src splices honest: both the shell (routes.go) and the
+// media fallback (media.go) rewrite the enforcing header by string-replacing
+// "script-src", and neither has to reason about a directive it did not put
+// there.
+const trustedTypesCSP = "require-trusted-types-for 'script'; trusted-types point"
+
 // sanitizeCSPSources normalizes an operator-supplied CSP source list (the
 // CSP_SCRIPT_SRC / CSP_CONNECT_SRC deploy config) into a safe space-separated
 // token list before it is appended to a directive. It splits on whitespace and
@@ -233,6 +264,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			c.Response().Header().Set("Content-Security-Policy-Report-Only", trustedTypesCSP)
 			return next(c)
 		}
 	})

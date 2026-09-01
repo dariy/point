@@ -1,4 +1,4 @@
-import { html, isRawHtml } from '../utils/helpers.js';
+import { setHTML, isRawHtml } from '../utils/helpers.js';
 
 /**
  * Base Component class.
@@ -54,11 +54,11 @@ import { html, isRawHtml } from '../utils/helpers.js';
  *
  * Update contract — in-place rendering:
  *   The default re-render is a rebuild: children unmounted, render() called,
- *   innerHTML assigned. That is right whenever the markup is the whole truth
- *   and wrong whenever DOM identity carries something it does not — a decoded
- *   <img> rebuilt is an image thrown away and fetched again, which is a visible
- *   flash. A subclass that can answer a particular change without the rebuild
- *   declares update():
+ *   its markup written with setHTML(). That is right whenever the markup is
+ *   the whole truth and wrong whenever DOM identity carries something it does
+ *   not — a decoded <img> rebuilt is an image thrown away and fetched again,
+ *   which is a visible flash. A subclass that can answer a particular change
+ *   without the rebuild declares update():
  *
  *     update(prevProps, prevState) {
  *       if (prevProps.posts === this.props.posts) return false;   // rebuild
@@ -132,8 +132,8 @@ export class Component {
   /**
    * Return the markup describing this component, built with the html`` tag.
    * Must be overridden.
-   * @returns {import('../utils/helpers.js').RawHtml|string} html`` output; a
-   *   plain string is still accepted while the migration to html`` runs.
+   * @returns {import('../utils/helpers.js').RawHtml} html`` output. A plain
+   *   string is refused — _rerender() throws rather than write it.
    */
   render() {
     throw new Error(`${this.constructor.name}.render() not implemented`);
@@ -393,6 +393,8 @@ export class Component {
     // reach innerHTML with nothing having escaped it, which is the whole class
     // of bug the html`` tag exists to remove. There is no escape hatch — build
     // the markup with the tag, and use raw() for the pieces that need it.
+    // setHTML() re-checks this, but the message it can give names a sink; the
+    // one worth reading here names the subclass whose render() is at fault.
     if (!isRawHtml(markup)) {
       throw new TypeError(
         `${this.constructor.name}.render() must return html\`\` output, got ` +
@@ -400,7 +402,7 @@ export class Component {
         'from utils/helpers.js.',
       );
     }
-    this.container.innerHTML = html`${markup}`;
+    setHTML(this.container, markup);
     this._rendered = true;
     this.afterRender();
   }

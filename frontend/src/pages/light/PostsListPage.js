@@ -12,7 +12,7 @@ import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { html, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
+import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { captureInteraction } from "../../utils/preserveInteraction.js";
@@ -713,7 +713,7 @@ export default class PostsListPage extends Component {
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = html`${CHEVRON(d)}`;
+      setHTML(b, html`${CHEVRON(d)}`);
       b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);
@@ -793,11 +793,11 @@ export default class PostsListPage extends Component {
     const tbody = this.container.querySelector("#posts-tbody");
     const colspan = this.state.statusFilter === "trash" ? 5 : this.state.selectMode ? 5 : 4;
     if (tbody) {
-      tbody.innerHTML = html`<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
+      setHTML(tbody, html`<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`); // static, safe
     }
     const cardList = this.container.querySelector("#posts-card-list");
     if (cardList) {
-      cardList.innerHTML = html`<p class="post-card-placeholder">Loading…</p>`; // static, safe
+      setHTML(cardList, html`<p class="post-card-placeholder">Loading…</p>`); // static, safe
     }
     this.state.loading = true;
     this.state.error = null;

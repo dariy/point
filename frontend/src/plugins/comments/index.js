@@ -10,6 +10,7 @@
 
 import CommentsAdminPage from './CommentsAdminPage.js';
 import { store } from '../../store.js';
+import { setScriptSrc } from '../../utils/helpers.js';
 
 const SCRIPT_ID = 'remark42-embed-script';
 
@@ -145,7 +146,7 @@ export function mount(el, ctx) {
     const s = document.createElement('script');
     s.id = SCRIPT_ID;
     s.type = 'module';
-    s.src = '/comments/web/embed.mjs';
+    setScriptSrc(s, '/comments/web/embed.mjs');
     document.head.appendChild(s);
     onReady = () => scheduleColorSync(root);
     window.addEventListener('REMARK42::ready', onReady, { once: true });

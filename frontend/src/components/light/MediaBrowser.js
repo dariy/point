@@ -27,7 +27,7 @@ import { MediaPager } from "../../core/mediaPager.js";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { html, navigate, raw } from "../../utils/helpers.js";
+import { html, setHTML, navigate, raw } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.js";
@@ -731,7 +731,7 @@ export class MediaBrowser extends Component {
     if (!pickerMode) {
       const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
-        h1.innerHTML = html`${this._renderBreadcrumbs()}`;
+        setHTML(h1, html`${this._renderBreadcrumbs()}`);
         h1.querySelectorAll(".mb-breadcrumb-item").forEach(btn => {
           btn.addEventListener("click", () => {
             this.setState({

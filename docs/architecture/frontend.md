@@ -74,12 +74,12 @@ export class Component {
    */
 
   /**
-   * Returns an HTML string describing this component.
+   * Returns the markup describing this component, built with the html`` tag.
    * MUST be overridden by subclasses.
-   * SECURITY: This string is set via innerHTML. Only include trusted,
-   * server-sanitized HTML. Never interpolate raw user input directly —
-   * always use escapeHtml() for any user-provided text values.
-   * @returns {string}
+   * SECURITY: the tag escapes every interpolation, and _rerender() throws on
+   * anything it did not produce — so a subclass never escapes by hand and
+   * never forgets to. See the Security Model section.
+   * @returns {RawHtml}
    */
   render() {
     throw new Error(`${this.constructor.name}.render() not implemented`);
@@ -179,8 +179,9 @@ export class Component {
     this.beforeRender?.();
     this._unmountChildren();
     this._children = [];
-    // SECURITY: render() returns trusted HTML only (see Security Model section)
-    this.container.innerHTML = this.render();
+    // SECURITY: setHTML() refuses anything the html`` tag did not produce, and
+    // is the one HTML sink in the frontend (see Security Model section).
+    setHTML(this.container, this.render());
     this.afterRender();
   }
 
@@ -261,7 +262,7 @@ new Component(container, props)
         |-- _runCleanups()            (empty on the first pass)
         |-- beforeRender()            (imperative teardown hook)
         |-- _unmountChildren()        (clean up any previous children)
-        |-- container.innerHTML = render()
+        |-- setHTML(container, render())
         `-- afterRender()             (attach events, mount children,
                 |                      registerCleanup() what you acquire)
                 v (user interaction or async data)
@@ -276,7 +277,7 @@ new Component(container, props)
                         |-- _runCleanups()   <- releases the PREVIOUS render
                         |-- beforeRender()
                         |-- _unmountChildren()
-                        |-- container.innerHTML = render()
+                        |-- setHTML(container, render())
                         `-- afterRender()
                 |
                 v (navigation away or parent re-renders)
@@ -1228,38 +1229,70 @@ document.documentElement.setAttribute('data-theme', theme);
 
 ## Security Model
 
-### innerHTML policy
+### The HTML write path
 
-The component system uses `container.innerHTML = this.render()` for
-performance. This is safe **only** when the following rules are followed:
+There is exactly one HTML sink in `frontend/src`, and it is three lines long:
 
-1. **Server-generated HTML** (`content_html` from the API): Post content is
-   converted from Markdown server-side by a trusted formatter. The backend
-   is responsible for sanitizing any user-submitted HTML before storage.
-   The frontend renders `content_html` directly.
+```javascript
+// frontend/src/utils/helpers.js
+export function setHTML(el, markup) {
+  el.innerHTML = trusted(markup, 'setHTML');
+}
+```
 
-2. **User-input text in templates**: ALL user-input values interpolated into
-   template literal HTML strings MUST be escaped with `escapeHtml()`:
-   ```javascript
-   // frontend/src/utils/helpers.js
-   export function escapeHtml(str) {
-     return String(str)
-       .replace(/&/g, '&amp;')
-       .replace(/</g, '&lt;')
-       .replace(/>/g, '&gt;')
-       .replace(/"/g, '&quot;')
-       .replace(/'/g, '&#39;');
-   }
+Everything else — every component's re-render, every hand-written patch of a
+node's contents — goes through it or through its `insertAdjacentHTML` twin,
+`insertHTML(el, position, markup)`. Three layers hold that up, each catching
+what the one before it misses:
+
+1. **The tagged template escapes.** Interpolations are escaped on the way
+   through — `safeUrl()` in `href`/`src` position, `escapeHtml()` everywhere
+   else — so no caller applies either by hand and no caller forgets to.
+   `raw()` is the opt-out, and it belongs around module-level constants (the
+   SVG blobs in `utils/icons.js`) and around HTML the server sanitized before
+   storing it (a post body). Nothing else.
+
+2. **`setHTML()` refuses anything else.** The tag returns a `RawHtml`, not a
+   string; `setHTML()` throws a `TypeError` on a plain string, so markup
+   assembled by hand cannot reach the DOM even by accident. `Component._rerender()`
+   makes the same check first, to name the subclass whose `render()` is at fault.
+
+3. **The browser refuses a write that skipped the funnel.** `setHTML()` mints
+   its string through a Trusted Types policy named `point`, and the response
+   carries
+
+   ```
+   Content-Security-Policy-Report-Only: require-trusted-types-for 'script'; trusted-types point
    ```
 
-3. **Dynamic text nodes**: Prefer setting text via `element.textContent = value`
-   over interpolating into HTML strings when possible (e.g., error messages,
-   user names, toast notifications).
+   Under enforcement a Chromium browser rejects any `.innerHTML` /
+   `.outerHTML` / `insertAdjacentHTML` write whose value did not come from that
+   policy — which moves the rule from lint, where an author can suppress it, to
+   the browser, where nobody can. Firefox and Safari ignore the directive, so
+   this is defence in depth on top of the lint rule, never a replacement.
 
-4. **Attribute values**: URL values in `href` or `src` attributes must be
-   validated to start with `/` or `https://` — never allow `javascript:`.
+   It ships **report-only** for now. The vendored libraries write HTML
+   internally and cannot go through the funnel: leaflet does it during feature
+   detection at import time and again for every zoom button, attribution line
+   and popup; `Prism.highlightElement` does it for code blocks in post content;
+   codejar does it restoring an undo step. Enforcing today would take the map,
+   atlas and editor pages down. See `trustedTypesCSP` in
+   `api/cmd/api/server.go`.
 
-5. **No eval, no Function()**: Never execute strings as code.
+`eslint.config.js` is what keeps the funnel a funnel: a bare `.innerHTML =`,
+`.outerHTML =` or `insertAdjacentHTML(` anywhere under `frontend/src` or
+`demo/mock` is an error, as is `raw()` around a template literal or a call, or
+an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.js`
+proves each of those rules still fires.
+
+Three things sit outside all of this and are still worth stating:
+
+- **Server-generated HTML** (`content_html` from the API) is sanitized
+  server-side before storage; the frontend passes it through `raw()`.
+- **Dynamic text** is better set with `element.textContent = value` than
+  interpolated into markup at all — error messages, user names, toasts.
+- **No `eval`, no `Function()`.** `require-trusted-types-for 'script'` covers
+  those sinks too, once enforced.
 
 ### Auth security
 
@@ -1268,20 +1301,18 @@ performance. This is safe **only** when the following rules are followed:
 - CSRF protection: FastAPI + same-site cookie policy handles this
 - The frontend never stores auth tokens in `localStorage`
 
-### Content Security Policy (recommended)
+### Content Security Policy
 
-Add a `Content-Security-Policy` header on the server:
+Shipped, not recommended — the policy is assembled in `api/cmd/api/server.go`
+and sent on every response. `script-src` is `'self'` plus a sha256 for each
+inline `<script>`, computed from `index.html` at startup and re-spliced per
+request where the bootstrap script is injected (`routes.go`, `media.go`), so
+there is no `'unsafe-inline'` anywhere in it. An operator can widen `script-src`
+and `connect-src` for a deployment (`CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC`)
+without the engine hardcoding a third-party domain.
 
-```
-Content-Security-Policy:
-  default-src 'self';
-  script-src 'self' 'sha256-+20twPiohHfGLZsSvahDBaYeh7l+te5yNz5UDCAfqsA=';
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob:;
-  media-src 'self' blob:;
-  connect-src 'self';
-  frame-ancestors 'none'
-```
+The Trusted Types directives ride in a second, report-only header — see
+*The HTML write path* above.
 
 ---
 

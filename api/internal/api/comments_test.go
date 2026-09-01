@@ -43,6 +43,7 @@ func TestCommentsProxy(t *testing.T) {
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+			c.Response().Header().Set("Content-Security-Policy-Report-Only", "require-trusted-types-for 'script'; trusted-types point")
 			c.Response().Header().Set("X-Frame-Options", "DENY")
 			c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 			return next(c)
@@ -72,6 +73,12 @@ func TestCommentsProxy(t *testing.T) {
 	if lastResp.Get("Content-Security-Policy") != "" || lastResp.Get("X-Frame-Options") != "" {
 		t.Errorf("Point's CSP/X-Frame-Options must be dropped on proxied responses, got CSP=%q XFO=%q",
 			lastResp.Get("Content-Security-Policy"), lastResp.Get("X-Frame-Options"))
+	}
+	// The widget is third-party code served through this origin: it writes
+	// script.src from a plain string, so Point's Trusted Types policy has to
+	// come off with the rest.
+	if got := lastResp.Get("Content-Security-Policy-Report-Only"); got != "" {
+		t.Errorf("Point's report-only CSP must be dropped on proxied responses, got %q", got)
 	}
 	if lastResp.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("non-conflicting security headers must survive, X-Content-Type-Options=%q",

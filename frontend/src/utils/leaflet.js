@@ -1,3 +1,5 @@
+import { setScriptSrc } from "./helpers.js";
+
 export const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 export const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
 export const COUNTRIES_GEOJSON = "/assets/vendor/leaflet/countries.geojson";
@@ -33,7 +35,7 @@ export async function loadLeaflet() {
 
   await new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = LEAFLET_JS;
+    setScriptSrc(s, LEAFLET_JS);
     s.onload = resolve;
     s.onerror = reject;
     document.head.appendChild(s);

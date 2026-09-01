@@ -13,7 +13,7 @@ import { listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackup
 import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
 import { store } from "../../../store.js";
-import { html, raw } from "../../../utils/helpers.js";
+import { html, setHTML, raw } from "../../../utils/helpers.js";
 import { formatFileSize } from "../../../utils/formatters.js";
 import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
@@ -456,7 +456,7 @@ export class BackupsSection extends Component {
     el.setAttribute("aria-live", "polite");
     const card = document.createElement("div");
     card.className = "restart-overlay-card";
-    card.innerHTML = html`<span class="restart-overlay-spinner" aria-hidden="true"></span><p class="restart-overlay-text"></p><p class="restart-overlay-sub">This will only take a moment.</p>`;
+    setHTML(card, html`<span class="restart-overlay-spinner" aria-hidden="true"></span><p class="restart-overlay-text"></p><p class="restart-overlay-sub">This will only take a moment.</p>`);
     card.querySelector(".restart-overlay-text").textContent = text;
     el.appendChild(card);
     document.body.appendChild(el);

@@ -1,4 +1,4 @@
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 /**
  * NotificationLogButton — floating action button for the notification log.
  *
@@ -125,7 +125,7 @@ export class NotificationLogButton extends Component {
     const bodyMount = this._activeModal.getBodyMount();
     if (!bodyMount) return;
     const entries = store.get('toast_log') ?? [];
-    bodyMount.innerHTML = html`${entries.length === 0
+    setHTML(bodyMount, html`${entries.length === 0
       ? html`<p class="notification-log-empty">No recent notifications.</p>`
       : html`<ul class="notification-log-list">${[...entries].reverse().map(e => {
           const safeType = TYPE_LABELS[e.type] ? e.type : 'info';
@@ -133,6 +133,6 @@ export class NotificationLogButton extends Component {
             <span class="notification-log-icon" aria-hidden="true">${TYPE_LABELS[safeType]}</span>
             <span class="notification-log-message">${e.message}</span>
           </li>`;
-        })}</ul>`}`;
+        })}</ul>`}`);
   }
 }

@@ -361,3 +361,152 @@ export function html(strings, ...values) {
   }
   return new RawHtml(out);
 }
+
+/**
+ * The Trusted Types policy every HTML write in this codebase goes through.
+ *
+ * Resolved once, lazily, on the first write rather than at module load: the
+ * Node tests import this module with no `window` at all, and the demo bundle
+ * runs it in pages that may never write HTML. `null` is the normal answer in
+ * Firefox and Safari, which do not implement Trusted Types, and in any browser
+ * on a page whose CSP names no `trusted-types` directive — the write then
+ * assigns a plain string, exactly as it did before.
+ *
+ * `createHTML` is the identity function on purpose. The escaping happened in
+ * the html`` tag, and setHTML() refuses anything the tag did not produce; the
+ * policy's job here is not to sanitize a second time but to be the one named
+ * gate the browser will accept, so that a write from anywhere else — a future
+ * `el.innerHTML = someString`, or an injected script reaching for the same
+ * sink — has no policy to go through and throws.
+ *
+ * @type {{createHTML: (s: string) => string}|null}
+ */
+let policy;
+let policyResolved = false;
+
+function trustedTypesPolicy() {
+  if (policyResolved) return policy;
+  policyResolved = true;
+  policy = null;
+  const tt = typeof window !== 'undefined' ? window.trustedTypes : undefined;
+  if (tt && typeof tt.createPolicy === 'function') {
+    try {
+      policy = tt.createPolicy('point', {
+        createHTML: (s) => s,
+        createScript: (s) => s,
+        createScriptURL: (s) => {
+          // The only scripts this frontend loads by assignment are its own
+          // vendored bundles and the comments embed, all at same-origin
+          // absolute paths. Anything else — an absolute URL, a protocol
+          // relative "//host/x", a data: — is refused here rather than
+          // trusted because a caller passed it: the policy is the last place
+          // that sees the value before the browser fetches and executes it.
+          if (!/^\/[^/]/.test(s)) {
+            throw new TypeError(`refusing to load a script from ${s} — same-origin absolute paths only`);
+          }
+          return s;
+        },
+      });
+    } catch {
+      // A duplicate name (a second bundle on the same page) or a CSP whose
+      // trusted-types list does not include 'point'. Either way the write
+      // still has to happen; under enforcement it will throw at the sink,
+      // which is the violation we want reported rather than swallowed here.
+      policy = null;
+    }
+  }
+  return policy;
+}
+
+/**
+ * Convert html`` output into something an HTML sink will accept.
+ *
+ * @param {import('./helpers.js').RawHtml} markup
+ * @param {string} sink  name of the sink, for the error message
+ * @returns {string} a TrustedHTML where the browser supports it, else the
+ *   plain string (TrustedHTML stringifies, so callers need not care)
+ */
+function trusted(markup, sink) {
+  // The contract, enforced rather than documented: a plain string here would
+  // reach the sink with nothing having escaped it, which is the whole class of
+  // bug the html`` tag exists to remove. There is no escape hatch — build the
+  // markup with the tag, and use raw() for the pieces that genuinely need it.
+  if (!isRawHtml(markup)) {
+    throw new TypeError(
+      `${sink} was given ${markup === null ? 'null' : typeof markup} rather than ` +
+      'html`` output. Build the markup with the html tag from utils/helpers.js.',
+    );
+  }
+  const p = trustedTypesPolicy();
+  const str = markup.toString();
+  return p ? p.createHTML(str) : str;
+}
+
+/**
+ * Write markup into an element. The single innerHTML in the frontend.
+ *
+ * Every HTML write goes through here, which is what makes the Trusted Types
+ * policy tractable: one gate to register instead of sixty sinks to audit. The
+ * lint rule in eslint.config.js keeps it that way — a bare `.innerHTML =`
+ * anywhere in frontend/src is an error.
+ *
+ * @param {HTMLElement} el
+ * @param {import('./helpers.js').RawHtml} markup  html`` output
+ */
+export function setHTML(el, markup) {
+  // eslint-disable-next-line no-restricted-syntax -- the one innerHTML write.
+  el.innerHTML = trusted(markup, 'setHTML');
+}
+
+/**
+ * Insert markup relative to an element — the insertAdjacentHTML half of
+ * setHTML(), with the same contract.
+ *
+ * @param {HTMLElement} el
+ * @param {'beforebegin'|'afterbegin'|'beforeend'|'afterend'} position
+ * @param {import('./helpers.js').RawHtml} markup  html`` output
+ */
+export function insertHTML(el, position, markup) {
+  // eslint-disable-next-line no-restricted-syntax -- the one insertAdjacentHTML.
+  el.insertAdjacentHTML(position, trusted(markup, 'insertHTML'));
+}
+
+/**
+ * Point a <script> at a URL, through the policy.
+ *
+ * `script.src` is a Trusted Types sink in its own right — under
+ * `require-trusted-types-for 'script'` a plain string there is refused just as
+ * it is at .innerHTML, and for a better reason: the value decides what code
+ * the page runs. The policy's createScriptURL is where the same-origin rule
+ * lives, so every dynamic script load is checked in one place.
+ *
+ * @param {HTMLScriptElement} el
+ * @param {string} url  a same-origin absolute path
+ */
+export function setScriptSrc(el, url) {
+  const p = trustedTypesPolicy();
+  el.src = p ? p.createScriptURL(String(url)) : String(url);
+}
+
+/**
+ * Fill a <script> element with JSON — the only script body this frontend
+ * writes, and the reason the signature takes a value rather than a string.
+ *
+ * `script.textContent` is a Trusted Types sink whatever the script's type, so
+ * even `application/ld+json` (data the browser never executes) has to go
+ * through the policy. Serialising here rather than taking a caller's string
+ * keeps that honest: what reaches the sink is provably JSON.stringify output,
+ * not markup someone assembled.
+ *
+ * `<` is escaped on the way out. Assigning to textContent cannot break out of
+ * the element on its own, but a document that is later serialised and
+ * re-parsed would give a `</script>` inside a title back to the HTML parser.
+ *
+ * @param {HTMLScriptElement} el
+ * @param {unknown} value  anything JSON.stringify accepts
+ */
+export function setScriptJSON(el, value) {
+  const json = JSON.stringify(value).replace(/</g, '\\u003c');
+  const p = trustedTypesPolicy();
+  el.textContent = p ? p.createScript(json) : json;
+}

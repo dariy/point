@@ -13,7 +13,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { store } from '../../store.js';
-import { html, raw } from '../../utils/helpers.js';
+import { html, setHTML, raw } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
@@ -127,7 +127,7 @@ export default class TagsManagerPage extends Component {
   _updateFilterChips() {
     const chips = this.container.querySelector('#tm-filter-chips');
     if (!chips) return;
-    chips.innerHTML = html`${renderFilterChips(this._listFilterParents)}`;
+    setHTML(chips, html`${renderFilterChips(this._listFilterParents)}`);
     chips.querySelectorAll('.tm-filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const id = parseInt(chip.dataset.removeId, 10);

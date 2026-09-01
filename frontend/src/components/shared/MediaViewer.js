@@ -1,4 +1,4 @@
-import { html, raw } from "../../utils/helpers.js";
+import { html, setHTML, raw } from "../../utils/helpers.js";
 /**
  * MediaViewer — Unified carousel component for immersive posts and lightbox.
  * (point-x52z.19)
@@ -447,7 +447,7 @@ export class MediaViewer extends Component {
     const el = document.createElement('div');
     el.className = 'carousel-slide edge-ghost';
     el.dataset.edge = dir;
-    el.innerHTML = html`${this._renderItem(item)}`;
+    setHTML(el, html`${this._renderItem(item)}`);
     el.style.opacity = '0';
     visuals.appendChild(el);
     this._ghost[dir] = el;

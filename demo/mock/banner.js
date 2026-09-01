@@ -1,4 +1,4 @@
-import { html } from "../../frontend/src/utils/helpers.js";
+import { html, setHTML } from "../../frontend/src/utils/helpers.js";
 /**
  * Demo-only UI: an explanatory banner, a reset control, and a login hint.
  *
@@ -86,12 +86,12 @@ function buildBanner() {
   const bar = document.createElement("aside");
   bar.className = "demo-banner";
   bar.setAttribute("role", "note");
-  bar.innerHTML = html`
+  setHTML(bar, html`
     <p><strong>Point demo.</strong> Changes live in this browser tab only.</p>
     <a class="demo-admin-link" href="/light">Open the admin →</a>
     <button type="button" data-demo-reset>Reset demo</button>
     <button type="button" data-demo-dismiss aria-label="Hide this notice">Hide</button>
-  `;
+  `);
   bar.querySelector("[data-demo-reset]").addEventListener("click", () => {
     window.__DEMO_RESET__?.();
   });

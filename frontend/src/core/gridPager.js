@@ -1,4 +1,4 @@
-import { html } from "../utils/helpers.js";
+import { html, setHTML } from "../utils/helpers.js";
 /**
  * GridPager — the gesture layer for a paginated post grid.
  *
@@ -318,7 +318,7 @@ export class GridPager {
       b.type = 'button';
       b.className = `page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = html`${CHEVRON(d)}`;
+      setHTML(b, html`${CHEVRON(d)}`);
       b.disabled = dir === 'prev' ? pag.page <= minPage : pag.page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);
@@ -550,7 +550,7 @@ export class GridPager {
     const band = () => mounts.reduce((h, m) => h + m.getBoundingClientRect().height, 0);
     const pag = this._pagination;
     const holder = document.createElement('div');
-    holder.innerHTML = html`${new Pagination(document.createElement('div'), {
+    setHTML(holder, html`${new Pagination(document.createElement('div'), {
       page,
       pages: pag.pages,
       minPage: GridPager.minPage(pag),
@@ -560,7 +560,7 @@ export class GridPager {
       // Read off the live node so the probe matches whichever copy is on
       // screen without the pager having to know who mounted it.
       compact: !live.querySelector('.page-info')
-    }).render()}`;
+    }).render()}`);
     const probe = holder.firstElementChild;
     if (!probe) return 0;
     const before = band();
@@ -678,7 +678,7 @@ export class GridPager {
       el.dataset.edge = dir;
       if (ghostHeight) el.style.height = `${ghostHeight}px`;
       if (gridTop) el.style.top = `${gridTop}px`;
-      el.innerHTML = html`${this._buildGridHtml(posts || [], page)}`;
+      setHTML(el, html`${this._buildGridHtml(posts || [], page)}`);
       // The ghost's cards are static markup with no component behind them, so
       // the one bit of card behaviour they still need is wired here: a video
       // with no poster frame must leave its card unpainted rather than paint a

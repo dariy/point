@@ -11,7 +11,7 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import { store } from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
-import { html, navigate, raw } from "../../utils/helpers.js";
+import { html, insertHTML, navigate, raw } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
 /**
@@ -79,7 +79,7 @@ export function setupAdminLayout(component, {
   // visitor then looked at.
   const headerActions = component.$(".header-actions");
   if (headerActions) {
-    headerActions.insertAdjacentHTML("beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${raw(EXTERNAL_LINK_SVG)}</a>`);
+    insertHTML(headerActions, "beforeend", html`<a href="${publicUrl || "/"}" class="btn btn-secondary public-home-link" title="View public site" aria-label="View public site">${raw(EXTERNAL_LINK_SVG)}</a>`);
   }
   const onLogout = async () => {
     try {
@@ -163,7 +163,7 @@ function updateSyncPill(component) {
   const existing = component.$(".sync-pill");
   if (existing) existing.remove();
   if (newPill) {
-    titleRow.insertAdjacentHTML("beforeend", html`${raw(newPill)}`);
+    insertHTML(titleRow, "beforeend", html`${raw(newPill)}`);
     component.$("#sync-pill-btn")?.addEventListener("click", () => onSyncPillClick());
   }
 }

@@ -1,5 +1,5 @@
 import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 import { sharePost } from '../../utils/helpers.js';
 import { SHARE_SVG } from '../../utils/icons.js';
 
@@ -13,7 +13,7 @@ export function mount(wrapper, _ctx) {
   btn.className = 'header-action-btn share-btn carousel-share-btn';
   btn.type = 'button';
   btn.setAttribute('aria-label', 'Share');
-  btn.innerHTML = html`${raw(SHARE_SVG)}`;
+  setHTML(btn, html`${raw(SHARE_SVG)}`);
   const onClick = e => {
     e.stopPropagation();
     sharePost({

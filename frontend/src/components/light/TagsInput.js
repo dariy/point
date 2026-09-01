@@ -8,7 +8,7 @@
 
 import { Component } from '../Component.js';
 import { listTags, createTag } from '../../api/tags.js';
-import { html, debounce } from '../../utils/helpers.js';
+import { html, setHTML, debounce } from '../../utils/helpers.js';
 import { openTagFamilyPopover } from './TagFamilyPopover.js';
 let _tagInputCounter = 0;
 export class TagsInput extends Component {
@@ -247,7 +247,7 @@ export class TagsInput extends Component {
     box.textContent = '';
     const popover = document.createElement('div');
     popover.className = 'tag-create-popover';
-    popover.innerHTML = html`
+    setHTML(popover, html`
       <div class="field">
         <label class="form-label">Name</label>
         <input type="text" class="new-tag-name form-input" value="${name}">
@@ -263,7 +263,7 @@ export class TagsInput extends Component {
         <button type="button" class="btn btn-secondary btn-cancel">Cancel</button>
         <button type="button" class="btn btn-primary btn-create">Create</button>
       </div>
-    `;
+    `);
     box.appendChild(popover);
     box.classList.add('show');
     const nameInput = popover.querySelector('.new-tag-name');

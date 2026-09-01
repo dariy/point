@@ -2,7 +2,7 @@ import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../core/gestures.js";
 import { renderTagLink } from "../../utils/tagLinks.js";
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 const EDGE_PAD = 48;
 
 // A range change navigates + remounts the Timeline, which would otherwise rebuild
@@ -527,7 +527,7 @@ export class Timeline extends Component {
     popoverEl.setAttribute("role", "dialog");
     popoverEl.setAttribute("aria-label", `Locations for ${pill.year}`);
     if (isMobile) popoverEl.classList.add("bottom-sheet");
-    popoverEl.innerHTML = html`<div class="timeline-popover-spinner"></div>`;
+    setHTML(popoverEl, html`<div class="timeline-popover-spinner"></div>`);
     document.body.appendChild(popoverEl);
     this.state.popover = popoverEl;
     this._anchorPopover(el, popoverEl);
@@ -569,10 +569,10 @@ export class Timeline extends Component {
         </li>
       `;
       if (locations.length === 0) {
-        popoverEl.innerHTML = html`
+        setHTML(popoverEl, html`
           <ul class="timeline-popover-list">${yearItem}</ul>
           <p class="timeline-popover-empty" style="margin-top: 8px;">No locations recorded for this date.</p>
-        `;
+        `);
       } else {
         const items = locations.map(loc => html`
           <li>
@@ -580,7 +580,7 @@ export class Timeline extends Component {
             <span class="count">${loc.post_count}</span>
           </li>
         `);
-        popoverEl.innerHTML = html`<ul class="timeline-popover-list">${yearItem}${items}</ul>`;
+        setHTML(popoverEl, html`<ul class="timeline-popover-list">${yearItem}${items}</ul>`);
       }
       this._anchorPopover(el, popoverEl);
 
@@ -589,7 +589,7 @@ export class Timeline extends Component {
     } catch (err) {
       if (this._unmounted || this.state.popover !== popoverEl) return;
       console.error("Failed to load locations:", err);
-      popoverEl.innerHTML = html`<p class="error">Failed to load locations.</p>`;
+      setHTML(popoverEl, html`<p class="error">Failed to load locations.</p>`);
     }
     this._popoverCloseHandler = e => {
       if (!popoverEl.contains(e.target) && !el.contains(e.target)) {
@@ -618,7 +618,7 @@ export class Timeline extends Component {
         <button class="timeline-pill-btn sub-pill" data-slug="${p.slug}">${p.name}</button>
       </li>
     `);
-    popoverEl.innerHTML = html`<ul class="timeline-popover-list">${items}</ul>`;
+    setHTML(popoverEl, html`<ul class="timeline-popover-list">${items}</ul>`);
     document.body.appendChild(popoverEl);
     this.state.popover = popoverEl;
     this._anchorPopover(el, popoverEl);
@@ -929,7 +929,7 @@ export class Timeline extends Component {
     const btn = this.$('.timeline-cluster.all-years .timeline-cluster-btn');
     if (btn) {
       const totalPosts = n > 0 ? n : this.state.pills.reduce((sum, p) => sum + p.post_count, 0);
-      btn.innerHTML = html`All years · ${totalPosts} post${totalPosts !== 1 ? 's' : ''}`;
+      setHTML(btn, html`All years · ${totalPosts} post${totalPosts !== 1 ? 's' : ''}`);
     }
   }
   _announceRange() {
@@ -1206,7 +1206,7 @@ export class Timeline extends Component {
         if (info.expanded !== wasExpanded) {
           el.dataset.expanded = info.expanded;
           el.classList.toggle("expanded", info.expanded);
-          el.innerHTML = html``;
+          setHTML(el, html``);
           el.appendChild(this._makePillBtn(info));
         }
       } else {
@@ -1347,7 +1347,7 @@ export class Timeline extends Component {
         ticks.push(html`<div class="timeline-tick" style="left: ${x}px"></div>`);
       }
     }
-    ticksMount.innerHTML = html`${ticks}`;
+    setHTML(ticksMount, html`${ticks}`);
   }
   _updateNavButtons(trackWidth, getX) {
     const {
@@ -1441,7 +1441,7 @@ export class Timeline extends Component {
     for (const p of visible) {
       bars.push(bar(p.post_count, getX(p.year), p.year));
     }
-    mount.innerHTML = html`${bars}`;
+    setHTML(mount, html`${bars}`);
   }
 }
 export function mount(el, ctx) {

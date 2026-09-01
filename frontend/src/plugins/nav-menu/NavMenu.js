@@ -1,5 +1,5 @@
 import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { navigate } from '../../utils/helpers.js';
@@ -136,7 +136,7 @@ export class NavMenu {
     const isActive = href => !!href && href === currentPath;
 
     // Inline links + More shell + tags icon.
-    this.navItemsEl.innerHTML = html`
+    setHTML(this.navItemsEl, html`
       ${this._inline.map((it, i) => html`
         <a href="${it.href || '#'}"
            class="nav-menu-link${isActive(it.href) ? ' active' : ''}${it.children.length ? ' has-children' : ''}"
@@ -150,21 +150,21 @@ export class NavMenu {
                   aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
                  ${raw(tagsMeta.icon)}
                </a>` : ''}
-    `;
+    `);
     this._wireInline();
     this._syncMore();
 
     // Burger: the full menu, children indented.
-    this.burgerTagsEl.innerHTML = html`${items.length ? items.map(it => [
+    setHTML(this.burgerTagsEl, html`${items.length ? items.map(it => [
       html`<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`,
       ...it.children.filter(c => c.href).map(c => html`<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`)
-    ]) : ''}`;
+    ]) : ''}`);
 
     // Burger sitemap.
-    this.burgerSitemapEl.innerHTML = html`
+    setHTML(this.burgerSitemapEl, html`
       ${tagsVisible ? html`<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
       <a href="/light" class="burger-link">${user ? 'Admin' : 'About'}</a>
-    `;
+    `);
 
     // New content, new widths — let the fold controller re-measure.
     this.fold?.relayout();
@@ -291,13 +291,13 @@ export class NavMenu {
     // Parents only — a parent with children reveals them in the shared
     // dropdown (like inline links) rather than flattening the whole subtree.
     const panel = more.querySelector('.nav-more-panel');
-    panel.innerHTML = html`${panelItems.map((it, i) => {
+    setHTML(panel, html`${panelItems.map((it, i) => {
       const hasChildren = this._childItems(it).length > 0;
       const caret = hasChildren ? html`<span class="nav-more-item-caret" aria-hidden="true">›</span>` : '';
       return html`<a href="${it.href || '#'}"
          class="nav-more-item${hasChildren ? ' has-children' : ''}"
          data-more-i="${i}">${it.name}${caret}</a>`;
-    })}`;
+    })}`);
     panel.querySelectorAll('.nav-more-item.has-children').forEach(el => {
       const childItems = this._childItems(panelItems[Number(el.dataset.moreI)]);
       if (childItems.length) this._wireChildFlyout(el, childItems);
