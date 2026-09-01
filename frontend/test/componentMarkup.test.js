@@ -1,16 +1,15 @@
 /**
  * Component.render() — the escape-by-default contract.
  *
- * render() is expected to build its markup with the html`` tag and return what
- * that tag returns, so every interpolation is escaped (safeUrl() in href/src
- * position, escapeHtml() elsewhere) without the subclass doing anything. The
- * base class used to say the opposite: it wrapped whatever render() returned in
- * raw() and left escaping to a comment in its own docstring.
+ * render() builds its markup with the html`` tag and returns what that tag
+ * returns, so every interpolation is escaped (safeUrl() in href/src position,
+ * escapeHtml() elsewhere) without the subclass doing anything. The base class
+ * used to say the opposite: it wrapped whatever render() returned in raw() and
+ * left escaping to a comment in its own docstring.
  *
- * Sixty-three render() methods cannot flip in one commit, so a plain string is
- * still adopted verbatim while the migration runs. These tests hold both ends —
- * that html`` output survives untouched, and that the legacy string path still
- * works — so the strict flip has something to break when it removes the second.
+ * The migration ran behind a hatch that adopted a plain string verbatim. The
+ * hatch is gone: a plain string from render() is now a TypeError, which is what
+ * stops the next hand-escaped renderer from being written at all.
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
@@ -61,11 +60,17 @@ describe('Component.render() markup contract', () => {
     assert.strictEqual(el.querySelector('b.svg')?.textContent, 'x');
   });
 
-  test('an unmigrated render() returning a plain string is still adopted', () => {
-    // The escape hatch. When this stops passing, every render() has moved and
-    // adoptLegacyMarkup() can go with it.
-    const el = mount(() => '<p class="legacy">hand-escaped</p>');
-    assert.strictEqual(el.querySelector('p.legacy')?.textContent, 'hand-escaped');
+  test('a render() returning a plain string is refused, and says so', () => {
+    // The hatch that let the migration run incrementally. Nothing may reach
+    // innerHTML that the tag has not escaped, so this is a hard error rather
+    // than a silent adoption — and the message names the offending component.
+    assert.throws(
+      () => mount(() => '<p class="legacy">hand-escaped</p>'),
+      (e) => e instanceof TypeError && /render\(\) must return html`` output, got string/.test(e.message),
+    );
+    assert.throws(() => mount(() => ''), /must return html`` output/);
+    assert.throws(() => mount(() => null), /got null/);
+    assert.throws(() => mount(() => undefined), /got undefined/);
   });
 
   test('a markup helper with nothing to render returns something falsy', () => {
@@ -79,9 +84,7 @@ describe('Component.render() markup contract', () => {
     assert.match(wrap(renderTagStrip([{ name: 'a', slug: 'a' }])), /^<div class="w">/);
   });
 
-  test('an empty render() leaves the container empty either way', () => {
+  test('an empty html`` render() leaves the container empty', () => {
     assert.strictEqual(mount(() => html``).innerHTML, '');
-    host.innerHTML = '';
-    assert.strictEqual(mount(() => '').innerHTML, '');
   });
 });

@@ -1,5 +1,3 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 /**
  * AdminLayout — shared layout helpers for all /light pages.
  *
@@ -13,12 +11,17 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import { store } from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
-import { navigate } from "../../utils/helpers.js";
+import { html, navigate, raw } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
 /**
- * Shared HTML template for admin pages.
- * To be used inside component.render().
+ * Shared markup for admin pages, for use inside component.render().
+ *
+ * `title`, `actions`, `banner` and `content` are markup slots: pass html``
+ * output. A plain string is escaped, which is the safe default — a page that
+ * wants markup there says so with the tag.
+ *
+ * @returns {import('../../utils/helpers.js').RawHtml}
  */
 export function adminLayoutTemplate({
   title = "Admin",
@@ -30,7 +33,7 @@ export function adminLayoutTemplate({
   const offline = store.get("offline_status") || {};
   const autosave = store.get("autosave_status") || {};
   const syncPill = renderSyncPill(offline, autosave);
-  return `
+  return html`
     <div class="light-layout">
       <div id="sidebar-mount"></div>
       <div class="light-main">
@@ -138,7 +141,7 @@ function renderSyncPill(offline, autosave = {}) {
   } else {
     return "";
   }
-  return `<button class="${cls}" id="sync-pill-btn" type="button">${text}</button>`;
+  return html`<button class="${cls}" id="sync-pill-btn" type="button">${text}</button>`;
 }
 function onSyncPillClick() {
   const offline = store.get("offline_status") || {};

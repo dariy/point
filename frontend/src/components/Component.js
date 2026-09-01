@@ -1,4 +1,4 @@
-import { html, isRawHtml, raw } from '../utils/helpers.js';
+import { html, isRawHtml } from '../utils/helpers.js';
 
 /**
  * Base Component class.
@@ -41,27 +41,6 @@ import { html, isRawHtml, raw } from '../utils/helpers.js';
  *     `frag ? html`<div>${frag}</div>` : ''` shape callers reach for would emit
  *     the empty wrapper. render() itself may return html`` — nothing tests it.
  */
-
-/**
- * The migration escape hatch: adopt a render() result that is still a plain
- * string, built the old way with hand-applied escapeHtml() calls.
- *
- * Sixty-three render() methods cannot flip in one commit, so plain strings keep
- * working — but only through here, so the trust is stated in one place instead
- * of being implied by every subclass. What is left to migrate is what still
- * escapes by hand:
- *
- *   grep -rn 'escapeHtml(' frontend/src --include='*.js'
- *
- * Do not add callers. This function disappears with the strict flip, which
- * turns a plain string from render() into an error.
- *
- * @param {unknown} markup
- * @returns {import('../utils/helpers.js').RawHtml}
- */
-function adoptLegacyMarkup(markup) {
-  return raw(markup);
-}
 
 export class Component {
   /**
@@ -237,10 +216,18 @@ export class Component {
     this._unmountChildren();
     this._children = [];
     const markup = this.render();
-    // html`` already escaped every interpolation in there, so the result goes
-    // in untouched. A render() that has not been migrated yet returns a plain
-    // string instead, and adoptLegacyMarkup() is the one place that is trusted.
-    this.container.innerHTML = html`${isRawHtml(markup) ? markup : adoptLegacyMarkup(markup)}`;
+    // The contract, enforced rather than documented: a plain string here would
+    // reach innerHTML with nothing having escaped it, which is the whole class
+    // of bug the html`` tag exists to remove. There is no escape hatch — build
+    // the markup with the tag, and use raw() for the pieces that need it.
+    if (!isRawHtml(markup)) {
+      throw new TypeError(
+        `${this.constructor.name}.render() must return html\`\` output, got ` +
+        `${markup === null ? 'null' : typeof markup}. Build it with the html tag ` +
+        'from utils/helpers.js.',
+      );
+    }
+    this.container.innerHTML = html`${markup}`;
     this.afterRender();
   }
   _unmountChildren() {

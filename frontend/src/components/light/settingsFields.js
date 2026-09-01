@@ -248,6 +248,9 @@ export function renderFields(keys, settings, ctx = {}) {
       </div>`);
   }
 
+  // Every part is html`` output; raw() covers only the join that turns the
+  // array back into one string.
+  // eslint-disable-next-line no-restricted-syntax
   const join = (parts) => (parts.length ? raw(parts.join("")) : "");
   return { inputs: join(inputs), toggles: join(toggles) };
 }

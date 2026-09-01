@@ -1,5 +1,4 @@
-import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
@@ -28,13 +27,13 @@ export class CssEditor extends Component {
   render() {
     const isMaximizedClass = this.isMaximized ? 'is-maximized' : '';
     // We add some basic styles to ensure visibility even if CSS tokens are missing
-    return `
+    return html`
       <div class="css-editor-container" style="position: relative; border: var(--border-width, 1px) solid var(--border-primary, #ccc); border-radius: var(--border-radius, 4px); background: var(--surface-input, #fff); overflow: hidden; min-height: 200px; display: flex; flex-direction: column;">
         <button type="button" class="textarea-maximize-btn ${isMaximizedClass}" title="${this.isMaximized ? 'Minimize' : 'Maximize'}">
-          ${this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG}
+          ${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}
         </button>
         <button type="button" class="textarea-save-btn ${isMaximizedClass}" title="Save">
-          ${CHECK_SVG}
+          ${raw(CHECK_SVG)}
         </button>
         <div id="${this.id}" class="codejar-editor language-css ${isMaximizedClass}" 
              style="flex: 1; min-height: 200px; padding: 1rem; font-family: var(--font-mono, monospace); font-size: var(--font-size-sm, 14px); line-height: 1.5; color: var(--text-primary, #000); outline: none; white-space: pre-wrap; word-wrap: break-word;"
@@ -55,6 +54,9 @@ export class CssEditor extends Component {
     const highlight = editor => {
       if (window.Prism && window.Prism.languages.css) {
         const code = editor.textContent;
+        // Prism emits markup by design; it is the sanctioned raw() the
+        // convention names alongside the SVG constants.
+        // eslint-disable-next-line no-restricted-syntax
         editor.innerHTML = html`${raw(window.Prism.highlight(code, window.Prism.languages.css, 'css'))}`;
       }
     };

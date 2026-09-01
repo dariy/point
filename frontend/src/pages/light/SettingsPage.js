@@ -12,7 +12,7 @@ import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
-import { html } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";
 
@@ -60,9 +60,9 @@ export default class SettingsPage extends Component {
   render() {
     const { saving } = this.state;
 
-    const actions = `
+    const actions = html`
         <button type="submit" form="settings-form" class="btn btn-primary" title="Save Settings" ${saving ? "disabled" : ""}>
-          ${CHECK_SVG}<span class="btn-label">${saving ? "Saving…" : "Save Settings"}</span>
+          ${raw(CHECK_SVG)}<span class="btn-label">${saving ? "Saving…" : "Save Settings"}</span>
         </button>
     `;
 

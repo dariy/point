@@ -357,10 +357,10 @@ test('should preserve other fields when switching from visual to text mode', () 
     page.state.isNew = false;
 
     page.state.post = { id: 1, title: 'Test', status: 'draft' };
-    assert.match(page.render(), /class="details-group is-hidden" data-group="schedule"/, 'hidden for a draft');
+    assert.match(String(page.render()), /class="details-group is-hidden" data-group="schedule"/, 'hidden for a draft');
 
     page.state.post = { id: 1, title: 'Test', status: 'scheduled', scheduled_at: '2030-01-02T10:00:00Z' };
-    assert.ok(!/is-hidden" data-group="schedule"/.test(page.render()), 'visible for a scheduled post');
+    assert.ok(!/is-hidden" data-group="schedule"/.test(String(page.render())), 'visible for a scheduled post');
   });
 
   test('dropping into the other list moves the live element and records the side', () => {

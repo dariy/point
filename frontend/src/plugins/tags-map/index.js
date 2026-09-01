@@ -104,7 +104,7 @@ export default class MapPage extends Component {
     const { loading, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper site-wrapper--map">
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
@@ -130,7 +130,7 @@ export default class MapPage extends Component {
         </div>`;
     }
 
-    return `
+    return html`
       <div class="site-wrapper site-wrapper--map">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
@@ -369,16 +369,17 @@ export default class MapPage extends Component {
           }
           if (!tag) return;
 
+          const yearLinkList = (tag.years || []).map(
+            (y) =>
+              html`<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${y.name}</a>`,
+          );
+          // Each link is html`` output; raw() covers only the join, which keeps the
+          // single-space separator the popup has always had.
+          // eslint-disable-next-line no-restricted-syntax
+          const yearLinks = raw(yearLinkList.join(" "));
           const yearsHtml =
             tag.years && tag.years.length > 0
-              ? html`<div class="map-popup-years">${raw(
-                  tag.years
-                    .map(
-                      (y) =>
-                        html`<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${y.name}</a>`,
-                    )
-                    .join(" "),
-                )}</div>`
+              ? html`<div class="map-popup-years">${yearLinks}</div>`
               : "";
           const lockIcon = tag.is_hidden ? raw(LOCK_SVG) : "";
           // Leaflet tests for a primitive string, so the markup is unwrapped here.
@@ -418,16 +419,17 @@ export default class MapPage extends Component {
         this._markerLayer,
       );
 
+      const yearLinkList = (tag.years || []).map(
+        (y) =>
+          html`<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${y.name}</a>`,
+      );
+      // Each link is html`` output; raw() covers only the join, which keeps the
+      // single-space separator the popup has always had.
+      // eslint-disable-next-line no-restricted-syntax
+      const yearLinks = raw(yearLinkList.join(" "));
       const yearsHtml =
         tag.years && tag.years.length > 0
-          ? html`<div class="map-popup-years">${raw(
-              tag.years
-                .map(
-                  (y) =>
-                    html`<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${y.name}</a>`,
-                )
-                .join(" "),
-            )}</div>`
+          ? html`<div class="map-popup-years">${yearLinks}</div>`
           : "";
       const lockIcon = tag.is_hidden ? raw(LOCK_SVG) : "";
       // Leaflet tests for a primitive string, so the markup is unwrapped here.

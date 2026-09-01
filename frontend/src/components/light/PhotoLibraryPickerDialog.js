@@ -49,7 +49,7 @@ export class PhotoLibraryPickerDialog extends Component {
   // ── Shell (rendered once) ─────────────────────────────────────────────────
 
   render() {
-    return `
+    return html`
       <div class="modal photo-library-modal">
         <header class="modal-header photo-library-header">
           <div class="photo-library-title-row">

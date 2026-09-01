@@ -43,7 +43,7 @@ export default class CommentsAdminPage extends Component {
 
   render() {
     const { selectMode } = this.state;
-    const actions = `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select comments"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>`;
+    const actions = html`<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select comments"}">${raw(selectMode ? X_SVG : SELECT_SVG)}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>`;
     return adminLayoutTemplate({
       title: "Comments",
       actions,

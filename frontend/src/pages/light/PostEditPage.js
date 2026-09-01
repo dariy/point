@@ -72,45 +72,45 @@ export default class PostEditPage extends Component {
     const titleText = isNew ? "New Post" : "Edit Post";
     if (loading) return adminLayoutTemplate({
       title: titleText,
-      content: `<div class="loading-spinner" aria-label="Loading…"></div>`
+      content: html`<div class="loading-spinner" aria-label="Loading…"></div>`
     });
     const p = post || {};
     const status = p.status || "draft";
     const isPublished = status === "published";
-    const actions = `
+    const actions = html`
       <button id="save-btn" class="btn btn-secondary" type="button" style="margin-right: var(--spacing-sm);">Save</button>
       <div class="header-split-button ${menuOpen ? 'is-menu-open' : ''}">
-        ${isPublished ? `
+        ${isPublished ? html`
           <button id="update-btn" class="btn btn-primary main-action" type="button">Update</button>
-        ` : `
+        ` : html`
           <button id="publish-btn" class="btn btn-primary main-action" type="button">Publish</button>
         `}
         <button id="header-menu-toggle" class="btn btn-primary menu-toggle" type="button" aria-label="More actions">
-          ${CHEVRON_SVG}
+          ${raw(CHEVRON_SVG)}
         </button>
         <div class="header-menu">
-          ${!isPublished ? `
+          ${!isPublished ? html`
             <button class="menu-item" type="button" data-action="publish-now">Publish now</button>
             <button class="menu-item" type="button" data-action="schedule">Schedule…</button>
             <button class="menu-item" type="button" data-action="mark-hidden">Mark hidden</button>
-          ` : `
+          ` : html`
             <button class="menu-item" type="button" data-action="unpublish">Unpublish</button>
           `}
           <hr>
-          ${pluginHost.isEnabled("ai-analysis") ? `<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${SPARKLE_SVG} Analyze media</button>` : ''}
-          <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${LINK_SVG} Preview link</button>
-          <button class="menu-item" type="button" data-action="arrange">${GRIP_SVG} Arrange fields</button>
-          ${this._isWide() ? `<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
-          ${!isNew ? `<button class="menu-item" type="button" data-action="view-on-site">${EXTERNAL_LINK_SVG} View on site</button>` : ''}
+          ${pluginHost.isEnabled("ai-analysis") ? html`<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${raw(SPARKLE_SVG)} Analyze media</button>` : ''}
+          <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${raw(LINK_SVG)} Preview link</button>
+          <button class="menu-item" type="button" data-action="arrange">${raw(GRIP_SVG)} Arrange fields</button>
+          ${this._isWide() ? html`<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
+          ${!isNew ? html`<button class="menu-item" type="button" data-action="view-on-site">${raw(EXTERNAL_LINK_SVG)} View on site</button>` : ''}
           <hr>
-          <button class="menu-item text-danger" type="button" data-action="delete" id="delete-btn">${TRASH_SVG} Delete</button>
+          <button class="menu-item text-danger" type="button" data-action="delete" id="delete-btn">${raw(TRASH_SVG)} Delete</button>
         </div>
       </div>
     `;
-    const detailsToggle = `
+    const detailsToggle = html`
       <button id="details-toggle" class="btn btn-secondary" type="button"
               aria-controls="details-panel" aria-expanded="${this.state.detailsOpen ? 'true' : 'false'}">
-        ${SETTINGS_SVG}
+        ${raw(SETTINGS_SVG)}
         <span class="btn-label">Details</span>
       </button>`;
     let backUrl = "/light/posts";
@@ -120,7 +120,7 @@ export default class PostEditPage extends Component {
     } catch {/* ignore */}
     return adminLayoutTemplate({
       title: html`<a href="${backUrl}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
-      actions: detailsToggle + actions,
+      actions: html`${detailsToggle}${actions}`,
       content: this._renderContent(),
       contentClass: "editor-full-width"
     });
@@ -152,10 +152,10 @@ export default class PostEditPage extends Component {
       anyActionInProgress
     });
     const keys = Object.keys(groups).sort((a, b) => this._orderIndex(a) - this._orderIndex(b));
-    const renderWhere = pinned => keys.filter(k => this._pinned.has(k) === pinned).map(k => renderGroup(k, groups[k], pinned)).join("");
+    const renderWhere = pinned => keys.filter(k => this._pinned.has(k) === pinned).map(k => renderGroup(k, groups[k], pinned));
     const pinnedHtml = renderWhere(true);
     const detailsHtml = renderWhere(false);
-    return `
+    return html`
             <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
               <div class="arrange-bar" id="arrange-bar" role="region" aria-label="Arrange fields" hidden>
                 <span class="arrange-bar-hint">
@@ -182,7 +182,7 @@ export default class PostEditPage extends Component {
                   <span class="details-panel-title">Details</span>
                   <button id="details-close-btn" class="details-panel-close" type="button" aria-label="Close details">&times;</button>
                 </div>
-                <div class="details-panel-body${detailsHtml ? " has-groups" : ""}">
+                <div class="details-panel-body${detailsHtml.length ? " has-groups" : ""}">
                   <!-- Kept first so a group unpinned back into an empty panel can
                        simply be appended and still land after this note. -->
                   <p class="details-panel-empty">Every field is shown in the editor. Move one back here from Arrange fields.</p>

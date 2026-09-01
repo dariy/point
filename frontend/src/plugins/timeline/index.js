@@ -130,9 +130,9 @@ export class Timeline extends Component {
   }
   render() {
     if (this.state.isLoading || this.state.pills.length === 0) {
-      return "";
+      return html``;
     }
-    return `
+    return html`
       <div class="timeline-container" role="region" aria-label="Date timeline">
         <div class="timeline-track-wrapper">
           <div class="timeline-track">
@@ -140,13 +140,13 @@ export class Timeline extends Component {
               <div class="timeline-axis-ticks"></div>
             </div>
             <div id="histogram-mount" class="timeline-histogram"></div>
-            ${this.props.mode === "filter" ? '<div class="timeline-center-indicator"></div>' : ""}
+            ${this.props.mode === "filter" ? html`<div class="timeline-center-indicator"></div>` : ""}
             <div class="timeline-pills-mount"></div>
           </div>
           <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
           <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
         </div>
-        ${this.props.mode === "filter" ? '<div class="sr-only" aria-live="polite" id="timeline-live-announcer"></div>' : ""}
+        ${this.props.mode === "filter" ? html`<div class="sr-only" aria-live="polite" id="timeline-live-announcer"></div>` : ""}
       </div>
     `;
   }

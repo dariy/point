@@ -705,13 +705,13 @@ export default class PostsListPage extends Component {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
-    const CHEVRON = d => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
-      b.innerHTML = html`${raw(CHEVRON(d))}`;
+      b.innerHTML = html`${CHEVRON(d)}`;
       b.disabled = dir === 'prev' ? page <= 1 : page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);

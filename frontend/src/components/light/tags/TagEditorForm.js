@@ -178,6 +178,9 @@ const _html = [
 
   // Every line is html`` output; raw() covers only the join that turns the
   // array back into one string, so the caller gets markup, not a bare string.
+  // Every line is html`` output; raw() covers only the join that turns the
+  // array back into one string.
+  // eslint-disable-next-line no-restricted-syntax
   return raw(_html.join('\n'));
 }
 
@@ -187,6 +190,8 @@ export function renderVisibilitySection(f) {
     ? html`<span class="tm-inherited-chip">inherited — <button type="button" class="tm-badge-via-btn" data-open-tag-id="${f.hidden_via}">change at ancestor</button></span>`
     : (isEffectivelyHidden ? html`<span class="tm-inherited-chip">inherited from ancestor</span>` : '');
 
+  // Every line is html`` output; raw() covers only the join below.
+  // eslint-disable-next-line no-restricted-syntax
   return raw([
     html`<label class="tm-flag-row">`,
     html`  <input type="checkbox" name="hidden"${f.hidden ? raw(' checked') : ''}>`,

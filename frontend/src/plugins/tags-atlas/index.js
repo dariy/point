@@ -154,7 +154,7 @@ export default class AtlasPage extends Component {
     const { loading, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper site-wrapper--atlas">
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
@@ -179,7 +179,7 @@ export default class AtlasPage extends Component {
         </div>`;
     }
 
-    return `
+    return html`
       <div class="site-wrapper site-wrapper--atlas">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>

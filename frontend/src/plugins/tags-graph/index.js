@@ -37,7 +37,7 @@ export default class TagsPage extends Component {
     const { loading, data, error } = this.state;
 
     if (loading) {
-      return `
+      return html`
         <div class="site-wrapper site-wrapper--graph">
           <div id="header-mount"></div>
           <main class="site-main site-main--graph" aria-busy="true">

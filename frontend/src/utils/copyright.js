@@ -60,6 +60,9 @@ export function renderCopyright(settings = {}) {
   //
   // Literals stop at `{` and `[` so the token and link forms get a chance to
   // match; a lone one of either is consumed as literal text.
+  // The callback returns escaped text and html`` markup only; raw() states
+  // that about the assembled result.
+  // eslint-disable-next-line no-restricted-syntax
   return raw(template.replace(
     /\{\{(\w+)\}\}|\[([^\]]*)\]\(([^)\s]+)\)|([^{[]+|[{[])/g,
     (m, token, text, href, literal) => {

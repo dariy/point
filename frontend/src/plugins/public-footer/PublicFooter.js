@@ -9,6 +9,7 @@
 import { Component } from "../../components/Component.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { renderCopyright } from "../../utils/copyright.js";
+import { html, raw } from "../../utils/helpers.js";
 import {
   renderTagLink,
   buildTagIndex,
@@ -65,15 +66,15 @@ export class PublicFooter extends Component {
         const entry = tagIndex.get(t.slug);
         return !entry || entry.isLeaf;
       });
-      const tagLinks = visibleTags.map((t) => renderTagLink(t)).join("");
-      centerSlot = `<div class="immersive-tags">${tagLinks}</div>`;
+      const tagLinks = visibleTags.map((t) => renderTagLink(t));
+      centerSlot = html`<div class="immersive-tags">${tagLinks}</div>`;
     } else {
       // Grid paginator slot — filled from the store-published page state (see
       // afterRender). Rendered unconditionally so a partial refresh that gains
       // pages (e.g. a timeline-scope change) has a mount to update; CSS shows
       // it on desktop / phone-landscape only, portrait phones keep the in-flow
       // paginator below the grid.
-      centerSlot = `<div class="footer-pagination"></div>`;
+      centerSlot = html`<div class="footer-pagination"></div>`;
     }
 
     // About (author link in .footer-copyright), Map and All tags (header
@@ -88,10 +89,10 @@ export class PublicFooter extends Component {
         gridCols(document.querySelector(".grid-expand-mount .posts-grid")) ||
         3,
     );
-    const zoomSlider = `<input type="range" class="footer-zoom" id="footer-zoom" min="1" max="${maxCols}" step="1" value="${maxCols + 1 - zoomCols}" title="Card size" aria-label="Card size">`;
+    const zoomSlider = html`<input type="range" class="footer-zoom" id="footer-zoom" min="1" max="${maxCols}" step="1" value="${maxCols + 1 - zoomCols}" title="Card size" aria-label="Card size">`;
 
     const rssButton = pluginHost.isEnabled("rss")
-      ? `<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
+      ? html`<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${raw(RSS_SVG)}</a>`
       : "";
 
     // Revelio (owner only): reveal or conceal everything a guest can't see —
@@ -99,26 +100,26 @@ export class PublicFooter extends Component {
     // feed's negative pages. Concealed is the guest's own view of the site.
     const revelioOn = isRevelioOn();
     const revelioButton = store.get("user")
-      ? `<button class="footer-action-btn revelio-toggle${revelioOn ? " is-revealing" : ""}" id="revelio-toggle" type="button"
+      ? html`<button class="footer-action-btn revelio-toggle${revelioOn ? " is-revealing" : ""}" id="revelio-toggle" type="button"
                 aria-pressed="${revelioOn}"
                 title="${revelioOn ? "Revelio: showing hidden items — click to view as a guest" : "Viewing as a guest — click to reveal hidden items"}"
-                aria-label="${revelioOn ? "View as a guest" : "Reveal hidden items"}">${revelioOn ? EYE_SVG : EYE_OFF_SVG}</button>`
+                aria-label="${revelioOn ? "View as a guest" : "Reveal hidden items"}">${raw(revelioOn ? EYE_SVG : EYE_OFF_SVG)}</button>`
       : "";
 
-    const themeToggle = `<button class="footer-action-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
-                <span class="icon-sun">${SUN_SVG}</span>
-                <span class="icon-moon">${MOON_SVG}</span>
+    const themeToggle = html`<button class="footer-action-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
+                <span class="icon-sun">${raw(SUN_SVG)}</span>
+                <span class="icon-moon">${raw(MOON_SVG)}</span>
               </button>`;
 
     // When signed in: keep the /light admin entrance link (one-tap to the
     // panel) and add a log out button next to it. When signed out: a single
     // log in link to the admin app.
     const authButton = store.get("user")
-      ? `<a href="/light" class="footer-action-btn" title="Admin panel" aria-label="Admin panel">${DASHBOARD_SVG}</a>
-                <button class="footer-action-btn" id="footer-logout" type="button" title="Log out" aria-label="Log out">${LOGOUT_SVG}</button>`
-      : `<a href="/light" class="footer-action-btn" title="Log in" aria-label="Log in">${LOGIN_SVG}</a>`;
+      ? html`<a href="/light" class="footer-action-btn" title="Admin panel" aria-label="Admin panel">${raw(DASHBOARD_SVG)}</a>
+                <button class="footer-action-btn" id="footer-logout" type="button" title="Log out" aria-label="Log out">${raw(LOGOUT_SVG)}</button>`
+      : html`<a href="/light" class="footer-action-btn" title="Log in" aria-label="Log in">${raw(LOGIN_SVG)}</a>`;
 
-    return `
+    return html`
       <footer class="site-footer">
         <div class="footer-container">
           <div class="footer-content">
@@ -137,7 +138,7 @@ export class PublicFooter extends Component {
                   ${authButton}
                 </div>
                 <button class="footer-action-btn footer-slider-btn" id="footer-slider-btn" type="button" aria-label="Toggle actions" title="More Actions">
-                  ${SLIDERS_SVG}
+                  ${raw(SLIDERS_SVG)}
                 </button>
                 ${themeToggle}
               </div>

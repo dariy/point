@@ -732,7 +732,7 @@ export class MediaBrowser extends Component {
     if (!pickerMode) {
       const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
-        h1.innerHTML = html`${raw(this._renderBreadcrumbs())}`;
+        h1.innerHTML = html`${this._renderBreadcrumbs()}`;
         h1.querySelectorAll(".mb-breadcrumb-item").forEach(btn => {
           btn.addEventListener("click", () => {
             this.setState({
