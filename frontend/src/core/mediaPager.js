@@ -1,5 +1,4 @@
-import { raw } from "../utils/helpers.js";
-import { html } from "../utils/helpers.js";
+import { html, raw } from "../utils/helpers.js";
 /**
  * MediaPager — the gesture layer for the admin media grid (/light/media).
  *
@@ -58,7 +57,8 @@ export class MediaPager {
    * @param {() => HTMLElement|null} opts.root      gesture root (.media-browser)
    * @param {() => HTMLElement|null} opts.area      the element that slides (#mb-media-area)
    * @param {() => HTMLElement|null} opts.grid      the live .media-grid
-   * @param {(page:number) => Promise<string>} opts.fetchPage  neighbour page markup
+   * @param {(page:number) => Promise<import('../utils/helpers.js').RawHtml>}
+   *   opts.fetchPage  neighbour page markup, built with html``
    * @param {(page:number) => void} opts.gotoPage   load a page
    * @param {() => void} opts.onZoomCommit          refit per_page after a zoom step
    * @param {() => boolean} opts.isAlive            false once the host unmounted
@@ -264,7 +264,7 @@ export class MediaPager {
       const el = document.createElement('div');
       el.className = 'mb-page-ghost';
       el.dataset.edge = dir;
-      el.innerHTML = html`${raw(_html)}`;
+      el.innerHTML = html`${_html}`;
       document.body.appendChild(el);
       this._ghosts[dir] = el;
       this.applyZoom(); // the ghost is on <body> and inherits no zoom of its own

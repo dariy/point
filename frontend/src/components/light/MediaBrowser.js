@@ -118,9 +118,9 @@ export class MediaBrowser extends Component {
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
     const data = await listMedia(params);
     const items = data.media || [];
-    if (!items.length) return `<p class="empty-state">No media files.</p>`;
+    if (!items.length) return html`<p class="empty-state">No media files.</p>`;
     const none = new Set();
-    return `<div class="media-grid">${items.map(m => this._renderItem(m, none)).join("")}</div>`;
+    return html`<div class="media-grid">${items.map(m => this._renderItem(m, none))}</div>`;
   }
 
   /**

@@ -47,7 +47,7 @@ export default class HomePage extends Component {
         this._reconcilePerPage({ fromResize: true });
       },
       isAlive: () => !this._unmounted,
-      emptyHtml: '<p class="empty-state">No posts yet.</p>',
+      emptyHtml: html`<p class="empty-state">No posts yet.</p>`,
     });
   }
 

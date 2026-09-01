@@ -59,7 +59,7 @@ export default class SearchPage extends Component {
         });
       },
       isAlive: () => !this._unmounted,
-      emptyHtml: '<p class="empty-state">No posts matched your search.</p>'
+      emptyHtml: html`<p class="empty-state">No posts matched your search.</p>`
     });
   }
   onRouteUpdate(params, query) {
