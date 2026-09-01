@@ -25,7 +25,8 @@ export function escapeHtml(value) {
  * e.g. Instagram URLs — which should render as links rather than raw text.
  *
  * @param {string} text
- * @returns {string} HTML-safe string with <a> tags for any URLs found
+ * @returns {import('./helpers.js').RawHtml} markup — the text escaped, with
+ *   <a> tags for any URLs found
  */
 export function linkify(text) {
   const str = String(text ?? '');
@@ -37,16 +38,18 @@ export function linkify(text) {
   let m;
   while ((m = urlRe.exec(str)) !== null) {
     out += escapeHtml(str.slice(last, m.index));
-    let raw = m[0];
+    // Not `raw` — that name is the opt-out helper this module exports.
+    let found = m[0];
     let tail = '';
-    const t = trim.exec(raw);
-    if (t) { tail = raw.slice(t.index); raw = raw.slice(0, t.index); }
-    const href = raw.startsWith('http') ? raw : `https://${raw}`;
-    out += html`<a href="${href}" target="_blank" rel="noopener noreferrer">${raw}</a>${tail}`.toString();
+    const t = trim.exec(found);
+    if (t) { tail = found.slice(t.index); found = found.slice(0, t.index); }
+    const href = found.startsWith('http') ? found : `https://${found}`;
+    out += html`<a href="${href}" target="_blank" rel="noopener noreferrer">${found}</a>${tail}`;
     last = m.index + m[0].length;
   }
   out += escapeHtml(str.slice(last));
-  return out;
+  // Assembled from escaped pieces by hand, so raw() states that once, here.
+  return raw(out);
 }
 
 /**

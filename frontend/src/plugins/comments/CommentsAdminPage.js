@@ -10,7 +10,7 @@ import {
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { api } from "../../api/client.js";
 import { store } from "../../store.js";
-import { escapeHtml , html, raw} from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import {
   MINUS_SVG,
@@ -55,11 +55,11 @@ export default class CommentsAdminPage extends Component {
     const { loading, error, tab, comments, blocked, selectMode, selectedIds } =
       this.state;
     if (loading)
-      return '<div class="loading-spinner" aria-label="Loading comments…"></div>';
+      return html`<div class="loading-spinner" aria-label="Loading comments…"></div>`;
     if (error)
-      return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+      return html`<p class="error-state" role="alert">${error}</p>`;
 
-    const tabs = `
+    const tabs = html`
       <div class="menu-editor-tabs" role="tablist">
         <button id="tab-recent" role="tab" aria-selected="${tab === "recent"}" class="btn btn-sm ${tab === "recent" ? "btn-primary" : "btn-secondary"}">Recent</button>
         <button id="tab-blocked" role="tab" aria-selected="${tab === "blocked"}" class="btn btn-sm ${tab === "blocked" ? "btn-primary" : "btn-secondary"}">Blocked users${blocked.length ? ` (${blocked.length})` : ""}</button>
@@ -68,19 +68,19 @@ export default class CommentsAdminPage extends Component {
     let bulkToolbar = "";
     if (selectMode) {
       const isRecent = tab === "recent";
-      bulkToolbar = `
+      bulkToolbar = html`
         <div class="posts-toolbar" style="margin-bottom: var(--spacing-sm);">
           <div class="bulk-toolbar" style="display: flex;">
             <div class="bulk-actions">
               <span id="bulk-count">${selectedIds.size} selected</span>
               ${
                 isRecent
-                  ? `
-                <button id="bulk-block-btn" class="btn btn-sm btn-secondary" ${selectedIds.size ? "" : "disabled"}>${MINUS_SVG}<span class="btn-label">Block Authors</span></button>
-                <button id="bulk-delete-btn" class="btn btn-sm btn-danger" ${selectedIds.size ? "" : "disabled"}>${TRASH_SVG}<span class="btn-label">Delete</span></button>
+                  ? html`
+                <button id="bulk-block-btn" class="btn btn-sm btn-secondary" ${selectedIds.size ? "" : "disabled"}>${raw(MINUS_SVG)}<span class="btn-label">Block Authors</span></button>
+                <button id="bulk-delete-btn" class="btn btn-sm btn-danger" ${selectedIds.size ? "" : "disabled"}>${raw(TRASH_SVG)}<span class="btn-label">Delete</span></button>
               `
-                  : `
-                <button id="bulk-unblock-btn" class="btn btn-sm btn-secondary" ${selectedIds.size ? "" : "disabled"}>${RESTORE_SVG}<span class="btn-label">Unblock</span></button>
+                  : html`
+                <button id="bulk-unblock-btn" class="btn btn-sm btn-secondary" ${selectedIds.size ? "" : "disabled"}>${raw(RESTORE_SVG)}<span class="btn-label">Unblock</span></button>
               `
               }
             </div>
@@ -89,7 +89,7 @@ export default class CommentsAdminPage extends Component {
       `;
     }
 
-    return `
+    return html`
       ${bulkToolbar}
       <div class="card">
         <div class="card-header">${tabs}</div>
@@ -101,38 +101,37 @@ export default class CommentsAdminPage extends Component {
 
   _renderRecent(comments) {
     const { selectMode, selectedIds } = this.state;
-    if (!comments.length) return '<p class="empty-state">No comments yet.</p>';
+    if (!comments.length) return html`<p class="empty-state">No comments yet.</p>`;
 
     const tableRows = comments
       .map((c, i) => {
         const url = c.locator?.url || "";
         const name = c.user?.name || c.user?.id || "unknown";
         const isChecked = selectedIds.has(i);
-        return `
+        return html`
         <tr data-i="${i}" class="post-row-main">
-          ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
-          <td class="meta-col"><strong>${escapeHtml(name)}</strong></td>
-          <td class="title-col">${url ? html`<a href="${url}" class="table-link muted">${c.title || c.locator?.title || "post"} ${raw(EXTERNAL_LINK_SVG)}</a>` : '<span class="text-muted">—</span>'}</td>
-          <td class="updated-col"><time datetime="${escapeHtml(c.time || "")}">${escapeHtml(formatDate(c.time))}</time></td>
+          ${selectMode ? html`<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
+          <td class="meta-col"><strong>${name}</strong></td>
+          <td class="title-col">${url ? html`<a href="${url}" class="table-link muted">${c.title || c.locator?.title || "post"} ${raw(EXTERNAL_LINK_SVG)}</a>` : html`<span class="text-muted">—</span>`}</td>
+          <td class="updated-col"><time datetime="${c.time || ""}">${formatDate(c.time)}</time></td>
           <td class="actions-col" rowspan="2">
             <div class="actions">
-              <button class="btn btn-sm btn-secondary btn-block-user" data-action="block" data-i="${i}" title="Block the author">${MINUS_SVG}</button>
-              <button class="btn btn-sm btn-danger btn-delete-comment" data-action="delete" data-i="${i}" title="Delete">${TRASH_SVG}</button>
+              <button class="btn btn-sm btn-secondary btn-block-user" data-action="block" data-i="${i}" title="Block the author">${raw(MINUS_SVG)}</button>
+              <button class="btn btn-sm btn-danger btn-delete-comment" data-action="delete" data-i="${i}" title="Delete">${raw(TRASH_SVG)}</button>
             </div>
           </td>
         </tr>
         <tr data-i="${i}" class="post-row-tags">
-          <td colspan="3" class="tags-col" style="white-space: normal;">${escapeHtml(textOf(c.text))}</td>
+          <td colspan="3" class="tags-col" style="white-space: normal;">${textOf(c.text)}</td>
         </tr>`;
-      })
-      .join("");
+      });
 
-    const tableHTML = `
+    const tableHTML = html`
       <div class="table-container">
         <table class="table">
           <thead>
             <tr>
-              ${selectMode ? `<th class="check-col" style="width: 1%;"><input type="checkbox" id="select-all-cb" ${comments.length > 0 && selectedIds.size === comments.length ? "checked" : ""}></th>` : ""}
+              ${selectMode ? html`<th class="check-col" style="width: 1%;"><input type="checkbox" id="select-all-cb" ${comments.length > 0 && selectedIds.size === comments.length ? "checked" : ""}></th>` : ""}
               <th style="width: 20%;">Author</th>
               <th style="width: 50%;">Post</th>
               <th style="width: 20%;">Date</th>
@@ -148,62 +147,60 @@ export default class CommentsAdminPage extends Component {
         const url = c.locator?.url || "";
         const name = c.user?.name || c.user?.id || "unknown";
         const isChecked = selectedIds.has(i);
-        return `
+        return html`
         <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
           <div class="post-card-body">
             <div class="post-card-top" style="align-items: baseline; flex-wrap: wrap;">
               <span class="post-card-title" style="flex: 1;">
-                <strong>${escapeHtml(name)}</strong>
+                <strong>${name}</strong>
                 <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
                   ${url ? html`on <a href="${url}" style="color: inherit;">${c.title || c.locator?.title || "post"}</a> · ` : ""}
-                  <time datetime="${escapeHtml(c.time || "")}">${escapeHtml(formatDate(c.time))}</time>
+                  <time datetime="${c.time || ""}">${formatDate(c.time)}</time>
                 </span>
               </span>
             </div>
             <div class="post-card-chips" style="white-space: normal; color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--spacing-xs);">
-              ${escapeHtml(textOf(c.text))}
+              ${textOf(c.text)}
             </div>
           </div>
           <div class="post-card-swipe-actions">
-            <button class="btn btn-sm swipe-block-btn btn-block-user" data-action="block" data-i="${i}">${MINUS_SVG}<span>Block</span></button>
-            <button class="btn btn-sm btn-danger swipe-delete-btn btn-delete-comment" data-action="delete" data-i="${i}">${TRASH_SVG}<span>Delete</span></button>
+            <button class="btn btn-sm swipe-block-btn btn-block-user" data-action="block" data-i="${i}">${raw(MINUS_SVG)}<span>Block</span></button>
+            <button class="btn btn-sm btn-danger swipe-delete-btn btn-delete-comment" data-action="delete" data-i="${i}">${raw(TRASH_SVG)}<span>Delete</span></button>
           </div>
         </div>`;
-      })
-      .join("");
+      });
 
     const selectClass = selectMode ? " select-mode" : "";
-    const cardHTML = `<div class="posts-card-list${selectClass}" id="posts-card-list">${cardRows}</div>`;
-    return tableHTML + cardHTML;
+    const cardHTML = html`<div class="posts-card-list${selectClass}" id="posts-card-list">${cardRows}</div>`;
+    return html`${tableHTML}${cardHTML}`;
   }
 
   _renderBlocked(blocked) {
     const { selectMode, selectedIds } = this.state;
-    if (!blocked.length) return '<p class="empty-state">No blocked users.</p>';
+    if (!blocked.length) return html`<p class="empty-state">No blocked users.</p>`;
 
     const tableRows = blocked
       .map((u, i) => {
         const isChecked = selectedIds.has(i);
-        return `
+        return html`
         <tr data-i="${i}" class="post-row-main">
-          ${selectMode ? `<td class="check-col"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
-          <td><strong>${escapeHtml(u.name || u.id)}</strong></td>
-          <td>blocked until ${escapeHtml(formatDate(u.time))}</td>
+          ${selectMode ? html`<td class="check-col"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
+          <td><strong>${u.name || u.id}</strong></td>
+          <td>blocked until ${formatDate(u.time)}</td>
           <td class="actions-col">
             <div class="actions">
-              <button class="btn btn-sm btn-secondary btn-unblock-user" data-action="unblock" data-i="${i}" title="Unblock">${RESTORE_SVG}</button>
+              <button class="btn btn-sm btn-secondary btn-unblock-user" data-action="unblock" data-i="${i}" title="Unblock">${raw(RESTORE_SVG)}</button>
             </div>
           </td>
         </tr>`;
-      })
-      .join("");
+      });
 
-    const tableHTML = `
+    const tableHTML = html`
       <div class="table-container">
         <table class="table">
           <thead>
             <tr>
-              ${selectMode ? `<th class="check-col" style="width: 1%;"><input type="checkbox" id="select-all-cb" ${blocked.length > 0 && selectedIds.size === blocked.length ? "checked" : ""}></th>` : ""}
+              ${selectMode ? html`<th class="check-col" style="width: 1%;"><input type="checkbox" id="select-all-cb" ${blocked.length > 0 && selectedIds.size === blocked.length ? "checked" : ""}></th>` : ""}
               <th>User</th>
               <th>Status</th>
               <th style="width: 1%;"></th>
@@ -216,28 +213,27 @@ export default class CommentsAdminPage extends Component {
     const cardRows = blocked
       .map((u, i) => {
         const isChecked = selectedIds.has(i);
-        return `
+        return html`
         <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
           <div class="post-card-body">
             <div class="post-card-top" style="align-items: baseline;">
               <span class="post-card-title">
-                <strong>${escapeHtml(u.name || u.id)}</strong>
+                <strong>${u.name || u.id}</strong>
                 <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
-                  blocked until ${escapeHtml(formatDate(u.time))}
+                  blocked until ${formatDate(u.time)}
                 </span>
               </span>
             </div>
           </div>
           <div class="post-card-swipe-actions">
-            <button class="btn btn-sm btn-secondary swipe-unblock-btn btn-unblock-user" data-action="unblock" data-i="${i}">${RESTORE_SVG}<span>Unblock</span></button>
+            <button class="btn btn-sm btn-secondary swipe-unblock-btn btn-unblock-user" data-action="unblock" data-i="${i}">${raw(RESTORE_SVG)}<span>Unblock</span></button>
           </div>
         </div>`;
-      })
-      .join("");
+      });
 
     const selectClass = selectMode ? " select-mode" : "";
-    const cardHTML = `<div class="posts-card-list${selectClass}" id="posts-card-list">${cardRows}</div>`;
-    return tableHTML + cardHTML;
+    const cardHTML = html`<div class="posts-card-list${selectClass}" id="posts-card-list">${cardRows}</div>`;
+    return html`${tableHTML}${cardHTML}`;
   }
 
   afterRender() {

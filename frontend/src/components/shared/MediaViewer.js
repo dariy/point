@@ -97,18 +97,14 @@ export class MediaViewer extends Component {
           <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
           <div class="carousel-indicators">${dots}</div>
         ` : postNav}
-        ${raw(this._renderExtras())}
+        ${this._renderExtras()}
       </div>`;
   }
 
   /**
    * Hook for subclasses to inject extra markup inside the viewer wrapper
-   * (e.g. the immersive sheet overlay). Returns empty markup by default.
-   *
-   * The one override lives in the immersive plugin and still builds a
-   * hand-escaped string, which is why render() has to raw() what comes back.
-   * Once the plugins move to html`` that raw() goes and this returns RawHtml
-   * like every other renderer.
+   * (e.g. the immersive sheet overlay). Returns nothing by default; an override
+   * returns the RawHtml html`` yields.
    */
   _renderExtras() {
     return '';
