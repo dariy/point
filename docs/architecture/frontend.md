@@ -64,6 +64,7 @@ export class Component {
     this._children = []; // child Component instances for lifecycle propagation
     this._cleanups = [];        // teardowns for THIS render's resources (see 2.3)
     this._actionTeardowns = []; // the delegated `actions` listeners (see 2.4)
+    this._rendered = false;     // gates update(): nothing to update in place yet
     this._unmounted = false;
   }
 
@@ -106,12 +107,23 @@ export class Component {
   beforeRender() {}
 
   /**
+   * Optional: update(prevProps, prevState) — update the DOM in place instead
+   * of rebuilding it (see 2.5). Declared by the subclass, not here, so the
+   * base class can tell "cannot" from "would not". Return exactly true to say
+   * "handled": render(), afterRender(), the cleanup list and the mounted
+   * children are then all left alone. Anything else rebuilds. Not called for
+   * the first render.
+   * @type {((prevProps: object, prevState: object) => boolean)|undefined}
+   */
+
+  /**
    * Merges newState into this.state and re-renders.
    * @param {object} newState
    */
   setState(newState) {
+    const prevState = this.state;
     this.state = { ...this.state, ...newState };
-    this._rerender();
+    this._rerender(this.props, prevState);   // prev* are what update() diffs
   }
 
   /**
@@ -119,8 +131,9 @@ export class Component {
    * @param {object} newProps
    */
   setProps(newProps) {
+    const prevProps = this.props;
     this.props = { ...this.props, ...newProps };
-    this._rerender();
+    this._rerender(prevProps, this.state);
   }
 
   /**
@@ -255,8 +268,11 @@ new Component(container, props)
         .setState(delta)
                 |
                 |-- merge state
-                `-- _rerender()
+                `-- _rerender(prevProps, prevState)
                         |
+                        |-- update(prevProps, prevState)?  -> true: STOP here,
+                        |                                     the DOM stands
+                        |                                     (see 2.5)
                         |-- _runCleanups()   <- releases the PREVIOUS render
                         |-- beforeRender()
                         |-- _unmountChildren()
@@ -397,7 +413,68 @@ Keep `on()` for what delegation cannot express: a listener on `document` or
 `window`, one that needs `capture` or `passive`, or a handler on a specific node
 rather than a class of them.
 
-### 2.5 — Example: Simple Component
+### 2.5 — In-Place Updates
+
+The default re-render is a rebuild: children unmounted, `render()` called,
+`innerHTML` assigned. That is right whenever the markup is the whole truth, and
+wrong whenever DOM identity carries something it does not — a decoded `<img>`
+rebuilt is an image thrown away and fetched again, which is a visible flash.
+
+A component that can answer a particular change without the rebuild declares
+`update(prevProps, prevState)`:
+
+```javascript
+update(prevProps) {
+  if (prevProps.posts === this.props.posts) return false;   // not our case
+  reconcileList(this.$('.posts-grid'), this.props.posts, p => p.id, {
+    create: post => buildSlot(post),
+    update: (slot, post, i) => { slot.dataset.index = String(i); },
+    remove: slot => this._cardFor(slot).unmount(),
+  });
+  return true;                                              // handled
+}
+```
+
+Returning exactly `true` means handled. `_rerender()` returns immediately, so
+`render()` and `afterRender()` do not run — and because the DOM they wired is
+still on screen, neither the cleanup list nor the mounted children are touched.
+Anything else falls through to the rebuild, so `return false`, dropping off the
+end, and a case nobody thought about are all the same safe answer: a slower
+render, never a stale screen. `update()` is not consulted for the first render;
+there is nothing to update yet.
+
+The cost of "handled" is that the component now owns keeping its DOM true to its
+props. Two helpers carry most of that:
+
+**`reconcileList(container, items, keyOf, ops)`** — `frontend/src/utils/reconcileList.js`.
+Brings a container's children into line with a list, matching nodes to items by
+key rather than by position, so a survivor is *moved* rather than rebuilt. Nodes
+carry their key in `data-rkey`; `create` gets it stamped for free, and
+`setKey(node, key)` is how `afterRender()` stamps the ones the first render
+produced. `ops` is `{ create(item, i), update?(node, item, i), remove?(node, key) }`,
+and the result is `{ created, removed, nodes, moved }` — `nodes` in list order,
+`moved` counting survivors that had to be lifted.
+
+Departures are detached before the arrivals are placed, which is what makes a
+list that only lost a middle element cost zero moves. An element without
+`data-rkey` belongs to something else and is never moved, keyed or removed.
+
+**`preserveInteraction(container, fn)`** — `frontend/src/utils/preserveInteraction.js`.
+Snapshots focus, caret and scroll, runs `fn`, puts them back — for the rebuilds
+that still happen. The snapshot is a *selector*, not a node reference, because
+the node is about to stop existing: an `id`, a `name`, or a `data-action`, and
+only when it matches exactly one element. An ambiguous one restores nothing,
+since focusing the first `[data-action="delete"]` of twenty rows is a wrong
+answer that looks like a right one. `captureInteraction(container)` is the same
+snapshot with the restore handed back as a function, for a page that reloads
+across an `await` (`PostsListPage._load`).
+
+The sites this replaced: `PostGrid.reconcile()` was this loop written by hand
+for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.js`) and
+`utils/gridFlip.js` still cover what a reconciler cannot — a swipe handed across
+a route change, and the FLIP animation over a zoom step.
+
+### 2.6 — Example: Simple Component
 
 ```javascript
 // frontend/src/components/shared/Pagination.js
@@ -450,7 +527,7 @@ template escapes every interpolation on the way through, and
 `Component._rerender()` rejects anything that is not its output — see
 [Security Model](#security-model).
 
-### 2.6 — Example: Async Component (loads data)
+### 2.7 — Example: Async Component (loads data)
 
 ```javascript
 // frontend/src/pages/public/HomePage.js
