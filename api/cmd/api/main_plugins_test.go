@@ -42,7 +42,9 @@ func writePluginFrontend(t *testing.T, pluginID string) (string, string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "index.html"),
-		[]byte("<html><head><title>Loading…</title></head><body></body></html>"), 0o644); err != nil {
+		// The blank description meta is part of the real shell: the injected
+		// metadata has to displace it, not queue up behind it.
+		[]byte(`<html><head><meta name="description" content="" /><title>Loading…</title></head><body></body></html>`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root, chunk
