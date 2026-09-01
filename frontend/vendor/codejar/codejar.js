@@ -1,5 +1,26 @@
 // @ts-nocheck — vendored third-party source; not ours to annotate.
 const globalWindow = window;
+/* Point patch — Trusted Types. The three sinks below (undo/redo restore and
+   the escaped-text paste) go through the "point-codejar" policy, so a page can
+   enforce require-trusted-types-for 'script' without Ctrl+Z silently
+   corrupting the buffer. Pass-through on purpose: what reaches these sinks is
+   markup CodeJar itself produced, or text it has just escaped. Re-apply on a
+   version bump — scripts/check-vendor-sinks.sh fails if a bare sink reappears
+   here. See docs/vendors.md. */
+let pointTTPolicy;
+let pointTTResolved = false;
+function pointTT(html) {
+    if (!pointTTResolved) {
+        pointTTResolved = true;
+        try {
+            pointTTPolicy = globalWindow.trustedTypes.createPolicy('point-codejar', { createHTML: (s) => s });
+        }
+        catch {
+            pointTTPolicy = null;
+        }
+    }
+    return pointTTPolicy ? pointTTPolicy.createHTML(html) : html;
+}
 export function CodeJar(editor, highlight, opt = {}) {
     const options = {
         tab: '\t',
@@ -354,7 +375,7 @@ export function CodeJar(editor, highlight, opt = {}) {
             at--;
             const record = history[at];
             if (record) {
-                editor.innerHTML = record.html;
+                editor.innerHTML = pointTT(record.html);
                 restore(record.pos);
             }
             if (at < 0)
@@ -365,7 +386,7 @@ export function CodeJar(editor, highlight, opt = {}) {
             at++;
             const record = history[at];
             if (record) {
-                editor.innerHTML = record.html;
+                editor.innerHTML = pointTT(record.html);
                 restore(record.pos);
             }
             if (at >= history.length)
@@ -462,7 +483,7 @@ export function CodeJar(editor, highlight, opt = {}) {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
-        document.execCommand('insertHTML', false, text);
+        document.execCommand('insertHTML', false, pointTT(text));
     }
     function debounce(cb, wait) {
         let timeout = 0;

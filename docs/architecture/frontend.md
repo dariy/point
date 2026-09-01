@@ -1345,26 +1345,62 @@ what the one before it misses:
    makes the same check first, to name the subclass whose `render()` is at fault.
 
 3. **The browser refuses a write that skipped the funnel.** `setHTML()` mints
-   its string through a Trusted Types policy named `point`, and the response
-   carries
+   its string through a Trusted Types policy named `point`, and every response
+   carries, at the tail of the enforcing policy:
 
    ```
-   Content-Security-Policy-Report-Only: require-trusted-types-for 'script'; trusted-types point
+   require-trusted-types-for 'script'; trusted-types point point-leaflet point-codejar
    ```
 
-   Under enforcement a Chromium browser rejects any `.innerHTML` /
-   `.outerHTML` / `insertAdjacentHTML` write whose value did not come from that
-   policy — which moves the rule from lint, where an author can suppress it, to
-   the browser, where nobody can. Firefox and Safari ignore the directive, so
-   this is defence in depth on top of the lint rule, never a replacement.
+   A Chromium browser rejects any `.innerHTML` / `.outerHTML` /
+   `insertAdjacentHTML` write whose value did not come from a named policy —
+   which moves the rule from lint, where an author can suppress it, to the
+   browser, where nobody can. Firefox and Safari ignore the directive, so this
+   is defence in depth on top of the lint rule, never a replacement.
 
-   It ships **report-only** for now. The vendored libraries write HTML
-   internally and cannot go through the funnel: leaflet does it during feature
-   detection at import time and again for every zoom button, attribution line
-   and popup; `Prism.highlightElement` does it for code blocks in post content;
-   codejar does it restoring an undo step. Enforcing today would take the map,
-   atlas and editor pages down. See `trustedTypesCSP` in
-   `api/cmd/api/server.go`.
+   **The three names are the security claim.** `point` is the frontend's own,
+   in `utils/helpers.js`. The other two are waivers for vendored libraries that
+   write their own markup and were patched to route it through a policy instead
+   of a plain string:
+
+   | Policy | Lives in | Sinks |
+   |---|---|---|
+   | `point` | `frontend/src/utils/helpers.js` | every write this frontend makes |
+   | `point-leaflet` | `frontend/vendor/leaflet/leaflet.js` | feature detection at import time, zoom buttons, attribution, scale, layer control, popup content, popup close button, `divIcon` markup |
+   | `point-codejar` | `frontend/vendor/codejar/codejar.js` | undo restore, redo restore, and the escaped-text paste via `execCommand('insertHTML')` |
+
+   Both vendor policies are pass-through: those libraries build their own
+   markup and there is no second escaping pass to add. What the split buys is
+   that the waiver is **scoped and named**. The cheap alternative — a
+   pass-through `default` policy — would have caught every unrouted sink on the
+   page, including one reached by injected content, and left the directive
+   decorative. These two catch only the writes inside two files that were read
+   line by line. There is no `'allow-duplicates'`, so each name mints exactly
+   once per document: the policies created at load are the only ones the page
+   will ever have.
+
+   Prism needed no waiver. `Prism.highlightElement` writes the highlighted
+   markup itself, so `PostContent` calls `Prism.highlight()` — the
+   string-returning form the editors already used — and writes the result with
+   `setHTML()`. `utils/prismManual.js` switches off the automatic pass
+   prism-core otherwise runs on itself at load, which went through
+   `highlightElement` and was duplicated work even before it became a
+   violation.
+
+   A patched vendored file is a patch a version bump silently reverts, so
+   `scripts/check-vendor-sinks.sh` (in `check.sh` and in CI) counts the raw and
+   routed sinks in `frontend/vendor/`, checks both policies are still
+   registered, checks the names in the CSP and the names the code creates are
+   the same set, and fails if anything calls `highlightElement` again.
+   `build-js.sh` additionally fails if a `createPolicy()` call lands in more
+   than one chunk — a name mints once, so a graph split that duplicated
+   `helpers.js` would silently take the write path down on every page loading
+   both chunks. `frontend/e2e/trustedTypes.test.js` then drives a real Chromium
+   under the real header and asserts not just zero violations but that the vendored
+   writers *produced* something — highlighted tokens, zoom buttons, an
+   attribution line, a marker, a popup, an undo that did not corrupt the
+   buffer. Zero violations is otherwise trivially satisfied by a map that never
+   initialises.
 
 `eslint.config.js` is what keeps the funnel a funnel: a bare `.innerHTML =`,
 `.outerHTML =` or `insertAdjacentHTML(` anywhere under `frontend/src` or
@@ -1379,7 +1415,7 @@ Three things sit outside all of this and are still worth stating:
 - **Dynamic text** is better set with `element.textContent = value` than
   interpolated into markup at all — error messages, user names, toasts.
 - **No `eval`, no `Function()`.** `require-trusted-types-for 'script'` covers
-  those sinks too, once enforced.
+  those sinks too, and it is enforced.
 
 ### Auth security
 
@@ -1398,8 +1434,15 @@ there is no `'unsafe-inline'` anywhere in it. An operator can widen `script-src`
 and `connect-src` for a deployment (`CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC`)
 without the engine hardcoding a third-party domain.
 
-The Trusted Types directives ride in a second, report-only header — see
-*The HTML write path* above.
+The Trusted Types directives are the tail of that same enforcing header — see
+*The HTML write path* above. Two documents on the origin deliberately do not
+inherit them, because both replace the policy outright rather than extend it:
+a directly-navigated SVG (`neutralizeSVG` in `media.go`, which denies
+everything and sandboxes) and the MCP OAuth login page (`oauth.go`, which runs
+no JS). The remark42 comments widget is proxied through this origin and is
+third-party code that sets `script.src` from a plain string, so
+`internal/api/comments.go` strips both CSP headers from every proxied
+response.
 
 ---
 

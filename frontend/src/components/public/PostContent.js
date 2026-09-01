@@ -13,7 +13,7 @@
  */
 
 import { Component } from "../Component.js";
-import { html, navigate, raw } from "../../utils/helpers.js";
+import { html, navigate, raw, setHTML } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import { buildTagIndex } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
@@ -24,6 +24,8 @@ import { ViewContext } from "../../utils/viewContext.js";
 import { cachedPerPage } from "../../utils/gridFit.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
 import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
+// Sets Prism.manual before prism-core is imported below — see that file.
+import "../../utils/prismManual.js";
 
 const _prismLoading = new Map();
 const _LANG_DEPS = {
@@ -37,7 +39,9 @@ const _LANG_DEPS = {
 };
 
 async function _ensurePrismCore() {
-  if (window.Prism) return;
+  // Not `if (window.Prism)`: prismManual.js has already put a stub there to
+  // switch the automatic pass off. The real thing is the one with highlight().
+  if (window.Prism?.highlight) return;
   await import("/assets/vendor/prismjs/prism-core.js");
 }
 
@@ -51,6 +55,37 @@ async function _loadPrismLang(lang) {
   })();
   _prismLoading.set(lang, p);
   return p;
+}
+
+/**
+ * Highlight one `<code>` block — the string-returning half of Prism, not
+ * `highlightElement`.
+ *
+ * `Prism.highlightElement` writes the highlighted markup itself, with a bare
+ * `element.innerHTML =` inside the vendored file. Under Trusted Types
+ * enforcement that write is refused and the code block is left blank, so this
+ * does what highlightElement does — set the language class on the `<code>` and
+ * its `<pre>` (prism.css keys off `pre[class*="language-"]`), then insert the
+ * markup — while routing the insert through setHTML() like every other write
+ * in this frontend. `Prism.highlight()` escapes the source text itself, which
+ * is why raw() is the honest wrapper here.
+ *
+ * @param {HTMLElement} code  the `<code>` element
+ * @param {string} lang       the language named by its `language-*` class
+ */
+function _highlightInto(code, lang) {
+  const Prism = window.Prism;
+  const grammar = Prism?.languages?.[lang];
+  // The grammar import failed (an unknown language, or offline). Leave the
+  // server-rendered plain text alone rather than blanking the block.
+  if (!grammar) return;
+  Prism.util.setLanguage(code, lang);
+  const pre = code.parentElement;
+  if (pre && pre.nodeName === "PRE") Prism.util.setLanguage(pre, lang);
+  // Prism emits markup by design and escapes the source text on the way; this
+  // is the same sanctioned raw() the two editors use around Prism.highlight().
+  // eslint-disable-next-line no-restricted-syntax -- pre-escaped by Prism.
+  setHTML(code, raw(Prism.highlight(code.textContent, grammar, lang)));
 }
 
 /**
@@ -291,7 +326,7 @@ export class PostContent extends Component {
       await _ensurePrismCore();
       const langs = [...new Set(toHighlight.map((x) => x.lang))];
       await Promise.all(langs.map(_loadPrismLang));
-      toHighlight.forEach(({ code }) => window.Prism.highlightElement(code));
+      toHighlight.forEach(({ code, lang }) => _highlightInto(code, lang));
     })();
   }
 

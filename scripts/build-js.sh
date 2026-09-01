@@ -121,6 +121,23 @@ build_set() {
     echo '{}' > "$manifest"
     echo "No plugin entries — wrote empty $manifest"
   fi
+  # A Trusted Types policy name can be minted exactly once per document (the
+  # CSP carries no 'allow-duplicates'), so createPolicy('point') has to end up
+  # in exactly one chunk. Two chunks holding it means the second call throws,
+  # the fallback assigns a plain string, and the browser refuses the write —
+  # every page loading both of them loses its HTML write path at once. That is
+  # a property of how esbuild split the graph, not of any source file, so it is
+  # checked here, where the split happens.
+  policy_counts=$(grep -rhoE "createPolicy\((['\"])[^'\"]+" "$js_dir" 2>/dev/null |
+      sed -E "s/.*['\"]//" | sort | uniq -c || true)
+  dupes=$(echo "$policy_counts" | awk 'NF > 0 && $1 != 1 { print "  FAIL  createPolicy(\047" $2 "\047) landed in " $1 " chunks, expected 1." }')
+  if [ -n "$dupes" ]; then
+    echo "$dupes" >&2
+    echo "        Each Trusted Types policy must be registered from one shared chunk" >&2
+    echo "        of $js_dir. See trustedTypesCSP in api/cmd/api/server.go." >&2
+    exit 1
+  fi
+
   echo "Built $js_dir: app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val}), ${PLUGIN_COUNT} plugin entrie(s), $(ls "$js_dir/chunks" 2>/dev/null | wc -l | tr -d ' ') shared/page chunk(s)"
 }
 

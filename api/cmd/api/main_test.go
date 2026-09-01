@@ -158,13 +158,15 @@ func TestSecurityHeaders(t *testing.T) {
 		{"X-Content-Type-Options", "nosniff"},
 		{"X-Frame-Options", "DENY"},
 		{"X-Xss-Protection", "1; mode=block"},
-		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://server.arcgisonline.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"},
+		// Trusted Types is the tail of the enforcing policy, not a second
+		// Report-Only header — see trustedTypesCSP.
+		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://server.arcgisonline.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; " + trustedTypesCSP},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
 		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
-		// Trusted Types ships in its own Report-Only header rather than inside
-		// the enforcing policy — see trustedTypesCSP for why it is not enforced
-		// yet, and why it is not spliced into the line above.
-		{"Content-Security-Policy-Report-Only", trustedTypesCSP},
+		// The report-only header is gone. A browser that got both would
+		// report every violation twice, and an operator reading the response
+		// could not tell which of the two policies was the live one.
+		{"Content-Security-Policy-Report-Only", ""},
 	}
 
 	for _, tt := range tests {

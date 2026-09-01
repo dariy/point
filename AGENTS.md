@@ -64,6 +64,16 @@ command you add cannot run unattended, mark it in the source with
   `api/sqlc.yaml`. `extra.go` in the same package is hand-written. Keep `queries.sql` ASCII: sqlc
   expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
 
+**Two vendored files carry a Point patch.** `frontend/vendor/leaflet/leaflet.js`
+and `frontend/vendor/codejar/codejar.js` route their own HTML writes through a
+Trusted Types policy, because the CSP enforces
+`require-trusted-types-for 'script'` and a plain string at `.innerHTML` is
+refused — leaflet would die at import time, codejar would corrupt the buffer on
+Ctrl+Z. A version bump that drops a fresh upstream build over either file
+reverts the patch; re-apply the block marked `/* Point patch — Trusted Types */`
+at the top of the file. `scripts/check-vendor-sinks.sh` fails when that has not
+happened, and [docs/vendors.md](docs/vendors.md) has the detail.
+
 **Do not add a query whose name is already a method on `*sqliteRepository`.** The repository embeds
 `*models.Queries`, and a hand-written method shadows the promoted one — the generated query
 compiles and never runs, with nothing to catch it. `scripts/check-sql-layer.sh` (part of

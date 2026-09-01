@@ -80,6 +80,11 @@ run_step "JS typecheck" bash -c "
 # an interpolation, and growth in the set of raw() exceptions.
 run_step "html escaping" "$SCRIPT_DIR/check-html-escaping.sh"
 
+# ── Vendored Trusted Types waivers ───────────────────────────────────────────
+# The enforcing CSP names three policies; two of them live in patched vendored
+# files that a version bump would overwrite. This is what notices.
+run_step "vendor TT sinks" "$SCRIPT_DIR/check-vendor-sinks.sh"
+
 if [ -n "$LINT_ONLY" ]; then
     if [ ${#FAIL[@]} -gt 0 ]; then
         echo ""

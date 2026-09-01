@@ -58,6 +58,7 @@ frontend/src/components/light/CssEditor.js 1
 frontend/src/components/light/MarkdownEditor.js 1
 frontend/src/components/light/settingsFields.js 1
 frontend/src/components/light/tags/TagEditorForm.js 2
+frontend/src/components/public/PostContent.js 1
 frontend/src/pages/light/PluginsPage.js 1
 frontend/src/plugins/tags-map/index.js 2
 frontend/src/utils/copyright.js 1
