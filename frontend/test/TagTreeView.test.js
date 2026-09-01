@@ -3,13 +3,23 @@ import assert from 'node:assert';
 
 import {
   buildTagTree,
-  renderTagForest,
-  renderTagTree,
-  renderTagNode,
-  renderSelectCheckbox,
-  renderRowBadges,
-  renderUnfiledGroup,
+  renderTagForest as _renderTagForest,
+  renderTagTree as _renderTagTree,
+  renderTagNode as _renderTagNode,
+  renderSelectCheckbox as _renderSelectCheckbox,
+  renderRowBadges as _renderRowBadges,
+  renderUnfiledGroup as _renderUnfiledGroup,
 } from '../src/components/light/tags/TagTreeView.js';
+
+// The renderers return the RawHtml html`` produces — a String object, which
+// assert.match and friends will not take. Every assertion below wants the
+// primitive, so the wrappers do that once here rather than at each call.
+const renderTagForest = (...a) => String(_renderTagForest(...a));
+const renderTagTree = (...a) => String(_renderTagTree(...a));
+const renderTagNode = (...a) => String(_renderTagNode(...a));
+const renderSelectCheckbox = (...a) => String(_renderSelectCheckbox(...a));
+const renderRowBadges = (...a) => String(_renderRowBadges(...a));
+const renderUnfiledGroup = (...a) => String(_renderUnfiledGroup(...a));
 
 // No DOM stubs: TagTreeView is pure string rendering, which is the point of
 // having it out of the page.

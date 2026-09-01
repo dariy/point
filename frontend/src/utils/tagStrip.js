@@ -23,16 +23,14 @@ import { setupTagFlyout } from './tagFlyout.js';
  */
 export function renderTagStrip(postTags) {
   const visibleTags = (postTags || []).filter((t) => !t.inherited);
-  // renderTagLink still returns a hand-escaped string; raw() until tagLinks.js
-  // moves to html`` with the rest of the tags subsystem.
-  const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
+  const links = visibleTags.map((t) => renderTagLink(t));
   // Falsy, not html``: RawHtml('') is a String object and therefore truthy,
   // and PostContent gates its wrapper <div> on this result.
-  if (!tagsHtml) return '';
+  if (!links.length) return '';
   return html`
     <div class="tag-strip-track">
       <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${raw(CHEVRON_SVG)}</button>
-      <div class="tag-strip-scroll" aria-label="Tags">${raw(tagsHtml)}</div>
+      <div class="tag-strip-scroll" aria-label="Tags">${links}</div>
       <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">${raw(CHEVRON_SVG)}</button>
     </div>`;
 }

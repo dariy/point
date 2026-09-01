@@ -13,7 +13,7 @@ import { Component } from "../../components/Component.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getMapPage } from "../../api/pages.js";
 import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
@@ -116,13 +116,13 @@ export default class MapPage extends Component {
     }
 
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper site-wrapper--map">
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
           <main class="site-main site-main--map">
             <div class="map-fetch-error" role="alert">
-              <p class="map-fetch-error__message">${escapeHtml(error)}</p>
+              <p class="map-fetch-error__message">${error}</p>
               <button class="btn btn-primary btn-sm map-fetch-error__retry" id="map-retry-btn" type="button">Try again</button>
             </div>
           </main>
@@ -371,20 +371,19 @@ export default class MapPage extends Component {
 
           const yearsHtml =
             tag.years && tag.years.length > 0
-              ? `<div class="map-popup-years">` +
-                tag.years
-                  .map(
-                    (y) =>
-                      `<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`,
-                  )
-                  .join(" ") +
-                `</div>`
+              ? html`<div class="map-popup-years">${raw(
+                  tag.years
+                    .map(
+                      (y) =>
+                        html`<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${y.name}</a>`,
+                    )
+                    .join(" "),
+                )}</div>`
               : "";
-          const lockIcon = tag.is_hidden ? LOCK_SVG : "";
+          const lockIcon = tag.is_hidden ? raw(LOCK_SVG) : "";
+          // Leaflet tests for a primitive string, so the markup is unwrapped here.
           layer.bindPopup(
-            `<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${escapeHtml(tag.name)}</a>` +
-              `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>` +
-              yearsHtml,
+            String(html`<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${tag.name}</a><div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>${yearsHtml}`),
           );
           layer.on("click", (e) => layer.openPopup(e.latlng));
           this._tagMarkers.set(tag.slug, layer);
@@ -421,20 +420,19 @@ export default class MapPage extends Component {
 
       const yearsHtml =
         tag.years && tag.years.length > 0
-          ? `<div class="map-popup-years">` +
-            tag.years
-              .map(
-                (y) =>
-                  `<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`,
-              )
-              .join(" ") +
-            `</div>`
+          ? html`<div class="map-popup-years">${raw(
+              tag.years
+                .map(
+                  (y) =>
+                    html`<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${y.name}</a>`,
+                )
+                .join(" "),
+            )}</div>`
           : "";
-      const lockIcon = tag.is_hidden ? LOCK_SVG : "";
+      const lockIcon = tag.is_hidden ? raw(LOCK_SVG) : "";
+      // Leaflet tests for a primitive string, so the markup is unwrapped here.
       marker.bindPopup(
-        `<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${escapeHtml(tag.name)}</a>` +
-          `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>` +
-          yearsHtml,
+        String(html`<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${tag.name}</a><div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>${yearsHtml}`),
       );
       marker.on("click", () => marker.openPopup());
       this._tagMarkers.set(tag.slug, marker);

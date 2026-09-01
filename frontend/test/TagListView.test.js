@@ -4,10 +4,16 @@ import assert from 'node:assert';
 import {
   matchesListFilter,
   sortTagsForList,
-  renderSortHeader,
-  renderTagList,
-  renderFilterChips,
+  renderSortHeader as _renderSortHeader,
+  renderTagList as _renderTagList,
+  renderFilterChips as _renderFilterChips,
 } from '../src/components/light/tags/TagListView.js';
+
+// The renderers return the RawHtml html`` produces — a String object, which
+// assert.match and friends will not take, so unwrap once here.
+const renderSortHeader = (...a) => String(_renderSortHeader(...a));
+const renderTagList = (...a) => String(_renderTagList(...a));
+const renderFilterChips = (...a) => String(_renderFilterChips(...a));
 
 // No DOM stubs: TagListView is pure, same as TagTreeView.
 const view = (over = {}) => ({

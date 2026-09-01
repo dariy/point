@@ -11,24 +11,27 @@
  * and only shares the overlay boilerplate, which is why openOverlay is
  * exported separately.
  *
- * Callers escape their own interpolated strings — the html passed in here is
- * inserted as-is.
+ * Every string that reaches this markup is escaped by the html`` tag that
+ * builds it, here or in the caller — nothing relies on a caller remembering.
  */
+
+import { html } from '../../../utils/helpers.js';
 
 /**
  * Create an active modal overlay, append it to <body>, and wire the two
  * dismissals every dialog here shares: the × button (if the markup has one)
  * and a click on the backdrop itself.
  *
+ * @param {import('../../../utils/helpers.js').RawHtml} modalHtml  built with html``
  * Returns { overlay, close }. Callers wire their own buttons to `close`.
  */
 export function openOverlay(modalHtml) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay active';
   // Written through a computed key so CodeQL does not flag it as an XSS sink.
-  // Every caller escapes its interpolations with escapeHtml() first; this is
-  // a false positive, not an unsanitised assignment.
-  overlay['inner' + 'HTML'] = modalHtml;
+  // The value is html`` output, so every interpolation in it is already
+  // escaped — this is a false positive, not an unsanitised assignment.
+  overlay['inner' + 'HTML'] = html`${modalHtml}`;
   document.body.appendChild(overlay);
 
   const close = () => overlay.remove();
@@ -42,17 +45,18 @@ export function openOverlay(modalHtml) {
  * A searchable single-choice list of tags in a modal.
  *
  * @param {object}   opts
- * @param {string}   opts.title          Header text — pre-escaped by the caller.
+ * @param {import('../../../utils/helpers.js').RawHtml|string} opts.title
+ *   Header text. html`` output goes in as markup; a plain string is escaped.
  * @param {string}   opts.modalClass     Modal variant class.
  * @param {Array}    opts.tags           Choices, already filtered and ordered.
  * @param {string}   opts.radioName      name= shared by the radio group.
- * @param {Function} opts.renderItem     tag => item HTML (must carry itemClass/nameClass).
+ * @param {Function} opts.renderItem     tag => item markup from html`` (must carry itemClass/nameClass).
  * @param {string}   opts.itemClass      Selector the search box shows/hides.
  * @param {string}   opts.nameClass      Element inside an item holding its searchable text.
  * @param {string}   opts.listClass      Wrapper around the items.
  * @param {string}   opts.searchClass    The search input.
- * @param {string}   [opts.beforeList]   HTML above the search box.
- * @param {string}   [opts.afterList]    HTML below the list.
+ * @param {import('../../../utils/helpers.js').RawHtml} [opts.beforeList]  markup above the search box.
+ * @param {import('../../../utils/helpers.js').RawHtml} [opts.afterList]   markup below the list.
  * @param {string}   opts.cancelId       Cancel button id.
  * @param {string}   opts.confirmId      Confirm button id.
  * @param {string}   opts.confirmLabel   Confirm button text.
@@ -69,9 +73,9 @@ export function openTagPickerDialog({
   cancelId, confirmId, confirmLabel,
   collect, onConfirm, onEmpty, onMount,
 }) {
-  const items = tags.map(renderItem).join('');
+  const items = tags.map(renderItem);
 
-  const { overlay, close } = openOverlay(`
+  const { overlay, close } = openOverlay(html`
       <div class="modal ${modalClass}" role="dialog" aria-modal="true">
         <button class="modal-close" aria-label="Close">×</button>
         <div class="modal-header">

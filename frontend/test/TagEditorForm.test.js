@@ -2,12 +2,18 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import {
-  renderTagEditorForm,
-  renderVisibilitySection,
-  renderTagToggles,
+  renderTagEditorForm as _renderTagEditorForm,
+  renderVisibilitySection as _renderVisibilitySection,
+  renderTagToggles as _renderTagToggles,
   slugifyTagName,
   tagEditorSelection,
 } from '../src/components/light/tags/TagEditorForm.js';
+
+// The renderers return the RawHtml html`` produces — a String object, which
+// assert.match and friends will not take, so unwrap once here.
+const renderTagEditorForm = (...a) => String(_renderTagEditorForm(...a));
+const renderVisibilitySection = (...a) => String(_renderVisibilitySection(...a));
+const renderTagToggles = (...a) => String(_renderTagToggles(...a));
 
 // Pure module — no DOM stubs.
 const tag = (id, name, over = {}) => ({ id, name, slug: name.toLowerCase(), parents: [], ...over });

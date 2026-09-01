@@ -26,6 +26,7 @@
  * react to leaves through `onModeChange` / `onBulkDone`.
  */
 
+import { html, raw } from '../../../utils/helpers.js';
 import { CHECK_SVG, TRASH_SVG } from '../../../utils/icons.js';
 import { matchesListFilter } from './TagListView.js';
 import { SWIPE_BREAKPOINT } from './tagGestures.js';
@@ -78,7 +79,7 @@ export function selectAllState(selected, total) {
  * The page decides when to show it; this only says what it looks like.
  */
 export function renderBulkToolbar() {
-  return `
+  return html`
       <div class="tm-bulk-toolbar" id="tm-bulk-toolbar">
         <label class="select-all-label"><input type="checkbox" id="tm-select-all-cb"> Select all</label>
         <div class="tm-bulk-actions">
@@ -87,9 +88,9 @@ export function renderBulkToolbar() {
             <option value="hidden">Hidden</option>
             <option value="visible">Visible</option>
           </select>
-          <button id="tm-bulk-apply-btn" class="btn btn-sm" disabled title="Apply visibility">${CHECK_SVG}<span class="btn-label"> Apply</span></button>
+          <button id="tm-bulk-apply-btn" class="btn btn-sm" disabled title="Apply visibility">${raw(CHECK_SVG)}<span class="btn-label"> Apply</span></button>
           <button id="tm-bulk-move-btn" class="btn btn-sm" disabled title="Move under a parent…">Move…</button>
-          <button id="tm-bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Delete tags">${TRASH_SVG}<span class="btn-label"> Delete</span></button>
+          <button id="tm-bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Delete tags">${raw(TRASH_SVG)}<span class="btn-label"> Delete</span></button>
           <!-- Deliberately not a .btn-label: this is the way out of select
                mode, so its text has to survive the icon-only collapse. -->
           <button id="tm-bulk-done-btn" class="btn btn-sm btn-secondary" title="Leave selection mode">Done</button>

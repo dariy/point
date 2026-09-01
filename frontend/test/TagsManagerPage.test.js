@@ -143,7 +143,7 @@ describe('TagsManagerPage', () => {
     page._listFilterParents = [{ id: 9, name: 'Japan' }];
 
     page._updateFilterChips();
-    assert.equal(chipsEl.innerHTML, renderFilterChips(page._listFilterParents));
+    assert.equal(chipsEl.innerHTML, String(renderFilterChips(page._listFilterParents)));
     assert.match(String(chipsEl.innerHTML), /<svg/, 'the × icon survives a re-render');
   });
 

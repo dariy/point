@@ -13,7 +13,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { store } from '../../store.js';
-import { html, raw } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
@@ -79,20 +79,18 @@ export default class TagsManagerPage extends Component {
       tags,
       view
     } = this.state;
-    // The tags views still return hand-escaped strings; the raw() calls go when
-    // components/light/tags moves to html``.
     let content;
     if (loading) {
       content = html`<div class="loading-spinner" aria-label="Loading tags…"></div>`;
     } else if (error) {
       content = html`<p class="error-state" role="alert">${error}</p>`;
     } else if (view === 'tree') {
-      content = html`<div class="tags-tree-container">${raw(renderTagForest(buildTagTree(tags), this._treeView()))}</div>`;
+      content = html`<div class="tags-tree-container">${renderTagForest(buildTagTree(tags), this._treeView())}</div>`;
     } else {
-      content = raw(renderTagList(tags, this._listView()));
+      content = renderTagList(tags, this._listView());
     }
     return html`
-            ${this.state.selectMode && !loading && !error ? raw(renderBulkToolbar()) : ''}
+            ${this.state.selectMode && !loading && !error ? renderBulkToolbar() : ''}
             <div class="card tm-card">
               <div class="card-body">
                 ${content}
@@ -129,7 +127,7 @@ export default class TagsManagerPage extends Component {
   _updateFilterChips() {
     const chips = this.container.querySelector('#tm-filter-chips');
     if (!chips) return;
-    chips.innerHTML = html`${raw(renderFilterChips(this._listFilterParents))}`;
+    chips.innerHTML = html`${renderFilterChips(this._listFilterParents)}`;
     chips.querySelectorAll('.tm-filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const id = parseInt(chip.dataset.removeId, 10);

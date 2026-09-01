@@ -78,7 +78,11 @@ const rules = {
       message: "Use the html tagged template helper for insertAdjacentHTML."
     },
     {
-      selector: "TaggedTemplateExpression[tag.name='html'] TemplateElement[value.raw=/=\\s*$/]",
+      // An interpolation landing straight after `attr=` is unquoted, and the
+      // helper's URL-position scan only works on quoted attributes. The name
+      // must be preceded by whitespace so a query string inside a quoted value
+      // (href="/map?tag=${slug}") is not mistaken for one.
+      selector: "TaggedTemplateExpression[tag.name='html'] TemplateElement[value.raw=/\\s[\\w:.-]+=\\s*$/]",
       message: "Attribute interpolations must be quoted (e.g. href=\"${url}\")."
     }
   ],

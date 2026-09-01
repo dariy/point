@@ -21,13 +21,13 @@ import { store } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { setPageTitle } from "../../utils/documentTitle.js";
 import {
-  escapeHtml,
+  html,
   navigate,
+  raw,
   safeUrl,
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
 import { tagKind } from "../../utils/tagLinks.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { isRevelioOn } from "../../utils/revelio.js";
@@ -166,13 +166,13 @@ export default class AtlasPage extends Component {
     }
 
     if (error) {
-      return `
+      return html`
         <div class="site-wrapper site-wrapper--atlas">
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
           <main class="site-main site-main--atlas">
             <div class="main-container">
-              <p class="error-message" role="alert">${escapeHtml(error)}</p>
+              <p class="error-message" role="alert">${error}</p>
             </div>
           </main>
           <div id="footer-mount"></div>
@@ -949,16 +949,17 @@ export default class AtlasPage extends Component {
       const thumbUrl = node.thumb && safeUrl(node.thumb);
       const thumbHtml =
         thumbUrl && thumbUrl !== "#"
-          ? html`<img class="atlas-node__thumb" src="${thumbUrl}" alt="" loading="lazy" decoding="async" />`.toString()
+          ? html`<img class="atlas-node__thumb" src="${thumbUrl}" alt="" loading="lazy" decoding="async" />`
           : "";
       const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
       // Owner-only chips carry the site-wide lock plus a dashed ring, so a cloud
       // read with revelio on shows which of its nodes a guest would not get.
       const hiddenClass = node.concealed ? " atlas-node--hidden" : "";
-      const lockHtml = node.concealed ? LOCK_SVG : "";
+      const lockHtml = node.concealed ? raw(LOCK_SVG) : "";
       const icon = L.divIcon({
         className: "atlas-node-wrap",
-        html: `<span class="atlas-node atlas-node--${node.kind}${thumbClass}${hiddenClass}" style="animation-delay:${i * 16}ms" title="${escapeHtml(node.title || node.label)}">${thumbHtml}${lockHtml}${escapeHtml(truncate(node.label, node.max))}</span>`,
+        // Leaflet tests for a primitive string, so the markup is unwrapped here.
+        html: String(html`<span class="atlas-node atlas-node--${node.kind}${thumbClass}${hiddenClass}" style="animation-delay:${i * 16}ms" title="${node.title || node.label}">${thumbHtml}${lockHtml}${truncate(node.label, node.max)}</span>`),
         iconSize: [0, 0],
       });
       const marker = L.marker(ll, { icon, keyboard: false, riseOnHover: true });
@@ -978,7 +979,7 @@ export default class AtlasPage extends Component {
     const centerConcealed = isConcealed(tag);
     const centerIcon = L.divIcon({
       className: "atlas-node-wrap",
-      html: `<span class="atlas-node atlas-node--${centerKind} atlas-node--center${centerConcealed ? " atlas-node--hidden" : ""}" title="${escapeHtml(concealedTitle(tag, tag.name))}">${centerConcealed ? LOCK_SVG : ""}${escapeHtml(truncate(tag.name, 30))}</span>`,
+      html: String(html`<span class="atlas-node atlas-node--${centerKind} atlas-node--center${centerConcealed ? " atlas-node--hidden" : ""}" title="${concealedTitle(tag, tag.name)}">${centerConcealed ? raw(LOCK_SVG) : ""}${truncate(tag.name, 30)}</span>`),
       iconSize: [0, 0],
     });
     const centerMarker = L.marker(anchorLatLng, {

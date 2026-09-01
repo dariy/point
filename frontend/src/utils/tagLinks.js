@@ -58,14 +58,21 @@ export function tagKind(tag) {
   return 'tag';
 }
 
+/**
+ * One tag as an <a>. `prefix` and `suffix` are markup slots — whatever a caller
+ * puts there lands inside the link unescaped — so they take html`` output, not
+ * a user-supplied string. The tag's own name always goes through the tag.
+ *
+ * @returns {import('./helpers.js').RawHtml} interpolate it directly; no raw()
+ *   at the call site.
+ */
 export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
   const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tags/${slug}`;
   const classes = ['tag-link', `tag-kind-${tagKind(tag)}`, active ? 'active' : '', extra].filter(Boolean).join(' ');
   const isExternal = /^https?:\/\//.test(href);
-  const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return html`<a href="${href}" class="${classes}"${raw(externalAttrs)}>${raw(prefix)}${name}${raw(suffix)}</a>`.toString();
+  return html`<a href="${href}" class="${classes}"${isExternal ? html` target="_blank" rel="noopener noreferrer"` : ''}>${raw(prefix)}${name}${raw(suffix)}</a>`;
 }
 
 export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
