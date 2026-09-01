@@ -122,7 +122,7 @@ export default class HomePage extends Component {
     if (this._unmounted) return;
     await fadeOut;
     if (this._unmounted) return;
-    if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+    if (data.settings) store.merge('settings', normalizeSettings(data.settings));
     // tag_cloud is page-independent and only sent on page 1; cache it so it
     // persists across pagination, swipes, and direct loads of later pages.
     if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
@@ -528,7 +528,7 @@ export default class HomePage extends Component {
     try {
       const data = await getHomePage(this._buildParams(vc));
       // Merge settings from page response into store.
-      if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+      if (data.settings) store.merge('settings', normalizeSettings(data.settings));
       // tag_cloud is page-independent and only sent on page 1; cache it so it
       // persists across pagination, swipes, and direct loads of later pages.
       if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);

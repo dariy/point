@@ -614,9 +614,7 @@ export default class MenuPage extends Component {
 
       // Sync the public settings store so the header reflects the change
       // without a reload, then let nav consumers refetch the menu.
-      const settings = store.get('settings') || {};
-      store.set('settings', {
-        ...settings,
+      store.merge('settings', {
         nav_menu_mode: this.state.mode,
         nav_inline_max: String(this.state.inlineMax),
         nav_more_title: this.state.moreTitle
