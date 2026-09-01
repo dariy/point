@@ -13,7 +13,7 @@
 
 import { Component } from '../../components/Component.js';
 import { login, loginWithPasskey } from '../../api/auth.js';
-import { store } from '../../store.js';
+import { getUser, setUser } from '../../store.js';
 import { html, navigate } from '../../utils/helpers.js';
 
 export default class LoginPage extends Component {
@@ -86,7 +86,7 @@ export default class LoginPage extends Component {
       this.setState({ loading: true, error: null });
       try {
         const result = await loginWithPasskey();
-        store.set('user', result.user);
+        setUser(result.user);
         this._finish(result.user);
       } catch (err) {
         if (err?.name !== 'NotAllowedError') {
@@ -114,7 +114,7 @@ export default class LoginPage extends Component {
         // No username: the install has a single owner, so the API resolves the
         // credential against the first (only) user.
         const result = await login(null, password, true);
-        store.set('user', result.user);
+        setUser(result.user);
         this._finish(result.user);
       } catch (err) {
         this.setState({
@@ -149,7 +149,7 @@ export default class LoginPage extends Component {
     setTimeout(() => pwField?.focus(), 80);
 
     // Auto-redirect if already logged in.
-    if (store.get('user')) this._finish(store.get('user'));
+    if (getUser()) this._finish(getUser());
   }
 
   beforeUnmount() {

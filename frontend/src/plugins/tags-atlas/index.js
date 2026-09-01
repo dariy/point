@@ -18,7 +18,7 @@ import { Component } from "../../components/Component.js";
 
 import { pluginHost } from "../../core/pluginHost.js";
 import { getTagsGraph, getTagCloud } from "../../api/pages.js";
-import { store } from "../../store.js";
+import { getSettings, getUser } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { setPageTitle } from "../../utils/documentTitle.js";
 import {
@@ -205,7 +205,7 @@ export default class AtlasPage extends Component {
   afterRender() {
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
 
-    const settings = store.get("settings") || {};
+    const settings = getSettings() || {};
     pluginHost.fill("header", this.$("#header-mount"), {
       settings,
       currentPath: "/tags",
@@ -341,7 +341,7 @@ export default class AtlasPage extends Component {
    * be a control that does nothing.
    */
   _canFilterHidden() {
-    return !!store.get("user") && isRevelioOn();
+    return !!getUser() && isRevelioOn();
   }
 
   /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */

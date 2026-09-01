@@ -166,9 +166,10 @@ export class Component {
 
   /**
    * Helper: subscribe to a store key for the lifetime of the current render.
+   * Takes one of store.js's `on*` accessors, not a store and a string key.
    */
-  subscribeStore(storeInstance, key, callback) {
-    this.registerCleanup(storeInstance.subscribe(key, callback));
+  subscribeStore(subscribe, callback) {
+    this.registerCleanup(subscribe(callback));
   }
 
   // ── Private ──────────────────────────────────────────────────────────────
@@ -314,7 +315,7 @@ afterRender() {
   this.registerCleanup(() => document.removeEventListener('keydown', onKey));
 
   // subscribeStore() and mountChild() are already built on it.
-  this.subscribeStore(store, 'settings', () => this.setState({}));
+  this.subscribeStore(onSettings, () => this.setState({}));
 }
 ```
 
@@ -340,7 +341,7 @@ So the block above is really:
 afterRender() {
   this.observe(new ResizeObserver(() => this._refit())).observe(this.$('.panel'));
   this.on(document, 'keydown', (e) => this._onKey(e));
-  this.subscribeStore(store, 'settings', () => this.setState({}));
+  this.subscribeStore(onSettings, () => this.setState({}));
 }
 ```
 
@@ -738,7 +739,7 @@ export class Router {
     // its own fresh document, isolated from any third-party markup injected into
     // the guest shell via HEAD_HTML (see features/syndication.md).
     if (isAdminRoute && !isPublicRoute) {
-      const user = store.get('user');
+      const user = getUser();
       if (!user) {
         window.location.assign(`/light/login?next=${encodeURIComponent(path)}`);
         return;
@@ -804,9 +805,9 @@ const router = new Router(document.getElementById('app'));
 async function bootstrap() {
   try {
     const user = await authApi.me();
-    store.set('user', user);
+    setUser(user);
   } catch {
-    store.set('user', null);
+    setUser(null);
   }
   router._resolve();
 }
@@ -888,24 +889,71 @@ export const store = new Store();
 `set()`'s guard is reference equality, which is exactly what a re-fetched
 payload does not have: settings come back parsed from JSON on every page load,
 a fresh object every time. That is what `merge()` is for — writers patch the
-key (`store.merge('settings', normalizeSettings(data.settings))`) instead of
-rebuilding it with a spread, so an unchanged payload keeps the object that is
-already there and nothing repaints.
+key (`mergeSettings(normalizeSettings(data.settings))`) instead of rebuilding it
+with a spread, so an unchanged payload keeps the object that is already there
+and nothing repaints.
 
 `subscribeSelector()` is the escape valve for the coarse keys: `settings` holds
 every public setting, so a subscriber of the key wakes for every write to any
-part of it. `NavMenu` watches the four settings it renders from and stays
-asleep for the rest. `Component.subscribeStoreSelector()` is the same thing
-released at the next render boundary, alongside `subscribeStore()`.
+part of it. `NavMenu` watches the four settings it renders from
+(`onSettingsSelector(navSlice, …)`) and stays asleep for the rest.
+`Component.subscribeStoreSelector()` is the same thing released at the next
+render boundary, alongside `subscribeStore()`.
 
-**Store keys used across the app:**
+Neither is reached through the store object at a call site, though:
 
-| Key | Type | Description |
+### Keys are not strings at the call site
+
+`store.get()`, `store.set()` and `store.subscribe()` take a string, and a string
+is checked by nothing: `store.get('usr')` is `undefined`, so a mistyped key
+shows up as a component that renders empty forever and a report that says "the
+toast never appears". The keys with a single call site are the worst of it,
+because there is no second use to compare a typo against.
+
+So `store.js` binds each key once and exports a get/set/subscribe triple, and
+the rest of the app imports those. esbuild resolves named imports at build time,
+which turns the same typo into a build failure that names the fix:
+
+```
+✘ [ERROR] No matching export in "store.js" for import "getUsr"
+          Did you mean to import "getUser" instead?
+```
+
+A `no-restricted-syntax` rule (`eslint.config.js`) rejects a string-literal key
+outside `store.js` — for `merge` and `subscribeSelector` as much as for the
+basic three — so the raw form cannot come back. A hand-written list of
+"well-known keys" lived here and in a comment at the tail of `store.js` before
+this; both had drifted to about a third of the real set, which is what a
+contract kept as prose does.
+
+**The keys, as exported (`frontend/src/store.js`):**
+
+| Key | Accessors | Type |
 |---|---|---|
-| `user` | `object or null` | Current authenticated user |
-| `settings` | `object` | Public blog settings (title, description) |
-| `theme` | `'dark' or 'light'` | UI theme |
-| `toast` | `{message, type}` | Active toast notification |
+| `user` | `getUser` `setUser` `onUser` | `object or null` — authenticated user |
+| `settings` | `getSettings` `setSettings` `onSettings` `mergeSettings` `onSettingsSelector` | `object` — public blog settings |
+| `theme` | `getTheme` `setTheme` `onTheme` | `'dark' \| 'light' \| 'auto'` |
+| `route` | `getRoute` `setRoute` `onRoute` | `{pathname, params, query}` |
+| `toast` | `getToast` `setToast` `onToast` | `{message, type} or null` |
+| `toast_log` | `getToastLog` `setToastLog` `onToastLog` | `{id, message, type, timestamp}[]` |
+| `pagination` | `getPagination` `setPagination` `onPagination` | `{page, pages, total} or null` |
+| `offline_status` | `getOfflineStatus` `setOfflineStatus` `onOfflineStatus` | `{pending, failed, syncing, has_ops}` |
+| `autosave_status` | `getAutosaveStatus` `setAutosaveStatus` `onAutosaveStatus` | `{state, at} or null` |
+| `navTags` | `getNavTags` `setNavTags` `onNavTags` | `object[]` — public nav entries |
+| `rootTags` | `getRootTags` `setRootTags` `onRootTags` | `object[]` — top-level tags |
+| `tagCloud` | `getTagCloudCache` `setTagCloudCache` | `object[] or null` — home page cache |
+| `version` | `getAppVersion` `setAppVersion` `onAppVersion` | `string` |
+| `plugin_toggled` | `setPluginToggled` `onPluginToggled` | `number` — bump to re-render admin chrome |
+| `tags_view` | `getTagsView` | `'tree' \| 'list'` — read-only; nothing writes it yet |
+| `bc:tag:<slug>` | `getTagBreadcrumb(slug)` `setTagBreadcrumb(slug, …)` | `object[]` — per-tag breadcrumb cache |
+
+`settings` is the one key that also exports the two cheap-write helpers, being
+the one coarse enough to need them; `keyed()` binds `merge` and `onSelector` for
+every key, and the rest simply do not destructure them.
+
+The last one is the only key built at runtime. Its accessors take the slug and
+own the `bc:tag:` prefix, so the key space stays enumerable from this file
+rather than growing wherever a template literal happens to be written.
 
 ---
 
@@ -1223,11 +1271,11 @@ is needed, it must be server-generated and sanitized.
 
 ```javascript
 // Global toast system via store:
-import { store } from '../store.js';
-store.set('toast', { message: 'Post saved!', type: 'success' });
+import { setToast } from '../store.js';
+setToast({ message: 'Post saved!', type: 'success' });
 ```
 
-A `ToastContainer` component subscribes to `store.get('toast')` and renders
+A `ToastContainer` component subscribes with `onToast()` and renders
 notifications in the corner. All toast messages are set via `textContent`.
 
 ### ThemeToggle
@@ -1542,7 +1590,7 @@ async _deleteTag(id) {
   } catch (err) {
     // Revert and show error
     this.setState({ tags: previousTags });
-    store.set('toast', { message: err.message, type: 'error' });
+    setToast({ message: err.message, type: 'error' });
   }
 }
 ```

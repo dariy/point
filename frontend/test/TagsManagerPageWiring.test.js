@@ -25,7 +25,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, type } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { getToast, setToast, setUser } from '../src/store.js';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
@@ -69,7 +69,7 @@ describe('TagsManagerPage — wiring', () => {
   }
 
   const trace = () => requests.map(r => `${r.method} ${r.url}`);
-  const toast = () => store.get('toast');
+  const toast = () => getToast();
   const q = sel => dom.document.querySelector(sel);
   const qa = sel => [...dom.document.querySelectorAll(sel)];
   const settle = () => new Promise(r => setImmediate(r));
@@ -99,8 +99,8 @@ describe('TagsManagerPage — wiring', () => {
   beforeEach(async () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
-    store.set('toast', null);
-    store.set('user', { username: 'tester' });
+    setToast(null);
+    setUser({ username: 'tester' });
 
     navRefreshes = 0;
     dom.document.addEventListener('nav-changed', () => { navRefreshes++; });

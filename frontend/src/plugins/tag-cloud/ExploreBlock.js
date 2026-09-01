@@ -9,7 +9,7 @@
 
 import { Component } from "../../components/Component.js";
 import { html } from "../../utils/helpers.js";
-import { store } from "../../store.js";
+import { getNavTags } from "../../store.js";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
 import { setupTagFlyout } from "../../utils/tagFlyout.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -46,7 +46,7 @@ export class ExploreBlock extends Component {
     this._cleanupFlyout?.();
     const container = this.$(".explore-tags");
     if (!container) return;
-    const navTags = store.get("navTags") || [];
+    const navTags = getNavTags() || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this._cleanupFlyout = setupTagFlyout(container, tagIndex, (url) => {
       const { tag, navPath } = parseTagUrl(url);

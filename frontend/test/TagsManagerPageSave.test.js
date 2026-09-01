@@ -29,7 +29,7 @@ const TAGS = [
 const kyoto = () => ({ ...TAGS[2], parents: [{ id: 1, name: 'Travel' }], children: [] });
 
 describe('TagsManagerPage._handleSave', () => {
-  let dom, page, requests, respond, store;
+  let dom, page, requests, respond, getToast, setToast;
 
   /** Record every request; reply with whatever `respond` currently returns. */
   function fakeFetch() {
@@ -57,7 +57,7 @@ describe('TagsManagerPage._handleSave', () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
 
-    ({ store } = await import('../src/store.js'));
+    ({ getToast, setToast } = await import('../src/store.js'));
     const { default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js');
 
     page = new TagsManagerPage(dom.document.createElement('div'));
@@ -72,7 +72,7 @@ describe('TagsManagerPage._handleSave', () => {
     page._load = async () => { page.reloaded++; };
     page._refreshNavTags = async () => { page.navRefreshed++; };
 
-    store.set('toast', null);
+    setToast(null);
   });
 
   afterEach(() => {
@@ -109,7 +109,7 @@ describe('TagsManagerPage._handleSave', () => {
     assert.equal(req.body.slug, 'osaka', 'the slug auto-fills from the name');
     assert.deepEqual(req.body.parent_ids, [1], 'the seeded parent rides along in the create');
     assert.deepEqual(req.body.child_ids, []);
-    assert.equal(store.get('toast').type, 'success');
+    assert.equal(getToast().type, 'success');
   });
 
   test('trims text fields and reads the checkbox flags off the form', async () => {
@@ -302,8 +302,8 @@ describe('TagsManagerPage._handleSave', () => {
 
     await page._handleSave(form, 3);
 
-    assert.equal(store.get('toast').message, 'Slug already taken', 'the server message reaches the user');
-    assert.equal(store.get('toast').type, 'error');
+    assert.equal(getToast().message, 'Slug already taken', 'the server message reaches the user');
+    assert.equal(getToast().type, 'error');
     assert.equal(submit.disabled, false, 'the button is usable again');
     assert.equal(submit.textContent, label, 'and back to its original label');
     assert.ok(page._modal, 'the edits are not thrown away');
@@ -320,8 +320,8 @@ describe('TagsManagerPage._handleSave', () => {
 
     await page._handleSave(form, 3);
 
-    assert.equal(store.get('toast').message, 'Cycle detected');
-    assert.equal(store.get('toast').type, 'error');
+    assert.equal(getToast().message, 'Cycle detected');
+    assert.equal(getToast().type, 'error');
     assert.equal(to('/api/tags/3/children').length, 0, 'the children call is skipped after the failure');
     assert.ok(page._modal, 'the modal stays open on a partial failure');
   });

@@ -9,7 +9,14 @@ import { LightSidebar } from "./LightSidebar.js";
 import { AdminBottomBar } from "./AdminBottomBar.js";
 import { CommandPalette } from "./CommandPalette.js";
 import { ShortcutHelp } from "./ShortcutHelp.js";
-import { store } from "../../store.js";
+import {
+  getAutosaveStatus,
+  getOfflineStatus,
+  getUser,
+  onAutosaveStatus,
+  onOfflineStatus,
+  setUser,
+} from "../../store.js";
 import { syncQueue } from "../../utils/sync.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
 import { html, insertHTML, navigate, raw } from "../../utils/helpers.js";
@@ -31,8 +38,8 @@ export function adminLayoutTemplate({
   content = "",
   contentClass = ""
 }) {
-  const offline = store.get("offline_status") || {};
-  const autosave = store.get("autosave_status") || {};
+  const offline = getOfflineStatus() || {};
+  const autosave = getAutosaveStatus() || {};
   const syncPill = renderSyncPill(offline, autosave);
   return html`
     <div class="light-layout">
@@ -91,7 +98,7 @@ export function setupAdminLayout(component, {
     } catch {
       /* ignore */
     }
-    store.set("user", null);
+    setUser(null);
     // Hard navigation: drop all in-memory admin state and load a fresh public
     // document (with analytics restored for the now-guest), mirroring the
     // public-footer logout.
@@ -100,7 +107,7 @@ export function setupAdminLayout(component, {
   component.mountChild(LightSidebar, "#sidebar-mount", {
     currentPath,
     publicUrl,
-    user: store.get("user") || {},
+    user: getUser() || {},
     onLogout
   });
   component.mountChild(AdminBottomBar, "#bottom-bar-mount", {
@@ -111,8 +118,8 @@ export function setupAdminLayout(component, {
   component.mountChild(CommandPalette, "#command-palette-mount");
   component.mountChild(ShortcutHelp, "#shortcut-help-mount");
   component.$("#sync-pill-btn")?.addEventListener("click", () => onSyncPillClick());
-  component.subscribeStore(store, "offline_status", () => updateSyncPill(component));
-  component.subscribeStore(store, "autosave_status", () => updateSyncPill(component));
+  component.subscribeStore(onOfflineStatus, () => updateSyncPill(component));
+  component.subscribeStore(onAutosaveStatus, () => updateSyncPill(component));
 }
 function renderSyncPill(offline, autosave = {}) {
   let text = "";
@@ -145,8 +152,8 @@ function renderSyncPill(offline, autosave = {}) {
   return html`<button class="${cls}" id="sync-pill-btn" type="button">${text}</button>`;
 }
 function onSyncPillClick() {
-  const offline = store.get("offline_status") || {};
-  const autosave = store.get("autosave_status") || {};
+  const offline = getOfflineStatus() || {};
+  const autosave = getAutosaveStatus() || {};
   if (autosave.status === "failed") {
     window.dispatchEvent(new CustomEvent("autosave:retry"));
   } else if (offline.failed) {
@@ -156,8 +163,8 @@ function onSyncPillClick() {
   }
 }
 function updateSyncPill(component) {
-  const offline = store.get("offline_status") || {};
-  const autosave = store.get("autosave_status") || {};
+  const offline = getOfflineStatus() || {};
+  const autosave = getAutosaveStatus() || {};
   const newPill = renderSyncPill(offline, autosave);
   const titleRow = component.$(".header-title-row");
   if (!titleRow) return;

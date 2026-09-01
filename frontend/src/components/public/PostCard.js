@@ -17,7 +17,7 @@ import { cardImageSizes } from "../../utils/gridFit.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { LOCK_SVG } from "../../utils/icons.js";
-import { store } from "../../store.js";
+import { getNavTags, getSettings, onNavTags } from "../../store.js";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -163,13 +163,13 @@ export class PostCard extends Component {
 
     // Hover-to-play is opt-in per site (post-list plugin setting). Off, a video
     // card stays a poster frame until the reader opens the post.
-    const hoverAutoplay = !!(store.get("settings") || {})
+    const hoverAutoplay = !!(getSettings() || {})
       .enable_video_hover_autoplay;
     if (hoverAutoplay && mediaUrl && VIDEO_RE.test(mediaUrl)) {
       this._setupHoverVideo(card, mediaUrl);
     }
 
-    this.subscribeStore(store, "navTags", () => this._rerender());
+    this.subscribeStore(onNavTags, () => this._rerender());
 
     const go = () => {
       this._stopHoverVideo?.();
@@ -257,7 +257,7 @@ export class PostCard extends Component {
     });
 
     // Unified tag strip scrolling and flyout setup
-    const navTags = store.get("navTags") || [];
+    const navTags = getNavTags() || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this.registerCleanup(setupTagStrip(card, tagIndex, (url) => {
       const { tag, navPath } = parseTagUrl(url);

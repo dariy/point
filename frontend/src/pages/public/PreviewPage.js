@@ -11,7 +11,7 @@ import { Component } from '../../components/Component.js';
 
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { previewPost } from '../../api/posts.js';
-import { store } from '../../store.js';
+import { getNavTags, getSettings } from '../../store.js';
 import { html } from '../../utils/helpers.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
@@ -63,8 +63,8 @@ export default class PreviewPage extends Component {
   }
 
   afterRender() {
-    const settings = store.get('settings') || {};
-    const navTags = store.get('navTags') || [];
+    const settings = getSettings() || {};
+    const navTags = getNavTags() || [];
     pluginHost.fill('header', this.$('#header-mount'), { settings, navTags, currentPath: '' }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._children.push(comps[0]);

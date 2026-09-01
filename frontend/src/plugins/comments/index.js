@@ -10,7 +10,7 @@
 // and fires "REMARK42::ready" on window after the first init.
 
 import CommentsAdminPage from './CommentsAdminPage.js';
-import { store } from '../../store.js';
+import { getSettings } from '../../store.js';
 import { setScriptSrc } from '../../utils/helpers.js';
 
 const SCRIPT_ID = 'remark42-embed-script';
@@ -108,7 +108,7 @@ export function mount(el, ctx) {
   root.id = 'remark42';
   el.appendChild(root);
 
-  const settings = store.get('settings') || {};
+  const settings = getSettings() || {};
   window.remark_config = {
     host: `${window.location.origin}/comments`,
     site_id: 'remark',

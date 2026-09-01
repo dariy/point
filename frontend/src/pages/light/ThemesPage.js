@@ -8,7 +8,7 @@
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
-import { store } from "../../store.js";
+import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { STAR_SVG, MOON_SVG } from "../../utils/icons.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
@@ -181,10 +181,10 @@ export default class ThemesPage extends Component {
       // re-fetching it repaints the whole app in the new theme the way the
       // light/dark toggle does. Cache-busted: the URL is unchanged.
       await loadThemeCss({ bust: true });
-      store.set("toast", { message: `Theme "${name}" activated.`, type: "success" });
+      setToast({ message: `Theme "${name}" activated.`, type: "success" });
       this.setState({ saving: false, activeTheme: name });
     } catch (err) {
-      store.set("toast", { message: err.message || "Failed to set theme.", type: "error" });
+      setToast({ message: err.message || "Failed to set theme.", type: "error" });
       this.setState({ saving: false });
     }
   }
@@ -201,13 +201,13 @@ export default class ThemesPage extends Component {
       // Say so rather than letting the removal look like a save that worked.
       const warnings = result?.css_warnings;
       if (warnings?.length) {
-        store.set("toast", { message: `Custom CSS saved; removed: ${warnings.join(", ")}.`, type: "warning" });
+        setToast({ message: `Custom CSS saved; removed: ${warnings.join(", ")}.`, type: "warning" });
       } else {
-        store.set("toast", { message: "Custom CSS saved.", type: "success" });
+        setToast({ message: "Custom CSS saved.", type: "success" });
       }
       this.setState({ savingCSS: false });
     } catch (err) {
-      store.set("toast", { message: err.message || "Failed to save CSS.", type: "error" });
+      setToast({ message: err.message || "Failed to save CSS.", type: "error" });
       this.setState({ savingCSS: false });
     }
   }

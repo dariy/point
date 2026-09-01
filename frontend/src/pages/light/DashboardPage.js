@@ -10,7 +10,7 @@ import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/Ad
 import { getStats, getVersion } from '../../api/system.js';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
 import { listPosts, createPost } from '../../api/posts.js';
-import { store } from '../../store.js';
+import { setToast } from '../../store.js';
 import { html, navigate, raw } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
 import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.js';
@@ -221,7 +221,7 @@ export default class DashboardPage extends Component {
           });
           navigate(`/light/posts/${post.id}/edit`);
         } catch (err) {
-          store.set('toast', { message: err.message || 'Failed to create draft.', type: 'error' });
+          setToast({ message: err.message || 'Failed to create draft.', type: 'error' });
         }
       });
 
@@ -256,7 +256,7 @@ export default class DashboardPage extends Component {
       });
     } catch (err) {
       console.error('[DashboardPage] load error:', err);
-      store.set('toast', { message: 'Could not load dashboard stats.', type: 'error' });
+      setToast({ message: 'Could not load dashboard stats.', type: 'error' });
       this.setState({ loading: false, stats: null });
     }
 

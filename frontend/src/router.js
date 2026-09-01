@@ -19,7 +19,7 @@
  *     { path: '/light/login',  load: () => import('./pages/light/LoginPage.js'),    public: true },
  *   ], {
  *     mountPoint: document.getElementById('app'),
- *     authGuard: () => !!store.get('user'),
+ *     authGuard: () => !!getUser(),
  *     loginPath: '/light/login',
  *   });
  *
@@ -28,7 +28,7 @@
  * from the router module.
  */
 
-import { store } from "./store.js";
+import { setRoute, setToast } from "./store.js";
 import { setPageTitle } from "./utils/documentTitle.js";
 import { subclassHooks } from "./components/Component.js";
 
@@ -284,7 +284,7 @@ class Router {
 
     if (!matchedRoute) {
       if (pathname.startsWith("/light") && pathname !== "/light") {
-        store.set("toast", { message: "Page not found.", type: "error" });
+        setToast({ message: "Page not found.", type: "error" });
         this.navigate("/light", { replace: true });
       } else {
         this._showFallback("404", "Page not found.");
@@ -350,7 +350,7 @@ class Router {
       sameRoute &&
       typeof hooks.onRouteUpdate === "function"
     ) {
-      store.set("route", { pathname, params, query });
+      setRoute({ pathname, params, query });
       this._currentRoute = matchedRoute;
       hooks.onRouteUpdate(params, query);
       return;
@@ -372,7 +372,7 @@ class Router {
     // survives and owns its own title across an in-place refresh.
     setPageTitle(matchedRoute.title);
 
-    store.set("route", { pathname, params, query });
+    setRoute({ pathname, params, query });
 
     try {
       const mod = await matchedRoute.load();
@@ -383,7 +383,7 @@ class Router {
     } catch (err) {
       console.error("[Router] Failed to load page:", err);
       if (pathname.startsWith("/light") && pathname !== "/light") {
-        store.set("toast", {
+        setToast({
           message: "Failed to load page. Please try again.",
           type: "error",
         });

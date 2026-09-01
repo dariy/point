@@ -16,7 +16,14 @@ import { PostContent, shouldUseImmersive } from '../../components/public/PostCon
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { store } from '../../store.js';
+import {
+  getNavTags,
+  getSettings,
+  getTagCloudCache,
+  mergeSettings,
+  setPagination,
+  setTagCloudCache,
+} from '../../store.js';
 import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -70,7 +77,7 @@ export default class HomePage extends Component {
   }
 
   _isStaticHome() {
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const data = this.state.data;
     // A scheduled page is never the static home page, however the counts
     // happen to line up — it is a page of the queue, not the site's front door.
@@ -123,10 +130,10 @@ export default class HomePage extends Component {
     if (this._unmounted) return;
     await fadeOut;
     if (this._unmounted) return;
-    if (data.settings) store.merge('settings', normalizeSettings(data.settings));
+    if (data.settings) mergeSettings(normalizeSettings(data.settings));
     // tag_cloud is page-independent and only sent on page 1; cache it so it
     // persists across pagination, swipes, and direct loads of later pages.
-    if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
+    if (data.tag_cloud) setTagCloudCache(data.tag_cloud);
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
@@ -155,7 +162,7 @@ export default class HomePage extends Component {
   }
 
   _minPerPage() {
-    return (store.get('settings') || {}).posts_per_page || 10;
+    return (getSettings() || {}).posts_per_page || 10;
   }
 
   _buildParams(vc) {
@@ -246,7 +253,7 @@ export default class HomePage extends Component {
         </div>`;
     }
 
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const { data } = this.state;
     const isStaticHomePage = data && !data.pagination?.scheduled && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
 
@@ -268,8 +275,8 @@ export default class HomePage extends Component {
   afterRender() {
     // Reset the footer paginator's feed; _mountPostContent republishes it when
     // the grid view has pages, so static/immersive/error views show none.
-    store.set('pagination', null);
-    const settings = store.get('settings') || {};
+    setPagination(null);
+    const settings = getSettings() || {};
     const { data, forceImmersive, startIndex } = this.state;
     const isStaticHomePage = data && !data.pagination?.scheduled && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
     const post = isStaticHomePage ? data.posts[0] : null;
@@ -282,7 +289,7 @@ export default class HomePage extends Component {
     }
 
     this._pager.disarm();
-    const navTags = store.get('navTags') || [];
+    const navTags = getNavTags() || [];
 
     // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
     // but keep the custom menu visible since it contains explicit navigation links.
@@ -344,7 +351,7 @@ export default class HomePage extends Component {
     }
 
     // home-explore slot (tag cloud).
-    const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
+    const tagCloud = this.state.data.tag_cloud || getTagCloudCache() || [];
     pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
 
     // timeline slot (decided above, before the header was told about it).
@@ -371,7 +378,7 @@ export default class HomePage extends Component {
   // swipe gestures). Kept separate from the page chrome so a timeline-scope or
   // page change can refresh just this in place — see _refreshPostContent.
   async _mountPostContent() {
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     const { posts = [], pagination = {} } = this.state.data;
 
     this._postChildren = [];
@@ -455,7 +462,7 @@ export default class HomePage extends Component {
       this._postChildren.length = 1;
     }
 
-    store.set('pagination', multiPage
+    setPagination(multiPage
       ? { page: pagination.page, pages: pagination.pages, minPage, total: pagination.total }
       : null);
   }
@@ -500,7 +507,7 @@ export default class HomePage extends Component {
   beforeUnmount() {
     // Non-grid pages (post, search) share the footer — don't leave a stale
     // paginator feed behind.
-    store.set('pagination', null);
+    setPagination(null);
     this._pager.destroy();
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
@@ -529,10 +536,10 @@ export default class HomePage extends Component {
     try {
       const data = await getHomePage(this._buildParams(vc));
       // Merge settings from page response into store.
-      if (data.settings) store.merge('settings', normalizeSettings(data.settings));
+      if (data.settings) mergeSettings(normalizeSettings(data.settings));
       // tag_cloud is page-independent and only sent on page 1; cache it so it
       // persists across pagination, swipes, and direct loads of later pages.
-      if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
+      if (data.tag_cloud) setTagCloudCache(data.tag_cloud);
 
       // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
       const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);

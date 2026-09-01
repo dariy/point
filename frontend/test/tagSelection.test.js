@@ -16,7 +16,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, selectOption } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { getToast, setToast } from '../src/store.js';
 import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.js';
 import { renderTagList } from '../src/components/light/tags/TagListView.js';
 import {
@@ -62,7 +62,7 @@ describe('tagSelection', () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
     setBreakpoint(true);
-    store.set('toast', null);
+    setToast(null);
     modeChanges = [];
     bulkDone = 0;
     confirms = [];
@@ -351,7 +351,7 @@ describe('tagSelection', () => {
       assert.deepEqual(trace(), ['PATCH /api/tags/3', 'PATCH /api/tags/4']);
       assert.deepEqual(requests.map(r => r.body), [{ hidden: true }, { hidden: true }]);
       assert.equal(bulkDone, 1);
-      assert.match(store.get('toast').message, /2 tags marked hidden/);
+      assert.match(getToast().message, /2 tags marked hidden/);
     });
 
     test('Apply reads "visible" off the select', async () => {
@@ -405,8 +405,8 @@ describe('tagSelection', () => {
       click(q('#tm-bulk-delete-btn'));
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
-      assert.match(store.get('toast').message, /1 of 2 done\. 1 failed\./);
+      assert.equal(getToast().type, 'error');
+      assert.match(getToast().message, /1 of 2 done\. 1 failed\./);
       assert.equal(bulkDone, 1);
     });
   });

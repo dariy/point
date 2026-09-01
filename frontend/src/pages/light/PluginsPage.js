@@ -34,7 +34,7 @@ import { getPlugins, setPluginEnabled, getPresets, updatePreset, applyPreset } f
 import { getAllSettings } from "../../api/settings.js";
 import { getInstagramStatus } from "../../api/instagram.js";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
-import { store } from "../../store.js";
+import { setPluginToggled, setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 
@@ -609,7 +609,7 @@ export default class PluginsPage extends Component {
       this._panel.mount();
     } catch (err) {
       console.error("[PluginsPage] open settings error:", err);
-      store.set("toast", { message: "Could not load plugin settings.", type: "error" });
+      setToast({ message: "Could not load plugin settings.", type: "error" });
     }
   }
 
@@ -673,9 +673,9 @@ export default class PluginsPage extends Component {
         pluginHost._byId.delete(id);
         pluginHost._manifest = pluginHost._manifest.filter(e => e.id !== id);
       }
-      store.set('plugin_toggled', Date.now());
+      setPluginToggled(Date.now());
 
-      store.set("toast", {
+      setToast({
         message: `${humanize(id)} ${enabled ? "enabled" : "disabled"}. Reload the public site to see the change.`,
         type: "success",
       });
@@ -688,7 +688,7 @@ export default class PluginsPage extends Component {
       const pending = { ...this.state.pending };
       delete pending[id];
       this.setState({ pending });
-      store.set("toast", { message: err.message || "Failed to update plugin.", type: "error" });
+      setToast({ message: err.message || "Failed to update plugin.", type: "error" });
     }
   }
 
@@ -729,7 +729,7 @@ export default class PluginsPage extends Component {
         plugins: Array.isArray(plugins) ? plugins : this.state.plugins,
         activePreset: id,
       });
-      store.set("toast", {
+      setToast({
         message: `Applied “${PRESET_TITLES[id] || id}” preset. Reload the public site to see the change.`,
         type: "success",
       });
@@ -738,7 +738,7 @@ export default class PluginsPage extends Component {
         window.location.reload();
       }
     } catch (err) {
-      store.set("toast", { message: err.message || "Failed to apply preset.", type: "error" });
+      setToast({ message: err.message || "Failed to apply preset.", type: "error" });
     }
   }
 
@@ -753,7 +753,7 @@ export default class PluginsPage extends Component {
     } catch (err) {
       // Revert by re-rendering from unchanged state.
       this.setState({ presets: { ...this.state.presets } });
-      store.set("toast", { message: err.message || "Failed to update preset.", type: "error" });
+      setToast({ message: err.message || "Failed to update preset.", type: "error" });
     }
   }
 }

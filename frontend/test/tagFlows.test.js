@@ -18,7 +18,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, selectOption, type } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { getToast, onToast, setToast } from '../src/store.js';
 import {
   candidateTags, parentsWith, positionOptions, bulkOutcome, pluralTags,
   runBulk, bulkVisibility, bulkDelete,
@@ -59,7 +59,7 @@ describe('tagFlows', () => {
 
   /** `METHOD /path` for each request, in order — what each flow asserts on. */
   const trace = () => requests.map(r => `${r.method} ${r.url}`);
-  const toast = () => store.get('toast');
+  const toast = () => getToast();
   const q = sel => dom.document.querySelector(sel);
   const qa = sel => [...dom.document.querySelectorAll(sel)];
   const settle = () => new Promise(r => setImmediate(r));
@@ -67,7 +67,7 @@ describe('tagFlows', () => {
   beforeEach(() => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
-    store.set('toast', null);
+    setToast(null);
     done = 0;
   });
 
@@ -217,8 +217,8 @@ describe('tagFlows', () => {
 
     test('reports before handing back, so the toast is not lost to a re-render', async () => {
       const order = [];
-      store.subscribe('toast', () => order.push('toast'))();
-      const unsub = store.subscribe('toast', () => order.push('toast'));
+      onToast(() => order.push('toast'))();
+      const unsub = onToast(() => order.push('toast'));
       await runBulk([1], async () => {}, () => 'ok', { onDone: () => order.push('done') });
       unsub();
 
@@ -599,7 +599,7 @@ describe('tagFlows', () => {
       assert.deepEqual(toast(), { message: 'Cycle detected', type: 'error' });
       assert.equal(done, 0);
 
-      store.set('toast', null);
+      setToast(null);
       openDropOnConfirm({ tags: FOREST, dragId: 3, targetId: 5, onDone });
       click(q('#drop-also-btn'));
       await settle();

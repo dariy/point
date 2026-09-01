@@ -9,7 +9,7 @@
  * for a field exists once regardless of placement.
  */
 
-import { store } from "../../store.js";
+import { getSettings } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { defaultPostTitle } from "../../utils/formatters.js";
 import { pluginHost } from "../../core/pluginHost.js";
@@ -109,7 +109,7 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
       body: html`
           <div class="title-row">
             <div class="title-input-wrapper">
-              <input type="text" id="title-input" class="form-input editor-title" placeholder="${defaultPostTitle(store.get("settings"))}" title="Leave blank to title this post with today's date" value="${title}">
+              <input type="text" id="title-input" class="form-input editor-title" placeholder="${defaultPostTitle(getSettings())}" title="Leave blank to title this post with today's date" value="${title}">
               ${aiBtn("title")}
             </div>
           </div>`,

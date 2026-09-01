@@ -10,7 +10,7 @@ import { saveSnapshot, saveMeta, getMeta } from "../../../utils/offlineStore.js"
 import { preCacheImages, clearImageCache } from "../../../utils/imageCache.js";
 import { thumbUrl } from "../../../utils/mediaUrl.js";
 import { mediaTypeFromPath } from "../../../utils/postMedia.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../../utils/formatters.js";
 
@@ -110,11 +110,11 @@ export class OfflineDataSection extends Component {
       await saveMeta("last_sync", lastSync);
 
       this.setState({ downloading: false, lastSync, statusText: "" });
-      store.set("toast", { message: "Offline data updated.", type: "success" });
+      setToast({ message: "Offline data updated.", type: "success" });
     } catch (err) {
       console.error("[OfflineDataSection] update error:", err);
       this.setState({ downloading: false });
-      store.set("toast", { message: "Offline update failed.", type: "error" });
+      setToast({ message: "Offline update failed.", type: "error" });
     }
   }
 

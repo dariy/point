@@ -1,7 +1,7 @@
 /**
  * Mutation Queue helper for Admin Offline CRUD.
  */
-import { store } from '../store.js';
+import { setOfflineStatus } from '../store.js';
 
 const DB_NAME = 'point-offline';
 const VERSION = 1;
@@ -92,7 +92,7 @@ export async function updateStatus() {
   const failed = queue.filter(op => op.status === 'failed').length;
   const syncing = queue.filter(op => op.status === 'syncing').length;
 
-  store.set('offline_status', {
+  setOfflineStatus({
     pending,
     failed,
     syncing,

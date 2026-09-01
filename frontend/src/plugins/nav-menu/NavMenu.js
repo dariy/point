@@ -1,7 +1,7 @@
 // @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { raw } from "../../utils/helpers.js";
 import { html, setHTML } from "../../utils/helpers.js";
-import { store } from '../../store.js';
+import { getNavTags, getSettings, getUser, onNavTags, onSettingsSelector } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { navigate } from '../../utils/helpers.js';
 import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.js';
@@ -53,12 +53,12 @@ export class NavMenu {
     this._moreZone = null;
   }
   mount() {
-    this._unsubscribeNav = store.subscribe('navTags', () => this.render());
+    this._unsubscribeNav = onNavTags(() => this.render());
     // 'settings' is every public setting in one object and is rewritten by
     // every page fetch; this menu reads four of them. Watching the joined
     // slice keeps an unrelated save — a changed blog title, a new posts count
     // — from rebuilding the nav and closing whatever dropdown is open in it.
-    this._unsubscribeSettings = store.subscribeSelector('settings', navSlice, () => this.render());
+    this._unsubscribeSettings = onSettingsSelector(navSlice, () => this.render());
 
     // Fold stage 30: inline links fold right-to-left into More ▾ before the
     // whole nav zone collapses into the burger (stage 40, PublicHeader).
@@ -97,8 +97,8 @@ export class NavMenu {
 
   /** Menu items normalized from the store: {name, href, slug, count, children[]}. */
   _items() {
-    const navTags = store.get('navTags') || [];
-    const settings = store.get('settings') || {};
+    const navTags = getNavTags() || [];
+    const settings = getSettings() || {};
     if (settings.nav_menu_mode === 'none') return [];
     const toItem = t => ({
       name: t.name,
@@ -110,8 +110,8 @@ export class NavMenu {
     return navTags.map(toItem).filter(i => i.href || i.children.length);
   }
   render() {
-    const settings = store.get('settings') || {};
-    const user = store.get('user');
+    const settings = getSettings() || {};
+    const user = getUser();
     const {
       currentPath
     } = this.ctx;

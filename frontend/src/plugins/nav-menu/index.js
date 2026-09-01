@@ -1,4 +1,4 @@
-import { store } from '../../store.js';
+import { onUser } from '../../store.js';
 import { loadNav } from '../../api/nav.js';
 import { NavMenu } from './NavMenu.js';
 import MenuPage from './MenuPage.js';
@@ -24,7 +24,7 @@ export async function mount(navEl, ctx) {
   // Also refresh on user login/logout or explicit nav-changed event
   const refresh = () => loadNav({ force: true });
 
-  const unsubscribeUser = store.subscribe('user', refresh);
+  const unsubscribeUser = onUser(refresh);
   const onNavChanged = () => refresh();
   document.addEventListener('nav-changed', onNavChanged);
 

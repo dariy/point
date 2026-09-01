@@ -25,7 +25,7 @@ import { html, setHTML, raw } from "../../utils/helpers.js";
 import { Component } from '../../components/Component.js';
 import { safeUrl, navigate } from '../../utils/helpers.js';
 import { X_SVG } from '../../utils/icons.js';
-import { store } from '../../store.js';
+import { getSettings, getUser } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { hideFlyout } from '../../utils/tagFlyout.js';
@@ -133,7 +133,7 @@ export class MediaViewer extends Component {
     const {
       back,
       fwd
-    } = immersiveNavTargets(store.get('settings'), prev, next);
+    } = immersiveNavTargets(getSettings(), prev, next);
     const prevHtml = back ? html`<div class="immersive-nav-panel immersive-nav-prev" data-nav="back"><div class="immersive-nav-gradient"></div></div>` : '';
     const nextHtml = fwd ? html`<div class="immersive-nav-panel immersive-nav-next" data-nav="fwd"><div class="immersive-nav-gradient"></div></div>` : '';
     return html`${prevHtml}${nextHtml}`;
@@ -195,9 +195,9 @@ export class MediaViewer extends Component {
     // the share button, so it sits above the site header instead of being
     // swallowed by it). Per-slide metadata is resolved up front and the control
     // re-points to the active slide via _updateExif() on every step.
-    const settings = store.get('settings') || {};
+    const settings = getSettings() || {};
     this._exifMeta = null;
-    if (this._useFloatingExif() && exifVisible(settings, store.get('user')) && media.length) {
+    if (this._useFloatingExif() && exifVisible(settings, getUser()) && media.length) {
       const exifMap = buildExifMap(media);
       const meta = items.map(it => it.type === 'image' && it.url ? metadataForSrc(exifMap, it.url) : null);
       if (meta.some(Boolean)) {
@@ -398,7 +398,7 @@ export class MediaViewer extends Component {
    * (see immersiveNavTargets).
    */
   _targetFor(dir) {
-    const targets = immersiveNavTargets(store.get('settings'), this.props.navPrev, this.props.navNext);
+    const targets = immersiveNavTargets(getSettings(), this.props.navPrev, this.props.navNext);
     return targets[dir];
   }
 

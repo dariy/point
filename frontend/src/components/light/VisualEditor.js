@@ -12,7 +12,7 @@
 import { Component } from "../Component.js";
 import { html } from "../../utils/helpers.js";
 import { updateMedia, reextractMediaEXIF } from "../../api/media.js";
-import { store } from "../../store.js";
+import { setToast } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
@@ -191,9 +191,9 @@ export class VisualEditor extends Component {
         });
         try {
           await updateMedia(id, { metadata });
-          store.set("toast", { message: "EXIF saved.", type: "success" });
+          setToast({ message: "EXIF saved.", type: "success" });
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Save failed.",
             type: "error",
           });
@@ -245,9 +245,9 @@ export class VisualEditor extends Component {
               const msg = Object.keys(metadata).length
                 ? "EXIF re-extracted."
                 : "No EXIF data found in this file.";
-              store.set("toast", { message: msg, type: "success" });
+              setToast({ message: msg, type: "success" });
             } catch (err) {
-              store.set("toast", {
+              setToast({
                 message: err.message || "Re-extract failed.",
                 type: "error",
               });

@@ -14,7 +14,7 @@
  */
 
 import { api } from './client.js';
-import { store } from '../store.js';
+import { getNavTags, setNavTags, setRootTags } from '../store.js';
 
 /**
  * Navigation menu: hierarchical tag tree scoped to the current user's auth
@@ -41,7 +41,7 @@ let _generation = 0;
 export function loadNav({ force = false } = {}) {
   if (!force) {
     if (_inflight) return _inflight;
-    if (store.get('navTags')) return Promise.resolve();
+    if (getNavTags()) return Promise.resolve();
   }
   const gen = ++_generation;
   const req = getNavMenu()
@@ -49,8 +49,8 @@ export function loadNav({ force = false } = {}) {
       // A later refresh has already published; this response is stale.
       if (gen !== _generation) return;
       const menu = data.menu || [];
-      store.set('navTags', menu);
-      store.set('rootTags', data.tags || menu);
+      setNavTags(menu);
+      setRootTags(data.tags || menu);
     })
     .catch(() => { /* header degrades to identity + crumbs + tools */ })
     .finally(() => { if (_inflight === req) _inflight = null; });

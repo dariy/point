@@ -1,7 +1,8 @@
 import { syncQueue } from "../../utils/sync.js";
 import { getMeta } from "../../utils/offlineStore.js";
+import { setOfflineStatus } from "../../store.js";
 
-export async function mount(store) {
+export async function mount() {
   // Register service worker (PWA shell cache + Web Share Target).
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch((err) => {
@@ -13,7 +14,7 @@ export async function mount(store) {
   try {
     const lastSync = await getMeta("last_sync");
     if (lastSync) {
-      store.set("offline_status", { available: true, last_sync: lastSync });
+      setOfflineStatus({ available: true, last_sync: lastSync });
     }
   } catch {
     /* ignore */

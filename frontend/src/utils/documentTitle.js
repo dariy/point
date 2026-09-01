@@ -12,7 +12,7 @@
  * known until its fetch resolves — calls setPageTitle() once it does.
  */
 
-import { store } from '../store.js';
+import { getSettings } from '../store.js';
 
 /** Shown before settings load, and when the blog has no title of its own. */
 const FALLBACK_SITE_TITLE = 'Point';
@@ -22,7 +22,7 @@ const FALLBACK_SITE_TITLE = 'Point';
  * @returns {string}
  */
 export function siteTitle() {
-  const settings = /** @type {{ blog_title?: string }} */ (store.get('settings')) || {};
+  const settings = /** @type {{ blog_title?: string }} */ (getSettings()) || {};
   return settings.blog_title || FALLBACK_SITE_TITLE;
 }
 

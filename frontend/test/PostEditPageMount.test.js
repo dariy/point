@@ -19,7 +19,15 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire, type } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import {
+  getAutosaveStatus,
+  getToast,
+  onToast,
+  setAutosaveStatus,
+  setSettings,
+  setToast,
+  setUser,
+} from '../src/store.js';
 import { pluginHost } from '../src/core/pluginHost.js';
 import { clearPostReadCache } from '../src/api/posts.js';
 
@@ -117,10 +125,10 @@ describe('PostEditPage (mounted)', () => {
       'DELETE /api/posts/7': () => ({}),
     };
     fakeFetch();
-    store.set('user', { username: 'owner', is_admin: true });
-    store.set('settings', { blog_title: 'Test blog' });
-    store.set('toast', null);
-    store.set('autosave_status', null);
+    setUser({ username: 'owner', is_admin: true });
+    setSettings({ blog_title: 'Test blog' });
+    setToast(null);
+    setAutosaveStatus(null);
     pluginHost.init([
       { id: 'instagram', type: 'service' },
       { id: 'ai-analysis', type: 'service' },
@@ -166,7 +174,7 @@ describe('PostEditPage (mounted)', () => {
 
       await mountPage({ params: { id: '7' } });
 
-      assert.match(store.get('toast').message, /Could not load post/);
+      assert.match(getToast().message, /Could not load post/);
       assert.equal(wentTo(), '/light/posts');
     });
   });
@@ -202,7 +210,7 @@ describe('PostEditPage (mounted)', () => {
       const body = sent('PUT', '/api/posts/7').at(-1).body;
       assert.equal(body.title, 'Harbour lights, revisited');
       assert.equal(body.type, 'post');
-      assert.equal(store.get('toast').message, 'Saved.');
+      assert.equal(getToast().message, 'Saved.');
       assert.equal(page.state.saving, false);
     });
 
@@ -237,8 +245,8 @@ describe('PostEditPage (mounted)', () => {
       await page._save();
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
-      assert.equal(store.get('autosave_status').status, 'failed');
+      assert.equal(getToast().type, 'error');
+      assert.equal(getAutosaveStatus().status, 'failed');
       assert.equal(page.state.saving, false);
     });
   });
@@ -255,7 +263,7 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(sent('PUT', '/api/posts/7').length, 1);
       assert.equal(page.state.hasPendingEdits, false);
-      assert.equal(store.get('autosave_status').status, 'saved');
+      assert.equal(getAutosaveStatus().status, 'saved');
     });
 
     test('does nothing when there is nothing pending', async () => {
@@ -299,7 +307,7 @@ describe('PostEditPage (mounted)', () => {
       await page._autosave();
       await settle();
 
-      assert.equal(store.get('autosave_status').status, 'failed');
+      assert.equal(getAutosaveStatus().status, 'failed');
       assert.equal(page.state.hasPendingEdits, true);
     });
   });
@@ -370,7 +378,7 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(sent('DELETE', '/api/posts/7').length, 1);
       assert.equal(wentTo(), '/light/posts');
-      assert.match(store.get('toast').message, /Trash/);
+      assert.match(getToast().message, /Trash/);
     });
 
     test('deleting a post that was never saved just leaves', async () => {
@@ -390,7 +398,7 @@ describe('PostEditPage (mounted)', () => {
       await settle();
 
       assert.equal(page.state.deleting, false);
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('view-on-site flushes a pending edit before navigating', async () => {
@@ -418,7 +426,7 @@ describe('PostEditPage (mounted)', () => {
       await settle();
 
       assert.equal(copied, 'http://localhost/preview/abc');
-      assert.match(store.get('toast').message, /copied/i);
+      assert.match(getToast().message, /copied/i);
       assert.equal(page.state.generatingPreview, false);
     });
 
@@ -450,7 +458,7 @@ describe('PostEditPage (mounted)', () => {
       await page._generatePreviewLink();
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(page.state.generatingPreview, false);
     });
   });
@@ -467,7 +475,7 @@ describe('PostEditPage (mounted)', () => {
       await page._publishToInstagram();
       await settle();
 
-      assert.equal(store.get('toast').type, 'success');
+      assert.equal(getToast().type, 'success');
       assert.equal(page.state.publishingToInstagram, false);
     });
 
@@ -478,8 +486,8 @@ describe('PostEditPage (mounted)', () => {
       await page._publishToInstagram();
       await settle();
 
-      assert.equal(store.get('toast').message, 'rate limited');
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().message, 'rate limited');
+      assert.equal(getToast().type, 'error');
     });
 
     test('anything else is reported as merely triggered', async () => {
@@ -489,7 +497,7 @@ describe('PostEditPage (mounted)', () => {
       await page._publishToInstagram();
       await settle();
 
-      assert.equal(store.get('toast').type, 'info');
+      assert.equal(getToast().type, 'info');
     });
 
     test('a request failure is reported', async () => {
@@ -499,7 +507,7 @@ describe('PostEditPage (mounted)', () => {
       await page._publishToInstagram();
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(page.state.publishingToInstagram, false);
     });
 
@@ -527,7 +535,7 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(page.state.post.title, 'Suggested title');
       assert.equal(page.state.post.excerpt, 'An evening walk.');
-      assert.match(store.get('toast').message, /Title filled/);
+      assert.match(getToast().message, /Title filled/);
     });
 
     test('filling tags merges with what is already there, without duplicates', async () => {
@@ -557,7 +565,7 @@ describe('PostEditPage (mounted)', () => {
       await page._doAnalyzeField('title', { path: '/2024/08/harbour.jpg' });
       await settle();
 
-      assert.match(store.get('toast').message, /AI disabled|no suggestions/i);
+      assert.match(getToast().message, /AI disabled|no suggestions/i);
     });
 
     test('a failure is reported and the field left alone', async () => {
@@ -567,7 +575,7 @@ describe('PostEditPage (mounted)', () => {
       await page._doAnalyzeField('title', { path: '/2024/08/harbour.jpg' });
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(page.state.analyzingField, null);
     });
 
@@ -593,7 +601,7 @@ describe('PostEditPage (mounted)', () => {
       await settle();
 
       assert.equal(page.state.post.title, 'Typed by hand');
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(page._analyzing, false);
     });
 
@@ -629,7 +637,7 @@ describe('PostEditPage (mounted)', () => {
       await page._uploadAndInsert(new globalThis.File([''], 'huge.jpg', { type: 'image/jpeg' }));
       await settle();
 
-      assert.match(store.get('toast').message, /Upload failed/);
+      assert.match(getToast().message, /Upload failed/);
     });
 
     test('inserting nothing changes nothing', async () => {
@@ -651,14 +659,14 @@ describe('PostEditPage (mounted)', () => {
       await settle();
 
       assert.ok(page._nodes.some(n => n.path === '/2024/08/renamed.jpg'));
-      assert.equal(store.get('toast').type, 'success');
+      assert.equal(getToast().type, 'success');
     });
 
     test('a path the media list does not know about fails loudly', async () => {
       await mountPage({ params: { id: '7' } });
 
       await assert.rejects(() => page._handleRename('/2024/08/gone.jpg', 'x.jpg'));
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
   });
 
@@ -718,7 +726,7 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(q('#title-input').value, 'From the phone');
       assert.equal(rows.length, 0, 'the queue is emptied once drained');
       assert.equal(sent('POST', '/api/posts').length, 1, 'the backlog entry becomes its own draft');
-      assert.match(store.get('toast').message, /1 offline shares saved as draft/);
+      assert.match(getToast().message, /1 offline shares saved as draft/);
     });
 
     test('the backlog draft is filled with the uploaded paths', async () => {
@@ -738,7 +746,7 @@ describe('PostEditPage (mounted)', () => {
       const restore = installFakeIndexedDB(queued());
       await mountPage({ params: { id: '7' } });
       const seen = [];
-      const unsubscribe = store.subscribe('toast', t => t && seen.push(t.message));
+      const unsubscribe = onToast(t => t && seen.push(t.message));
       try {
         await page._processShareQueue();
         await settle();

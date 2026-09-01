@@ -14,7 +14,7 @@ import { html, setHTML } from "../../utils/helpers.js";
  */
 
 import { Component } from '../Component.js';
-import { store } from '../../store.js';
+import { getRoute, getToastLog, onRoute, onToastLog, setToastLog } from '../../store.js';
 import { Modal } from './Modal.js';
 
 import { getRecentEntries } from '../../utils/notificationLog.js';
@@ -49,18 +49,18 @@ export class NotificationLogButton extends Component {
   }
   afterRender() {
     this.$('.notification-log-btn')?.addEventListener('click', () => this._openModal());
-    this.subscribeStore(store, 'toast_log', entries => {
-      this._updateVisibility(entries, store.get('route'));
+    this.subscribeStore(onToastLog, entries => {
+      this._updateVisibility(entries, getRoute());
       this._schedulePruneTimer(entries);
       if (this._isOpen) this._refreshModalContent();
     });
-    this.subscribeStore(store, 'route', route => {
-      this._updateVisibility(store.get('toast_log'), route);
+    this.subscribeStore(onRoute, route => {
+      this._updateVisibility(getToastLog(), route);
     });
 
     // Apply initial state (store may already have values at mount time).
-    this._updateVisibility(store.get('toast_log'), store.get('route'));
-    this._schedulePruneTimer(store.get('toast_log'));
+    this._updateVisibility(getToastLog(), getRoute());
+    this._schedulePruneTimer(getToastLog());
   }
   beforeUnmount() {
     if (this._pruneTimer) clearTimeout(this._pruneTimer);
@@ -90,7 +90,7 @@ export class NotificationLogButton extends Component {
     const expiresIn = entries[0].timestamp + 10 * 60 * 1000 - Date.now();
     if (expiresIn <= 0) return;
     this._pruneTimer = setTimeout(() => {
-      store.set('toast_log', getRecentEntries());
+      setToastLog(getRecentEntries());
     }, expiresIn + 100); // small buffer to ensure _prune runs after expiry
   }
 
@@ -125,7 +125,7 @@ export class NotificationLogButton extends Component {
     if (!this._activeModal) return;
     const bodyMount = this._activeModal.getBodyMount();
     if (!bodyMount) return;
-    const entries = store.get('toast_log') ?? [];
+    const entries = getToastLog() ?? [];
     setHTML(bodyMount, html`${entries.length === 0
       ? html`<p class="notification-log-empty">No recent notifications.</p>`
       : html`<ul class="notification-log-list">${[...entries].reverse().map(e => {

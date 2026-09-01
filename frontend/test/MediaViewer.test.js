@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { setupDOM, click, fire } from './helpers/dom.js';
 import { MediaViewer } from '../src/components/shared/MediaViewer.js';
 import { ImmersiveSheetViewer } from '../src/plugins/immersive/ImmersiveSheetViewer.js';
-import { store } from '../src/store.js';
+import { setSettings } from '../src/store.js';
 
 describe('MediaViewer', () => {
   let dom;
@@ -13,7 +13,7 @@ describe('MediaViewer', () => {
     dom = setupDOM();
     navs = [];
     dom.window.addEventListener('app:navigate', (e) => navs.push(e.detail.path));
-    store.set('settings', { immersive_nav_direction: 'chronological' });
+    setSettings({ immersive_nav_direction: 'chronological' });
   });
 
   afterEach(() => {
@@ -88,7 +88,7 @@ describe('MediaViewer', () => {
   });
   
   test('feed navigation direction reverses navTargets', async () => {
-    store.set('settings', { immersive_nav_direction: 'feed' });
+    setSettings({ immersive_nav_direction: 'feed' });
     const items = [{ type: 'image', url: '/a.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { 
       items, 
@@ -149,7 +149,7 @@ describe('ImmersiveSheetViewer', () => {
 
   beforeEach(() => {
     dom = setupDOM();
-    store.set('settings', { immersive_overlay_mode: 'sheet' });
+    setSettings({ immersive_overlay_mode: 'sheet' });
   });
 
   afterEach(() => {
@@ -204,7 +204,7 @@ describe('MediaViewer slide escaping', () => {
 
   beforeEach(() => {
     dom = setupDOM();
-    store.set('settings', { immersive_nav_direction: 'chronological' });
+    setSettings({ immersive_nav_direction: 'chronological' });
   });
 
   afterEach(() => {

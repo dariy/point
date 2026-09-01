@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { setupDOM, fire, click } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { setNavTags, setRoute, setSettings } from '../src/store.js';
 import { PostCard } from '../src/components/public/PostCard.js';
 
 /**
@@ -78,8 +78,8 @@ describe('PostCard video preview', () => {
     videos = instrumentVideos(dom.document);
     navigations = [];
     dom.window.addEventListener('app:navigate', (e) => navigations.push(e.detail.path));
-    store.set('route', { pathname: '/', query: {} });
-    store.set('navTags', []);
+    setRoute({ pathname: '/', query: {} });
+    setNavTags([]);
   });
 
   afterEach(() => {
@@ -88,7 +88,7 @@ describe('PostCard video preview', () => {
 
   /** Mount one card, hover-autoplay on unless the test says otherwise. */
   function mount(post = POST, settings = { enable_video_hover_autoplay: true }) {
-    store.set('settings', settings);
+    setSettings(settings);
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
     const component = new PostCard(el, { post });

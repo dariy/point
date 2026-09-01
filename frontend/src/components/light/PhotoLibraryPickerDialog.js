@@ -19,7 +19,7 @@ import { html, setHTML } from "../../utils/helpers.js";
  */
 
 import { Component } from '../Component.js';
-import { store } from '../../store.js';
+import { setToast } from '../../store.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.js';
@@ -164,7 +164,7 @@ export class PhotoLibraryPickerDialog extends Component {
       this._patchContent(contents.files, this.state.selected);
     } catch (err) {
       this.state.loading = false;
-      store.set('toast', {
+      setToast({
         message: err.message || 'Failed to load photo library.',
         type: 'error'
       });
@@ -289,7 +289,7 @@ export class PhotoLibraryPickerDialog extends Component {
       const result = await importSelectedPhotos([...selected]);
       this.state.importing = false;
       const msg = `Imported ${result.imported} photo${result.imported !== 1 ? 's' : ''}, skipped ${result.skipped} duplicate${result.skipped !== 1 ? 's' : ''}.`;
-      store.set('toast', {
+      setToast({
         message: msg,
         type: result.imported > 0 ? 'success' : 'info'
       });
@@ -298,7 +298,7 @@ export class PhotoLibraryPickerDialog extends Component {
     } catch (err) {
       this.state.importing = false;
       this._patchImportBtn(selected.size, false);
-      store.set('toast', {
+      setToast({
         message: err.message || 'Import failed.',
         type: 'error'
       });

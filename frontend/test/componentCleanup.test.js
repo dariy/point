@@ -25,10 +25,19 @@ import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 import { Component } from '../src/components/Component.js';
 import { html } from '../src/utils/helpers.js';
-import { store } from '../src/store.js';
+import { setAutosaveStatus, setUser, store } from '../src/store.js';
 
 /** Live subscribers on a store key — the leak, measured at its source. */
 const listeners = key => store._listeners[key]?.size ?? 0;
+
+/**
+ * An `on*`-shaped subscriber for a probe key.
+ *
+ * subscribeStore() takes one of store.js's accessors, not a store and a string
+ * key. These tests are about how long a subscription lives, not about any real
+ * key, so they bind their own throwaway ones in the same shape.
+ */
+const onKey = key => cb => store.subscribe(key, cb);
 
 describe('Component — per-render cleanup', () => {
   let dom;
@@ -127,7 +136,7 @@ describe('Component — per-render cleanup', () => {
     let fired = 0;
     class Subscriber extends Component {
       render() { return html``; }
-      afterRender() { this.subscribeStore(store, KEY, () => { fired++; }); }
+      afterRender() { this.subscribeStore(onKey(KEY), () => { fired++; }); }
     }
     const before = listeners(KEY);
     const c = mountIn(Subscriber);
@@ -149,7 +158,7 @@ describe('Component — per-render cleanup', () => {
     let renders = 0;
     class Reactive extends Component {
       render() { renders++; return html``; }
-      afterRender() { this.subscribeStore(store, KEY, () => this._rerender()); }
+      afterRender() { this.subscribeStore(onKey(KEY), () => this._rerender()); }
     }
     const c = mountIn(Reactive);
     renders = 0;
@@ -168,13 +177,13 @@ describe('Component — per-render cleanup', () => {
     class Parent extends Component {
       render() { return html`<div id="slot"></div>`; }
       afterRender() {
-        this.subscribeStore(store, KEY, () => { seen.push('parent'); this.setState({}); });
+        this.subscribeStore(onKey(KEY), () => { seen.push('parent'); this.setState({}); });
         this.mountChild(Child, '#slot');
       }
     }
     class Child extends Component {
       render() { return html``; }
-      afterRender() { this.subscribeStore(store, KEY, () => seen.push('child')); }
+      afterRender() { this.subscribeStore(onKey(KEY), () => seen.push('child')); }
     }
     const c = mountIn(Parent);
     assert.equal(listeners(KEY), 2, 'parent and child both subscribed');
@@ -203,7 +212,7 @@ describe('setupAdminLayout — the leak it caused', () => {
       headers: { get: () => 'application/json' },
       json: async () => ({ tags: [], total: 0 }),
     });
-    store.set('user', { username: 'tester' });
+    setUser({ username: 'tester' });
     ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js'));
 
     const el = dom.document.createElement('div');
@@ -252,11 +261,11 @@ describe('setupAdminLayout — the leak it caused', () => {
       await settle();
     }
 
-    store.set('autosave_status', { status: 'saving' });
+    setAutosaveStatus({ status: 'saving' });
     assert.equal(page.container.querySelectorAll('.sync-pill').length, 1,
       'the header was rewritten once, not once per leaked subscription');
 
-    store.set('autosave_status', {});
+    setAutosaveStatus({});
   });
 
   test('unmounting an admin page disconnects its header observer', async () => {

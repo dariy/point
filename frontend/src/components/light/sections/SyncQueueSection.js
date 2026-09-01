@@ -7,7 +7,7 @@
 import { Component } from "../../Component.js";
 import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.js";
 import { syncQueue } from "../../../utils/sync.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { html, raw } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
 import { WARNING_SVG } from "../../../utils/icons.js";
@@ -81,7 +81,7 @@ export class SyncQueueSection extends Component {
       this._load();
       updateStatus();
     } catch (_err) {
-      store.set("toast", { message: "Failed to reset queue.", type: "error" });
+      setToast({ message: "Failed to reset queue.", type: "error" });
     }
   }
 

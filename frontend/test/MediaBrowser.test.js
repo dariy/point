@@ -18,7 +18,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire, type, check } from './helpers/dom.js';
-import { store } from '../src/store.js';
+import { getToast, setToast } from '../src/store.js';
 
 const settle = () => new Promise(r => setImmediate(r));
 
@@ -92,7 +92,7 @@ describe('MediaBrowser', () => {
       'PUT /api/media': () => ({}),
     };
     fakeFetch();
-    store.set('toast', null);
+    setToast(null);
     ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.js'));
   });
 
@@ -322,7 +322,7 @@ describe('MediaBrowser', () => {
 
       await browser._createPostFromSelected();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(navigations.length, 0);
     });
   });
@@ -341,7 +341,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.equal(sent('DELETE', '/api/media/1').length, 1);
-      assert.match(store.get('toast').message, /deleted/i);
+      assert.match(getToast().message, /deleted/i);
     });
 
     test('cancelling deletes nothing', async () => {
@@ -360,7 +360,7 @@ describe('MediaBrowser', () => {
 
       await browser._deleteMedia(1);
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('a bulk delete names the count and tallies the failures', async () => {
@@ -374,7 +374,7 @@ describe('MediaBrowser', () => {
       acceptDialog();
       await settle();
 
-      assert.match(store.get('toast').message, /Deleted 1, 1 failed/);
+      assert.match(getToast().message, /Deleted 1, 1 failed/);
       assert.equal(browser.state.selectMode, false);
       assert.deepEqual(browser.getSelectedItems(), []);
     });
@@ -427,7 +427,7 @@ describe('MediaBrowser', () => {
       acceptDialog();
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
       assert.equal(sent('POST', '/api/media/1/rename').length, 0);
     });
 
@@ -450,7 +450,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.equal(sent('POST', '/api/media/1/rename').at(-1).body.new_filename, 'sea front');
-      assert.match(store.get('toast').message, /renamed/i);
+      assert.match(getToast().message, /renamed/i);
     });
 
     test('a failed rename reports the reason', async () => {
@@ -459,7 +459,7 @@ describe('MediaBrowser', () => {
 
       await browser._renameMedia(1, 'sea front');
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
   });
 
@@ -475,7 +475,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.equal(sent('POST', '/api/media/upload').length, 2);
-      assert.match(store.get('toast').message, /Uploaded 2/);
+      assert.match(getToast().message, /Uploaded 2/);
       assert.equal(browser.state.uploading, false);
     });
 
@@ -487,8 +487,8 @@ describe('MediaBrowser', () => {
       await browser._uploadFiles([file('a.jpg'), file('b.jpg')]);
       await settle();
 
-      assert.match(store.get('toast').message, /Uploaded 1, 1 failed/);
-      assert.equal(store.get('toast').type, 'warning');
+      assert.match(getToast().message, /Uploaded 1, 1 failed/);
+      assert.equal(getToast().type, 'warning');
     });
 
     test('uploading nothing is a no-op', async () => {
@@ -557,7 +557,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.deepEqual(sent('PUT', '/api/media/1/exif').at(-1).body, { Make: 'Canon' });
-      assert.match(store.get('toast').message, /EXIF saved/);
+      assert.match(getToast().message, /EXIF saved/);
     });
 
     test('a value with punctuation in it is refused before anything is sent', async () => {
@@ -567,7 +567,7 @@ describe('MediaBrowser', () => {
       click(q('#exif-panel-1 .exif-save-btn'));
       await settle();
 
-      assert.match(store.get('toast').message, /Invalid characters in: Make/);
+      assert.match(getToast().message, /Invalid characters in: Make/);
       assert.equal(sent('PUT', '/api/media/1/exif').length, 0);
     });
 
@@ -578,7 +578,7 @@ describe('MediaBrowser', () => {
       click(q('#exif-panel-1 .exif-save-btn'));
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('reverting warns first, then rebuilds the rows from what came back', async () => {
@@ -591,7 +591,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.deepEqual(qa('#exif-panel-1 .exif-key').map(i => i.value), ['Make', 'Lens']);
-      assert.match(store.get('toast').message, /reverted/i);
+      assert.match(getToast().message, /reverted/i);
     });
 
     test('a failed revert reports the reason', async () => {
@@ -602,7 +602,7 @@ describe('MediaBrowser', () => {
       acceptDialog();
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('re-extracting warns first, then rebuilds the rows from the file', async () => {
@@ -615,7 +615,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.deepEqual(qa('#exif-panel-1 .exif-key').map(i => i.value), ['Make']);
-      assert.match(store.get('toast').message, /re-extracted/i);
+      assert.match(getToast().message, /re-extracted/i);
     });
 
     test('a file with no EXIF in it says so rather than claiming success', async () => {
@@ -626,7 +626,7 @@ describe('MediaBrowser', () => {
       acceptDialog();
       await settle();
 
-      assert.match(store.get('toast').message, /No EXIF data found/);
+      assert.match(getToast().message, /No EXIF data found/);
     });
 
     test('a failed re-extract reports the reason', async () => {
@@ -637,7 +637,7 @@ describe('MediaBrowser', () => {
       acceptDialog();
       await settle();
 
-      assert.equal(store.get('toast').type, 'error');
+      assert.equal(getToast().type, 'error');
     });
 
     test('the picker has no EXIF panels — it is a chooser, not an editor', async () => {
@@ -678,7 +678,7 @@ describe('MediaBrowser', () => {
 
       // No decoder in this environment, so every capture fails — which is the
       // branch that has to report rather than silently do nothing.
-      assert.match(store.get('toast').message, /could not be decoded/);
+      assert.match(getToast().message, /could not be decoded/);
       assert.equal(browser.state.capturingPosters, false);
     });
 
@@ -688,7 +688,7 @@ describe('MediaBrowser', () => {
 
       await browser._backfillPosters();
 
-      assert.equal(store.get('toast'), null);
+      assert.equal(getToast(), null);
     });
   });
 
@@ -704,7 +704,7 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.equal(copied, '/2024/08/harbour.jpg');
-      assert.match(store.get('toast').message, /Copied/);
+      assert.match(getToast().message, /Copied/);
     });
 
     test('a rejected clipboard write is reported', async () => {
@@ -714,7 +714,7 @@ describe('MediaBrowser', () => {
       click(q('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
       await settle();
 
-      assert.equal(store.get('toast').message, 'Copy failed');
+      assert.equal(getToast().message, 'Copy failed');
     });
 
     test('no clipboard at all — over plain HTTP — says why', async () => {
@@ -724,7 +724,7 @@ describe('MediaBrowser', () => {
       click(q('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
       await settle();
 
-      assert.match(store.get('toast').message, /requires HTTPS/);
+      assert.match(getToast().message, /requires HTTPS/);
     });
   });
 

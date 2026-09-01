@@ -281,25 +281,38 @@ export class Component {
 
   /**
    * Subscribe to a store key for the lifetime of the current render.
-   * @param {object} storeInstance
-   * @param {string} key
-   * @param {Function} callback
+   *
+   * Takes one of store.js's `on*` accessors rather than the store and a key,
+   * so a mistyped key is a build error instead of a subscription that never
+   * fires:
+   *
+   *   this.subscribeStore(onSettings, () => this.setState({}));
+   *
+   * @param {Function} subscribe  An `on*` accessor from store.js; returns the
+   *                              unsubscribe function.
+   * @param {Function} callback   Called with the new value on every change.
    */
-  subscribeStore(storeInstance, key, callback) {
-    this.registerCleanup(storeInstance.subscribe(key, callback));
+  subscribeStore(subscribe, callback) {
+    this.registerCleanup(subscribe(callback));
   }
 
   /**
    * Subscribe to one slice of a store key for the lifetime of the current
    * render, so writes to the rest of that key cost nothing here.
    *
-   * @param {object} storeInstance
-   * @param {string} key
+   * Takes an `on*Selector` accessor from store.js, for the same reason
+   * subscribeStore() takes an `on*` one:
+   *
+   *   this.subscribeStoreSelector(onSettingsSelector, s => s.blog_title, cb);
+   *
+   * @param {Function} subscribeSelector  An `on*Selector` accessor from
+   *                                      store.js; returns the unsubscribe
+   *                                      function.
    * @param {Function} select    Maps the key's value to the slice to watch
    * @param {Function} callback  Called when the slice changes
    */
-  subscribeStoreSelector(storeInstance, key, select, callback) {
-    this.registerCleanup(storeInstance.subscribeSelector(key, select, callback));
+  subscribeStoreSelector(subscribeSelector, select, callback) {
+    this.registerCleanup(subscribeSelector(select, callback));
   }
 
   /**

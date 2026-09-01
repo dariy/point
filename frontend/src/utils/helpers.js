@@ -260,8 +260,8 @@ export async function sharePost(data) {
   // Fallback: copy to clipboard
   try {
     await navigator.clipboard.writeText(data.url);
-    const { store } = await import('../store.js');
-    store.set('toast', { message: 'Link copied to clipboard', type: 'success' });
+    const { setToast } = await import('../store.js');
+    setToast({ message: 'Link copied to clipboard', type: 'success' });
   } catch (err) {
     console.error('Clipboard failed:', err);
   }

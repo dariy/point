@@ -19,7 +19,7 @@
 
 import { Component } from '../../components/Component.js';
 import { SiteCrumb } from '../../components/public/SiteCrumb.js';
-import { store } from '../../store.js';
+import { getSettings, getTheme, getUser, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
@@ -40,7 +40,7 @@ export class PublicHeader extends Component {
       // through raw() below. No caller passes one today.
       slot = ''
     } = this.props;
-    const user = store.get('user');
+    const user = getUser();
     const subtitle = settings.blog_subtitle || '';
     const logoHtml = settings.logo_url ? html`<img class="app-logo" src="${settings.logo_url}" alt="${settings.blog_title || 'Logo'}" decoding="async">` : raw(APP_LOGO_SVG);
     const shareButtonHtml = showShare ? html`<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
@@ -163,7 +163,7 @@ export class PublicHeader extends Component {
     this.container.querySelectorAll('.share-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.preventDefault();
-        const settings = store.get('settings') || {};
+        const settings = getSettings() || {};
         sharePost({
           title: settings.blog_title || document.title,
           url: window.location.href
@@ -245,8 +245,8 @@ export class PublicHeader extends Component {
 
     // Theme toggle in the burger menu (the primary toggle now lives in the footer)
     this.$('#burger-theme-toggle')?.addEventListener('click', () => {
-      const current = store.get('theme') || 'auto';
-      store.set('theme', current === 'dark' ? 'light' : 'dark');
+      const current = getTheme() || 'auto';
+      setTheme(current === 'dark' ? 'light' : 'dark');
     });
 
     // Header search (expandable)

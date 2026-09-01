@@ -27,7 +27,7 @@ import { captureVideoPoster } from "../../utils/videoPoster.js";
 import { MediaPager } from "../../core/mediaPager.js";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.js";
 import { listPosts } from "../../api/posts.js";
-import { store } from "../../store.js";
+import { setToast } from "../../store.js";
 import { html, setHTML, navigate, raw } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
@@ -270,7 +270,7 @@ export class MediaBrowser extends Component {
     this.setState({
       capturingPosters: true
     });
-    store.set("toast", {
+    setToast({
       message: `Capturing poster${pending.length === 1 ? "" : "s"} for ${pending.length} video${pending.length === 1 ? "" : "s"}…`,
       type: "info"
     });
@@ -292,7 +292,7 @@ export class MediaBrowser extends Component {
     this.setState({
       capturingPosters: false
     });
-    store.set("toast", {
+    setToast({
       message: `Captured ${done} poster${done === 1 ? "" : "s"}${failed ? `, ${failed} could not be decoded by this browser` : ""}.`,
       type: failed ? "warning" : "success"
     });
@@ -523,7 +523,7 @@ export class MediaBrowser extends Component {
           }
         });
         if (invalid.length > 0) {
-          store.set("toast", {
+          setToast({
             message: `Invalid characters in: ${invalid.join(", ")}. Only letters, numbers and spaces allowed.`,
             type: "error"
           });
@@ -531,12 +531,12 @@ export class MediaBrowser extends Component {
         }
         try {
           await updateMediaEXIF(id, fields);
-          store.set("toast", {
+          setToast({
             message: "EXIF saved.",
             type: "success"
           });
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Save failed.",
             type: "error"
           });
@@ -593,12 +593,12 @@ export class MediaBrowser extends Component {
                 tr.appendChild(tdDel);
                 tbody.appendChild(tr);
               });
-              store.set("toast", {
+              setToast({
                 message: "EXIF reverted to original.",
                 type: "success"
               });
             } catch (err) {
-              store.set("toast", {
+              setToast({
                 message: err.message || "Revert failed.",
                 type: "error"
               });
@@ -668,12 +668,12 @@ export class MediaBrowser extends Component {
                 tbody.appendChild(tr);
               });
               const msg = Object.keys(metadata).length ? "EXIF re-extracted." : "No EXIF data found in this file.";
-              store.set("toast", {
+              setToast({
                 message: msg,
                 type: "success"
               });
             } catch (err) {
-              store.set("toast", {
+              setToast({
                 message: err.message || "Re-extract failed.",
                 type: "error"
               });
@@ -867,18 +867,18 @@ export class MediaBrowser extends Component {
           const path = btn.dataset.path;
           if (navigator.clipboard) {
             navigator.clipboard.writeText(path).then(() => {
-              store.set("toast", {
+              setToast({
                 message: `Copied: ${path}`,
                 type: "success"
               });
             }).catch(() => {
-              store.set("toast", {
+              setToast({
                 message: "Copy failed",
                 type: "error"
               });
             });
           } else {
-            store.set("toast", {
+            setToast({
               message: "Clipboard unavailable (requires HTTPS)",
               type: "error"
             });
@@ -953,7 +953,7 @@ export class MediaBrowser extends Component {
   async _createPostFromSelected() {
     const items = Array.from(this.state.selectedIds).map(id => this._selectedItemsById[id]).filter(Boolean);
     if (items.length === 0) {
-      store.set("toast", {
+      setToast({
         message: "No images selected.",
         type: "error"
       });
@@ -1009,7 +1009,7 @@ export class MediaBrowser extends Component {
         failed++;
       }
     }
-    store.set("toast", {
+    setToast({
       message: `Deleted ${deleted}${failed ? `, ${failed} failed` : ""}.`,
       type: failed ? "warning" : "success"
     });
@@ -1274,7 +1274,7 @@ export class MediaBrowser extends Component {
     this.setState({
       uploading: false
     });
-    store.set("toast", {
+    setToast({
       message: `Uploaded ${uploadedItems.length}${failed ? `, ${failed} failed` : ""}.`,
       type: failed ? "warning" : "success"
     });
@@ -1327,7 +1327,7 @@ export class MediaBrowser extends Component {
         // Sanitise: keep only letters, digits, hyphens, underscores and spaces.
         const safe = (newName || "").trim().replace(/[^a-zA-Z0-9\-_ ]/g, "");
         if (!safe) {
-          store.set("toast", {
+          setToast({
             message: "Name must contain letters, digits, hyphens, underscores or spaces only.",
             type: "error"
           });
@@ -1347,14 +1347,14 @@ export class MediaBrowser extends Component {
   async _deleteMedia(id) {
     try {
       await deleteMedia(id);
-      store.set("toast", {
+      setToast({
         message: "File deleted.",
         type: "success"
       });
       this._load();
       this._loadFolders();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Delete failed.",
         type: "error"
       });
@@ -1363,14 +1363,14 @@ export class MediaBrowser extends Component {
   async _renameMedia(id, newFilename) {
     try {
       await renameMedia(id, newFilename);
-      store.set("toast", {
+      setToast({
         message: "File renamed.",
         type: "success"
       });
       this._load();
       this._loadFolders();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Rename failed.",
         type: "error"
       });

@@ -29,7 +29,16 @@ import {
   EYE_OFF_SVG,
 } from "../../utils/icons.js";
 import { isRevelioOn, setRevelio } from "../../utils/revelio.js";
-import { store } from "../../store.js";
+import {
+  getNavTags,
+  getPagination,
+  getTheme,
+  getUser,
+  onPagination,
+  setTagCloudCache,
+  setTheme,
+  setUser,
+} from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import {
@@ -60,7 +69,7 @@ export class PublicFooter extends Component {
 
     let centerSlot = "";
     if (immersiveTags.length) {
-      const navTags = store.get("navTags") || [];
+      const navTags = getNavTags() || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
       const visibleTags = immersiveTags.filter((t) => {
         if (!tagIndex) return true;
@@ -100,7 +109,7 @@ export class PublicFooter extends Component {
     // hidden posts and tags, private media, and the scheduled queue on the
     // feed's negative pages. Concealed is the guest's own view of the site.
     const revelioOn = isRevelioOn();
-    const revelioButton = store.get("user")
+    const revelioButton = getUser()
       ? html`<button class="footer-action-btn revelio-toggle${revelioOn ? " is-revealing" : ""}" id="revelio-toggle" type="button"
                 aria-pressed="${revelioOn}"
                 title="${revelioOn ? "Revelio: showing hidden items — click to view as a guest" : "Viewing as a guest — click to reveal hidden items"}"
@@ -115,7 +124,7 @@ export class PublicFooter extends Component {
     // When signed in: keep the /light admin entrance link (one-tap to the
     // panel) and add a log out button next to it. When signed out: a single
     // log in link to the admin app.
-    const authButton = store.get("user")
+    const authButton = getUser()
       ? html`<a href="/light" class="footer-action-btn" title="Admin panel" aria-label="Admin panel">${raw(DASHBOARD_SVG)}</a>
                 <button class="footer-action-btn" id="footer-logout" type="button" title="Log out" aria-label="Log out">${raw(LOGOUT_SVG)}</button>`
       : html`<a href="/light" class="footer-action-btn" title="Log in" aria-label="Log in">${raw(LOGIN_SVG)}</a>`;
@@ -179,12 +188,12 @@ export class PublicFooter extends Component {
     const pagEl = this.$(".footer-pagination");
     if (pagEl) {
       this._pagination = this.mountChild(Pagination, pagEl, {
-        ...(store.get("pagination") || {}),
+        ...(getPagination() || {}),
         compact: true, // item count as tooltip — the centre slot is tight
         onPage: (p) => ViewContext.update({ page: p }),
       });
       if (!this._unsubPagination) {
-        this._unsubPagination = store.subscribe("pagination", (pag) => {
+        this._unsubPagination = onPagination((pag) => {
           this._pagination?.setProps({ page: 0, pages: 0, total: 0, ...(pag || {}) });
         });
       }
@@ -192,8 +201,8 @@ export class PublicFooter extends Component {
 
     // Theme toggle (moved here from the header; always visible in the footer).
     this.$("#theme-toggle")?.addEventListener("click", () => {
-      const current = store.get("theme") || "auto";
-      store.set("theme", current === "dark" ? "light" : "dark");
+      const current = getTheme() || "auto";
+      setTheme(current === "dark" ? "light" : "dark");
     });
 
     this.$("#footer-slider-btn")?.addEventListener("click", () => {
@@ -211,7 +220,7 @@ export class PublicFooter extends Component {
       } catch {
         /* ignore */
       }
-      store.set("user", null);
+      setUser(null);
       // Reload so admin-only affordances elsewhere on the page (edit buttons,
       // EXIF, etc.) reflect the logged-out state — re-rendering the footer
       // alone leaves stale admin UI on screen. (point-tj6k)
@@ -220,7 +229,7 @@ export class PublicFooter extends Component {
 
     const tagsEl = this.$(".immersive-tags");
     if (!tagsEl) return;
-    const navTags = store.get("navTags") || [];
+    const navTags = getNavTags() || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, (url) => {
       const { tag, navPath } = parseTagUrl(url);
@@ -255,7 +264,7 @@ export class PublicFooter extends Component {
       import("../../router.js"),
     ]);
     clearPostReadCache(); // post reads *and* the list pages behind them
-    store.set("tagCloud", null);
+    setTagCloudCache(null);
     await loadNav({ force: true });
     router.refresh(url.pathname + url.search + url.hash);
   }

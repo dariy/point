@@ -12,7 +12,7 @@ import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.js
 import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.js";
-import { store } from "../../store.js";
+import { setToast } from "../../store.js";
 import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
@@ -627,7 +627,7 @@ export default class PostsListPage extends Component {
     } else {
       message = `${successCount} of ${ids.length} posts updated. ${failCount} failed.`;
     }
-    store.set("toast", {
+    setToast({
       message,
       type: failCount > 0 ? "error" : "success"
     });
@@ -658,7 +658,7 @@ export default class PostsListPage extends Component {
       } else {
         message = `${successCount} of ${ids.length} posts moved to Trash. ${failCount} failed.`;
       }
-      store.set("toast", {
+      setToast({
         message,
         type: failCount > 0 ? "error" : "success"
       });
@@ -834,7 +834,7 @@ export default class PostsListPage extends Component {
     } catch (err) {
       this._restoreInteraction = restoreInteraction;
       console.error("[PostsListPage] load error:", err);
-      store.set("toast", {
+      setToast({
         message: "Could not load posts.",
         type: "error"
       });
@@ -859,12 +859,12 @@ export default class PostsListPage extends Component {
             name: n,
             slug: n
           }));
-          store.set("toast", {
+          setToast({
             message: "Tags saved.",
             type: "success"
           });
         } catch (err) {
-          store.set("toast", {
+          setToast({
             message: err.message || "Failed to save tags.",
             type: "error"
           });
@@ -895,13 +895,13 @@ export default class PostsListPage extends Component {
   async _deletePost(id) {
     try {
       await deletePost(id);
-      store.set("toast", {
+      setToast({
         message: "Post moved to Trash.",
         type: "success"
       });
       this._load();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Move to Trash failed.",
         type: "error"
       });
@@ -910,13 +910,13 @@ export default class PostsListPage extends Component {
   async _restorePost(id, title) {
     try {
       await restorePost(id);
-      store.set("toast", {
+      setToast({
         message: `"${title}" restored.`,
         type: "success"
       });
       this._load();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Restore failed.",
         type: "error"
       });
@@ -925,13 +925,13 @@ export default class PostsListPage extends Component {
   async _permanentlyDeletePost(id) {
     try {
       await permanentlyDeletePost(id);
-      store.set("toast", {
+      setToast({
         message: "Post permanently deleted.",
         type: "success"
       });
       this._load();
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Delete failed.",
         type: "error"
       });
@@ -1083,18 +1083,18 @@ export default class PostsListPage extends Component {
       } = await generatePreviewLink(id);
       try {
         await navigator.clipboard.writeText(preview_url);
-        store.set("toast", {
+        setToast({
           message: "Preview link copied to clipboard.",
           type: "success"
         });
       } catch {
-        store.set("toast", {
+        setToast({
           message: preview_url,
           type: "info"
         });
       }
     } catch (err) {
-      store.set("toast", {
+      setToast({
         message: err.message || "Could not generate preview link.",
         type: "error"
       });
@@ -1122,14 +1122,14 @@ export default class PostsListPage extends Component {
 
       // Update UI
       if (select) select.className = `status-select badge-${effStatus(updated)} status-change-btn`;
-      store.set("toast", {
+      setToast({
         message: "Status updated.",
         type: "success"
       });
     } catch (err) {
       // Revert select value on failure
       if (select) select.value = originalStatus;
-      store.set("toast", {
+      setToast({
         message: err.message || "Update failed.",
         type: "error"
       });

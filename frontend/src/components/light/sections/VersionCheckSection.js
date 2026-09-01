@@ -15,7 +15,7 @@
 
 import { Component } from "../../Component.js";
 import { getVersion, checkVersionNow } from "../../../api/system.js";
-import { store } from "../../../store.js";
+import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatDatetime, isoDatetime } from "../../../utils/formatters.js";
 
@@ -112,14 +112,14 @@ export class VersionCheckSection extends Component {
     // Offline, the shared client would queue the POST for later instead of
     // answering — useless for a check whose whole value is the live round-trip.
     if (!navigator.onLine) {
-      store.set("toast", { message: "You're offline — cannot reach GitHub.", type: "error" });
+      setToast({ message: "You're offline — cannot reach GitHub.", type: "error" });
       return;
     }
     this.setState({ checking: true });
     try {
       const info = await checkVersionNow();
       this.setState({ checking: false, info, error: null, justChecked: true });
-      store.set("toast", {
+      setToast({
         message: info.error
           ? `Check failed: ${info.error}`
           : info.update_available
@@ -129,7 +129,7 @@ export class VersionCheckSection extends Component {
       });
     } catch (err) {
       this.setState({ checking: false });
-      store.set("toast", { message: err.message || "Version check failed.", type: "error" });
+      setToast({ message: err.message || "Version check failed.", type: "error" });
     }
   }
 }
