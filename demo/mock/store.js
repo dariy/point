@@ -175,8 +175,10 @@ const CONTENT_VERSION = 1;
 function isReload() {
   try {
     const [nav] = performance.getEntriesByType("navigation");
-    if (nav) return nav.type === "reload";
-    return performance.navigation?.type === 1;
+    if (nav) return /** @type {PerformanceNavigationTiming} */ (nav).type === "reload";
+    // The deprecated fallback: gone from the DOM types, still there in an old
+    // enough browser.
+    return /** @type {any} */ (performance).navigation?.type === 1;
   } catch {
     return false;
   }

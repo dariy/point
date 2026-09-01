@@ -6,11 +6,12 @@ import { store } from '../store.js';
 const DB_NAME = 'point-offline';
 const VERSION = 1;
 
+/** @returns {Promise<IDBDatabase>} */
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, VERSION);
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 

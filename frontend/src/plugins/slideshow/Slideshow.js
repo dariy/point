@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { raw } from "../../utils/helpers.js";
 import { html, setHTML } from "../../utils/helpers.js";
 /**

@@ -52,6 +52,12 @@ jobs:
           npm ci --no-audit --no-fund
           node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
 
+      # The JSDoc annotations in frontend/src are checked, not decorative:
+      # jsconfig.json sets checkJs, and the files not yet clean carry
+      # `// @ts-nocheck` on line 1. Same command as scripts/check.sh.
+      - name: JS typecheck
+        run: npm run typecheck
+
       # Coverage rides along on the same run (V8 instrumentation via the
       # built-in runner — no c8, no extra devDependency).
       - name: E2E tests

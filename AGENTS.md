@@ -32,6 +32,7 @@ failure and prints a PASS/FAIL summary, so one red step still tells you about th
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
+| Frontend typecheck | `npm run typecheck` — `tsc --noEmit` over the JSDoc types; no `.ts` files, no emit |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |

@@ -12,6 +12,15 @@
 // fresh shell cache and the activate handler below prunes the previous
 // build's — old hashed plugin chunks don't accumulate across deploys.
 const CACHE_VERSION = "__BUILD_VERSION__";
+
+/**
+ * `self` here is a ServiceWorkerGlobalScope, which is not in the DOM lib this
+ * project typechecks against — the cast names only the two members used below.
+ * Every other `self.` reference is `addEventListener`, which Window has too.
+ *
+ * @type {{skipWaiting: () => Promise<void>, clients: {claim: () => Promise<void>}}}
+ */
+const swScope = /** @type {any} */ (self);
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -39,8 +48,9 @@ const OFFLINE_VERSION = 1;
 function offlineDbOpen() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(OFFLINE_DB, OFFLINE_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      /** @type {Array<[string, IDBObjectStoreParameters]>} */
       const stores = [
         ["posts", { keyPath: "id" }],
         ["tags", { keyPath: "id" }],
@@ -56,8 +66,8 @@ function offlineDbOpen() {
           db.createObjectStore(name, opts);
       });
     };
-    req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror = (e) => reject(e.target.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -78,7 +88,7 @@ async function idbGet(storeName, query) {
         result = result.sort((a, b) => {
           const dateA = a.published_at || a.created_at;
           const dateB = b.published_at || b.created_at;
-          return new Date(dateB) - new Date(dateA);
+          return new Date(dateB).getTime() - new Date(dateA).getTime();
         });
       }
       res(result);
@@ -90,11 +100,11 @@ async function idbGet(storeName, query) {
 function idbOpen() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB, 1);
-    req.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(IDB_STORE, { keyPath: "id" });
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(IDB_STORE, { keyPath: "id" });
     };
-    req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror = (e) => reject(e.target.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -125,7 +135,7 @@ self.addEventListener("install", (event) => {
           ),
         );
       })
-      .then(() => self.skipWaiting()),
+      .then(() => swScope.skipWaiting()),
   );
 });
 
@@ -146,7 +156,7 @@ self.addEventListener("activate", (event) => {
             .map((k) => caches.delete(k)),
         ),
       )
-      .then(() => self.clients.claim()),
+      .then(() => swScope.clients.claim()),
   );
 });
 

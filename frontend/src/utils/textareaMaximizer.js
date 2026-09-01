@@ -44,6 +44,14 @@ export function setupTextareaMaximizer(container) {
       parent.appendChild(btn);
       parent.appendChild(saveBtn);
     }
+    /**
+     * Stands in for the textarea's parent in the layout while the parent is
+     * reparented onto <body>. Closure-scoped because this callback is created
+     * once per textarea.
+     * @type {HTMLElement|null}
+     */
+    let placeholder = null;
+
     const toggleMaximize = () => {
       const isMaximized = textarea.classList.toggle('is-maximized');
       btn.classList.toggle('is-maximized', isMaximized);
@@ -55,18 +63,18 @@ export function setupTextareaMaximizer(container) {
       if (isMaximized) {
         acquireScrollLock(textarea);
         if (parent) {
-          textarea._placeholder = document.createElement('div');
-          textarea._placeholder.className = 'textarea-placeholder';
-          textarea._placeholder.style.height = parent.offsetHeight + 'px';
-          parent.parentNode.insertBefore(textarea._placeholder, parent);
+          placeholder = document.createElement('div');
+          placeholder.className = 'textarea-placeholder';
+          placeholder.style.height = parent.offsetHeight + 'px';
+          parent.parentNode.insertBefore(placeholder, parent);
           document.body.appendChild(parent);
         }
       } else {
         releaseScrollLock(textarea);
-        if (parent && textarea._placeholder) {
-          textarea._placeholder.parentNode.insertBefore(parent, textarea._placeholder);
-          textarea._placeholder.remove();
-          textarea._placeholder = null;
+        if (parent && placeholder) {
+          placeholder.parentNode.insertBefore(parent, placeholder);
+          placeholder.remove();
+          placeholder = null;
         }
       }
 

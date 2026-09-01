@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * Public site header — blog logo, unified breadcrumb (tag path + active
  * facets), and nav buttons.

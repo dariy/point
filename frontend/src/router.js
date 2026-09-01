@@ -30,10 +30,23 @@
 
 import { store } from "./store.js";
 import { setPageTitle } from "./utils/documentTitle.js";
+import { subclassHooks } from "./components/Component.js";
+
+/**
+ * One route table entry.
+ *
+ * @typedef {object} Route
+ * @property {string} path  Pattern, with `:name` segments.
+ * @property {Function} load  Resolves to the page class.
+ * @property {boolean} [public]  Reachable without a session.
+ * @property {string} [title]  Document title.
+ * @property {string} [key]  Shared identity: two patterns with the same key
+ *   resolve to the same page instance, refreshed through onRouteUpdate().
+ */
 
 class Router {
   constructor() {
-    /** @type {Array<{ path: string, load: Function, public?: boolean, title?: string }>} */
+    /** @type {Route[]} */
     this._routes = [];
     /** @type {HTMLElement|null} */
     this._mountPoint = null;
@@ -45,7 +58,7 @@ class Router {
     this._setupPath = "/setup";
     /** @type {import('./components/Component.js').Component|null} */
     this._currentPage = null;
-    /** @type {{ path: string, load: Function, public?: boolean, title?: string }|null} */
+    /** @type {Route|null} */
     this._currentRoute = null;
 
     this._onPopState = this._onPopState.bind(this);
@@ -58,7 +71,7 @@ class Router {
   /**
    * Initialise the router and render the current URL.
    *
-   * @param {Array<{ path: string, load: Function, public?: boolean, title?: string }>} routes
+   * @param {Route[]} routes
    * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string }} opts
    */
   init(
@@ -68,7 +81,7 @@ class Router {
       authGuard = null,
       loginPath = "/light/login",
       setupPath = "/setup",
-    } = {},
+    },
   ) {
     this._routes = routes;
     this._mountPoint = mountPoint;
@@ -216,6 +229,7 @@ class Router {
     const urlParts = cleanPathname.split("/");
     if (patParts.length !== urlParts.length) return null;
 
+    /** @type {Record<string,string>} */
     const params = {};
     for (let i = 0; i < patParts.length; i++) {
       if (patParts[i].startsWith(":")) {
@@ -233,6 +247,7 @@ class Router {
    * @returns {Record<string,string>}
    */
   _parseSearch(search) {
+    /** @type {Record<string,string>} */
     const out = {};
     for (const [k, v] of new URLSearchParams(search)) {
       out[k] = v;
@@ -329,14 +344,15 @@ class Router {
       (this._currentRoute &&
         matchedRoute.key &&
         this._currentRoute.key === matchedRoute.key);
+    const hooks = this._currentPage && subclassHooks(this._currentPage);
     if (
       this._currentPage &&
       sameRoute &&
-      typeof this._currentPage.onRouteUpdate === "function"
+      typeof hooks.onRouteUpdate === "function"
     ) {
       store.set("route", { pathname, params, query });
       this._currentRoute = matchedRoute;
-      this._currentPage.onRouteUpdate(params, query);
+      hooks.onRouteUpdate(params, query);
       return;
     }
 

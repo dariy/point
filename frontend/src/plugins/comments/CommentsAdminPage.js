@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * CommentsAdminPage — /light/comments moderation for the remark42 plugin.
  */

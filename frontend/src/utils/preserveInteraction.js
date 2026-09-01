@@ -22,6 +22,11 @@
 /** Text controls are the only ones with a caret worth recording. */
 const TEXTUAL = new Set(['text', 'search', 'url', 'tel', 'password', 'email', 'number']);
 
+/**
+ * @param {Element} el
+ * @returns {el is HTMLTextAreaElement|HTMLInputElement} True when el exposes
+ *   selectionStart/End — a predicate so the caret read below is checked.
+ */
 function hasCaret(el) {
   if (el.tagName === 'TEXTAREA') return true;
   if (el.tagName !== 'INPUT') return false;

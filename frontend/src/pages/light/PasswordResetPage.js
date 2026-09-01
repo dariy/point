@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 import { Component } from "../../components/Component.js";
 import { html } from "../../utils/helpers.js";
 import { sha256 } from "../../api/auth.js";

@@ -63,6 +63,12 @@ export class GridPager {
       prev: null,
       next: null
     };
+    /**
+     * Media URLs already prefetched, so a repaint of the same page does not
+     * queue them a second time.
+     * @type {Set<string>|null}
+     */
+    this._warmedMedia = null;
   }
 
   /**
@@ -313,7 +319,12 @@ export class GridPager {
     };
     window.addEventListener('keydown', this._onKeyNav);
     const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+    /** @type {Array<[string, () => void, string, string]>} */
+    const arrowSpecs = [
+      ['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
+      ['next', goNext, 'Next page', 'M9 18l6-6-6-6'],
+    ];
+    this._navArrows = arrowSpecs.map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow page-nav-${dir}`;
@@ -361,7 +372,7 @@ export class GridPager {
     // CSS-only: pins columns + rows + squares cards, no remount. Both halves of
     // the new geometry go inside the FLIP so the cards glide into it rather
     // than cutting to it — see utils/gridFlip.js.
-    flipGrid(grid, () => {
+    flipGrid(/** @type {HTMLElement} */ (grid), () => {
       stepZoom(grid, delta);
       this._trimToCapacity(grid);
     });
@@ -400,7 +411,9 @@ export class GridPager {
     // Footer slider sets an absolute column count; commit is debounced here
     // like every other zoom path.
     this._onZoomRequest = e => {
-      const grid = this._o.gridMount()?.querySelector('.posts-grid');
+      const grid = /** @type {HTMLElement|null} */ (
+        this._o.gridMount()?.querySelector('.posts-grid') ?? null
+      );
       flipGrid(grid, () => {
         requestZoom(e.detail?.cols || 0, grid);
         if (grid) this._trimToCapacity(grid);
@@ -543,9 +556,9 @@ export class GridPager {
       .filter(Boolean);
     // The copy that is actually laid out; the other one is display:none and
     // measures 0, which is also what an unpaginated view measures.
-    const live = [...(document.querySelectorAll?.(
+    const live = /** @type {HTMLElement|undefined} */ ([...(document.querySelectorAll?.(
       '#pagination-mount .pagination, .footer-pagination .pagination') || [])]
-      .find(el => el.getBoundingClientRect().height > 0);
+      .find(el => el.getBoundingClientRect().height > 0));
     if (!live || !mounts.length) return 0;
     const band = () => mounts.reduce((h, m) => h + m.getBoundingClientRect().height, 0);
     const pag = this._pagination;
@@ -753,6 +766,7 @@ export class GridPager {
   /** Build static grid markup (real cards, no listeners) for a ghost preview. */
   _buildGridHtml(posts, page) {
     if (!posts.length) return this._o.emptyHtml;
+    /** @type {Record<string, any>} */
     const settings = store.get('settings') || {};
     const heroIndex = posts.findIndex(p => p.is_featured);
     const dummy = document.createElement('div');

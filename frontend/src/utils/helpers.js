@@ -174,7 +174,8 @@ export function dropBrokenImages(root) {
   root.addEventListener(
     'error',
     (e) => {
-      if (e.target.tagName === 'IMG') e.target.remove();
+      const img = /** @type {HTMLElement} */ (e.target);
+      if (img.tagName === 'IMG') img.remove();
     },
     true,
   );
@@ -219,11 +220,16 @@ export function removeCanonical() {
 /**
  * Normalize raw string settings from the backend into proper types.
  *
- * @param {Record<string, string>} raw
+ * The values are strings off the wire, but a caller may also hand over what a
+ * form collected, where a checkbox is already a boolean — hence `any`, and
+ * hence the `=== true` / `=== 1` arms below.
+ *
+ * @param {Record<string, any>} raw
  * @returns {Record<string, any>}
  */
 export function normalizeSettings(raw) {
   if (!raw) return {};
+  /** @type {Record<string, any>} */
   const result = { ...raw };
   for (const key in raw) {
     const value = raw[key];
@@ -265,9 +271,9 @@ export async function sharePost(data) {
  * Setup a long-press listener on an element.
  *
  * @param {HTMLElement} el
- * @param {function(Event)} callback
+ * @param {function(Event): void} callback
  * @param {number} [duration=400]
- * @returns {function()} cleanup
+ * @returns {function(): void} cleanup
  */
 export function setupLongPress(el, callback, duration = 400) {
   let timer = null;
@@ -310,7 +316,7 @@ export class RawHtml extends String {}
 /**
  * Wrap a string so the html tag leaves it unescaped.
  *
- * @param {string} str
+ * @param {string|RawHtml} str
  * @returns {RawHtml}
  */
 export function raw(str) {
@@ -379,7 +385,7 @@ export function html(strings, ...values) {
  * `el.innerHTML = someString`, or an injected script reaching for the same
  * sink — has no policy to go through and throws.
  *
- * @type {{createHTML: (s: string) => string}|null}
+ * @type {TrustedTypePolicy|null}
  */
 let policy;
 let policyResolved = false;

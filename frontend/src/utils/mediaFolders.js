@@ -35,12 +35,13 @@ export function monthLabel(month) {
  * @returns {{years: string[], byYear: Object<string, Array>}}
  */
 export function groupFoldersByYear(folders = []) {
+  /** @type {Record<string, Array<{year: string, month: string, path: string}>>} */
   const byYear = {};
   for (const f of folders) {
     if (!byYear[f.year]) byYear[f.year] = [];
     byYear[f.year].push(f);
   }
-  const years = Object.keys(byYear).sort((a, b) => b - a);
+  const years = Object.keys(byYear).sort((a, b) => Number(b) - Number(a));
   return { years, byYear };
 }
 

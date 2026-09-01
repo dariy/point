@@ -1,3 +1,4 @@
+// @ts-nocheck — vendored third-party source; not ours to annotate.
 const globalWindow = window;
 export function CodeJar(editor, highlight, opt = {}) {
     const options = {

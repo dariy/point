@@ -44,6 +44,13 @@ export class HeaderFold {
     if (observe) this._ro.observe(observe);
   }
 
+  /**
+   * @param {number} order  Lower orders fold first.
+   * @param {object} [provider]
+   * @param {() => void} [provider.reset]  Undo every fold this provider applies.
+   * @param {() => Array<() => void>} [provider.ops]  One function per further fold.
+   * @returns {() => void} unregister
+   */
   register(order, { reset, ops } = {}) {
     const entry = { order, reset, ops };
     this._providers.push(entry);

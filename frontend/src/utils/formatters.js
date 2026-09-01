@@ -74,6 +74,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
 // previews the title the backend will assign, so the two must agree, including
 // the English month/day names (the server formats them with Go's layouts, not
 // the visitor's locale). Longer tokens first: the scanner takes the first match.
+/** @type {Array<[string, (d: Date) => string]>} */
 const TITLE_DATE_TOKENS = [
   ['YYYY', (d) => String(d.getFullYear())],
   ['YY', (d) => String(d.getFullYear()).slice(-2)],

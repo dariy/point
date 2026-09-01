@@ -1395,6 +1395,47 @@ For production, the same files are served as-is. If minification is ever
 desired, it can be added as an optional pre-deployment step without
 changing the architecture.
 
+### Typechecking the JSDoc
+
+```bash
+npm run typecheck        # tsc --noEmit -p jsconfig.json
+```
+
+The JSDoc annotations across `frontend/src` are types, and this is what makes
+them binding. There are no `.ts` files and nothing is emitted — `tsc` reads the
+comments, and `jsconfig.json` sets `checkJs: true`, so **a new file is checked
+by default**. `scripts/check.sh` and CI both run it.
+
+Three things to know before adding annotations:
+
+- **Files not yet clean carry `// @ts-nocheck` on line 1**, naming the issue that
+  will remove it. Adding a pragma to a file that does not have one is going
+  backwards; grep for it before assuming an area is covered.
+- **Globals live in `frontend/types/globals.d.ts`** — `__DEBUG__`, the payloads
+  the server injects (`window.__MEDIA__`, `window.__PLUGINS__`), and the browser
+  APIs missing from TypeScript's DOM lib (Trusted Types). Declare a genuine
+  global there rather than casting at each call site.
+- **The untyped boundaries are generic, not `any`.** `api.get()` / `api.request()`
+  and `store.get()` take a `@template` that defaults to `unknown`, so the shape
+  flows in from whatever the caller declares:
+
+  ```javascript
+  /** @returns {Promise<{tags: any[], total: number}>} */
+  export function getTags() {
+    return api.get('/api/tags');    // T comes from the @returns above
+  }
+
+  /** @type {Record<string, any>} */
+  const settings = store.get('settings') || {};
+  ```
+
+  Declaring nothing leaves it `unknown` and the caller has to narrow — which is
+  the honest answer for a wire format, and the reason the annotation on the
+  wrapper is worth writing.
+
+`strict` stays off on purpose: turning it on adds null-safety errors to every
+DOM read at once, which is separate work from checking what is annotated today.
+
 ---
 
 ## Build & Deployment

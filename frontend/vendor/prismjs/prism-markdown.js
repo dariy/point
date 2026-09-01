@@ -1,3 +1,4 @@
+// @ts-nocheck — vendored third-party source; not ours to annotate.
 (function (Prism) {
 
 	// Allow only one line break

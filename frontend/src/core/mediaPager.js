@@ -69,6 +69,12 @@ export class MediaPager {
       prev: null,
       next: null
     };
+    /**
+     * The listing's paging state, as arm() last received it. Empty until then,
+     * hence the optional properties every reader defaults.
+     * @type {{page?: number, pages?: number, total?: number}}
+     */
+    this._pagination = {};
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -595,7 +601,12 @@ export class MediaPager {
     };
     window.addEventListener('keydown', this._onKeyNav);
     const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+    /** @type {Array<[string, () => void, string, string]>} */
+    const arrowSpecs = [
+      ['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
+      ['next', goNext, 'Next page', 'M9 18l6-6-6-6'],
+    ];
+    this._navArrows = arrowSpecs.map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;

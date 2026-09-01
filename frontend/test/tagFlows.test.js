@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * tagFlows — the tags manager's Move…, Merge…, drop-on and bulk operations.
  *

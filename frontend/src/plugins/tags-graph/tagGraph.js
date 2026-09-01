@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * tagGraph.js — a small, dependency-free force-directed graph renderer for the
  * public /tags page, drawn on a <canvas>.

@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * PostEditPage, mounted for real.
  *
@@ -836,10 +837,17 @@ function installFakeIndexedDB(rows, { broken = false } = {}) {
     configurable: true, writable: true,
     value: {
       open() {
+        // `result` / `error` on the request itself, the way a real IDBRequest
+        // carries them — utils/idb.js reads the request, not the event.
         const req = {};
         setImmediate(() => {
-          if (broken) req.onerror?.({ target: { error: new Error('no indexeddb') } });
-          else req.onsuccess?.({ target: { result: db } });
+          if (broken) {
+            req.error = new Error('no indexeddb');
+            req.onerror?.({ target: req });
+          } else {
+            req.result = db;
+            req.onsuccess?.({ target: req });
+          }
         });
         return req;
       },

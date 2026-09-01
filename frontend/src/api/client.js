@@ -32,13 +32,19 @@ class ApiClient {
    * Perform a fetch request, returning parsed JSON on success.
    * Throws a plain object `{ status, message }` on non-2xx responses.
    *
+   * The response shape is whatever the endpoint sends, so `T` is chosen by the
+   * caller — the per-endpoint wrappers in this directory declare it through
+   * their own `@returns`, and it falls back to `unknown` when nobody does.
+   *
+   * @template [T=unknown]
    * @param {string} path
    * @param {RequestInit} [init]
-   * @returns {Promise<unknown>}
+   * @returns {Promise<T>}
    */
   async request(path, init = {}) {
     const url = this._base + path;
 
+    /** @type {RequestInit} */
     const opts = {
       credentials: 'include',
       headers: {
@@ -96,20 +102,27 @@ class ApiClient {
 
   /**
    * GET request.
+   * @template [T=unknown]
    * @param {string} path
    * @param {Record<string,string|number|boolean>} [params]  Query parameters
-   * @returns {Promise<unknown>}
+   * @returns {Promise<T>}
    */
   get(path, params) {
-    const url = params ? `${path}?${new URLSearchParams(params)}` : path;
+    // String() explicitly: URLSearchParams stringifies anyway, but its type
+    // only admits strings, and numbers/booleans are common here.
+    const query = params && new URLSearchParams(
+      Object.entries(params).map(([k, v]) => [k, String(v)]),
+    );
+    const url = query ? `${path}?${query}` : path;
     return this.request(url, { method: 'GET' });
   }
 
   /**
    * POST request with JSON body.
+   * @template [T=unknown]
    * @param {string} path
    * @param {unknown} [body]
-   * @returns {Promise<unknown>}
+   * @returns {Promise<T>}
    */
   post(path, body) {
     if (!navigator.onLine && path.startsWith('/api/') && !path.includes('/auth/')) {
@@ -124,9 +137,10 @@ class ApiClient {
 
   /**
    * PUT request with JSON body.
+   * @template [T=unknown]
    * @param {string} path
    * @param {unknown} [body]
-   * @returns {Promise<unknown>}
+   * @returns {Promise<T>}
    */
   put(path, body) {
     if (!navigator.onLine && path.startsWith('/api/')) {
@@ -141,9 +155,10 @@ class ApiClient {
 
   /**
    * PATCH request with JSON body.
+   * @template [T=unknown]
    * @param {string} path
    * @param {unknown} [body]
-   * @returns {Promise<unknown>}
+   * @returns {Promise<T>}
    */
   patch(path, body) {
     if (!navigator.onLine && path.startsWith('/api/')) {
@@ -158,8 +173,9 @@ class ApiClient {
 
   /**
    * DELETE request.
+   * @template [T=null]
    * @param {string} path
-   * @returns {Promise<null>}
+   * @returns {Promise<T>}
    */
   delete(path) {
     if (!navigator.onLine && path.startsWith('/api/')) {
@@ -172,9 +188,10 @@ class ApiClient {
    * POST with a FormData body (file uploads). No Content-Type header —
    * the browser sets the correct multipart boundary automatically.
    *
+   * @template [T=unknown]
    * @param {string} path
    * @param {FormData} formData
-   * @returns {Promise<unknown>}
+   * @returns {Promise<T>}
    */
   upload(path, formData) {
     if (!navigator.onLine && path.startsWith('/api/')) {

@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../core/gestures.js";

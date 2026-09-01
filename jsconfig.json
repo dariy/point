@@ -1,0 +1,30 @@
+{
+  // What this file is for: the frontend is plain JS with JSDoc types, and this
+  // is what turns those annotations into a build gate (`npm run typecheck`).
+  //
+  // checkJs is on, so a new file is checked by default. The files that are not
+  // yet clean carry `// @ts-nocheck` on line 1 naming the issue that will
+  // remove it — grep for it before assuming an area is covered.
+  //
+  // strict stays off deliberately: turning it on adds null-safety errors to
+  // every DOM read at once, which is a separate piece of work.
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "checkJs": true,
+    "strict": false,
+    "baseUrl": ".",
+    // @types/node pulls in the real punycode.js, which does not typecheck.
+    "maxNodeModuleJsDepth": 0,
+    "skipLibCheck": true
+  },
+  "include": [
+    "frontend/src/**/*.js",
+    "frontend/test/**/*.js",
+    "frontend/*.js",
+    "frontend/index.html",
+    "frontend/types/**/*.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

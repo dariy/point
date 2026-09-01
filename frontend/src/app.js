@@ -49,7 +49,8 @@ pluginHost.init();
 // deployment-injected third-party markup (analytics, etc.). This tears down the
 // guest UI — and anything running in it — before a password is ever typed, and
 // keeps that markup out of the authenticated session that follows.
-window.addEventListener("app:login-required", ({ detail }) => {
+window.addEventListener("app:login-required", (event) => {
+  const { detail } = /** @type {CustomEvent} */ (event);
   const next = detail?.next || null;
   const target =
     "/light/login" + (next ? `?next=${encodeURIComponent(next)}` : "");
@@ -70,8 +71,8 @@ window.addEventListener("app:login-required", ({ detail }) => {
 // but the browser does not apply its rules. We swap media attributes
 // synchronously on every route change, before any page component mounts.
 
-const _cssPublic = document.getElementById("css-public");
-const _cssLight = document.getElementById("css-light");
+const _cssPublic = /** @type {HTMLLinkElement|null} */ (document.getElementById("css-public"));
+const _cssLight = /** @type {HTMLLinkElement|null} */ (document.getElementById("css-light"));
 
 function _applySection(pathname) {
   const isLight = pathname.startsWith("/light") || pathname === "/setup";
@@ -227,6 +228,7 @@ const TAGS_VIZ_PLUGINS = ["tags-atlas", "tags-map", "tags-graph"];
 // Mirrors the backend gate in tagsModuleAccessible: no enabled viz (or
 // admins-only for a logged-out visitor) sends the visitor home.
 async function resolveTagsModule() {
+  /** @type {Record<string, any>} */
   const settings = store.get("settings") || {};
   const visibility = settings.tags_visibility || "hidden";
   const isAdmin = !!store.get("user");

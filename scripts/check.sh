@@ -63,6 +63,18 @@ run_step "JS lint" bash -c "
         demo/mock demo/*.mjs demo/scripts/*.mjs
 "
 
+# ── JS typecheck ──────────────────────────────────────────────────────────────
+# The JSDoc annotations in frontend/src are types, and this is what makes them
+# binding: tsc with checkJs, no emit, no .ts files. Files not yet clean carry
+# `// @ts-nocheck` on line 1 — see jsconfig.json. Runs in the lint-only loop
+# too, because a broken annotation is a static error like any other.
+run_step "JS typecheck" bash -c "
+    set -eo pipefail
+    cd '$ROOT_DIR'
+    [ -x node_modules/.bin/tsc ] || npm ci --no-audit --no-fund
+    node_modules/.bin/tsc --noEmit -p jsconfig.json
+"
+
 # ── html`` conventions ────────────────────────────────────────────────────────
 # What the AST rules in eslint.config.js cannot see: hand-applied escapeHtml in
 # an interpolation, and growth in the set of raw() exceptions.

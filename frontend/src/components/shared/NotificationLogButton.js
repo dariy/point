@@ -1,3 +1,4 @@
+// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { html, setHTML } from "../../utils/helpers.js";
 /**
  * NotificationLogButton — floating action button for the notification log.
