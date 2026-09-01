@@ -57,6 +57,16 @@ func assertBootstrap(t *testing.T, rec *httptest.ResponseRecorder, wantGen strin
 	if !strings.Contains(csp, want) {
 		t.Errorf("CSP does not carry the served script's hash %s:\nCSP: %s", want, csp)
 	}
+	// Both injection sites splice the bootstrap hash in by string-replacing
+	// "script-src" in the enforcing header. The Trusted Types directives sit in
+	// a separate Report-Only header precisely so that splice never has to know
+	// about them: assert here that it did not eat one or grow the other.
+	if got := rec.Header().Get("Content-Security-Policy-Report-Only"); got != trustedTypesCSP {
+		t.Errorf("Report-Only policy after the script-src splice: want %q, got %q", trustedTypesCSP, got)
+	}
+	if strings.Contains(csp, "trusted-types") {
+		t.Errorf("trusted-types leaked into the enforcing policy: %s", csp)
+	}
 }
 
 // Every HTML injection site must ship __MEDIA__: the SPA fallback, the

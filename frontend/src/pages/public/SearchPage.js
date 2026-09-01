@@ -17,7 +17,7 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
-import { html } from '../../utils/helpers.js';
+import { html, setHTML } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
@@ -443,14 +443,14 @@ export default class SearchPage extends Component {
       </a>
     `);
     // <h3 class="search-tag-results-title">Tags</h3>
-    mount.innerHTML = html`
+    setHTML(mount, html`
       <div class="search-tag-results">
 
         <div class="search-tag-strip">
           ${tagsHtml}
         </div>
       </div>
-    `;
+    `);
   }
   mount() {
     // Seed the per_page cache from the window size so the first fetch is sized

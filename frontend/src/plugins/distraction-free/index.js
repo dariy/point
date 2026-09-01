@@ -1,5 +1,5 @@
 import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 // Distraction-free (full-screen) mode for the public post list. A floating
 // toggle mounted into the `post-list-tools` slot (see HomePage); clicking it
 // adds `body.distraction-free`, which the plugin CSS uses to hide every bit of
@@ -63,7 +63,7 @@ export function mount(el) {
     } else {
       el.appendChild(btn);
     }
-    btn.innerHTML = html`${raw(on ? EXIT_SVG : ENTER_SVG)}`;
+    setHTML(btn, html`${raw(on ? EXIT_SVG : ENTER_SVG)}`);
     btn.setAttribute('aria-label', on ? 'Exit full-screen mode' : 'Full-screen mode');
     btn.setAttribute('aria-pressed', String(on));
     applyOverlay();

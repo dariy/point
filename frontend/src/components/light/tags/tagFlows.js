@@ -21,7 +21,7 @@
  */
 
 import { store } from '../../../store.js';
-import { html } from '../../../utils/helpers.js';
+import { html, setHTML } from '../../../utils/helpers.js';
 import { setTagParents, deleteTag, patchTag, moveTag, mergeTags } from '../../../api/tags.js';
 import { openTagPickerDialog, openOverlay } from './TagPickerDialog.js';
 import { getChildrenOf } from './tagOrdering.js';
@@ -320,7 +320,7 @@ export function openMoveDialog({
       // Re-offer positions whenever the chosen parent changes.
       overlay.querySelector('.tm-picker-list').addEventListener('change', e => {
         if (e.target.name === 'tm-move-parent') {
-          overlay.querySelector('.tm-move-position-select').innerHTML = html`${positionOptions(tags, parseInt(e.target.value, 10), tagId)}`;
+          setHTML(overlay.querySelector('.tm-move-position-select'), html`${positionOptions(tags, parseInt(e.target.value, 10), tagId)}`);
         }
       });
     },

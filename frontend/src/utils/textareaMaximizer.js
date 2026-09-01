@@ -1,5 +1,5 @@
 import { raw } from "../utils/helpers.js";
-import { html } from "../utils/helpers.js";
+import { html, setHTML } from "../utils/helpers.js";
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from './icons.js';
 import { acquireScrollLock, releaseScrollLock } from './scrollLock.js';
 
@@ -24,12 +24,12 @@ export function setupTextareaMaximizer(container) {
     btn.type = 'button';
     btn.className = 'textarea-maximize-btn' + (isInitialMaximized ? ' is-maximized' : '');
     btn.title = isInitialMaximized ? 'Minimize' : 'Maximize';
-    btn.innerHTML = html`${raw(isInitialMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`;
+    setHTML(btn, html`${raw(isInitialMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`);
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'textarea-save-btn' + (isInitialMaximized ? ' is-maximized' : '');
     saveBtn.title = 'Save';
-    saveBtn.innerHTML = html`${raw(CHECK_SVG)}`;
+    setHTML(saveBtn, html`${raw(CHECK_SVG)}`);
     if (isInitialMaximized) {
       acquireScrollLock(textarea);
     }
@@ -48,7 +48,7 @@ export function setupTextareaMaximizer(container) {
       const isMaximized = textarea.classList.toggle('is-maximized');
       btn.classList.toggle('is-maximized', isMaximized);
       saveBtn.classList.toggle('is-maximized', isMaximized);
-      btn.innerHTML = html`${raw(isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`;
+      setHTML(btn, html`${raw(isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`);
       btn.title = isMaximized ? 'Minimize' : 'Maximize';
 
       // Prevent body scrolling and stacking context traps when maximized

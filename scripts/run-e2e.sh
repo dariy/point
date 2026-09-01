@@ -54,4 +54,9 @@ for i in $(seq 1 30); do
 done
 
 export E2E_BASE_URL="http://127.0.0.1:$PORT"
-node --test frontend/e2e/*.test.js
+# One file at a time: every e2e file drives the SAME server, and they all
+# bootstrap it (POST /api/setup, publish a post). Run in parallel and two of
+# them race on creating the owner, which the engine answers with a 409 for the
+# loser at best and a 500 at worst. Serial also keeps a failure readable — the
+# browser log belongs to one file.
+node --test --test-concurrency=1 frontend/e2e/*.test.js

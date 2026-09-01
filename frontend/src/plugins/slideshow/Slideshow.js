@@ -1,5 +1,5 @@
 import { raw } from "../../utils/helpers.js";
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 /**
  * Slideshow — auto-advancing controller for the immersive MediaViewer.
  *
@@ -85,7 +85,7 @@ export class Slideshow {
   }
   _syncButton() {
     if (!this._btn) return;
-    this._btn.innerHTML = html`${raw(running ? PAUSE_SVG : PLAY_SVG)}`;
+    setHTML(this._btn, html`${raw(running ? PAUSE_SVG : PLAY_SVG)}`);
     this._btn.classList.toggle('active', running);
     this._btn.setAttribute('aria-label', running ? 'Pause slideshow' : 'Start slideshow');
   }
@@ -251,7 +251,7 @@ export class Slideshow {
     if (this._bar) return;
     const bar = document.createElement('div');
     bar.className = 'slideshow-bar';
-    bar.innerHTML = html`
+    setHTML(bar, html`
       <div class="slideshow-stepper">
         <button type="button" class="slideshow-bar-btn" data-step="-1" aria-label="Slower">${raw(MINUS_SVG)}</button>
         <span class="slideshow-interval" aria-live="polite">${this.interval}s</span>
@@ -260,7 +260,7 @@ export class Slideshow {
       <button type="button" class="slideshow-bar-btn slideshow-loop${this.loop ? ' active' : ''}"
               aria-label="Loop" aria-pressed="${this.loop}">${raw(REPEAT_SVG)}</button>
       <button type="button" class="slideshow-bar-btn slideshow-shuffle${this.shuffle ? ' active' : ''}"
-              aria-label="Shuffle" aria-pressed="${this.shuffle}">${raw(SHUFFLE_SVG)}</button>`;
+              aria-label="Shuffle" aria-pressed="${this.shuffle}">${raw(SHUFFLE_SVG)}</button>`);
     // Keep taps on the bar from reaching the viewer's close/hide handler.
     bar.addEventListener('click', e => e.stopPropagation());
     bar.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));

@@ -8,9 +8,11 @@
 #   1. Hand-applied escapeHtml() inside an interpolation. The tag escapes by
 #      default, so calling it by hand means either a plain template literal
 #      (unescaped by definition) or a double-escape.
-#   2. Growth in the set of raw() exceptions. Each one is a place where the
-#      escaping is asserted by a human rather than performed by the tag, so a
-#      new one is a deliberate act, not a quiet edit.
+#   2. Growth in the set of no-restricted-syntax suppressions. Each one is a
+#      place where safety is asserted by a human rather than enforced by a rule
+#      — a raw() around a value the reader cannot check, or the two lines of
+#      utils/helpers.js that hold the only innerHTML and insertAdjacentHTML in
+#      the frontend — so a new one is a deliberate act, not a quiet edit.
 #
 # Usage: scripts/check-html-escaping.sh
 
@@ -45,9 +47,12 @@ if [ -n "$hits" ]; then
         "URL inside html\`\` so the tag applies safeUrl() instead." "$hits"
 fi
 
-# ── 2. The raw() exception budget ────────────────────────────────────────────
+# ── 2. The suppression budget ────────────────────────────────────────────────
 # Every line here is a place a human asserted the value is already safe. Adding
-# one means editing this list, which is the point.
+# one means editing this list, which is the point. helpers.js is the odd one:
+# its two are not raw() exceptions but the sinks themselves — the single
+# innerHTML write (setHTML) and the single insertAdjacentHTML (insertHTML) that
+# every other write in the frontend goes through.
 expected=$(cat <<'LIST'
 frontend/src/components/light/CssEditor.js 1
 frontend/src/components/light/MarkdownEditor.js 1
@@ -56,16 +61,19 @@ frontend/src/components/light/tags/TagEditorForm.js 2
 frontend/src/pages/light/PluginsPage.js 1
 frontend/src/plugins/tags-map/index.js 2
 frontend/src/utils/copyright.js 1
+frontend/src/utils/helpers.js 2
 LIST
 )
 actual=$(grep -rl 'eslint-disable-next-line no-restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do
     echo "$f $(grep -c 'eslint-disable-next-line no-restricted-syntax' "$f")"
 done)
 if [ "$actual" != "$expected" ]; then
-    report "the raw() exception list moved" \
-        "Each of these suppresses the rule that keeps raw() away from values the" \
-        "reader cannot check. If the change is deliberate, update the list in" \
-        "scripts/check-html-escaping.sh and say why in the commit." \
+    report "the suppression list moved" \
+        "Each of these turns off a rule that would otherwise hold — the one" \
+        "keeping raw() away from values the reader cannot check, or the one" \
+        "keeping HTML sinks inside setHTML()/insertHTML(). If the change is" \
+        "deliberate, update the list in scripts/check-html-escaping.sh and say" \
+        "why in the commit." \
         "--- expected ---" "$expected" "--- actual ---" "${actual:-(none)}"
 fi
 

@@ -70,12 +70,24 @@ const rules = {
   "no-restricted-syntax": [
     "error",
     {
-      selector: "AssignmentExpression[left.property.name='innerHTML']:not([right.type='TaggedTemplateExpression'][right.tag.name='html'])",
-      message: "Use the html tagged template helper for innerHTML assignments."
+      // The sinks themselves are now off limits everywhere but the two lines of
+      // utils/helpers.js that implement setHTML()/insertHTML(), which carry a
+      // disable comment. That is what makes the Trusted Types policy tractable:
+      // the browser will only accept a write that came from the named policy,
+      // and exactly one function in the frontend holds it. Writing the markup
+      // with html`` is still required — setHTML() throws on anything else — but
+      // it is no longer sufficient, because a write that bypasses the funnel
+      // bypasses the policy and dies at the sink under enforcement.
+      selector: "AssignmentExpression[left.property.name='innerHTML']",
+      message: "Use setHTML(el, html`…`) from utils/helpers.js — a bare innerHTML write bypasses the Trusted Types policy."
     },
     {
-      selector: "CallExpression[callee.property.name='insertAdjacentHTML']:not([arguments.1.type='TaggedTemplateExpression'][arguments.1.tag.name='html'])",
-      message: "Use the html tagged template helper for insertAdjacentHTML."
+      selector: "AssignmentExpression[left.property.name='outerHTML']",
+      message: "Use setHTML() on the parent, or replaceWith() with real nodes — outerHTML bypasses the Trusted Types policy."
+    },
+    {
+      selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
+      message: "Use insertHTML(el, position, html`…`) from utils/helpers.js — a bare insertAdjacentHTML bypasses the Trusted Types policy."
     },
     {
       // raw() is the one way past the html`` tag's escaping, so what may go

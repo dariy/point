@@ -161,6 +161,10 @@ func TestSecurityHeaders(t *testing.T) {
 		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://server.arcgisonline.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
 		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
+		// Trusted Types ships in its own Report-Only header rather than inside
+		// the enforcing policy — see trustedTypesCSP for why it is not enforced
+		// yet, and why it is not spliced into the line above.
+		{"Content-Security-Policy-Report-Only", trustedTypesCSP},
 	}
 
 	for _, tt := range tests {

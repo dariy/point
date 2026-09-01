@@ -1,4 +1,4 @@
-import { html, raw } from "../../utils/helpers.js";
+import { html, setHTML, raw } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
@@ -57,7 +57,7 @@ export class CssEditor extends Component {
         // Prism emits markup by design; it is the sanctioned raw() the
         // convention names alongside the SVG constants.
         // eslint-disable-next-line no-restricted-syntax
-        editor.innerHTML = html`${raw(window.Prism.highlight(code, window.Prism.languages.css, 'css'))}`;
+        setHTML(editor, html`${raw(window.Prism.highlight(code, window.Prism.languages.css, 'css'))}`);
       }
     };
     this.jar = CodeJar(editorElement, highlight, {
@@ -110,7 +110,7 @@ export class CssEditor extends Component {
     editorElement.classList.toggle('is-maximized', this.isMaximized);
     btn.classList.toggle('is-maximized', this.isMaximized);
     if (saveBtn) saveBtn.classList.toggle('is-maximized', this.isMaximized);
-    btn.innerHTML = html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`;
+    setHTML(btn, html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`);
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
     const container = editorElement.closest('.css-editor-container');
     if (this.isMaximized) {

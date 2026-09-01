@@ -1,5 +1,5 @@
 
-import { html } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.js";
 /**
  * PhotoLibraryPickerDialog — browse the external photo library and selectively
  * import photos into site media.
@@ -226,37 +226,37 @@ export class PhotoLibraryPickerDialog extends Component {
       label: p,
       index: i
     }))];
-    el.innerHTML = html`${crumbs.map((crumb, i) => {
+    setHTML(el, html`${crumbs.map((crumb, i) => {
       const isLast = i === crumbs.length - 1;
       return isLast ? html`<span class="breadcrumb-current">${crumb.label}</span>` : html`<button class="breadcrumb-btn" data-index="${crumb.index}">${crumb.label}</button>
            <span class="breadcrumb-sep">/</span>`;
-    })}`;
+    })}`);
   }
   _patchSidebar(folders) {
     const el = this.$('#plpd-sidebar');
     if (!el) return;
     if (folders === null) {
-      el.innerHTML = html`<span class="photo-library-sidebar-empty">Loading…</span>`;
+      setHTML(el, html`<span class="photo-library-sidebar-empty">Loading…</span>`);
       return;
     }
-    el.innerHTML = html`${folders.length ? folders.map(name => html`
+    setHTML(el, html`${folders.length ? folders.map(name => html`
           <button class="photo-library-folder-btn" data-folder="${name}" title="${name}">
             <span class="photo-library-folder-icon">&#128193;</span>
             <span class="photo-library-item-label">${name}</span>
-          </button>`) : html`<span class="photo-library-sidebar-empty">No subfolders</span>`}`;
+          </button>`) : html`<span class="photo-library-sidebar-empty">No subfolders</span>`}`);
   }
   _patchContent(files, selected) {
     const el = this.$('#plpd-content');
     if (!el) return;
     if (files === null) {
-      el.innerHTML = html`<div class="photo-library-loading">Loading…</div>`;
+      setHTML(el, html`<div class="photo-library-loading">Loading…</div>`);
       return;
     }
     if (!files.length) {
-      el.innerHTML = html`<p class="photo-library-empty">No photos in this folder.</p>`;
+      setHTML(el, html`<p class="photo-library-empty">No photos in this folder.</p>`);
       return;
     }
-    el.innerHTML = html`<div class="photo-library-grid">${files.map(file => {
+    setHTML(el, html`<div class="photo-library-grid">${files.map(file => {
       const isSelected = selected.has(file.path);
       const url = getPhotoLibraryFileUrl(file.path);
       return html`
@@ -266,7 +266,7 @@ export class PhotoLibraryPickerDialog extends Component {
           <span class="photo-library-item-label">${file.name}</span>
           ${isSelected ? html`<span class="photo-library-check" aria-hidden="true">✓</span>` : ''}
         </button>`;
-    })}</div>`;
+    })}</div>`);
   }
   _patchImportBtn(count, importing) {
     const btn = this.$('#plpd-import-btn');

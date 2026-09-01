@@ -14,7 +14,7 @@
 
 import { Component } from '../Component.js';
 import { Modal } from './Modal.js';
-import { html } from '../../utils/helpers.js';
+import { html, setHTML } from '../../utils/helpers.js';
 
 export class ConfirmDialog extends Component {
   render() {
@@ -38,7 +38,7 @@ export class ConfirmDialog extends Component {
         // A message built with html`` lands as markup; a bare string is escaped
         // and shows its own angle brackets. That is the point — the flag can no
         // longer smuggle an unescaped caller-built string into innerHTML.
-        body.innerHTML = html`${message}`;
+        setHTML(body, html`${message}`);
       } else {
         const p = document.createElement('p');
         p.textContent = message;

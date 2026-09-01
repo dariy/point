@@ -18,7 +18,7 @@ import { uploadMedia } from "../../api/media.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
-import { html, navigate, raw, debounce } from "../../utils/helpers.js";
+import { html, setHTML, navigate, raw, debounce } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
@@ -632,7 +632,7 @@ export default class PostEditPage extends Component {
         const mount = this.$("#preview-content");
         if (mount) {
           const titleHtml = data.title ? html`<h1 class="post-title">${data.title}</h1>` : "";
-          mount.innerHTML = html`${titleHtml}${raw(rendered)}`;
+          setHTML(mount, html`${titleHtml}${raw(rendered)}`);
         }
       } catch (_err) {/* ignore */}
     }, 1000);

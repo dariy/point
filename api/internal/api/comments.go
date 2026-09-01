@@ -54,12 +54,20 @@ func RegisterCommentsProxy(e *echo.Echo, settingsService *services.SettingsServi
 			// Point's global CSP (frame-ancestors 'none') and X-Frame-Options
 			// DENY are pre-set on the response by earlier middleware and would
 			// stack with remark42's own CSP — browsers enforce the stricter
-			// set, which blocks the widget iframe. Drop only those two;
-			// remark42 sets its own per-path CSP, and Point's remaining
-			// headers (nosniff, Referrer-Policy, Permissions-Policy) coexist
-			// harmlessly with remark42's equivalents.
+			// set, which blocks the widget iframe. Drop those; remark42 sets
+			// its own per-path CSP, and Point's remaining headers (nosniff,
+			// Referrer-Policy, Permissions-Policy) coexist harmlessly with
+			// remark42's equivalents.
+			//
+			// The Trusted Types policy goes with them. It is a statement about
+			// code Point wrote — the widget is a third-party document that
+			// happens to be served through this origin, and it sets script.src
+			// from a plain string, so leaving the directive on would report a
+			// violation for every widget load today and break the widget
+			// outright the day the policy is enforced.
 			h := c.Response().Header()
 			h.Del("Content-Security-Policy")
+			h.Del("Content-Security-Policy-Report-Only")
 			h.Del("X-Frame-Options")
 			// stripPointProvider has to read the config body as JSON; asking the
 			// engine not to compress this one small response keeps it from

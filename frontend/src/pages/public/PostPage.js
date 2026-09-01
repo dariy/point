@@ -10,7 +10,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { html, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
+import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -335,7 +335,7 @@ export default class PostPage extends Component {
         const btn = document.createElement('button');
         btn.className = 'lightbox-close';
         btn.setAttribute('aria-label', 'Close');
-        btn.innerHTML = html`${raw(X_SVG)}`;
+        setHTML(btn, html`${raw(X_SVG)}`);
         btn.onclick = () => exitImmersive(this);
         contentEl.appendChild(btn);
       }
@@ -371,7 +371,7 @@ export default class PostPage extends Component {
     const script = document.createElement('script');
     script.type = 'application/ld+json';
     script.id = 'json-ld-blogposting';
-    script.textContent = JSON.stringify(ld);
+    setScriptJSON(script, ld);
     document.head.appendChild(script);
   }
   mount() {

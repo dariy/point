@@ -20,7 +20,7 @@ import { Component } from '../../components/Component.js';
 import { SiteCrumb } from '../../components/public/SiteCrumb.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { html, navigate, raw, sharePost } from '../../utils/helpers.js';
+import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
@@ -538,7 +538,7 @@ export class PublicHeader extends Component {
       }
       parts.push(html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`);
     }
-    mount.innerHTML = html`${parts}`;
+    setHTML(mount, html`${parts}`);
     mount.querySelectorAll('.typeahead-item').forEach(item => {
       item.addEventListener('click', e => {
         e.preventDefault();

@@ -1,4 +1,4 @@
-import { html, raw } from "../../utils/helpers.js";
+import { html, setHTML, raw } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
@@ -64,7 +64,7 @@ export class MarkdownEditor extends Component {
         // convention names alongside the SVG constants, and its input here is
         // the editor's own textContent.
         // eslint-disable-next-line no-restricted-syntax
-        editor.innerHTML = html`${raw(Prism.highlight(editor.textContent, lang, langKey))}`;
+        setHTML(editor, html`${raw(Prism.highlight(editor.textContent, lang, langKey))}`);
       }
     };
     this.jar = CodeJar(editorElement, highlight, {
@@ -108,7 +108,7 @@ export class MarkdownEditor extends Component {
     editorElement.classList.toggle('is-maximized', this.isMaximized);
     btn.classList.toggle('is-maximized', this.isMaximized);
     if (saveBtn) saveBtn.classList.toggle('is-maximized', this.isMaximized);
-    btn.innerHTML = html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`;
+    setHTML(btn, html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`);
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
     if (this.isMaximized) acquireScrollLock(this);
     else releaseScrollLock(this);
