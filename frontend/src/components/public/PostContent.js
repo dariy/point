@@ -190,10 +190,10 @@ export class PostContent extends Component {
     if (tagsContainer) {
       const navTags = store.get("navTags") || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-      this._cleanupStrip = setupTagStrip(tagsContainer, tagIndex, (url) => {
+      this.registerCleanup(setupTagStrip(tagsContainer, tagIndex, (url) => {
         const slug = url.replace('/tags/', '');
         ViewContext.update({ tag: slug, postSlug: null, query: null });
-      });
+      }));
     }
   }
 
@@ -309,7 +309,6 @@ export class PostContent extends Component {
   }
 
   beforeUnmount() {
-    this._cleanupStrip?.();
     this._teardownViewer();
     this._teardownComments();
   }

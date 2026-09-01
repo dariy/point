@@ -26,6 +26,32 @@ import { html, isRawHtml } from '../utils/helpers.js';
  *   the wrong fix and now an actively broken one — the flag survives the
  *   cleanup that released the resource, so the second render gets neither.
  *
+ *   on(), timer(), interval(), observe() and raf() are registerCleanup() with
+ *   the acquisition folded in, so the safe form is also the short one:
+ *
+ *     this.on(document, 'keydown', e => this._onKey(e));
+ *     this.observe(new ResizeObserver(() => this._refit())).observe(el);
+ *     this.timer(() => this.setState({ flash: false }), 2000);
+ *
+ * Event contract — data-action:
+ *   A component that declares an `actions` map gets ONE delegated listener per
+ *   event type on this.container, bound at mount() and released at unmount().
+ *   The container outlives every render, so the binding is established once
+ *   instead of re-attached per afterRender() — which retires both halves of
+ *   the classic pair of bugs there: a listener never re-attached is a dead
+ *   button, one attached twice fires twice.
+ *
+ *     render()  ->  html`<button data-action="delete" data-id="${id}">…`
+ *     class     ->  actions = { delete(e, el) { this._delete(el.dataset.id); } }
+ *
+ *   Handlers are called with `this` bound to the component, the event, and the
+ *   nearest [data-action] ancestor of the target. A bare key answers `click`;
+ *   any other event type is delegated by writing it into the key —
+ *   `'change:select-all'` — and the set of delegated types is read off the
+ *   map, so there is no second list to keep in sync. An event originating
+ *   inside a child mounted with mountChild() belongs to that child and is not
+ *   dispatched again here.
+ *
  * Security contract for subclasses:
  *   - render() builds its markup with the html`` tag from utils/helpers.js and
  *     returns what that tag returns. Interpolations are escaped by the tag —
@@ -59,6 +85,12 @@ export class Component {
      * @type {Function[]}
      */
     this._cleanups = [];
+    /**
+     * Teardowns for the delegated `actions` listeners. Bound once at mount()
+     * because this.container survives every render; released at unmount().
+     * @type {Function[]}
+     */
+    this._actionTeardowns = [];
     this._unmounted = false;
   }
 
@@ -73,6 +105,10 @@ export class Component {
   render() {
     throw new Error(`${this.constructor.name}.render() not implemented`);
   }
+
+  // Optional, declared by subclasses that want delegation:
+  //   actions = { <data-action value>: (event, el) => void }
+  // See the event contract in the class comment.
 
   /**
    * Called after HTML is written to the DOM.
@@ -121,6 +157,7 @@ export class Component {
    * Perform the initial render. Call this once after construction.
    */
   mount() {
+    this._bindActions();
     this._rerender();
   }
 
@@ -129,6 +166,7 @@ export class Component {
    */
   unmount() {
     this._unmounted = true;
+    this._unbindActions();
     this._runCleanups();
     this._unmountChildren();
     this.beforeUnmount();
@@ -185,6 +223,87 @@ export class Component {
   }
 
   /**
+   * Add an event listener released at the next render boundary.
+   *
+   * The whole point is that the safe form is the short one: no handler stored
+   * in a field, no matching removeEventListener to forget, no "did I already
+   * bind this?" flag. Registered through registerCleanup(), so a listener
+   * taken in afterRender() lives exactly as long as the render that took it.
+   *
+   * A missing target is a no-op rather than a throw, so the `this.$('.x')` of
+   * a conditionally rendered element can be passed straight in.
+   *
+   * @param {EventTarget|null|undefined} target
+   * @param {string} type
+   * @param {Function} handler
+   * @param {boolean|object} [options]  Passed to both add and remove, so a
+   *                                    capture listener detaches correctly.
+   * @returns {EventTarget|null} target, for chaining; null when there was none.
+   */
+  on(target, type, handler, options) {
+    if (!target?.addEventListener) return null;
+    target.addEventListener(type, handler, options);
+    this.registerCleanup(() => target.removeEventListener(type, handler, options));
+    return target;
+  }
+
+  /**
+   * setTimeout whose pending callback is cancelled at the next render boundary.
+   * A timer that already fired clears harmlessly.
+   * @param {Function} fn
+   * @param {number} [ms]
+   * @returns {*} the timer id
+   */
+  timer(fn, ms) {
+    const id = setTimeout(fn, ms);
+    this.registerCleanup(() => clearTimeout(id));
+    return id;
+  }
+
+  /**
+   * setInterval stopped at the next render boundary.
+   *
+   * An interval that must survive re-renders — a poll started once — belongs
+   * in the constructor with beforeUnmount() to stop it, not here.
+   * @param {Function} fn
+   * @param {number} [ms]
+   * @returns {*} the interval id
+   */
+  interval(fn, ms) {
+    const id = setInterval(fn, ms);
+    this.registerCleanup(() => clearInterval(id));
+    return id;
+  }
+
+  /**
+   * Register any object with a disconnect() — ResizeObserver, MutationObserver,
+   * IntersectionObserver — to be disconnected at the next render boundary.
+   *
+   * Returns the observer, so the usual one-liner reads:
+   *   this.observe(new ResizeObserver(fn)).observe(el)
+   *
+   * @template {{ disconnect: Function }} T
+   * @param {T} observer
+   * @returns {T}
+   */
+  observe(observer) {
+    this.registerCleanup(() => observer.disconnect());
+    return observer;
+  }
+
+  /**
+   * requestAnimationFrame cancelled at the next render boundary, so a frame
+   * scheduled by the previous render cannot run against the new DOM.
+   * @param {FrameRequestCallback} fn
+   * @returns {number} the frame id
+   */
+  raf(fn) {
+    const id = requestAnimationFrame(fn);
+    this.registerCleanup(() => cancelAnimationFrame(id));
+    return id;
+  }
+
+  /**
    * Query selector scoped to this component's container.
    * @param {string} selector
    * @returns {HTMLElement|null}
@@ -233,6 +352,72 @@ export class Component {
   _unmountChildren() {
     this._children.forEach(c => c.unmount());
     this._children = [];
+  }
+
+  /**
+   * Bind the delegated `actions` listeners to this.container.
+   *
+   * The event types come from the map itself: a bare key answers `click`, and
+   * a key of the form `'<type>:<name>'` contributes its type. Deriving them
+   * this way means a component declares its wiring in exactly one place — a
+   * second list would be a thing to forget, and forgetting it produces a
+   * button that silently does nothing.
+   */
+  _bindActions() {
+    const actions = this.actions;
+    if (!actions || !this.container?.addEventListener) return;
+    if (this._actionTeardowns.length) return; // already bound; mount() is idempotent
+
+    const types = new Set();
+    for (const key of Object.keys(actions)) {
+      const sep = key.indexOf(':');
+      types.add(sep > 0 ? key.slice(0, sep) : 'click');
+    }
+
+    const dispatch = event => this._dispatchAction(event);
+    for (const type of types) {
+      this.container.addEventListener(type, dispatch);
+      this._actionTeardowns.push(
+        () => this.container.removeEventListener(type, dispatch),
+      );
+    }
+  }
+
+  /** Release the delegated listeners. Only unmount() ends their lifetime. */
+  _unbindActions() {
+    const fns = this._actionTeardowns;
+    this._actionTeardowns = [];
+    for (const fn of fns) fn();
+  }
+
+  /**
+   * Route one delegated event to its handler.
+   *
+   * `closest` rather than the target itself, so the click that lands on an
+   * icon inside the button still finds the button. A hit inside a child
+   * mounted with mountChild() is that child's to answer — it bubbles through
+   * here on its way up the tree, and dispatching it again would run the
+   * parent's same-named action a second time.
+   *
+   * @param {Event} event
+   */
+  _dispatchAction(event) {
+    const actions = this.actions;
+    if (!actions) return;
+
+    const el = event.target?.closest?.('[data-action]');
+    if (!el || !this.container.contains(el)) return;
+
+    for (const child of this._children) {
+      if (child.container !== this.container && child.container?.contains(el)) return;
+    }
+
+    const name = el.getAttribute('data-action');
+    const handler = actions[`${event.type}:${name}`]
+      ?? (event.type === 'click' ? actions[name] : undefined);
+    if (typeof handler !== 'function') return;
+
+    handler.call(this, event, el);
   }
 
   /**

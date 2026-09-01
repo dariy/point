@@ -62,6 +62,44 @@ export default class PostEditPage extends Component {
     this._idleTimer = null;
     this._maxWaitTimer = null;
   }
+
+  /**
+   * The header overflow menu, delegated from the container.
+   *
+   * The menu is rebuilt by every re-render (its labels track post status and
+   * viewport width), so each item used to be re-bound by hand in afterRender;
+   * the container these arrive at does not move.
+   */
+  actions = {
+    "publish-now"() { this._save({ status: "published" }); },
+    "mark-hidden"() { this._save({ status: "hidden" }); },
+    unpublish() { this._save({ status: "draft" }); },
+    analyze() { this._analyzeNow(); },
+    arrange() { this._toggleArrange(true); },
+    "toggle-preview"() { this._toggleLivePreview(); },
+    "preview-link"() { this._generatePreviewLink(); },
+    // Same tab, like every other public-site link in the admin. The editor is
+    // the one place where leaving can cost something — edits typed inside the
+    // autosave idle window are still only in the form — so flush them first
+    // and let the navigation follow the save.
+    "view-on-site"() { this._viewOnSite(); },
+    schedule() {
+      const sel = this.container.querySelector("#status-select");
+      if (sel) {
+        sel.value = "scheduled";
+        sel.dispatchEvent(new Event("change"));
+      }
+      this._revealGroup("schedule");
+      this.timer(() => this.container.querySelector("#schedule-input")?.focus(), 10);
+    },
+    delete() {
+      const title = this.container.querySelector("#title-input")?.value
+        || this.state.post?.title || "this post";
+      this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash",
+        "danger", () => this._deletePost(this.state.postId));
+    },
+  };
+
   render() {
     const {
       isNew,
@@ -455,18 +493,10 @@ export default class PostEditPage extends Component {
       setMenuOpen(!this.state.menuOpen);
     });
 
-    // Close the menu on any outside click. Stored + removed below so re-renders
-    // don't accumulate stale document listeners.
-    if (this._onDocClick) document.removeEventListener("click", this._onDocClick);
-    this._onDocClick = () => {
+    // Close the menu on any outside click. Released at the render boundary, so
+    // re-renders cannot accumulate stale document listeners.
+    this.on(document, "click", () => {
       if (this.state.menuOpen) setMenuOpen(false);
-    };
-    document.addEventListener("click", this._onDocClick);
-    this.container.querySelectorAll(".menu-item").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const action = btn.dataset.action;
-        this._handleMenuAction(action);
-      });
     });
 
     // "Update" (for already-published posts) saves whatever status the user
@@ -627,61 +657,6 @@ export default class PostEditPage extends Component {
     this._detachFileDrop = attachWindowFileDrop({
       onFile: f => this._uploadAndInsert(f)
     });
-  }
-  _handleMenuAction(action) {
-    switch (action) {
-      case "publish-now":
-        this._save({
-          status: "published"
-        });
-        break;
-      case "schedule":
-        {
-          const sel = this.container.querySelector("#status-select");
-          if (sel) {
-            sel.value = "scheduled";
-            sel.dispatchEvent(new Event("change"));
-          }
-          this._revealGroup("schedule");
-          setTimeout(() => this.container.querySelector("#schedule-input")?.focus(), 10);
-          break;
-        }
-      case "mark-hidden":
-        this._save({
-          status: "hidden"
-        });
-        break;
-      case "unpublish":
-        this._save({
-          status: "draft"
-        });
-        break;
-      case "analyze":
-        this._analyzeNow();
-        break;
-      case "arrange":
-        this._toggleArrange(true);
-        break;
-      case "toggle-preview":
-        this._toggleLivePreview();
-        break;
-      case "preview-link":
-        this._generatePreviewLink();
-        break;
-      // Same tab, like every other public-site link in the admin. The editor is
-      // the one place where leaving can cost something — edits typed inside the
-      // autosave idle window are still only in the form — so flush them first
-      // and let the navigation follow the save.
-      case "view-on-site":
-        this._viewOnSite();
-        break;
-      case "delete":
-        {
-          const title = this.container.querySelector("#title-input")?.value || this.state.post?.title || "this post";
-          this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash", "danger", () => this._deletePost(this.state.postId));
-          break;
-        }
-    }
   }
 
   /**

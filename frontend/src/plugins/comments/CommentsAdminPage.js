@@ -41,6 +41,18 @@ export default class CommentsAdminPage extends Component {
     };
   }
 
+  /**
+   * Delegated row actions. The buttons are re-rendered on every state change —
+   * a tab switch, a selection, a delete — so binding them individually meant
+   * re-binding the whole table each time; the container this is bound to
+   * outlives all of it.
+   */
+  actions = {
+    delete(e, el) { this._deleteComment(this.state.comments[Number(el.dataset.i)]); },
+    block(e, el) { this._blockUser(this.state.comments[Number(el.dataset.i)]?.user); },
+    unblock(e, el) { this._unblock(this.state.blocked[Number(el.dataset.i)]); },
+  };
+
   render() {
     const { selectMode } = this.state;
     const actions = html`<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select comments"}">${raw(selectMode ? X_SVG : SELECT_SVG)}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>`;
@@ -288,17 +300,6 @@ export default class CommentsAdminPage extends Component {
         if (e.target.checked) selectedIds.add(i);
         else selectedIds.delete(i);
         this.setState({ selectedIds });
-      });
-    });
-
-    this.container.querySelectorAll("[data-action]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const i = Number(btn.dataset.i);
-        const action = btn.dataset.action;
-        if (action === "delete") this._deleteComment(this.state.comments[i]);
-        else if (action === "block")
-          this._blockUser(this.state.comments[i]?.user);
-        else if (action === "unblock") this._unblock(this.state.blocked[i]);
       });
     });
 

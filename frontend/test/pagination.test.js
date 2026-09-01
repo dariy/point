@@ -1,5 +1,7 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+
+import { setupDOM, click } from './helpers/dom.js';
 
 /**
  * The paginator normally runs 1…pages. The owner's home feed lowers its left
@@ -58,5 +60,67 @@ describe('Pagination', () => {
     }
     assert.ok(!/class="page-btn page-scheduled"[^>]*data-page="1"/.test(out),
       'a published page is never marked scheduled');
+  });
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+
+  describe('mounted', () => {
+    let dom;
+    beforeEach(() => { dom = setupDOM(); });
+    afterEach(() => { dom.cleanup(); });
+
+    /** Mount a paginator and return it with the pages it reported. */
+    const mount = (props) => {
+      const el = dom.document.createElement('div');
+      dom.document.body.appendChild(el);
+      const asked = [];
+      const c = new Pagination(el, { ...props, onPage: (p) => asked.push(p) });
+      c.mount();
+      return { c, asked };
+    };
+
+    test('clicking a page number reports it', () => {
+      const { c, asked } = mount({ page: 1, pages: 3, total: 30 });
+      click(c.$('[data-page="3"]'));
+      assert.deepEqual(asked, [3]);
+    });
+
+    test('the arrows step either way', () => {
+      const { c, asked } = mount({ page: 2, pages: 3, total: 30 });
+      click(c.$('.page-next'));
+      click(c.$('.page-prev'));
+      assert.deepEqual(asked, [3, 1]);
+    });
+
+    test('a page outside the range is not reported', () => {
+      // page 0 with minPage 1: the prev arrow renders disabled, and its target
+      // is below the left edge either way.
+      const { c, asked } = mount({ page: 1, pages: 3, total: 30 });
+      click(c.$('.page-prev'));
+      assert.deepEqual(asked, []);
+    });
+
+    test('the wiring survives a re-render, having never been re-attached', () => {
+      const { c, asked } = mount({ page: 1, pages: 5, total: 50 });
+      c.setProps({ page: 2 });
+      c.setProps({ page: 3 });
+      click(c.$('.page-next'));
+      assert.deepEqual(asked, [4], 'exactly once — not once per render');
+    });
+
+    test('unmounting releases the delegate', () => {
+      const { c, asked } = mount({ page: 1, pages: 3, total: 30 });
+      c.unmount();
+
+      // The container outlives unmount — only its contents are cleared — so an
+      // event on it is exactly what a leaked delegate would still answer.
+      const btn = dom.document.createElement('button');
+      btn.setAttribute('data-action', 'page');
+      btn.setAttribute('data-page', '2');
+      c.container.appendChild(btn);
+      click(btn);
+
+      assert.deepEqual(asked, []);
+    });
   });
 });

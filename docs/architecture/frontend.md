@@ -62,9 +62,15 @@ export class Component {
     this.props = props;
     this.state = {};
     this._children = []; // child Component instances for lifecycle propagation
-    this._cleanups = []; // teardowns for THIS render's resources (see 2.3)
+    this._cleanups = [];        // teardowns for THIS render's resources (see 2.3)
+    this._actionTeardowns = []; // the delegated `actions` listeners (see 2.4)
     this._unmounted = false;
   }
+
+  /**
+   * Optional: delegated handlers keyed by `data-action` value (see 2.4).
+   * @type {Object<string, function(Event, HTMLElement): void>|undefined}
+   */
 
   /**
    * Returns an HTML string describing this component.
@@ -200,6 +206,16 @@ export class Component {
   }
 
   /**
+   * Resource helpers — registerCleanup() with the acquisition folded in, so
+   * each releases at the next render boundary. See 2.3.
+   */
+  on(target, type, handler, options) { /* addEventListener + removeEventListener */ }
+  timer(fn, ms) { /* setTimeout + clearTimeout */ }
+  interval(fn, ms) { /* setInterval + clearInterval */ }
+  observe(observer) { /* returns it; disconnect() on release */ }
+  raf(fn) { /* requestAnimationFrame + cancelAnimationFrame */ }
+
+  /**
    * Helper: query within this component's container.
    * @param {string} selector
    * @returns {HTMLElement|null}
@@ -227,6 +243,8 @@ new Component(container, props)
         v
   .mount()
         |
+        |-- _bindActions()            (one delegated listener per event type,
+        |                              on the container — see 2.4)
         |-- _runCleanups()            (empty on the first pass)
         |-- beforeRender()            (imperative teardown hook)
         |-- _unmountChildren()        (clean up any previous children)
@@ -248,6 +266,7 @@ new Component(container, props)
                 v (navigation away or parent re-renders)
         .unmount()
                 |
+                |-- _unbindActions()   (the delegated listeners, bound at mount)
                 |-- _runCleanups()     (the last render's resources)
                 |-- _unmountChildren()
                 |-- beforeUnmount()    (whatever outlived a single render)
@@ -285,6 +304,35 @@ afterRender() {
 The list is drained before each re-render and again on `unmount()`, then
 forgotten — so re-registering on every pass is correct and expected.
 
+Five helpers are that same registration with the acquisition folded in, which
+matters because the shortest thing to type is what actually gets typed —
+`frontend/src` carries 539 `addEventListener` calls against 102
+`removeEventListener`:
+
+| Helper | Acquires | Releases with |
+|---|---|---|
+| `on(target, type, fn, opts)` | `addEventListener` | `removeEventListener` (same `opts`) |
+| `timer(fn, ms)` | `setTimeout` | `clearTimeout` |
+| `interval(fn, ms)` | `setInterval` | `clearInterval` |
+| `observe(observer)` | nothing — takes one you built | `observer.disconnect()` |
+| `raf(fn)` | `requestAnimationFrame` | `cancelAnimationFrame` |
+
+So the block above is really:
+
+```javascript
+afterRender() {
+  this.observe(new ResizeObserver(() => this._refit())).observe(this.$('.panel'));
+  this.on(document, 'keydown', (e) => this._onKey(e));
+  this.subscribeStore(store, 'settings', () => this.setState({}));
+}
+```
+
+`on()` treats a missing target as a no-op and returns `null`, so the result of
+`this.$('.maybe')` can go straight in. `observe()` returns its argument, which
+is what lets the observer line stay one statement. Everything they hold is
+render-scoped: a resource that must outlive renders — a poll started once in the
+constructor — belongs in `beforeUnmount()`, not in these.
+
 **Do not guard an acquisition with an "already done this" flag.** It looks like
 it prevents a leak and does the opposite now: the flag survives the cleanup
 that released the resource, so the second render gets neither the old
@@ -302,55 +350,113 @@ It runs in the same place, right after the cleanup list.
 Reach for `beforeUnmount()` only for what outlives a render — a poll timer
 started in the constructor, a portal node created once.
 
-### 2.4 — Example: Simple Component
+### 2.4 — Event Delegation with `data-action`
+
+A component may declare an `actions` map instead of wiring buttons one at a
+time. `mount()` binds **one** listener per event type to `this.container`, and
+`unmount()` releases it:
 
 ```javascript
-// frontend/src/components/Pagination.js
-import { Component } from './Component.js';
-import { escapeHtml } from '../utils/helpers.js';
-
-export class Pagination extends Component {
-  // props: { page, totalPages, onPageChange }
+export class CommentRows extends Component {
+  actions = {
+    delete(e, el) { this._delete(Number(el.dataset.i)); },
+    block(e, el) { this._block(Number(el.dataset.i)); },
+    'change:select-all'(e, el) { this._selectAll(el.checked); },
+  };
 
   render() {
-    const { page, totalPages } = this.props;
-    if (totalPages <= 1) return '';
-
-    const prev = page > 1
-      ? `<button class="btn btn-ghost" data-page="${page - 1}">&larr; Prev</button>`
-      : `<button class="btn btn-ghost" disabled>&larr; Prev</button>`;
-
-    const next = page < totalPages
-      ? `<button class="btn btn-ghost" data-page="${page + 1}">Next &rarr;</button>`
-      : `<button class="btn btn-ghost" disabled>Next &rarr;</button>`;
-
-    return `
-      <nav class="pagination">
-        ${prev}
-        <span class="pagination__info">
-          Page ${escapeHtml(String(page))} of ${escapeHtml(String(totalPages))}
-        </span>
-        ${next}
-      </nav>
-    `;
-  }
-
-  afterRender() {
-    this.$$('button[data-page]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.props.onPageChange(parseInt(btn.dataset.page, 10));
-      });
-    });
+    return html`
+      <input type="checkbox" data-action="select-all">
+      ${rows.map((r, i) => html`
+        <button data-action="delete" data-i="${i}">${raw(TRASH_SVG)}</button>
+        <button data-action="block"  data-i="${i}">Block</button>
+      `)}`;
   }
 }
 ```
 
-### 2.5 — Example: Async Component (loads data)
+The rules, all of them:
+
+- A **bare key answers `click`**. Any other event type is written into the key
+  as `'<type>:<name>'`, and the set of types to delegate is read off the map —
+  there is no second list to keep in sync, because a second list is a thing to
+  forget, and forgetting it yields a control that silently does nothing.
+- The handler is called with `this` bound to the component, the event, and the
+  nearest `[data-action]` **ancestor** of `event.target` — so a click landing on
+  an icon inside the button still finds the button.
+- An event originating inside a child mounted with `mountChild()` belongs to
+  that child and is not dispatched again by the parent.
+
+Why this and not `afterRender()`: `this.container` is the one node that survives
+a re-render, so the binding happens once instead of being re-attached on every
+pass. That retires both halves of the usual pair of bugs — a listener never
+re-attached is a dead button, and one attached twice fires twice — along with
+the `querySelector` + `addEventListener` pair per control.
+
+Keep `on()` for what delegation cannot express: a listener on `document` or
+`window`, one that needs `capture` or `passive`, or a handler on a specific node
+rather than a class of them.
+
+### 2.5 — Example: Simple Component
+
+```javascript
+// frontend/src/components/shared/Pagination.js
+import { Component } from '../Component.js';
+import { html } from '../../utils/helpers.js';
+
+export class Pagination extends Component {
+  // props: { page, pages, total, minPage, onPage }
+
+  render() {
+    const { page, pages, total } = this.props;
+    const minPage = this._minPage();
+    // A markup helper with nothing to render returns '' — html`` yields a
+    // String OBJECT, so an empty one is still truthy to a caller testing it.
+    if (!pages || pages - minPage < 1) return html``;
+
+    const buttons = this._buildItems(page, pages, minPage).map((item) => html`
+      <button class="page-btn${item === page ? ' active' : ''}"
+              data-action="page" data-page="${item}" type="button">${item}</button>`);
+
+    return html`
+      <nav class="pagination" aria-label="Page navigation">
+        <button class="page-btn page-prev" data-action="page" data-page="${page - 1}"
+                type="button"${page <= minPage ? html` disabled` : ''}
+                aria-label="Previous page">&#8592;</button>
+        <span class="page-numbers">${buttons}</span>
+        <button class="page-btn page-next" data-action="page" data-page="${page + 1}"
+                type="button"${page >= pages ? html` disabled` : ''}
+                aria-label="Next page">&#8594;</button>
+        <span class="page-info" aria-live="polite">${total} items</span>
+      </nav>`;
+  }
+
+  // One listener on the container for the whole strip, bound at mount() — the
+  // buttons themselves are rebuilt on every render (see 2.4).
+  actions = {
+    page(e, el) {
+      if (el.disabled) return;
+      const p = parseInt(el.dataset.page, 10);
+      if (p >= this._minPage() && p <= this.props.pages && this.props.onPage) {
+        this.props.onPage(p);
+      }
+    },
+  };
+}
+```
+
+Note what `render()` does *not* do: no `escapeHtml()` by hand. The html tagged
+template escapes every interpolation on the way through, and
+`Component._rerender()` rejects anything that is not its output — see
+[Security Model](#security-model).
+
+### 2.6 — Example: Async Component (loads data)
 
 ```javascript
 // frontend/src/pages/public/HomePage.js
 import { Component } from '../../components/Component.js';
-import { PostGrid } from '../../components/PostGrid.js';
+import { PostGrid } from '../../components/public/PostGrid.js';
+import { html } from '../../utils/helpers.js';
 import { pagesApi } from '../../api/pages.js';
 
 export class HomePage extends Component {
@@ -363,9 +469,9 @@ export class HomePage extends Component {
 
   render() {
     const { loading, data, error } = this.state;
-    if (loading) return '<div class="loading-spinner"></div>';
-    if (error)   return `<div class="error-state"><p class="error-message"></p></div>`;
-    return `
+    if (loading) return html`<div class="loading-spinner"></div>`;
+    if (error)   return html`<div class="error-state"><p class="error-message"></p></div>`;
+    return html`
       <div class="home-page">
         <div class="home-posts" id="post-grid-mount"></div>
         <div class="home-sidebar" id="tag-cloud-mount"></div>
@@ -1220,8 +1326,7 @@ Every list or grid component renders a descriptive empty state:
 ```javascript
 render() {
   if (!this.state.data?.length) {
-    // Build empty state with DOM methods (no innerHTML needed for simple content)
-    return `<div class="empty-state"><p class="empty-state__text"></p></div>`;
+    return html`<div class="empty-state"><p class="empty-state__text"></p></div>`;
   }
   // normal render
 }

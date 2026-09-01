@@ -577,7 +577,7 @@ test('should preserve other fields when switching from visual to text mode', () 
             return onConfirm();
           };
 
-          await page._handleMenuAction('delete');
+          await page.actions.delete.call(page);
           // _showConfirm's onConfirm is async; let the delete settle.
           await new Promise((r) => setImmediate(r));
 

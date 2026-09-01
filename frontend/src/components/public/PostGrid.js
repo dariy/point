@@ -56,7 +56,11 @@ export class PostGrid extends Component {
     const grid = this.container.querySelector('.posts-grid');
     if (!grid) return;
 
-    this._gridKeyHandler = (e) => {
+    // Ctrl+arrows walk the cards. On document, because the grid itself is not
+    // focused — and so released at the render boundary: the handler closes over
+    // `grid`, and a grid from a previous render is a detached node whose cards
+    // no longer exist.
+    this.on(document, 'keydown', (e) => {
       if (!e.ctrlKey || !['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
       const cards = Array.from(grid.querySelectorAll('.post-card[tabindex="0"]'));
       if (!cards.length) return;
@@ -65,12 +69,7 @@ export class PostGrid extends Component {
       const delta = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
       const next = idx === -1 ? 0 : Math.max(0, Math.min(idx + delta, cards.length - 1));
       cards[next].focus();
-    };
-    document.addEventListener('keydown', this._gridKeyHandler);
-  }
-
-  beforeUnmount() {
-    if (this._gridKeyHandler) document.removeEventListener('keydown', this._gridKeyHandler);
+    });
   }
 
   _cardProps(post, isHero = false) {
