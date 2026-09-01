@@ -18,6 +18,33 @@ and reviewable, in `frontend/vendor/`:
 | [Prism.js](https://prismjs.com) | core + per-language grammars | Syntax highlighting for fenced code blocks in rendered Markdown and in the post editor. |
 | [CodeJar](https://github.com/antonmedv/codejar) | vendored, unversioned | Minimal code-editing textarea (line editing, indent/outdent, bracket auto-close) backing the CSS editor and code blocks in the Markdown/Visual editor. |
 
+### Local patches to vendored files
+
+Two of the three carry a Point patch, marked in the file with a
+`/* Point patch — Trusted Types ... */` block. **Re-apply it after any version
+bump.** Point's CSP enforces `require-trusted-types-for 'script'`, so a write
+that reaches a browser as a plain string is refused: leaflet dies during feature
+detection at import time, and codejar corrupts the buffer on Ctrl+Z. Each
+patched file registers its own pass-through policy (`point-leaflet`,
+`point-codejar`) and routes its own sinks through it — 10 sites in leaflet, 3 in
+codejar.
+
+`scripts/check-vendor-sinks.sh` is what notices when a bump reverts them: it
+counts raw versus routed sinks per file, checks both policies are still
+registered, and checks the names in the CSP match the names the code creates. It
+runs in `check.sh` and in CI. `frontend/e2e/trustedTypes.test.js` then proves
+the patched libraries still work in a real Chromium under the real header.
+
+Prism is deliberately *not* patched — `PostContent` calls the string-returning
+`Prism.highlight()` and writes the result with `setHTML()`, so nothing has to be
+re-applied across its seventeen files on an upgrade. See
+[Architecture → The HTML write path](./architecture/frontend.md) for the whole
+arrangement.
+
+`leaflet.js.map` is upstream's and is not referenced by `leaflet.js` (no
+`sourceMappingURL`), so no browser loads it; the patch shifts column offsets on
+the minified line, which makes it wrong as well as unused.
+
 Notably *not* used: no D3 — the Tags Graph (`frontend/src/plugins/tags-graph/tagGraph.js`)
 is a dependency-free force-directed layout renderer on `<canvas>`; no
 lightbox/carousel library — `MediaLightbox`/`MediaViewer`/immersive mode are

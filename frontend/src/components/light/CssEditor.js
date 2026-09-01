@@ -5,7 +5,9 @@ import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
-// Import Prism core and ensure it is global before importing language components
+// Import Prism core and ensure it is global before importing language components.
+// prismManual must be imported first — see that file.
+import '../../utils/prismManual.js';
 import Prism from '../../../vendor/prismjs/prism-core.js';
 window.Prism = Prism;
 import '../../../vendor/prismjs/prism-css.js';

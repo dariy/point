@@ -58,14 +58,14 @@ func assertBootstrap(t *testing.T, rec *httptest.ResponseRecorder, wantGen strin
 		t.Errorf("CSP does not carry the served script's hash %s:\nCSP: %s", want, csp)
 	}
 	// Both injection sites splice the bootstrap hash in by string-replacing
-	// "script-src" in the enforcing header. The Trusted Types directives sit in
-	// a separate Report-Only header precisely so that splice never has to know
-	// about them: assert here that it did not eat one or grow the other.
-	if got := rec.Header().Get("Content-Security-Policy-Report-Only"); got != trustedTypesCSP {
-		t.Errorf("Report-Only policy after the script-src splice: want %q, got %q", trustedTypesCSP, got)
+	// "script-src" in the enforcing header, which now also carries the Trusted
+	// Types directives. A splice that widened its match, or replaced more than
+	// the first occurrence, would show up here as a mangled tail.
+	if !strings.HasSuffix(csp, "; "+trustedTypesCSP) {
+		t.Errorf("script-src splice damaged the trusted-types tail:\nCSP: %s", csp)
 	}
-	if strings.Contains(csp, "trusted-types") {
-		t.Errorf("trusted-types leaked into the enforcing policy: %s", csp)
+	if got := rec.Header().Get("Content-Security-Policy-Report-Only"); got != "" {
+		t.Errorf("a Report-Only policy is still being served: %q", got)
 	}
 }
 

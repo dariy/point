@@ -25,36 +25,47 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// trustedTypesCSP is shipped as Content-Security-Policy-Report-Only, alongside
-// the enforcing policy rather than inside it.
+// trustedTypesCSP is appended to the enforcing Content-Security-Policy.
 //
 // require-trusted-types-for 'script' makes every HTML sink — .innerHTML,
 // .outerHTML, insertAdjacentHTML — refuse a plain string; only a value minted
 // by a registered TrustedTypePolicy gets through, and trusted-types names the
-// single policy allowed to exist ("point", registered in utils/helpers.js and
-// held by setHTML()/insertHTML()). Chromium then rejects a write from anywhere
+// policies allowed to exist at all. Chromium rejects a write from anywhere
 // else at the sink, which is the point: it moves the escaping rule from lint,
 // which an author can suppress, to the browser, which nobody can. Firefox and
 // Safari ignore the directive entirely, so this is defence in depth on top of
 // the lint rule, never a replacement for it.
 //
-// Report-only for now, deliberately. The frontend's own writes all go through
-// the funnel, but the vendored libraries do not and cannot: leaflet writes
-// innerHTML during feature detection at import time and again for every zoom
-// button, attribution line and popup; Prism.highlightElement (used on code
-// blocks in post content) writes the highlighted markup; codejar restores an
-// undo step the same way. Under enforcement the map and atlas pages would die
-// on load. Report-only surfaces those as console violations and leaves the
-// pages working, which is the state this ships in — the flip to enforcement
-// waits on a decision about the vendored code (patch it, wrap it, or accept a
-// pass-through default policy) and gets its own change.
+// Three names, and the list is the security claim, so it is worth reading
+// literally:
 //
-// Keeping it in a second header rather than appending to the enforcing policy
-// also keeps the script-src splices honest: both the shell (routes.go) and the
-// media fallback (media.go) rewrite the enforcing header by string-replacing
-// "script-src", and neither has to reason about a directive it did not put
-// there.
-const trustedTypesCSP = "require-trusted-types-for 'script'; trusted-types point"
+//	point           registered in utils/helpers.js, held by setHTML() /
+//	                insertHTML() / setScriptSrc() / setScriptJSON(). Every
+//	                write this frontend makes goes through it.
+//	point-leaflet   frontend/vendor/leaflet/leaflet.js, patched.
+//	point-codejar   frontend/vendor/codejar/codejar.js, patched.
+//
+// The two vendor policies are pass-through: those libraries build their own
+// markup and there is no second escaping pass to add. What the split buys is
+// that the waiver is *scoped and named*. A pass-through `default` policy — the
+// cheap alternative — would have caught every unrouted sink on the page,
+// including one reached by injected content, and left the directive decorative.
+// These two catch only the writes inside two files that were read line by line
+// (fourteen sinks between them; scripts/check-vendor-sinks.sh fails if a
+// version bump adds a fifteenth). Prism needed no waiver at all: PostContent
+// drives Prism.highlight(), the string-returning form, and writes the result
+// with setHTML().
+//
+// There is no 'allow-duplicates', so each name can be minted exactly once per
+// document — the three policies are created at load, and nothing that runs
+// later can register another under the same name.
+//
+// Appending to the enforcing policy means the two script-src splices (the
+// shell in routes.go, the media fallback in media.go) now rewrite a header that
+// carries directives they did not put there. Both do a single
+// strings.Replace on "script-src", which is unaffected by anything appended
+// after it; main_bootstrap_test.go pins that.
+const trustedTypesCSP = "require-trusted-types-for 'script'; trusted-types point point-leaflet point-codejar"
 
 // sanitizeCSPSources normalizes an operator-supplied CSP source list (the
 // CSP_SCRIPT_SRC / CSP_CONNECT_SRC deploy config) into a safe space-separated
@@ -250,7 +261,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		// object-src does fall back to default-src, but 'none' is stated outright
 		// so the plugin surface stays closed even if default-src is ever widened;
 		// no <object>/<embed>/<applet> exists in the frontend.
-		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src " + connectSrc + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; " + trustedTypesCSP,
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		// HSTS: instruct browsers to only reach this origin over HTTPS for a year,
 		// including subdomains. Echo only emits the header when the request is
@@ -264,7 +275,6 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-			c.Response().Header().Set("Content-Security-Policy-Report-Only", trustedTypesCSP)
 			return next(c)
 		}
 	})

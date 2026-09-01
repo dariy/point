@@ -58,6 +58,12 @@ jobs:
       - name: JS typecheck
         run: npm run typecheck
 
+      # The enforcing Trusted Types policy waives two vendored libraries by
+      # name, and both waivers live in files a dependency bump overwrites. This
+      # is the step that turns "re-apply the patch" from a note into a gate.
+      - name: Vendored TT sinks
+        run: ./scripts/check-vendor-sinks.sh
+
       # Coverage rides along on the same run (V8 instrumentation via the
       # built-in runner — no c8, no extra devDependency).
       - name: E2E tests
