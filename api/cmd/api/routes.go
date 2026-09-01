@@ -14,8 +14,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,7 +26,6 @@ import (
 	"point-api/internal/mcp"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
-	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -548,91 +545,25 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 			if isAdminPath(path) || hasSession(c) {
 				shell = fe.AdminShell
 			}
-			if slug, ok := strings.CutPrefix(path, "/posts/"); ok {
-				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
-				if err == nil && strings.EqualFold(post.Status, "published") {
-					{
-						htmlStr := shell
-						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
+			// What this URL is about, resolved server side and spliced into
+			// the head: a crawler, an unfurler and the tab strip all read the
+			// document before any JS runs. seo.go returns the zero value for a
+			// route with nothing to say, which renders as the empty string and
+			// leaves the shell's own placeholder head alone.
+			//
+			// The plugin manifest goes in the same splice, so every document —
+			// described or not — still boots with __PLUGINS__ and __MEDIA__ set,
+			// and the CSP names exactly one inline script hash.
+			meta := shellMeta(c, svcs)
+			htmlStr := meta.rewriteShell(shell)
+			script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
+			htmlStr = strings.Replace(htmlStr, "</head>", meta.head()+script+"\n</head>", 1)
 
-						var sb strings.Builder
-						desc := post.MetaDescription.String
-						if !post.MetaDescription.Valid || desc == "" {
-							desc = post.Excerpt.String
-						}
+			csp := c.Response().Header().Get("Content-Security-Policy")
+			csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+			c.Response().Header().Set("Content-Security-Policy", csp)
 
-						fmt.Fprintf(&sb, "\n  <title>%s</title>", html.EscapeString(post.Title))
-						if desc != "" {
-							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
-							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
-							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:description\" content=\"%s\">", html.EscapeString(desc))
-						}
-
-						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
-						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
-						fmt.Fprintf(&sb, "\n  <meta name=\"twitter:title\" content=\"%s\">", html.EscapeString(post.Title))
-
-						scheme := c.Scheme()
-						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
-							scheme = fwd
-						}
-						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
-						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
-
-						gen := svcs.Media.ThumbnailGeneration(c.Request().Context())
-						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
-						// Card image = the post's first media that can actually
-						// render one. A video without a captured poster has no
-						// still behind it, so it is skipped rather than pointed
-						// at: the crawler would fetch the whole stream and show
-						// nothing.
-						cardPath := ""
-						for _, m := range media {
-							if strings.EqualFold(m.FileType, "image") || (m.ThumbnailPath.Valid && m.ThumbnailPath.String != "") {
-								cardPath = "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
-								break
-							}
-						}
-						if cardPath != "" {
-							// The 1024 rung, never the original: a camera JPEG
-							// is megabytes and past every card renderer's size
-							// ceiling, which renders as no card at all.
-							variant := services.VariantURL(cardPath, services.SocialCardVariantSize, gen)
-							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, variant)
-							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
-							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
-							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
-						} else {
-							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
-						}
-
-						script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
-						sb.WriteString(script)
-						sb.WriteString("\n</head>")
-						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
-
-						csp := c.Response().Header().Get("Content-Security-Policy")
-						csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
-						c.Response().Header().Set("Content-Security-Policy", csp)
-
-						return c.HTML(http.StatusOK, htmlStr)
-					}
-				}
-			}
-			// Generic SPA route: serve index.html with the enabled-only plugin
-			// manifest injected so the client bootstrap always sees __PLUGINS__.
-			// shell (chosen above) already omits third-party markup for admin
-			// routes and authenticated viewers.
-			{
-				script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
-				htmlStr := strings.Replace(shell, "</head>", script+"\n</head>", 1)
-
-				csp := c.Response().Header().Get("Content-Security-Policy")
-				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
-				c.Response().Header().Set("Content-Security-Policy", csp)
-
-				return c.HTML(http.StatusOK, htmlStr)
-			}
+			return c.HTML(http.StatusOK, htmlStr)
 		}
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"detail": "Frontend not available — build the frontend first",
