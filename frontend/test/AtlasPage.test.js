@@ -415,6 +415,20 @@ describe('AtlasPage hidden-node filter', () => {
     assert.equal(isConcealed(MIXED.tags[1]), true);
   });
 
+  // Regression: the toggle was built with a plain `` template literal
+  // interpolated into html``, so the tag escaped it and the owner got the
+  // markup as visible text instead of a button.
+  test('the toggle renders as an element, not as escaped text', () => {
+    const p = page();
+    setUser({ id: 1 });
+    const markup = String(p.render());
+    assert.ok(
+      markup.includes('<button type="button" class="atlas-toggle atlas-toggle--hidden"'),
+      'the Hidden toggle is not real markup:\n' + markup.slice(markup.indexOf('atlas-legend'), 1200),
+    );
+    assert.ok(!markup.includes('&lt;button'), 'a button was escaped into the legend');
+  });
+
   test('a draft post chip is filtered by the same switch', () => {
     const p = page();
     p._hiddenTypes.add('concealed');

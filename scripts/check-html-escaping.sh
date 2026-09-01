@@ -14,6 +14,10 @@
 #      utils/helpers.js that hold the only innerHTML and insertAdjacentHTML in
 #      the frontend — so a new one is a deliberate act, not a quiet edit.
 #
+# A third shape needs a parser rather than a grep, so it lives in
+# frontend/test/htmlInterpolation.test.js: markup in a plain template literal
+# interpolated into html``, which the tag escapes into visible text.
+#
 # Usage: scripts/check-html-escaping.sh
 
 set -eo pipefail

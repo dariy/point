@@ -193,7 +193,7 @@ export default class AtlasPage extends Component {
               <button type="button" class="atlas-toggle" data-type="tag" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--tag"></span>Tag</button>
               <button type="button" class="atlas-toggle" data-type="year" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--year"></span>Year</button>
               <button type="button" class="atlas-toggle" data-type="post" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--post"></span>Post</button>
-              ${this._canFilterHidden() ? `<button type="button" class="atlas-toggle atlas-toggle--hidden" data-type="concealed" aria-pressed="true"
+              ${this._canFilterHidden() ? html`<button type="button" class="atlas-toggle atlas-toggle--hidden" data-type="concealed" aria-pressed="true"
                         title="Hidden places and posts — switch off to see the map a guest gets"><span class="atlas-legend__dot atlas-legend__dot--concealed"></span>Hidden</button>` : ""}
             </div>
           </div>
