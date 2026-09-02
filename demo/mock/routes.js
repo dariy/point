@@ -671,8 +671,9 @@ function relockPlugins(state) {
  * area a preset leaves empty falls back to its default member (Minimalistic
  * names no immersive viewer, yet one has to stay on), and an exclusive area
  * keeps only its first enabled member (Fully featured names all three tag
- * visualizations, but only one can own /tags). Without both, the demo would
- * show states the real backend refuses to produce.
+ * visualizations; the graph owns /tags on its own, but the atlas and the plain
+ * map both claim /map, so only the first of those survives). Without both, the
+ * demo would show states the real backend refuses to produce.
  */
 function applyPluginPreset(state, list) {
   const want = new Set(list);

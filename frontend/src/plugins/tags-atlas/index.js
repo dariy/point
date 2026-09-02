@@ -207,7 +207,7 @@ export default class AtlasPage extends Component {
     const settings = getSettings() || {};
     pluginHost.fill("header", this.$("#header-mount"), {
       settings,
-      currentPath: "/tags",
+      currentPath: "/map",
       timelineVisible: true,
     }).then(comps => {
       if (comps[0] && !this._unmounted) this._children.push(comps[0]);
@@ -388,7 +388,7 @@ export default class AtlasPage extends Component {
       const data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
       if (token !== this._graphReq) return; // a scope change overtook this load
       setPageTitle("Atlas");
-      setCanonical(`${window.location.origin}/tags`);
+      setCanonical(`${window.location.origin}/map`);
       this._buildIndexes(data);
       this.setState({ loading: false, data, error: null });
     } catch (err) {

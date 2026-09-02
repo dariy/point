@@ -32,7 +32,7 @@ const args = Object.fromEntries(
 
 const BASE = args.base || "http://localhost:3000";
 
-const PUBLIC_ROUTES = ["/", "/tags", "/search"];
+const PUBLIC_ROUTES = ["/", "/tags", "/map", "/search"];
 const ADMIN_ROUTES = [
   "/light",
   "/light/posts",

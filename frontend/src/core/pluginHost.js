@@ -13,7 +13,8 @@
  *   - slots: `fill(slot, el, ctx)` lazily imports every enabled plugin claiming
  *     a named region and mounts it.
  *   - single-claim route slots: `claimRoute(slot, choose)` resolves the one
- *     plugin module that owns a route (e.g. `tags-route`).
+ *     plugin module that owns a route (`tags-route` for /tags, `map-route`
+ *     for /map).
  *   - dynamic routes: `routes()` lists manifest-provided routes to merge into
  *     the static table in app.js.
  *
@@ -35,6 +36,11 @@
 import { debugLog, DEBUG } from "../utils/debug.js";
 
 const log = debugLog("PluginHost");
+
+// Single-claim slots whose members own a public path (/tags, /map). app.js
+// resolves these through claimRoute(), so they never join the merged route
+// table — see routes() below.
+const CLAIM_ROUTE_SLOTS = new Set(["tags-route", "map-route"]);
 
 class PluginHost {
   constructor() {
@@ -212,10 +218,10 @@ class PluginHost {
 
   /**
    * Resolve the single plugin module that owns a single-claim route slot (e.g.
-   * `tags-route`). `choose(entries)` picks the winning entry among the enabled
-   * claimants; defaults to the first. Returns the loaded module (`{ default:
-   * PageClass }`) or null when no claimant has a built chunk — letting the caller
-   * fall back to a core module.
+   * `tags-route`, `map-route`). `choose(entries)` picks the winning entry among
+   * the enabled claimants; defaults to the first. Returns the loaded module
+   * (`{ default: PageClass }`) or null when no claimant has a built chunk —
+   * letting the caller fall back to a core module.
    */
   async claimRoute(slot, choose) {
     const entries = this.slotEntries(slot);
@@ -233,15 +239,15 @@ class PluginHost {
 
   /**
    * Manifest-provided routes to merge into the static route table. Excludes the
-   * single-claim `tags-route` (handled explicitly) and only includes route
-   * plugins that have a built chunk.
+   * single-claim public slots (handled explicitly by claimRoute) and only
+   * includes route plugins that have a built chunk.
    */
   routes() {
     // A plugin contributes admin routes when it has a built chunk and declares
     // any `/light/` path — including slot plugins like nav-menu that also own an
-    // admin page. The tags-route single-claim slot is handled separately.
+    // admin page. The single-claim public slots are handled separately.
     const out = this._manifest.filter(
-      (e) => e.entry && e.slot !== "tags-route" && Array.isArray(e.routes) &&
+      (e) => e.entry && !CLAIM_ROUTE_SLOTS.has(e.slot) && Array.isArray(e.routes) &&
         e.routes.some((p) => p.startsWith("/light")),
     );
     if (DEBUG && out.length) log("dynamic routes:", out.flatMap((e) => e.routes).join(", "));
