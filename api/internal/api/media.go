@@ -158,7 +158,20 @@ func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
+// ListMedia lists the media library a page at a time, or — when the request
+// carries one or more paths= parameters — resolves exactly those content paths
+// and nothing else.
+//
+// The path form exists because "the media this post references" is not a
+// question the paged listing can answer. media.post_id is only set for files
+// uploaded from the editor, so it misses anything picked out of the library,
+// and a page of the listing is ordered by upload time, which has nothing to do
+// with what a given post uses.
 func (h *MediaHandler) ListMedia(c echo.Context) error {
+	if paths := c.QueryParams()["paths"]; len(paths) > 0 {
+		return h.listMediaByPaths(c, paths)
+	}
+
 	page, perPage := ParsePaginationParams(c, 20)
 	fileType := c.QueryParam("file_type")
 	folder := c.QueryParam("folder")
@@ -178,18 +191,46 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		pages = 1
 	}
 
+	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, page, perPage, pages))
+}
+
+// maxMediaPathLookup bounds a paths= request. The number of images in a post is
+// the real bound; this only keeps an absurd URL from becoming an absurd query.
+const maxMediaPathLookup = 500
+
+func (h *MediaHandler) listMediaByPaths(c echo.Context, paths []string) error {
+	if len(paths) > maxMediaPathLookup {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			fmt.Sprintf("at most %d paths per request", maxMediaPathLookup))
+	}
+
+	media, err := h.mediaService.GetMediaByContentPaths(c.Request().Context(), paths)
+	if err != nil {
+		return MapError(err)
+	}
+
+	// A path lookup is not paginated: the caller already named the whole set it
+	// wants. The envelope keeps the listing's shape so one client-side type
+	// describes both.
+	total := int64(len(media))
+	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, 1, int32(len(media)), 1))
+}
+
+// mediaListEnvelope renders media rows into the paged list response both
+// ListMedia branches return.
+func (h *MediaHandler) mediaListEnvelope(c echo.Context, media []models.Medium, total int64, page, perPage int32, pages int) map[string]interface{} {
 	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	items := make([]map[string]interface{}, len(media))
 	for i, m := range media {
 		items[i] = mediaToResponse(m, gen)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return map[string]interface{}{
 		"media":    items,
 		"total":    total,
 		"page":     page,
 		"per_page": perPage,
 		"pages":    pages,
-	})
+	}
 }
 
 func (h *MediaHandler) GetMediaFolders(c echo.Context) error {

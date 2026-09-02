@@ -482,6 +482,27 @@ func (s *MediaService) GetMediaByContent(ctx context.Context, content, thumbnail
 	return s.repo.GetMediaByPaths(ctx, paths)
 }
 
+// GetMediaByContentPaths resolves media by the bare content paths a post's body
+// carries ("/YYYY/MM/file"), as opposed to the "originals/YYYY/MM/file" form the
+// media table stores. Paths that are not in the content form are dropped rather
+// than looked up, so a malformed one costs nothing.
+func (s *MediaService) GetMediaByContentPaths(ctx context.Context, paths []string) ([]models.Medium, error) {
+	seen := make(map[string]struct{}, len(paths))
+	orig := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if !strings.HasPrefix(p, "/") {
+			continue
+		}
+		full := "originals" + p
+		if _, ok := seen[full]; ok {
+			continue
+		}
+		seen[full] = struct{}{}
+		orig = append(orig, full)
+	}
+	return s.repo.GetMediaByPaths(ctx, orig)
+}
+
 // ReextractEXIF re-reads the original file from disk, runs extractEXIF, and
 // overwrites media.metadata. Returns the updated media record.
 func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medium, error) {
