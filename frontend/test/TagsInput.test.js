@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";

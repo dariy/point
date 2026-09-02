@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * setHTML()/insertHTML() — the single gate every HTML write goes through, and
  * the Trusted Types policy behind it.

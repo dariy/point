@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * TagsManagerPage — loading, the data operations, and the URL the editor keeps.
  *
