@@ -100,6 +100,7 @@ func Register(e *echo.Echo, d Deps) {
 			principal:  r.Context().Value(principalKey{}),
 			e:          d.Echo,
 			uploadRoot: d.UploadRoot,
+			baseURL:    d.BaseURL,
 			h: handlers{
 				post: d.Post, tag: d.Tag, media: d.Media,
 				theme: d.Theme, settings: d.Settings, system: d.System,

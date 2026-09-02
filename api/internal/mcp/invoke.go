@@ -42,6 +42,10 @@ type invoker struct {
 	e          *echo.Echo
 	h          handlers
 	uploadRoot string // sandbox for point_upload_media; empty disables path uploads
+	// baseURL is the blog's public base URL, reported by point_get_context and
+	// point://context. It comes from config rather than from settings: the site
+	// itself derives its origin from the request, which an MCP call has not got.
+	baseURL string
 }
 
 // call runs handler h with a synthetic echo.Context carrying the invoker's
