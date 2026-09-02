@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * SettingsPage — admin configuration form.
  *
@@ -112,19 +111,19 @@ export default class SettingsPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
-    const form = this.container.querySelector("#settings-form");
+    const form = this.$("#settings-form");
     form?.addEventListener("submit", (e) => {
       e.preventDefault();
       this._save();
     });
 
-    this.container.querySelector(".settings-logo-pick")?.addEventListener("click", () => this._pickLogo());
+    this.$(".settings-logo-pick")?.addEventListener("click", () => this._pickLogo());
 
     // Auto-scroll to group if hash is present
     if (location.hash) {
       const id = location.hash.slice(1);
       setTimeout(() => {
-        this.container.querySelector(`#${id}`)?.scrollIntoView({ behavior: "smooth" });
+        this.$(`#${id}`)?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
 
@@ -142,9 +141,9 @@ export default class SettingsPage extends Component {
         onConfirm: (items) => {
           const path = items[0]?.path;
           if (!path) return;
-          const input = this.container.querySelector("#logo_url");
+          const input = /** @type {HTMLInputElement|null} */ (this.$("#logo_url"));
           if (input) input.value = path;
-          let preview = this.container.querySelector(".settings-logo-preview");
+          let preview = /** @type {HTMLImageElement|null} */ (this.$(".settings-logo-preview"));
           if (!preview) {
             preview = document.createElement("img");
             preview.className = "settings-logo-preview";
@@ -182,7 +181,7 @@ export default class SettingsPage extends Component {
   }
 
   async _save() {
-    const form = this.container.querySelector("#settings-form");
+    const form = /** @type {HTMLFormElement|null} */ (this.$("#settings-form"));
     if (!form) return;
 
     this.setState({ saving: true });
