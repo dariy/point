@@ -339,14 +339,9 @@ func NewRepository(dbURL string) (Repository, error) {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		// Use SplitSeq for efficient iteration without allocating a full slice
-		for stmt := range strings.SplitSeq(pointsql.SchemaSQL, ";") {
-			trimmed := strings.TrimSpace(stmt)
-			if trimmed == "" {
-				continue
-			}
-			if _, err := tx.Exec(trimmed); err != nil {
-				return nil, fmt.Errorf("failed to execute schema statement: %w\nStatement: %s", err, trimmed)
+		for _, stmt := range pointsql.SchemaStatements() {
+			if _, err := tx.Exec(stmt); err != nil {
+				return nil, fmt.Errorf("failed to execute schema statement: %w\nStatement: %s", err, stmt)
 			}
 		}
 

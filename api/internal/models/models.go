@@ -112,6 +112,12 @@ type PostTag struct {
 	TagID  int64 `json:"tag_id"`
 }
 
+type PostsFt struct {
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
+	Content string `json:"content"`
+}
+
 type Session struct {
 	ID           int64          `json:"id"`
 	UserID       int64          `json:"user_id"`

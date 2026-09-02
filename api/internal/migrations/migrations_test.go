@@ -259,3 +259,57 @@ func TestRefreshQueryPlannerStats_ContextCancellation(t *testing.T) {
 		t.Error("expected error on cancelled context")
 	}
 }
+
+// Search reads posts_fts, so a database that predates it has to come out of Run
+// with the index built and every post already in it — the triggers only see
+// writes made after they exist, which for an existing blog is none of them.
+func TestRun_BuildsAndBackfillsTheSearchIndex(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Stand in for a database written before the FTS index existed: drop what
+	// schema.sql just created, leaving a post behind that no trigger ever saw.
+	// Nothing has to be undone in migration_history — NewRepository does not
+	// write it, so this database has no record of having run anything.
+	for _, stmt := range []string{
+		`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','e','h','D')`,
+		`INSERT INTO posts (title, slug, content, author_id, status, published_at)
+		     VALUES ('Old Post', 'old-post', 'written before the index', 1, 'published', datetime('now'))`,
+		`DROP TRIGGER IF EXISTS posts_fts_insert`,
+		`DROP TRIGGER IF EXISTS posts_fts_delete`,
+		`DROP TRIGGER IF EXISTS posts_fts_update`,
+		`DROP TABLE IF EXISTS posts_fts`,
+	} {
+		if _, err := repo.DB().ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed the old database (%s): %v", stmt, err)
+		}
+	}
+
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "written", "", false, 10, 0)
+	if err != nil {
+		t.Fatalf("search after Run: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("search found %d posts written before the index, want 1", len(rows))
+	}
+
+	// And the triggers are back, so writes from here on keep it current.
+	if _, err := repo.DB().ExecContext(ctx,
+		`UPDATE posts SET content = 'rewritten afterwards' WHERE slug = 'old-post'`); err != nil {
+		t.Fatalf("update post: %v", err)
+	}
+	if rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "afterwards", "", false, 10, 0); err != nil || len(rows) != 1 {
+		t.Errorf("search for the rewritten body = (%d rows, %v), want (1, nil)", len(rows), err)
+	}
+	if rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "written", "", false, 10, 0); err != nil || len(rows) != 0 {
+		t.Errorf("search for the replaced body = (%d rows, %v), want (0, nil)", len(rows), err)
+	}
+}

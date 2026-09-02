@@ -64,6 +64,42 @@ CREATE INDEX IF NOT EXISTS idx_posts_live ON posts(published_at DESC, created_at
 -- IS NOT NULL, it holds only the trash and cannot be chosen for the feed.
 CREATE INDEX IF NOT EXISTS idx_posts_trashed ON posts(deleted_at DESC) WHERE deleted_at IS NOT NULL;
 
+-- Full-text search over posts. Search used to be five leading-wildcard LIKEs
+-- over title, slug and content, which is unindexable by construction: every
+-- post body read off disk, per keystroke in the admin search box. FTS5 turns
+-- that into an index lookup.
+--
+-- The index is external-content (content='posts'): it stores the inverted index
+-- and nothing else, so posts stays the single source of truth and no column is
+-- duplicated. The price is that SQLite will not keep it in step by itself —
+-- the three triggers below are what does, and they must stay in step with the
+-- column list here. Mirrored in internal/migrations for databases that predate
+-- this file's version of it.
+CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+    title, slug, content,
+    content='posts',
+    content_rowid='id',
+    tokenize='unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS posts_fts_insert AFTER INSERT ON posts BEGIN
+    INSERT INTO posts_fts(rowid, title, slug, content)
+    VALUES (new.id, new.title, new.slug, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS posts_fts_delete AFTER DELETE ON posts BEGIN
+    INSERT INTO posts_fts(posts_fts, rowid, title, slug, content)
+    VALUES ('delete', old.id, old.title, old.slug, old.content);
+END;
+-- OF title, slug, content: an unqualified UPDATE trigger would reindex a whole
+-- post body every time a view counter ticked. A soft delete is an UPDATE of
+-- deleted_at, so trashed posts stay in the index — the queries all carry
+-- `deleted_at IS NULL` anyway, and restoring one costs nothing.
+CREATE TRIGGER IF NOT EXISTS posts_fts_update AFTER UPDATE OF title, slug, content ON posts BEGIN
+    INSERT INTO posts_fts(posts_fts, rowid, title, slug, content)
+    VALUES ('delete', old.id, old.title, old.slug, old.content);
+    INSERT INTO posts_fts(rowid, title, slug, content)
+    VALUES (new.id, new.title, new.slug, new.content);
+END;
+
 -- Tags
 CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
