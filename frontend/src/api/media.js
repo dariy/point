@@ -9,7 +9,10 @@ import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.js';
 
 /**
  * List media items.
- * @param {{ page?, per_page?, file_type?, folder?, orphaned_only? }} [params]
+ * `orphaned_only` is deliberately absent: the handler reads page, per_page,
+ * file_type and folder and nothing else, so any other key is sent and dropped.
+ *
+ * @param {{ page?: number, per_page?: number, file_type?: string, folder?: string }} [params]
  * @returns {Promise<{ media: object[], total, page, per_page, pages }>}
  */
 export function listMedia(params = {}) {

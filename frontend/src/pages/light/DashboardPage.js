@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * DashboardPage — admin overview with stats and quick actions.
  *
@@ -202,7 +201,7 @@ export default class DashboardPage extends Component {
     });
 
     // Compose strip interactions
-    const textarea = this.$('#compose-textarea');
+    const textarea = /** @type {HTMLTextAreaElement|null} */ (this.$('#compose-textarea'));
     if (textarea) {
       textarea.addEventListener('input', () => {
         textarea.style.height = 'auto';
@@ -250,8 +249,8 @@ export default class DashboardPage extends Component {
         loading: false,
         stats,
         analyticsStats,
-        topPosts: topPostsResp.posts || topPostsResp.items || [],
-        drafts: draftsResp.posts || draftsResp.items || [],
+        topPosts: topPostsResp.posts || [],
+        drafts: draftsResp.posts || [],
         error: null,
       });
     } catch (err) {

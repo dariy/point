@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 import { Component } from "../../components/Component.js";
 import { html } from "../../utils/helpers.js";
 import { usernameHintField } from "../../utils/passwordForm.js";
@@ -130,7 +129,7 @@ export default class PasswordResetPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const email = this.$("#pss-email")?.value.trim();
+      const email = /** @type {HTMLInputElement|null} */ (this.$("#pss-email"))?.value.trim();
       if (!email) {
         this.setState({ error: "Email address is required." });
         return;
@@ -139,7 +138,9 @@ export default class PasswordResetPage extends Component {
       this.setState({ loading: true, error: null });
 
       try {
-        const res = await api.post("/api/auth/forgot-password", { email });
+        const res = /** @type {{ detail: string }} */ (
+          await api.post("/api/auth/forgot-password", { email })
+        );
         this.setState({ loading: false, success: res.detail });
       } catch (err) {
         this.setState({
@@ -160,8 +161,8 @@ export default class PasswordResetPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const password = this.$("#pss-password")?.value || "";
-      const confirm = this.$("#pss-confirm")?.value || "";
+      const password = /** @type {HTMLInputElement|null} */ (this.$("#pss-password"))?.value || "";
+      const confirm = /** @type {HTMLInputElement|null} */ (this.$("#pss-confirm"))?.value || "";
 
       if (password.length < 8) {
         this.setState({ error: "Password must be at least 8 characters." });
@@ -175,10 +176,12 @@ export default class PasswordResetPage extends Component {
       this.setState({ loading: true, error: null });
 
       try {
-        const res = await api.post("/api/auth/reset-password", {
-          token: this._token,
-          name: await sha256(password),
-        });
+        const res = /** @type {{ detail: string }} */ (
+          await api.post("/api/auth/reset-password", {
+            token: this._token,
+            name: await sha256(password),
+          })
+        );
         this.setState({ loading: false, success: res.detail });
       } catch (err) {
         this.setState({

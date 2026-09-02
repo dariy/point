@@ -98,9 +98,14 @@ export function isShortViewport() {
  * Debounce a function — delays execution until `ms` milliseconds have passed
  * since the last call.
  *
- * @param {Function} fn
+ * Generic in the wrapped function so the result stays callable wherever the
+ * original was — an event listener, most often, which the bare `Function`
+ * type is not assignable to.
+ *
+ * @template {(...args: any[]) => any} F
+ * @param {F} fn
  * @param {number} ms
- * @returns {Function}
+ * @returns {(...args: Parameters<F>) => void}
  */
 export function debounce(fn, ms) {
   let timer;
@@ -113,9 +118,14 @@ export function debounce(fn, ms) {
 /**
  * Throttle a function — ensures it is called at most once every `ms` ms.
  *
- * @param {Function} fn
+ * Generic in the wrapped function so the result stays callable wherever the
+ * original was — an event listener, most often, which the bare `Function`
+ * type is not assignable to.
+ *
+ * @template {(...args: any[]) => any} F
+ * @param {F} fn
  * @param {number} ms
- * @returns {Function}
+ * @returns {(...args: Parameters<F>) => void}
  */
 export function throttle(fn, ms) {
   let last = 0;
@@ -312,6 +322,14 @@ export function setupLongPress(el, callback, duration = 400) {
  * is expected (innerHTML, .toString() comparisons in tests).
  */
 export class RawHtml extends String {}
+
+/**
+ * A markup slot: html`` output, or a plain string — which the tag escapes on
+ * the way in, so a caller with nothing to put there can pass "". What every
+ * "give me some markup" parameter in this frontend accepts.
+ *
+ * @typedef {string|RawHtml} Slot
+ */
 
 /**
  * Wrap a string so the html tag leaves it unescaped.

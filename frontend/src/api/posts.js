@@ -33,8 +33,8 @@ export function clearPostReadCache() {
 /**
  * List posts with optional filters.
  *
- * @param {{ page?: number, per_page?: number, status?: string, tag?: string, q?: string }} [params]
- * @returns {Promise<{ items: object[], total: number, page: number, per_page: number, pages: number }>}
+ * @param {{ page?: number, per_page?: number, status?: string, type?: string, tag?: string, q?: string }} [params]
+ * @returns {Promise<{ posts: object[], total: number, page: number, per_page: number, pages: number, tag?: object }>}
  */
 export function listPosts(params = {}) {
   return api.get('/api/posts', params);
@@ -178,7 +178,11 @@ export function publishPostToInstagram(id) {
   return api.post(`/api/posts/${id}/instagram/publish`);
 }
 
-/** Render markdown content to HTML for preview. */
+/**
+ * Render markdown content to HTML for preview.
+ * @param {string} content
+ * @returns {Promise<{ html: string }>}
+ */
 export function previewRender(content) {
   return api.post('/api/posts/preview-render', { content });
 }

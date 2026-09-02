@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * PluginsPage — admin plugin management.
  *
@@ -156,8 +155,8 @@ export default class PluginsPage extends Component {
       presets: {},
       activePreset: "custom",
       editingPreset: null, // preset id while editing membership, else null
-      pending: {}, // id -> true while a toggle request is in flight
-      collapsed: {}, // type -> true while a group card is collapsed
+      pending: /** @type {Record<string, boolean>} */ ({}), // id -> true while a toggle request is in flight
+      collapsed: /** @type {Record<string, boolean>} */ ({}), // type -> true while a group card is collapsed
     };
   }
 
@@ -200,7 +199,7 @@ export default class PluginsPage extends Component {
     // leftover (no visual spot) list below can be derived, never hand-kept.
     this._mappedIds = new Set();
 
-    const headerRow = (extra = "") => html`
+    const headerRow = (/** @type {import("../../utils/helpers.js").Slot} */ extra = "") => html`
       <div class="pmap-row pmap-hdr">
         ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
       </div>`;
@@ -420,6 +419,7 @@ export default class PluginsPage extends Component {
   _renderRowControls(plugin, pending) {
     // Settings control only when the plugin is enabled: an inline drawer for
     // plugins whose settings were extracted here, else a link to its admin page.
+    /** @type {import("../../utils/helpers.js").Slot} */
     let settingsLink = "";
     if (plugin.enabled && PLUGIN_SETTINGS[plugin.id]) {
       settingsLink = html`<button type="button" class="plugin-settings-link" data-settings-id="${plugin.id}">Settings</button>`;
@@ -472,12 +472,12 @@ export default class PluginsPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
-    this.container.querySelector("#expand-all-groups")?.addEventListener("click", () => this._setAllCollapsed(false));
-    this.container.querySelector("#collapse-all-groups")?.addEventListener("click", () => this._setAllCollapsed(true));
+    this.$("#expand-all-groups")?.addEventListener("click", () => this._setAllCollapsed(false));
+    this.$("#collapse-all-groups")?.addEventListener("click", () => this._setAllCollapsed(true));
 
     // Collapse/expand group cards (header click, ignoring the presets header).
-    this.container.querySelectorAll(".plugins-group-header").forEach((header) => {
-      const card = header.closest(".plugins-group");
+    this.$$(".plugins-group-header").forEach((header) => {
+      const card = /** @type {HTMLElement} */ (header.closest(".plugins-group"));
       const type = card?.dataset.group;
       const toggle = () => {
         const nowCollapsed = card.classList.toggle("collapsed");
@@ -494,13 +494,13 @@ export default class PluginsPage extends Component {
     });
 
     // Preset pills: apply (normal) or select-to-edit (editing).
-    this.container.querySelectorAll(".preset-pill").forEach((btn) => {
+    this.$$(".preset-pill").forEach((btn) => {
       btn.addEventListener("click", () => this._handlePresetPill(btn.dataset.preset));
     });
-    this.container.querySelector(".preset-edit-toggle")?.addEventListener("click", () => this._toggleEdit());
+    this.$(".preset-edit-toggle")?.addEventListener("click", () => this._toggleEdit());
 
     // Enable/disable toggles.
-    this.container.querySelectorAll(".plugin-toggle").forEach((input) => {
+    this.$$(".plugin-toggle").forEach((/** @type {HTMLInputElement} */ input) => {
       input.addEventListener("change", () => this._handleToggle(input.dataset.id, input.checked));
       if (input.type === "radio") {
         input.addEventListener("click", (e) => {
@@ -515,12 +515,12 @@ export default class PluginsPage extends Component {
     });
 
     // Per-plugin settings drawer triggers.
-    this.container.querySelectorAll("[data-settings-id]").forEach((btn) => {
+    this.$$("[data-settings-id]").forEach((btn) => {
       btn.addEventListener("click", () => this._openPanel(btn.dataset.settingsId));
     });
 
     // Preset-membership checkboxes (edit mode).
-    this.container.querySelectorAll(".plugin-include-toggle").forEach((input) => {
+    this.$$(".plugin-include-toggle").forEach((/** @type {HTMLInputElement} */ input) => {
       input.addEventListener("change", () => this._handleInclude(input.dataset.id, input.checked));
     });
 
@@ -534,9 +534,9 @@ export default class PluginsPage extends Component {
    */
   _wireMap() {
     const cards = new Map();
-    this.container.querySelectorAll(".plugin-card").forEach((c) => cards.set(c.dataset.id, c));
+    this.$$(".plugin-card").forEach((c) => cards.set(c.dataset.id, c));
 
-    this.container.querySelectorAll(".pmap-region").forEach((region) => {
+    this.$$(".pmap-region").forEach((region) => {
       const ids = (region.dataset.plugins || "").split(" ").filter(Boolean);
       const mark = (onOff) => ids.forEach((id) => cards.get(id)?.classList.toggle("map-hit", onOff));
       region.addEventListener("mouseenter", () => mark(true));
@@ -546,9 +546,9 @@ export default class PluginsPage extends Component {
       region.addEventListener("click", () => this._revealPlugin(ids[0], cards));
     });
 
-    this.container.querySelectorAll(".plugin-card").forEach((card) => {
+    this.$$(".plugin-card").forEach((card) => {
       // ~= matches the id inside the space-separated data-plugins list.
-      const regions = this.container.querySelectorAll(`.pmap-region[data-plugins~="${CSS.escape(card.dataset.id)}"]`);
+      const regions = this.$$(`.pmap-region[data-plugins~="${CSS.escape(card.dataset.id)}"]`);
       card.addEventListener("mouseenter", () => regions.forEach((r) => r.classList.add("map-hit")));
       card.addEventListener("mouseleave", () => regions.forEach((r) => r.classList.remove("map-hit")));
     });

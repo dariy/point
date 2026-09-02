@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * SecurityPage — account security and session management.
  *
@@ -131,23 +130,23 @@ export default class SecurityPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
-    this.container.querySelector('#change-password-form')?.addEventListener('submit', (e) => {
+    this.$('#change-password-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
       this._handleChangePassword();
     });
 
-    this.container.querySelector('#change-email-form')?.addEventListener('submit', (e) => {
+    this.$('#change-email-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
       this._handleChangeEmail();
     });
 
-    this.container.querySelector('#logout-others-btn')?.addEventListener('click', () => {
+    this.$('#logout-others-btn')?.addEventListener('click', () => {
       this._showConfirm('Logout others', 'Logout all other active sessions?', 'Logout Others', 'danger', () => {
         this._handleLogoutOthers();
       });
     });
 
-    this.container.querySelectorAll('.delete-session-btn').forEach(btn => {
+    this.$$('.delete-session-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this._handleDeleteSession(btn.dataset.id);
       });
@@ -175,8 +174,8 @@ export default class SecurityPage extends Component {
   }
 
   async _handleChangePassword() {
-    const oldEl = this.container.querySelector('#old-password');
-    const newEl = this.container.querySelector('#new-password');
+    const oldEl = /** @type {HTMLInputElement} */ (this.$('#old-password'));
+    const newEl = /** @type {HTMLInputElement} */ (this.$('#new-password'));
     const oldPassword = oldEl.value;
     const newPassword = newEl.value;
 
@@ -194,8 +193,8 @@ export default class SecurityPage extends Component {
   }
 
   async _handleChangeEmail() {
-    const emailEl = this.container.querySelector('#account-email');
-    const passEl = this.container.querySelector('#email-password');
+    const emailEl = /** @type {HTMLInputElement} */ (this.$('#account-email'));
+    const passEl = /** @type {HTMLInputElement} */ (this.$('#email-password'));
     const email = emailEl.value.trim();
     const password = passEl.value;
 

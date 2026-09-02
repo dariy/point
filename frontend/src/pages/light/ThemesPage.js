@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * ThemesPage — admin theme management.
  *
@@ -121,7 +120,7 @@ export default class ThemesPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
-    this.container.querySelectorAll(".set-active-btn").forEach((btn) => {
+    this.$$(".set-active-btn").forEach((btn) => {
       btn.addEventListener("click", () => this._handleSetActive(btn.dataset.name));
     });
 
@@ -162,7 +161,7 @@ export default class ThemesPage extends Component {
       ]);
       this.setState({
         loading: false,
-        themes: Array.isArray(themes) ? themes : (themes.themes || []),
+        themes,
         activeTheme: activeTheme.name,
         customCSS: customCSS.css || "",
         error: null,

@@ -22,6 +22,8 @@ import { setupHeaderCompact } from "../../utils/headerCompact.js";
 import { html, insertHTML, navigate, raw } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
+/** @typedef {import('../../utils/helpers.js').Slot} Slot */
+
 /**
  * Shared markup for admin pages, for use inside component.render().
  *
@@ -29,6 +31,7 @@ import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
  * output. A plain string is escaped, which is the safe default — a page that
  * wants markup there says so with the tag.
  *
+ * @param {{ title?: Slot, actions?: Slot, banner?: Slot, content?: Slot, contentClass?: string }} slots
  * @returns {import('../../utils/helpers.js').RawHtml}
  */
 export function adminLayoutTemplate({
@@ -72,11 +75,14 @@ export function adminLayoutTemplate({
  * to call from beforeUnmount() — it used to return a teardown closure, and
  * every page overwrote its handle on the next render without ever calling it,
  * which leaked an observer and two store subscriptions per setState().
+ *
+ * @param {any} component
+ * @param {{ currentPath?: string, publicUrl?: string }} [options]
  */
 export function setupAdminLayout(component, {
   currentPath,
   publicUrl
-}) {
+} = {}) {
   component.registerCleanup(setupHeaderCompact(component.$(".light-header")));
   // Public-site link — icon button pinned to the right edge of the header
   // actions. Deliberately a plain in-app link: the public site and the admin

@@ -246,10 +246,16 @@ export class Component {
    * Mount a child Component inside this component's DOM subtree.
    * Automatically cleaned up when this component re-renders or unmounts.
    *
-   * @param {typeof Component} Cls   Component class to instantiate
+   * Generic in the class so the caller gets its child back, not a bare
+   * Component: a page that mounts MediaBrowser and then calls
+   * `browser.openFilePicker()` is calling a method only the subclass has.
+   *
+   * @template {Component} T
+   * @param {new (container: HTMLElement, props?: object) => T} Cls  Component
+   *   class to instantiate
    * @param {string|HTMLElement} target  Selector or element inside this.container
    * @param {object} [props]
-   * @returns {Component}
+   * @returns {T}
    */
   mountChild(Cls, target, props = {}) {
     const el = typeof target === 'string' ? this.container.querySelector(target) : target;

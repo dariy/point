@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * SystemPage — system administration (cache, map data, disk, migrations).
  *
