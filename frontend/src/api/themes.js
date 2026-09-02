@@ -8,7 +8,8 @@ import { api } from './client.js';
 
 /**
  * Get all available themes.
- * @returns {Promise<Array>}
+ * @returns {Promise<object[]>} A bare array — the handler serializes the slice
+ *   directly, with no envelope object around it.
  */
 export function getThemes() {
   return api.get('/api/themes');
@@ -41,8 +42,13 @@ export function getCustomCSS() {
 
 /**
  * Update the system-wide custom CSS.
+ *
+ * The server sanitizes what it stores; a save that lost something answers 200
+ * with the list of removed constructs, and a clean save answers 204 (`null`
+ * here). Callers that ignore the result get the old behavior.
+ *
  * @param {string} css
- * @returns {Promise<void>}
+ * @returns {Promise<{ css_warnings?: string[] }|null>}
  */
 export function updateCustomCSS(css) {
   return api.put('/api/themes/custom-css', { css });

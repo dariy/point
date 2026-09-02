@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 import { Component } from '../../components/Component.js';
 import { html, raw } from '../../utils/helpers.js';
 import { api } from '../../api/client.js';
@@ -93,11 +92,13 @@ export default class SetupPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const blog_title = this.$('#blog_title').value.trim();
-      const author_name = this.$('#author_name').value.trim();
-      const email = this.$('#email').value.trim();
-      const password = this.$('#password').value;
-      const confirm_password = this.$('#confirm_password').value;
+      const field = (/** @type {string} */ id) =>
+        /** @type {HTMLInputElement} */ (this.$(id)).value;
+      const blog_title = field('#blog_title').trim();
+      const author_name = field('#author_name').trim();
+      const email = field('#email').trim();
+      const password = field('#password');
+      const confirm_password = field('#confirm_password');
 
       if (!blog_title || !author_name || !password) {
         this.setState({ error: 'Blog title, your name, and password are required.' });

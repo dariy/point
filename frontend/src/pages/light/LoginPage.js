@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * LoginPage — standalone login page mounted at /light/login.
  *
@@ -101,7 +100,7 @@ export default class LoginPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const password = this.$('#password-input')?.value || '';
+      const password = /** @type {HTMLInputElement|null} */ (this.$('#password-input'))?.value || '';
 
       if (!password) {
         this.setState({ error: 'Password is required.' });
