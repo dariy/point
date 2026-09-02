@@ -28,6 +28,28 @@ func addTool[In any](s *sdk.Server, t *sdk.Tool, fn func(In) (json.RawMessage, e
 	})
 }
 
+// addGatedTool registers a tool whose REST route carries
+// api.RequirePlugin(id). MCP dispatches past route middleware, so the gate is
+// applied twice here: the tool is left out of tools/list when the plugin is off
+// as the session opens, and the call re-checks, since an admin can flip the
+// toggle while a session is held open. A disabled plugin answers the way its
+// route does — not found, indistinguishable from a tool that never existed.
+func addGatedTool[In any](s *sdk.Server, inv *invoker, id string, t *sdk.Tool, fn func(In) (json.RawMessage, error)) {
+	if on, err := inv.pluginEnabled(id); err != nil || !on {
+		return
+	}
+	addTool(s, t, func(in In) (json.RawMessage, error) {
+		on, err := inv.pluginEnabled(id)
+		if err != nil {
+			return nil, err
+		}
+		if !on {
+			return nil, fmt.Errorf("point API error 404: not found")
+		}
+		return fn(in)
+	})
+}
+
 func itoa(id int64) string               { return strconv.FormatInt(id, 10) }
 func idParam(id int64) map[string]string { return map[string]string{"id": itoa(id)} }
 
@@ -584,7 +606,8 @@ func registerMediaTools(s *sdk.Server, inv *invoker) {
 		return inv.call(inv.h.media.ListMedia, "GET", "/api/media?"+q.Encode(), nil, nil)
 	})
 
-	addTool(s, &sdk.Tool{
+	// Gated: the route this dispatches to carries RequirePlugin("ai-analysis").
+	addGatedTool(s, inv, "ai-analysis", &sdk.Tool{
 		Name:        "point_analyze_media",
 		Description: "Analyze a media image with AI to suggest a title, tags, and excerpt.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true},

@@ -21,7 +21,9 @@ surface admins must consciously enable from `/light/plugins`).
   discovery, dynamic client registration, authorize, token) so remote clients
   (Claude.ai web/desktop) can connect by URL. OAuth login validates against the real
   admin credential — there is no separate MCP password.
-- **Plugin gating**: with the plugin disabled, `/mcp` and the OAuth discovery routes 404.
+- **Plugin gating**: with the `mcp` plugin disabled, `/mcp` and the OAuth discovery routes
+  404. Individual tools carry the plugin gate of the route they dispatch to as well — see
+  decision 6 below.
 
 ## Key architectural decisions
 
@@ -41,6 +43,14 @@ surface admins must consciously enable from `/light/plugins`).
    restricted to `PHOTO_LIBRARY_PATH` (the path is not on the MCP client's machine).
 5. **Config**: `MCP_BASE_URL` is the public HTTPS base for OAuth discovery; it falls
    back to `APP_URL`.
+6. **A disabled plugin disables the capability on every transport.** In-process dispatch
+   skips route middleware, so `api.RequirePlugin` — the thing that 404s a disabled
+   plugin's routes — never runs for MCP callers. Enabling `mcp` is not consent to the
+   capabilities an admin has switched off elsewhere, so `addGatedTool` re-applies the
+   named gate in the tool itself: the tool is omitted from `tools/list` when the plugin
+   is off as the session opens, and the call re-checks (a toggle can flip mid-session),
+   answering `404: not found` exactly as its route would. Today this covers
+   `point_analyze_media` (`ai-analysis`); every other tool lands on an ungated handler.
 
 ## Out of scope
 
@@ -54,4 +64,6 @@ surface admins must consciously enable from `/light/plugins`).
 - Destructive tool semantics: `point_update_tag` (like the REST PUT it wraps) replaces
   the whole tag — omitted fields are wiped; clients must resend the full object.
 - When adding a REST endpoint that should be MCP-visible, add a tool entry in
-  `tools.go`; the dispatcher needs no changes.
+  `tools.go`; the dispatcher needs no changes. If the route carries
+  `api.RequirePlugin(...)`, register with `addGatedTool(s, inv, "<plugin-id>", ...)` —
+  nothing fails when you forget, the gate is simply not enforced for MCP callers.

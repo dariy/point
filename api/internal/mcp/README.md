@@ -18,7 +18,10 @@ or interface — those mirrored the REST API needlessly).
   the request context + principal, calls a REST handler, returns its JSON. Also
   the sandboxed media upload (`PHOTO_LIBRARY_PATH`).
 - `tools.go` — the 28 tools. Inputs are typed (drive the model-facing schema);
-  outputs pass the handler JSON straight through.
+  outputs pass the handler JSON straight through. A tool whose REST route carries
+  `api.RequirePlugin` registers through `addGatedTool`, which re-applies that gate
+  (route middleware does not run on in-process dispatch): the tool is absent from
+  `tools/list` and 404s on call while its plugin is off.
 - `content.go` — static `point_get_syntax_guidelines`.
 - `resources.go` — the three read-only resources.
 - `prompts.go` — the `create_landing_page` workflow prompt.
