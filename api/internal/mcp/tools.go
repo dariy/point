@@ -78,9 +78,9 @@ func registerContextTools(s *sdk.Server, inv *invoker) {
 		}
 		postsPerPage, _ := strconv.Atoi(settings["posts_per_page"])
 		return json.Marshal(map[string]any{
-			"base_url":       settings["url"],
-			"blog_title":     settings["title"],
-			"subtitle":       settings["subtitle"],
+			"base_url":       inv.baseURL,
+			"blog_title":     settings["blog_title"],
+			"subtitle":       settings["blog_subtitle"],
 			"author_name":    settings["author_name"],
 			"posts_per_page": postsPerPage,
 			"active_theme":   theme,
