@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * MediaBrowser — reusable media library component.
  *
@@ -45,6 +44,7 @@ export class MediaBrowser extends Component {
     this.state = {
       loading: true,
       media: [],
+      /** @type {{ page?: number, pages?: number, total?: number }} */
       pagination: {},
       typeFilter: "",
       selectedFolder: null,
@@ -231,7 +231,7 @@ export class MediaBrowser extends Component {
    */
   _centerActiveChip() {
     const strip = this.$(".mb-folder-chips");
-    const active = strip?.querySelector(".mb-folder-chip.active");
+    const active = /** @type {HTMLElement} */ (strip?.querySelector(".mb-folder-chip.active"));
     if (!strip || !active) return;
     strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
   }
@@ -406,6 +406,7 @@ export class MediaBrowser extends Component {
   _renderReferringPostsInline(m) {
     const st = (this.state.referringPostsState || {})[m.id];
     if (!st) return "";
+    /** @type {import("../../utils/helpers.js").Slot} */
     let body = "";
     if (st.loading) {
       body = html`<div class="referring-posts-loading">Searching…</div>`;
@@ -456,10 +457,10 @@ export class MediaBrowser extends Component {
   }
   _bindExifPanels() {
     // Toggle visibility
-    this.container.querySelectorAll(".exif-toggle-btn").forEach(btn => {
+    this.$$(".exif-toggle-btn").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        const panel = this.container.querySelector(`#exif-panel-${btn.dataset.id}`);
+        const panel = this.$(`#exif-panel-${btn.dataset.id}`);
         if (panel) panel.hidden = !panel.hidden;
       });
     });
@@ -473,7 +474,7 @@ export class MediaBrowser extends Component {
     bindDeleteBtns(this.container);
 
     // Add a new blank row using DOM API (no innerHTML with user data)
-    this.container.querySelectorAll(".exif-add-btn").forEach(btn => {
+    this.$$(".exif-add-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const tbody = btn.closest(".exif-panel").querySelector(".exif-rows");
         const tr = document.createElement("tr");
@@ -506,15 +507,16 @@ export class MediaBrowser extends Component {
     });
 
     // Save EXIF — validates alphanumeric+space, writes to file via PUT /exif
-    this.container.querySelectorAll(".exif-save-btn").forEach(btn => {
+    this.$$(".exif-save-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
         const id = parseInt(btn.dataset.id, 10);
         const panel = btn.closest(".exif-panel");
+        /** @type {Record<string,string>} */
         const fields = {};
         const invalid = [];
         panel.querySelectorAll(".exif-rows tr").forEach(tr => {
-          const key = tr.querySelector(".exif-key")?.value.trim();
-          const val = tr.querySelector(".exif-val")?.value.trim();
+          const key = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-key"))?.value.trim();
+          const val = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-val"))?.value.trim();
           if (!key) return;
           if (val && !/^[a-zA-Z0-9 ]*$/.test(val)) {
             invalid.push(key);
@@ -545,7 +547,7 @@ export class MediaBrowser extends Component {
     });
 
     // Revert EXIF — restores original_metadata captured at upload
-    this.container.querySelectorAll(".exif-revert-btn").forEach(btn => {
+    this.$$(".exif-revert-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const mountEl = document.createElement("div");
         document.body.appendChild(mountEl);
@@ -614,7 +616,7 @@ export class MediaBrowser extends Component {
     });
 
     // Re-extract — rebuilds rows via DOM API
-    this.container.querySelectorAll(".exif-reextract-btn").forEach(btn => {
+    this.$$(".exif-reextract-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const mountEl = document.createElement("div");
         document.body.appendChild(mountEl);
@@ -702,7 +704,7 @@ export class MediaBrowser extends Component {
         })
       });
     }
-    const fileInput = this.$("#mb-file-input");
+    const fileInput = /** @type {HTMLInputElement|null} */ (this.$("#mb-file-input"));
 
     // Tree and mobile-bar copies of each control are both in the DOM (CSS shows
     // one), so every listener binds across all matches.
@@ -732,8 +734,8 @@ export class MediaBrowser extends Component {
     if (!pickerMode) {
       const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
-        setHTML(h1, html`${this._renderBreadcrumbs()}`);
-        h1.querySelectorAll(".mb-breadcrumb-item").forEach(btn => {
+        setHTML(/** @type {HTMLElement} */ (h1), html`${this._renderBreadcrumbs()}`);
+        h1.querySelectorAll(".mb-breadcrumb-item").forEach((/** @type {HTMLElement} */ btn) => {
           btn.addEventListener("click", () => {
             this.setState({
               selectedFolder: btn.dataset.folder || null
@@ -753,7 +755,7 @@ export class MediaBrowser extends Component {
     this._bindPreviewFallback();
     this.$$(".mb-type-filter").forEach(select => select.addEventListener("change", e => {
       this.setState({
-        typeFilter: e.target.value
+        typeFilter: /** @type {HTMLSelectElement} */ (e.target).value
       });
       this._load({
         page: 1
@@ -781,7 +783,7 @@ export class MediaBrowser extends Component {
       this.$$(".media-item").forEach(item => {
         item.addEventListener("click", e => {
           // Don't trigger if clicking directly on checkbox label (it handles its own state)
-          if (e.target.closest(".media-item-checkbox")) return;
+          if (/** @type {HTMLElement} */ (e.target).closest(".media-item-checkbox")) return;
           const id = parseInt(item.dataset.id, 10);
           this._toggleSelection(id);
         });
@@ -1192,7 +1194,7 @@ export class MediaBrowser extends Component {
     const MAX = 120; // backend has no clamp; don't fetch unbounded
     const area = this.$("#mb-media-area");
     const grid = this.$(".media-grid");
-    const item = grid?.firstElementChild;
+    const item = /** @type {HTMLElement} */ (grid?.firstElementChild);
     if (!area || !item || !area.clientHeight) return null; // nothing to measure yet
 
     const cs = getComputedStyle(grid);

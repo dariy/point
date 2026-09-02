@@ -85,7 +85,7 @@ export class MediaPager {
    * load; every previous binding is torn down first and the neighbour preload
    * is skipped unless `key` says the listing itself changed.
    *
-   * @param {{page:number, pages:number}} pagination
+   * @param {{page?:number, pages?:number}} pagination  empty until the first load lands
    * @param {string} key  identity of the current listing (page + filters)
    */
   arm(pagination, key) {
