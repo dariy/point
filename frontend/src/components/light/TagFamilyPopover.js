@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { Component } from '../Component.js';
 import { getTag } from '../../api/tags.js';
 import { html, navigate } from '../../utils/helpers.js';
@@ -54,7 +53,7 @@ export class TagFamilyPopover extends Component {
   }
 
   afterRender() {
-    this.container.querySelectorAll('.tfp-tag-link').forEach(btn => {
+    this.$$('.tfp-tag-link').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         this._load(id);

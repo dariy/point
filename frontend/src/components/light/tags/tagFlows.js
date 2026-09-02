@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * tagFlows — the tags manager's mutating flows: Move…, Merge…, the confirm
  * shown when one tag is dragged onto another, and the bulk operations behind

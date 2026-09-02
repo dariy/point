@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * SiteCrumb — the blog title at the head of the breadcrumb trail, plus its
  * dropdown of root tags.

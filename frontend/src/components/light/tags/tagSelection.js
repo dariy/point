@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * tagSelection — select mode in the tags manager: the bulk toolbar, the ways
  * into and out of selecting, and the selection itself.
@@ -240,7 +239,7 @@ export function setupSelectMode(container, { state, onModeChange, onBulkDone, co
 
   if (!state().selectMode) return handle;
 
-  container.querySelectorAll('.tm-select-cb').forEach(cb => {
+  container.querySelectorAll('.tm-select-cb').forEach((/** @type {HTMLInputElement} */ cb) => {
     cb.addEventListener('change', e => {
       // Belt and braces, kept from the original: nothing above a row listens
       // for `change`, and the tap that ticked the box is already ignored by the
@@ -261,7 +260,8 @@ export function setupSelectMode(container, { state, onModeChange, onBulkDone, co
   container.querySelector('#tm-bulk-apply-btn')
     ?.addEventListener('click', () => bulkVisibility({
       ids: [...state().selectedIds],
-      hidden: container.querySelector('#tm-bulk-visibility-select').value === 'hidden',
+      hidden: /** @type {HTMLSelectElement} */ (
+        container.querySelector('#tm-bulk-visibility-select')).value === 'hidden',
       onDone: onBulkDone,
     }));
   container.querySelector('#tm-bulk-move-btn')

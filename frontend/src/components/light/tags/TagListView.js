@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * TagListView — the tabular half of the tags manager, as pure functions.
  *
@@ -74,7 +73,8 @@ export function renderFilterChips(filterParents = []) {
   return chips.length ? html`${chips}` : '';
 }
 
-export function renderSortHeader(field, label, className = '', title = '', { sortField, sortOrder } = {}) {
+export function renderSortHeader(field, label, className = '', title = '',
+  /** @type {{ sortField?: string, sortOrder?: string }} */ { sortField, sortOrder } = {}) {
   const isActive = sortField === field;
   const icon = isActive ? (sortOrder === 'asc' ? ' ▴' : ' ▾') : '';
 

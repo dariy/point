@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * settingsFields — shared rendering & collection for admin settings inputs.
  *
@@ -267,12 +266,15 @@ export function renderFields(keys, settings, ctx = {}) {
  */
 export function collectUpdates(form, keys) {
   const fd = new FormData(form);
+  /** @type {Record<string,string>} */
   const updates = {};
   for (const key of keys) {
     if (isToggleKey(key)) {
       updates[key] = fd.has(key) ? "true" : "false";
     } else if (fd.has(key)) {
-      updates[key] = fd.get(key);
+      // FormData.get() is typed string|File; every settings control is a text
+      // input or a select, so String() states what the reads below already assume.
+      updates[key] = String(fd.get(key));
     }
   }
   return updates;
