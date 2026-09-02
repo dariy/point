@@ -5,15 +5,36 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Overridable, because the pre-flight below refuses to run when it is taken.
+export PORT="${E2E_PORT:-8005}"
+export HOST=127.0.0.1
+
+# Refuse to start on a port something else already holds. Without this the run
+# is worse than a failure: our binary dies on bind, every request below is
+# answered by the foreign server, and the suite reports on data that is not ours
+# — passing or failing for reasons nothing in this repo explains. Checked here
+# rather than after launch because a child that died on bind is a zombie until
+# reaped, and `kill -0` reports a zombie as alive.
+if (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; then
+    exec 3>&-
+    echo "Port $PORT is already in use — refusing to run against a foreign server."
+    echo "Stop whatever is listening, or re-run with E2E_PORT=<free port>."
+    exit 1
+fi
+
 # Install Chromium if needed
 echo "==> Ensuring Playwright Chromium is installed..."
 npx playwright install chromium
 
-echo "==> Building JS/CSS if missing..."
-if [ ! -d "frontend/css/public" ] || [ ! -d "frontend/js" ]; then
-    ./scripts/build-css.sh
-    BUILD_DEBUG_FRONTEND=0 ./scripts/build-js.sh
-fi
+# Always rebuild. The old guard tested frontend/css/public and frontend/js for
+# existence, but the first is a *source* directory that is always present, so
+# the whole build hinged on frontend/js — which exists in any tree that has been
+# run once and is stale the moment frontend/src changes. The tests then assert
+# against a build nobody made, and read as a product bug. Both builds together
+# cost well under a second.
+echo "==> Building JS/CSS..."
+./scripts/build-css.sh
+BUILD_DEBUG_FRONTEND=0 ./scripts/build-js.sh
 
 echo "==> Building Go backend..."
 cd "$ROOT_DIR/api"
@@ -22,8 +43,6 @@ cd ..
 
 export STORAGE_PATH=$(mktemp -d)
 export DATABASE_URL="sqlite:$STORAGE_PATH/point.db"
-export PORT=8005
-export HOST=127.0.0.1
 export FRONTEND_DIR=frontend
 
 mkdir -p "$STORAGE_PATH/media/originals" "$STORAGE_PATH/media/thumbnails" "$STORAGE_PATH/media/variants" "$STORAGE_PATH/logs" "$STORAGE_PATH/themes"
