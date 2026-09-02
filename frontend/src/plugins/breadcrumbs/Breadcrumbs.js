@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * Breadcrumbs — the tag-ancestry trail and the active facet crumbs.
  *
@@ -187,7 +186,7 @@ export class Breadcrumbs extends Component {
     const breadcrumbSlugs = (this.props.breadcrumb || [])
       .map(b => b.slug)
       .filter(Boolean);
-    this.container.querySelectorAll('.breadcrumb-link[data-crumb-slug], .breadcrumb-current[data-crumb-slug]').forEach(el => {
+    this.$$('.breadcrumb-link[data-crumb-slug], .breadcrumb-current[data-crumb-slug]').forEach(el => {
       if (!el.classList.contains('has-dropdown')) return;
       const slug = el.dataset.crumbSlug;
       if (!slug) return;
@@ -209,7 +208,7 @@ export class Breadcrumbs extends Component {
     // crumb ellipsized) those ancestors would be unreachable. Give that leaf a
     // path-only dropdown so the trail stays one tap away — same anchored panel,
     // no children section. The `has-hidden-trail` class drives the affordance.
-    const crumbCurrentEls = [...this.container.querySelectorAll('.breadcrumb-current')];
+    const crumbCurrentEls = [...this.$$('.breadcrumb-current')];
     const lastCrumbCurrent = crumbCurrentEls[crumbCurrentEls.length - 1] || null;
     if (
       lastCrumbCurrent &&

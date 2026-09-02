@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * Public site footer — copyright, pagination slot (normal), or post tags (immersive).
  *
@@ -67,6 +66,7 @@ export class PublicFooter extends Component {
     // sheet's footer so the two render the same line.
     const copyright = renderCopyright(settings);
 
+    /** @type {import("../../utils/helpers.js").Slot} */
     let centerSlot = "";
     if (immersiveTags.length) {
       const navTags = getNavTags() || [];
@@ -161,7 +161,7 @@ export class PublicFooter extends Component {
   afterRender() {
     // Zoom slider → ask the grid page to apply the zoom (it owns the debounced
     // per_page refit); sync back from every zoom change (pinch, wheel, keys).
-    const zoomEl = this.$("#footer-zoom");
+    const zoomEl = /** @type {HTMLInputElement|null} */ (this.$("#footer-zoom"));
     if (zoomEl) {
       zoomEl.addEventListener("input", () => {
         const cols = Number(zoomEl.max) + 1 - Number(zoomEl.value);

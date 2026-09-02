@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * TagsPage — interactive force-directed tag graph.
  *
@@ -137,10 +136,10 @@ export default class TagsPage extends Component {
 
     this._initGraph();
 
-    const filterInput = this.$('#tag-filter-input');
+    const filterInput = /** @type {HTMLInputElement|null} */ (this.$('#tag-filter-input'));
     if (filterInput) {
-      filterInput.addEventListener('input', (e) => {
-        this.state.filter = e.target.value;
+      filterInput.addEventListener('input', () => {
+        this.state.filter = filterInput.value;
         this._graph?.setFilter(this.state.filter);
       });
       if (this.state.filter) {
@@ -154,7 +153,7 @@ export default class TagsPage extends Component {
     this.$('#tg-reset')?.addEventListener('click', () => this._graph?.resetView());
 
     // Node-type toggles (Tag / Year / Place / Post) — show or hide each kind.
-    this.container.querySelectorAll('.tg-toggle').forEach((btn) => {
+    this.$$('.tg-toggle').forEach((btn) => {
       btn.addEventListener('click', () => {
         const type = btn.dataset.type;
         const nowOff = btn.getAttribute('aria-pressed') === 'true';

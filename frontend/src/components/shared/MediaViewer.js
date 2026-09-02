@@ -105,6 +105,8 @@ export class MediaViewer extends Component {
    * Hook for subclasses to inject extra markup inside the viewer wrapper
    * (e.g. the immersive sheet overlay). Returns nothing by default; an override
    * returns the RawHtml html`` yields.
+   *
+   * @returns {import('../../utils/helpers.js').Slot}
    */
   _renderExtras() {
     return '';

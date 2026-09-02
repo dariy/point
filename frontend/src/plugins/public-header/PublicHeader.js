@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * Public site header — blog logo, unified breadcrumb (tag path + active
  * facets), and nav buttons.
@@ -28,6 +27,11 @@ import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_
 import { ViewContext } from '../../utils/viewContext.js';
 import { hideFlyout } from '../../utils/tagFlyout.js';
 import { HeaderFold } from '../../utils/headerFold.js';
+
+/** Rows the search typeahead shows per section. */
+const TYPEAHEAD_POSTS = 3;
+const TYPEAHEAD_TAGS = 5;
+
 export class PublicHeader extends Component {
   render() {
     const {
@@ -252,7 +256,7 @@ export class PublicHeader extends Component {
     // Header search (expandable)
     const searchForm = this.$('#header-search');
     if (searchForm) {
-      const input = searchForm.querySelector('input[type="search"]');
+      const input = /** @type {HTMLInputElement} */ (searchForm.querySelector('input[type="search"]'));
       const toggleBtn = searchForm.querySelector('.search-toggle-btn');
       const closeSearch = () => {
         searchForm.classList.remove('is-active');
@@ -318,7 +322,7 @@ export class PublicHeader extends Component {
     if (burgerSearchForm) {
       burgerSearchForm.addEventListener('submit', e => {
         e.preventDefault();
-        const q = burgerSearchForm.querySelector('input[type="search"]').value.trim();
+        const q = /** @type {HTMLInputElement} */ (burgerSearchForm.querySelector('input[type="search"]')).value.trim();
         if (q) ViewContext.update({
           query: q
         });
@@ -336,7 +340,7 @@ export class PublicHeader extends Component {
         navBurger.classList.toggle('is-open', !isOpen);
         burgerBtn.setAttribute('aria-expanded', String(!isOpen));
         if (!isOpen) {
-          const input = navBurger.querySelector('input[type="search"]');
+          const input = /** @type {HTMLElement|null} */ (navBurger.querySelector('input[type="search"]'));
           if (input) setTimeout(() => input.focus(), 100);
         }
       });
@@ -481,18 +485,19 @@ export class PublicHeader extends Component {
     const vc = ViewContext.current();
     const params = {
       q,
-      limit: 3,
+      per_page: TYPEAHEAD_POSTS,
       status: 'published'
     };
     if (vc.tag) params.tag = vc.tag;
     try {
       const [postsData, tagsData] = await Promise.all([listPosts(params), listTags({
         q,
-        limit: 5,
         include_empty: false
       })]);
       if (!this._typeaheadActive) return;
-      this._renderTypeaheadResults(q, postsData.posts || [], tagsData.tags || [], input);
+      // ListTags has no page-size parameter, so the tag cap is applied here —
+      // without it the Tags section renders every tag matching the query.
+      this._renderTypeaheadResults(q, postsData.posts || [], (tagsData.tags || []).slice(0, TYPEAHEAD_TAGS), input);
     } catch (err) {
       console.error('Typeahead failed:', err);
     }
@@ -540,7 +545,7 @@ export class PublicHeader extends Component {
       parts.push(html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`);
     }
     setHTML(mount, html`${parts}`);
-    mount.querySelectorAll('.typeahead-item').forEach(item => {
+    /** @type {NodeListOf<HTMLElement>} */ (mount.querySelectorAll('.typeahead-item')).forEach(item => {
       item.addEventListener('click', e => {
         e.preventDefault();
         const searchQ = item.dataset.q;

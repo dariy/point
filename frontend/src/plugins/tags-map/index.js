@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * MapPage — Leaflet map showing tag locations.
  *
@@ -227,6 +226,7 @@ export default class MapPage extends Component {
   }
 
   async _onTimelineRangeChange({ from, to, isFullExtent }) {
+    /** @type {[number, number]|null} */
     const years = isFullExtent ? null : [from, to];
     const vc = ViewContext.current();
     const same = years
