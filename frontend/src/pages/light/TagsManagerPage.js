@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * TagsManagerPage — hierarchical tag management.
  *
@@ -120,16 +119,16 @@ export default class TagsManagerPage extends Component {
   }
   _applyListFilter() {
     const byId = new Map(this.state.tags.map(t => [t.id, t]));
-    this.container.querySelectorAll('.tm-tag-row').forEach(row => {
+    this.$$('.tm-tag-row').forEach(row => {
       const tag = byId.get(parseInt(row.dataset.id, 10));
       row.classList.toggle('hidden', !tag || !matchesListFilter(tag, this._listView()));
     });
   }
   _updateFilterChips() {
-    const chips = this.container.querySelector('#tm-filter-chips');
+    const chips = this.$('#tm-filter-chips');
     if (!chips) return;
     setHTML(chips, html`${renderFilterChips(this._listFilterParents)}`);
-    chips.querySelectorAll('.tm-filter-chip').forEach(chip => {
+    chips.querySelectorAll('.tm-filter-chip').forEach((/** @type {HTMLElement} */ chip) => {
       chip.addEventListener('click', () => {
         const id = parseInt(chip.dataset.removeId, 10);
         this._listFilterParents = this._listFilterParents.filter(p => p.id !== id);
@@ -140,12 +139,12 @@ export default class TagsManagerPage extends Component {
     });
   }
   _syncClearBtn() {
-    const btn = this.container.querySelector('.tm-clear-filters');
+    const btn = this.$('.tm-clear-filters');
     const hasFilters = this._listSearch || '' || this._listFilterParents.length > 0;
     if (btn) {
       btn.classList.toggle('hidden', !hasFilters);
     } else if (hasFilters) {
-      const listWrap = this.container.querySelector('.tm-list-filter-bar');
+      const listWrap = this.$('.tm-list-filter-bar');
       if (listWrap) {
         const searchRow = listWrap.querySelector('.tm-list-search-row');
         if (searchRow && !searchRow.querySelector('.tm-clear-filters')) {
@@ -162,11 +161,11 @@ export default class TagsManagerPage extends Component {
   _clearListFilters() {
     this._listSearch = '';
     this._listFilterParents = [];
-    const searchInput = this.container.querySelector('.tm-list-search');
+    const searchInput = /** @type {HTMLInputElement|null} */ (this.$('.tm-list-search'));
     if (searchInput) searchInput.value = '';
     this._updateFilterChips();
     this._applyListFilter();
-    const btn = this.container.querySelector('.tm-clear-filters');
+    const btn = this.$('.tm-clear-filters');
     if (btn) btn.classList.add('hidden');
   }
 
@@ -202,19 +201,19 @@ export default class TagsManagerPage extends Component {
     });
     setupTextareaMaximizer(this.container);
     if (this.state.loading || this.state.error) return;
-    this.container.querySelector('#view-tree-btn')?.addEventListener('click', () => this.setState({
+    this.$('#view-tree-btn')?.addEventListener('click', () => this.setState({
       view: 'tree'
     }));
-    this.container.querySelector('#view-list-btn')?.addEventListener('click', () => this.setState({
+    this.$('#view-list-btn')?.addEventListener('click', () => this.setState({
       view: 'list'
     }));
-    this.container.querySelector('#add-root-tag-btn')?.addEventListener('click', () => this._openModal());
-    this.container.querySelector('#recalc-counts-btn')?.addEventListener('click', () => this._handleRecalc());
+    this.$('#add-root-tag-btn')?.addEventListener('click', () => this._openModal());
+    this.$('#recalc-counts-btn')?.addEventListener('click', () => this._handleRecalc());
     this._bindSelectMode();
     if (this.state.view === 'tree') {
-      this.container.querySelector('#expand-all-btn')?.addEventListener('click', () => this._expandAll());
-      this.container.querySelector('#collapse-all-btn')?.addEventListener('click', () => this._collapseAll());
-      this.container.querySelectorAll('.tm-toggle').forEach(btn => {
+      this.$('#expand-all-btn')?.addEventListener('click', () => this._expandAll());
+      this.$('#collapse-all-btn')?.addEventListener('click', () => this._collapseAll());
+      this.$$('.tm-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id, 10);
           const expanded = new Set(this.state.expanded);
@@ -224,15 +223,15 @@ export default class TagsManagerPage extends Component {
           });
         });
       });
-      this.container.querySelector('#unfiled-toggle-btn')?.addEventListener('click', () => {
+      this.$('#unfiled-toggle-btn')?.addEventListener('click', () => {
         this.setState({
           unfiledExpanded: !this.state.unfiledExpanded
         });
       });
-      this.container.querySelectorAll('.add-child-btn').forEach(btn => {
+      this.$$('.add-child-btn').forEach(btn => {
         btn.addEventListener('click', () => this._openModal(null, parseInt(btn.dataset.id, 10)));
       });
-      this.container.querySelectorAll('.move-tag-btn').forEach(btn => {
+      this.$$('.move-tag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           openMoveDialog({
             tags: this.state.tags,
@@ -242,7 +241,7 @@ export default class TagsManagerPage extends Component {
           });
         });
       });
-      this.container.querySelectorAll('.merge-tag-btn').forEach(btn => {
+      this.$$('.merge-tag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           openMergeDialog({
             tags: this.state.tags,
@@ -253,7 +252,7 @@ export default class TagsManagerPage extends Component {
       });
 
       // Open ancestor via inherited-hidden badge
-      this.container.querySelectorAll('.tm-badge-via-btn').forEach(btn => {
+      this.$$('.tm-badge-via-btn').forEach(btn => {
         btn.addEventListener('click', e => {
           e.stopPropagation();
           const tagId = parseInt(btn.dataset.openTagId, 10);
@@ -263,13 +262,13 @@ export default class TagsManagerPage extends Component {
       });
       this._bindDragAndDrop();
     }
-    this.container.querySelectorAll('.edit-tag-btn').forEach(btn => {
+    this.$$('.edit-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         this._openModal(this.state.tags.find(t => t.id === id));
       });
     });
-    this.container.querySelectorAll('.delete-tag-btn').forEach(btn => {
+    this.$$('.delete-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         const tag = this.state.tags.find(t => t.id === id);
@@ -279,21 +278,21 @@ export default class TagsManagerPage extends Component {
       });
     });
     if (this.state.view === 'list') {
-      this.container.querySelectorAll('.tm-sortable-header').forEach(th => {
+      this.$$('.tm-sortable-header').forEach(th => {
         th.addEventListener('click', () => this._handleSort(th.dataset.field));
       });
-      const searchInput = this.container.querySelector('.tm-list-search');
+      const searchInput = /** @type {HTMLInputElement|null} */ (this.$('.tm-list-search'));
       if (searchInput) {
         searchInput.focus();
         const len = searchInput.value.length;
         searchInput.setSelectionRange(len, len);
         searchInput.addEventListener('input', e => {
-          this._listSearch = e.target.value;
+          this._listSearch = /** @type {HTMLInputElement} */ (e.target).value;
           this._applyListFilter();
           this._syncClearBtn();
         });
       }
-      this.container.querySelectorAll('.tm-parent-filter-btn').forEach(btn => {
+      this.$$('.tm-parent-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.parentId, 10);
           const name = btn.dataset.parentName;
@@ -308,7 +307,7 @@ export default class TagsManagerPage extends Component {
           }
         });
       });
-      this.container.querySelector('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
+      this.$('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
       this._updateFilterChips();
       this._applyListFilter();
     }
@@ -491,8 +490,8 @@ export default class TagsManagerPage extends Component {
     }
 
     // Auto-slug from name
-    const nameInput = modal.querySelector('[name="name"]');
-    const slugInput = modal.querySelector('#modal-slug');
+    const nameInput = /** @type {HTMLInputElement} */ (modal.querySelector('[name="name"]'));
+    const slugInput = /** @type {HTMLInputElement} */ (modal.querySelector('#modal-slug'));
     if (isEdit) slugInput.dataset.manual = '1';
     nameInput.addEventListener('input', () => {
       if (!slugInput.dataset.manual) slugInput.value = slugifyTagName(nameInput.value);
@@ -502,14 +501,14 @@ export default class TagsManagerPage extends Component {
     });
 
     // Toggle nav order field visibility
-    const inNavCheck = modal.querySelector('#in-nav-check');
+    const inNavCheck = /** @type {HTMLInputElement|null} */ (modal.querySelector('#in-nav-check'));
     const navOrderRow = modal.querySelector('#nav-order-row');
     inNavCheck?.addEventListener('change', () => {
       navOrderRow.classList.toggle('hidden', !inNavCheck.checked);
     });
 
     // Collapsible sections
-    modal.querySelectorAll('.tm-section-toggle').forEach(btn => {
+    modal.querySelectorAll('.tm-section-toggle').forEach((/** @type {HTMLElement} */ btn) => {
       btn.addEventListener('click', () => {
         const targetId = btn.dataset.target;
         const body = modal.querySelector(`#${targetId}`);
@@ -522,10 +521,10 @@ export default class TagsManagerPage extends Component {
 
     // Parse / Geocode
     modal.querySelector('#gmaps-parse-btn')?.addEventListener('click', async () => {
-      const coordInput = modal.querySelector('#coordinates-input');
-      const latInput = modal.querySelector('#coord-lat');
-      const lngInput = modal.querySelector('#coord-lng');
-      const parseBtn = modal.querySelector('#gmaps-parse-btn');
+      const coordInput = /** @type {HTMLInputElement} */ (modal.querySelector('#coordinates-input'));
+      const latInput = /** @type {HTMLInputElement} */ (modal.querySelector('#coord-lat'));
+      const lngInput = /** @type {HTMLInputElement} */ (modal.querySelector('#coord-lng'));
+      const parseBtn = /** @type {HTMLButtonElement} */ (modal.querySelector('#gmaps-parse-btn'));
       const raw = coordInput.value.trim();
       const setLocked = locked => {
         coordInput.disabled = locked;
@@ -538,13 +537,13 @@ export default class TagsManagerPage extends Component {
       try {
         if (raw) {
           const coords = await parseMapsCoords(raw);
-          latInput.value = coords.lat;
-          lngInput.value = coords.lng;
+          latInput.value = String(coords.lat);
+          lngInput.value = String(coords.lng);
           coordInput.value = '';
         } else if (isEdit) {
           const result = await geocodeTag(f.id);
-          latInput.value = result.latitude;
-          lngInput.value = result.longitude;
+          latInput.value = String(result.latitude);
+          lngInput.value = String(result.longitude);
           setToast({
             message: 'Coordinates fetched from Nominatim.',
             type: 'success'
@@ -652,25 +651,28 @@ export default class TagsManagerPage extends Component {
     closeAfter = true
   } = {}) {
     const fd = new FormData(form);
-    const name = (fd.get('name') || '').trim();
-    const slug = (fd.get('slug') || '').trim();
-    const description = (fd.get('description') || '').trim();
-    const kind = fd.get('kind') || 'topic';
+    // FormData reads are typed `string|File`; this form has no file input, and a
+    // missing key still comes back null, which every read below already handles.
+    const field = (/** @type {string} */ key) => /** @type {string} */ (fd.get(key));
+    const name = (field('name') || '').trim();
+    const slug = (field('slug') || '').trim();
+    const description = (field('description') || '').trim();
+    const kind = field('kind') || 'topic';
     const hidden = fd.has('hidden');
     const hides_posts = fd.has('hides_posts');
     const in_breadcrumbs = fd.has('in_breadcrumbs');
     const show_related = fd.has('show_related');
     const in_ancestor_flyout = fd.has('in_ancestor_flyout');
     const inNav = fd.has('in_nav');
-    const navOrderRaw = fd.get('nav_order');
+    const navOrderRaw = field('nav_order');
     // ponytail: checkbox on with empty position must still enable nav — default to 0.
     const nav_order = inNav ? navOrderRaw !== '' ? parseInt(navOrderRaw, 10) : 0 : null;
-    const lat = parseFloat(fd.get('latitude') || '');
-    const lon = parseFloat(fd.get('longitude') || '');
+    const lat = parseFloat(field('latitude') || '');
+    const lon = parseFloat(field('longitude') || '');
     const latitude = !isNaN(lat) ? lat : null;
     const longitude = !isNaN(lon) ? lon : null;
-    const newParentIds = fd.getAll('parent_ids').map(v => parseInt(v, 10));
-    const newChildIds = fd.getAll('child_ids').map(v => parseInt(v, 10));
+    const newParentIds = fd.getAll('parent_ids').map(v => parseInt(String(v), 10));
+    const newChildIds = fd.getAll('child_ids').map(v => parseInt(String(v), 10));
     const submitBtn = form.querySelector('[type="submit"]');
     const origText = submitBtn.textContent;
     submitBtn.disabled = true;
