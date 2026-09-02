@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
@@ -81,12 +80,15 @@ test("BackupsSection actions", async (t) => {
   root.querySelector("#create-backup-btn").click();
   root.querySelector("#restart-server-btn").click();
 
-  // Settings mock
-  section._saveSetting = async () => {};
-  const settingsInput = root.querySelector("input[name='schedule']");
-  if (settingsInput) {
-    settingsInput.dispatchEvent(new Event('change'));
-  }
+  // A change to any cadence control saves the settings. Stub the save and
+  // assert it ran: the control has to be one that render() emits, or the
+  // dispatch below goes nowhere and the assertion is the only thing that says so.
+  let saved = 0;
+  section._saveSettings = async () => { saved++; };
+  const keepInput = root.querySelector("#bk-keep");
+  assert.ok(keepInput, "render() should emit the 'keep last' control");
+  keepInput.dispatchEvent(new Event('change'));
+  assert.strictEqual(saved, 1, "changing a cadence control should save the settings");
 
   root.remove();
   dom.cleanup();

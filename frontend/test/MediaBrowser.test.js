@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 /**
  * MediaBrowser — the media library, in both of the shapes it is used in.
  *

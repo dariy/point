@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { Pagination } from '../src/components/shared/Pagination.js';

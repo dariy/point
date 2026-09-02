@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.13.
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 import { pluginHost } from '../src/core/pluginHost.js';
@@ -39,7 +38,6 @@ describe('PostEditPage', () => {
         location: { pathname: '' },
         history: { replaceState: () => {} },
         matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-        addEventListener: () => {},
         addEventListener: () => {},
         removeEventListener: () => {},
         dispatchEvent: () => {},

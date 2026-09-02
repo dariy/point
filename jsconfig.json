@@ -8,6 +8,14 @@
   //
   // strict stays off deliberately: turning it on adds null-safety errors to
   // every DOM read at once, which is a separate piece of work.
+  //
+  // frontend/test/** is deliberately NOT in the checked set. Checking it once
+  // cost 401 errors across 70 files, and a file-by-file audit of them found
+  // exactly one real defect: linkedom's DOM is not the DOM lib's DOM, mocks are
+  // partial objects on purpose, and tests attach their own tracker properties
+  // to instances. The value of this gate is enforcing the JSDoc in src/, and
+  // the src/ types a test exercises are checked from src/ either way. An honest
+  // exclusion beats 70 @ts-nocheck pragmas nobody intends to remove.
   "compilerOptions": {
     "target": "ES2020",
     "module": "ES2020",
@@ -21,10 +29,9 @@
   },
   "include": [
     "frontend/src/**/*.js",
-    "frontend/test/**/*.js",
     "frontend/*.js",
     "frontend/index.html",
     "frontend/types/**/*.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "frontend/test"]
 }
