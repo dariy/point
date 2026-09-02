@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * CommentsAdminPage — /light/comments moderation for the remark42 plugin.
  */
@@ -78,6 +77,7 @@ export default class CommentsAdminPage extends Component {
         <button id="tab-blocked" role="tab" aria-selected="${tab === "blocked"}" class="btn btn-sm ${tab === "blocked" ? "btn-primary" : "btn-secondary"}">Blocked users${blocked.length ? ` (${blocked.length})` : ""}</button>
       </div>`;
 
+    /** @type {import("../../utils/helpers.js").Slot} */
     let bulkToolbar = "";
     if (selectMode) {
       const isRecent = tab === "recent";
@@ -343,7 +343,7 @@ export default class CommentsAdminPage extends Component {
       openCard = null;
     };
 
-    this.container.querySelectorAll(".post-card").forEach((card) => {
+    this.$$(".post-card").forEach((card) => {
       if (!card.querySelector(".post-card-swipe-actions")) return;
       const ac = new AbortController();
       abortControllers.push(ac);
@@ -353,7 +353,12 @@ export default class CommentsAdminPage extends Component {
         "touchstart",
         (e) => {
           if (e.touches.length !== 1) return;
-          if (card === openCard && e.target.closest(".post-card-swipe-actions"))
+          if (
+            card === openCard &&
+            /** @type {HTMLElement} */ (e.target).closest(
+              ".post-card-swipe-actions",
+            )
+          )
             return;
           const t = e.touches[0];
           startX = t.clientX;
@@ -361,7 +366,9 @@ export default class CommentsAdminPage extends Component {
           dragging = false;
           decided = false;
           dx = 0;
-          const actions = card.querySelector(".post-card-swipe-actions");
+          const actions = /** @type {HTMLElement|null} */ (
+            card.querySelector(".post-card-swipe-actions")
+          );
           actionsWidth = actions ? actions.offsetWidth : 0;
           card.style.transition = "none";
         },

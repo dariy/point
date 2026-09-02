@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 // Hover logic for dynamic-post-list plugin
 
 let listenersAttached = false;
@@ -8,9 +7,9 @@ export function attachHoverEffect() {
     listenersAttached = true;
     
     document.addEventListener('mouseover', function(e) {
-        var card = e.target.closest('.post-card');
+        var card = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (e.target).closest('.post-card'));
         if (!card) return;
-        var slot = card.closest('.post-card-slot');
+        var slot = /** @type {HTMLElement} */ (card.closest('.post-card-slot'));
         if (!slot) return;
         
         var grid = slot.closest('.posts-grid');
@@ -101,12 +100,12 @@ export function attachHoverEffect() {
     });
     
     document.addEventListener('mouseout', function(e) {
-        var card = e.target.closest('.post-card');
-        if (card && card.dataset.scaled === 'true' && !card.contains(e.relatedTarget)) {
+        var card = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (e.target).closest('.post-card'));
+        if (card && card.dataset.scaled === 'true' && !card.contains(/** @type {Node} */ (e.relatedTarget))) {
             // Do not shrink if a flyout menu is open!
             if (card.classList.contains('has-flyout-open')) return;
             // Or if they moved to a flyout menu directly
-            if (e.relatedTarget && e.relatedTarget.closest('.flyout, .post-card-tag-flyout, .tag-family-flyout')) return;
+            if (e.relatedTarget && /** @type {HTMLElement} */ (e.relatedTarget).closest('.flyout, .post-card-tag-flyout, .tag-family-flyout')) return;
             
             card.style.width = '100%';
             card.style.height = '100%';
@@ -114,7 +113,7 @@ export function attachHoverEffect() {
             // Drop z-index slightly to 900 so it falls behind any newly hovered cards, 
             // but stays above the rest of the grid!
             card.style.zIndex = '900';
-            var slot = card.closest('.post-card-slot');
+            var slot = /** @type {HTMLElement} */ (card.closest('.post-card-slot'));
             if (slot) slot.style.zIndex = '900';
         }
     });
@@ -123,29 +122,30 @@ export function attachHoverEffect() {
     // We can detect this with a mutation observer on the document body or just rely on mousemove.
     document.addEventListener('mousemove', function(e) {
         // Failsafe: if a card is scaled, but mouse is far away and no flyout is open, shrink it.
-        var scaledCards = document.querySelectorAll('.post-card[data-scaled="true"]');
+        var scaledCards = /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('.post-card[data-scaled="true"]'));
         for (var i = 0; i < scaledCards.length; i++) {
             var c = scaledCards[i];
-            if (!c.classList.contains('has-flyout-open') && !c.contains(e.target)) {
+            if (!c.classList.contains('has-flyout-open') && !c.contains(/** @type {Node} */ (e.target))) {
                 c.style.width = '100%';
                 c.style.height = '100%';
                 c.style.transform = '';
                 c.style.zIndex = '900';
-                var s = c.closest('.post-card-slot');
+                var s = /** @type {HTMLElement} */ (c.closest('.post-card-slot'));
                 if (s) s.style.zIndex = '900';
             }
         }
     });
     
     document.addEventListener('transitionend', function(e) {
-        if (e.propertyName === 'width' && e.target.classList.contains('post-card')) {
-            if (e.target.style.width === '100%') {
-                e.target.style.position = '';
-                e.target.style.top = '';
-                e.target.style.left = '';
-                e.target.style.zIndex = '';
-                delete e.target.dataset.scaled;
-                var slot = e.target.closest('.post-card-slot');
+        var target = /** @type {HTMLElement} */ (e.target);
+        if (e.propertyName === 'width' && target.classList.contains('post-card')) {
+            if (target.style.width === '100%') {
+                target.style.position = '';
+                target.style.top = '';
+                target.style.left = '';
+                target.style.zIndex = '';
+                delete target.dataset.scaled;
+                var slot = /** @type {HTMLElement} */ (target.closest('.post-card-slot'));
                 if (slot) {
                     slot.style.position = '';
                     slot.style.width = '';
