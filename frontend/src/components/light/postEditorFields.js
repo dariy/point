@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * The editor's field markup.
  *
@@ -31,7 +30,7 @@ export function toDatetimeLocal(isoStr) {
 export function scheduleSummary(scheduledAt) {
   if (!scheduledAt) return "not set";
   const d = new Date(scheduledAt);
-  return isNaN(d) ? "not set" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return isNaN(d.getTime()) ? "not set" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export const toTagNames = (tags) =>

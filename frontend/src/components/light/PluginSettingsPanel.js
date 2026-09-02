@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * PluginSettingsPanel — a right slide-in drawer holding one plugin's settings.
  *
@@ -66,6 +65,7 @@ export class PluginSettingsPanel extends Component {
     const { title, sections, settings, pluginId } = this.props;
     const { saving } = this.state;
 
+    /** @type {import("../../utils/helpers.js").Slot} */
     let formHtml = "";
     if (this._hasForm) {
       const { inputs, toggles } = renderFields(this.props.keys, settings, {});
@@ -254,7 +254,7 @@ export class PluginSettingsPanel extends Component {
   }
 
   async _save() {
-    const form = this.$("#plugin-settings-form");
+    const form = /** @type {HTMLFormElement|null} */ (this.$("#plugin-settings-form"));
     if (!form) return;
     this.setState({ saving: true });
 

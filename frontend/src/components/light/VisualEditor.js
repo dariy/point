@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * VisualEditor — visual image-sequence editor for immersive posts.
  *
@@ -138,10 +137,11 @@ export class VisualEditor extends Component {
   }
 
   _bindVeExif() {
-    this.container.querySelectorAll(".ve-exif-toggle").forEach((btn) => {
+    this.$$(".ve-exif-toggle").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const panel = btn.closest(".ve-card").querySelector(".ve-exif-panel");
+        const panel = /** @type {HTMLElement} */ (
+          btn.closest(".ve-card").querySelector(".ve-exif-panel"));
         if (panel) panel.hidden = !panel.hidden;
       });
     });
@@ -153,7 +153,7 @@ export class VisualEditor extends Component {
     };
     bindDelete(this.container);
 
-    this.container.querySelectorAll(".ve-exif-add-btn").forEach((btn) => {
+    this.$$(".ve-exif-add-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const tbody = btn.closest(".ve-exif-panel").querySelector(".exif-rows");
         const tr = document.createElement("tr");
@@ -179,14 +179,14 @@ export class VisualEditor extends Component {
       });
     });
 
-    this.container.querySelectorAll(".ve-exif-save-btn").forEach((btn) => {
+    this.$$(".ve-exif-save-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = parseInt(btn.dataset.mediaId, 10);
         const panel = btn.closest(".ve-exif-panel");
         const metadata = {};
         panel.querySelectorAll(".exif-rows tr").forEach((tr) => {
-          const key = tr.querySelector(".exif-key")?.value.trim();
-          const val = tr.querySelector(".exif-val")?.value.trim();
+          const key = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-key"))?.value.trim();
+          const val = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-val"))?.value.trim();
           if (key) metadata[key] = val;
         });
         try {
@@ -201,7 +201,7 @@ export class VisualEditor extends Component {
       });
     });
 
-    this.container.querySelectorAll(".ve-exif-reextract-btn").forEach((btn) => {
+    this.$$(".ve-exif-reextract-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const mountEl = document.createElement("div");
         document.body.appendChild(mountEl);
@@ -277,8 +277,8 @@ export class VisualEditor extends Component {
         const card = this.container.querySelector(
           `.ve-card[data-index="${i}"]`,
         );
-        const ta = card?.querySelector(".ve-text-area");
-        const blockClassInput = card?.querySelector(".ve-block-class");
+        const ta = /** @type {HTMLTextAreaElement} */ (card?.querySelector(".ve-text-area"));
+        const blockClassInput = /** @type {HTMLInputElement} */ (card?.querySelector(".ve-block-class"));
         const text = ta ? ta.value : node.text || "";
         const blockClass = (
           blockClassInput ? blockClassInput.value : node.blockClass || ""
@@ -292,9 +292,9 @@ export class VisualEditor extends Component {
   }
 
   _bindInsertZones() {
-    this.container.querySelectorAll(".ve-insert-text").forEach((btn) => {
+    this.$$(".ve-insert-text").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const zone = btn.closest(".ve-insert-zone");
+        const zone = /** @type {HTMLElement} */ (btn.closest(".ve-insert-zone"));
         if (!zone) return;
         const at = parseInt(zone.dataset.insertAt, 10);
         const next = [...this.props.nodes];
@@ -302,15 +302,15 @@ export class VisualEditor extends Component {
         this.props.onChange(next);
         // After parent re-renders via setProps, focus the new textarea
         requestAnimationFrame(() => {
-          const cards = this.container.querySelectorAll(".ve-card");
-          cards[at]?.querySelector(".ve-text-area")?.focus();
+          const cards = this.$$(".ve-card");
+          /** @type {HTMLElement} */ (cards[at]?.querySelector(".ve-text-area"))?.focus();
         });
       });
     });
 
-    this.container.querySelectorAll(".ve-insert-media").forEach((btn) => {
+    this.$$(".ve-insert-media").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const zone = btn.closest(".ve-insert-zone");
+        const zone = /** @type {HTMLElement} */ (btn.closest(".ve-insert-zone"));
         if (!zone) return;
         const at = parseInt(zone.dataset.insertAt, 10);
         if (this.props.onAddMedia) {
@@ -321,7 +321,7 @@ export class VisualEditor extends Component {
   }
 
   _bindTextCards() {
-    this.container.querySelectorAll(".ve-text-area").forEach((ta) => {
+    this.$$(".ve-text-area").forEach((/** @type {HTMLTextAreaElement} */ ta) => {
       const resize = () => {
         ta.style.height = "auto";
         ta.style.height = ta.scrollHeight + "px";
@@ -329,7 +329,7 @@ export class VisualEditor extends Component {
       resize();
       ta.addEventListener("input", () => {
         resize();
-        const card = ta.closest(".ve-card");
+        const card = /** @type {HTMLElement} */ (ta.closest(".ve-card"));
         if (card) {
           const idx = parseInt(card.dataset.index, 10);
           if (this.props.nodes[idx]) {
@@ -342,9 +342,9 @@ export class VisualEditor extends Component {
       });
     });
 
-    this.container.querySelectorAll(".ve-block-class").forEach((input) => {
+    this.$$(".ve-block-class").forEach((/** @type {HTMLInputElement} */ input) => {
       input.addEventListener("input", () => {
-        const card = input.closest(".ve-card");
+        const card = /** @type {HTMLElement} */ (input.closest(".ve-card"));
         if (card) {
           const idx = parseInt(card.dataset.index, 10);
           if (this.props.nodes[idx]) {
@@ -357,9 +357,9 @@ export class VisualEditor extends Component {
   }
 
   _bindRemove() {
-    this.container.querySelectorAll(".ve-remove").forEach((btn) => {
+    this.$$(".ve-remove").forEach((btn) => {
       btn.addEventListener("click", (e) => {
-        const idx = parseInt(e.currentTarget.dataset.index, 10);
+        const idx = parseInt(/** @type {HTMLElement} */ (e.currentTarget).dataset.index, 10);
         const next = [...this.props.nodes];
         next.splice(idx, 1);
         this.props.onChange(next);
@@ -406,14 +406,15 @@ export class VisualEditor extends Component {
 
     // Enable dragging only when mousedown starts on the handle
     list.addEventListener("mousedown", (e) => {
-      const handle = e.target.closest(".ve-handle");
+      const handle = /** @type {HTMLElement} */ (e.target).closest(".ve-handle");
       if (!handle) return;
       const card = handle.closest(".ve-card");
       if (card) card.setAttribute("draggable", "true");
     });
 
     list.addEventListener("dragstart", (e) => {
-      const card = e.target.closest(".ve-card");
+      const card = /** @type {HTMLElement} */ (
+        /** @type {HTMLElement} */ (e.target).closest(".ve-card"));
       if (!card || card.getAttribute("draggable") !== "true") return;
       dragIdx = parseInt(card.dataset.index, 10);
       card.classList.add("dragging");
@@ -439,7 +440,7 @@ export class VisualEditor extends Component {
     });
 
     list.addEventListener("dragleave", (e) => {
-      if (!list.contains(e.relatedTarget)) removeIndicator();
+      if (!list.contains(/** @type {Node} */ (e.relatedTarget))) removeIndicator();
     });
 
     list.addEventListener("drop", (e) => {
@@ -468,9 +469,9 @@ export class VisualEditor extends Component {
     });
   }
   _bindInlineRename() {
-    this.container.querySelectorAll(".ve-path").forEach((span) => {
+    this.$$(".ve-path").forEach((span) => {
       span.addEventListener("click", () => {
-        const card = span.closest(".ve-card");
+        const card = /** @type {HTMLElement} */ (span.closest(".ve-card"));
         if (!card) return;
         const idx = parseInt(card.dataset.index, 10);
         const node = this.props.nodes[idx];
@@ -553,7 +554,7 @@ export class VisualEditor extends Component {
   }
 
   _bindLightbox() {
-    this.container.querySelectorAll(".ve-thumb").forEach((img) => {
+    this.$$(".ve-thumb").forEach((img) => {
       img.addEventListener("click", () => {
         const full = img.dataset.full;
         if (!full) return;

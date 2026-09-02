@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * Pointer gestures for the tags manager: the mobile swipe-to-reveal drawer and
  * desktop drag-and-drop reordering.
@@ -115,6 +114,9 @@ export function rowParentId(row) {
  * Returns a cleanup function, or null when the gesture does not apply (desktop
  * width, or no matchMedia at all). Callers must call the previous cleanup
  * before rebinding after a re-render.
+ *
+ * @param {Element} container
+ * @param {{ onSelect?: (row: HTMLElement) => void }} [handlers]
  */
 export function bindSwipeToReveal(container, { onSelect } = {}) {
   if (!window.matchMedia) return null;      // SSR / test env guard
@@ -137,7 +139,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
   };
 
   // Tree rows carry .tm-row; list-view rows are the <tr class="tm-tag-row">.
-  container.querySelectorAll('.tm-row, .tm-tag-row').forEach(row => {
+  container.querySelectorAll('.tm-row, .tm-tag-row').forEach((/** @type {HTMLElement} */ row) => {
     if (!row.querySelector('.tm-actions')) return;
     const ac = new AbortController();
     abortControllers.push(ac);
@@ -146,7 +148,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
     row.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) return;
       // If tapping inside the already-open row's actions, let buttons handle it
-      if (row === openRow && e.target.closest('.tm-actions')) return;
+      if (row === openRow && /** @type {HTMLElement} */ (e.target).closest('.tm-actions')) return;
 
       const t = e.touches[0];
       startX = t.clientX;
@@ -156,7 +158,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
       dx = 0;
 
       // Measure actions width (varies per row due to button count)
-      const actions = row.querySelector('.tm-actions');
+      const actions = /** @type {HTMLElement} */ (row.querySelector('.tm-actions'));
       actionsWidth = actions ? actions.offsetWidth : 0;
 
       // Disable transition during drag for responsive feel
@@ -252,7 +254,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
  * @param {Function} handlers.onInvalidReorder  () => void
  * @param {Function} handlers.siblingBefore     (targetId, parentId) => id|null
  */
-export function bindDragAndDrop(container, { onReparent, onReorder, onInvalidReorder, siblingBefore } = {}) {
+export function bindDragAndDrop(container, { onReparent, onReorder, onInvalidReorder, siblingBefore }) {
   let dragState = null;
 
   const clearIndicators = () => {
@@ -260,7 +262,7 @@ export function bindDragAndDrop(container, { onReparent, onReorder, onInvalidReo
       r.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on'));
   };
 
-  container.querySelectorAll('.tm-row[draggable="true"]').forEach(row => {
+  container.querySelectorAll('.tm-row[draggable="true"]').forEach((/** @type {HTMLElement} */ row) => {
     row.addEventListener('dragstart', e => {
       const id = parseInt(row.dataset.id, 10);
       dragState = { tagId: id, parentId: rowParentId(row) };
@@ -291,7 +293,7 @@ export function bindDragAndDrop(container, { onReparent, onReorder, onInvalidReo
     });
 
     row.addEventListener('dragleave', e => {
-      if (!row.contains(e.relatedTarget)) {
+      if (!row.contains(/** @type {Node} */ (e.relatedTarget))) {
         row.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on');
       }
     });

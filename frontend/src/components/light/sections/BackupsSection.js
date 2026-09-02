@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * BackupsSection — the database-backup block for the `backups` plugin.
  *
@@ -139,7 +138,7 @@ export class BackupsSection extends Component {
   }
   afterRender() {
     this.$("#create-backup-btn")?.addEventListener("click", () => this._handleCreate());
-    const uploadInput = this.$("#upload-backup-input");
+    const uploadInput = /** @type {HTMLInputElement|null} */ (this.$("#upload-backup-input"));
     this.$("#upload-backup-btn")?.addEventListener("click", () => uploadInput?.click());
     uploadInput?.addEventListener("change", () => {
       const file = uploadInput.files?.[0];
@@ -196,15 +195,15 @@ export class BackupsSection extends Component {
     const closeAll = except => {
       items.forEach(it => {
         if (it === except) return;
-        const c = it.querySelector(".backup-swipe-content");
+        const c = /** @type {HTMLElement} */ (it.querySelector(".backup-swipe-content"));
         c.style.transition = "";
         c.style.transform = "translateX(0)";
         it.classList.remove("is-open");
       });
     };
     items.forEach(item => {
-      const content = item.querySelector(".backup-swipe-content");
-      const actions = item.querySelector(".backup-swipe-actions");
+      const content = /** @type {HTMLElement} */ (item.querySelector(".backup-swipe-content"));
+      const actions = /** @type {HTMLElement} */ (item.querySelector(".backup-swipe-actions"));
       const open = () => {
         closeAll(item);
         content.style.transition = "";
@@ -247,10 +246,7 @@ export class BackupsSection extends Component {
   // Wire the automation controls. Frequency toggles a custom day-count input;
   // every control persists on change (no separate Save button).
   _bindSettings() {
-    const enable = this.$("#bk-enable");
-    const freq = this.$("#bk-freq");
-    const freqDays = this.$("#bk-freq-days");
-    const keep = this.$("#bk-keep");
+    const { enable, freq, freqDays, keep } = this._settingsControls();
     enable?.addEventListener("change", () => {
       // Enable/disable the cadence controls in place without a full re-render.
       const on = enable.checked;
@@ -265,12 +261,29 @@ export class BackupsSection extends Component {
     freqDays?.addEventListener("change", () => this._saveSettings());
     keep?.addEventListener("change", () => this._saveSettings());
   }
+  /**
+   * The four automation controls. Both readers below want the same set, and
+   * each has to be named as the control it is before the DOM lib will part
+   * with its `checked`/`value`/`disabled`.
+   *
+   * @returns {{ enable: HTMLInputElement|null, freq: HTMLSelectElement|null,
+   *             freqDays: HTMLInputElement|null, keep: HTMLInputElement|null }}
+   */
+  _settingsControls() {
+    return {
+      enable: /** @type {HTMLInputElement|null} */ (this.$("#bk-enable")),
+      freq: /** @type {HTMLSelectElement|null} */ (this.$("#bk-freq")),
+      freqDays: /** @type {HTMLInputElement|null} */ (this.$("#bk-freq-days")),
+      keep: /** @type {HTMLInputElement|null} */ (this.$("#bk-keep")),
+    };
+  }
   async _saveSettings() {
-    const enable = this.$("#bk-enable")?.checked ?? true;
-    const freq = this.$("#bk-freq")?.value;
-    const freqDays = this.$("#bk-freq-days")?.value;
+    const els = this._settingsControls();
+    const enable = els.enable?.checked ?? true;
+    const freq = els.freq?.value;
+    const freqDays = els.freqDays?.value;
     const interval = freq === "custom" ? Math.max(1, parseInt(freqDays, 10) || 1) : parseInt(freq, 10) || 1;
-    const keep = Math.max(0, parseInt(this.$("#bk-keep")?.value, 10) || 0);
+    const keep = Math.max(0, parseInt(els.keep?.value, 10) || 0);
 
     // Keep local state in sync so a later re-render shows the saved values.
     this.state.enableBackup = enable;

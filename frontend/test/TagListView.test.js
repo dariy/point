@@ -11,9 +11,12 @@ import {
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take, so unwrap once here.
-const renderSortHeader = (...a) => String(_renderSortHeader(...a));
-const renderTagList = (...a) => String(_renderTagList(...a));
-const renderFilterChips = (...a) => String(_renderFilterChips(...a));
+const renderSortHeader = (/** @type {Parameters<typeof _renderSortHeader>} */ ...a) =>
+  String(_renderSortHeader(...a));
+const renderTagList = (/** @type {Parameters<typeof _renderTagList>} */ ...a) =>
+  String(_renderTagList(...a));
+const renderFilterChips = (/** @type {Parameters<typeof _renderFilterChips>} */ ...a) =>
+  String(_renderFilterChips(...a));
 
 // No DOM stubs: TagListView is pure, same as TagTreeView.
 const view = (over = {}) => ({

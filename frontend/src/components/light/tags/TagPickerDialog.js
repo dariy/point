@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * The modal overlay plumbing shared by the tags manager's dialogs.
  *
@@ -48,7 +47,8 @@ export function openOverlay(modalHtml) {
  * @param {string}   opts.modalClass     Modal variant class.
  * @param {Array}    opts.tags           Choices, already filtered and ordered.
  * @param {string}   opts.radioName      name= shared by the radio group.
- * @param {Function} opts.renderItem     tag => item markup from html`` (must carry itemClass/nameClass).
+ * @param {(tag: any) => import('../../../utils/helpers.js').RawHtml} opts.renderItem
+ *   tag => item markup from html`` (must carry itemClass/nameClass).
  * @param {string}   opts.itemClass      Selector the search box shows/hides.
  * @param {string}   opts.nameClass      Element inside an item holding its searchable text.
  * @param {string}   opts.listClass      Wrapper around the items.
@@ -102,7 +102,8 @@ export function openTagPickerDialog({
   });
 
   overlay.querySelector(`#${confirmId}`).addEventListener('click', async () => {
-    const radio = overlay.querySelector(`input[name="${radioName}"]:checked`);
+    const radio = /** @type {HTMLInputElement|null} */ (
+      overlay.querySelector(`input[name="${radioName}"]:checked`));
     if (!radio) {
       onEmpty();
       return;

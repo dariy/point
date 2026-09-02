@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * PostGrid — renders a responsive grid of PostCard components.
  *
@@ -48,10 +47,10 @@ export class PostGrid extends Component {
     // them are each about to ask how wide they will paint (PostCard reads the
     // answer back out of gridFit for its <img sizes>). Measure first, so the
     // question is asked of this grid rather than of the last one.
-    measureCardImageSizes(this.container.querySelector('.posts-grid'));
+    measureCardImageSizes(this.$('.posts-grid'));
 
     this._cards = posts.map((post, i) => {
-      const slot = this.container.querySelector(`[data-index="${i}"]`);
+      const slot = this.$(`[data-index="${i}"]`);
       if (!slot) return null;
       // What lets the next update be a reconcile rather than a rebuild: the
       // slot is told which post it stands for, here where that is known.
@@ -59,7 +58,7 @@ export class PostGrid extends Component {
       return this.mountChild(PostCard, slot, this._cardProps(post, i === heroIndex));
     });
 
-    const grid = this.container.querySelector('.posts-grid');
+    const grid = this.$('.posts-grid');
     if (!grid) return;
 
     // Ctrl+arrows walk the cards. On document, because the grid itself is not
@@ -68,10 +67,11 @@ export class PostGrid extends Component {
     // no longer exist.
     this.on(document, 'keydown', (e) => {
       if (!e.ctrlKey || !['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
-      const cards = Array.from(grid.querySelectorAll('.post-card[tabindex="0"]'));
+      const cards = /** @type {HTMLElement[]} */ (
+        Array.from(grid.querySelectorAll('.post-card[tabindex="0"]')));
       if (!cards.length) return;
       e.preventDefault();
-      const idx = cards.indexOf(document.activeElement);
+      const idx = cards.indexOf(/** @type {HTMLElement} */ (document.activeElement));
       const delta = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
       const next = idx === -1 ? 0 : Math.max(0, Math.min(idx + delta, cards.length - 1));
       cards[next].focus();
@@ -133,7 +133,7 @@ export class PostGrid extends Component {
    * @returns {boolean}
    */
   _reconcileTo(posts, current) {
-    const grid = this.container.querySelector('.posts-grid');
+    const grid = this.$('.posts-grid');
     // An empty list on either side is the empty-state markup, not a grid.
     if (!grid || !current.length || !posts.length || !this._cards) return false;
     // The hero spans a whole row, so moving it re-flows everything below it —

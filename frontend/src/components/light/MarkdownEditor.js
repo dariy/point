@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { html, setHTML, raw } from "../../utils/helpers.js";
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
@@ -7,6 +6,8 @@ import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js'
 // prismManual must be imported before prism-core — see that file.
 import '../../utils/prismManual.js';
 import Prism from '../../../vendor/prismjs/prism-core.js';
+// The language files below are vendored global scripts reading a bare `Prism`,
+// so the module's export has to be on the global before they are imported.
 window.Prism = Prism;
 import '../../../vendor/prismjs/prism-markup.js';
 import '../../../vendor/prismjs/prism-markdown.js';

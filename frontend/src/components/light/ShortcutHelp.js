@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { Component } from '../Component.js';
 import { html } from '../../utils/helpers.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
@@ -59,7 +58,8 @@ export class ShortcutHelp extends Component {
     if (!this.state.isOpen) return;
 
     this.$('#sh-overlay')?.addEventListener('click', (e) => {
-      if (e.target.id === 'sh-overlay' || e.target.classList.contains('sh-close')) this.close();
+      const target = /** @type {HTMLElement} */ (e.target);
+      if (target.id === 'sh-overlay' || target.classList.contains('sh-close')) this.close();
     });
     this.$('.sh-close')?.addEventListener('click', () => this.close());
   }

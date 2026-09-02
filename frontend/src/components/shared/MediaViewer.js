@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { html, setHTML, raw } from "../../utils/helpers.js";
 /**
  * MediaViewer — Unified carousel component for immersive posts and lightbox.
@@ -181,8 +180,10 @@ export class MediaViewer extends Component {
     this._cleanup();
     const wrapper = this.$('.media-viewer-wrapper');
     const visuals = this.$('.immersive-visuals');
-    const slides = Array.from(visuals.querySelectorAll('.carousel-slide'));
-    const dots = Array.from(this.container.querySelectorAll('.carousel-dot'));
+    const slides = /** @type {HTMLElement[]} */ (
+      Array.from(visuals.querySelectorAll('.carousel-slide')));
+    const dots = /** @type {HTMLElement[]} */ (
+      Array.from(this.container.querySelectorAll('.carousel-dot')));
     this._slides = slides;
     this._dots = dots;
     let lastTapTime = 0;
@@ -622,7 +623,7 @@ export class MediaViewer extends Component {
 
   /** Real-time drag feedback. Overridable for alternate vertical gestures. */
   _onSwipeMove(dx, dy) {
-    this._updateVisuals(this._calcSwipeX(dx), dy);
+    this._updateVisuals(this._calcSwipeX(dx, dy), dy);
   }
 
   /** Drag released without committing — settle back to rest. */
@@ -639,8 +640,13 @@ export class MediaViewer extends Component {
     }
     this._commitHorizontal(dir === 'left' ? 'fwd' : 'back');
   }
-  _calcSwipeX(dx) {
-    if (Math.abs(dx) <= Math.abs(this._lastDy || 0)) return dx;
+  /**
+   * The horizontal offset to drag by: rubber-banded when the step it implies is
+   * blocked, plain otherwise. A drag that is more vertical than horizontal is
+   * on its way to a dismiss, so it never rubber-bands.
+   */
+  _calcSwipeX(dx, dy) {
+    if (Math.abs(dx) <= Math.abs(dy || 0)) return dx;
     const blocked = dx > 0 && this._isBlocked('back') || dx < 0 && this._isBlocked('fwd');
     return blocked ? rubberBand(dx) : dx;
   }
@@ -711,7 +717,7 @@ export class MediaViewer extends Component {
       if (ty > 0) {
         const s = Math.max(0.5, 1 - ty / window.innerHeight);
         target.style.transform = `translateY(${ty}px) scale(${s})`;
-        target.style.opacity = s;
+        target.style.opacity = String(s);
       } else {
         target.style.transform = '';
         target.style.opacity = '1';
@@ -751,10 +757,11 @@ export class MediaViewer extends Component {
     neighbor.style.zIndex = '11';
   }
   _getMaxScale() {
-    const img = (this.$('.carousel-slide.active') || this.$('.immersive-visuals')).querySelector('img, video');
+    const img = /** @type {HTMLImageElement|HTMLVideoElement} */ (
+      (this.$('.carousel-slide.active') || this.$('.immersive-visuals')).querySelector('img, video'));
     if (!img) return 2;
     const rect = img.getBoundingClientRect();
-    const nw = img.naturalWidth || img.videoWidth || rect.width * 2;
+    const nw = ('naturalWidth' in img ? img.naturalWidth : img.videoWidth) || rect.width * 2;
     return Math.max(window.innerWidth / rect.width, window.innerHeight / rect.height, nw / rect.width, 2);
   }
   _panelClick(e, navFn) {
