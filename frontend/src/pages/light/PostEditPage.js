@@ -879,6 +879,7 @@ export default class PostEditPage extends Component {
   }
   _insertMediaPaths(items) {
     if (!items.length) return;
+    this._rememberMedia(items);
     if (this.state.editorMode === "visual") {
       this._nodes = [...this._nodes, ...items.map(item => ({
         type: "image",
@@ -889,6 +890,15 @@ export default class PostEditPage extends Component {
     }
     const paths = items.map(item => item.path).join("\n");
     if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(paths);
+  }
+  /**
+   * Fold picked media into the path -> media map. The map is built once per
+   * load from what the post already references, so without this an image
+   * inserted afterwards would render without its EXIF panel until a reload.
+   */
+  _rememberMedia(items) {
+    if (!this._mediaByPath) this._mediaByPath = {};
+    for (const item of items) if (item && item.path) this._mediaByPath[item.path] = item;
   }
   _mountVisualEditor() {
     if (this._visualEditorRef) {
@@ -910,6 +920,7 @@ export default class PostEditPage extends Component {
       onAddMedia: index => {
         this._mediaPicker.open(items => {
           if (!items.length) return;
+          this._rememberMedia(items);
           this._nodes.splice(index, 0, ...items.map(item => ({
             type: "image",
             path: item.path
@@ -922,20 +933,19 @@ export default class PostEditPage extends Component {
     });
   }
   async _handleRename(oldPath, newFilename) {
-    const lastSlash = oldPath.lastIndexOf("/");
-    const folder = oldPath.slice(1, lastSlash);
     try {
       const {
-        listMedia,
+        getMediaByPaths,
         renameMedia
       } = await import('../../api/media.js');
-      const result = await listMedia({
-        folder,
-        per_page: 200
-      });
-      const item = (result.media || []).find(m => m.path === oldPath);
+      const item = (await getMediaByPaths([oldPath]))[oldPath];
       if (!item) throw new Error(`Media not found: ${oldPath}`);
       const updated = await renameMedia(item.id, newFilename);
+      // Re-key the metadata map so the renamed card keeps its EXIF panel.
+      if (this._mediaByPath) {
+        delete this._mediaByPath[oldPath];
+        this._mediaByPath[updated.path] = updated;
+      }
       this._nodes = this._nodes.map(n => n.type === "image" && n.path === oldPath ? {
         ...n,
         path: updated.path
@@ -1070,18 +1080,18 @@ export default class PostEditPage extends Component {
       this._tags = toTagNames(post.tags);
       this._nodes = parseNodes(post.content);
       this._mediaByPath = {};
-      try {
-        const {
-          listMedia
-        } = await import('../../api/media.js');
-        // No post filter exists on this endpoint — it reads page, per_page,
-        // file_type and folder and nothing else — so this is the first 200
-        // items site-wide, used only to resolve the paths this post references.
-        const result = await listMedia({
-          per_page: 200
-        });
-        for (const m of result.media || []) if (m.path) this._mediaByPath[m.path] = m;
-      } catch (_e) {/* ignore */}
+      // Resolve exactly the paths this post references. This used to take the
+      // first 200 media site-wide and hope: the listing is ordered by upload
+      // time, so a post whose images sat past that window got no metadata at all.
+      const paths = this._nodes.filter(n => n.type === "image" && n.path).map(n => n.path);
+      if (paths.length) {
+        try {
+          const {
+            getMediaByPaths
+          } = await import('../../api/media.js');
+          this._mediaByPath = await getMediaByPaths(paths);
+        } catch (_e) {/* ignore */}
+      }
       this.setState({
         loading: false,
         post,

@@ -9,14 +9,49 @@ import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.js';
 
 /**
  * List media items.
- * `orphaned_only` is deliberately absent: the handler reads page, per_page,
- * file_type and folder and nothing else, so any other key is sent and dropped.
  *
- * @param {{ page?: number, per_page?: number, file_type?: string, folder?: string }} [params]
+ * `paths` switches the endpoint out of listing mode: it resolves exactly the
+ * given content paths ("/YYYY/MM/file") and ignores the paging keys, which is
+ * how a caller that already knows which media it wants — the post editor, say —
+ * avoids fishing for them in a page of the library. At most 500 per request.
+ *
+ * `orphaned_only` is deliberately absent: the handler reads page, per_page,
+ * file_type, folder and paths and nothing else, so any other key is sent and
+ * dropped.
+ *
+ * @param {{ page?: number, per_page?: number, file_type?: string, folder?: string, paths?: string[] }} [params]
  * @returns {Promise<{ media: object[], total, page, per_page, pages }>}
  */
 export function listMedia(params = {}) {
   return api.get('/api/media', params);
+}
+
+// Paths ride in the query string, and a photo essay can reference more of them
+// than one URL should carry, so a lookup goes out in batches of this size.
+const MEDIA_PATH_BATCH = 100;
+
+/**
+ * Resolve the media records at the given content paths, keyed by path.
+ *
+ * This is the lookup a post editor wants: a post's images are what its content
+ * references, which is neither what `media.post_id` records nor what any one
+ * page of the library happens to contain.
+ *
+ * @param {string[]} paths  Content paths, e.g. "/2026/03/1712345678_shot.jpg"
+ * @returns {Promise<Record<string, object>>}
+ */
+export async function getMediaByPaths(paths) {
+  const unique = [...new Set(paths.filter(Boolean))];
+  const batches = [];
+  for (let i = 0; i < unique.length; i += MEDIA_PATH_BATCH) {
+    batches.push(listMedia({ paths: unique.slice(i, i + MEDIA_PATH_BATCH) }));
+  }
+  /** @type {Record<string, object>} */
+  const byPath = {};
+  for (const result of await Promise.all(batches)) {
+    for (const m of result.media || []) if (m.path) byPath[m.path] = m;
+  }
+  return byPath;
 }
 
 /**

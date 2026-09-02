@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -880,6 +882,133 @@ func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
 	meta, ok := item["metadata"].(map[string]interface{})
 	if !ok || meta["Make"] != "Nikon" {
 		t.Errorf("ListMedia did not return metadata: got %v", item["metadata"])
+	}
+}
+
+// The post editor resolves the images a post references by path. Before
+// paths= existed it paged the library instead, so an image outside the first
+// page came back with no metadata at all — hence per_page=1 here, which the
+// path lookup must ignore.
+func TestMediaHandler_ListMedia_ByPaths(t *testing.T) {
+	repo := setupTestDB(t)
+	t.Cleanup(func() { _ = repo.Close() })
+	tmpDir, _ := os.MkdirTemp("", "media-list-paths-test")
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	contentPath := func(m models.Medium) string {
+		return "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
+	}
+	upload := func(name string) models.Medium {
+		m, err := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+			Content: []byte(name), Filename: name, MimeType: "text/plain",
+		})
+		if err != nil {
+			t.Fatalf("upload %s: %v", name, err)
+		}
+		return m
+	}
+
+	wanted := upload("wanted.txt")
+	for i := range 5 {
+		upload(fmt.Sprintf("filler%d.txt", i))
+	}
+	alsoWanted := upload("also-wanted.txt")
+
+	listPaths := func(paths ...string) []interface{} {
+		t.Helper()
+		q := url.Values{"per_page": {"1"}}
+		for _, p := range paths {
+			q.Add("paths", p)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/media?"+q.Encode(), nil)
+		rec := httptest.NewRecorder()
+		if err := handler.ListMedia(e.NewContext(req, rec)); err != nil {
+			t.Fatalf("ListMedia: %v", err)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		return resp["media"].([]interface{})
+	}
+
+	got := listPaths(contentPath(wanted), contentPath(alsoWanted))
+	if len(got) != 2 {
+		t.Fatalf("paths lookup: got %d items, want 2 (per_page must not apply)", len(got))
+	}
+	names := map[string]bool{}
+	for _, it := range got {
+		names[it.(map[string]interface{})["filename"].(string)] = true
+	}
+	if !names["wanted.txt"] || !names["also-wanted.txt"] {
+		t.Errorf("paths lookup returned the wrong media: %v", names)
+	}
+
+	// A repeated path is one row, and a path nothing was ever stored at is not
+	// an error — the editor sends whatever its content references.
+	if got := listPaths(contentPath(wanted), contentPath(wanted)); len(got) != 1 {
+		t.Errorf("duplicate path: got %d items, want 1", len(got))
+	}
+	if got := listPaths("/2001/01/gone.jpg"); len(got) != 0 {
+		t.Errorf("unknown path: got %d items, want 0", len(got))
+	}
+	// Not in content form ("/YYYY/MM/file"), so there is nothing to look up.
+	if got := listPaths("originals/2001/01/gone.jpg"); len(got) != 0 {
+		t.Errorf("non-content path: got %d items, want 0", len(got))
+	}
+}
+
+func TestMediaHandler_ListMedia_ByPaths_TooMany(t *testing.T) {
+	repo := setupTestDB(t)
+	t.Cleanup(func() { _ = repo.Close() })
+	tmpDir, _ := os.MkdirTemp("", "media-list-paths-cap-test")
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, services.NewTagService(repo))
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+
+	q := url.Values{}
+	for i := range maxMediaPathLookup + 1 {
+		q.Add("paths", fmt.Sprintf("/2026/01/%d.jpg", i))
+	}
+	req := httptest.NewRequest(http.MethodGet, "/media?"+q.Encode(), nil)
+	rec := httptest.NewRecorder()
+	err := handler.ListMedia(echo.New().NewContext(req, rec))
+	var httpErr *echo.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 over the path cap, got %v", err)
+	}
+}
+
+// A failed lookup is a 500, not an empty result — the editor would otherwise
+// read "the database is down" as "this post references no media".
+func TestMediaHandler_ListMedia_ByPaths_LookupError(t *testing.T) {
+	repo := setupTestDB(t)
+	tmpDir, _ := os.MkdirTemp("", "media-list-paths-err-test")
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, services.NewTagService(repo))
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	_ = repo.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/media?paths=%2F2026%2F01%2Fphoto.jpg", nil)
+	rec := httptest.NewRecorder()
+	err := handler.ListMedia(echo.New().NewContext(req, rec))
+	var httpErr *echo.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when the lookup fails, got %v", err)
 	}
 }
 

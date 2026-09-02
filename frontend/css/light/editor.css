@@ -236,6 +236,7 @@ body.drag-active::after {
     display: block;
     width: 100%;
     max-width: 100%;
+    min-height: 6em;
     resize: vertical;
 }
 
@@ -1324,4 +1325,3 @@ textarea.is-maximized,
         background: var(--surface-card);
     }
 }
-

@@ -59,6 +59,10 @@ Gotchas from production:
 - **Content-addressed dedup at the service layer** rather than per-caller checks.
 - **Posts reference media by path** (serialized in post content nodes, matched by
   `IMAGE_PATH_RE` in the editor) — renames go through the service so references update.
+  That is also how a caller asks for a post's media: `GET /api/media?paths=/YYYY/MM/file`
+  (repeated, up to 500, batched client-side) resolves exactly those and skips paging.
+  `media.post_id` is not the answer — it is only set for files uploaded from the editor,
+  so it misses anything picked out of the library.
 - **Originals are immutable-ish**: EXIF edits keep the original values recoverable.
   A variant is never served as the `src` of an article image either — `src` stays on the
   bare original so the lightbox and `extractMedia`'s `src` capture still open full size.

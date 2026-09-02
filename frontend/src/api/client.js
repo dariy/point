@@ -102,17 +102,27 @@ class ApiClient {
 
   /**
    * GET request.
+   *
+   * An array value becomes repeated keys (`?p=a&p=b`) rather than a joined
+   * string: the values it carries — media paths, say — may contain whatever
+   * separator we would have joined on.
+   *
    * @template [T=unknown]
    * @param {string} path
-   * @param {Record<string,string|number|boolean>} [params]  Query parameters
+   * @param {Record<string,string|number|boolean|(string|number)[]>} [params]  Query parameters
    * @returns {Promise<T>}
    */
   get(path, params) {
-    // String() explicitly: URLSearchParams stringifies anyway, but its type
-    // only admits strings, and numbers/booleans are common here.
-    const query = params && new URLSearchParams(
-      Object.entries(params).map(([k, v]) => [k, String(v)]),
-    );
+    let query;
+    if (params) {
+      query = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        // String() explicitly: URLSearchParams stringifies anyway, but its type
+        // only admits strings, and numbers/booleans are common here.
+        if (Array.isArray(v)) for (const item of v) query.append(k, String(item));
+        else query.append(k, String(v));
+      }
+    }
     const url = query ? `${path}?${query}` : path;
     return this.request(url, { method: 'GET' });
   }
