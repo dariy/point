@@ -2,7 +2,8 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 import { NavMenu } from '../src/plugins/nav-menu/NavMenu.js';
-import { store } from '../src/store.js';
+import { setUser, store } from '../src/store.js';
+import { pluginHost } from '../src/core/pluginHost.js';
 
 // The More ▾ panel renders admin-authored menu items into the PUBLIC header.
 // It used to be built with a bare template literal wrapped in raw(), which put
@@ -134,5 +135,107 @@ describe('NavMenu settings subscription', () => {
     store.merge('settings', { nav_more_title: 'Plus' });
     assert.strictEqual(renders, 0);
     menu.unmount = () => {};  // afterEach must not unmount twice.
+  });
+});
+
+// Two vizzes, two paths: the graph owns /tags and a map owns /map, so the
+// header shows up to two independent icon buttons — one single "active viz"
+// icon could only ever point at one of them.
+describe('NavMenu viz buttons', () => {
+  let dom;
+  let navItemsEl;
+  let burgerSitemapEl;
+  let menu;
+
+  /**
+   * Render the nav with `enabled` plugin ids in the manifest.
+   * @param {string[]} enabled
+   * @param {object} [opts] {visibility, user, currentPath}
+   */
+  const renderWith = (enabled, opts = {}) => {
+    pluginHost.init(enabled.map((id) => ({ id, entry: `/assets/js/p/${id}.js` })));
+    store.set('settings', { tags_visibility: opts.visibility || 'all', nav_menu_mode: 'none' });
+    setUser(opts.user || null);
+    menu = new NavMenu({
+      navItemsEl,
+      burgerTagsEl: dom.document.createElement('div'),
+      burgerSitemapEl,
+      ctx: { currentPath: opts.currentPath || '/' },
+    });
+    menu.render();
+    return [...navItemsEl.querySelectorAll('.header-action-btn')];
+  };
+
+  beforeEach(() => {
+    dom = setupDOM();
+    navItemsEl = dom.document.createElement('div');
+    burgerSitemapEl = dom.document.createElement('div');
+    dom.document.body.append(navItemsEl, burgerSitemapEl);
+  });
+
+  afterEach(() => {
+    pluginHost.init([]);
+    setUser(null);
+    dom.cleanup();
+  });
+
+  test('graph and map enabled together render one button each', () => {
+    const btns = renderWith(['tags-graph', 'tags-atlas']);
+
+    assert.deepStrictEqual(btns.map((b) => b.getAttribute('href')), ['/tags', '/map']);
+    assert.deepStrictEqual(btns.map((b) => b.getAttribute('title')), ['All tags', 'Atlas']);
+  });
+
+  test('the graph alone renders only the /tags button', () => {
+    const btns = renderWith(['tags-graph']);
+
+    assert.deepStrictEqual(btns.map((b) => b.getAttribute('href')), ['/tags']);
+  });
+
+  test('a map alone renders only the /map button, with its own icon and label', () => {
+    const btns = renderWith(['tags-map']);
+
+    assert.deepStrictEqual(btns.map((b) => b.getAttribute('href')), ['/map']);
+    assert.strictEqual(btns[0].getAttribute('aria-label'), 'Map');
+  });
+
+  test('no viz enabled renders no buttons', () => {
+    assert.deepStrictEqual(renderWith([]), []);
+  });
+
+  test('a guest under tags_visibility=hidden gets no buttons', () => {
+    const btns = renderWith(['tags-graph', 'tags-atlas'], { visibility: 'hidden' });
+
+    assert.deepStrictEqual(btns, []);
+    assert.strictEqual(burgerSitemapEl.querySelector('a[href="/tags"]'), null);
+    assert.strictEqual(burgerSitemapEl.querySelector('a[href="/map"]'), null);
+  });
+
+  test('an admin sees them even under tags_visibility=hidden', () => {
+    const btns = renderWith(['tags-graph', 'tags-atlas'], { visibility: 'hidden', user: { id: 1 } });
+
+    assert.deepStrictEqual(btns.map((b) => b.getAttribute('href')), ['/tags', '/map']);
+  });
+
+  test('each button marks itself active on its own path only', () => {
+    const onMap = renderWith(['tags-graph', 'tags-atlas'], { currentPath: '/map' });
+
+    assert.ok(!onMap[0].classList.contains('active'));
+    assert.ok(onMap[1].classList.contains('active'));
+
+    const onTags = renderWith(['tags-graph', 'tags-atlas'], { currentPath: '/tags' });
+
+    assert.ok(onTags[0].classList.contains('active'));
+    assert.ok(!onTags[1].classList.contains('active'));
+  });
+
+  test('the burger sitemap lists one link per enabled viz', () => {
+    renderWith(['tags-graph', 'tags-map']);
+
+    const links = [...burgerSitemapEl.querySelectorAll('.burger-link')];
+    assert.deepStrictEqual(
+      links.map((a) => [a.getAttribute('href'), a.textContent]),
+      [['/tags', 'All tags'], ['/map', 'Map'], ['/light', 'About']],
+    );
   });
 });
