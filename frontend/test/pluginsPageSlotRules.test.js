@@ -2,10 +2,12 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 
 // The Plugins page derives its radio/lock behavior from each row's `slot_rule`
-// (the cardinality of the slot the plugin claims), so the tag visualizations and
-// the immersive viewers are driven by one rule set. These tests pin that mapping:
+// (the cardinality of the slot the plugin claims), so the tag maps and the
+// immersive viewers are driven by one rule set. These tests pin that mapping:
 // a "0-1" slot is a plain radio group, a "1" slot is a radio group whose current
-// claimant cannot be switched off.
+// claimant cannot be switched off. A 0-1 slot with a single candidate
+// (`tags-route`, the graph) has nothing to compete with and is not an
+// alternative.
 describe('PluginsPage slot rules', () => {
   let PluginsPage;
 
@@ -44,16 +46,16 @@ describe('PluginsPage slot rules', () => {
     PluginsPage = mod.PluginsPage || mod.default;
   });
 
-  // Rows as the backend serves them: three candidates for the 0-1 tags slot and
-  // two for the 1 post-viewer slot, each slot with one candidate enabled.
+  // Rows as the backend serves them: two candidates for the 0-1 map slot, one for
+  // the 0-1 tags slot and two for the 1 post-viewer slot.
   function page(overrides = {}) {
     const p = new PluginsPage({ querySelector: () => null, querySelectorAll: () => [] });
     p.state = {
       ...p.state,
       loading: false,
       plugins: [
-        { id: 'tags-atlas', type: 'route', slot: 'tags-route', slot_rule: '0-1', enabled: true },
-        { id: 'tags-map', type: 'route', slot: 'tags-route', slot_rule: '0-1', enabled: false },
+        { id: 'tags-atlas', type: 'route', slot: 'map-route', slot_rule: '0-1', enabled: true },
+        { id: 'tags-map', type: 'route', slot: 'map-route', slot_rule: '0-1', enabled: false },
         { id: 'tags-graph', type: 'route', slot: 'tags-route', slot_rule: '0-1', enabled: false },
         { id: 'immersive', type: 'enhancer', slot: 'post-viewer', slot_rule: '1', enabled: false },
         { id: 'immersive-sheet', type: 'enhancer', slot: 'post-viewer', slot_rule: '1', enabled: true, locked: true },
@@ -80,15 +82,16 @@ describe('PluginsPage slot rules', () => {
   test('a 0-1 slot never locks its sole claimant — "none" is a valid state there', () => {
     const p = page();
     const atlas = rowOf(p, 'tags-atlas');
-    assert.ok(!atlas.includes('plugin-pill-locked'), '/tags may be turned off entirely');
+    assert.ok(!atlas.includes('plugin-pill-locked'), '/map may be turned off entirely');
     assert.ok(atlas.includes('plugin-toggle'), 'the enabled viz keeps its toggle');
   });
 
   test('candidates competing for one slot are marked as alternatives; other plugins are not', () => {
     const p = page();
-    assert.ok(rowOf(p, 'tags-atlas').includes('Alternative'), 'tags viz rows are alternatives');
+    assert.ok(rowOf(p, 'tags-atlas').includes('Alternative'), 'map rows are alternatives');
     assert.ok(rowOf(p, 'immersive').includes('Alternative'), 'viewer rows are alternatives');
     assert.ok(!rowOf(p, 'timeline').includes('Alternative'), 'a many-slot plugin competes with nothing');
+    assert.ok(!rowOf(p, 'tags-graph').includes('Alternative'), 'the sole tags-route candidate competes with nothing');
   });
 
   // _withLocks re-derives `locked` after a toggle so the page does not need a

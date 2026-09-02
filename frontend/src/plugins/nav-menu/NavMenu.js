@@ -7,6 +7,35 @@ import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyou
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 const DEFAULT_INLINE_MAX = 4;
 
+/** Icon and label per tags-viz plugin, keyed by plugin id. */
+const VIZ_META = {
+  'tags-graph': {
+    icon: TAGS_SVG,
+    label: 'All tags'
+  },
+  'tags-atlas': {
+    icon: GLOBE_SVG,
+    label: 'Atlas'
+  },
+  'tags-map': {
+    icon: MAP_SVG,
+    label: 'Map'
+  }
+};
+
+/**
+ * The two single-claim viz slots and the public path each one owns, listing
+ * candidates in the same order app.js resolves them (see resolveVizModule) —
+ * so a button's icon names the plugin its path will actually load.
+ */
+const VIZ_SLOTS = [{
+  href: '/tags',
+  candidates: ['tags-graph']
+}, {
+  href: '/map',
+  candidates: ['tags-atlas', 'tags-map']
+}];
+
 /**
  * The settings this menu actually renders from, as one comparable string.
  * A primitive, because subscribeSelector compares with Object.is.
@@ -127,31 +156,26 @@ export class NavMenu {
     this._inline = items.slice(0, cap);
     this._configOverflow = items.slice(cap);
 
-    // Tags button — the active viz is the enabled tags-viz plugin (at most
-    // one). None enabled → no tags link. Rendered as one more nav item.
-    const activeTagsViz = ['tags-atlas', 'tags-map', 'tags-graph'].find(id => pluginHost.isEnabled(id)) || '';
+    // Viz buttons — one per single-claim viz slot, each rendered only when its
+    // own slot has an enabled member: the graph on /tags, a map on /map. So
+    // graph-and-map enabled together shows two buttons, either alone shows
+    // one, neither shows none. Both maps share one slot, so "Map" and "Atlas"
+    // can never stand side by side and each icon stays unambiguous.
     const tagsVisibility = settings.tags_visibility || 'hidden';
-    const tagsVisible = !!activeTagsViz && (tagsVisibility === 'all' || !!user);
-    const tagsMeta = {
-      'tags-graph': {
-        icon: TAGS_SVG,
-        label: 'All tags'
-      },
-      'tags-map': {
-        icon: MAP_SVG,
-        label: 'Map'
-      },
-      'tags-atlas': {
-        icon: GLOBE_SVG,
-        label: 'Atlas'
-      }
-    }[activeTagsViz] || {
-      icon: TAGS_SVG,
-      label: 'All tags'
-    };
+    const vizVisible = tagsVisibility === 'all' || !!user;
+    const vizButtons = vizVisible ? VIZ_SLOTS.flatMap(({
+      href,
+      candidates
+    }) => {
+      const active = candidates.find(id => pluginHost.isEnabled(id));
+      return active ? [{
+        href,
+        ...VIZ_META[active]
+      }] : [];
+    }) : [];
     const isActive = href => !!href && href === currentPath;
 
-    // Inline links + More shell + tags icon.
+    // Inline links + More shell + viz icons.
     setHTML(this.navItemsEl, html`
       ${this._inline.map((it, i) => html`
         <a href="${it.href || '#'}"
@@ -162,10 +186,10 @@ export class NavMenu {
                 aria-haspopup="true" aria-expanded="false">${settings.nav_more_title || 'More'}<span class="nav-more-caret" aria-hidden="true">▾</span></button>
         <div class="nav-more-panel"></div>
       </span>
-      ${tagsVisible ? html`<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
-                  aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
-                 ${raw(tagsMeta.icon)}
-               </a>` : ''}
+      ${vizButtons.map(b => html`<a href="${b.href}" class="header-action-btn${isActive(b.href) ? ' active' : ''}"
+                  aria-label="${b.label}" title="${b.label}">
+                 ${raw(b.icon)}
+               </a>`)}
     `);
     this._wireInline();
     this._syncMore();
@@ -178,7 +202,7 @@ export class NavMenu {
 
     // Burger sitemap.
     setHTML(this.burgerSitemapEl, html`
-      ${tagsVisible ? html`<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
+      ${vizButtons.map(b => html`<a href="${b.href}" class="burger-link">${b.label}</a>`)}
       <a href="/light" class="burger-link">${user ? 'Admin' : 'About'}</a>
     `);
 

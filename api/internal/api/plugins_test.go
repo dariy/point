@@ -244,16 +244,17 @@ func TestTogglePlugin_SingleClaimSlotKeepsAtMostOne(t *testing.T) {
 		return rec.Code
 	}
 
-	// Atlas is the default-enabled tags viz. Enabling Map disables Atlas (radio).
+	// Atlas is the default-enabled map. Enabling Map disables Atlas (radio).
 	if code := toggle("tags-map", `{"enabled":true}`); code != http.StatusOK {
 		t.Fatalf("enabling tags-map should 200, got %d", code)
 	}
 	all, _ := svc.GetAllSettings(ctx)
-	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-map" {
-		t.Fatalf("tags-route should hold only tags-map, got %v", got)
+	if got := plugins.EnabledInSlot("map-route", all); len(got) != 1 || got[0] != "tags-map" {
+		t.Fatalf("map-route should hold only tags-map, got %v", got)
 	}
 
-	// Switching to Graph likewise leaves it the sole claimant.
+	// The graph is in the other slot, so enabling it adds a claimant to
+	// tags-route and leaves the map on /map exactly where it was.
 	if code := toggle("tags-graph", `{"enabled":true}`); code != http.StatusOK {
 		t.Fatalf("enabling tags-graph should 200, got %d", code)
 	}
@@ -261,15 +262,29 @@ func TestTogglePlugin_SingleClaimSlotKeepsAtMostOne(t *testing.T) {
 	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-graph" {
 		t.Fatalf("tags-route should hold only tags-graph, got %v", got)
 	}
+	if got := plugins.EnabledInSlot("map-route", all); len(got) != 1 || got[0] != "tags-map" {
+		t.Fatalf("enabling the graph must not disturb map-route, got %v", got)
+	}
 
-	// "None" is allowed for this slot (0-1): disabling the active viz empties it
-	// and hides /tags — unlike post-viewer, whose last claimant is locked.
+	// "None" is allowed for both slots (0-1): disabling the active claimant
+	// empties the slot and hides its route — unlike post-viewer, whose last
+	// claimant is locked. Each route goes dark on its own.
 	if code := toggle("tags-graph", `{"enabled":false}`); code != http.StatusOK {
-		t.Fatalf("disabling the sole tags viz should 200 (none allowed), got %d", code)
+		t.Fatalf("disabling the sole graph should 200 (none allowed), got %d", code)
 	}
 	all, _ = svc.GetAllSettings(ctx)
 	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 0 {
 		t.Fatalf("tags-route should be empty, got %v", got)
+	}
+	if got := plugins.EnabledInSlot("map-route", all); len(got) != 1 || got[0] != "tags-map" {
+		t.Fatalf("disabling the graph must not disturb map-route, got %v", got)
+	}
+	if code := toggle("tags-map", `{"enabled":false}`); code != http.StatusOK {
+		t.Fatalf("disabling the sole map should 200 (none allowed), got %d", code)
+	}
+	all, _ = svc.GetAllSettings(ctx)
+	if got := plugins.EnabledInSlot("map-route", all); len(got) != 0 {
+		t.Fatalf("map-route should be empty, got %v", got)
 	}
 }
 

@@ -183,11 +183,11 @@ describe('Trusted Types', () => {
   });
 
   it('the atlas map renders under enforcement', async () => {
-    // tags-atlas owns /tags by default. Leaflet's first innerHTML happens
+    // tags-atlas owns /map by default. Leaflet's first innerHTML happens
     // during feature detection at import time, so a refused write here takes
     // the whole library down rather than one control.
     await api('/api/plugins/tags-atlas', { enabled: true }, 'PATCH');
-    const viol = await violationsAt('/tags', 2500);
+    const viol = await violationsAt('/map', 2500);
     const map = await page.evaluate(() => ({
       container: !!document.querySelector('.leaflet-container'),
       zoomIn: (document.querySelector('.leaflet-control-zoom-in')?.textContent || '').trim(),
@@ -198,14 +198,14 @@ describe('Trusted Types', () => {
     assert.ok(map.zoomIn.length > 0, `zoom-in button has no label: ${JSON.stringify(map)}`);
     assert.ok(map.zoomOut.length > 0, `zoom-out button has no label: ${JSON.stringify(map)}`);
     assert.ok(map.attribution.length > 0, `no attribution line: ${JSON.stringify(map)}`);
-    assertClean(viol, '/tags (atlas)');
+    assertClean(viol, '/map (atlas)');
   });
 
   it('the tags map renders markers and popups under enforcement', async () => {
-    // tags-map shares the /tags slot with the atlas and adds the two sinks the
+    // tags-map shares the /map slot with the atlas and adds the two sinks the
     // atlas does not reach: a divIcon's markup and a popup's content.
     await api('/api/plugins/tags-map', { enabled: true }, 'PATCH');
-    const viol = await violationsAt('/tags', 2500);
+    const viol = await violationsAt('/map', 2500);
     const markers = await page.evaluate(() => ({
       count: document.querySelectorAll('.leaflet-marker-icon').length,
       html: (document.querySelector('.leaflet-marker-icon')?.innerHTML || '').length,
@@ -226,7 +226,7 @@ describe('Trusted Types', () => {
     // __ttViolations is cumulative for this page load, so it already covers
     // what `viol` saw before the click.
     void viol;
-    assertClean(await page.evaluate(() => window.__ttViolations || []), '/tags (map)');
+    assertClean(await page.evaluate(() => window.__ttViolations || []), '/map (map)');
   });
 
   it('the code editor survives an undo under enforcement', async () => {

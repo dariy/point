@@ -1,11 +1,26 @@
-# Tags Visualization (`/tags`) — Atlas, Map, Graph
+# Tags Visualization (`/map`, `/tags`) — Atlas, Map, Graph
 
-The public `/tags` route is a **single-claim plugin slot** (`tags-route`, cardinality
-`0-1` in `SlotCardinality` — see `api/internal/plugins/registry.go`): one of three
-plugins owns it, selectable from `/light/plugins`, and with none enabled the route is
-hidden altogether.
+Three plugins visualize the tag set, across **two single-claim slots** with one public
+path each (both `0-1` in `SlotCardinality` — see `api/internal/plugins/registry.go`):
 
-## The three providers
+| Path    | Slot         | Candidates                         |
+| ------- | ------------ | ---------------------------------- |
+| `/map`  | `map-route`  | `tags-atlas` (default), `tags-map` |
+| `/tags` | `tags-route` | `tags-graph`                       |
+
+Each slot takes at most one enabled plugin, selectable from `/light/plugins`, and a slot
+with none enabled hides its own route altogether. So the two maps are alternatives to
+each other, while the graph competes with nothing: it can be enabled next to a map, and
+the header then shows two viz buttons, one per live path. `tags_visibility` is a single
+shared gate over all three (there is no per-viz visibility).
+
+`/tags` here is the visualization route; the tag archive at `/tags/:slug` is a core page
+and is unaffected by any of these plugins.
+
+## The maps (`/map`)
+
+The two are alternatives for the same path. Registry order makes the atlas the winner
+when a configuration asks for both.
 
 ### `tags-atlas` (default, Leaflet)
 
@@ -77,6 +92,12 @@ Hidden places are marked the same way as on the Atlas — hollow dashed marker, 
 country outline — alongside the lock its popups already carried (`is_hidden` /
 `hidden_via` from `GET /api/pages/map`, admin-only).
 
+## The graph (`/tags`)
+
+The graph is the "all tags" view, so it keeps `/tags` — its historical path — as
+`tags-route`'s only candidate today. The slot's rule is declared anyway, so a future
+second graph viz cannot silently double-claim the path.
+
 ### `tags-graph` (force graph)
 
 Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.js`) making two
@@ -107,10 +128,19 @@ fallback; `prefers-reduced-motion` is respected.
   a supported-by-data future option, deliberately not built.
 - **Year nodes are only explicit `kind='year'` tags** — never derived from a post's
   `created_at`.
-- **Exclusivity via the plugin system** rather than a `tags_module` setting — the
-  slot's cardinality is the generic form of the old radio setting, shared with the
+- **Exclusivity via the plugin system** rather than a `tags_module` setting — slot
+  cardinality is the generic form of the old radio setting, shared with the
   `post-viewer` slot (which differs only in that it may not be left empty).
-
+- **Two slots, not one, because only the maps are alternatives** — two maps at once is
+  meaningless, a graph next to a map is not. One slot owning `/tags` for all three made
+  the graph and the maps switch each other off for no reason; splitting `map-route` out
+  lets a site run both, on `/map` and `/tags` respectively. `/map` is the only new
+  public path: the graph stays on `/tags`, so no redirect, no broken bookmarks.
+- **The Atlas is the default map, not a second path** — it is a Leaflet map with extra
+  functionality, so it takes `/map` and `tags-map` is its alternative there.
+- **Disabling a viz keeps the pre-split behavior on its path** — `RedirectHome`, per
+  route, so `/map` with no map enabled behaves exactly as `/tags` with nothing enabled
+  did.
 - **The Atlas filters places, the map filters markers** — `tags-map` scopes its markers
   with a flat per-tag count (`ListMapTagsForYearRange`), so a country tagged only through
   its cities disappears there under a year filter. The Atlas deliberately does not share

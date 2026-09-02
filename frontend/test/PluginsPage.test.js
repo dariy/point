@@ -70,8 +70,8 @@ describe('PluginsPage', () => {
       ...p.state,
       loading: false,
       plugins: [
-        { id: 'tags-atlas', type: 'route', slot: 'tags-route', slot_rule: '0-1', enabled: true },
-        { id: 'tags-map', type: 'route', slot: 'tags-route', slot_rule: '0-1', enabled: false },
+        { id: 'tags-atlas', type: 'route', slot: 'map-route', slot_rule: '0-1', enabled: true },
+        { id: 'tags-map', type: 'route', slot: 'map-route', slot_rule: '0-1', enabled: false },
         { id: 'timeline', type: 'slot', slot: 'timeline', slot_rule: '0+', enabled: true, routes: ['/'] },
         { id: 'service-a', type: 'service', slot: null, slot_rule: '0+', enabled: false },
         { id: 'custom-css', type: 'enhancer', slot: null, slot_rule: '0+', enabled: true },
@@ -108,10 +108,19 @@ describe('PluginsPage', () => {
     const html = p._renderMap();
     assert.ok(html.includes('pmap-card'));
     assert.ok(html.includes('Site map'));
-    
+
+    // Two panels: the graph owns /tags, the two maps share /map.
+    assert.ok(html.includes('<code>/tags</code>'));
+    assert.ok(html.includes('<code>/map</code>'));
+
     // Check known regions
     assert.ok(html.includes('data-plugins="tags-atlas"'));
     assert.ok(html.includes('data-plugins="tags-map"'));
+    assert.ok(html.includes('data-plugins="tags-graph"'));
+
+    // The maps are the only chooser on the tag pages; the graph stands alone.
+    assert.ok(html.includes('One map plugin owns /map'));
+    assert.ok(!html.includes('owns /tags'));
     
     // Check offMap
     assert.ok(html.includes('pmap-offmap'));
@@ -136,7 +145,9 @@ describe('PluginsPage', () => {
     const html = p._renderGroup({ type: 'route', title: 'Routes', hint: 'hint' });
     assert.ok(html.includes('Routes'));
     assert.ok(html.includes('tags-atlas'));
-    assert.ok(html.includes('Alternatives for <code>tags-route</code>'));
+    assert.ok(html.includes('Alternatives for <code>map-route</code>'));
+    // tags-route has a single candidate now — no group heading around one row.
+    assert.ok(!html.includes('Alternatives for <code>tags-route</code>'));
   });
 
   test('_renderGroup empty group', () => {

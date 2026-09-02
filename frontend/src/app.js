@@ -226,40 +226,54 @@ async function bootstrap() {
 // public: true  →  accessible without authentication
 // (absent)      →  requires authentication (authGuard redirect)
 
-// The tag-viz plugins that may own /tags, in the order the backend resolves
-// them (registry order). At most one is enabled — the `tags-route` slot takes a
-// single claimant (plugins.SlotCardinality on the backend).
-const TAGS_VIZ_PLUGINS = ["tags-atlas", "tags-map", "tags-graph"];
+// The tag-viz plugins that may own each public viz route, in the order the
+// backend resolves them (registry order). Both slots are single-claim
+// (plugins.SlotCardinality on the backend), so at most one member of each list
+// is enabled — but the graph and the maps no longer compete with each other.
+const TAGS_VIZ_PLUGINS = ["tags-graph"];
+const MAP_VIZ_PLUGINS = ["tags-atlas", "tags-map"];
 
-// Resolve the lazy module for the /tags route. `/tags` is a single-claim slot
-// (`tags-route`): the single enabled tag-visualization plugin owns it — that
-// enabled plugin IS the selection (the old `tags_module` setting is gone).
-// Mirrors the backend gate in tagsModuleAccessible: no enabled viz (or
-// admins-only for a logged-out visitor) sends the visitor home.
-async function resolveTagsModule() {
+/**
+ * Resolve the lazy module for a public viz route. `slot` is single-claim: the
+ * single enabled plugin among `candidates` owns the path — that enabled plugin
+ * IS the selection (the old `tags_module` setting is gone). Mirrors the backend
+ * gate in TagVizAccessible: no enabled viz (or admins-only for a logged-out
+ * visitor) sends the visitor home.
+ *
+ * @param {string} slot - "tags-route" or "map-route"
+ * @param {string[]} candidates - the slot's members in registry order; the
+ *   first is the slot's default, used as the fallback before the manifest lands.
+ */
+async function resolveVizModule(slot, candidates) {
   /** @type {Record<string, any>} */
   const settings = getSettings() || {};
   const visibility = settings.tags_visibility || "hidden";
   const isAdmin = !!getUser();
 
-  // Active viz = the enabled tags-viz plugin. Before the manifest loads
-  // (size 0) fall back to the Atlas default so the route resolves.
+  // Active viz = the enabled member of the slot. Before the manifest loads
+  // (size 0) fall back to the slot's default so the route still resolves.
   const active =
     pluginHost.size === 0
-      ? "tags-atlas"
-      : TAGS_VIZ_PLUGINS.find((id) => pluginHost.isEnabled(id)) || "";
+      ? candidates[0]
+      : candidates.find((id) => pluginHost.isEnabled(id)) || "";
 
   if (!active || (visibility !== "all" && !isAdmin)) {
     return import("./pages/public/RedirectHome.js");
   }
 
-  const claimed = await pluginHost.claimRoute("tags-route", (entries) =>
+  const claimed = await pluginHost.claimRoute(slot, (entries) =>
     entries.find((e) => e.id === active),
   );
   if (claimed) return claimed;
 
   return import("./pages/public/RedirectHome.js");
 }
+
+/** /tags — the tag-cloud graph, the sole `tags-route` claimant. */
+const resolveTagsModule = () => resolveVizModule("tags-route", TAGS_VIZ_PLUGINS);
+
+/** /map — the atlas or the plain map, whichever claims `map-route`. */
+const resolveMapModule = () => resolveVizModule("map-route", MAP_VIZ_PLUGINS);
 
 // The route table. `title` is the tab title's page-specific part; the router
 // applies it on every mount, so a page with a fixed name needs nothing else.
@@ -310,12 +324,18 @@ const routes = [
     load: () => import("./pages/public/TagPage.js"),
     public: true,
   },
-  // The /tags page surfaces a single, admin-selected viz: the tag-cloud graph,
-  // the map, or the atlas. Which one (if any) is the enabled tags-viz plugin,
-  // gated by `tags_visibility` — see resolveTagsModule().
+  // Two public viz pages, each owned by a single-claim slot and gated by
+  // `tags_visibility`: /tags shows the tag-cloud graph, /map shows the atlas or
+  // the plain map. Either resolves to RedirectHome when its slot is unclaimed —
+  // see resolveVizModule().
   {
     path: "/tags",
     load: () => resolveTagsModule(),
+    public: true,
+  },
+  {
+    path: "/map",
+    load: () => resolveMapModule(),
     public: true,
   },
   {
@@ -402,15 +422,16 @@ function adminRouteLabel(path) {
 
 // Merge manifest-provided plugin routes into the static table. Each route plugin
 // (with a built chunk) contributes its declared paths, loaded from its chunk.
-// The single-claim `tags-route` is handled by resolveTagsModule and excluded by
-// pluginHost.routes(). No-op until Phase 4 ships route-plugin chunks; a plugin
-// route never overrides a core path of the same pattern.
+// The single-claim public slots (`tags-route`, `map-route`) are handled by
+// resolveVizModule and excluded by pluginHost.routes(). No-op until Phase 4
+// ships route-plugin chunks; a plugin route never overrides a core path of the
+// same pattern.
 for (const entry of pluginHost.routes()) {
   for (const path of entry.routes) {
     // A plugin's `routes` mixes frontend paths, server API prefixes and
     // server-proxied paths (e.g. the comments plugin's /comments reverse
     // proxy); only /light admin pages belong in the client router — public
-    // route plugins go through the tags-route claim instead.
+    // route plugins go through their slot's claimRoute instead.
     if (!path.startsWith("/light")) continue;
     if (routes.some((r) => r.path === path)) continue;
     routes.push({

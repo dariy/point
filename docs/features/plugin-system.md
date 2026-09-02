@@ -31,9 +31,10 @@ All five phases of the original refactor are done.
 
 - Reads `window.__PLUGINS__` at bootstrap. A slot is *claimed* only when the plugin has
   a built chunk (`entry` URL); `fill(slot, el, ctx)` lazily imports and mounts claimants;
-  `claimRoute` resolves single-claim route slots (`tags-route`); `routes()` merges plugin
-  routes into the router. Broken plugins are logged and skipped; an absent/empty manifest
-  leaves the host inert (safe for tests — the hard constraint is enforced server-side).
+  `claimRoute` resolves single-claim route slots (`map-route`, `tags-route`);
+  `routes()` merges plugin routes into the router. Broken plugins are logged and
+  skipped; an absent/empty manifest leaves the host inert (safe for tests — the hard
+  constraint is enforced server-side).
 - Plugins live under `frontend/src/plugins/<id>/index.js`, exporting `mount(el, ctx)`
   (slot/enhancer) or a page class (route). `EntryName` in the Go registry must match the
   directory name.
@@ -52,9 +53,10 @@ All five phases of the original refactor are done.
 
 ### Plugin catalog (registry as of 2026-07)
 
-- **Route / tags-viz** (slot `tags-route`, cardinality `0-1` — one claims `/tags`,
-  or none and the route is hidden): `tags-atlas` (default), `tags-map` (Leaflet
-  world map), `tags-graph` (force graph).
+- **Route / tag vizzes** (two slots, both cardinality `0-1` — one claimant per slot,
+  or none and that route is hidden): `map-route` owns `/map` with `tags-atlas`
+  (default) and `tags-map` (plain Leaflet world map) as alternatives; `tags-route`
+  owns `/tags` with `tags-graph` (force graph) as its only candidate.
 - **Slots**: `timeline`, `tag-cloud` (home-explore `ExploreBlock`), `nav-menu`,
   `breadcrumbs`, `public-header`, `public-footer`, `distraction-free`
   (post-list-tools), `immersive-share`, `slideshow`.
@@ -103,10 +105,13 @@ old release for exactly that.
    every rule follows from it: a single-claim slot (`0-1`, `1`) makes its candidates a
    radio group — enabling one switches the peers off (`SlotPeers`) — and a slot that
    requires a claimant (`1`, `1+`) locks its last enabled one (`IsLockedOff` → 409).
-   `tags-route` is `0-1` (none = /tags hidden), `post-viewer` is `1` (an immersive post
-   renders nothing else). Whole-configuration writes go through `NormalizeSlots`, which
-   trims and refills slots to satisfy the same rules; installs configured before a rule
-   existed are reconciled once by a migration, the way `tags_module` was.
+   `map-route` is `0-1` (the atlas or the plain map, or none and `/map` is hidden),
+   `post-viewer` is `1` (an immersive post renders nothing else). A rule is worth
+   declaring even for a one-candidate slot: `tags-route` holds only `tags-graph` today,
+   and `0-1` there is what keeps a second graph viz from silently double-claiming
+   `/tags`. Whole-configuration writes go through `NormalizeSlots`, which trims and
+   refills slots to satisfy the same rules; installs configured before a rule existed
+   are reconciled once by a migration, the way `tags_module` was.
 
 ## Notes for future development
 
