@@ -34,6 +34,13 @@ interface PluginManifestEntry {
 interface Window {
   /** Leaflet, once utils/leaflet.js has loaded it from the CDN. */
   L?: any;
+  /**
+   * Prism. The core is an ES module, but the vendored language files are global
+   * scripts that read and extend a bare `Prism`, so the core's export is
+   * published here before they load — see components/light/MarkdownEditor.js.
+   * `any` because what the global holds grows with every language file.
+   */
+  Prism?: any;
   /** Injected per-request by the server. */
   __MEDIA__?: MediaBootstrap;
   /** Injected per-request by the server. */
@@ -62,3 +69,11 @@ interface TrustedTypePolicy {
   createScript(input: string): string;
   createScriptURL(input: string): string;
 }
+
+/**
+ * The vendored assets the backend serves from /assets/vendor. They are imported
+ * at runtime and left out of the bundle (`--external:/assets/vendor/*` in
+ * scripts/build-js.sh), so there is nothing under frontend/src for tsc to
+ * resolve the specifier against.
+ */
+declare module "/assets/vendor/*";

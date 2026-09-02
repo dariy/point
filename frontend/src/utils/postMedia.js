@@ -9,6 +9,17 @@
  * the same shape MediaViewer renders.
  */
 
+/**
+ * One entry of that sequence: a media URL, or a run of HTML that is not media
+ * but holds its place among the slides.
+ *
+ * @typedef {object} MediaItem
+ * @property {'image'|'video'|'audio'|'html'} type
+ * @property {string} [url]   Present on image/video/audio items.
+ * @property {string} [alt]   Present on image items lifted from an <img>.
+ * @property {string} [html]  Present on 'html' items.
+ */
+
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
 const AUDIO_EXTS = new Set(["mp3", "m4a", "ogg", "wav", "flac", "aac", "opus"]);
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "heic", "heif", "bmp"]);
@@ -42,8 +53,13 @@ export function stripHtml(html) {
   return html;
 }
 
-/** Extract media items from a single HTML fragment (no <hr> splitting). */
+/**
+ * Extract media items from a single HTML fragment (no <hr> splitting).
+ *
+ * @returns {MediaItem[]}
+ */
 export function extractMedia(html) {
+  /** @type {MediaItem[]} */
   const items = [];
   for (const m of html.matchAll(/<img[^>]+>/gi)) {
     const src = (m[0].match(/\ssrc="([^"]*)"/i) || [])[1] || "";
@@ -116,8 +132,11 @@ export function splitTopLevelBlocks(html) {
  * Reduce a list of blocks to carousel items: runs of media-only blocks become
  * media items, and everything else accumulates into 'html' (text) slides.
  * Shared by the <hr> and no-<hr> paths so both segment content the same way.
+ *
+ * @returns {MediaItem[]}
  */
 function blocksToItems(blocks) {
+  /** @type {MediaItem[]} */
   const items = [];
   let pending = [];
   const flush = () => {
@@ -157,9 +176,12 @@ function blocksToItems(blocks) {
  * silently dropped every paragraph around them — a post with mixed images and
  * text lost all its prose the moment it was forced into immersive mode.
  * See point-924a.
+ *
+ * @returns {MediaItem[]}
  */
 export function mediaFromHtml(html) {
   if (html.includes("<hr>") || html.includes("<hr/>") || html.includes("<hr />")) {
+    /** @type {MediaItem[]} */
     const items = [];
     const segments = html.split(/<hr\s*\/?>/i);
     for (const segment of segments) {

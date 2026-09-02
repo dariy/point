@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * PostCard — a single post entry in the grid.
  *
@@ -197,12 +196,13 @@ export class PostCard extends Component {
       // card's own — including a tap on an arrow that is invisible until the
       // overlay is revealed, which must count as that reveal tap.
       card.addEventListener("click", (e) => {
-        if (e.target.closest("a")) return;
+        const target = /** @type {HTMLElement} */ (e.target);
+        if (target.closest("a")) return;
         const needsTwoTap =
           lastPointerType !== "mouse" && !card.classList.contains("is-touched");
         if (needsTwoTap) {
           // Tag links with ancestor flyouts manage their own first-tap behavior.
-          if (e.target.closest(".has-flyout")) return;
+          if (target.closest(".has-flyout")) return;
 
           // First tap — reveal the overlay.
           e.preventDefault();
@@ -238,7 +238,7 @@ export class PostCard extends Component {
       });
     } else {
       card.addEventListener("click", (e) => {
-        if (e.target.closest("a, button")) return;
+        if (/** @type {HTMLElement} */ (e.target).closest("a, button")) return;
         go();
       });
     }
@@ -246,7 +246,7 @@ export class PostCard extends Component {
     // Firefox doesn't focus non-interactive elements on click; force it so arrow key
     // navigation in PostGrid works consistently across browsers.
     card.addEventListener("mousedown", (e) => {
-      if (!e.target.closest("a, button")) card.focus({ preventScroll: true });
+      if (!(/** @type {HTMLElement} */ (e.target)).closest("a, button")) card.focus({ preventScroll: true });
     });
 
     card.addEventListener("keydown", (e) => {
