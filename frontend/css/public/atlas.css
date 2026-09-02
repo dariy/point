@@ -136,7 +136,7 @@
 /* Two-click selection (mirrors /tags): the first click on a chip highlights its
    connections and dims the rest; a second click opens it. */
 .atlas-node--dim {
-    opacity: 0.16;
+    opacity: 0.36;
 }
 
 /* The selected chip stays filled (like hover) with a lift, even off-hover. */
