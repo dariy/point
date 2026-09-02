@@ -1153,6 +1153,79 @@ func TestMediaService_GetMediaByContent(t *testing.T) {
 	_ = media
 }
 
+// The editor asks for the media a post references by the paths in its body,
+// which are the content form ("/YYYY/MM/file") rather than the "originals/…"
+// form the table stores.
+func TestMediaService_GetMediaByContentPaths(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+
+	ctx := context.Background()
+	upload := func(name string) models.Medium {
+		m, err := svc.UploadFile(ctx, UploadFileParams{
+			Content: []byte(name), Filename: name, MimeType: "text/plain",
+		})
+		if err != nil {
+			t.Fatalf("UploadFile %s: %v", name, err)
+		}
+		return m
+	}
+	contentPath := func(m models.Medium) string {
+		return "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
+	}
+
+	first := upload("first.txt")
+	second := upload("second.txt")
+	upload("unreferenced.txt")
+
+	filenames := func(media []models.Medium) map[string]bool {
+		got := map[string]bool{}
+		for _, m := range media {
+			got[m.Filename] = true
+		}
+		return got
+	}
+
+	media, err := svc.GetMediaByContentPaths(ctx, []string{contentPath(first), contentPath(second)})
+	if err != nil {
+		t.Fatalf("GetMediaByContentPaths: %v", err)
+	}
+	if got := filenames(media); len(got) != 2 || !got["first.txt"] || !got["second.txt"] {
+		t.Errorf("got %v, want exactly first.txt and second.txt", got)
+	}
+
+	// A path repeated in the content is one row, not two.
+	media, err = svc.GetMediaByContentPaths(ctx, []string{contentPath(first), contentPath(first)})
+	if err != nil {
+		t.Fatalf("GetMediaByContentPaths duplicate: %v", err)
+	}
+	if len(media) != 1 {
+		t.Errorf("duplicate path: got %d rows, want 1", len(media))
+	}
+
+	// Anything not in the content form is dropped before the query, and a path
+	// nothing was stored at is simply absent — neither is an error.
+	media, err = svc.GetMediaByContentPaths(ctx, []string{
+		"originals/2001/01/gone.txt",
+		"2001/01/gone.txt",
+		"/2001/01/gone.txt",
+	})
+	if err != nil {
+		t.Fatalf("GetMediaByContentPaths unmatched: %v", err)
+	}
+	if len(media) != 0 {
+		t.Errorf("unmatched paths: got %d rows, want 0", len(media))
+	}
+
+	media, err = svc.GetMediaByContentPaths(ctx, nil)
+	if err != nil {
+		t.Fatalf("GetMediaByContentPaths empty: %v", err)
+	}
+	if len(media) != 0 {
+		t.Errorf("no paths: got %d rows, want 0", len(media))
+	}
+}
+
 func TestMediaService_AnalyzeMediaByID_NotFound(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()

@@ -990,6 +990,28 @@ func TestMediaHandler_ListMedia_ByPaths_TooMany(t *testing.T) {
 	}
 }
 
+// A failed lookup is a 500, not an empty result — the editor would otherwise
+// read "the database is down" as "this post references no media".
+func TestMediaHandler_ListMedia_ByPaths_LookupError(t *testing.T) {
+	repo := setupTestDB(t)
+	tmpDir, _ := os.MkdirTemp("", "media-list-paths-err-test")
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, services.NewTagService(repo))
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	_ = repo.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/media?paths=%2F2026%2F01%2Fphoto.jpg", nil)
+	rec := httptest.NewRecorder()
+	err := handler.ListMedia(echo.New().NewContext(req, rec))
+	var httpErr *echo.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when the lookup fails, got %v", err)
+	}
+}
+
 // Regression: PATCH /api/media/:id with only metadata must not wipe alt_text/caption/post_id.
 // Before the fix, UpdateMedia SQL used unconditional SET (not COALESCE) for those fields.
 func TestMediaHandler_UpdateEXIF_ValidInput(t *testing.T) {
