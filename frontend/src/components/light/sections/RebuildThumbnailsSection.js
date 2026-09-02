@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { Component } from "../../Component.js";
 import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
@@ -18,7 +17,7 @@ export class RebuildThumbnailsSection extends Component {
     if (rebuildBtn) {
       rebuildBtn.addEventListener("click", async (e) => {
         e.preventDefault();
-        const btn = e.target;
+        const btn = /** @type {HTMLButtonElement} */ (e.target);
         btn.disabled = true;
         const ogText = btn.textContent;
         btn.textContent = "Rebuilding…";

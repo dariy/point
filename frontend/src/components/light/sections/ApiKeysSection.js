@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * ApiKeysSection — the API-keys block for the `api-keys` plugin. Self-loads the
  * key list and handles create (shows the secret once) / delete. Extracted from
@@ -75,8 +74,8 @@ export class ApiKeysSection extends Component {
   }
 
   async _load() {
-    const apiKeys = await getApiKeys().catch(() => ({}));
-    this.setState({ loading: false, apiKeys: apiKeys.keys || [] });
+    const apiKeys = await getApiKeys().catch(() => ({ api_keys: [] }));
+    this.setState({ loading: false, apiKeys: apiKeys.api_keys || [] });
   }
 
   _handleCreate() {
@@ -90,10 +89,10 @@ export class ApiKeysSection extends Component {
           const result = await createApiKey(name);
           showConfirm({
             title: "API Key Created",
-            message: `Please copy your API key now. It will not be shown again:\n\n${result.key}`,
+            message: `Please copy your API key now. It will not be shown again:\n\n${result.raw_key}`,
             confirmText: "Copy to Clipboard",
             variant: "primary",
-            onConfirm: () => navigator.clipboard.writeText(result.key),
+            onConfirm: () => navigator.clipboard.writeText(result.raw_key),
           });
           this._load();
         } catch (err) {
