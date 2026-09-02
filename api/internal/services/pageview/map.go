@@ -52,7 +52,7 @@ func (b *Builder) BuildMapView(ctx context.Context, settings map[string]string, 
 	if err != nil {
 		return nil, err
 	}
-	if !TagsModuleAccessible(settings, []string{"tags-map"}, p.PublicOnly) {
+	if !TagVizAccessible(settings, []string{"tags-map"}, p.PublicOnly) {
 		return nil, ErrNotVisible
 	}
 

@@ -276,8 +276,12 @@ func TestIsLockedOff(t *testing.T) {
 	if IsLockedOff("timeline", map[string]string{}) {
 		t.Errorf("plugin in a slot with no minimum must never be locked")
 	}
-	if got := EnabledInSlot("tags-route", map[string]string{}); len(got) == 1 && IsLockedOff(got[0], map[string]string{}) {
-		t.Errorf("sole tags viz %q must not be locked — /tags may be turned off entirely", got[0])
+	// Both viz slots tolerate none, so their sole claimant is never locked:
+	// /tags and /map may each be turned off entirely.
+	for _, slot := range []string{"tags-route", "map-route"} {
+		if got := EnabledInSlot(slot, map[string]string{}); len(got) == 1 && IsLockedOff(got[0], map[string]string{}) {
+			t.Errorf("sole %s claimant %q must not be locked — the route may be turned off entirely", slot, got[0])
+		}
 	}
 	// Whichever viewer ships on is the required slot's only claimant → locked.
 	on, off := defaultSplit(t, "post-viewer")
@@ -296,16 +300,17 @@ func TestIsLockedOff(t *testing.T) {
 }
 
 func TestSlotPeers(t *testing.T) {
-	// tags-route takes one claimant; atlas's peers are the other two vizzes.
-	peers := SlotPeers("tags-atlas")
-	want := map[string]bool{"tags-map": true, "tags-graph": true}
-	if len(peers) != len(want) {
-		t.Fatalf("tags-atlas peers = %v, want %d candidates", peers, len(want))
+	// map-route takes one claimant, and the two maps are its only candidates,
+	// so the atlas's sole peer is the plain map. The graph is not a peer of
+	// either: it lives in tags-route, and enabling it leaves /map alone.
+	if got := SlotPeers("tags-atlas"); len(got) != 1 || got[0] != "tags-map" {
+		t.Errorf("tags-atlas peers = %v, want [tags-map]", got)
 	}
-	for _, p := range peers {
-		if !want[p] {
-			t.Errorf("unexpected peer %q", p)
-		}
+	if got := SlotPeers("tags-map"); len(got) != 1 || got[0] != "tags-atlas" {
+		t.Errorf("tags-map peers = %v, want [tags-atlas]", got)
+	}
+	if got := SlotPeers("tags-graph"); len(got) != 0 {
+		t.Errorf("tags-graph peers = %v, want none — the graph owns /tags alone", got)
 	}
 	// post-viewer takes one too, so each viewer's peer is the other: enabling
 	// one is what switches the public viewer over.

@@ -90,9 +90,14 @@ func (c Cardinality) RequiresOne() bool { return c == CardExactlyOne || c == Car
 // when its claimants are alternatives rather than additions, or when the page
 // renders nothing useful without one.
 var SlotCardinality = map[string]Cardinality{
-	// The enabled visualization owns /tags; with none enabled the route is
-	// hidden, which is a supported (and preset-used) configuration.
+	// The enabled graph owns /tags; with none enabled the route is hidden,
+	// which is a supported (and preset-used) configuration. The graph is the
+	// slot's only candidate today, so the rule is declared rather than needed:
+	// it keeps a future second graph viz from silently double-claiming /tags.
 	"tags-route": CardAtMostOne,
+	// The enabled map owns /map — the atlas and the plain map are alternatives,
+	// never both. With none enabled the route is hidden, same as /tags.
+	"map-route": CardAtMostOne,
 	// An immersive post renders the viewer and nothing else, so it needs one —
 	// the Standard and Sheet viewers are the two candidates for it.
 	"post-viewer": CardExactlyOne,
@@ -112,13 +117,15 @@ func SlotRule(slot string) Cardinality {
 // with every plugin DefaultEnabled:true so behavior is identical to today; the
 // admin Plugins page (Phase 3) and per-plugin extraction (Phase 4) build on top.
 var Registry = []Descriptor{
-	// ── Tag visualizations: candidates for the tags-route slot ───────────────
-	// The slot takes at most one (SlotCardinality), so the enabled one owns
-	// /tags and none enabled hides it. Atlas is the default; the others ship
-	// off. This replaces the old `tags_module` selector setting.
-	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true},
-	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: false},
+	// ── Tag visualizations: two slots, one route each ────────────────────────
+	// The force graph owns /tags; the two maps are alternatives for /map, where
+	// registry order makes the atlas the one that wins when both are asked for.
+	// Each slot takes at most one (SlotCardinality), so none enabled hides that
+	// route, and the graph and the maps no longer compete with each other.
+	// This replaces the old `tags_module` selector setting.
 	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: false},
+	{ID: "tags-atlas", Type: TypeRoute, Slot: "map-route", Routes: []string{"/map"}, EntryName: "tags-atlas", DefaultEnabled: true},
+	{ID: "tags-map", Type: TypeRoute, Slot: "map-route", Routes: []string{"/map"}, EntryName: "tags-map", DefaultEnabled: false},
 
 	// ── Post Lists: candidates for the post-list slot ────────────────────────
 	{ID: "simple-post-list", Title: "Simple Post List", Type: TypeSlot, Slot: "post-list", EntryName: "simple-post-list", DefaultEnabled: false},
@@ -342,13 +349,15 @@ func DefaultPresets() map[string][]string {
 		all = append(all, d.ID)
 	}
 	return map[string][]string{
-		// Bare guest experience: the sheet viewer and nothing else (/tags hidden).
+		// Bare guest experience: the sheet viewer and nothing else — no tag
+		// visualization, so both /tags and /map are hidden.
 		"minimalistic": {"immersive-sheet"},
 		// Self-hosted blog without the advanced/integration services.
 		"standalone": filterOut(all, "tag-cloud", "ai-analysis", "instagram", "immersive-sheet"),
 		// Everything available. Candidates for a single-claim slot (tags-route,
-		// post-viewer) are all listed; NormalizeSlots trims each slot to its first
-		// candidate on apply, so this stays a plain "everything" list.
+		// map-route, post-viewer) are all listed; NormalizeSlots trims each slot
+		// to its first candidate on apply, so this stays a plain "everything"
+		// list — it yields the graph on /tags and the atlas on /map.
 		"fully-featured": filterOut(all, "tag-cloud"),
 	}
 }

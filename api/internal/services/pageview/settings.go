@@ -74,33 +74,30 @@ func AtlasPostLimitSetting(settings map[string]string) int64 {
 	return v
 }
 
-// defaultTagsVisibility gates who sees /tags: "hidden" = admins only.
+// defaultTagsVisibility gates who sees the tag visualizations (/tags and /map):
+// "hidden" = admins only.
 const defaultTagsVisibility = "hidden"
 
-// TagsModuleAccessible reports whether the active tag-visualization plugin may
-// be served for the given request. Which viz is active is the enabled claimant
-// of the single-claim "tags-route" slot (tags-atlas/tags-map/tags-graph); `want`
-// lists the plugin ids the calling endpoint can render (the graph endpoint backs
-// both the atlas and the graph plugins).
+// TagVizAccessible reports whether a tag-visualization endpoint may be served
+// for the given request. `want` lists the plugin ids the calling endpoint can
+// render, and the endpoint is available as soon as any one of them is enabled.
+// The candidates span two single-claim slots — "tags-route" for the graph on
+// /tags, "map-route" for the atlas or the plain map on /map — so this asks
+// about the plugins directly rather than about one slot's claimant; the graph
+// endpoint, for one, backs both the graph and the atlas.
 //
-// Rules: no enabled viz hides the feature from everyone. Otherwise admins always
-// have access, while the public sees it only when tags_visibility is "all".
-func TagsModuleAccessible(settings map[string]string, want []string, publicOnly bool) bool {
-	active := ""
-	if ids := plugins.EnabledInSlot("tags-route", settings); len(ids) > 0 {
-		active = ids[0]
-	}
-	if active == "" {
-		return false
-	}
-	matched := false
+// Rules: none of `want` enabled hides the endpoint from everyone. Otherwise
+// admins always have access, while the public sees it only when the shared
+// tags_visibility gate is "all".
+func TagVizAccessible(settings map[string]string, want []string, publicOnly bool) bool {
+	enabled := false
 	for _, w := range want {
-		if w == active {
-			matched = true
+		if plugins.IsEnabled(w, settings) {
+			enabled = true
 			break
 		}
 	}
-	if !matched {
+	if !enabled {
 		return false
 	}
 	if publicOnly {
