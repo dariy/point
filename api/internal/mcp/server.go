@@ -101,6 +101,9 @@ func Register(e *echo.Echo, d Deps) {
 			e:          d.Echo,
 			uploadRoot: d.UploadRoot,
 			baseURL:    d.BaseURL,
+			// Tools whose REST route is plugin-gated re-check the gate here:
+			// the dispatch below skips route middleware entirely.
+			settingsSvc: d.SettingsService,
 			h: handlers{
 				post: d.Post, tag: d.Tag, media: d.Media,
 				theme: d.Theme, settings: d.Settings, system: d.System,

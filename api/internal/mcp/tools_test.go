@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/models"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
@@ -56,7 +58,10 @@ type toolEnv struct {
 	themesDir  string
 }
 
-func newToolEnv(t *testing.T) *toolEnv {
+// newToolEnv builds the session. Any prep funcs run against the wired services
+// before the tools register, which is when a plugin-gated tool decides whether
+// to appear at all.
+func newToolEnv(t *testing.T, prep ...func(*testing.T, *services.SettingsService)) *toolEnv {
 	t.Helper()
 
 	repo, err := repository.NewRepository(":memory:")
@@ -88,11 +93,12 @@ func newToolEnv(t *testing.T) *toolEnv {
 	}
 
 	inv := &invoker{
-		ctx:        context.Background(),
-		principal:  models.GetAPIKeyByHashRow{ID: 1, UserID: 1},
-		e:          echo.New(),
-		uploadRoot: uploadRoot,
-		baseURL:    testBaseURL,
+		ctx:         context.Background(),
+		principal:   models.GetAPIKeyByHashRow{ID: 1, UserID: 1},
+		e:           echo.New(),
+		uploadRoot:  uploadRoot,
+		baseURL:     testBaseURL,
+		settingsSvc: settingsSvc,
 		h: handlers{
 			post:     api.NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc),
 			tag:      api.NewTagHandler(tagSvc, settingsSvc),
@@ -102,6 +108,10 @@ func newToolEnv(t *testing.T) *toolEnv {
 			system: api.NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc,
 				systemSvc, cacheSvc, authSvc, storage, "test"),
 		},
+	}
+
+	for _, fn := range prep {
+		fn(t, settingsSvc)
 	}
 
 	srv := sdk.NewServer(&sdk.Implementation{Name: "point-mcp", Version: "test"}, nil)
@@ -595,11 +605,76 @@ func TestUploadMedia_RejectsPathsOutsideTheSandbox(t *testing.T) {
 	}
 }
 
+// setPlugin returns a prep func toggling a plugin before the tools register.
+func setPlugin(id string, on bool) func(*testing.T, *services.SettingsService) {
+	return func(t *testing.T, svc *services.SettingsService) {
+		t.Helper()
+		if err := svc.SetSetting(context.Background(), plugins.EnabledKey(id), strconv.FormatBool(on), "string"); err != nil {
+			t.Fatalf("set plugin %s: %v", id, err)
+		}
+	}
+}
+
+// toolNames lists the tools the session advertises.
+func (env *toolEnv) toolNames() []string {
+	env.t.Helper()
+	res, err := env.cs.ListTools(context.Background(), nil)
+	if err != nil {
+		env.t.Fatalf("list tools: %v", err)
+	}
+	names := make([]string, 0, len(res.Tools))
+	for _, tool := range res.Tools {
+		names = append(names, tool.Name)
+	}
+	return names
+}
+
 func TestAnalyzeMedia_UnknownIDIsAToolError(t *testing.T) {
-	env := newToolEnv(t)
+	env := newToolEnv(t, setPlugin("ai-analysis", true))
 
 	if msg := env.callErr("point_analyze_media", map[string]any{"id": 999}); !strings.Contains(msg, "point API error") {
 		t.Errorf("error = %q, want the API's error", msg)
+	}
+}
+
+// The tool dispatches straight to the handler, so the RequirePlugin middleware
+// on its route never runs — the gate has to live in the tool. Off means gone:
+// the same answer the route gives, at both the list and the call.
+func TestAnalyzeMedia_AbsentWhenPluginDisabled(t *testing.T) {
+	// ai-analysis ships off, so the default env is already the disabled case;
+	// set it explicitly so the test does not ride on that default.
+	env := newToolEnv(t, setPlugin("ai-analysis", false))
+
+	for _, name := range env.toolNames() {
+		if name == "point_analyze_media" {
+			t.Fatal("point_analyze_media is advertised with ai-analysis disabled")
+		}
+	}
+
+	_, err := env.cs.CallTool(context.Background(), &sdk.CallToolParams{
+		Name: "point_analyze_media", Arguments: map[string]any{"id": 1},
+	})
+	if err == nil {
+		t.Error("calling point_analyze_media succeeded with ai-analysis disabled")
+	}
+}
+
+// A session outlives the toggle: a client that connected while the plugin was
+// on must not keep the capability after an admin switches it off.
+func TestAnalyzeMedia_GateIsRecheckedPerCall(t *testing.T) {
+	env := newToolEnv(t, setPlugin("ai-analysis", true))
+
+	// A real media item, so the only 404 the call can produce is the gate's.
+	path := filepath.Join(env.uploadRoot, "photo.png")
+	if err := os.WriteFile(path, tinyPNG(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	id := int64(env.call("point_upload_media", map[string]any{"file_path": path})["id"].(float64))
+
+	setPlugin("ai-analysis", false)(t, env.settings)
+
+	if msg := env.callErr("point_analyze_media", map[string]any{"id": id}); msg != "point API error 404: not found" {
+		t.Errorf("error = %q, want the gate's not-found", msg)
 	}
 }
 

@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"point-api/internal/api"
+	"point-api/internal/plugins"
+	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 )
@@ -42,6 +44,11 @@ type invoker struct {
 	e          *echo.Echo
 	h          handlers
 	uploadRoot string // sandbox for point_upload_media; empty disables path uploads
+	// settingsSvc resolves plugin state for gated tools. Tool calls dispatch
+	// straight to a handler func, so the RequirePlugin middleware the matching
+	// REST route carries never runs; addGatedTool re-applies it. Nil leaves
+	// every tool enabled.
+	settingsSvc *services.SettingsService
 	// baseURL is the blog's public base URL, reported by point_get_context and
 	// point://context. It comes from config rather than from settings: the site
 	// itself derives its origin from the request, which an MCP call has not got.
@@ -63,6 +70,24 @@ func (in *invoker) call(h echo.HandlerFunc, method, target string, body []byte, 
 	return in.serve(h, req, params)
 }
 
+// pluginEnabled reports whether plugin id is on, reading the same settings
+// snapshot api.RequirePlugin reads. An invoker without a settings service (the
+// registration-only tests) reports everything enabled.
+func (in *invoker) pluginEnabled(id string) (bool, error) {
+	if in.settingsSvc == nil {
+		return true, nil
+	}
+	all, err := in.settingsSvc.Snapshot(in.ctx)
+	if err != nil {
+		return false, fmt.Errorf("point API error 500: failed to resolve plugin state")
+	}
+	return plugins.IsEnabled(id, all), nil
+}
+
+// serve runs h against a synthetic context. No route middleware runs: the auth
+// middleware is unnecessary (the /mcp endpoint resolved the principal, injected
+// below), but api.RequirePlugin is skipped too — which is why a tool on a
+// plugin-gated route has to register through addGatedTool.
 func (in *invoker) serve(h echo.HandlerFunc, req *http.Request, params map[string]string) (json.RawMessage, error) {
 	rec := httptest.NewRecorder()
 	c := in.e.NewContext(req, rec)
