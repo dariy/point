@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../core/gestures.js";
@@ -186,7 +185,6 @@ export class Timeline extends Component {
   }
   beforeUnmount() {
     this._resizeObserver?.disconnect();
-    this._abortController?.abort();
     this._gestureController?.destroy?.();
     this._closePopover();
     clearTimeout(this._emitTimer);
@@ -304,7 +302,7 @@ export class Timeline extends Component {
     let dragStartY = 0;
     let lastX = 0;
     trackWrapper.addEventListener("mousedown", e => {
-      if (e.target.closest(".timeline-nav-btn")) return;
+      if (/** @type {HTMLElement} */ (e.target).closest(".timeline-nav-btn")) return;
       isDragging = true;
       this._isDragging = true;
       hasDragged = false;
@@ -350,12 +348,12 @@ export class Timeline extends Component {
         e.stopPropagation();
         return;
       }
-      const cluster = e.target.closest(".timeline-cluster");
+      const cluster = /** @type {HTMLElement} */ (e.target).closest(".timeline-cluster");
       if (cluster) {
         this._expandCluster(cluster);
         return;
       }
-      const pill = e.target.closest(".timeline-pill-group");
+      const pill = /** @type {HTMLElement} */ (e.target).closest(".timeline-pill-group");
       if (pill) {
         this._onPillClick(pill);
       }
@@ -392,7 +390,7 @@ export class Timeline extends Component {
         this._centerOnYear(this.state.extent.max, true);
       } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
         const focusable = Array.from(this.$$(".timeline-pill-btn, .timeline-cluster-btn"));
-        const idx = focusable.indexOf(document.activeElement);
+        const idx = focusable.indexOf(/** @type {HTMLElement} */ (document.activeElement));
         if (idx !== -1) {
           e.preventDefault();
           const nextIdx = e.key === "ArrowRight" ? idx + 1 : idx - 1;
@@ -541,8 +539,8 @@ export class Timeline extends Component {
     }
     popoverEl.addEventListener("keydown", e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        const focusable = Array.from(popoverEl.querySelectorAll("a, button"));
-        const idx = focusable.indexOf(document.activeElement);
+        const focusable = /** @type {HTMLElement[]} */ (Array.from(popoverEl.querySelectorAll("a, button")));
+        const idx = focusable.indexOf(/** @type {HTMLElement} */ (document.activeElement));
         if (idx !== -1) {
           e.preventDefault();
           const nextIdx = e.key === "ArrowDown" ? idx + 1 : idx - 1;
@@ -586,7 +584,7 @@ export class Timeline extends Component {
       this._anchorPopover(el, popoverEl);
 
       // Focus the first item
-      popoverEl.querySelector("a, button")?.focus();
+      /** @type {HTMLElement|null} */ (popoverEl.querySelector("a, button"))?.focus();
     } catch (err) {
       if (this._unmounted || this.state.popover !== popoverEl) return;
       console.error("Failed to load locations:", err);
@@ -626,7 +624,7 @@ export class Timeline extends Component {
     popoverEl.addEventListener("keydown", e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         const focusable = Array.from(popoverEl.querySelectorAll("button"));
-        const idx = focusable.indexOf(document.activeElement);
+        const idx = focusable.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
         if (idx !== -1) {
           e.preventDefault();
           const nextIdx = e.key === "ArrowDown" ? idx + 1 : idx - 1;
@@ -640,7 +638,7 @@ export class Timeline extends Component {
       }
     });
     popoverEl.addEventListener("click", e => {
-      const btn = e.target.closest(".timeline-pill-btn");
+      const btn = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest(".timeline-pill-btn"));
       if (btn) {
         const slug = btn.dataset.slug;
         const pill = this.state.pills.find(p => p.slug === slug);
