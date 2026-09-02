@@ -19,6 +19,30 @@ interface MediaBootstrap {
   gen?: string;
 }
 
+/**
+ * The remark42 embed's config object — see plugins/comments/index.js, which
+ * writes it before the embed script reads it on load.
+ */
+interface RemarkConfig {
+  host: string;
+  site_id: string;
+  simple_view: boolean;
+  no_footer: boolean;
+  url?: string;
+  page_title?: string;
+  theme: string;
+}
+
+/**
+ * The remark42 embed's own global, present only once /comments/web/embed.mjs
+ * has loaded. Declared with just the surface plugins/comments uses.
+ */
+interface Remark42 {
+  createInstance(config: RemarkConfig): void;
+  changeTheme?(theme: string): void;
+  destroy?(): void;
+}
+
 /** One entry of the `window.__PLUGINS__` manifest — see core/pluginHost.js. */
 interface PluginManifestEntry {
   id: string;
@@ -40,6 +64,10 @@ interface Window {
   __PLUGINS__?: PluginManifestEntry[];
   /** Set by the demo build only (demo/), gating writes in the UI. */
   __DEMO__?: boolean;
+  /** Written by the comments plugin for the remark42 embed to read on load. */
+  remark_config?: RemarkConfig;
+  /** Defined by the remark42 embed script once it has loaded. */
+  REMARK42?: Remark42;
   /**
    * Trusted Types. Chromium-only and absent from TypeScript's DOM lib, so it
    * is declared with just the surface utils/helpers.js uses.

@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * tagGraph.js — a small, dependency-free force-directed graph renderer for the
  * public /tags page, drawn on a <canvas>.
@@ -51,8 +50,14 @@ const SETTLE_STEPS = 400;
 export class TagGraph {
   constructor(canvas, data, { onNavigate = () => {}, onHover = () => {}, onSelect = () => {} } = {}) {
     this.canvas = canvas;
+    // The defaults are no-ops, so the signatures have to be written out here —
+    // an inferred `() => {}` says the graph calls these with nothing, while
+    // every call site below passes a node or an href.
+    /** @type {(href: string) => void} */
     this.onNavigate = onNavigate;
+    /** @type {(node: object|null) => void} */
     this.onHover = onHover;
+    /** @type {(node: object|null) => void} */
     this.onSelect = onSelect;
 
     this.alpha = 1;

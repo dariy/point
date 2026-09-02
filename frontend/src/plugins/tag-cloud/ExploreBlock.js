@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 /**
  * ExploreBlock — homepage widget showing top tags as plain pills.
  * Replaces the weighted TagCloud.

@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { raw } from "../../utils/helpers.js";
 import { html, setHTML } from "../../utils/helpers.js";
 /**
@@ -264,7 +263,7 @@ export class Slideshow {
               aria-label="Shuffle" aria-pressed="${this.shuffle}">${raw(SHUFFLE_SVG)}</button>`);
     // Keep taps on the bar from reaching the viewer's close/hide handler.
     bar.addEventListener('click', e => e.stopPropagation());
-    bar.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));
+    bar.querySelectorAll('[data-step]').forEach((/** @type {HTMLElement} */ b) => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));
     this._intervalLabel = bar.querySelector('.slideshow-interval');
     this._loopBtn = bar.querySelector('.slideshow-loop');
     this._loopBtn.addEventListener('click', () => this._toggleLoop());
