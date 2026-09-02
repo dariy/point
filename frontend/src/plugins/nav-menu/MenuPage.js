@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.12.
 import { html, setHTML, raw } from "../../utils/helpers.js";
 /**
  * MenuPage — custom navigation menu editor.
@@ -265,7 +264,7 @@ export default class MenuPage extends Component {
    */
   _currentItems() {
     if (this.state.mode !== 'custom') return this.state.items;
-    return this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown(this.container.querySelector('#menu-markdown-input')?.value || '');
+    return this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown(/** @type {HTMLTextAreaElement|null} */ (this.$('#menu-markdown-input'))?.value || '');
   }
 
   /** Menu items to preview, as {name, hasChildren} — depends on the mode. */
@@ -289,7 +288,7 @@ export default class MenuPage extends Component {
     const settings = getSettings() || {};
     const title = settings.blog_title || 'My blog';
     const inlineMax = this.state.inlineMax;
-    this.container.querySelectorAll('.menu-preview-vp').forEach(vp => {
+    this.$$('.menu-preview-vp').forEach(vp => {
       // Mirror NavMenu: "More ▾" occupies one of the max visible slots, so
       // when items overflow we show max-1 inline and fold the rest under More.
       const cap = items.length <= inlineMax ? items.length : inlineMax - 1;
@@ -308,10 +307,10 @@ export default class MenuPage extends Component {
             <span class="pvh-iconbtn pvh-burger">${raw(MENU_SVG)}</span>
           </span>
         </div>`);
-      const root = vp.querySelector('.pvh');
-      const nav = root.querySelector('.pvh-nav');
-      const more = root.querySelector('.nav-more');
-      const moreBtn = root.querySelector('.nav-more-btn');
+      const root = /** @type {HTMLElement} */ (vp.querySelector('.pvh'));
+      const nav = /** @type {HTMLElement} */ (root.querySelector('.pvh-nav'));
+      const more = /** @type {HTMLElement} */ (root.querySelector('.nav-more'));
+      const moreBtn = /** @type {HTMLElement} */ (root.querySelector('.nav-more-btn'));
       const links = [...nav.querySelectorAll('.nav-menu-link')].filter(l => !l.closest('.nav-more'));
       let foldedCount = 0;
       const syncMore = () => {
@@ -369,7 +368,7 @@ export default class MenuPage extends Component {
     });
     this.container.querySelector('#mode-visual-btn')?.addEventListener('click', () => {
       if (this.state.editFormat === 'markdown') {
-        const text = this.container.querySelector('#menu-markdown-input').value;
+        const text = /** @type {HTMLTextAreaElement} */ (this.$('#menu-markdown-input')).value;
         this.setState({
           editFormat: 'visual',
           items: parseMarkdown(text)
@@ -396,7 +395,7 @@ export default class MenuPage extends Component {
       });
     });
     let dragSrcIndex = -1;
-    this.container.querySelectorAll('.menu-row').forEach(row => {
+    this.$$('.menu-row').forEach(row => {
       const index = parseInt(row.dataset.index, 10);
       row.querySelector('.delete-item-btn').addEventListener('click', () => {
         const items = this._collectVisualItems();
@@ -520,12 +519,12 @@ export default class MenuPage extends Component {
    * preview, the markdown serialiser and the save payload.
    */
   _collectVisualItems() {
-    const rows = this.container.querySelectorAll('.menu-row');
+    const rows = this.$$('.menu-row');
     const items = [];
     rows.forEach(row => {
       items.push({
-        label: row.querySelector('.item-label').value.trim(),
-        url: row.querySelector('.item-url').value.trim(),
+        label: /** @type {HTMLInputElement} */ (row.querySelector('.item-label')).value.trim(),
+        url: /** @type {HTMLInputElement} */ (row.querySelector('.item-url')).value.trim(),
         depth: parseInt(row.dataset.depth, 10) || 0
       });
     });
@@ -568,7 +567,7 @@ export default class MenuPage extends Component {
    */
   _setSaving(saving) {
     this.state.saving = saving;
-    const btn = this.container.querySelector('#save-menu-btn');
+    const btn = /** @type {HTMLButtonElement|null} */ (this.$('#save-menu-btn'));
     if (!btn) return;
     btn.disabled = saving;
     btn.textContent = saving ? 'Saving…' : 'Save Menu Configuration';
