@@ -19,9 +19,11 @@
  * mirroring plugins.Cardinality on the backend): a single-claim slot turns its
  * candidates into a radio group — enabling one flips the others off — and a slot
  * that requires a claimant has its last enabled one marked `locked` by the
- * backend, rendered read-only here. The tags visualizations (`tags-route`, 0-1)
- * and the immersive viewers (`post-viewer`, exactly 1) are the two such slots;
- * both are switched the same way, by enabling the candidate you want.
+ * backend, rendered read-only here. The tag maps (`map-route`, 0-1) and the
+ * immersive viewers (`post-viewer`, exactly 1) are the slots with several
+ * candidates; both are switched the same way, by enabling the one you want.
+ * `tags-route` (0-1) carries the same rule with a single candidate — the graph —
+ * so it renders as a plain row, not as a group of alternatives.
  *
  * This page is the one admin surface that reveals disabled plugins; the public
  * site never sees them (server-side enabled-only manifest + 404'd chunks/routes).
@@ -70,8 +72,9 @@ const SETTINGS_PAGE_PATHS = {
 // Plugins configured inline in a per-plugin drawer (PluginSettingsPanel). Each
 // entry may declare `keys` (settings fields extracted from /light/settings,
 // saved together) and/or `sections` (rich blocks extracted from /light/system
-// and /light/security — see SECTIONS in PluginSettingsPanel). The tag-route trio
-// shares the /tags selector.
+// and /light/security — see SECTIONS in PluginSettingsPanel). `tags_visibility`
+// is one shared gate over all three tag vizzes, across both slots (`tags-route`
+// for /tags and `map-route` for /map) — not a per-viz switch.
 const PLUGIN_SETTINGS = {
   "ai-analysis": {
     keys: [
@@ -132,6 +135,7 @@ const MAP_PANELS = [
   { id: "home", title: "Post list", path: "/" },
   { id: "post", title: "Post page", path: "/:slug" },
   { id: "tags", title: "Tags page", path: "/tags" },
+  { id: "map", title: "Map page", path: "/map" },
   { id: "viewer", title: "Media viewer", path: "photo opened" },
   { id: "admin", title: "Admin area", path: "/light" },
 ];
@@ -222,8 +226,13 @@ export default class PluginsPage extends Component {
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
       tags: html`
         ${headerRow()}
-        <div class="pmap-main pmap-choice" aria-label="One tag visualization owns /tags">
-          ${this._mr("tags-atlas", "Atlas")}${this._mr("tags-map", "Map")}${this._mr("tags-graph", "Graph")}
+        ${this._mr("tags-graph", "Graph", "pmap-main")}
+        ${this._mr("timeline", "Timeline", "pmap-band")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      map: html`
+        ${headerRow()}
+        <div class="pmap-main pmap-choice" aria-label="One map plugin owns /map">
+          ${this._mr("tags-atlas", "Atlas")}${this._mr("tags-map", "Map")}
         </div>
         ${this._mr("timeline", "Timeline", "pmap-band")}
         ${this._mr("public-footer", "Footer", "pmap-band")}`,
@@ -331,7 +340,7 @@ export default class PluginsPage extends Component {
     if (items.length === 0) return "";
     const collapsed = !!this.state.collapsed[group.type];
 
-    const TARGET_SLOTS = ["post-list", "post-viewer", "tags-route"];
+    const TARGET_SLOTS = ["post-list", "post-viewer", "tags-route", "map-route"];
     const grouped = [];
     const slotMap = new Map();
 
@@ -349,6 +358,11 @@ export default class PluginsPage extends Component {
     });
 
     const renderItem = (item) => {
+      // A slot with a single candidate (tags-route holds only the graph) has no
+      // alternatives to compare, so it renders as a plain row without a heading.
+      if (item.type === 'slot-group' && item.items.length === 1) {
+        return this._renderPlugin(item.items[0]);
+      }
       if (item.type === 'slot-group') {
         return html`
           <div class="plugins-slot-group">
