@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 /**
  * TagsInput — inline tag-badge input with autocomplete.
  *
@@ -25,7 +24,9 @@ export class TagsInput extends Component {
       selectedIndex: -1
     };
     this._allTags = [];
-    this._fetchSuggestions = debounce(this._fetchSuggestions.bind(this), 200);
+    // The debounced wrapper keeps the name every caller uses; the async method
+    // it wraps has its own, so neither has to pretend to be the other's type.
+    this._fetchSuggestions = debounce(this._loadSuggestions.bind(this), 200);
   }
   render() {
     const {
@@ -47,7 +48,7 @@ export class TagsInput extends Component {
     // Family popover
     this.$$('.tag-chip').forEach(chip => {
       chip.addEventListener('click', e => {
-        if (e.target.classList.contains('tag-remove')) return;
+        if (/** @type {HTMLElement} */ (e.target).classList.contains('tag-remove')) return;
         const tagName = chip.dataset.tag;
         const tagObj = this._allTags.find(t => t.name === tagName);
         if (tagObj) openTagFamilyPopover(tagObj.id, chip);
@@ -67,17 +68,17 @@ export class TagsInput extends Component {
     });
 
     // Text input
-    const input = this.$(`#${this._uid}-text`);
+    const input = /** @type {HTMLInputElement|null} */ (this.$(`#${this._uid}-text`));
     if (!input) return;
     input.addEventListener('input', e => {
       // Android virtual keyboards fire Enter as insertLineBreak (no keydown key).
-      if (e.inputType === 'insertLineBreak') {
+      if (/** @type {InputEvent} */ (e).inputType === 'insertLineBreak') {
         input.value = input.value.replace(/\n/g, '');
         const val = input.value.trim();
         if (val) this._addTag(val);
         return;
       }
-      const raw = e.target.value;
+      const raw = input.value;
 
       // Handle comma as a delimiter (needed on Android where keydown may not fire).
       if (raw.includes(',')) {
@@ -165,14 +166,14 @@ export class TagsInput extends Component {
       tags
     });
     this.props.onChange?.(tags);
-    const input = this.$(`#${this._uid}-text`);
+    const input = /** @type {HTMLInputElement|null} */ (this.$(`#${this._uid}-text`));
     if (input) {
       input.value = '';
       input.focus();
     }
     this._hideSuggestions();
   }
-  async _fetchSuggestions(q) {
+  async _loadSuggestions(q) {
     try {
       if (!this._allTags.length) {
         const res = await listTags();
@@ -267,8 +268,8 @@ export class TagsInput extends Component {
     `);
     box.appendChild(popover);
     box.classList.add('show');
-    const nameInput = popover.querySelector('.new-tag-name');
-    const parentInput = popover.querySelector('.new-tag-parent');
+    const nameInput = /** @type {HTMLInputElement} */ (popover.querySelector('.new-tag-name'));
+    const parentInput = /** @type {HTMLInputElement} */ (popover.querySelector('.new-tag-parent'));
     const parentSuggestions = popover.querySelector('.parent-suggestions');
     const createBtn = popover.querySelector('.btn-create');
     const cancelBtn = popover.querySelector('.btn-cancel');
@@ -298,8 +299,8 @@ export class TagsInput extends Component {
       });
       parentSuggestions.classList.add('show');
     }, 200);
-    parentInput.addEventListener('input', e => {
-      const q = e.target.value.trim();
+    parentInput.addEventListener('input', () => {
+      const q = parentInput.value.trim();
       if (!q) {
         parentSuggestions.textContent = '';
         parentSuggestions.classList.remove('show');
