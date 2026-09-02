@@ -14,6 +14,7 @@ import {
 } from '../../api/auth.js';
 import { setToast } from '../../store.js';
 import { html } from '../../utils/helpers.js';
+import { usernameHintField } from '../../utils/passwordForm.js';
 import { formatDateShort } from '../../utils/formatters.js';
 
 export default class SecurityPage extends Component {
@@ -49,6 +50,7 @@ export default class SecurityPage extends Component {
           <div class="card-body">
             <p class="form-hint">Change your password here.</p>
             <form id="change-password-form">
+              ${usernameHintField()}
               <div class="form-group">
                 <label class="form-label" for="old-password">Current Password</label>
                 <input type="password" id="old-password" class="form-input" required autocomplete="current-password">
@@ -69,6 +71,7 @@ export default class SecurityPage extends Component {
           <div class="card-body">
             <p class="form-hint">Password reset links are sent to this address.</p>
             <form id="change-email-form">
+              ${usernameHintField()}
               <div class="form-group">
                 <label class="form-label" for="account-email">Email</label>
                 <input type="email" id="account-email" class="form-input" required autocomplete="email"

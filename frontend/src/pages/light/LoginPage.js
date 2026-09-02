@@ -15,6 +15,7 @@ import { Component } from '../../components/Component.js';
 import { login, loginWithPasskey } from '../../api/auth.js';
 import { getUser, setUser } from '../../store.js';
 import { html, navigate } from '../../utils/helpers.js';
+import { usernameHintField } from '../../utils/passwordForm.js';
 
 export default class LoginPage extends Component {
   constructor(container, props = {}) {
@@ -60,6 +61,7 @@ export default class LoginPage extends Component {
           <div class="login-divider"><span>or</span></div>` : ''}
           <form id="login-form" class="login-modal-form" novalidate>
             <div class="login-input-group">
+              ${usernameHintField()}
               <input type="password" id="password-input" name="password"
                      class="login-input" autocomplete="current-password"
                      required placeholder="${loading ? 'Signing in…' : 'Password'}"
