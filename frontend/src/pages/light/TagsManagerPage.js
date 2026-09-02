@@ -473,12 +473,11 @@ export default class TagsManagerPage extends Component {
     this._initialChildIds = [...selChildren];
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';
-    const _html = renderTagEditorForm({
+    setHTML(modal, renderTagEditorForm({
       tag,
       parentId,
       allTags: this.state.tags
-    });
-    modal['inner' + 'HTML'] = _html;
+    }));
     document.body.appendChild(modal);
     this._modal = modal;
     setupTagToggleTrees(modal);

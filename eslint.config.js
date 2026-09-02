@@ -90,6 +90,33 @@ const rules = {
       message: "Use insertHTML(el, position, html`…`) from utils/helpers.js — a bare insertAdjacentHTML bypasses the Trusted Types policy."
     },
     {
+      // The three selectors above match a dotted property name, which is what
+      // the sinks look like when nobody is trying. A computed key spelling the
+      // same name — el['innerHTML'] — reaches the identical sink and used to
+      // slip past them, so the name is matched in that position too.
+      selector: "AssignmentExpression[left.computed=true][left.property.value=/^(inner|outer)HTML$/]",
+      message: "Use setHTML(el, html`…`) from utils/helpers.js — a computed-key HTML write bypasses the Trusted Types policy."
+    },
+    {
+      selector: "CallExpression[callee.computed=true][callee.property.value='insertAdjacentHTML']",
+      message: "Use insertHTML(el, position, html`…`) from utils/helpers.js — a computed-key insertAdjacentHTML bypasses the Trusted Types policy."
+    },
+    {
+      // And a key assembled from pieces — el['inner' + 'HTML'] — defeats any
+      // name match at all, which is exactly why it was written that way: two
+      // sites used it to quiet a CodeQL false positive, and both went on
+      // reaching innerHTML directly. In a *write* position a concatenated key
+      // has no legitimate use here (an index expression like a[i + 1] is a
+      // read, or an array element, and is not matched), so the shape itself is
+      // the error whatever name it spells.
+      selector: "AssignmentExpression[left.computed=true][left.property.type='BinaryExpression'][left.property.operator='+']:has(Literal[value=/inner|outer|HTML/i])",
+      message: "Do not build a property name from pieces — write the property out, so the HTML-sink rules can see it."
+    },
+    {
+      selector: "CallExpression[callee.computed=true][callee.property.type='BinaryExpression'][callee.property.operator='+']:has(Literal[value=/insertAdjacent|HTML/i])",
+      message: "Do not build a method name from pieces — write the method out, so the HTML-sink rules can see it."
+    },
+    {
       // raw() is the one way past the html`` tag's escaping, so what may go
       // through it is deliberately narrow: a module-level constant (the SVG
       // blobs), a string literal, or a choice between those. A template literal

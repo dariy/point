@@ -576,6 +576,11 @@ type loginData struct {
 	Error               string
 }
 
+// loginTmpl asks for the owner's password and nothing else, so it carries a
+// hidden username field: without one Chrome warns that the form is not
+// accessible, and a password manager has no account to key the saved
+// credential on. The value is the username the setup wizard writes, which is
+// what the admin SPA's own forms declare too.
 var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -605,7 +610,8 @@ button:hover{background:#d4b87a}
 <input type="hidden" name="code_challenge" value="{{.CodeChallenge}}">
 <input type="hidden" name="code_challenge_method" value="{{.CodeChallengeMethod}}">
 <label for="pw">Password</label>
-<input type="password" id="pw" name="submitted_password" autofocus>
+<input type="text" name="username" value="the_owner" autocomplete="username" readonly hidden>
+<input type="password" id="pw" name="submitted_password" autocomplete="current-password" autofocus>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 <button type="submit">Authenticate</button>
 </form>

@@ -1,6 +1,7 @@
 // @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 import { Component } from "../../components/Component.js";
 import { html } from "../../utils/helpers.js";
+import { usernameHintField } from "../../utils/passwordForm.js";
 import { sha256 } from "../../api/auth.js";
 import { api } from "../../api/client.js";
 
@@ -84,18 +85,19 @@ export default class PasswordResetPage extends Component {
             `
                 : html`
             <form id="pss-reset-form" novalidate>
+              ${usernameHintField()}
               <div class="form-group">
                 <label class="form-label" for="pss-password">New Password</label>
                 <input type="password" id="pss-password" name="password" class="form-input"
                        required placeholder="Minimum 8 characters"
-                       autocomplete="off"
+                       autocomplete="new-password"
                        ${loading ? "disabled" : ""}>
               </div>
               <div class="form-group">
                 <label class="form-label" for="pss-confirm">Confirm Password</label>
                 <input type="password" id="pss-confirm" name="confirm" class="form-input"
                        required placeholder="Repeat your password"
-                       autocomplete="off"
+                       autocomplete="new-password"
                        ${loading ? "disabled" : ""}>
               </div>
               <div class="setup-submit-wrapper">
