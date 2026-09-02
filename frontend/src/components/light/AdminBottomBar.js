@@ -57,7 +57,7 @@ export class AdminBottomBar extends Component {
             <button type="button" class="more-footer-btn" id="sheet-theme-toggle">
               <span class="icon-sun">${raw(SUN_SVG)}</span>
               <span class="icon-moon">${raw(MOON_SVG)}</span>
-              <span>Theme</span>
+              <span>Mode</span>
             </button>
             <a href="${this.props.publicUrl || '/'}" class="more-footer-btn">
               ${raw(EXTERNAL_LINK_SVG)}
