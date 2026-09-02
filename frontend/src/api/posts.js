@@ -33,8 +33,8 @@ export function clearPostReadCache() {
 /**
  * List posts with optional filters.
  *
- * @param {{ page?: number, per_page?: number, status?: string, tag?: string, q?: string }} [params]
- * @returns {Promise<{ items: object[], total: number, page: number, per_page: number, pages: number }>}
+ * @param {{ page?: number, per_page?: number, status?: string, type?: string, tag?: string, q?: string }} [params]
+ * @returns {Promise<{ posts: object[], total: number, page: number, per_page: number, pages: number, tag?: object }>}
  */
 export function listPosts(params = {}) {
   return api.get('/api/posts', params);

@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * PostPage — single post view.
  *
@@ -295,7 +294,7 @@ export default class PostPage extends Component {
     // replaced by a spinner (slow load). Either way, tear down the old content
     // child before mounting the new one so its listeners don't leak. unmount()
     // clears #content-mount, so the swap is atomic.
-    const contentEl = this.container.querySelector('#content-mount');
+    const contentEl = /** @type {HTMLElement|null} */ (this.container.querySelector('#content-mount'));
     if (this._contentChild) {
       this._contentChild.unmount();
       this._children = this._children.filter(c => c !== this._contentChild);
