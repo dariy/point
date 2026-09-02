@@ -178,7 +178,11 @@ export function publishPostToInstagram(id) {
   return api.post(`/api/posts/${id}/instagram/publish`);
 }
 
-/** Render markdown content to HTML for preview. */
+/**
+ * Render markdown content to HTML for preview.
+ * @param {string} content
+ * @returns {Promise<{ html: string }>}
+ */
 export function previewRender(content) {
   return api.post('/api/posts/preview-render', { content });
 }

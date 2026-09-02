@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * PostEditPage — create or edit a blog post.
  *
@@ -91,16 +90,16 @@ export default class PostEditPage extends Component {
     // and let the navigation follow the save.
     "view-on-site"() { this._viewOnSite(); },
     schedule() {
-      const sel = this.container.querySelector("#status-select");
+      const sel = this.$("#status-select");
       if (sel) {
         sel.value = "scheduled";
         sel.dispatchEvent(new Event("change"));
       }
       this._revealGroup("schedule");
-      this.timer(() => this.container.querySelector("#schedule-input")?.focus(), 10);
+      this.timer(() => this.$("#schedule-input")?.focus(), 10);
     },
     delete() {
-      const title = this.container.querySelector("#title-input")?.value
+      const title = this.$("#title-input")?.value
         || this.state.post?.title || "this post";
       this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash",
         "danger", () => this._deletePost(this.state.postId));
@@ -260,12 +259,12 @@ export default class PostEditPage extends Component {
   _toggleArrange(on) {
     const arranging = typeof on === "boolean" ? on : !this.state.arranging;
     this.state.arranging = arranging;
-    this.container.querySelector(".editor-layout")?.classList.toggle("is-arranging", arranging);
-    const bar = this.container.querySelector("#arrange-bar");
+    this.$(".editor-layout")?.classList.toggle("is-arranging", arranging);
+    const bar = this.$("#arrange-bar");
     if (bar) bar.hidden = !arranging;
     // Both lists have to be on screen to move fields between them.
     if (arranging) this._toggleDetails(true);
-    if (arranging) this.container.querySelector("#arrange-done")?.focus();
+    if (arranging) this.$("#arrange-done")?.focus();
   }
 
   /** Wire dragging and keyboard reordering. Bound once; gated on arrange mode. */
@@ -274,7 +273,7 @@ export default class PostEditPage extends Component {
     this._detachReorder = attachPointerReorder({
       handleSelector: ".details-group-handle",
       itemSelector: ".details-group",
-      containers: () => [this.container.querySelector("#pinned-fields"), this.container.querySelector(".details-panel-body")],
+      containers: () => [this.$("#pinned-fields"), this.$(".details-panel-body")],
       isEnabled: () => this.state.arranging,
       onDrop: ({
         item,
@@ -287,11 +286,13 @@ export default class PostEditPage extends Component {
     // reorders within a list, left/right moves the block to the other one —
     // dragging is the only other way to cross lists, so without this half the
     // feature would be pointer-only.
-    this.container.querySelector(".editor-layout")?.addEventListener("keydown", e => {
+    this.$(".editor-layout")?.addEventListener("keydown", e => {
       if (!this.state.arranging) return;
-      const handle = e.target.closest?.(".details-group-handle");
+      const handle = /** @type {HTMLElement|null} */ (
+        /** @type {HTMLElement} */ (e.target).closest?.(".details-group-handle")
+      );
       if (!handle) return;
-      const group = handle.closest(".details-group");
+      const group = /** @type {HTMLElement} */ (handle.closest(".details-group"));
       const host = group.parentElement;
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -306,14 +307,14 @@ export default class PostEditPage extends Component {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       // The canvas is the left-hand list on a wide screen and the upper one on a
       // narrow screen; either way left means "into the editor".
-      const canvas = this.container.querySelector("#pinned-fields");
-      const panel = this.container.querySelector(".details-panel-body");
+      const canvas = this.$("#pinned-fields");
+      const panel = this.$(".details-panel-body");
       const to = e.key === "ArrowLeft" ? canvas : panel;
       if (!to || to === host) return;
       e.preventDefault();
       // Land at the position the shared order asks for, not at the end.
       const idx = this._orderIndex(group.dataset.group);
-      const sibs = [...to.querySelectorAll(":scope > .details-group")];
+      const sibs = /** @type {HTMLElement[]} */ ([...to.querySelectorAll(":scope > .details-group")]);
       const after = sibs.filter(s => this._orderIndex(s.dataset.group) < idx).pop() || null;
       this._dropGroup(group, to, after);
       handle.focus();
@@ -330,7 +331,7 @@ export default class PostEditPage extends Component {
   _dropGroup(item, to, afterEl) {
     const key = item.dataset.group;
     if (!key || !to) return;
-    const pinnedHost = this.container.querySelector("#pinned-fields");
+    const pinnedHost = this.$("#pinned-fields");
     const pinned = to === pinnedHost;
     // Content can be moved among the canvas blocks but never into Details.
     if (!pinned && key === FIXED_TO_CANVAS) return;
@@ -351,19 +352,19 @@ export default class PostEditPage extends Component {
 
   /** Show the "everything is on the canvas" note only when the panel has no groups left. */
   _updatePanelEmpty() {
-    const body = this.container.querySelector(".details-panel-body");
+    const body = this.$(".details-panel-body");
     body?.classList.toggle("has-groups", !!body.querySelector(".details-group"));
   }
 
   /** The Schedule group is only meaningful for scheduled posts — hide it elsewhere. */
   _setScheduleVisible(on) {
-    this.container.querySelector('.details-group[data-group="schedule"]')?.classList.toggle("is-hidden", !on);
+    this.$('.details-group[data-group="schedule"]')?.classList.toggle("is-hidden", !on);
   }
 
   /** Bring a group into view wherever it lives: expanded, and with the panel open if unpinned. */
   _revealGroup(key) {
     if (!this._pinned.has(key)) this._toggleDetails(true);
-    this.container.querySelector(`.details-group[data-group="${key}"]`)?.setAttribute("open", "");
+    this.$(`.details-group[data-group="${key}"]`)?.setAttribute("open", "");
   }
 
   /** True on ultrawide viewports where the live-preview pane is available (≥112em, per admin-ux C5). */
@@ -388,8 +389,8 @@ export default class PostEditPage extends Component {
     try {
       localStorage.setItem("point:editor:live-preview", on ? "1" : "0");
     } catch {/* ignore */}
-    this.container.querySelector(".editor-layout")?.classList.toggle("has-live-preview", on);
-    const btn = this.container.querySelector('[data-action="toggle-preview"]');
+    this.$(".editor-layout")?.classList.toggle("has-live-preview", on);
+    const btn = this.$('[data-action="toggle-preview"]');
     if (btn) btn.textContent = on ? "Hide preview" : "Show preview";
     if (on) this._debouncedPreview?.();
   }
@@ -409,9 +410,9 @@ export default class PostEditPage extends Component {
   _toggleDetails(force) {
     const open = typeof force === "boolean" ? force : !this.state.detailsOpen;
     this.state.detailsOpen = open;
-    this.container.querySelector(".editor-layout")?.classList.toggle("is-details-open", open);
-    this.container.querySelector("#details-toggle")?.setAttribute("aria-expanded", String(open));
-    this.container.querySelector("#details-panel")?.setAttribute("aria-hidden", String(!open));
+    this.$(".editor-layout")?.classList.toggle("is-details-open", open);
+    this.$("#details-toggle")?.setAttribute("aria-expanded", String(open));
+    this.$("#details-panel")?.setAttribute("aria-hidden", String(!open));
     try {
       localStorage.setItem("point:editor:details-open", open ? "1" : "0");
     } catch {/* ignore */}
@@ -419,9 +420,13 @@ export default class PostEditPage extends Component {
 
   /** Refresh the one-line summary shown on each collapsed Details group. */
   _updateDetailsSummaries() {
-    const q = sel => this.container.querySelector(sel);
+    // Every #id read below is a form control, and they all carry `.value`.
+    const q = (/** @type {string} */ sel) =>
+      /** @type {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null} */ (this.$(sel));
+    const check = (/** @type {string} */ sel) =>
+      /** @type {HTMLInputElement|null} */ (this.$(sel));
     const set = (id, text) => {
-      const el = this.container.querySelector(`#${id}`);
+      const el = this.$(`#${id}`);
       if (el) el.textContent = text;
     };
     const title = (q("#title-input")?.value || "").trim();
@@ -429,12 +434,12 @@ export default class PostEditPage extends Component {
     const tags = this._tagsInputRef?.getTags?.() ?? this._tags ?? [];
     set("summary-tags", tags.length ? truncate(tags.join(", ")) : "none");
     const status = q("#status-select")?.value || "draft";
-    const featured = q("#featured-check")?.checked;
+    const featured = check("#featured-check")?.checked;
     const scheduledAt = q("#schedule-input")?.value;
     let statusSummary = status.charAt(0).toUpperCase() + status.slice(1);
     if (status === "scheduled" && scheduledAt) {
       const d = new Date(scheduledAt);
-      if (!isNaN(d)) statusSummary += ` · ${d.toLocaleDateString(undefined, {
+      if (!isNaN(d.getTime())) statusSummary += ` · ${d.toLocaleDateString(undefined, {
         month: "short",
         day: "numeric"
       })}`;
@@ -442,7 +447,7 @@ export default class PostEditPage extends Component {
     if (featured) statusSummary += " · ★";
     set("summary-status", statusSummary);
     const scheduleDate = scheduledAt ? new Date(scheduledAt) : null;
-    set("summary-schedule", scheduleDate && !isNaN(scheduleDate) ? scheduleDate.toLocaleString(undefined, {
+    set("summary-schedule", scheduleDate && !isNaN(scheduleDate.getTime()) ? scheduleDate.toLocaleString(undefined, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -458,8 +463,8 @@ export default class PostEditPage extends Component {
     }[immersive] || "Auto");
     const css = this._cssEditorRef?.getValue?.() ?? "";
     set("summary-css", css.trim() ? "custom" : "none");
-    if (this.container.querySelector("#ig-share-input")) {
-      set("summary-instagram", q("#ig-share-input")?.checked ? "on" : "off");
+    if (this.$("#ig-share-input")) {
+      set("summary-instagram", check("#ig-share-input")?.checked ? "on" : "off");
     }
   }
   afterRender() {
@@ -471,17 +476,17 @@ export default class PostEditPage extends Component {
     if (this.state.loading || this.state.error) return;
 
     // Details rail / bottom sheet toggle
-    this.container.querySelector("#details-toggle")?.addEventListener("click", () => this._toggleDetails());
-    this.container.querySelector("#details-close-btn")?.addEventListener("click", () => this._toggleDetails(false));
-    this.container.querySelector("#details-backdrop")?.addEventListener("click", () => this._toggleDetails(false));
+    this.$("#details-toggle")?.addEventListener("click", () => this._toggleDetails());
+    this.$("#details-close-btn")?.addEventListener("click", () => this._toggleDetails(false));
+    this.$("#details-backdrop")?.addEventListener("click", () => this._toggleDetails(false));
 
     // A block on the canvas is the field itself — its header row is a label, not
     // a disclosure control, so clicking it must not collapse it. While
     // arranging, every row is a bar to be dragged, not opened. Delegated on the
     // layout so a group added later (a plugin section rendered through
     // `renderGroup`) behaves the same with no extra wiring.
-    this.container.querySelector(".editor-layout")?.addEventListener("click", e => {
-      const summary = e.target.closest?.("summary.details-group-summary-row");
+    this.$(".editor-layout")?.addEventListener("click", e => {
+      const summary = /** @type {HTMLElement} */ (e.target).closest?.("summary.details-group-summary-row");
       if (!summary) return;
       if (this.state.arranging || summary.parentElement?.classList.contains("is-pinned")) e.preventDefault();
     });
@@ -490,12 +495,12 @@ export default class PostEditPage extends Component {
     // re-render here would rebuild the editor from state.post and discard any
     // edits not yet flushed by autosave (title/slug/excerpt/tags/css), plus
     // lose focus and scroll position.
-    const splitButton = this.container.querySelector(".header-split-button");
+    const splitButton = this.$(".header-split-button");
     const setMenuOpen = open => {
       this.state.menuOpen = open;
       splitButton?.classList.toggle("is-menu-open", open);
     };
-    this.container.querySelector("#header-menu-toggle")?.addEventListener("click", e => {
+    this.$("#header-menu-toggle")?.addEventListener("click", e => {
       e.stopPropagation();
       setMenuOpen(!this.state.menuOpen);
     });
@@ -520,9 +525,9 @@ export default class PostEditPage extends Component {
       });
       this._mediaPicker.mount();
     }
-    this.container.querySelector("#mode-text-btn")?.addEventListener("click", () => this._switchMode("text"));
-    this.container.querySelector("#mode-visual-btn")?.addEventListener("click", () => this._switchMode("visual"));
-    this.container.querySelectorAll(".field-ai-btn").forEach(btn => {
+    this.$("#mode-text-btn")?.addEventListener("click", () => this._switchMode("text"));
+    this.$("#mode-visual-btn")?.addEventListener("click", () => this._switchMode("visual"));
+    this.$$(".field-ai-btn").forEach(btn => {
       btn.addEventListener("click", () => this._analyzeField(btn.dataset.field));
     });
     this._tagsInputRef = this.mountChild(TagsInput, "#tags-input-mount", {
@@ -580,8 +585,8 @@ export default class PostEditPage extends Component {
     if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
     this._onAutosaveRetry = () => this._save();
     window.addEventListener("autosave:retry", this._onAutosaveRetry);
-    const featuredToggle = this.container.querySelector("#featured-toggle");
-    const featuredCheck = this.container.querySelector("#featured-check");
+    const featuredToggle = this.$("#featured-toggle");
+    const featuredCheck = /** @type {HTMLInputElement} */ (this.$("#featured-check"));
     featuredToggle?.addEventListener("click", () => {
       const newVal = !featuredCheck.checked;
       featuredCheck.checked = newVal;
@@ -590,8 +595,8 @@ export default class PostEditPage extends Component {
       featuredToggle.title = newVal ? "Unmark as featured" : "Mark as featured";
       this._onInput();
     });
-    const statusSelect = this.container.querySelector("#status-select");
-    const scheduleInput = this.container.querySelector("#schedule-input");
+    const statusSelect = /** @type {HTMLSelectElement|null} */ (this.$("#status-select"));
+    const scheduleInput = /** @type {HTMLInputElement|null} */ (this.$("#schedule-input"));
     statusSelect?.addEventListener("change", () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
@@ -604,9 +609,13 @@ export default class PostEditPage extends Component {
       statusSelect.className = "status-select badge-scheduled";
       this._setScheduleVisible(true);
       this._revealGroup("schedule");
-      setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
+      // Both run: showPicker() returns undefined, so the || never short-circuits.
+      setTimeout(() => {
+        scheduleInput.showPicker?.();
+        scheduleInput.focus();
+      }, 50);
     }
-    const scheduleHint = this.container.querySelector("#schedule-hint");
+    const scheduleHint = this.$("#schedule-hint");
     scheduleInput?.addEventListener("focus", () => {
       if (scheduleHint) scheduleHint.style.display = "none";
     });
@@ -620,13 +629,13 @@ export default class PostEditPage extends Component {
       }
       this._onInput();
     });
-    [this.container.querySelector("#title-input"), this.container.querySelector("#slug-input"), this.container.querySelector("#excerpt-editor")].forEach(el => {
+    [this.$("#title-input"), this.$("#slug-input"), this.$("#excerpt-editor")].forEach(el => {
       el?.addEventListener("input", () => this._onInput());
     });
-    this.container.querySelector("#immersive-mode-select")?.addEventListener("change", () => this._onInput());
+    this.$("#immersive-mode-select")?.addEventListener("change", () => this._onInput());
     if (this.state.editorMode === "visual") this._mountVisualEditor();
-    this.container.querySelector("#ig-share-input")?.addEventListener("change", () => this._onInput());
-    this.container.querySelector("#ig-publish-now-btn")?.addEventListener("click", () => this._publishToInstagram());
+    this.$("#ig-share-input")?.addEventListener("change", () => this._onInput());
+    this.$("#ig-publish-now-btn")?.addEventListener("click", () => this._publishToInstagram());
     this._debouncedPreview = debounce(async () => {
       if (!this.state.showLivePreview || this._unmounted) return;
       const data = this._collectFormData();
@@ -654,7 +663,7 @@ export default class PostEditPage extends Component {
       this._previewMql.addEventListener?.("change", this._onPreviewMqlChange);
     }
     if (this.state.showLivePreview) this._debouncedPreview();
-    this.container.querySelector("#arrange-done")?.addEventListener("click", () => this._toggleArrange(false));
+    this.$("#arrange-done")?.addEventListener("click", () => this._toggleArrange(false));
     this._setupArrange();
     // A re-render rebuilds the layout with the bar hidden; restore the mode.
     if (this.state.arranging) this._toggleArrange(true);
@@ -762,7 +771,7 @@ export default class PostEditPage extends Component {
         this.state.post = result;
         // Show the date title the backend assigned to an untitled post — a
         // re-render here would wipe the caret, so write the field directly.
-        const titleEl = this.container.querySelector("#title-input");
+        const titleEl = /** @type {HTMLInputElement|null} */ (this.$("#title-input"));
         if (titleEl && !titleEl.value.trim() && result.title) titleEl.value = result.title;
         history.replaceState(null, "", `/light/posts/${result.id}/edit`);
       } else {
@@ -866,7 +875,6 @@ export default class PostEditPage extends Component {
     this._mediaPicker = null;
     this._visualEditorRef = null;
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
-    if (this._onDocClick) document.removeEventListener("click", this._onDocClick);
     this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
   }
   _insertMediaPaths(items) {
@@ -1004,7 +1012,7 @@ export default class PostEditPage extends Component {
     if (!entries.length) return;
     const [current, ...backlog] = entries;
     if (current.title) {
-      const titleEl = this.container.querySelector("#title-input");
+      const titleEl = /** @type {HTMLInputElement|null} */ (this.$("#title-input"));
       if (titleEl && !titleEl.value.trim()) titleEl.value = current.title;
     }
     for (const fileEntry of current.files) {
@@ -1066,8 +1074,10 @@ export default class PostEditPage extends Component {
         const {
           listMedia
         } = await import('../../api/media.js');
+        // No post filter exists on this endpoint — it reads page, per_page,
+        // file_type and folder and nothing else — so this is the first 200
+        // items site-wide, used only to resolve the paths this post references.
         const result = await listMedia({
-          post_id: post.id,
           per_page: 200
         });
         for (const m of result.media || []) if (m.path) this._mediaByPath[m.path] = m;
@@ -1090,23 +1100,28 @@ export default class PostEditPage extends Component {
     }
   }
   _collectFormData() {
+    // Same narrowing as _updateDetailsSummaries: every id below is a control.
+    const field = (/** @type {string} */ sel) =>
+      /** @type {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null} */ (this.$(sel));
+    const check = (/** @type {string} */ sel) =>
+      /** @type {HTMLInputElement|null} */ (this.$(sel));
     return {
-      title: (this.container.querySelector("#title-input")?.value || "").trim(),
-      slug: (this.container.querySelector("#slug-input")?.value || "").trim() || null,
-      excerpt: (this.container.querySelector("#excerpt-editor")?.value || "").trim() || null,
+      title: (field("#title-input")?.value || "").trim(),
+      slug: (field("#slug-input")?.value || "").trim() || null,
+      excerpt: (field("#excerpt-editor")?.value || "").trim() || null,
       content: this.state.editorMode === "visual" ? this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes) : this._markdownEditorRef?.getValue() ?? "",
-      status: this.container.querySelector("#status-select")?.value || this.state.post?.status || "draft",
+      status: field("#status-select")?.value || this.state.post?.status || "draft",
       // These fields have no editor inputs; preserve existing values instead of
       // sending null (the backend would clear them on every save).
       formatter: this.state.post?.formatter || "markdown",
-      is_featured: this.container.querySelector("#featured-check")?.checked || false,
+      is_featured: check("#featured-check")?.checked || false,
       thumbnail_path: this.state.post?.thumbnail_path ?? null,
       meta_description: this.state.post?.meta_description ?? null,
       tags: this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
-      scheduled_at: this.container.querySelector("#schedule-input")?.value ? new Date(this.container.querySelector("#schedule-input").value).toISOString() : "",
+      scheduled_at: field("#schedule-input")?.value ? new Date(field("#schedule-input").value).toISOString() : "",
       css: this._cssEditorRef ? this._cssEditorRef.getValue() : this.state.post?.css || "",
-      immersive_mode: this.container.querySelector("#immersive-mode-select")?.value || "auto",
-      instagram_share: this.container.querySelector("#ig-share-input")?.checked ?? (this.state.isNew ? this.state.igStatus?.default_share ?? false : this.state.post?.instagram_share ?? false)
+      immersive_mode: field("#immersive-mode-select")?.value || "auto",
+      instagram_share: check("#ig-share-input")?.checked ?? (this.state.isNew ? this.state.igStatus?.default_share ?? false : this.state.post?.instagram_share ?? false)
     };
   }
   _showConfirm(title, message, confirmText, variant, onConfirm) {
@@ -1147,7 +1162,7 @@ export default class PostEditPage extends Component {
   async _doAnalyzeField(field, item) {
     if (!item) return;
     const snap = this._collectFormData();
-    this.container.querySelectorAll(`.field-ai-btn`).forEach(b => {
+    this.$$(`.field-ai-btn`).forEach((/** @type {HTMLButtonElement} */ b) => {
       b.disabled = true;
     });
     const post = {
