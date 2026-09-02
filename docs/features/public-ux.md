@@ -1,6 +1,6 @@
 # Public UX
 
-Design system for the visitor-facing SPA (routes: `/`, `/posts/:slug`, `/tags`,
+Design system for the visitor-facing SPA (routes: `/`, `/posts/:slug`, `/tags`, `/map`,
 `/tags/:slug`, `/search`, `/preview/:token`; pages in `frontend/src/pages/public/`,
 shell components in `frontend/src/components/public/` and plugins). The 2026 redesign
 targeted consistency and legibility.
