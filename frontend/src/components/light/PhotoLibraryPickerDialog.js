@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 
 import { html, setHTML } from "../../utils/helpers.js";
 /**
@@ -78,15 +77,18 @@ export class PhotoLibraryPickerDialog extends Component {
 
     // Event delegation on stable region containers — handles dynamically replaced content
     this.$('#plpd-breadcrumb').addEventListener('click', e => {
-      const btn = e.target.closest('.breadcrumb-btn');
+      const btn = /** @type {HTMLElement} */ (
+        /** @type {HTMLElement} */ (e.target).closest('.breadcrumb-btn'));
       if (btn) this._navigateToBreadcrumb(parseInt(btn.dataset.index, 10));
     });
     this.$('#plpd-sidebar').addEventListener('click', e => {
-      const btn = e.target.closest('.photo-library-folder-btn');
+      const btn = /** @type {HTMLElement} */ (
+        /** @type {HTMLElement} */ (e.target).closest('.photo-library-folder-btn'));
       if (btn) this._navigateInto(btn.dataset.folder);
     });
     this.$('#plpd-content').addEventListener('click', e => {
-      const item = e.target.closest('.photo-library-item');
+      const item = /** @type {HTMLElement} */ (
+        /** @type {HTMLElement} */ (e.target).closest('.photo-library-item'));
       if (item) this._toggleFile(item.dataset.path);
     });
     this.container.addEventListener('click', e => {
@@ -270,7 +272,7 @@ export class PhotoLibraryPickerDialog extends Component {
     })}</div>`);
   }
   _patchImportBtn(count, importing) {
-    const btn = this.$('#plpd-import-btn');
+    const btn = /** @type {HTMLButtonElement|null} */ (this.$('#plpd-import-btn'));
     if (!btn) return;
     btn.disabled = count === 0 || importing;
     btn.textContent = importing ? 'Importing…' : count === 0 ? 'Import selected' : `Import ${count} photo${count !== 1 ? 's' : ''}`;

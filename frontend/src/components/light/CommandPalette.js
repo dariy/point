@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.11.
 import { Component } from '../Component.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
@@ -70,13 +69,13 @@ export class CommandPalette extends Component {
     input?.focus();
 
     input?.addEventListener('input', (e) => {
-      const q = e.target.value;
+      const q = /** @type {HTMLInputElement} */ (e.target).value;
       this.setState({ query: q, selectedIndex: 0 });
       this._performSearch(q);
     });
 
     this.$('#cp-overlay')?.addEventListener('click', (e) => {
-      if (e.target.id === 'cp-overlay') this.close();
+      if (/** @type {HTMLElement} */ (e.target).id === 'cp-overlay') this.close();
     });
 
     this.$$('.cp-result-item').forEach(item => {
@@ -164,10 +163,12 @@ export class CommandPalette extends Component {
     try {
       const [postsResp, tagsResp] = await Promise.all([
         listPosts({ q, per_page: 5 }).catch(() => ({ posts: [] })),
-        listTags({ q, per_page: 5 }).catch(() => ({ tags: [] }))
+        // /api/tags does not paginate — it answers with the whole matching set,
+        // and the combined list is capped below.
+        listTags({ q }).catch(() => ({ tags: [] }))
       ]);
 
-      const posts = (postsResp.posts || postsResp.items || []).map(p => ({
+      const posts = (postsResp.posts || []).map(p => ({
         label: p.title,
         sublabel: p.slug,
         href: `/light/posts/${p.id}/edit`,
