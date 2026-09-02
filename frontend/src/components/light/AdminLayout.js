@@ -22,10 +22,7 @@ import { setupHeaderCompact } from "../../utils/headerCompact.js";
 import { html, insertHTML, navigate, raw } from "../../utils/helpers.js";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 
-/**
- * A markup slot: html`` output, or a plain string (escaped on the way in).
- * @typedef {string|import('../../utils/helpers.js').RawHtml} Slot
- */
+/** @typedef {import('../../utils/helpers.js').Slot} Slot */
 
 /**
  * Shared markup for admin pages, for use inside component.render().

@@ -314,6 +314,14 @@ export function setupLongPress(el, callback, duration = 400) {
 export class RawHtml extends String {}
 
 /**
+ * A markup slot: html`` output, or a plain string — which the tag escapes on
+ * the way in, so a caller with nothing to put there can pass "". What every
+ * "give me some markup" parameter in this frontend accepts.
+ *
+ * @typedef {string|RawHtml} Slot
+ */
+
+/**
  * Wrap a string so the html tag leaves it unescaped.
  *
  * @param {string|RawHtml} str
