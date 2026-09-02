@@ -98,9 +98,14 @@ export function isShortViewport() {
  * Debounce a function — delays execution until `ms` milliseconds have passed
  * since the last call.
  *
- * @param {Function} fn
+ * Generic in the wrapped function so the result stays callable wherever the
+ * original was — an event listener, most often, which the bare `Function`
+ * type is not assignable to.
+ *
+ * @template {(...args: any[]) => any} F
+ * @param {F} fn
  * @param {number} ms
- * @returns {Function}
+ * @returns {(...args: Parameters<F>) => void}
  */
 export function debounce(fn, ms) {
   let timer;
@@ -113,9 +118,14 @@ export function debounce(fn, ms) {
 /**
  * Throttle a function — ensures it is called at most once every `ms` ms.
  *
- * @param {Function} fn
+ * Generic in the wrapped function so the result stays callable wherever the
+ * original was — an event listener, most often, which the bare `Function`
+ * type is not assignable to.
+ *
+ * @template {(...args: any[]) => any} F
+ * @param {F} fn
  * @param {number} ms
- * @returns {Function}
+ * @returns {(...args: Parameters<F>) => void}
  */
 export function throttle(fn, ms) {
   let last = 0;

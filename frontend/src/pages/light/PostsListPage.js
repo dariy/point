@@ -1,4 +1,3 @@
-// @ts-nocheck — not yet typecheck-clean; see p-frontend-rendering-m06x.10.
 /**
  * PostsListPage — paginated, filterable list of all posts.
  *
@@ -91,6 +90,7 @@ export default class PostsListPage extends Component {
     const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
     const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
     const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+    /** @type {import("../../utils/helpers.js").Slot} */
     let thumbInner = "";
     if (isImage && p.media_url) {
       thumbInner = html`<img ${thumbAttrs(p.media_url, {
@@ -196,6 +196,7 @@ export default class PostsListPage extends Component {
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
       const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
       const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+      /** @type {import("../../utils/helpers.js").Slot} */
       let previewHtml = "";
       if (isImage && p.media_url) {
         previewHtml = html`<img ${thumbAttrs(p.media_url, {
@@ -364,24 +365,24 @@ export default class PostsListPage extends Component {
       this._restoreInteraction = null;
       restore();
     }
-    const searchInput = this.container.querySelector("#search-input");
+    const searchInput = this.$("#search-input");
     if (searchInput) {
       searchInput.addEventListener("input", debounce(e => {
         // Update state without re-rendering — the input already shows the new value
-        this.state.search = e.target.value;
+        this.state.search = /** @type {HTMLInputElement} */ (e.target).value;
         this.state.page = 1;
         this._load({
           page: 1,
-          search: e.target.value
+          search: /** @type {HTMLInputElement} */ (e.target).value
         });
       }, 350));
     }
 
     // Status filter
-    const statusFilterEl = this.container.querySelector("#status-filter");
+    const statusFilterEl = this.$("#status-filter");
     if (statusFilterEl) {
       statusFilterEl.addEventListener("change", e => {
-        const val = e.target.value;
+        const val = /** @type {HTMLSelectElement} */ (e.target).value;
         statusFilterEl.className = `status-select badge-${val || "draft"} filter-select`;
         this.setState({
           statusFilter: val,
@@ -422,17 +423,17 @@ export default class PostsListPage extends Component {
 
     // Status change buttons (skip for trash view)
     if (!isTrash) {
-      this.container.querySelectorAll(".status-change-btn").forEach(select => {
+      this.$$(".status-change-btn").forEach(select => {
         select.addEventListener("change", async e => {
           const id = parseInt(select.dataset.id, 10);
-          const newStatus = e.target.value;
+          const newStatus = /** @type {HTMLSelectElement} */ (e.target).value;
           await this._updatePostStatus(id, newStatus, select);
         });
       });
     }
 
     // Delete buttons (move to trash)
-    this.container.querySelectorAll(".delete-btn").forEach(btn => {
+    this.$$(".delete-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -443,7 +444,7 @@ export default class PostsListPage extends Component {
     });
 
     // Restore buttons (trash view)
-    this.container.querySelectorAll(".restore-btn").forEach(btn => {
+    this.$$(".restore-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -452,7 +453,7 @@ export default class PostsListPage extends Component {
     });
 
     // Permanently delete buttons (trash view)
-    this.container.querySelectorAll(".perm-delete-btn").forEach(btn => {
+    this.$$(".perm-delete-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -465,15 +466,15 @@ export default class PostsListPage extends Component {
     // Swipe-to-reveal action drawer on cards (portrait mobile).
     if (!isTrash && !this.state.loading) {
       // Drawer action buttons
-      this.container.querySelectorAll('.swipe-publish-btn').forEach(btn => {
+      this.$$('.swipe-publish-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           this._cyclePostStatus(parseInt(btn.dataset.id, 10), 'published');
         });
       });
-      this.container.querySelectorAll('.swipe-preview-btn').forEach(btn => {
+      this.$$('.swipe-preview-btn').forEach(btn => {
         btn.addEventListener('click', () => this._copyPreviewLink(parseInt(btn.dataset.id, 10)));
       });
-      this.container.querySelectorAll('.swipe-delete-btn').forEach(btn => {
+      this.$$('.swipe-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id, 10);
           const title = btn.dataset.title;
@@ -484,7 +485,7 @@ export default class PostsListPage extends Component {
     }
 
     // Tag family popover for chips
-    this.container.querySelectorAll(".tag-chip").forEach(chip => {
+    this.$$(".tag-chip").forEach(chip => {
       chip.addEventListener("click", _e => {
         const id = parseInt(chip.dataset.id, 10);
         if (id) openTagFamilyPopover(id, chip);
@@ -499,22 +500,22 @@ export default class PostsListPage extends Component {
       });
     });
     if (this.state.selectMode && !isTrash) {
-      this.container.querySelector("#select-all-cb")?.addEventListener("change", this._handleSelectAll.bind(this));
-      this.container.querySelectorAll(".select-row-cb").forEach(cb => {
+      this.$("#select-all-cb")?.addEventListener("change", this._handleSelectAll.bind(this));
+      this.$$(".select-row-cb").forEach(cb => {
         cb.addEventListener("change", this._handleSelectRow.bind(this));
       });
-      this.container.querySelector("#bulk-apply-btn")?.addEventListener("click", this._handleBulkApply.bind(this));
-      this.container.querySelector("#bulk-delete-btn")?.addEventListener("click", this._handleBulkDelete.bind(this));
+      this.$("#bulk-apply-btn")?.addEventListener("click", this._handleBulkApply.bind(this));
+      this.$("#bulk-delete-btn")?.addEventListener("click", this._handleBulkDelete.bind(this));
       this._updateBulkToolbar();
     }
 
     // Card view: tap to edit or toggle selection; long-press to enter select mode
-    this.container.querySelectorAll(".post-card").forEach(card => {
+    this.$$(".post-card").forEach(card => {
       const postId = parseInt(card.dataset.postId, 10);
       if (!isTrash) {
         let longPressTimer = null;
         card.addEventListener("pointerdown", e => {
-          if (e.target.closest("select, button, a, input")) return;
+          if (/** @type {HTMLElement} */ (e.target).closest("select, button, a, input")) return;
           longPressTimer = setTimeout(() => {
             longPressTimer = null;
             if (!this.state.selectMode) {
@@ -536,7 +537,7 @@ export default class PostsListPage extends Component {
         card.addEventListener("pointercancel", cancelTimer);
       }
       card.addEventListener("click", e => {
-        if (e.target.closest("select, button, a, input")) return;
+        if (/** @type {HTMLElement} */ (e.target).closest("select, button, a, input")) return;
         if (isTrash) return;
         if (this.state.selectMode) {
           this._toggleCardSelection(postId);
@@ -586,10 +587,10 @@ export default class PostsListPage extends Component {
   }
   _updateBulkToolbar() {
     const n = this.state.selectedIds.size;
-    const bulkCount = this.container.querySelector("#bulk-count");
-    const applyBtn = this.container.querySelector("#bulk-apply-btn");
-    const deleteBtn = this.container.querySelector("#bulk-delete-btn");
-    const selectAllCb = this.container.querySelector("#select-all-cb");
+    const bulkCount = this.$("#bulk-count");
+    const applyBtn = /** @type {HTMLButtonElement|null} */ (this.$("#bulk-apply-btn"));
+    const deleteBtn = /** @type {HTMLButtonElement|null} */ (this.$("#bulk-delete-btn"));
+    const selectAllCb = /** @type {HTMLInputElement|null} */ (this.$("#select-all-cb"));
     if (bulkCount) bulkCount.textContent = `${n} selected`;
     if (applyBtn) applyBtn.disabled = n === 0;
     if (deleteBtn) deleteBtn.disabled = n === 0;
@@ -608,7 +609,7 @@ export default class PostsListPage extends Component {
     }
   }
   async _handleBulkApply() {
-    const status = this.container.querySelector("#bulk-status-select").value;
+    const status = /** @type {HTMLSelectElement} */ (this.$("#bulk-status-select")).value;
     const ids = Array.from(this.state.selectedIds);
     let successCount = 0;
     let failCount = 0;
@@ -709,7 +710,9 @@ export default class PostsListPage extends Component {
     };
     window.addEventListener('keydown', this._onKeyNav);
     const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+    /** @type {[string, () => void, string, string][]} */
+    const arrowSpecs = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']];
+    this._navArrows = arrowSpecs.map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `page-nav-arrow admin-page-nav-arrow page-nav-${dir}`;
@@ -743,8 +746,8 @@ export default class PostsListPage extends Component {
     if (!rows) return;
     requestAnimationFrame(() => {
       // Whichever list is actually visible (table on desktop, cards on mobile).
-      const table = this.container.querySelector(".table-container");
-      const cards = this.container.querySelector(".posts-card-list");
+      const table = this.$(".table-container");
+      const cards = this.$(".posts-card-list");
       const container = table && table.offsetParent !== null ? table : cards;
       if (!container) return;
       const rowHeight = container.scrollHeight / rows; // real per-item height
@@ -791,12 +794,12 @@ export default class PostsListPage extends Component {
 
     // Show loading indicator in-place — no full re-render, no focus loss.
     // The strings are fully static (no user data), so innerHTML is safe here.
-    const tbody = this.container.querySelector("#posts-tbody");
+    const tbody = this.$("#posts-tbody");
     const colspan = this.state.statusFilter === "trash" ? 5 : this.state.selectMode ? 5 : 4;
     if (tbody) {
       setHTML(tbody, html`<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`); // static, safe
     }
-    const cardList = this.container.querySelector("#posts-card-list");
+    const cardList = this.$("#posts-card-list");
     if (cardList) {
       setHTML(cardList, html`<p class="post-card-placeholder">Loading…</p>`); // static, safe
     }
@@ -820,7 +823,7 @@ export default class PostsListPage extends Component {
       this._restoreInteraction = restoreInteraction;
       this.setState({
         loading: false,
-        posts: (data.posts || data.items || []).map(p => ({
+        posts: (data.posts || []).map(p => ({
           ...p,
           status: (p.status || "").toLowerCase()
         })),
@@ -846,7 +849,7 @@ export default class PostsListPage extends Component {
 
   /** Mount a TagsInput directly in the tags cell for a post row. Saves on change. */
   _mountTagEditor(post) {
-    const mount = this.container.querySelector(`#tags-cell-${post.id}`);
+    const mount = this.$(`#tags-cell-${post.id}`);
     if (!mount) return;
     const initialTags = (post.tags || []).map(t => typeof t === "string" ? t : t.name);
     this.mountChild(TagsInput, `#tags-cell-${post.id}`, {
@@ -964,7 +967,7 @@ export default class PostsListPage extends Component {
       openCard.classList.remove('post-card--revealed');
       openCard = null;
     };
-    this.container.querySelectorAll('.post-card').forEach(card => {
+    this.$$('.post-card').forEach(card => {
       if (!card.querySelector('.post-card-swipe-actions')) return;
       const ac = new AbortController();
       abortControllers.push(ac);
@@ -974,14 +977,14 @@ export default class PostsListPage extends Component {
       card.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
         // Let buttons in the already-open drawer handle their own taps
-        if (card === openCard && e.target.closest('.post-card-swipe-actions')) return;
+        if (card === openCard && /** @type {HTMLElement} */ (e.target).closest('.post-card-swipe-actions')) return;
         const t = e.touches[0];
         startX = t.clientX;
         startY = t.clientY;
         dragging = false;
         decided = false;
         dx = 0;
-        const actions = card.querySelector('.post-card-swipe-actions');
+        const actions = /** @type {HTMLElement|null} */ (card.querySelector('.post-card-swipe-actions'));
         actionsWidth = actions ? actions.offsetWidth : 0;
         card.style.transition = 'none';
       }, {
