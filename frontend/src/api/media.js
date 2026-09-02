@@ -90,9 +90,15 @@ export function uploadMultiple(files, postId) {
 }
 
 /**
- * Update media metadata (alt_text, caption, post_id).
+ * Update media metadata (alt_text, caption, post_id, metadata).
+ *
+ * `metadata` is the EXIF map, replaced wholesale — the visual editor's per-image
+ * EXIF panel saves through here (UpdateMediaRequest in api/internal/api/media.go
+ * has always read it).
+ *
  * @param {number} id
- * @param {{ alt_text?, caption?, post_id? }} data
+ * @param {{ alt_text?: string, caption?: string, post_id?: number,
+ *           metadata?: Record<string, any> }} data
  * @returns {Promise<object>}
  */
 export function updateMedia(id, data) {
