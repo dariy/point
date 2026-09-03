@@ -34,9 +34,25 @@ const CAROUSEL_FENCE_OPEN = `:::{.${CAROUSEL_BLOCK_CLASS}}`;
 const FIRST_IMAGE_IN_TEXT_RE =
   /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i;
 
+/**
+ * The `:::{.carousel-block}` fence for a list of media paths, in the blank-line
+ * form the render contract requires (`docs/features/carousel-studio.md`): a
+ * blank line between every path, because `html.WithHardWraps()` would otherwise
+ * collapse adjacent paths into one `<br>`-joined `<p>`.
+ *
+ * Shared so the carousel plugin's `buildCarouselBlock` and this module's node
+ * serializer emit byte-identical blocks.
+ *
+ * @param {string[]} paths
+ * @returns {string}
+ */
+export function carouselFence(paths) {
+  return `${CAROUSEL_FENCE_OPEN}\n\n${(paths || []).join("\n\n")}\n\n:::`;
+}
+
 /** Serialize a carousel node back to its fenced div, blank line between paths. */
 function serializeCarousel(paths) {
-  return `${CAROUSEL_FENCE_OPEN}\n\n${(paths || []).join("\n\n")}\n\n:::`;
+  return carouselFence(paths);
 }
 
 export function parseNodes(content) {
