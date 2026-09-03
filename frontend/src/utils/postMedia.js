@@ -81,6 +81,13 @@ export function extractMedia(html) {
   return items;
 }
 
+/**
+ * The class on the fenced div that wraps a Carousel Studio slide deck. Kept in
+ * sync with CAROUSEL_BLOCK_CLASS in postNodes.js — duplicated rather than
+ * imported so this module stays dependency-free for the preload path.
+ */
+const CAROUSEL_BLOCK_RE = /class="[^"]*\bcarousel-block\b[^"]*"/;
+
 /** Elements that never have a closing tag, for the top-level block scanner. */
 const VOID_TAGS = new Set([
   "img", "br", "hr", "input", "source", "meta", "link",
@@ -187,6 +194,14 @@ export function mediaFromHtml(html) {
     for (const segment of segments) {
       const trimmed = segment.trim();
       if (!trimmed) continue;
+      // A carousel block holds N images that ARE N slides — the media-only
+      // segmentation is what expands it. Left to the rules below it would fail
+      // the "exactly one media" test and lump the whole deck into one text
+      // slide (any surrounding prose in the same segment still splits off).
+      if (CAROUSEL_BLOCK_RE.test(trimmed)) {
+        items.push(...blocksToItems(splitTopLevelBlocks(trimmed)));
+        continue;
+      }
       const segmentMedia = extractMedia(trimmed);
       const text = stripHtml(trimmed).replace(/&nbsp;/g, " ").trim();
       if (segmentMedia.length === 1 && (text.length === 0 || text === segmentMedia[0].url)) {
