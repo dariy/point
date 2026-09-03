@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,6 +31,11 @@ const partialSuffix = ".partial"
 // running; only one may run at a time.
 var ErrBackupInProgress = kindSentinel(ErrConflict, "a backup is already in progress")
 
+// healthTaskBackupHook is the HealthRegistry key for the off-host backup copy
+// (BACKUP_HOOK). It is recorded from CreateBackup rather than the scheduler, so
+// its "last run" tracks the last backup, not a fixed daily tick.
+const healthTaskBackupHook = "backup off-host copy"
+
 type SystemService struct {
 	repo     repository.Repository
 	dataPath string
@@ -36,6 +43,14 @@ type SystemService struct {
 
 	backupMu      sync.Mutex
 	backupRunning bool
+
+	// backupHook, when set, is a `sh -c` command run against each finished
+	// archive to copy it off-host; backupHookTimeout bounds one run. health
+	// receives the hook's outcome under healthTaskBackupHook. All optional —
+	// see WithBackupHook / WithHealth.
+	backupHook        string
+	backupHookTimeout time.Duration
+	health            *HealthRegistry
 }
 
 func NewSystemService(repo repository.Repository, dataPath, dbPath string) *SystemService {
@@ -44,6 +59,24 @@ func NewSystemService(repo repository.Repository, dataPath, dbPath string) *Syst
 		dataPath: dataPath,
 		dbPath:   dbPath,
 	}
+}
+
+// WithBackupHook configures the command run after each successful backup to copy
+// the archive off-host, and how long one run may take before it is killed and
+// reported as failed. An empty command disables the hook entirely. Returns the
+// receiver for chaining at construction.
+func (s *SystemService) WithBackupHook(command string, timeout time.Duration) *SystemService {
+	s.backupHook = strings.TrimSpace(command)
+	s.backupHookTimeout = timeout
+	return s
+}
+
+// WithHealth attaches the shared background-job health registry so the off-host
+// backup hook's outcome is visible in /api/system/health. Returns the receiver
+// for chaining at construction.
+func (s *SystemService) WithHealth(h *HealthRegistry) *SystemService {
+	s.health = h
+	return s
 }
 
 type DiskInfo struct {
@@ -120,6 +153,11 @@ func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error)
 		return "", 0, fmt.Errorf("backup finalize failed: %w", err)
 	}
 
+	// Ship the finished archive off-host if a hook is configured. It is already
+	// complete and listed, so a hook failure is surfaced (health + log) but does
+	// not fail the backup.
+	s.runBackupHook(ctx, finalPath, backupName, sum)
+
 	info, err := os.Stat(finalPath)
 	if err != nil {
 		return backupName, 0, nil
@@ -133,6 +171,67 @@ func (s *SystemService) BackupRunning() bool {
 	s.backupMu.Lock()
 	defer s.backupMu.Unlock()
 	return s.backupRunning
+}
+
+// runBackupHook runs the configured BACKUP_HOOK command against a freshly
+// finished archive to copy it off-host. Best-effort by design: the local
+// archive is already complete, so a hook that exits non-zero or overruns its
+// timeout is recorded against healthTaskBackupHook (surfaced by
+// /api/system/health and the metrics exposition) and logged, but does not fail
+// the backup. Does nothing when no hook is configured — not even a health
+// entry, so an operator who wants no off-host copy gets no perpetually-green
+// job either.
+func (s *SystemService) runBackupHook(ctx context.Context, archivePath, archiveName, sha256Hex string) {
+	if s.backupHook == "" {
+		return
+	}
+
+	timeout := s.backupHookTimeout
+	if timeout <= 0 {
+		timeout = time.Hour
+	}
+	hookCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// The archive path is both $1 and $POINT_BACKUP_FILE; $0 is a label so a
+	// hook that echoes its arguments reads sensibly.
+	// G204: the command is BACKUP_HOOK — operator-supplied deployment config,
+	// never request input. Running it verbatim through a shell is the feature.
+	cmd := exec.CommandContext(hookCtx, "sh", "-c", s.backupHook, "point-backup-hook", archivePath) //nolint:gosec // G204: BACKUP_HOOK is operator config, not user input
+	cmd.Env = append(os.Environ(),
+		"POINT_BACKUP_FILE="+archivePath,
+		"POINT_BACKUP_NAME="+archiveName,
+		"POINT_BACKUP_SHA256="+sha256Hex,
+		"POINT_BACKUP_DIR="+filepath.Dir(archivePath),
+	)
+	// Own process group + kill it as a group on timeout: `sh -c` typically
+	// exec's the real uploader as a child, and killing only the shell would
+	// leave that child running (and holding the output pipe open, so
+	// CombinedOutput would block past the deadline). WaitDelay is the backstop
+	// if the group ignores SIGTERM.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = 5 * time.Second
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if hookCtx.Err() == context.DeadlineExceeded {
+			err = fmt.Errorf("hook timed out after %s", timeout)
+		}
+		// Bound what a chatty hook can push into the health registry and log.
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			if len(msg) > 500 {
+				msg = "…" + msg[len(msg)-500:]
+			}
+			err = fmt.Errorf("%w: %s", err, msg)
+		}
+		slog.Error("backup off-host hook failed", "archive", archiveName, "err", err)
+		s.health.Record(healthTaskBackupHook, err)
+		return
+	}
+
+	slog.Info("backup copied off-host", "archive", archiveName)
+	s.health.Record(healthTaskBackupHook, nil)
 }
 
 // removePartials deletes leftover "*.tar.gz.partial" files from an interrupted

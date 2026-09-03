@@ -7,6 +7,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"point-api/internal/config"
 	"point-api/internal/metrics"
@@ -65,7 +66,9 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		WithMetrics(metricsRegistry)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService).
 		WithCache(cacheService)
-	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
+	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL).
+		WithBackupHook(cfg.BackupHook, time.Duration(cfg.BackupHookTimeoutSeconds)*time.Second).
+		WithHealth(healthRegistry)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
 	systemService.CleanupPartialBackups()
 	themeService := services.NewThemeService(cfg, settingsService)

@@ -3,8 +3,8 @@
 Two layers, and they answer different questions.
 
 **Without configuring anything**, `/api/system/health` reports the last outcome of every
-background job — the scheduler's five tasks, Instagram cross-posts, the comments sidecar
-— and the admin Health card renders it. It answers *"is anything quietly broken right
+background job — the scheduler's five tasks, Instagram cross-posts, the comments sidecar,
+the off-host backup copy (`BACKUP_HOOK`) — and the admin Health card renders it. It answers *"is anything quietly broken right
 now"*, in memory, per process, with no scrape target and no retention policy. That is the
 zero-configuration answer and it is not deprecated by anything below.
 
