@@ -33,7 +33,14 @@ targeted consistency and legibility.
 - **Explore block** (`tag-cloud` plugin, `ExploreBlock.js`): replaced the weighted
   font-size tag cloud on the home page — top tags as plain pills + "All tags →".
 - **Search**: matches tag names as well as posts; SearchPage shows a tags strip above
-  post results (a place seen as a pill is findable).
+  post results (a place seen as a pill is findable). Post text (title, slug, body) is
+  matched through the SQLite FTS5 index `posts_fts` — every word in the query has to
+  appear, each matched as a prefix, so "cold mou" finds a cold mountain and a
+  half-typed word still matches. Mid-word matches do not: "ountain" finds nothing.
+  Tag names are still matched as substrings, so a pill remains findable from the
+  middle of its name. FTS5 query syntax typed into the box (`"`, `*`, `OR`, `NEAR`)
+  is treated as literal text, not as operators. See
+  `api/internal/repository/queries_posts.go` (`ftsMatchQuery`) and `api/sql/schema.sql`.
 - **Responsive matrix**: em-based breakpoints plus pointer/orientation axes;
   `--content-max-width: clamp(75rem, 90vw, 112rem)` (`frontend/css/public/tokens.css`)
   — grids grow to 4–5 columns on ultrawide while prose stays at the narrow reading

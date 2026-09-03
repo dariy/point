@@ -366,6 +366,59 @@ var schema = []struct{ name, sql string }{
 		"drop_posts_deleted_at_index",
 		`DROP INDEX IF EXISTS idx_posts_deleted_at`,
 	},
+	{
+		// Search was five leading-wildcard LIKEs over title, slug, content and
+		// tag names — unindexable by construction, so every post body came off
+		// disk per keystroke of the admin search box. FTS5 makes it a lookup.
+		//
+		// External content (content='posts') means the virtual table holds the
+		// inverted index and nothing else: posts stays the one copy of the
+		// text. What SQLite does not then do is keep the two in step, which is
+		// what the three triggers below are for. Same statements as in
+		// sql/schema.sql, which is where a fresh database gets them; these are
+		// for the databases that already exist.
+		"create_posts_fts",
+		`CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+				title, slug, content,
+				content='posts',
+				content_rowid='id',
+				tokenize='unicode61'
+			)`,
+	},
+	{
+		"create_posts_fts_insert_trigger",
+		`CREATE TRIGGER IF NOT EXISTS posts_fts_insert AFTER INSERT ON posts BEGIN
+				INSERT INTO posts_fts(rowid, title, slug, content)
+				VALUES (new.id, new.title, new.slug, new.content);
+			END`,
+	},
+	{
+		"create_posts_fts_delete_trigger",
+		`CREATE TRIGGER IF NOT EXISTS posts_fts_delete AFTER DELETE ON posts BEGIN
+				INSERT INTO posts_fts(posts_fts, rowid, title, slug, content)
+				VALUES ('delete', old.id, old.title, old.slug, old.content);
+			END`,
+	},
+	{
+		// OF title, slug, content — an unqualified UPDATE trigger would
+		// reindex a whole post body every time a view counter ticked.
+		"create_posts_fts_update_trigger",
+		`CREATE TRIGGER IF NOT EXISTS posts_fts_update AFTER UPDATE OF title, slug, content ON posts BEGIN
+				INSERT INTO posts_fts(posts_fts, rowid, title, slug, content)
+				VALUES ('delete', old.id, old.title, old.slug, old.content);
+				INSERT INTO posts_fts(rowid, title, slug, content)
+				VALUES (new.id, new.title, new.slug, new.content);
+			END`,
+	},
+	{
+		// The triggers only see writes made after they exist, so the index
+		// starts empty and every post already in the database is invisible to
+		// search until it is filled. 'rebuild' reads the content table and
+		// builds the whole index from it — the one-time backfill, and the
+		// repair if the two ever drift.
+		"backfill_posts_fts",
+		`INSERT INTO posts_fts(posts_fts) VALUES ('rebuild')`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in
