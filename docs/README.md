@@ -16,6 +16,7 @@ decisions, out-of-scope notes, and gotchas for future development.
 - [Plugin System](./features/plugin-system.md) — enabled-only manifest, registry, build pipeline
 - [MCP Server](./features/mcp.md) — 28 tools at `/mcp`, OAuth 2.1 + API-key auth
 - [Instagram Integration](./features/instagram-integration.md) — cross-posting and import
+- [Carousel Studio](./features/carousel-studio.md) — `:::{.carousel-block}` output contract, staged builder plan
 - [Tag System](./features/tag-system.md) — multi-parent DAG, typed flags, TagGraph snapshot
 - [Hidden Posts & Tags](./features/hidden-visibility.md) — visibility rules and guest filtering
 - [Tags Visualization](./features/tags-visualization.md) — `/tags` as Atlas, Map, or force Graph
