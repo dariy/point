@@ -12,6 +12,7 @@ import (
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
+	"point-api/internal/utils"
 )
 
 type ApiKeyService struct {
@@ -84,11 +85,11 @@ func (s *ApiKeyService) ValidateAPIKey(ctx context.Context, rawKey string) (mode
 	}
 
 	// Update last used timestamp
-	go func() {
+	utils.SafeGo("apikey: touch last-used", func() {
 		// Using a background context for the async update to not block the current request
 		// or fail if the request context is cancelled.
 		_ = s.repo.TouchAPIKeyLastUsed(context.Background(), apiKey.ID)
-	}()
+	})
 
 	return apiKey, nil
 }

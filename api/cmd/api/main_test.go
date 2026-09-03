@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1195,5 +1196,23 @@ func TestInitServices_HealthRegistryIsShared(t *testing.T) {
 	snap := svcs.Health.Snapshot()
 	if len(snap) != 1 || snap[0].Name != "probe" {
 		t.Fatalf("scheduler outcomes did not reach the shared registry: %+v", snap)
+	}
+}
+
+func TestParseLogLevel(t *testing.T) {
+	cases := map[string]slog.Level{
+		"debug":    slog.LevelDebug,
+		"DEBUG":    slog.LevelDebug,
+		"info":     slog.LevelInfo,
+		"":         slog.LevelInfo,
+		"nonsense": slog.LevelInfo,
+		"warn":     slog.LevelWarn,
+		"warning":  slog.LevelWarn,
+		" ERROR ":  slog.LevelError,
+	}
+	for in, want := range cases {
+		if got := parseLogLevel(in); got != want {
+			t.Errorf("parseLogLevel(%q) = %v, want %v", in, got, want)
+		}
 	}
 }

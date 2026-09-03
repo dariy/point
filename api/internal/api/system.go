@@ -442,7 +442,7 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 	// a request should stay open. Progress is observable via ListBackups (the
 	// in-progress .partial entry) and survives page reloads. A detached context is
 	// used so the work isn't cancelled when this request returns.
-	go func() {
+	utils.SafeGo("system: create backup", func() {
 		bgCtx := context.Background()
 		if _, _, err := h.systemService.CreateBackup(bgCtx); err != nil {
 			slog.Error("backup failed", "err", err)
@@ -451,7 +451,7 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 		if _, err := h.systemService.RotateBackups(keep); err != nil {
 			slog.Error("backup rotation failed", "err", err)
 		}
-	}()
+	})
 
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "started"})
 }
@@ -547,13 +547,13 @@ func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 func (h *SystemHandler) RestartServer(c echo.Context) error {
 	// Respond first, then trigger shutdown from a goroutine — a short delay lets
 	// this response flush before the HTTP server stops accepting connections.
-	go func() {
+	utils.SafeGo("system: restart signal", func() {
 		time.Sleep(300 * time.Millisecond)
 		RestartRequested.Store(true)
 		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
 			slog.Error("restart: failed to signal shutdown", "error", err)
 		}
-	}()
+	})
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "restarting",
 		"message": "Server is restarting…",

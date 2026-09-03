@@ -159,6 +159,31 @@ container. The `LogErrorFunc` that increments `point_panics_total` also logs thr
 `slog`, so they land there now. The response is unchanged: the error still goes to the
 centralized handler and the client still gets its 500.
 
+### Background goroutines recover too
+
+`middleware.Recover` only covers the HTTP request goroutine. Detached work — the API-key
+last-used touch, the Instagram import, the backup archive, the restart signal — runs in a
+bare `go func()` with no such backstop, so a panic there took the **whole process** down
+and left nothing in `app.log` to say why. Each now defers `utils.SafeGo` /
+`utils.Recovered` (`api/internal/utils/recover.go`), which logs the panic and stack
+through `slog` and lets the process live. The Instagram import additionally resets its
+`running` flag from the recover so a later import can still start. The scheduler
+(`SchedulerService.runTask`) and the Instagram cross-post already did this inline; the
+helper is that same pattern. These sites are **not** counted in `point_panics_total` —
+that counter is for the two middleware-style choke points, not every goroutine.
+
+`safeImagingDecode` (`api/internal/services/media_service.go`) already turned decode
+panics from crafted images into a returned error; it now also logs them at `warn` with a
+stack, so a caller that swallows the error does not make the panic invisible.
+
+## Log level
+
+`LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) sets the minimum slog
+level. It is read once at startup in `api/cmd/api/main.go` (`parseLogLevel` →
+`slog.HandlerOptions.Level`); an unrecognised value falls back to `info`. There is no
+runtime switch. `DEBUG` used to be documented as a production toggle but was never wired
+to anything — it has been removed.
+
 ## Considered and rejected
 
 - **`prometheus/client_golang`.** The engine ships to strangers as one binary with no
@@ -201,4 +226,6 @@ centralized handler and the client still gets its 500.
 | `api/internal/metrics/expose.go` | the text-format writer, `Sources`, and the HTTP handler |
 | `api/cmd/api/metrics.go` | the request middleware, the scrape-time sources, the second listener |
 | `api/cmd/api/server.go` | where the middleware, the recover counter and the limiter counters attach |
-| `api/internal/config/config.go` | `METRICS_ENABLED` / `METRICS_BIND` / `METRICS_PORT` |
+| `api/internal/config/config.go` | `METRICS_ENABLED` / `METRICS_BIND` / `METRICS_PORT` / `LOG_LEVEL` |
+| `api/internal/utils/recover.go` | `SafeGo` / `Recovered` — the panic backstop for bare background goroutines |
+| `api/cmd/api/main.go` | `parseLogLevel`, `installLogger` — where `LOG_LEVEL` becomes the slog level |

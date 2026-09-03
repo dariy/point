@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1807,6 +1808,11 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
+			// Crafted-image panics (see CVE note above) are a security-relevant
+			// event, not a routine decode failure: log them with a stack so they
+			// are visible even when a caller swallows the returned error.
+			slog.Warn("recovered panic during image decode",
+				"panic", rec, "stack", string(debug.Stack()))
 			err = fmt.Errorf("image decode panic: %v", rec)
 		}
 	}()
