@@ -16,6 +16,7 @@ import (
 
 	"point-api/internal/api"
 	"point-api/internal/config"
+	"point-api/internal/metrics"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -179,6 +180,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg, repo)
 
 	// Global middleware
+	//
+	// Metrics goes on first, which makes it the outermost wrapper: it is the
+	// only position from which the recorded latency is the whole of what the
+	// client waited for, and the only one that sees a rate-limiter rejection.
+	// Absent entirely when METRICS_ENABLED is off, so the default install pays
+	// nothing — not even a nil check.
+	if svcs.Metrics != nil {
+		e.Use(metricsMiddleware(svcs.Metrics))
+	}
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:   true,
 		LogURI:      true,
@@ -208,7 +218,29 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			return nil
 		},
 	}))
-	e.Use(middleware.Recover())
+	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		// The response is unchanged from middleware.Recover(): returning err
+		// from LogErrorFunc still hands it to the centralized error handler,
+		// so the client gets the same 500 it always did.
+		//
+		// What changes is where the panic is reported. Echo's default writes
+		// the stack through c.Logger(), which this server never points at slog
+		// — so panics went to stderr in Echo's own format and never reached
+		// app.log, which is the file the admin Logs page reads and the only one
+		// visible from inside a container. They land there now, and they are
+		// counted: a recovered panic is otherwise indistinguishable from a
+		// failed query, because both are a 500.
+		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
+			svcs.Metrics.Panic(metrics.PanicHTTP)
+			slog.Error("recovered panic",
+				"method", c.Request().Method,
+				"uri", c.Request().RequestURI,
+				"error", err,
+				"stack", string(stack),
+			)
+			return err
+		},
+	}))
 	// Compress text payloads: the CSS/JS bundles and every JSON API response
 	// gzip to roughly a quarter of their size. Sits high in the chain so it
 	// wraps the static file routes as well as the handlers. Responses under
@@ -404,13 +436,14 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			Burst:     200,
 			ExpiresIn: 3 * time.Minute,
 		}),
+		DenyHandler: countRateLimited(svcs.Metrics, metrics.LimiterPublic),
 	})
 	e.Use(publicLimiter)
 
 	// One credential throttle instance, shared by the password and the passkey
 	// login paths so the two can't be used as independent buckets against the
 	// same secret (see newCredentialLimiter).
-	credLimiter := newCredentialLimiter()
+	credLimiter := newCredentialLimiter(svcs.Metrics)
 	registerAuthRoutes(e, authHandler, apiKeyHandler, svcs, credLimiter)
 	registerWebAuthnRoutes(e, webAuthnHandler, svcs, credLimiter)
 

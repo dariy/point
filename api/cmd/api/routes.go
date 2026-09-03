@@ -24,6 +24,7 @@ import (
 	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/mcp"
+	"point-api/internal/metrics"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 
@@ -74,13 +75,14 @@ func registerSetupRoutes(e *echo.Echo, h *api.SetupHandler) {
 // Pass one instance to both registerAuthRoutes and registerWebAuthnRoutes:
 // giving the passkey login its own limiter would hand an attacker a second,
 // independent bucket for the same secret.
-func newCredentialLimiter() echo.MiddlewareFunc {
+func newCredentialLimiter(reg *metrics.Registry) echo.MiddlewareFunc {
 	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
 			Rate:      rate.Every(6 * time.Second),
 			Burst:     10,
 			ExpiresIn: 10 * time.Minute,
 		}),
+		DenyHandler: countRateLimited(reg, metrics.LimiterCredential),
 	})
 }
 
@@ -306,6 +308,7 @@ func registerMCPRoutes(e *echo.Echo, cfg config.Config, repo repository.Reposito
 		BaseURL:         mcpBaseURL,
 		Version:         cfg.AppVersion,
 		UploadRoot:      cfg.PhotoLibraryPath,
+		Metrics:         svcs.Metrics,
 	})
 }
 

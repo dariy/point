@@ -88,6 +88,20 @@ type Config struct {
 	CSPScriptSrc  string `mapstructure:"CSP_SCRIPT_SRC"`
 	CSPConnectSrc string `mapstructure:"CSP_CONNECT_SRC"`
 
+	// MetricsEnabled starts a second HTTP listener serving Prometheus text
+	// exposition at /metrics. Off by default, and off means off: no listener,
+	// no goroutine, no instrumentation on the request path — a self-hoster who
+	// sets nothing gets exactly the behaviour of a build without this feature.
+	//
+	// It is a separate listener rather than a route on the main port so there
+	// is no auth decision to get wrong, no interaction with the gzip/CORS/CSP
+	// chain, and no exemption to add to the public rate limiter. MetricsBind
+	// therefore carries the whole access decision: it defaults to loopback, and
+	// widening it publishes post counts, storage usage and error rates to
+	// anything that can reach the port.
+	MetricsEnabled bool   `mapstructure:"METRICS_ENABLED"`
+	MetricsBind    string `mapstructure:"METRICS_BIND"`
+	MetricsPort    int    `mapstructure:"METRICS_PORT"`
 	// TrustedProxies extends the set of hops c.RealIP() will walk past when it
 	// reads X-Forwarded-For: a comma-separated list of CIDR ranges, empty by
 	// default. Loopback and private networks are always trusted, which covers
@@ -178,6 +192,14 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("HEAD_HTML", "")
 	v.SetDefault("CSP_SCRIPT_SRC", "")
 	v.SetDefault("CSP_CONNECT_SRC", "")
+	v.SetDefault("METRICS_ENABLED", false)
+	// Loopback, so enabling metrics never publishes them by accident: a scraper
+	// on another host needs either a reverse proxy in front of this port or an
+	// explicit widening here.
+	v.SetDefault("METRICS_BIND", "127.0.0.1")
+	// 9101 rather than 9090, which belongs to the Prometheus server itself and
+	// is the port an operator is most likely to already have in use.
+	v.SetDefault("METRICS_PORT", 9101)
 	v.SetDefault("TRUSTED_PROXIES", "")
 
 	err = v.ReadInConfig()

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"point-api/internal/metrics"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
@@ -38,6 +39,27 @@ type PostService struct {
 	// cache is the public page cache a post write invalidates. Nil is valid
 	// and simply skips the invalidation.
 	cache *CacheService
+	// metrics counts view-count flush losses. Nil is valid and counts nothing,
+	// which is what METRICS_ENABLED=false leaves here.
+	metrics *metrics.Registry
+}
+
+// WithMetrics attaches the metrics registry. The only thing counted here is a
+// lost view count: FlushViewCounts drops a post's buffered views when the write
+// fails, and that loss was previously visible only as one log line.
+func (s *PostService) WithMetrics(m *metrics.Registry) *PostService {
+	s.metrics = m
+	return s
+}
+
+// PendingViewCounts is how many posts have views buffered in memory and not yet
+// written back. Read at scrape time rather than mirrored into a counter: the
+// buffer is already the authority, and a second copy could only disagree with
+// it.
+func (s *PostService) PendingViewCounts() int {
+	s.viewMu.Lock()
+	defer s.viewMu.Unlock()
+	return len(s.viewBuffer)
 }
 
 // WithHealth attaches a health registry so background cross-post outcomes are
@@ -464,6 +486,7 @@ func (s *PostService) FlushViewCounts(ctx context.Context) error {
 			// On error, we might lose these counts or we could try to re-add them to the buffer
 			// For now, just log the error.
 			slog.Error("failed to flush view count", "post_id", id, "error", err)
+			s.metrics.ViewFlushFailure()
 		}
 	}
 	return nil

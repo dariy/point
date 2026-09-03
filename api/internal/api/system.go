@@ -71,10 +71,13 @@ func (h *SystemHandler) WithStorageQuotaMB(mb int) *SystemHandler {
 // GetHealth reports the last outcome of every background job: the scheduled
 // tasks, Instagram cross-posts and the comments sidecar.
 //
-// This is the whole of Point's runtime observability, and deliberately so —
-// a self-hosted single binary does not want a Prometheus. The question it
-// answers is "is anything quietly broken", which nothing short of reading the
-// request log could answer before.
+// This is the observability an operator gets without configuring anything: it
+// answers "is anything quietly broken" from the admin UI, with no scrape
+// target, no retention policy and no second process. An operator who wants
+// history, alerting or per-route error rates turns on METRICS_ENABLED and gets
+// a Prometheus exposition on a second listener (see
+// docs/features/observability.md); this endpoint stays the zero-configuration
+// answer and is not deprecated by it.
 //
 // The data is per process: a restart clears it, and jobs that have not run yet
 // in this process are absent rather than reported as failing.
@@ -115,6 +118,12 @@ func (h *SystemHandler) GetHealth(c echo.Context) error {
 }
 
 var startTime = time.Now()
+
+// StartTime is when this process began serving. Exported for the metrics
+// exposition, which reports uptime as a gauge; GetHealth and GetStats already
+// derive their uptime from the same variable, so there is one answer to the
+// question rather than three clocks that drift.
+func StartTime() time.Time { return startTime }
 
 func NewSystemHandler(repo repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, authService *services.AuthService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{

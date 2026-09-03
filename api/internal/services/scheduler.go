@@ -7,6 +7,8 @@ import (
 	"runtime/debug"
 	"strconv"
 	"time"
+
+	"point-api/internal/metrics"
 )
 
 const igTokenRefreshWindow = 7 * 24 * time.Hour
@@ -21,6 +23,9 @@ type SchedulerService struct {
 	// health records every task outcome for the admin health view. Nil is
 	// valid and simply records nothing.
 	health *HealthRegistry
+	// metrics counts recovered panics. Task runs and failures are not counted
+	// here: they are already in health, and the exposition reads that.
+	metrics *metrics.Registry
 }
 
 func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService, instagramService *InstagramService) *SchedulerService {
@@ -38,6 +43,14 @@ func NewSchedulerService(authService *AuthService, postService *PostService, sys
 // admin health endpoint. Returns the receiver for chaining at construction.
 func (s *SchedulerService) WithHealth(h *HealthRegistry) *SchedulerService {
 	s.health = h
+	return s
+}
+
+// WithMetrics attaches the metrics registry. A scheduler panic is the outcome
+// worth its own counter: runTask survives it, so nothing downstream fails and
+// nothing but a log line says the tick was lost.
+func (s *SchedulerService) WithMetrics(m *metrics.Registry) *SchedulerService {
+	s.metrics = m
 	return s
 }
 
@@ -119,6 +132,7 @@ func (s *SchedulerService) runTask(ctx context.Context, name string, task func(c
 			// concerned — recording it here is why the health data cannot
 			// silently miss the worst kind of outcome.
 			s.health.Record(name, fmt.Errorf("panic: %v", r))
+			s.metrics.Panic(metrics.PanicScheduler)
 		}
 	}()
 	err := task(ctx)

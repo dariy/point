@@ -164,6 +164,11 @@ func main() {
 	// Start background scheduler (goroutines honor ctx cancellation)
 	svcs.Scheduler.Start(ctx)
 
+	// Prometheus exposition on a listener of its own, or nil when
+	// METRICS_ENABLED is off — which is the default, and then nothing below
+	// this line runs at all.
+	metricsSrv := startMetricsServer(cfg, repo, svcs)
+
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	slog.Info("Point API starting", "address", address)
@@ -183,6 +188,13 @@ func main() {
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
+	}
+	// Closed before the re-exec below, not just at exit: a restart that left
+	// this port held would fail to rebind it in the new process.
+	if metricsSrv != nil {
+		if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("metrics listener shutdown error", "error", err)
+		}
 	}
 	slog.Info("graceful shutdown complete")
 

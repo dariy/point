@@ -19,6 +19,8 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 | Health endpoint | `GET /health` returns a liveness signal suitable for Docker health checks and orchestrators. |
 | Version check | `GET /api/system/version` reports the running release and whether a newer version is available on GitHub. |
 | Production setup guide | Documented nginx + systemd + TLS setup for running Point as a hardened long-lived service. |
+| Background job health | The admin Health card shows the last run, last success and last error of every scheduled job — no log reading required. |
+| Prometheus metrics | Opt-in (`METRICS_ENABLED`) exposition on a second, loopback-bound listener: request, cache, scheduler, storage and panic metrics with a closed label allow-list. *Full details: [Observability](./features/observability.md)* |
 
 ---
 

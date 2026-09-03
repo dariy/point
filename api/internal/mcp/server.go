@@ -9,6 +9,7 @@ import (
 
 	"point-api/internal/api"
 	"point-api/internal/mcp/oauth"
+	"point-api/internal/metrics"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -47,6 +48,13 @@ type Deps struct {
 	BaseURL    string // public HTTPS base URL for OAuth discovery metadata
 	Version    string
 	UploadRoot string // sandbox for point_upload_media; empty disables path uploads
+
+	// Metrics counts rejections from the OAuth password throttle below. Nil is
+	// valid and counts nothing. Tool calls themselves are NOT counted: they
+	// dispatch to handlers through invoker.serve, which builds a synthetic
+	// context and never enters the Echo middleware chain, so the request
+	// middleware cannot see them. See docs/features/observability.md.
+	Metrics *metrics.Registry
 }
 
 type principalKey struct{}
@@ -82,6 +90,14 @@ func Register(e *echo.Echo, d Deps) {
 			Burst:     10,
 			ExpiresIn: 10 * time.Minute,
 		}),
+		DenyHandler: func(c echo.Context, identifier string, err error) error {
+			d.Metrics.RateLimited(metrics.LimiterMCPOAuth)
+			return &echo.HTTPError{
+				Code:     http.StatusTooManyRequests,
+				Message:  "rate limit exceeded",
+				Internal: err,
+			}
+		},
 	})
 
 	e.GET("/.well-known/oauth-protected-resource", oauthH, gate)
