@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,6 +102,47 @@ type Config struct {
 	MetricsEnabled bool   `mapstructure:"METRICS_ENABLED"`
 	MetricsBind    string `mapstructure:"METRICS_BIND"`
 	MetricsPort    int    `mapstructure:"METRICS_PORT"`
+	// TrustedProxies extends the set of hops c.RealIP() will walk past when it
+	// reads X-Forwarded-For: a comma-separated list of CIDR ranges, empty by
+	// default. Loopback and private networks are always trusted, which covers
+	// the usual deployment (a reverse proxy on the same host or the same
+	// container network — its address is private, the walk skips it, and the
+	// real client comes out). It does not cover a proxy or CDN whose address is
+	// public: the walk stops at the edge address, so every visitor arriving
+	// through one edge shares a rate-limit bucket and the session audit trail
+	// records the edge instead of the visitor. An operator in that shape lists
+	// their provider's ranges here.
+	//
+	// This is the trust boundary, so a too-wide value is the whole risk:
+	// 0.0.0.0/0 trusts every peer and makes c.RealIP() entirely
+	// client-controlled. Parsed by ParseTrustedProxies; LoadConfig rejects a
+	// malformed list rather than starting with it half-applied.
+	TrustedProxies string `mapstructure:"TRUSTED_PROXIES"`
+}
+
+// ParseTrustedProxies turns a TRUSTED_PROXIES value — a comma-separated list of
+// CIDR ranges, with blanks tolerated — into the networks to trust. An empty
+// string yields no networks and no error, which is the default and reproduces
+// the loopback+private-only behaviour.
+//
+// Bare addresses are rejected along with everything else malformed: silently
+// widening "203.0.113.7" to a /32 would be a guess about a trust boundary, and
+// the error says what to write instead.
+func ParseTrustedProxies(s string) ([]*net.IPNet, error) {
+	var nets []*net.IPNet
+	for _, entry := range strings.Split(s, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		_, ipNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXIES: %q is not a CIDR range "+
+				"(a single address needs a prefix, e.g. 203.0.113.7/32)", entry)
+		}
+		nets = append(nets, ipNet)
+	}
+	return nets, nil
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -157,6 +200,7 @@ func LoadConfig(path string) (config Config, err error) {
 	// 9101 rather than 9090, which belongs to the Prometheus server itself and
 	// is the port an operator is most likely to already have in use.
 	v.SetDefault("METRICS_PORT", 9101)
+	v.SetDefault("TRUSTED_PROXIES", "")
 
 	err = v.ReadInConfig()
 	if err != nil {
@@ -168,6 +212,17 @@ func LoadConfig(path string) (config Config, err error) {
 	}
 
 	err = v.Unmarshal(&config)
+	if err != nil {
+		return
+	}
+
+	// Fail on a malformed proxy list here rather than dropping the bad entry at
+	// server start: a trust boundary that silently ends up narrower than the
+	// operator wrote is how everyone behind a CDN edge lands in one rate-limit
+	// bucket, with nothing in the log to say why.
+	if _, err = ParseTrustedProxies(config.TrustedProxies); err != nil {
+		return
+	}
 
 	// Smart path detection: if running from repo root, frontend and data dirs
 	// are local, but defaults assume we are in 'api' directory.

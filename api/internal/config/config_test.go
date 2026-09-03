@@ -280,3 +280,54 @@ func TestUserThemesPathDerivation(t *testing.T) {
 		t.Errorf("expected UserThemesPath /custom/user-themes, got %s", config.UserThemesPath)
 	}
 }
+
+// TRUSTED_PROXIES is the trust boundary for c.RealIP(), so both ends matter:
+// the default must not widen it, and a typo must not be silently narrowed into
+// a boundary the operator did not write.
+func TestParseTrustedProxies(t *testing.T) {
+	if nets, err := ParseTrustedProxies(""); err != nil || len(nets) != 0 {
+		t.Errorf("empty: got %v, %v; want no networks and no error", nets, err)
+	}
+
+	nets, err := ParseTrustedProxies(" 173.245.48.0/20, 2400:cb00::/32 ,")
+	if err != nil {
+		t.Fatalf("ParseTrustedProxies: %v", err)
+	}
+	if len(nets) != 2 {
+		t.Fatalf("got %d networks, want 2 (blanks skipped, spaces trimmed)", len(nets))
+	}
+	if got := nets[0].String(); got != "173.245.48.0/20" {
+		t.Errorf("nets[0] = %q, want 173.245.48.0/20", got)
+	}
+	if got := nets[1].String(); got != "2400:cb00::/32" {
+		t.Errorf("nets[1] = %q, want 2400:cb00::/32", got)
+	}
+
+	for _, bad := range []string{"203.0.113.7", "not-an-address", "10.0.0.0/33"} {
+		if _, err := ParseTrustedProxies("192.0.2.0/24," + bad); err == nil {
+			t.Errorf("ParseTrustedProxies(%q): want error, got nil", bad)
+		}
+	}
+}
+
+// A malformed list must stop the process at load, not start a server whose
+// trust boundary is quietly narrower than the deploy config says.
+func TestLoadConfigRejectsBadTrustedProxies(t *testing.T) {
+	viper.Reset()
+	hermeticEnv(t)
+	t.Setenv("TRUSTED_PROXIES", "173.245.48.0/20,garbage")
+
+	if _, err := LoadConfig(t.TempDir()); err == nil {
+		t.Fatal("LoadConfig accepted a malformed TRUSTED_PROXIES")
+	}
+
+	viper.Reset()
+	t.Setenv("TRUSTED_PROXIES", "173.245.48.0/20")
+	config, err := LoadConfig(t.TempDir())
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if config.TrustedProxies != "173.245.48.0/20" {
+		t.Errorf("TrustedProxies = %q", config.TrustedProxies)
+	}
+}

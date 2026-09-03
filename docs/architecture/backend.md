@@ -210,6 +210,35 @@ func (h *PostHandler) GetPost(c echo.Context) error {
 - **Sanitization**: Markdown is rendered to HTML server-side using `goldmark`.
 - **CSP**: A strict Content Security Policy is enforced via middleware to prevent XSS.
 
+### 6.4 — Client IP and Trusted Proxies
+
+The credential rate limiter and the session audit trail both key off
+`c.RealIP()`, so where that value comes from is a security decision.
+`setupEcho` (`cmd/api/server.go`) installs `echo.ExtractIPFromXFFHeader`, which
+walks `X-Forwarded-For` from the right and stops at the first hop it does not
+trust. Trusted by default: loopback and private networks. That covers the usual
+deployment — a reverse proxy on the same host or the same container network has
+a private address, the walk steps past it, and the address that comes out is the
+visitor's. Entries a client prepends to the header are below the first untrusted
+hop and never reached. With no proxy at all, `RealIP()` is the socket peer.
+
+`TRUSTED_PROXIES` extends that trust list with a comma-separated set of CIDR
+ranges (`config.ParseTrustedProxies`, appended as `echo.TrustIPRange` options).
+It exists for the one shape the defaults get wrong: a proxy or CDN that answers
+from a **public** address, such as a CDN pointed straight at the container. The
+walk stops at the edge, so every visitor through that edge is recorded as the
+edge — one shared rate-limit bucket, and a "recent logins" list that identifies
+nobody. The operator pastes their provider's published ranges.
+
+It is deliberately vendor-neutral: no `CF-Connecting-IP` special case, because a
+peer inside the trusted range can spoof that header exactly as easily as
+`X-Forwarded-For`. The trust boundary does the work, not the header name.
+
+The value is a trust boundary, so it is validated in `LoadConfig` and a
+malformed entry stops the process at startup rather than being dropped. Setting
+it too wide is the real hazard — `0.0.0.0/0` trusts every peer and makes
+`RealIP()` entirely client-controlled.
+
 ---
 
 ## Frontend Integration
