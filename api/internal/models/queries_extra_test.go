@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -105,6 +106,61 @@ func TestQueries_Extra(t *testing.T) {
 	// 8. Other
 	_ = q.WithTx(nil)
 	_ = q.DeleteTag(ctx, tag.ID)
+}
+
+// TestCarouselQueries exercises the carousel document queries against a real
+// schema: absent -> insert -> upsert-replaces-in-place -> get -> delete. These
+// run here, in package models, because `go test ./...` records coverage per
+// package — the repository and api tests that also call these functions never
+// attribute to queries.sql.go. (The ON DELETE CASCADE from posts needs
+// PRAGMA foreign_keys and is covered by repository.TestRepository_Carousels.)
+func TestCarouselQueries(t *testing.T) {
+	q, db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	u, _ := q.CreateUser(ctx, CreateUserParams{Username: "cu", Email: "cu@t.com", PasswordHash: "h", DisplayName: "U"})
+	p, _ := q.CreatePost(ctx, CreatePostParams{Title: "CP", Slug: "cp", AuthorID: u.ID, Status: "draft"})
+
+	// Absent.
+	if _, err := q.GetCarouselByPostID(ctx, p.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetCarouselByPostID on empty: want sql.ErrNoRows, got %v", err)
+	}
+	// Deleting an absent row is a no-op, not an error.
+	if err := q.DeleteCarouselByPostID(ctx, p.ID); err != nil {
+		t.Fatalf("DeleteCarouselByPostID on absent row: %v", err)
+	}
+
+	// Insert.
+	row, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, Doc: `{"version":1}`})
+	if err != nil {
+		t.Fatalf("UpsertCarousel insert: %v", err)
+	}
+	if row.Doc != `{"version":1}` || row.PostID != p.ID {
+		t.Fatalf("stored row = %+v", row)
+	}
+
+	// Upsert replaces the doc in place — same row id.
+	row2, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, Doc: `{"version":2}`})
+	if err != nil {
+		t.Fatalf("UpsertCarousel update: %v", err)
+	}
+	if row2.ID != row.ID {
+		t.Fatalf("upsert made a new row: %d -> %d", row.ID, row2.ID)
+	}
+
+	got, err := q.GetCarouselByPostID(ctx, p.ID)
+	if err != nil || got.Doc != `{"version":2}` {
+		t.Fatalf("after upsert: doc=%q err=%v", got.Doc, err)
+	}
+
+	// Explicit delete.
+	if err := q.DeleteCarouselByPostID(ctx, p.ID); err != nil {
+		t.Fatalf("DeleteCarouselByPostID: %v", err)
+	}
+	if _, err := q.GetCarouselByPostID(ctx, p.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("after delete: want sql.ErrNoRows, got %v", err)
+	}
 }
 
 // TestQueryScanBodies exercises list/scan functions with actual data
