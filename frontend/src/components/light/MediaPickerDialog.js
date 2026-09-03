@@ -98,17 +98,23 @@ export class MediaPickerDialog extends Component {
       this._activeBrowser = null;
     }
 
-    if (this._keyHandler) {
-      document.removeEventListener('keydown', this._keyHandler);
-      this._keyHandler = null;
-    }
+    this._releaseKeyHandler();
   }
 
   // The dialog can be torn down while open — its owner unmounts, or a
   // re-render replaces it — and close() never runs then. Without this the page
-  // behind it stays unscrollable (p-overlay-scroll-lock-leak).
+  // behind it stays unscrollable (p-overlay-scroll-lock-leak) and the Escape
+  // handler lives on, calling close() on a dead component (p-dialog-keydown-leak).
   beforeUnmount() {
     releaseScrollLock(this);
+    this._releaseKeyHandler();
+  }
+
+  /** Drop the document-level Escape handler, from close() or from unmount(). */
+  _releaseKeyHandler() {
+    if (!this._keyHandler) return;
+    document.removeEventListener('keydown', this._keyHandler);
+    this._keyHandler = null;
   }
 
   destroy() {
