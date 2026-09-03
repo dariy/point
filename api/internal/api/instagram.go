@@ -13,6 +13,7 @@ import (
 
 	"point-api/internal/config"
 	"point-api/internal/services"
+	"point-api/internal/utils"
 
 	"github.com/labstack/echo/v4"
 )
@@ -226,6 +227,15 @@ func (h *InstagramHandler) StartImport(c echo.Context) error {
 
 	// Run in background.
 	go func() {
+		// A panic in ImportAccount would otherwise kill the process and leave
+		// h.state.running stuck true forever; reset it so a later import can start.
+		defer utils.RecoveredFunc("instagram import", func(recovered any) {
+			h.state.mu.Lock()
+			h.state.running = false
+			h.state.finishedAt = time.Now()
+			h.state.err = "import failed unexpectedly (panic); check server logs"
+			h.state.mu.Unlock()
+		})
 		bgCtx := context.Background()
 		result, err := h.importer.ImportAccount(bgCtx, triggerAuthorID, func(p services.ImportProgress) {
 			h.state.mu.Lock()

@@ -15,11 +15,14 @@ type Config struct {
 	AppName     string `mapstructure:"APP_NAME"`
 	AppVersion  string `mapstructure:"APP_VERSION"`
 	AppEnv      string `mapstructure:"APP_ENV"`
-	Debug       bool   `mapstructure:"DEBUG"`
 	Host        string `mapstructure:"HOST"`
 	Port        int    `mapstructure:"PORT"`
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	StoragePath string `mapstructure:"STORAGE_PATH"`
+
+	// LogLevel sets the minimum slog level: "debug", "info", "warn" or "error"
+	// (case-insensitive). Anything unrecognised falls back to "info".
+	LogLevel string `mapstructure:"LOG_LEVEL"`
 
 	// MigrationBackup snapshots the database before a boot applies pending
 	// migrations, and puts the snapshot back if they fail. Turning it off means
@@ -156,7 +159,7 @@ func LoadConfig(path string) (config Config, err error) {
 	// Defaults
 	v.SetDefault("APP_NAME", "Point")
 	v.SetDefault("APP_ENV", "development")
-	v.SetDefault("DEBUG", true)
+	v.SetDefault("LOG_LEVEL", "info")
 	v.SetDefault("HOST", "0.0.0.0")
 	v.SetDefault("PORT", 8000)
 	v.SetDefault("DATABASE_URL", "sqlite:./data/point.db")

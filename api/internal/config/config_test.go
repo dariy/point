@@ -145,6 +145,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if config.Port != 8000 {
 		t.Errorf("expected default Port 8000, got %d", config.Port)
 	}
+	if config.LogLevel != "info" {
+		t.Errorf("expected default LogLevel info, got %q", config.LogLevel)
+	}
 }
 
 func TestThemesPathDerivation(t *testing.T) {
