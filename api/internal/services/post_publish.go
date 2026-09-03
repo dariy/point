@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -103,7 +104,13 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	}
 
 	// 2. Get images referenced in post content (by path, not post_id FK).
+	// A :::{.carousel-block}, when present, IS the Instagram carousel: its
+	// slides in order, and none of the post's other loose photos
+	// (docs/features/carousel-studio.md, bead C8).
 	paths := ExtractMediaPaths(post.Content, "")
+	if slides := carouselBlockPaths(post.Content); len(slides) > 0 {
+		paths = slides
+	}
 	media, err := s.repo.GetMediaByPaths(ctx, paths)
 	if err != nil {
 		return err
@@ -167,6 +174,23 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	}
 
 	return s.updateInstagramStatus(ctx, post.ID, "published", mediaID, "")
+}
+
+// carouselBlockRe matches the first :::{.carousel-block} fence in post content.
+// (?s) lets . span newlines; the match is non-greedy to the first closing :::,
+// which a bare slide path can never contain.
+var carouselBlockRe = regexp.MustCompile(`(?s):::\{\.carousel-block\}\n(.*?)\n:::`)
+
+// carouselBlockPaths returns the media paths inside a post's :::{.carousel-block}
+// fence — in fence order, in the DB "originals/YYYY/MM/file" form — or nil when
+// the post has no carousel block. Callers use its non-emptiness to mean "this
+// post's Instagram carousel is exactly these slides".
+func carouselBlockPaths(content string) []string {
+	m := carouselBlockRe.FindStringSubmatch(content)
+	if m == nil {
+		return nil
+	}
+	return ExtractMediaPaths(m[1], "")
 }
 
 // orderImagesByPaths filters media down to images and returns them in the

@@ -53,11 +53,11 @@ const POST = {
 };
 
 describe('CarouselStudioPage', () => {
-  let dom, CarouselStudioPage, page;
+  let dom, CarouselStudioPage, page, calls;
   const settle = () => new Promise((r) => setImmediate(r));
 
-  async function mount(query, routes) {
-    installFetch(
+  async function mount(query, routes, props = {}) {
+    calls = installFetch(
       routes || [
         [/\/api\/posts\/42/, { body: POST }],
         [/\/api\/carousel/, { status: 404, body: { message: 'no carousel' } }],
@@ -66,11 +66,26 @@ describe('CarouselStudioPage', () => {
     dom.location.pathname = '/light/carousel';
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    page = new CarouselStudioPage(el, { params: {}, query });
+    page = new CarouselStudioPage(el, { params: {}, query, ...props });
     page.mount();
     await settle();
     await settle();
     return el;
+  }
+
+  /**
+   * A render backend that never touches a real canvas or the network: a
+   * fixed-size decoded strip, no-op surface, a labelled blob, and an `upload`
+   * the test supplies to control which media rows come back.
+   */
+  function fakeRenderDeps(upload) {
+    return {
+      fetchBlob: async () => new Blob(['src']),
+      decode: async () => ({ width: 3000, height: 1000, close() {} }),
+      makeSurface: () => ({ canvas: {}, ctx: { clearRect() {}, drawImage() {} } }),
+      encode: async () => new Blob(['jpg']),
+      upload,
+    };
   }
 
   beforeEach(async () => {
@@ -160,5 +175,93 @@ describe('CarouselStudioPage', () => {
       el.querySelector('.light-header h1')?.textContent.trim(),
       'Carousel Studio',
     );
+  });
+
+  describe('re-render', () => {
+    const CAROUSEL_POST = {
+      ...POST,
+      content:
+        ':::{.carousel-block}\n\n/2026/08/old1.jpg\n\n/2026/08/old2.jpg\n\n:::',
+    };
+    const priorDoc = {
+      version: 1,
+      aspect: '4:5',
+      mode: 'split',
+      slides: [
+        { source: '/2026/08/w.jpg', rendered: { path: '/2026/08/old1.jpg', media_id: 100 } },
+        { source: '/2026/08/w.jpg', rendered: { path: '/2026/08/old2.jpg', media_id: 101 } },
+      ],
+    };
+
+    /** Routes for a post that already has a rendered carousel. */
+    function routes(post = CAROUSEL_POST, doc = priorDoc) {
+      return [
+        [/\/api\/posts\/42$/, (url, opts) =>
+          opts.method === 'PUT' ? { body: {} } : { body: post }],
+        [/\/api\/carousel/, (url, opts) =>
+          opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+    }
+
+    test('deletes the superseded slide rows on re-render', async () => {
+      let n = 0;
+      const deps = fakeRenderDeps(async () => {
+        n += 1;
+        return { id: 200 + n, path: `/2026/08/new${n}.jpg` };
+      });
+      await mount({ post: '42' }, routes(), { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      const deletes = calls
+        .filter((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url))
+        .map((c) => c.url.match(/\/api\/media\/(\d+)$/)[1]);
+      assert.deepEqual(deletes.sort(), ['100', '101']);
+      assert.deepEqual(
+        page._priorRendered.map((r) => r.media_id).sort(),
+        [201, 202],
+      );
+    });
+
+    test('keeps a superseded slide whose path is still used elsewhere', async () => {
+      const post = {
+        ...CAROUSEL_POST,
+        content: `![keep](/2026/08/old1.jpg)\n\n${CAROUSEL_POST.content}`,
+      };
+      let n = 0;
+      const deps = fakeRenderDeps(async () => {
+        n += 1;
+        return { id: 300 + n, path: `/2026/08/fresh${n}.jpg` };
+      });
+      await mount({ post: '42' }, routes(post), { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      const deletes = calls
+        .filter((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url))
+        .map((c) => c.url.match(/\/api\/media\/(\d+)$/)[1]);
+      assert.deepEqual(deletes, ['101'], 'only the unreferenced slide is deleted');
+    });
+
+    test('refuses byte-identical slides and saves nothing', async () => {
+      const deps = fakeRenderDeps(async () => ({ id: 500, path: '/2026/08/dup.jpg' }));
+      await mount({ post: '42' }, routes(), { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      assert.match(page.state.error, /identical/i);
+      assert.ok(
+        !calls.some((c) => c.method === 'PUT' && /\/api\/carousel/.test(c.url)),
+        'carousel document was not saved',
+      );
+      assert.ok(
+        !calls.some((c) => c.method === 'PUT' && /\/api\/posts\/42$/.test(c.url)),
+        'post content was not written',
+      );
+    });
   });
 });

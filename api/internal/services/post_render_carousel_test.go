@@ -76,3 +76,34 @@ func TestRenderContent_CarouselBlock_BlankLineContract(t *testing.T) {
 			"got %d <p>, <br> present=%v\n  %q", n, strings.Contains(got, "<br"), got)
 	}
 }
+
+// TestCarouselBlockPaths covers the "carousel block wins" selector that
+// post_publish.go uses to decide an Instagram carousel: when a post carries a
+// :::{.carousel-block} fence, only its slides ship — in fence order, in the DB
+// "originals/…" form — and the post's other loose photos are dropped.
+func TestCarouselBlockPaths(t *testing.T) {
+	t.Run("no fence returns nil", func(t *testing.T) {
+		if got := carouselBlockPaths("![a](/2026/06/a.jpg)\n![b](/2026/06/b.jpg)"); got != nil {
+			t.Errorf("want nil, got %v", got)
+		}
+	})
+
+	t.Run("fence slides only, in order", func(t *testing.T) {
+		content := "![loose](/2026/06/loose.jpg)\n\n" +
+			":::{.carousel-block}\n\n/2026/06/s1.jpg\n\n/2026/06/s2.jpg\n\n/2026/06/s3.jpg\n\n:::"
+		got := carouselBlockPaths(content)
+		want := []string{
+			"originals/2026/06/s1.jpg",
+			"originals/2026/06/s2.jpg",
+			"originals/2026/06/s3.jpg",
+		}
+		if len(got) != len(want) {
+			t.Fatalf("want %v, got %v", want, got)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("slide %d: want %q, got %q", i, want[i], got[i])
+			}
+		}
+	})
+}

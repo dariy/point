@@ -24,6 +24,7 @@ import {
 } from "../../components/light/AdminLayout.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
 import { getPost, updatePost } from "../../api/posts.js";
+import { deleteMedia } from "../../api/media.js";
 import { getCarousel, saveCarousel } from "../../api/carousel.js";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
@@ -81,6 +82,9 @@ export default class CarouselStudioPage extends Component {
       rendered: [],
     };
     this._picker = null;
+    // { path, media_id } for every slide the *saved* document currently points
+    // at — the set a re-render supersedes and must clean up (see _render).
+    this._priorRendered = [];
   }
 
   actions = {
@@ -118,6 +122,9 @@ export default class CarouselStudioPage extends Component {
       ]);
       if (this._unmounted) return;
       const doc = carousel ? parseDocument(carousel.doc) : emptyDocument();
+      this._priorRendered = doc.slides
+        .map((s) => s.rendered)
+        .filter((r) => r && r.media_id);
       const first = doc.slides[0];
       this.setState({
         loading: false,
@@ -178,6 +185,17 @@ export default class CarouselStudioPage extends Component {
       const deps = this.props.renderDeps || browserDeps();
       const doc = splitDocument({ source, n, aspect });
       const media = await renderAndUpload({ source, n, aspect, postId }, deps);
+
+      // Byte-identical slides dedup to one media row server-side (SHA256), so
+      // two slides would share a path — which the blog renders twice but
+      // Instagram (ExtractMediaPaths dedups) renders once. Rather than let the
+      // two disagree, forbid it here. See docs/features/carousel-studio.md.
+      if (new Set(media.map((m) => m.id)).size !== media.length) {
+        throw new Error(
+          "Two slides came out byte-identical — change the slide count or aspect so every slide is distinct.",
+        );
+      }
+
       media.forEach((m, i) => {
         doc.slides[i].rendered = {
           path: m.path,
@@ -188,10 +206,27 @@ export default class CarouselStudioPage extends Component {
       await saveCarousel(postId, doc);
       const content = applyCarouselBlock(post.content, doc);
       const updated = await updatePost(postId, this._postPayload(post, content));
+      const finalContent = updated?.content ?? content;
+
+      // The previous generation's slides are now unreferenced: orphan detection
+      // keys on `post_id IS NULL` and these carry a post_id, so they would sit
+      // on disk forever. Delete each superseded row explicitly — but never one
+      // whose path still appears in the post (a slide reused inline, say).
+      const keptIds = new Set(media.map((m) => m.id));
+      const superseded = this._priorRendered.filter(
+        (r) => !keptIds.has(r.media_id) && !finalContent.includes(r.path),
+      );
+      if (superseded.length) {
+        await Promise.allSettled(superseded.map((r) => deleteMedia(r.media_id)));
+      }
+      this._priorRendered = doc.slides
+        .map((s) => s.rendered)
+        .filter((r) => r && r.media_id);
+
       if (this._unmounted) return;
       this.setState({
         busy: false,
-        post: { ...post, content: updated?.content ?? content },
+        post: { ...post, content: finalContent },
         rendered: media.map((m) => m.path),
       });
       setToast({ message: `Carousel rendered — ${media.length} slides.`, type: "success" });
