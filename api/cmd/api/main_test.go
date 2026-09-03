@@ -505,6 +505,45 @@ func TestSetupEcho_RealIPIgnoresSpoofedXFF(t *testing.T) {
 	}
 }
 
+// A deployment whose proxy answers from a *public* address (a CDN edge pointed
+// straight at the container) gets no help from the loopback+private defaults:
+// the walk stops at the edge, so every visitor through that colo shares one
+// rate-limit bucket and one audit-trail address. TRUSTED_PROXIES adds the
+// operator's ranges to the trust list. See p-trusted-proxies-kz8c.
+func TestSetupEcho_RealIPTrustsConfiguredProxyRange(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cfg.TrustedProxies = "198.51.100.0/24, 2001:db8::/32"
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// Peer inside a configured range: walk past it to the rightmost entry that
+	// is outside every trusted set — the real client.
+	edgeReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	edgeReq.RemoteAddr = "198.51.100.42:5555"
+	edgeReq.Header.Set(echo.HeaderXForwardedFor, "9.9.9.9, 203.0.113.7")
+	if got := e.IPExtractor(edgeReq); got != "203.0.113.7" {
+		t.Errorf("trusted edge: got RealIP %q, want real client 203.0.113.7", got)
+	}
+
+	// Same for the IPv6 range, and the trusted hop may also appear in the header
+	// itself — a CDN typically appends its own address as it forwards.
+	v6Req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	v6Req.RemoteAddr = "[2001:db8::1]:5555"
+	v6Req.Header.Set(echo.HeaderXForwardedFor, "203.0.113.7, 2001:db8::2")
+	if got := e.IPExtractor(v6Req); got != "203.0.113.7" {
+		t.Errorf("trusted v6 edge: got RealIP %q, want real client 203.0.113.7", got)
+	}
+
+	// A public peer *outside* the configured ranges is still untrusted: XFF is
+	// ignored entirely and RealIP falls back to the socket address.
+	strangerReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	strangerReq.RemoteAddr = "192.0.2.9:5555"
+	strangerReq.Header.Set(echo.HeaderXForwardedFor, "203.0.113.7")
+	if got := e.IPExtractor(strangerReq); got != "192.0.2.9" {
+		t.Errorf("untrusted peer: got RealIP %q, want socket address 192.0.2.9", got)
+	}
+}
+
 func TestSetupEcho_FeedRoutes(t *testing.T) {
 	repo, cfg := newEchoWithRepo(t)
 	svcs := initServices(&cfg, repo)
