@@ -12,7 +12,12 @@ only for a saved post, that links straight to it.
 Off by default: published `:::{.carousel-block}` output stays styled with the plugin
 disabled (the public CSS is in the main bundle, not the plugin dir), so only editors who
 want the builder turn it on. Disabling the plugin 404s the studio chunk and `/api/carousel`
-entirely. The builder itself lands in stages — this is the gated skeleton.
+entirely. The builder UI lands in stages — this is the gated skeleton.
+
+`GET/PUT/DELETE /api/carousel?post=<id>` stores one carousel document per post in the
+`carousels` table (`post_id` UNIQUE, `ON DELETE CASCADE`). The document body is opaque —
+the server validates only that it is a JSON object and round-trips it verbatim; the
+schema is `frontend/src/plugins/carousel/document.js`.
 
 See [Carousel Studio](../features/carousel-studio.md) for the output contract, the
 document schema, and the delivery stages.

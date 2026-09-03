@@ -220,6 +220,19 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
 );
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id);
 
+-- Carousels
+-- One Carousel Studio document per post. Kept off the posts table because sqlc
+-- expands SELECT * by byte offset, so a multi-KB JSON blob there would load on
+-- every post-list query. doc is opaque JSON owned by the frontend carousel
+-- plugin -- this layer stores and returns it verbatim.
+CREATE TABLE IF NOT EXISTS carousels (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id    INTEGER NOT NULL UNIQUE REFERENCES posts(id) ON DELETE CASCADE,
+    doc        TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- API Keys
 CREATE TABLE IF NOT EXISTS api_keys (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

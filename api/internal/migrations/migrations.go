@@ -419,6 +419,19 @@ var schema = []struct{ name, sql string }{
 		"backfill_posts_fts",
 		`INSERT INTO posts_fts(posts_fts) VALUES ('rebuild')`,
 	},
+	{
+		// Carousel Studio's document store. One row per post, keyed post_id
+		// UNIQUE; doc is opaque JSON. Same statement as in sql/schema.sql,
+		// which is where a fresh database gets it.
+		"create_carousels_table",
+		`CREATE TABLE IF NOT EXISTS carousels (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				post_id    INTEGER NOT NULL UNIQUE REFERENCES posts(id) ON DELETE CASCADE,
+				doc        TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

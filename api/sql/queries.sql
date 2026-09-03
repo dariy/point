@@ -467,6 +467,24 @@ SELECT
 FROM posts
 WHERE deleted_at IS NULL AND status = 'published';
 
+-- CAROUSELS
+-- One Carousel Studio document per post. doc is opaque JSON, stored and
+-- returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
+
+-- name: GetCarouselByPostID :one
+SELECT * FROM carousels
+WHERE post_id = ? LIMIT 1;
+
+-- name: UpsertCarousel :one
+INSERT INTO carousels (post_id, doc, created_at, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(post_id) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
+RETURNING *;
+
+-- name: DeleteCarouselByPostID :exec
+DELETE FROM carousels
+WHERE post_id = ?;
+
 -- Queries for sqlc. Every entry here becomes a method on *models.Queries, which
 -- is embedded in sqliteRepository, so a name added here is also a name added to
 -- the repository -- and a hand-written method of the same name silently wins

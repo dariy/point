@@ -17,8 +17,9 @@ Staged delivery. As of 2026-09: the **output contract** below is pinned (a Go re
 test), the editor's Visual mode preserves a `:::{.carousel-block}` fence (C3), the
 `carousel` plugin exists as a gated skeleton — registry descriptor, an empty studio
 shell at `/light/carousel?post=<id>`, and a post-editor menu entry (C4) — and the pure
-`geometry.js` / `document.js` modules with their unit tests have landed (C5). The
-builder UI and the `carousels` table are not built yet. See "Delivery stages".
+`geometry.js` / `document.js` modules with their unit tests have landed (C5), and the
+`carousels` table with its `GET/PUT/DELETE /api/carousel?post=<id>` document API is
+wired and gated (C6). The builder UI is not built yet. See "Delivery stages".
 
 ## The output contract
 
@@ -130,7 +131,7 @@ they are extensions or rewrites.
 | **C3** | `postNodes.js` + `VisualEditor.js` carousel node — line-based parse ahead of `IMAGE_PATH_RE`, serialize in both, round-trip tests. Data-loss guard: today, opening a carousel post in Visual mode and saving destroys the block. Must precede any writer. |
 | **C4** | Plugin skeleton: `registry.go` descriptor, `frontend/src/plugins/carousel/index.js`, post-editor menu entry, gating tests (chunk + `/api/carousel` 404 when off). |
 | **C5** | Pure `geometry.js` + `document.js` + unit tests. No UI, no canvas. **Done** — `frontend/src/plugins/carousel/{geometry,document}.js`, `frontend/test/carousel{Geometry,Document}.test.js`. |
-| **C6** | `carousels` table + migration + repo queries + handler + JS API client + Go tests. |
+| **C6** | `carousels` table + migration + repo queries + handler + JS API client + Go tests. **Done** — `carousels(post_id UNIQUE)`, sqlc `GetCarouselByPostID` / `UpsertCarousel` / `DeleteCarouselByPostID`, `api/internal/api/carousel.go`, `frontend/src/api/carousel.js`. `doc` is stored and returned verbatim (validated only as a JSON object); `?post=<id>` on every verb; all 404 with the plugin off; post delete cascades. |
 | **C7** | Splitter MVP: source picker, N/aspect controls, safe-area guides, thin `render.js`, `createImageBitmap` downscale, upload, write block, save document. |
 | **C8** | Superseded-slide cleanup on re-render; "carousel block wins" + the >10 rule in `post_publish.go`; resolve the duplicate-path divergence between Go (`ExtractMediaPaths` dedups) and the browser (`extractMedia` does not). |
 | **C9** | Public block CSS partial; verify non-immersive and immersive rendering, including `mediaFromHtml` expansion in the immersive viewer. |

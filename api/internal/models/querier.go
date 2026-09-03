@@ -27,6 +27,7 @@ type Querier interface {
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
+	DeleteCarouselByPostID(ctx context.Context, postID int64) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
@@ -35,6 +36,10 @@ type Querier interface {
 	DeleteTag(ctx context.Context, id int64) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error)
+	// CAROUSELS
+	// One Carousel Studio document per post. doc is opaque JSON, stored and
+	// returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
+	GetCarouselByPostID(ctx context.Context, postID int64) (Carousel, error)
 	GetFirstUser(ctx context.Context) (User, error)
 	// MEDIA
 	GetMedia(ctx context.Context, id int64) (Medium, error)
@@ -92,6 +97,7 @@ type Querier interface {
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpsertCarousel(ctx context.Context, arg UpsertCarouselParams) (Carousel, error)
 	UpsertSecret(ctx context.Context, arg UpsertSecretParams) error
 	WithdrawPost(ctx context.Context, id int64) (Post, error)
 }
