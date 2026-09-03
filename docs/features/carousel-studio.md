@@ -13,9 +13,12 @@ infrastructure.
 
 ## Status
 
-Staged delivery. As of 2026-09, only the **output contract** below is pinned (a Go
-render test); the plugin, the builder UI, and the `carousels` table are not built yet.
-See "Delivery stages".
+Staged delivery. As of 2026-09: the **output contract** below is pinned (a Go render
+test), the editor's Visual mode preserves a `:::{.carousel-block}` fence (C3), and the
+`carousel` plugin exists as a gated skeleton — registry descriptor, an empty studio
+shell at `/light/carousel?post=<id>`, and a post-editor menu entry (C4). The builder
+UI, the geometry/document modules, and the `carousels` table are not built yet. See
+"Delivery stages".
 
 ## The output contract
 

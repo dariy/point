@@ -180,6 +180,17 @@ var Registry = []Descriptor{
 	// lazy routes in frontend/src/app.js now: the plugin indirection bought
 	// only code-splitting, which esbuild --splitting provides directly.
 
+	// ── Admin studios ───────────────────────────────────────────────────────
+	// Carousel Studio: turns a post's media into an Instagram-ready slide deck,
+	// written back into the post as a :::{.carousel-block} fenced div. Admin UI
+	// at /light/carousel?post=<id> — the path carries no :id because plugin
+	// admin routes are merged verbatim and filtered on the /light prefix
+	// (app.js), and the page title is taken from the last path segment. Off by
+	// default; the builder lands incrementally (docs/features/carousel-studio.md).
+	// The /api/carousel prefix is declared here and adopts RequirePlugin when
+	// its CRUD lands in a later bead; until then it simply 404s.
+	{ID: "carousel", Title: "Carousel Studio", Type: TypeRoute, Routes: []string{"/light/carousel", "/api/carousel"}, EntryName: "carousel", DefaultEnabled: false},
+
 	// ── Backend-gated services ───────────────────────────────────────────────
 	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: false},
 	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: false},

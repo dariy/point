@@ -1,0 +1,31 @@
+/*
+ * Carousel Studio — admin builder styles.
+ *
+ * Auto-bundled to css/p/carousel.css by scripts/build-css.sh and loaded only
+ * when the plugin is enabled. Public rendering of the :::{.carousel-block}
+ * output is a separate concern and does NOT live here — the plugin is off by
+ * default and visitors must still get styled slides.
+ */
+
+.carousel-studio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.carousel-studio__lead {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.carousel-studio__stage {
+  aspect-ratio: 4 / 5;
+  max-width: 22rem;
+  border: var(--border-width) dashed var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-card);
+}
+
+.carousel-studio--empty {
+  padding: var(--spacing-lg) 0;
+}

@@ -63,6 +63,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	registerSettingsRoutes(e, h.Settings, svcs, setupComplete)
 	registerPluginRoutes(e, h.Plugins, svcs)
 	registerInstagramRoutes(e, h.Instagram, svcs)
+	registerCarouselRoutes(e, svcs)
 	registerThemeRoutes(e, h.Theme, svcs)
 	registerSystemRoutes(e, h.System, svcs)
 
