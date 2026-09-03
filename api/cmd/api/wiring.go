@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"point-api/internal/config"
+	"point-api/internal/metrics"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
@@ -28,9 +29,21 @@ type AppServices struct {
 	Timeline    *services.TimelineService
 	Instagram   *services.InstagramService
 	S3Presigner *services.S3Presigner
+	// Metrics is nil unless METRICS_ENABLED is set. Nil is the whole of the
+	// off switch: every counter method is nil-safe, and setupEcho leaves the
+	// instrumenting middleware out of the chain entirely, so a default install
+	// carries no instrumentation rather than instrumentation nobody reads.
+	Metrics *metrics.Registry
 }
 
 func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
+	// Built first: several services below take it at construction, and whether
+	// it exists at all is what METRICS_ENABLED decides.
+	var metricsRegistry *metrics.Registry
+	if cfg.MetricsEnabled {
+		metricsRegistry = metrics.New()
+	}
+
 	settingsService := services.NewSettingsService(repo)
 	authService := services.NewAuthService(repo)
 	apiKeyService := services.NewApiKeyService(repo)
@@ -42,11 +55,14 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	// Built before the post/tag services so both can be handed it: a write to
 	// either invalidates the rendered public pages (see onPostsChanged /
 	// TagService.Invalidate).
-	cacheService := services.NewCacheService(cfg.StoragePath).WithBudgetMB(cfg.PageCacheBudgetMB)
+	cacheService := services.NewCacheService(cfg.StoragePath).
+		WithBudgetMB(cfg.PageCacheBudgetMB).
+		WithMetrics(metricsRegistry)
 	tagService.WithCache(cacheService)
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).
 		WithHealth(healthRegistry).
-		WithCache(cacheService)
+		WithCache(cacheService).
+		WithMetrics(metricsRegistry)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService).
 		WithCache(cacheService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL)
@@ -54,7 +70,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	systemService.CleanupPartialBackups()
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry)
 
 	s3Presigner, err := services.NewS3Presigner(
 		os.Getenv("S3_ENDPOINT"),
@@ -82,5 +98,6 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Timeline:    timelineService,
 		Instagram:   instagramService,
 		S3Presigner: s3Presigner,
+		Metrics:     metricsRegistry,
 	}
 }

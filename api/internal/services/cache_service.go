@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"point-api/internal/metrics"
+
 	"golang.org/x/sync/singleflight"
 )
 
@@ -70,6 +72,30 @@ type CacheService struct {
 	// directory left oversized by a crash, or by the operator lowering the
 	// budget, would sit there until a tenth of a budget had been rewritten.
 	sinceSweep int64
+
+	// metrics counts cache outcomes. Nil is valid and counts nothing, which is
+	// what METRICS_ENABLED=false leaves here.
+	metrics *metrics.Registry
+}
+
+// WithMetrics attaches the metrics registry so page-cache effectiveness is
+// visible. GetOrRender records the hit and the miss; a render that was never
+// cacheable never reaches it, so the caller reports that one through
+// NoteBypass.
+func (s *CacheService) WithMetrics(m *metrics.Registry) *CacheService {
+	s.metrics = m
+	return s
+}
+
+// NoteBypass records a public page render that was not eligible for the cache
+// at all. It is worth separating from a miss: a rising bypass rate means more
+// requests are being routed around the cache, a rising miss rate means the
+// cache is not holding what it is asked for.
+func (s *CacheService) NoteBypass() {
+	if s == nil {
+		return
+	}
+	s.metrics.PageCache(metrics.CacheBypass)
 }
 
 func NewCacheService(dataPath string) *CacheService {
@@ -368,8 +394,13 @@ func (s *CacheService) GetWithTTL(ctx context.Context, key string, ttl time.Dura
 // write it to a response; none of them may modify it.
 func (s *CacheService) GetOrRender(ctx context.Context, key string, ttl time.Duration, render func(context.Context) ([]byte, error)) ([]byte, error) {
 	if data, err := s.GetWithTTL(ctx, key, ttl); err == nil {
+		s.metrics.PageCache(metrics.CacheHit)
 		return data, nil
 	}
+	// Counted once per caller, not once per render: the waiters a flight
+	// coalesces missed the cache too, and a hit rate that counted only the
+	// leader would flatter the cache exactly when it is under load.
+	s.metrics.PageCache(metrics.CacheMiss)
 
 	v, err, _ := s.flight.Do(key, func() (any, error) {
 		// Look again: a previous flight may have filled the key between this
