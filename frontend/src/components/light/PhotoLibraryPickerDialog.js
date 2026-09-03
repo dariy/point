@@ -134,15 +134,21 @@ export class PhotoLibraryPickerDialog extends Component {
   close() {
     this.container.classList.remove('active');
     releaseScrollLock(this);
-    if (this._keyHandler) {
-      document.removeEventListener('keydown', this._keyHandler);
-      this._keyHandler = null;
-    }
+    this._releaseKeyHandler();
   }
   // Torn down while open, close() never runs — release the lock here so the
-  // page behind does not stay unscrollable (p-overlay-scroll-lock-leak).
+  // page behind does not stay unscrollable (p-overlay-scroll-lock-leak), and the
+  // Escape handler with it, or it calls close() on a dead component
+  // (p-dialog-keydown-leak).
   beforeUnmount() {
     releaseScrollLock(this);
+    this._releaseKeyHandler();
+  }
+  /** Drop the document-level Escape handler, from close() or from unmount(). */
+  _releaseKeyHandler() {
+    if (!this._keyHandler) return;
+    document.removeEventListener('keydown', this._keyHandler);
+    this._keyHandler = null;
   }
   destroy() {
     this.close();
