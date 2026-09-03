@@ -113,14 +113,27 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// Derive the client IP by walking X-Forwarded-For from the right and
 	// skipping only trusted hops (loopback + private networks — i.e. our own
-	// reverse proxy). This returns the real client address and ignores any
-	// XFF entries an attacker prepends, so c.RealIP() can't be spoofed to
-	// dodge the credential rate limiter or poison the session audit trail.
-	// Direct (no-proxy) connections fall back to the socket remote address.
-	e.IPExtractor = echo.ExtractIPFromXFFHeader(
+	// reverse proxy — plus whatever TRUSTED_PROXIES adds for a deployment whose
+	// proxy or CDN answers from a public address). This returns the real client
+	// address and ignores any XFF entries an attacker prepends, so c.RealIP()
+	// can't be spoofed to dodge the credential rate limiter or poison the
+	// session audit trail. Direct (no-proxy) connections fall back to the socket
+	// remote address.
+	trustOpts := []echo.TrustOption{
 		echo.TrustLoopback(true),
 		echo.TrustPrivateNet(true),
-	)
+	}
+	trustedNets, err := config.ParseTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
+		// LoadConfig rejects a malformed list before we get here, so this is a
+		// Config built in code. Trust nothing extra: a narrower boundary costs
+		// accurate client IPs, a wrong one hands them to the client.
+		slog.Error("ignoring TRUSTED_PROXIES", "error", err)
+	}
+	for _, n := range trustedNets {
+		trustOpts = append(trustOpts, echo.TrustIPRange(n))
+	}
+	e.IPExtractor = echo.ExtractIPFromXFFHeader(trustOpts...)
 
 	// Redirect HTTP to HTTPS if AppURL is configured as HTTPS.
 	if strings.HasPrefix(cfg.AppURL, "https://") {
