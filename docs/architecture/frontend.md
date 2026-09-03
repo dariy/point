@@ -1426,7 +1426,7 @@ Three things sit outside all of this and are still worth stating:
 
 ### Content Security Policy
 
-Shipped, not recommended — the policy is assembled in `api/cmd/api/server.go`
+Shipped, not recommended — the policy is assembled in `api/cmd/api/csp.go`
 and sent on every response. `script-src` is `'self'` plus a sha256 for each
 inline `<script>`, computed from `index.html` at startup and re-spliced per
 request where the bootstrap script is injected (`routes.go`, `media.go`), so

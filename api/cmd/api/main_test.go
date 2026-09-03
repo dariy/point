@@ -294,37 +294,6 @@ func TestDeploymentHeadInjection(t *testing.T) {
 	}
 }
 
-func TestSanitizeCSPSources(t *testing.T) {
-	// Normal inputs pass through, whitespace-normalized.
-	exact := []struct{ in, want string }{
-		{"", ""},
-		{"   ", ""},
-		{"https://a.example", "https://a.example"},
-		{"https://a.example https://b.example", "https://a.example https://b.example"},
-		{"  https://a.example   https://b.example  ", "https://a.example https://b.example"},
-		{"https://*.cdn.example", "https://*.cdn.example"},
-		{"https://a.example;object-src", ""},   // ';'-fused token dropped whole
-		{"https://a.example,https://evil", ""}, // ','-fused token dropped whole
-	}
-	for _, c := range exact {
-		if got := sanitizeCSPSources(c.in); got != c.want {
-			t.Errorf("sanitizeCSPSources(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-	// A breakout character (new directive ';', new policy ',', header split
-	// CR/LF) must never survive into the output, whatever the arrangement.
-	for _, in := range []string{
-		"https://a; object-src *",
-		"https://a, default-src *",
-		"https://a.example\r\nX-Injected: 1",
-		"a;b,c\r\nd",
-	} {
-		if got := sanitizeCSPSources(in); strings.ContainsAny(got, ";,\r\n") {
-			t.Errorf("sanitizeCSPSources(%q) = %q still contains a breakout char", in, got)
-		}
-	}
-}
-
 func TestBodyLimitEnforced(t *testing.T) {
 	cfg := config.Config{
 		AppVersion:      "1.0.0",

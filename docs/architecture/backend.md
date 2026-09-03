@@ -214,7 +214,7 @@ func (h *PostHandler) GetPost(c echo.Context) error {
 
 The credential rate limiter and the session audit trail both key off
 `c.RealIP()`, so where that value comes from is a security decision.
-`setupEcho` (`cmd/api/server.go`) installs `echo.ExtractIPFromXFFHeader`, which
+`installMiddleware` (`cmd/api/middleware_stack.go`) installs `echo.ExtractIPFromXFFHeader`, which
 walks `X-Forwarded-For` from the right and stops at the first hop it does not
 trust. Trusted by default: loopback and private networks. That covers the usual
 deployment — a reverse proxy on the same host or the same container network has

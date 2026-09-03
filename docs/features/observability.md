@@ -225,7 +225,7 @@ to anything — it has been removed.
 | `api/internal/metrics/route_class.go` | `ClassifyRoute`, the ordered template → class rules |
 | `api/internal/metrics/expose.go` | the text-format writer, `Sources`, and the HTTP handler |
 | `api/cmd/api/metrics.go` | the request middleware, the scrape-time sources, the second listener |
-| `api/cmd/api/server.go` | where the middleware, the recover counter and the limiter counters attach |
+| `api/cmd/api/middleware_stack.go` | where the middleware, the recover counter and the public limiter counter attach (`server.go` attaches the credential limiter) |
 | `api/internal/config/config.go` | `METRICS_ENABLED` / `METRICS_BIND` / `METRICS_PORT` / `LOG_LEVEL` |
 | `api/internal/utils/recover.go` | `SafeGo` / `Recovered` — the panic backstop for bare background goroutines |
 | `api/cmd/api/main.go` | `parseLogLevel`, `installLogger` — where `LOG_LEVEL` becomes the slog level |

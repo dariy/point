@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 
+	"point-api/internal/config"
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 )
@@ -68,29 +69,6 @@ func bootstrapScript(ctx context.Context, settings *services.SettingsService, ch
 	hash := sha256.Sum256([]byte(scriptContent))
 	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
 	return "\n  <script>" + scriptContent + "</script>", hashBase64
-}
-
-// inlineScriptRe matches attribute-less inline <script> blocks in index.html.
-// Scripts with attributes (src=, type=module) load external files and are
-// covered by CSP 'self'.
-var inlineScriptRe = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
-
-// inlineScriptHashes returns CSP 'sha256-…' source tokens for every inline
-// <script> in the file, so the script-src policy always matches the shell that
-// is actually served — no hardcoded hash to keep in sync with index.html by
-// hand. Computed once at startup: index.html only changes at build/deploy time
-// (the __BUILD_VERSION__ stamp rewrites URLs, not inline script bodies).
-func inlineScriptHashes(path string) []string {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, m := range inlineScriptRe.FindAllSubmatch(b, -1) {
-		h := sha256.Sum256(m[1])
-		out = append(out, "'sha256-"+base64.StdEncoding.EncodeToString(h[:])+"'")
-	}
-	return out
 }
 
 // resolveJSDir returns the directory to serve under /assets/js.
@@ -171,4 +149,68 @@ func loadCSSManifest(cssDir string) map[string]string {
 		out[name] = base + "." + hash + ".css"
 	}
 	return out
+}
+
+// loadHTMLShells reads index.html once at startup and returns the two shells the
+// SPA routes serve: the public one carries the deployment-supplied <head> markup
+// (analytics/verification tags), the admin one omits it so the injected
+// third-party script never loads in the authenticated /light context — a smaller
+// XSS blast radius, and it keeps admin traffic out of analytics.
+//
+// The build version is substituted here, at serve time, instead of mutating the
+// file on disk (the old sed/skip-worktree dance in run.sh + Dockerfile):
+// index.html stays on disk pristine with the literal __BUILD_VERSION__
+// placeholder and is a normally tracked file. Both shells are "" when the
+// frontend isn't built — the SPA routes fall back to a 503.
+func loadHTMLShells(cfg config.Config, cssManifest map[string]string) (shell, adminShell string) {
+	b, err := os.ReadFile(filepath.Join(cfg.FrontendDir, "index.html"))
+	if err != nil {
+		return "", ""
+	}
+	base := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
+	// Rewrite the CSS bundle links to their content-addressed URLs so an
+	// unchanged bundle keeps the same URL across deploys and can be cached
+	// forever. Without a manifest the ?v=<build version> links stay, which
+	// still busts correctly on deploy — just on every deploy.
+	for name, hashed := range cssManifest {
+		base = strings.ReplaceAll(base,
+			"/assets/css/"+name+"?v="+cfg.AppVersion,
+			"/assets/css/"+hashed)
+	}
+	// Public shell. Note: an inline <script> injected via HEAD_HTML is NOT
+	// covered by the CSP script-src hashes (those are computed from the on-disk
+	// shell), so deployments should inject external scripts and allow-list their
+	// origin via CSP_SCRIPT_SRC.
+	shell = strings.Replace(base, "<!-- __HEAD_HTML__ -->", cfg.HeadHTML, 1)
+	// Admin shell — placeholder dropped, no third-party markup.
+	adminShell = strings.Replace(base, "<!-- __HEAD_HTML__ -->", "", 1)
+	return shell, adminShell
+}
+
+// newFrontendAssets bundles everything the frontend routes need: the frontend
+// directory, the resolved JS bundle directory, the two HTML shells, and the
+// static plugin chunk/CSS maps.
+//
+// The JS bundle directory is resolved once — the release bundle (frontend/js),
+// or the debug bundle (frontend/js-debug) when FRONTEND_DEBUG is set and built.
+// The chunk map MUST come from the same directory we serve so plugin chunk
+// hashes match the bundle the browser loads.
+func newFrontendAssets(cfg config.Config, shell, adminShell string) frontendAssets {
+	jsDir := resolveJSDir(cfg.FrontendDir, cfg.FrontendDebug)
+	manifestDir := jsDir
+	if manifestDir == "" {
+		manifestDir = filepath.Join(cfg.FrontendDir, "js")
+	}
+	return frontendAssets{
+		Dir:        cfg.FrontendDir,
+		JSDir:      jsDir,
+		Shell:      shell,
+		AdminShell: adminShell,
+		// Static build map (plugin id → hashed chunk filename). Empty in Phase 1
+		// (no per-plugin chunks built yet), which makes every /assets/js/p/*
+		// request 404 and every manifest Entry empty — the intended foundation
+		// state.
+		ChunkMap: plugins.LoadChunkMap(filepath.Join(manifestDir, "plugin-manifest.json")),
+		CSSMap:   plugins.LoadCssMap(filepath.Join(cfg.FrontendDir, "css", "p")),
+	}
 }

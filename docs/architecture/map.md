@@ -41,7 +41,7 @@ what lets those rules be tested without an HTTP harness, and
 
 Two kinds of middleware run before step 2. The global chain — logging, recover,
 gzip, CORS, security headers and CSP, the public rate limiter — is built in
-`api/cmd/api/server.go`. The per-route ones are attached in `routes.go` where
+`api/cmd/api/middleware_stack.go`. The per-route ones are attached in `routes.go` where
 the route is declared: `AuthMiddleware`, `OptionalAuthMiddleware`,
 `RequirePlugin` and `SessionOnlyMiddleware` from
 `api/internal/api/middleware.go`, plus the edge-cache policy from
@@ -87,8 +87,10 @@ the list below before trusting an older reference to `main.go`.
 |---|---|
 | `main.go` | Process lifecycle: config, migrations, start, graceful shutdown. |
 | `cli.go` | Which subcommand the args name (`setup`, `reset-password`); each command's body gets its own file. `--create-api-key` is the exception — it needs the wired services, so `main.go` dispatches it after `initServices`. |
-| `wiring.go` | `AppServices` — constructing every service once and handing them around. |
-| `server.go` | `setupEcho`: Echo's own config, the global `e.Use`/`e.Pre` chain, handler construction, the two `index.html` shells. |
+| `wiring.go` | `initServices` (`AppServices` — every service constructed once) and `initHandlers` (`AppHandlers` — every HTTP handler built from those services). |
+| `server.go` | `setupEcho`: assembles the server from the pieces below — reads top to bottom as the router's registration order, decides no URL or header itself. |
+| `middleware_stack.go` | `installMiddleware`: Echo's own config and the global `e.Use`/`e.Pre` chain. `newPublicLimiter`, the blanket per-IP throttle. |
+| `csp.go` | `buildContentSecurityPolicy` and its helpers (`sanitizeCSPSources`, `inlineScriptHashes`), plus the `trustedTypesCSP` tail. |
 | `routes.go` | Route registration only. One `register*Routes` per domain; **registration order is load-bearing** (the `/*` SPA fallback must come last, the dated media path after `/api`). |
 | `cache.go` | Request-time HTTP cache policy for HTML and API responses. |
 | `assets.go` | The JS directory choice, the CSS content-hash manifest, and the shell markup — including `bootstrapScript`, the one inline `<script>` every document carries (`window.__PLUGINS__`, `window.__MEDIA__`). One body means one CSP hash. |
