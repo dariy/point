@@ -2,7 +2,7 @@
 # Trusted Types enforcement, asserted against the vendored code that has a
 # waiver for it.
 #
-# The enforcing CSP (trustedTypesCSP in api/cmd/api/server.go) names three
+# The enforcing CSP (trustedTypesCSP in api/cmd/api/csp.go) names three
 # policies and no more: "point" for everything this frontend writes, plus
 # "point-leaflet" and "point-codejar" for two vendored libraries that were
 # patched to route their own writes through a policy of their own. Everything
@@ -27,7 +27,7 @@ cd "$(cd "$(dirname "$0")/.." && pwd)"
 
 VENDOR=frontend/vendor
 SRC=frontend/src
-SERVER=api/cmd/api/server.go
+SERVER=api/cmd/api/csp.go
 fail=0
 
 report() {

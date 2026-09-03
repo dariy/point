@@ -1,14 +1,17 @@
 package main
 
-// Dependency wiring: one place where every service is constructed and handed
-// its collaborators. Nothing here talks to HTTP — the handlers that wrap these
-// services are built in server.go.
+// Dependency wiring: where every service is constructed and handed its
+// collaborators (initServices), and where the HTTP handlers that wrap those
+// services are built (initHandlers). Nothing here registers a route or decides
+// a URL — that is routes.go, driven from setupEcho.
 
 import (
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
+	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/metrics"
 	"point-api/internal/repository"
@@ -102,5 +105,75 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Instagram:   instagramService,
 		S3Presigner: s3Presigner,
 		Metrics:     metricsRegistry,
+	}
+}
+
+// AppHandlers is every HTTP handler the router wires, built once from the
+// services in AppServices. Construction is pure — no route is registered and no
+// HTTP behaviour is decided here; routes.go turns these into endpoints.
+type AppHandlers struct {
+	Auth      *api.AuthHandler
+	ApiKey    *api.ApiKeyHandler
+	Tag       *api.TagHandler
+	Post      *api.PostHandler
+	Media     *api.MediaHandler
+	Settings  *api.SettingsHandler
+	Plugins   *api.PluginsHandler
+	Theme     *api.ThemeHandler
+	System    *api.SystemHandler
+	Feeds     *api.FeedsHandler
+	Pages     *api.PagesHandler
+	Timeline  *api.TimelineHandler
+	Setup     *api.SetupHandler
+	NavMenu   *api.NavMenuHandler
+	Instagram *api.InstagramHandler
+	WebAuthn  *api.WebAuthnHandler
+}
+
+// initHandlers constructs every handler in AppHandlers from the wired services.
+//
+// Two side effects live here rather than in setupEcho, next to the collaborators
+// they belong to: the remark-comments supervisor goroutine is started (the
+// settings handler holds the supervisor so an admin can restart it), and the
+// WebAuthn service is built only when AppURL names an origin — passkeys need
+// HTTPS and a known RP ID, so a bare install gets a nil service and a handler
+// that reports the feature off.
+func initHandlers(cfg config.Config, repo repository.Repository, svcs *AppServices) *AppHandlers {
+	remarkSupervisor := services.NewRemarkSupervisor(svcs.Settings, repo).WithHealth(svcs.Health)
+	go remarkSupervisor.Start()
+
+	instagramImportService := services.NewInstagramImportService(svcs.Instagram, svcs.Media, svcs.Post)
+
+	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
+	var webauthnSvc *services.WebAuthnService
+	if cfg.AppURL != "" {
+		origin := services.SanitizeOrigin(cfg.AppURL)
+		rpID := services.GetRPIDFromURL(cfg.AppURL)
+		if origin != "" && rpID != "" {
+			var waErr error
+			webauthnSvc, waErr = services.NewWebAuthnService(repo, rpID, cfg.AppName, origin)
+			if waErr != nil {
+				slog.Warn("WebAuthn service init failed", "error", waErr)
+			}
+		}
+	}
+
+	return &AppHandlers{
+		Auth:      api.NewAuthHandler(svcs.Auth, &cfg, repo),
+		ApiKey:    api.NewApiKeyHandler(svcs.ApiKey),
+		Tag:       api.NewTagHandler(svcs.Tag, svcs.Settings),
+		Post:      api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag),
+		Media:     api.NewMediaHandler(svcs.Media, svcs.Settings),
+		Settings:  api.NewSettingsHandler(svcs.Settings, remarkSupervisor),
+		Plugins:   api.NewPluginsHandler(svcs.Settings),
+		Theme:     api.NewThemeHandler(svcs.Theme),
+		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithStorageQuotaMB(cfg.StorageQuotaMB),
+		Feeds:     api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache),
+		Pages:     api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache),
+		Timeline:  api.NewTimelineHandler(svcs.Timeline, svcs.Settings),
+		Setup:     api.NewSetupHandler(svcs.Auth, svcs.Settings, repo, &cfg),
+		NavMenu:   api.NewNavMenuHandler(svcs.Settings, svcs.Tag),
+		Instagram: api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg),
+		WebAuthn:  api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg, repo),
 	}
 }

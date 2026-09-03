@@ -134,7 +134,7 @@ build_set() {
   if [ -n "$dupes" ]; then
     echo "$dupes" >&2
     echo "        Each Trusted Types policy must be registered from one shared chunk" >&2
-    echo "        of $js_dir. See trustedTypesCSP in api/cmd/api/server.go." >&2
+    echo "        of $js_dir. See trustedTypesCSP in api/cmd/api/csp.go." >&2
     exit 1
   fi
 

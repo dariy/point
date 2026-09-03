@@ -29,7 +29,7 @@ Small, boring-on-purpose features that make the blog a good web citizen.
 - **`HEAD_HTML`** env var: extra HTML injected into `<head>` at serve time (analytics
   snippets, verification tags) — deployment-controlled, not stored in the DB, and
   composed with the other serve-time injections (plugin manifest, per-post meta) in the
-  single `</head>` rewrite in `api/cmd/api/server.go`.
+  serve-time shell build in `api/cmd/api/assets.go` (`loadHTMLShells`).
 - **Auth-isolated injection**: two HTML shells are built at serve time — the public
   shell carries `HEAD_HTML`, the admin shell omits it entirely. Admin routes and any
   authenticated request always get the admin shell, so third-party script from
