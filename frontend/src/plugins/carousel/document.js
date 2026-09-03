@@ -11,7 +11,7 @@
  * No DOM, no canvas, no network. Schema: `docs/features/carousel-studio.md`.
  */
 
-import { carouselFence } from '../../utils/postNodes.js';
+import { carouselFence, CAROUSEL_BLOCK_CLASS } from '../../utils/postNodes.js';
 
 /** Bumped only on a breaking schema change; present since the first commit. */
 export const DOC_VERSION = 1;
@@ -180,6 +180,60 @@ export function buildCarouselBlock(doc) {
     .slides.map((s) => (s.rendered ? s.rendered.path : ''))
     .filter(Boolean);
   return paths.length ? carouselFence(paths) : '';
+}
+
+/**
+ * The existing `:::{.carousel-block}` fence in a post's content, if any.
+ * Non-greedy to the first closing `:::` — a slide path can never contain one.
+ */
+const CAROUSEL_FENCE_RE = new RegExp(
+  `:::\\{\\.${CAROUSEL_BLOCK_CLASS}\\}\\n[\\s\\S]*?\\n:::`,
+);
+
+/**
+ * Splice a document's rendered block into a post's content: replace the
+ * existing carousel fence in place, append one when there is none, or drop it
+ * when the document has no rendered slides left. Everything else in the content
+ * is untouched — this is a targeted string edit, not a parse/serialize round
+ * trip.
+ *
+ * @param {string} content the post's markdown
+ * @param {*} doc the carousel document
+ * @returns {string}
+ */
+export function applyCarouselBlock(content, doc) {
+  const block = buildCarouselBlock(doc);
+  const src = String(content ?? '');
+
+  if (CAROUSEL_FENCE_RE.test(src)) {
+    const next = src.replace(CAROUSEL_FENCE_RE, () => block);
+    return next.replace(/\n{3,}/g, '\n\n').trim();
+  }
+  if (!block) return src;
+  return src.trim() ? `${src.trim()}\n\n${block}` : block;
+}
+
+/**
+ * A fresh `split` document: `n` slides, all drawn from the one `source` image.
+ * `render.js` recomputes the exact draw rect from the slide index via
+ * `geometry.sliceRects`; each slide's `crop` records the horizontal band it
+ * covers so the document is self-describing and every slide's `specHash` is
+ * distinct (equal hashes would collapse under the C8 re-render dedup).
+ *
+ * @param {{ source: string, n: number, aspect: string }} spec
+ * @returns {CarouselDoc}
+ */
+export function splitDocument({ source, n, aspect }) {
+  const count = Math.max(1, Math.floor(n));
+  return normalizeDocument({
+    version: DOC_VERSION,
+    aspect,
+    mode: 'split',
+    slides: Array.from({ length: count }, (_, i) => ({
+      source,
+      crop: { x: i / count, y: 0, w: 1 / count, h: 1 },
+    })),
+  });
 }
 
 /** Deterministic JSON: object keys sorted recursively. */

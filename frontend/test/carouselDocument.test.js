@@ -17,6 +17,8 @@ import {
   parseDocument,
   serializeDocument,
   buildCarouselBlock,
+  applyCarouselBlock,
+  splitDocument,
   specHash,
 } from '../src/plugins/carousel/document.js';
 
@@ -157,6 +159,69 @@ describe('buildCarouselBlock', () => {
   test('no rendered slides -> empty string', () => {
     assert.strictEqual(buildCarouselBlock({ slides: [{ source: '/x' }] }), '');
     assert.strictEqual(buildCarouselBlock({}), '');
+  });
+});
+
+describe('splitDocument', () => {
+  test('n slides, all from the one source, split mode', () => {
+    const doc = splitDocument({ source: '/2026/08/wide.jpg', n: 3, aspect: '1:1' });
+    assert.strictEqual(doc.mode, 'split');
+    assert.strictEqual(doc.aspect, '1:1');
+    assert.strictEqual(doc.slides.length, 3);
+    assert.ok(doc.slides.every((s) => s.source === '/2026/08/wide.jpg'));
+    assert.ok(doc.slides.every((s) => s.rendered === null));
+  });
+
+  test('an unknown aspect falls back to 4:5, n<2 to a single slide', () => {
+    const doc = splitDocument({ source: '/x.jpg', n: 0, aspect: 'nope' });
+    assert.strictEqual(doc.aspect, '4:5');
+    assert.strictEqual(doc.slides.length, 1);
+  });
+
+  test('each slide gets a distinct specHash (its own source band)', () => {
+    const doc = splitDocument({ source: '/2026/08/wide.jpg', n: 4, aspect: '4:5' });
+    const hashes = doc.slides.map((s) => specHash(s, doc.aspect));
+    assert.strictEqual(new Set(hashes).size, 4);
+  });
+});
+
+describe('applyCarouselBlock', () => {
+  const doc = {
+    slides: [{ rendered: { path: '/2026/08/1.jpg' } }, { rendered: { path: '/2026/08/2.jpg' } }],
+  };
+  const block = ':::{.carousel-block}\n\n/2026/08/1.jpg\n\n/2026/08/2.jpg\n\n:::';
+
+  test('appends the block to content that has none', () => {
+    assert.strictEqual(
+      applyCarouselBlock('Some intro copy.', doc),
+      `Some intro copy.\n\n${block}`,
+    );
+  });
+
+  test('empty content becomes just the block', () => {
+    assert.strictEqual(applyCarouselBlock('', doc), block);
+    assert.strictEqual(applyCarouselBlock(null, doc), block);
+  });
+
+  test('replaces an existing fence in place, leaving the rest untouched', () => {
+    const before =
+      'Intro.\n\n:::{.carousel-block}\n\n/2026/08/old-a.jpg\n\n/2026/08/old-b.jpg\n\n:::\n\nOutro.';
+    assert.strictEqual(
+      applyCarouselBlock(before, doc),
+      `Intro.\n\n${block}\n\nOutro.`,
+    );
+  });
+
+  test('a document with no rendered slides removes the fence', () => {
+    const before = 'Intro.\n\n:::{.carousel-block}\n\n/2026/08/old.jpg\n\n:::\n\nOutro.';
+    assert.strictEqual(
+      applyCarouselBlock(before, { slides: [{ source: '/x' }] }),
+      'Intro.\n\nOutro.',
+    );
+  });
+
+  test('no fence and nothing to write is a no-op', () => {
+    assert.strictEqual(applyCarouselBlock('Just text.', { slides: [] }), 'Just text.');
   });
 });
 
