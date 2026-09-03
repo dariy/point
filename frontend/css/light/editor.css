@@ -544,6 +544,42 @@ body.drag-active::after {
 }
 
 /* ===========================
+   Carousel node card — read-only; slides are edited in Carousel Studio
+   =========================== */
+.ve-card--carousel {
+    align-items: stretch;
+}
+
+.ve-carousel-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+}
+
+.ve-carousel-head {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.ve-carousel-label {
+    font-size: var(--font-size-sm);
+    line-height: 1;
+}
+
+.ve-carousel-strip {
+    display: flex;
+    gap: var(--spacing-xs);
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+/* ===========================
    Insert zone — appears between cards on list hover
    =========================== */
 .ve-insert-zone {
