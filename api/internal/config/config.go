@@ -121,6 +121,28 @@ type Config struct {
 	// client-controlled. Parsed by ParseTrustedProxies; LoadConfig rejects a
 	// malformed list rather than starting with it half-applied.
 	TrustedProxies string `mapstructure:"TRUSTED_PROXIES"`
+
+	// BackupHook is a shell command run after each successful backup (scheduled
+	// or manual) to copy the archive off-host. The engine's own backups land in
+	// STORAGE_PATH/backups — on the same disk they protect — so without this a
+	// disk loss takes them with it. Empty by default: no hook, and a backup
+	// behaves exactly as it did before this existed.
+	//
+	// The command runs via `sh -c`. The archive's absolute path arrives both as
+	// $1 and as $POINT_BACKUP_FILE; $POINT_BACKUP_NAME, $POINT_BACKUP_SHA256 and
+	// $POINT_BACKUP_DIR are also set. Example:
+	//   BACKUP_HOOK=rclone copy "$POINT_BACKUP_FILE" r2:my-bucket/point-backups/
+	//
+	// A non-zero exit — or a run longer than BackupHookTimeoutSeconds — is
+	// recorded against the "backup off-host copy" job in /api/system/health and
+	// the metrics exposition (a silently failing off-host copy is worse than
+	// none) but does NOT fail the backup: the local archive is already complete.
+	BackupHook string `mapstructure:"BACKUP_HOOK"`
+	// BackupHookTimeoutSeconds bounds a single BackupHook run so a wedged
+	// command cannot block backups indefinitely (the run guard is held for its
+	// duration). Default 3600. A legitimately slow upload that trips this is
+	// reported as a failure — raise it rather than leave the alert firing.
+	BackupHookTimeoutSeconds int `mapstructure:"BACKUP_HOOK_TIMEOUT_SECONDS"`
 }
 
 // ParseTrustedProxies turns a TRUSTED_PROXIES value — a comma-separated list of
@@ -204,6 +226,8 @@ func LoadConfig(path string) (config Config, err error) {
 	// is the port an operator is most likely to already have in use.
 	v.SetDefault("METRICS_PORT", 9101)
 	v.SetDefault("TRUSTED_PROXIES", "")
+	v.SetDefault("BACKUP_HOOK", "")
+	v.SetDefault("BACKUP_HOOK_TIMEOUT_SECONDS", 3600)
 
 	err = v.ReadInConfig()
 	if err != nil {

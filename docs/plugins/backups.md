@@ -79,6 +79,37 @@ the backups folder; nothing is applied until the operator explicitly Restores it
     `scripts/run.sh`. The UI offers "Restart now" right after scheduling a restore,
     plus a standalone "Restart server" button.
 
+## Off-host copy (`BACKUP_HOOK`)
+
+A created archive lands in `<data>/backups` — on the same disk it protects, so a
+disk loss takes the backups with it. `BACKUP_HOOK` is the escape hatch: a shell
+command the engine runs after **every** successful backup (scheduled or from the
+System page) to copy the archive somewhere else. Unset by default — no hook, and
+a backup behaves exactly as it did before.
+
+- The command runs via `sh -c`, once, against the just-finished archive. The
+  archive's absolute path is passed as both `$1` and `$POINT_BACKUP_FILE`;
+  `$POINT_BACKUP_NAME` (basename), `$POINT_BACKUP_SHA256` (the sidecar's hex) and
+  `$POINT_BACKUP_DIR` are also in the environment. A typical value is one line:
+  `rclone copy "$POINT_BACKUP_FILE" r2:my-bucket/point-backups/`.
+- It runs **inside the backup run guard** (`BackupRunning()` stays true, a
+  concurrent `CreateBackup` still gets `409`), so a wedged hook can't be worse
+  than blocking the *next* backup. `BACKUP_HOOK_TIMEOUT_SECONDS` (default 3600)
+  bounds one run; on overrun the hook's process group is signalled and the run
+  is recorded as a timeout. A slow-but-working uplink wants a *larger* timeout.
+- The hook is **best-effort and never fails the backup**: the local archive is
+  already complete and listed by the time it runs. Instead its outcome is
+  recorded against the `backup off-host copy` job in
+  [`/api/system/health`](../features/observability.md) and the metrics
+  exposition — a non-zero exit or a timeout shows as a degraded job (with a
+  bounded tail of the command's output as the error), a clean exit as healthy.
+  With no hook configured the job is absent, not perpetually green.
+- **Restoring from the remote is manual and unchanged:** fetch the archive from
+  wherever the hook put it, then use the System page's *upload → restore* (or
+  drop it into `<data>/backups` and restore). The engine does not pull from the
+  remote itself — the hook is a one-way copy, deliberately, so its only
+  credential need be write-only.
+
 ## Pre-migration snapshots
 
 Separate from this plugin, and deliberately not gated by it: schema migrations
