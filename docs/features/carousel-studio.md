@@ -37,8 +37,17 @@ Ahead of S2, `geometry.js` gained the inverse of the split question — `fitRepo
 and `slideCountOptions` say how many slides a source makes and at what scale
 (`cover` resamples to fill; `exact`/`pad` stay pixel-for-pixel), and `sliceRects`
 takes a `{ strategy, anchorY }` option and rounds every column edge to a whole
-source pixel so the next layer can crop per slide with `createImageBitmap`. The
-4-argument `sliceRects` call is unchanged.
+source pixel. The 4-argument `sliceRects` call is unchanged.
+
+`render.js` acts on that: one `createImageBitmap(blob, sx, sy, sw, sh, { resizeWidth,
+resizeHeight, resizeQuality })` **per slide**, cropping the column and resampling it
+straight to the slide canvas, so the decoder holds a constant `slideW × slideH` RGBA
+(~5.8 MB at 4:5) whatever the source megapixels or slide count — and the blit is 1:1,
+so "pixel-exact" is honest (the old 4096px strip cap silently downscaled any deck of 4+
+slides). The last `pad` slide's gap is filled from `slide.bg` (`blur` = the column
+stretched under `ctx.filter`; `solid` = `fillRect`) before the blit. `renderSplit` takes
+an optional `onProgress({ done, total })` fired after each slide. Cost: `n` JPEG decodes
+instead of one — accepted.
 
 ## The output contract
 
