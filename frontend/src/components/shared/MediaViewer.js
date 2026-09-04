@@ -232,6 +232,13 @@ export class MediaViewer extends Component {
         if (this._navigatePost('fwd')) return true;
       }
       if (this._index === newIndex) return false;
+      // Carousel-deck slides pan as one image rather than crossfading.
+      if (this._seamlessPair(this._index, newIndex)) {
+        this._seamlessStep(this._index, newIndex, slides, dots);
+        this._updateExif();
+        onStep?.(this._index);
+        return false;
+      }
       const oldSlide = slides[this._index];
       const newSlide = slides[newIndex];
       this._index = newIndex;
@@ -522,6 +529,77 @@ export class MediaViewer extends Component {
   }
 
   /**
+   * Two in-post slides are "seamless" when both were expanded from the same
+   * `:::{.carousel-block}` deck (postMedia.js marks them `carousel: true`). The
+   * studio splits one photo into continuity-matched slices, so stepping between
+   * them should pan like one image — never crossfade the outgoing slice down
+   * through the backdrop.
+   */
+  _seamlessPair(i, j) {
+    const items = this.props.items || [];
+    return !!(items[i]?.carousel && items[j]?.carousel);
+  }
+
+  /**
+   * Step between two seamless carousel slides with a pan instead of the CSS
+   * opacity crossfade: the incoming slice starts one viewport width to the side
+   * at full opacity and both slides translate together, so the seam reads as a
+   * single continuous image.
+   */
+  _seamlessStep(oldIndex, newIndex, slides, dots) {
+    this._clearPeek();
+    this._resetZoom();
+    const oldSlide = slides[oldIndex];
+    const newSlide = slides[newIndex];
+    const W = window.innerWidth;
+    const fwd = newIndex > oldIndex;
+    this._index = newIndex;
+    dots.forEach((d, j) => d.classList.toggle('active', j === newIndex));
+    if (newSlide) {
+      newSlide.classList.add('active');
+      newSlide.style.transition = 'none';
+      newSlide.style.opacity = '1';
+      newSlide.style.zIndex = '11';
+      newSlide.style.transform = `translateX(${fwd ? W : -W}px)`;
+    }
+    requestAnimationFrame(() => {
+      const T = 'transform 0.3s ease';
+      if (newSlide) {
+        newSlide.style.transition = T;
+        newSlide.style.transform = 'translateX(0)';
+      }
+      if (oldSlide) {
+        oldSlide.style.transition = T;
+        oldSlide.style.opacity = '1';
+        oldSlide.style.transform = `translateX(${fwd ? -W : W}px)`;
+      }
+    });
+    window.setTimeout(() => {
+      // Bail if another step overtook this one mid-animation — it owns cleanup.
+      if (this._index !== newIndex) return;
+      if (oldSlide && oldSlide !== newSlide) {
+        oldSlide.querySelector('video')?.pause();
+        // Drop it out cut, not faded: on a backward step the outgoing slide
+        // sits later in the DOM than the incoming one, so a CSS opacity fade
+        // (0.5s) would briefly paint it back on top — the very dimming this
+        // path exists to avoid.
+        oldSlide.style.transition = 'none';
+        oldSlide.style.opacity = '0';
+        oldSlide.style.transform = '';
+        oldSlide.classList.remove('active', 'immersive-fade-in');
+        requestAnimationFrame(() => { oldSlide.style.cssText = ''; });
+      }
+      if (newSlide) {
+        newSlide.style.transition = '';
+        newSlide.style.transform = '';
+        newSlide.style.opacity = '';
+        newSlide.style.zIndex = '';
+        newSlide.querySelector('video')?.play().catch(() => {});
+      }
+    }, 320);
+  }
+
+  /**
    * Carry the committed swipe to rest — the active slide finishes sliding off
    * and its neighbor finishes sliding to centre, continuing the drag's motion.
    * When the neighbor belongs to the next/prev post, the route swaps under it
@@ -543,11 +621,14 @@ export class MediaViewer extends Component {
     }
     const W = window.innerWidth;
     const active = this._slides[this._index];
+    // Between two slides of the same carousel deck the outgoing slice keeps
+    // full opacity as it pans off — the pair should read as one image.
+    const seamless = !crossing && this._seamlessPair(this._index, newIndex);
     const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
     if (active) {
       active.style.transition = T;
       active.style.transform = `translateX(${dir === 'fwd' ? -W : W}px)`;
-      active.style.opacity = '0';
+      active.style.opacity = seamless ? '1' : '0';
     }
     if (neighbor) {
       neighbor.style.transition = T;
@@ -615,9 +696,12 @@ export class MediaViewer extends Component {
     const dir = this._peekDir;
     if (!el) return;
     const W = window.innerWidth;
+    // A seamless deck neighbor pans back out at full opacity — no edge fade.
+    const seamless = this._seamlessPair(
+      this._index, dir === 'fwd' ? this._index + 1 : this._index - 1);
     el.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     el.style.transform = `translateX(${dir === 'fwd' ? W : -W}px)`;
-    el.style.opacity = '0';
+    el.style.opacity = seamless ? '1' : '0';
     setTimeout(() => this._clearPeek(), 300);
   }
 
@@ -740,11 +824,17 @@ export class MediaViewer extends Component {
     const dir = tx < 0 ? 'fwd' : 'back';
     const neighbor = this._neighborEl(dir);
     const ratio = Math.min(1, Math.abs(tx) / W);
+    // Dragging within one carousel deck: both slices ride at full opacity so
+    // the seam between them tracks the finger like a single panned image.
+    const seamless = neighbor && this._seamlessPair(
+      this._index, dir === 'fwd' ? this._index + 1 : this._index - 1);
     active.style.transition = 'none';
     active.style.transform = `translateX(${tx}px)`;
     // With a neighbor revealed, fade the outgoing slide fully out; otherwise
     // keep a floor so a blocked/edge drag never blanks the screen.
-    active.style.opacity = String(neighbor ? Math.max(0, 1 - ratio) : Math.max(0.3, 1 - ratio));
+    active.style.opacity = seamless
+      ? '1'
+      : String(neighbor ? Math.max(0, 1 - ratio) : Math.max(0.3, 1 - ratio));
     if (!neighbor) {
       this._clearPeek();
       return;
@@ -753,7 +843,7 @@ export class MediaViewer extends Component {
     const offset = dir === 'fwd' ? W : -W;
     neighbor.style.transition = 'none';
     neighbor.style.transform = `translateX(${offset + tx}px)`;
-    neighbor.style.opacity = String(ratio);
+    neighbor.style.opacity = seamless ? '1' : String(ratio);
     neighbor.style.zIndex = '11';
   }
   _getMaxScale() {

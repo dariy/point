@@ -140,8 +140,8 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 			err = s.instagramService.WaitForContainerReady(ctx, creationID)
 		}
 	} else {
-		if len(images) > 10 {
-			images = images[:10]
+		if len(images) > 20 {
+			images = images[:20]
 		}
 		var childIDs []string
 		for _, img := range images {

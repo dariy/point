@@ -40,7 +40,7 @@ export class AdminBottomBar extends Component {
         <div class="admin-more-sheet" id="more-sheet">
           <div class="more-sheet-header">
             <h3>More Actions</h3>
-            <button type="button" class="more-sheet-close" id="more-sheet-close">${X_SVG}</button>
+            <button type="button" class="more-sheet-close" id="more-sheet-close">${raw(X_SVG)}</button>
           </div>
           <div class="more-sheet-grid">
             ${this._renderMoreItem('/light/tags', TAGS_SVG, 'Tags')}

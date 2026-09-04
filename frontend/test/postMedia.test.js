@@ -150,6 +150,21 @@ describe('mediaFromHtml — carousel block', () => {
     );
   });
 
+  test('deck slides are marked carousel so the viewer pans, not fades', () => {
+    assert.deepStrictEqual(
+      mediaFromHtml(deck).map((i) => i.carousel),
+      [true, true, true],
+    );
+  });
+
+  test('only deck slides get the carousel mark, not neighbouring images', () => {
+    const html = `<img src="/2026/08/lone.jpg" alt="lone">\n<hr>\n${deck}`;
+    assert.deepStrictEqual(
+      mediaFromHtml(html).map((i) => i.carousel),
+      [undefined, true, true, true],
+    );
+  });
+
   test('prose around a deck stays its own slide (deck between <hr>)', () => {
     const html = `<p>Intro.</p>\n<hr>\n${deck}\n<hr>\n<p>Outro.</p>`;
     assert.deepStrictEqual(

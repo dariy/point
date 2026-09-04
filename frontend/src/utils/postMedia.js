@@ -18,6 +18,8 @@
  * @property {string} [url]   Present on image/video/audio items.
  * @property {string} [alt]   Present on image items lifted from an <img>.
  * @property {string} [html]  Present on 'html' items.
+ * @property {boolean} [carousel]  True on image slides expanded from a
+ *   `:::{.carousel-block}` deck — the viewer pans between these, never fades.
  */
 
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
@@ -163,7 +165,15 @@ function blocksToItems(blocks) {
     const mediaOnly = blockMedia.length > 0 && residual.trim().length === 0;
     if (mediaOnly) {
       flush();
-      items.push(...blockMedia);
+      // Slides lifted from a `:::{.carousel-block}` deck are marked so the
+      // immersive viewer pans between them instead of crossfading — the studio
+      // splits one photo into continuity-matched slices, so a fade through the
+      // backdrop would break the illusion of a single image.
+      const fromCarousel = CAROUSEL_BLOCK_RE.test(block);
+      for (const item of blockMedia) {
+        if (fromCarousel && item.type === "image") item.carousel = true;
+        items.push(item);
+      }
     } else {
       pending.push(block);
     }
