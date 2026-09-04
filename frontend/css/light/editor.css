@@ -572,6 +572,10 @@ body.drag-active::after {
     line-height: 1;
 }
 
+.ve-carousel-edit {
+    margin-left: auto;
+}
+
 .ve-carousel-strip {
     display: flex;
     gap: var(--spacing-xs);

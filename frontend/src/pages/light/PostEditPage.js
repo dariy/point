@@ -86,9 +86,7 @@ export default class PostEditPage extends Component {
     "preview-link"() { this._generatePreviewLink(); },
     // Opens the carousel plugin's studio for this post. Param-less path — the
     // post id rides in the query string (see the plugin's index.js).
-    "carousel-studio"() {
-      if (this.state.postId) navigate(`/light/carousel?post=${this.state.postId}`);
-    },
+    "carousel-studio"() { this._openCarouselStudio(); },
     // Same tab, like every other public-site link in the admin. The editor is
     // the one place where leaving can cost something — edits typed inside the
     // autosave idle window are still only in the form — so flush them first
@@ -147,7 +145,7 @@ export default class PostEditPage extends Component {
           `}
           <hr>
           ${pluginHost.isEnabled("ai-analysis") ? html`<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${raw(SPARKLE_SVG)} Analyze media</button>` : ''}
-          ${!isNew && pluginHost.isEnabled("carousel") ? html`<button class="menu-item" type="button" data-action="carousel-studio" id="carousel-studio-btn">${raw(MEDIA_SVG)} Carousel Studio</button>` : ''}
+          ${!isNew && pluginHost.isEnabled("carousel") ? html`<button class="menu-item" type="button" data-action="carousel-studio" id="carousel-studio-btn">${raw(MEDIA_SVG)} ${this._nodes.some(n => n.type === "carousel") ? "Edit Carousel" : "Carousel Studio"}</button>` : ''}
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${raw(LINK_SVG)} Preview link</button>
           <button class="menu-item" type="button" data-action="arrange">${raw(GRIP_SVG)} Arrange fields</button>
           ${this._isWide() ? html`<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
@@ -695,6 +693,16 @@ export default class PostEditPage extends Component {
   }
 
   /**
+   * Open Carousel Studio for this post, flushing pending edits first so text
+   * typed inside the autosave idle window isn't dropped — the studio loads
+   * the post's saved content, not the in-memory form state.
+   */
+  async _openCarouselStudio() {
+    if (this.state.hasPendingEdits) await this._autosave();
+    if (this.state.postId) navigate(`/light/carousel?post=${this.state.postId}`);
+  }
+
+  /**
    * Move the post to Trash and leave the editor.
    *
    * `deleting` is what parks the autosave — a queued idle save would otherwise
@@ -915,6 +923,7 @@ export default class PostEditPage extends Component {
     this._visualEditorRef = this.mountChild(VisualEditor, "#visual-editor-mount", {
       nodes: this._nodes,
       mediaByPath: this._mediaByPath || {},
+      onEditCarousel: pluginHost.isEnabled("carousel") ? () => this._openCarouselStudio() : null,
       onChange: nodes => {
         this._nodes = nodes;
         this._visualEditorRef.setProps({

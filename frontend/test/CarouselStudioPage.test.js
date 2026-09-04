@@ -117,12 +117,17 @@ describe('CarouselStudioPage', () => {
     const studio = el.querySelector('.carousel-studio');
     assert.ok(studio, 'studio section rendered');
     assert.equal(studio.dataset.postId, '42');
-    assert.equal(
-      el.querySelector('.carousel-studio__lead a').getAttribute('href'),
-      '/light/posts/42/edit',
-    );
+    assert.ok(el.querySelector('[data-action="back-to-post"]'), 'back-to-post control shown');
     assert.ok(el.querySelector('[data-action="pick-source"]'), 'pick prompt shown');
     assert.ok(!el.querySelector('.carousel-studio--empty'), 'not the empty state');
+  });
+
+  test('the back-to-post control navigates to the post editor', async () => {
+    const el = await mount({ post: '42' });
+    const seen = [];
+    dom.window.addEventListener('app:navigate', (e) => seen.push(e.detail.path));
+    click(el.querySelector('[data-action="back-to-post"]'));
+    assert.deepStrictEqual(seen, ['/light/posts/42/edit']);
   });
 
   test('an existing carousel document restores source, slide count and aspect', async () => {

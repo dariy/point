@@ -105,6 +105,9 @@ export class VisualEditor extends Component {
               <div class="ve-carousel-head">
                 <span class="ve-carousel-label" aria-hidden="true">▦</span>
                 <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
+                ${this.props.onEditCarousel
+                  ? html`<button class="ve-carousel-edit btn btn-sm" type="button">Edit in Studio</button>`
+                  : ""}
               </div>
               <div class="ve-carousel-strip">${thumbs}</div>
             </div>
@@ -147,6 +150,7 @@ export class VisualEditor extends Component {
 
   afterRender() {
     this._bindRemove();
+    this._bindCarouselEdit();
     this._bindDrag();
     this._bindLightbox();
     this._bindInlineRename();
@@ -402,6 +406,16 @@ export class VisualEditor extends Component {
         const next = [...this.props.nodes];
         next.splice(idx, 1);
         this.props.onChange(next);
+      });
+    });
+  }
+
+  _bindCarouselEdit() {
+    if (!this.props.onEditCarousel) return;
+    this.$$(".ve-carousel-edit").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.props.onEditCarousel();
       });
     });
   }

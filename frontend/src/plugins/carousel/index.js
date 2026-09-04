@@ -28,7 +28,7 @@ import { deleteMedia } from "../../api/media.js";
 import { deleteCarousel, getCarousel, saveCarousel } from "../../api/carousel.js";
 import { setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
-import { html, raw } from "../../utils/helpers.js";
+import { html, navigate, raw } from "../../utils/helpers.js";
 import { REFRESH_SVG } from "../../utils/icons.js";
 import {
   backgroundFit,
@@ -130,6 +130,9 @@ export default class CarouselStudioPage extends Component {
   }
 
   actions = {
+    "back-to-post"() {
+      navigate(`/light/posts/${this.state.postId}/edit`);
+    },
     "pick-source"() {
       this._openPicker();
     },
@@ -507,6 +510,7 @@ export default class CarouselStudioPage extends Component {
         : "Rendering…"
       : "Render";
     return html`
+      <button class="btn btn-secondary" data-action="back-to-post">&larr; Back to post</button>
       <button
         id="carousel-render-btn"
         class="btn btn-primary ${dirty && !busy ? "carousel-studio__render-btn--dirty" : ""}"
@@ -549,10 +553,7 @@ export default class CarouselStudioPage extends Component {
   _renderStudio() {
     const { loading, error, postId, source } = this.state;
     const lead = html`
-      <p class="carousel-studio__lead">
-        Building slides for
-        <a href="/light/posts/${String(postId)}/edit">this post</a>.
-      </p>`;
+      <p class="carousel-studio__lead">Building slides for this post.</p>`;
 
     if (loading) {
       return html`

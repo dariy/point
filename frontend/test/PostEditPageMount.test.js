@@ -29,6 +29,7 @@ import {
 } from '../src/store.js';
 import { pluginHost } from '../src/core/pluginHost.js';
 import { clearPostReadCache } from '../src/api/posts.js';
+import { carouselFence } from '../src/utils/postNodes.js';
 
 const settle = () => new Promise(r => setImmediate(r));
 
@@ -409,6 +410,62 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(sent('PUT', '/api/posts/7').length, 1);
       assert.equal(wentTo(), '/posts/harbour-lights');
+    });
+
+    test('carousel-studio flushes a pending edit before navigating', async () => {
+      pluginHost.init([{ id: 'carousel', type: 'route', routes: ['/light/carousel'] }]);
+      await mountPage({ params: { id: '7' } });
+      page.state.hasPendingEdits = true;
+
+      await page._openCarouselStudio();
+      await settle();
+
+      assert.equal(sent('PUT', '/api/posts/7').length, 1);
+      assert.equal(wentTo(), '/light/carousel?post=7');
+    });
+  });
+
+  // ── Carousel Studio entry points ─────────────────────────────────────────
+
+  describe('the carousel plugin', () => {
+    beforeEach(() => {
+      pluginHost.init([{ id: 'carousel', type: 'route', routes: ['/light/carousel'] }]);
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg']),
+      });
+    });
+
+    test('the menu reads "Edit Carousel" once the post already has one', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      assert.equal(q('#carousel-studio-btn').textContent.trim(), 'Edit Carousel');
+    });
+
+    test('the menu reads "Carousel Studio" for a post without one', async () => {
+      routes['GET /api/posts/7'] = () => POST();
+      await mountPage({ params: { id: '7' } });
+
+      assert.equal(q('#carousel-studio-btn').textContent.trim(), 'Carousel Studio');
+    });
+
+    test('the visual editor card offers Edit in Studio and it flushes before navigating', async () => {
+      await mountPage({ params: { id: '7' } });
+      page.state.hasPendingEdits = true;
+
+      click(q('.ve-carousel-edit'));
+      await settle();
+
+      assert.equal(sent('PUT', '/api/posts/7').length, 1);
+      assert.equal(wentTo(), '/light/carousel?post=7');
+    });
+
+    test('the card has no Edit in Studio affordance with the plugin disabled', async () => {
+      pluginHost.init([]);
+      await mountPage({ params: { id: '7' } });
+
+      assert.equal(q('.ve-carousel-edit'), null);
+      assert.equal(q('#carousel-studio-btn'), null);
     });
   });
 
