@@ -140,6 +140,62 @@ describe('MediaViewer', () => {
     assert.ok(!slides[0].classList.contains('active'));
   });
 
+  test('carousel-deck panoramic strategy: equal-width slides pan the inner image, clipped to the margin', async () => {
+    const items = [
+      { type: 'image', url: '/slide-1.jpg', carousel: true },
+      { type: 'image', url: '/slide-2.jpg', carousel: true },
+    ];
+    const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
+    viewer.mount();
+    dom.window.innerWidth = 800;
+    const slides = dom.document.querySelectorAll('.carousel-slide');
+    const imgs = dom.document.querySelectorAll('.immersive-bg-image');
+    // Both slices render at 400px — a 200px letterbox margin either side.
+    imgs[0].getBoundingClientRect = () => ({ width: 400 });
+    imgs[1].getBoundingClientRect = () => ({ width: 400 });
+
+    viewer._goTo(1);
+    // The slide BOX never moves in the panoramic path — only the inner <img> —
+    // and both slides are clipped to the shared 200px margin.
+    assert.strictEqual(slides[1].style.transform, '');
+    assert.strictEqual(slides[1].style.clipPath, 'inset(0 200px)');
+    assert.strictEqual(slides[0].style.clipPath, 'inset(0 200px)');
+    assert.notStrictEqual(imgs[0].style.transform, '');
+
+    await new Promise((r) => setTimeout(r, 360));
+    assert.strictEqual(viewer._index, 1);
+    // Settled: no residual offset or clip left on either slide.
+    assert.strictEqual(imgs[0].style.transform, '');
+    assert.strictEqual(imgs[1].style.transform, '');
+    assert.strictEqual(slides[0].style.clipPath, '');
+    assert.strictEqual(slides[1].style.clipPath, '');
+  });
+
+  test('carousel-deck panoramic strategy: mismatched slide widths fall back to the legacy full-viewport pan', async () => {
+    const items = [
+      { type: 'image', url: '/slide-1.jpg', carousel: true },
+      { type: 'image', url: '/slide-2.jpg', carousel: true },
+    ];
+    const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
+    viewer.mount();
+    dom.window.innerWidth = 800;
+    const slides = dom.document.querySelectorAll('.carousel-slide');
+    const imgs = dom.document.querySelectorAll('.immersive-bg-image');
+    imgs[0].getBoundingClientRect = () => ({ width: 400 });
+    imgs[1].getBoundingClientRect = () => ({ width: 300 }); // mismatched -> guard fails
+
+    viewer._goTo(1);
+    // Legacy path: the slide box itself pans by the full viewport width, the
+    // inner <img> is never touched, and no clip-path is applied.
+    assert.strictEqual(slides[1].style.transform, 'translateX(0)');
+    assert.strictEqual(imgs[1].style.transform, '');
+    assert.strictEqual(slides[1].style.clipPath, '');
+    assert.strictEqual(slides[0].style.clipPath, '');
+
+    await new Promise((r) => setTimeout(r, 360));
+    assert.strictEqual(viewer._index, 1);
+  });
+
   test('plain image slides still crossfade (fade-in marker present)', () => {
     const items = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });

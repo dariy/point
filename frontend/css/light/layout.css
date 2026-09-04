@@ -486,7 +486,7 @@ body:has(.light-layout) {
 .light-content {
     flex: 1;
     padding: var(--spacing-xl);
-    max-width: var(--content-max-width);
+    /*max-width: var(--content-max-width);*/
 }
 
 /* Posts list: fixed-viewport layout — table scrolls, pagination stays visible */

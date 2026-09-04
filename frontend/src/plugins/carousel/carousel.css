@@ -84,7 +84,11 @@
   display: flex;
   gap: var(--spacing-xs);
   overflow-x: auto;
+  max-width: 100%;
+  height: 85dvh;
 }
+
+
 
 .carousel-studio__frame {
   flex: 0 0 6rem;

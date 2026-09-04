@@ -41,6 +41,7 @@ const SETTING_GROUPS = [
       "default_theme",
       "show_view_counts",
       "exif_visibility",
+      "transition_strategy",
     ],
   },
 ];
