@@ -122,6 +122,66 @@ describe('mediaFromHtml — explicit <hr> separators still win', () => {
   });
 });
 
+/**
+ * A `:::{.carousel-block}` fence renders to a <div class="carousel-block">
+ * holding N <img> — one per slide. The immersive viewer must expand that into
+ * N media items, not lump the deck into a single text slide. Because a text
+ * node serialises with a trailing `---`, a post that mixes prose and a carousel
+ * always reaches the <hr> path, where the deck fails the "exactly one media"
+ * test — that was the bug.
+ */
+describe('mediaFromHtml — carousel block', () => {
+  const deck = [
+    '<div class="carousel-block">',
+    '<p><img src="/2026/08/slide-1.jpg" alt="slide-1.jpg" loading="lazy" decoding="async"></p>',
+    '<p><img src="/2026/08/slide-2.jpg" alt="slide-2.jpg" loading="lazy" decoding="async"></p>',
+    '<p><img src="/2026/08/slide-3.jpg" alt="slide-3.jpg" loading="lazy" decoding="async"></p>',
+    '</div>',
+  ].join('\n');
+
+  test('a lone deck expands to one media item per slide', () => {
+    assert.deepStrictEqual(types(mediaFromHtml(deck)), ['image', 'image', 'image']);
+  });
+
+  test('slide order and urls survive expansion', () => {
+    assert.deepStrictEqual(
+      mediaFromHtml(deck).map((i) => i.url),
+      ['/2026/08/slide-1.jpg', '/2026/08/slide-2.jpg', '/2026/08/slide-3.jpg'],
+    );
+  });
+
+  test('deck slides are marked carousel so the viewer pans, not fades', () => {
+    assert.deepStrictEqual(
+      mediaFromHtml(deck).map((i) => i.carousel),
+      [true, true, true],
+    );
+  });
+
+  test('only deck slides get the carousel mark, not neighbouring images', () => {
+    const html = `<img src="/2026/08/lone.jpg" alt="lone">\n<hr>\n${deck}`;
+    assert.deepStrictEqual(
+      mediaFromHtml(html).map((i) => i.carousel),
+      [undefined, true, true, true],
+    );
+  });
+
+  test('prose around a deck stays its own slide (deck between <hr>)', () => {
+    const html = `<p>Intro.</p>\n<hr>\n${deck}\n<hr>\n<p>Outro.</p>`;
+    assert.deepStrictEqual(
+      types(mediaFromHtml(html)),
+      ['html', 'image', 'image', 'image', 'html'],
+    );
+  });
+
+  test('deck sharing a segment with prose still expands, prose splits off', () => {
+    const html = `<p>Intro.</p>\n${deck}\n<hr>\n<p>Outro.</p>`;
+    assert.deepStrictEqual(
+      types(mediaFromHtml(html)),
+      ['html', 'image', 'image', 'image', 'html'],
+    );
+  });
+});
+
 describe('splitTopLevelBlocks', () => {
   test('keeps nested markup inside its parent block', () => {
     const blocks = splitTopLevelBlocks('<div><p>a</p><p>b</p></div><p>c</p>');

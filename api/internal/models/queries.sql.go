@@ -556,6 +556,16 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) erro
 	return err
 }
 
+const deleteCarouselByPostID = `-- name: DeleteCarouselByPostID :exec
+DELETE FROM carousels
+WHERE post_id = ?
+`
+
+func (q *Queries) DeleteCarouselByPostID(ctx context.Context, postID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCarouselByPostID, postID)
+	return err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM sessions
 WHERE expires_at < CURRENT_TIMESTAMP
@@ -671,6 +681,28 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 		&i.RevokedAt,
 		&i.Username,
 		&i.DisplayName,
+	)
+	return i, err
+}
+
+const getCarouselByPostID = `-- name: GetCarouselByPostID :one
+
+SELECT id, post_id, doc, created_at, updated_at FROM carousels
+WHERE post_id = ? LIMIT 1
+`
+
+// CAROUSELS
+// One Carousel Studio document per post. doc is opaque JSON, stored and
+// returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
+func (q *Queries) GetCarouselByPostID(ctx context.Context, postID int64) (Carousel, error) {
+	row := q.db.QueryRowContext(ctx, getCarouselByPostID, postID)
+	var i Carousel
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.Doc,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -2257,6 +2289,31 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
 	return err
+}
+
+const upsertCarousel = `-- name: UpsertCarousel :one
+INSERT INTO carousels (post_id, doc, created_at, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(post_id) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
+RETURNING id, post_id, doc, created_at, updated_at
+`
+
+type UpsertCarouselParams struct {
+	PostID int64  `json:"post_id"`
+	Doc    string `json:"doc"`
+}
+
+func (q *Queries) UpsertCarousel(ctx context.Context, arg UpsertCarouselParams) (Carousel, error) {
+	row := q.db.QueryRowContext(ctx, upsertCarousel, arg.PostID, arg.Doc)
+	var i Carousel
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.Doc,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const upsertSecret = `-- name: UpsertSecret :exec

@@ -3,7 +3,7 @@
 Two directions, both implemented and gated behind the `instagram` plugin:
 
 - **Cross-posting (outbound)** — publish a Point post's photos to an Instagram
-  Business/Creator account (single image or ≤10-image carousel) automatically on
+  Business/Creator account (single image or ≤20-image carousel) automatically on
   publish or on demand.
 - **Import (inbound)** — pull the connected account's existing posts into Point as
   drafts, re-runnable as an idempotent sync.
@@ -19,7 +19,7 @@ OAuth proxy or infrastructure.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Auth model | Self-hoster's own Meta app (App ID + Secret) + OAuth redirect → long-lived token | Self-contained; no Point infra; no Meta app review needed in Development mode |
-| Media types | Single image + carousel (≤10) | Covers photo-blog posts; video deferred |
+| Media types | Single image + carousel (≤20) | Covers photo-blog posts; video deferred |
 | Trigger | Per-post opt-in toggle, auto on publish (manual & scheduled), plus manual "Publish now" | Covers all publish surfaces |
 
 ### How it works (Graph API v25.0, `api/internal/services/instagram_service.go`)

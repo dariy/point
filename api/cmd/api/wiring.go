@@ -128,6 +128,7 @@ type AppHandlers struct {
 	NavMenu   *api.NavMenuHandler
 	Instagram *api.InstagramHandler
 	WebAuthn  *api.WebAuthnHandler
+	Carousel  *api.CarouselHandler
 }
 
 // initHandlers constructs every handler in AppHandlers from the wired services.
@@ -175,5 +176,6 @@ func initHandlers(cfg config.Config, repo repository.Repository, svcs *AppServic
 		NavMenu:   api.NewNavMenuHandler(svcs.Settings, svcs.Tag),
 		Instagram: api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg),
 		WebAuthn:  api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg, repo),
+		Carousel:  api.NewCarouselHandler(repo),
 	}
 }

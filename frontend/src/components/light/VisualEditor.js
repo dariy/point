@@ -77,6 +77,40 @@ export class VisualEditor extends Component {
             </div>
             ${exifPanel}
           </div>`;
+        } else if (node.type === "carousel") {
+          // Read-only card. Editing slides is Carousel Studio's job, not the
+          // editor's — but the card must show every path it holds so a Visual
+          // mode round-trip (see serializeNodes) never silently drops one.
+          const paths = node.paths || [];
+          const mediaByPath = this.props.mediaByPath || {};
+          const thumbs = paths
+            .map((path) => {
+              const media = mediaByPath[path];
+              return html`<img class="ve-thumb" ${thumbAttrs(path, {
+                sizes: VE_THUMB_SIZES,
+                width: media?.width,
+                height: media?.height,
+              })}
+                   alt="${path.split("/").pop()}"
+                   data-full="${path}"
+                   loading="lazy" decoding="async" draggable="false">`;
+            });
+          return html`
+          ${insertZone(i)}
+          <div class="ve-card ve-card--carousel" data-index="${i}">
+            <div class="ve-handle" title="Drag to reorder">
+              <span class="ve-handle-dots"></span>
+            </div>
+            <div class="ve-carousel-body">
+              <div class="ve-carousel-head">
+                <span class="ve-carousel-label" aria-hidden="true">▦</span>
+                <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
+              </div>
+              <div class="ve-carousel-strip">${thumbs}</div>
+            </div>
+            <button class="ve-remove" data-index="${i}" type="button"
+                    aria-label="Remove carousel block" title="Remove">&times;</button>
+          </div>`;
         } else {
           return html`
           ${insertZone(i)}
@@ -274,6 +308,11 @@ export class VisualEditor extends Component {
     return nodes
       .map((node, i) => {
         if (node.type === "image") return node.path;
+        if (node.type === "carousel") {
+          // Read-only in the editor: emit the paths back untouched, in the
+          // blank-line form the render contract requires (postNodes.js).
+          return `:::{.carousel-block}\n\n${(node.paths || []).join("\n\n")}\n\n:::`;
+        }
         const card = this.container.querySelector(
           `.ve-card[data-index="${i}"]`,
         );

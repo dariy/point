@@ -18,6 +18,8 @@
  * @property {string} [url]   Present on image/video/audio items.
  * @property {string} [alt]   Present on image items lifted from an <img>.
  * @property {string} [html]  Present on 'html' items.
+ * @property {boolean} [carousel]  True on image slides expanded from a
+ *   `:::{.carousel-block}` deck — the viewer pans between these, never fades.
  */
 
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
@@ -80,6 +82,13 @@ export function extractMedia(html) {
   }
   return items;
 }
+
+/**
+ * The class on the fenced div that wraps a Carousel Studio slide deck. Kept in
+ * sync with CAROUSEL_BLOCK_CLASS in postNodes.js — duplicated rather than
+ * imported so this module stays dependency-free for the preload path.
+ */
+const CAROUSEL_BLOCK_RE = /class="[^"]*\bcarousel-block\b[^"]*"/;
 
 /** Elements that never have a closing tag, for the top-level block scanner. */
 const VOID_TAGS = new Set([
@@ -156,7 +165,15 @@ function blocksToItems(blocks) {
     const mediaOnly = blockMedia.length > 0 && residual.trim().length === 0;
     if (mediaOnly) {
       flush();
-      items.push(...blockMedia);
+      // Slides lifted from a `:::{.carousel-block}` deck are marked so the
+      // immersive viewer pans between them instead of crossfading — the studio
+      // splits one photo into continuity-matched slices, so a fade through the
+      // backdrop would break the illusion of a single image.
+      const fromCarousel = CAROUSEL_BLOCK_RE.test(block);
+      for (const item of blockMedia) {
+        if (fromCarousel && item.type === "image") item.carousel = true;
+        items.push(item);
+      }
     } else {
       pending.push(block);
     }
@@ -187,6 +204,14 @@ export function mediaFromHtml(html) {
     for (const segment of segments) {
       const trimmed = segment.trim();
       if (!trimmed) continue;
+      // A carousel block holds N images that ARE N slides — the media-only
+      // segmentation is what expands it. Left to the rules below it would fail
+      // the "exactly one media" test and lump the whole deck into one text
+      // slide (any surrounding prose in the same segment still splits off).
+      if (CAROUSEL_BLOCK_RE.test(trimmed)) {
+        items.push(...blocksToItems(splitTopLevelBlocks(trimmed)));
+        continue;
+      }
       const segmentMedia = extractMedia(trimmed);
       const text = stripHtml(trimmed).replace(/&nbsp;/g, " ").trim();
       if (segmentMedia.length === 1 && (text.length === 0 || text === segmentMedia[0].url)) {

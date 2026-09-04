@@ -1,0 +1,55 @@
+/* ===========================
+   Carousel block — public rendering of the :::{.carousel-block} fence
+   ===========================
+
+   The Carousel Studio (a DefaultEnabled:false plugin) writes a designed slide
+   deck into post content as a `:::{.carousel-block}` fenced div of bare media
+   paths, which the markdown pipeline renders to:
+
+       <div class="carousel-block">
+         <p><img src="/…/slide-1.jpg" …></p>
+         <p><img src="/…/slide-2.jpg" …></p>
+       </div>
+
+   Published posts must stay styled for visitors whether or not the admin still
+   has the studio switched on, so this partial lives in the MAIN public bundle
+   (scripts/build-css.sh), never in the plugin's css/p/ chunk. The immersive
+   viewer renders these slides itself (postMedia.js expands the block into its
+   N media items); this file only covers the in-article, non-immersive view.
+
+   Namespace note: `.carousel-*` belongs to the immersive/lightbox viewer
+   (frontend/css/public/carousel.css → viewer.css). This block is
+   `.carousel-block` and owns nothing else. */
+
+.post-content .carousel-block {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin: var(--spacing-2xl) 0;
+    padding-bottom: var(--spacing-sm);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Each slide is a paragraph the markdown pipeline wrapped around one image.
+   Drop the article paragraph spacing and let the slide size the track. */
+.post-content .carousel-block > p {
+    flex: 0 0 min(80%, 22rem);
+    margin: 0;
+    scroll-snap-align: center;
+}
+
+.post-content .carousel-block img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* A single-slide deck has nothing to scroll — centre it and let it breathe. */
+.post-content .carousel-block > p:only-child {
+    flex-basis: min(100%, 30rem);
+    margin: 0 auto;
+    scroll-snap-align: none;
+}

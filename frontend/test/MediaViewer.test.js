@@ -119,6 +119,35 @@ describe('MediaViewer', () => {
     assert.ok(slides[2].innerHTML.includes('<audio src="/a.mp3"'));
   });
 
+  test('carousel-deck slides pan between each other without a crossfade', async () => {
+    const items = [
+      { type: 'image', url: '/slide-1.jpg', carousel: true },
+      { type: 'image', url: '/slide-2.jpg', carousel: true },
+    ];
+    const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
+    viewer.mount();
+    const slides = dom.document.querySelectorAll('.carousel-slide');
+
+    viewer._goTo(1);
+    // The seamless step never tags the incoming slide with the crossfade
+    // marker, and the outgoing slide is never dimmed to transparent.
+    assert.ok(!slides[1].classList.contains('immersive-fade-in'));
+    assert.notStrictEqual(slides[0].style.opacity, '0');
+
+    await new Promise((r) => setTimeout(r, 360));
+    assert.strictEqual(viewer._index, 1);
+    assert.ok(slides[1].classList.contains('active'));
+    assert.ok(!slides[0].classList.contains('active'));
+  });
+
+  test('plain image slides still crossfade (fade-in marker present)', () => {
+    const items = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
+    const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
+    viewer.mount();
+    viewer._goTo(1);
+    assert.ok(dom.document.querySelectorAll('.carousel-slide')[1].classList.contains('immersive-fade-in'));
+  });
+
   test('double tap to zoom', () => {
     const items = [{ type: 'image', url: '/a.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });

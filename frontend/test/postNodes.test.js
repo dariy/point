@@ -2,6 +2,12 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { parseNodes, serializeNodes, firstImagePath } from '../src/utils/postNodes.js';
 
+const CAROUSEL_ONE = ':::{.carousel-block}\n\n/2026/08/slide-1.jpg\n\n:::';
+const CAROUSEL_TWO =
+  ':::{.carousel-block}\n\n/2026/08/slide-1.jpg\n\n/2026/08/slide-2.jpg\n\n:::';
+const tenPaths = Array.from({ length: 10 }, (_, i) => `/2026/08/slide-${i + 1}.jpg`);
+const CAROUSEL_TEN = `:::{.carousel-block}\n\n${tenPaths.join('\n\n')}\n\n:::`;
+
 describe('parseNodes', () => {
   test('a bare media path on its own line becomes an image node', () => {
     assert.deepStrictEqual(parseNodes('/2024/05/beach.jpg'), [
@@ -81,5 +87,76 @@ describe('firstImagePath', () => {
     assert.strictEqual(firstImagePath('just words'), null);
     assert.strictEqual(firstImagePath(''), null);
     assert.strictEqual(firstImagePath(undefined), null);
+  });
+});
+
+describe('carousel block', () => {
+  test('a :::{.carousel-block} fence parses to one carousel node, paths in order', () => {
+    assert.deepStrictEqual(parseNodes(CAROUSEL_TWO), [
+      { type: 'carousel', paths: ['/2026/08/slide-1.jpg', '/2026/08/slide-2.jpg'] },
+    ]);
+  });
+
+  test('slides never leak out as loose image nodes', () => {
+    const nodes = parseNodes(CAROUSEL_TWO);
+    assert.strictEqual(nodes.length, 1);
+    assert.strictEqual(nodes.filter((n) => n.type === 'image').length, 0);
+  });
+
+  test('serializes back byte-identically in the blank-line form', () => {
+    assert.strictEqual(serializeNodes(parseNodes(CAROUSEL_TWO)), CAROUSEL_TWO);
+    assert.strictEqual(serializeNodes(parseNodes(CAROUSEL_ONE)), CAROUSEL_ONE);
+    assert.strictEqual(serializeNodes(parseNodes(CAROUSEL_TEN)), CAROUSEL_TEN);
+  });
+
+  test('round trips: fence alone, one path and ten', () => {
+    for (const md of [CAROUSEL_ONE, CAROUSEL_TWO, CAROUSEL_TEN]) {
+      assert.deepStrictEqual(parseNodes(serializeNodes(parseNodes(md))), parseNodes(md));
+    }
+  });
+
+  test('round trips with a paragraph above', () => {
+    const md = `Intro.\n\n${CAROUSEL_TWO}`;
+    assert.deepStrictEqual(parseNodes(md), [
+      { type: 'text', text: 'Intro.' },
+      { type: 'carousel', paths: ['/2026/08/slide-1.jpg', '/2026/08/slide-2.jpg'] },
+    ]);
+    assert.deepStrictEqual(parseNodes(serializeNodes(parseNodes(md))), parseNodes(md));
+  });
+
+  test('round trips with a paragraph below', () => {
+    const md = `${CAROUSEL_TWO}\n\nOutro.`;
+    assert.deepStrictEqual(parseNodes(md), [
+      { type: 'carousel', paths: ['/2026/08/slide-1.jpg', '/2026/08/slide-2.jpg'] },
+      { type: 'text', text: 'Outro.' },
+    ]);
+    assert.deepStrictEqual(parseNodes(serializeNodes(parseNodes(md))), parseNodes(md));
+  });
+
+  test('round trips with a paragraph above and below', () => {
+    const md = `Intro.\n\n${CAROUSEL_TWO}\n\nOutro.`;
+    assert.deepStrictEqual(parseNodes(md), [
+      { type: 'text', text: 'Intro.' },
+      { type: 'carousel', paths: ['/2026/08/slide-1.jpg', '/2026/08/slide-2.jpg'] },
+      { type: 'text', text: 'Outro.' },
+    ]);
+    assert.deepStrictEqual(parseNodes(serializeNodes(parseNodes(md))), parseNodes(md));
+  });
+
+  test('an image directly above the fence is its own node, not swallowed', () => {
+    const md = `/2026/08/cover.jpg\n${CAROUSEL_ONE}`;
+    assert.deepStrictEqual(parseNodes(md), [
+      { type: 'image', path: '/2026/08/cover.jpg' },
+      { type: 'carousel', paths: ['/2026/08/slide-1.jpg'] },
+    ]);
+  });
+
+  test('an unterminated fence keeps its text instead of losing it', () => {
+    const md = ':::{.carousel-block}\n\n/2026/08/slide-1.jpg\n\nmore words';
+    const nodes = parseNodes(md);
+    assert.strictEqual(nodes.length, 1);
+    assert.strictEqual(nodes[0].type, 'text');
+    assert.match(nodes[0].text, /carousel-block/);
+    assert.match(nodes[0].text, /slide-1\.jpg/);
   });
 });

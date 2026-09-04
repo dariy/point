@@ -73,6 +73,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 | Preview links | Generate a time-limited, shareable URL to let collaborators or clients review an unpublished post. |
 | View count | Each post tracks how many times it has been viewed, visible in the admin list and post detail. |
 | SEO meta description | Per-post meta description field for search engine snippet control. |
+| Carousel block | A `:::{.carousel-block}` fence wrapping bare media paths renders to a grouped `<div class="carousel-block">` of images — the output contract for the staged **Carousel Studio** Instagram-carousel builder. *Full details: [Carousel Studio](./features/carousel-studio.md)* |
 
 ---
 

@@ -194,6 +194,7 @@ export default [
         FormData: "readonly",
         Blob: "readonly",
         File: "readonly",
+        createImageBitmap: "readonly",
         crypto: "readonly",
         TextEncoder: "readonly",
         TextDecoder: "readonly",

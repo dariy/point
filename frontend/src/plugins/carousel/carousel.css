@@ -1,0 +1,120 @@
+/*
+ * Carousel Studio — admin builder styles.
+ *
+ * Auto-bundled to css/p/carousel.css by scripts/build-css.sh and loaded only
+ * when the plugin is enabled. Public rendering of the :::{.carousel-block}
+ * output is a separate concern and does NOT live here — the plugin is off by
+ * default and visitors must still get styled slides.
+ */
+
+.carousel-studio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.carousel-studio__lead {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.carousel-studio__stage {
+  aspect-ratio: 4 / 5;
+  max-width: 22rem;
+  border: var(--border-width) dashed var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-card);
+}
+
+.carousel-studio--empty {
+  padding: var(--spacing-lg) 0;
+}
+
+.carousel-studio__pick {
+  padding: var(--spacing-lg) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+}
+
+.carousel-studio__builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* The 1080·n × 1350 strip: source shown centre-cropped to the combined deck
+ * aspect (background-image is set from JS), column dividers and per-slide
+ * safe-area boxes drawn on top. */
+.carousel-studio__stage {
+  position: relative;
+  width: 100%;
+  background-color: var(--surface-card);
+  background-size: cover;
+  background-position: center;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.carousel-studio__divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed color-mix(in srgb, var(--color-primary) 70%, transparent);
+  pointer-events: none;
+}
+
+.carousel-studio__safe {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  pointer-events: none;
+}
+
+.carousel-studio__filmstrip,
+.carousel-studio__slides {
+  display: flex;
+  gap: var(--spacing-xs);
+  overflow-x: auto;
+}
+
+.carousel-studio__frame {
+  flex: 0 0 6rem;
+  background-color: var(--surface-card);
+  background-repeat: no-repeat;
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+}
+
+.carousel-studio__slide {
+  flex: 0 0 8rem;
+  height: auto;
+  border-radius: var(--border-radius);
+}
+
+.carousel-studio__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: flex-end;
+}
+
+.carousel-studio__control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+}
+
+.carousel-studio__control--check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.carousel-studio__subhead {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}

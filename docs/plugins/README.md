@@ -33,6 +33,10 @@ itself works (enabled-only manifest, build pipeline, admin toggling), see
 - [immersive-share](immersive-share.md) — share button in the media viewer
 - [slideshow](slideshow.md) — auto-advancing slideshow in the media viewer
 
+## Admin studios
+
+- [carousel](carousel.md) — `/light/carousel` Instagram carousel builder in the post editor (off by default)
+
 ## Admin routes (core, always enabled)
 
 - [media-library](media-library.md) — `/light/media`

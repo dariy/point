@@ -369,3 +369,39 @@ func TestDefaultPresets(t *testing.T) {
 		}
 	}
 }
+
+// The carousel plugin ships as a disabled route plugin: its admin studio at
+// /light/carousel and the /api/carousel prefix it will own are both declared on
+// one descriptor, and nothing about it is on by default.
+func TestRegistry_CarouselDescriptor(t *testing.T) {
+	d, ok := Get("carousel")
+	if !ok {
+		t.Fatal("carousel plugin missing from the registry")
+	}
+	if d.Type != TypeRoute {
+		t.Errorf("carousel Type = %q, want %q", d.Type, TypeRoute)
+	}
+	if d.DefaultEnabled {
+		t.Error("carousel must ship disabled — visitors get the block styling, admins opt into the builder")
+	}
+	if d.EntryName != "carousel" {
+		t.Errorf("carousel EntryName = %q, want \"carousel\"", d.EntryName)
+	}
+	want := map[string]bool{"/light/carousel": true, "/api/carousel": true}
+	got := map[string]bool{}
+	for _, r := range d.Routes {
+		got[r] = true
+	}
+	for r := range want {
+		if !got[r] {
+			t.Errorf("carousel Routes missing %q (have %v)", r, d.Routes)
+		}
+	}
+	// The route is param-less on purpose: plugin admin routes are merged verbatim
+	// and the page title is taken from the last path segment.
+	for _, r := range d.Routes {
+		if strings.Contains(r, ":") {
+			t.Errorf("carousel route %q has a path param — the post id belongs in the query string", r)
+		}
+	}
+}
