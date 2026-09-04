@@ -183,11 +183,44 @@ describe('CarouselStudioPage', () => {
     assert.ok(el.querySelector('.carousel-studio--empty'), 'falls back to empty state');
   });
 
-  test('the page titles itself "Carousel Studio"', async () => {
+  test('the header shows a Posts / <post title> / Carousel Studio breadcrumb', async () => {
     const el = await mount({ post: '42' });
+    const crumbs = [...el.querySelectorAll('.light-header h1 .breadcrumb-link, .light-header h1 .breadcrumb-current')]
+      .map((n) => n.textContent.trim());
+    assert.deepStrictEqual(crumbs, ['Posts', 'A post', 'Carousel Studio']);
+    assert.equal(el.querySelector('.breadcrumb-link[href="/light/posts"]')?.textContent.trim(), 'Posts');
+    assert.equal(el.querySelector('.breadcrumb-link[href="/light/posts/42/edit"]')?.textContent.trim(), 'A post');
+  });
+
+  test('the post-title crumb is left out — not a placeholder — before the post loads', async () => {
+    installFetch([
+      [/\/api\/posts\/42/, { body: POST }],
+      [/\/api\/carousel/, { status: 404, body: { message: 'no carousel' } }],
+    ]);
+    dom.location.pathname = '/light/carousel';
+    const el = dom.document.createElement('div');
+    dom.document.body.appendChild(el);
+    page = new CarouselStudioPage(el, { params: {}, query: { post: '42' } });
+    page.mount();
+
     assert.equal(
-      el.querySelector('.light-header h1')?.textContent.trim(),
-      'Carousel Studio',
+      el.querySelector('.light-header h1 .breadcrumb-link[href="/light/posts/42/edit"]'),
+      null,
+      'no post-title crumb while the post is still loading',
+    );
+    assert.deepStrictEqual(
+      [...el.querySelectorAll('.light-header h1 .breadcrumb-link, .light-header h1 .breadcrumb-current')]
+        .map((n) => n.textContent.trim()),
+      ['Posts', 'Carousel Studio'],
+    );
+
+    await settle();
+    await settle();
+
+    assert.equal(
+      el.querySelector('.light-header h1 .breadcrumb-link[href="/light/posts/42/edit"]')?.textContent.trim(),
+      'A post',
+      'fills in the real title once loaded',
     );
   });
 
