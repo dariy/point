@@ -24,17 +24,27 @@ import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 /** @typedef {import('../../utils/helpers.js').Slot} Slot */
 
 /**
+ * One crumb in a `breadcrumbs` list: `href` navigates there, or is omitted
+ * for the current page (rendered as plain text, not a link).
+ *
+ * @typedef {{ label: string, href?: string }} Breadcrumb
+ */
+
+/**
  * Shared markup for admin pages, for use inside component.render().
  *
  * `title`, `actions`, `banner` and `content` are markup slots: pass html``
  * output. A plain string is escaped, which is the safe default — a page that
- * wants markup there says so with the tag.
+ * wants markup there says so with the tag. Pass `breadcrumbs` instead of
+ * `title` to render a trail (e.g. "Posts / My Post / Carousel Studio")
+ * instead of a plain heading.
  *
- * @param {{ title?: Slot, actions?: Slot, banner?: Slot, content?: Slot, contentClass?: string }} slots
+ * @param {{ title?: Slot, breadcrumbs?: Breadcrumb[], actions?: Slot, banner?: Slot, content?: Slot, contentClass?: string }} slots
  * @returns {import('../../utils/helpers.js').RawHtml}
  */
 export function adminLayoutTemplate({
   title = "Admin",
+  breadcrumbs = null,
   actions = "",
   banner = "",
   content = "",
@@ -43,13 +53,16 @@ export function adminLayoutTemplate({
   const offline = getOfflineStatus() || {};
   const autosave = getAutosaveStatus() || {};
   const syncPill = renderSyncPill(offline, autosave);
+  const heading = breadcrumbs
+    ? html`<h1 class="header-breadcrumbs">${renderBreadcrumbs(breadcrumbs)}</h1>`
+    : html`<h1>${title}</h1>`;
   return html`
     <div class="light-layout">
       <div id="sidebar-mount"></div>
       <div class="light-main">
         <header class="light-header">
           <div class="header-title-row">
-            <h1>${title}</h1>
+            ${heading}
             ${syncPill}
           </div>
           <div class="header-actions">
@@ -125,6 +138,19 @@ export function setupAdminLayout(component, {
   component.$("#sync-pill-btn")?.addEventListener("click", () => onSyncPillClick());
   component.subscribeStore(onOfflineStatus, () => updateSyncPill(component));
   component.subscribeStore(onAutosaveStatus, () => updateSyncPill(component));
+}
+/**
+ * @param {Breadcrumb[]} crumbs
+ */
+function renderBreadcrumbs(crumbs) {
+  return crumbs.map((crumb, i) => {
+    const sep = i > 0 ? html`<span class="breadcrumb-sep">/</span>` : "";
+    const isLast = i === crumbs.length - 1;
+    const item = crumb.href && !isLast
+      ? html`<a href="${crumb.href}" class="breadcrumb-link">${crumb.label}</a>`
+      : html`<span class="breadcrumb-current">${crumb.label}</span>`;
+    return html`${sep}${item}`;
+  });
 }
 function renderSyncPill(offline, autosave = {}) {
   let text = "";

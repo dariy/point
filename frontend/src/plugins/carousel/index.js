@@ -480,7 +480,7 @@ export default class CarouselStudioPage extends Component {
   // ── Markup ────────────────────────────────────────────────────────────────
 
   render() {
-    const { postId } = this.state;
+    const { postId, post, loading } = this.state;
     if (!postId) {
       return adminLayoutTemplate({
         title: "Carousel Studio",
@@ -494,8 +494,16 @@ export default class CarouselStudioPage extends Component {
       });
     }
 
+    // The post-title crumb is left out rather than filled with a placeholder
+    // — a placeholder swapping to the real title once the post loads reads
+    // as a jump, not a fill-in.
+    const postCrumb = post?.title || (loading ? null : "Untitled");
     return adminLayoutTemplate({
-      title: "Carousel Studio",
+      breadcrumbs: [
+        { label: "Posts", href: "/light/posts" },
+        ...(postCrumb ? [{ label: postCrumb, href: `/light/posts/${postId}/edit` }] : []),
+        { label: "Carousel Studio" },
+      ],
       actions: this._renderActions(),
       content: this._renderStudio(),
     });
