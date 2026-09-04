@@ -14,6 +14,7 @@ import assert from 'node:assert';
 
 import { setupDOM, click, fire } from './helpers/dom.js';
 import { setSettings, setUser } from '../src/store.js';
+import { backgroundFit } from '../src/plugins/carousel/geometry.js';
 
 /** Route `fetch` by URL; unmatched paths 404. */
 function installFetch(routes) {
@@ -322,6 +323,109 @@ describe('CarouselStudioPage', () => {
       assert.equal(saved.length, 1, 'carousel document saved once');
       assert.equal(saved[0].strategy, 'pad');
       assert.equal(saved[0].anchorY, 0.25);
+    });
+  });
+
+  describe('filmstrip/stage background crop', () => {
+    /** A doc of `n` split slides from one source, plus render deps whose
+     *  probe reports a fixed source size — mirrors `sized()` above. */
+    function sized(n, w, h, strategy) {
+      const doc = {
+        version: 1,
+        aspect: '4:5',
+        mode: 'split',
+        strategy,
+        slides: Array.from({ length: n }, () => ({ source: '/2026/08/pano.jpg' })),
+      };
+      const routes = [
+        [/\/api\/posts\/42/, { body: POST }],
+        [/\/api\/carousel/, { body: { post_id: 42, doc } }],
+      ];
+      const deps = { ...fakeRenderDeps(async () => ({})), probeSize: async () => ({ w, h }) };
+      return { routes, deps };
+    }
+
+    /** Parse `"12.3% 45.6%, 100% 100%"` into `[12.3, 45.6]` — the first
+     *  (image) layer only; the second is always the pad hatch. */
+    const firstLayer = (css) =>
+      css.split(',')[0].trim().split(/\s+/).map((v) => Number(v.replace('%', '')));
+
+    test('cover: the stage and every frame carry the computed crop, not a stretch', async () => {
+      const { routes, deps } = sized(3, 4096, 2000, 'cover');
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const stage = el.querySelector('.carousel-studio__stage');
+      const expectedStage = backgroundFit(4096, 2000, '4:5', 3, 'cover', 0.5, 3, 0);
+      assert.deepEqual(firstLayer(stage.style.backgroundSize), expectedStage.size);
+      assert.deepEqual(firstLayer(stage.style.backgroundPosition), expectedStage.position);
+
+      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      assert.equal(frames.length, 3);
+      frames.forEach((frame, i) => {
+        const expected = backgroundFit(4096, 2000, '4:5', 3, 'cover', 0.5, 1, i);
+        assert.deepEqual(firstLayer(frame.style.backgroundSize), expected.size);
+        assert.deepEqual(firstLayer(frame.style.backgroundPosition), expected.position);
+      });
+
+      // Every frame carries the pad-hatch layer too (harmless — hidden
+      // behind an opaque image whenever there's no gap to show it in).
+      frames.forEach((frame) => {
+        assert.match(frame.style.backgroundImage, /repeating-linear-gradient/);
+      });
+    });
+
+    test('exact: the deck sits centred, matching the fit panel readout', async () => {
+      const { routes, deps } = sized(3, 4096, 2000, 'exact');
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const stage = el.querySelector('.carousel-studio__stage');
+      const [, stagePosY] = firstLayer(stage.style.backgroundPosition);
+      assert.equal(firstLayer(stage.style.backgroundPosition)[0], 50);
+      assert.equal(stagePosY, 50); // default anchorY
+
+      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      const first = frames[0];
+      const last = frames[frames.length - 1];
+      const [firstX] = firstLayer(first.style.backgroundPosition);
+      const [lastX] = firstLayer(last.style.backgroundPosition);
+      assert.ok(Math.abs(firstX + lastX - 100) < 1e-6, 'first/last frames mirror the centred trim');
+    });
+
+    test('pad: the padded last frame exposes the hatch layer, not a stretched image', async () => {
+      const { routes, deps } = sized(4, 4096, 2000, 'pad');
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const stage = el.querySelector('.carousel-studio__stage');
+      assert.equal(firstLayer(stage.style.backgroundPosition)[0], 0, 'flush-left, not centred');
+
+      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      const last = frames[frames.length - 1];
+      const [sizeX] = firstLayer(last.style.backgroundSize);
+      const [posX] = firstLayer(last.style.backgroundPosition);
+      // Recover the visible image's right edge inside the 1080-wide frame and
+      // confirm the gap beyond it is the padPx the fit panel reports (224).
+      const boxW = 1080;
+      const bgWpx = (sizeX / 100) * boxW;
+      const offsetXpx = (boxW - bgWpx) * (posX / 100);
+      const imageRightEdgePx = offsetXpx + bgWpx;
+      assert.ok(Math.abs(boxW - imageRightEdgePx - 224) < 1e-6);
+      // The hatch layer is present to fill exactly that gap.
+      assert.match(last.style.backgroundImage, /repeating-linear-gradient/);
+    });
+
+    test('dimensions unknown: falls back to a plain stretch instead of crashing', async () => {
+      const doc = { version: 1, aspect: '4:5', mode: 'split', slides: [{ source: '/x.jpg' }, { source: '/x.jpg' }] };
+      const el = await mount({ post: '42' }, [
+        [/\/api\/posts\/42/, { body: POST }],
+        [/\/api\/carousel/, { body: { post_id: 42, doc } }],
+      ], { renderDeps: { ...fakeRenderDeps(async () => ({})), probeSize: async () => { throw new Error('no'); } } });
+
+      const stage = el.querySelector('.carousel-studio__stage');
+      assert.ok(stage.style.backgroundImage, 'stage still gets an image');
+      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      assert.equal(frames.length, 2);
+      assert.equal(firstLayer(frames[0].style.backgroundPosition)[0], 0);
+      assert.equal(firstLayer(frames[1].style.backgroundPosition)[0], 100);
     });
   });
 

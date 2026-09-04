@@ -14,6 +14,7 @@ import {
   canvasSize,
   sliceRects,
   fitReport,
+  backgroundFit,
   slideCountOptions,
   fitRect,
   safeAreaRect,
@@ -216,6 +217,76 @@ describe('fitReport', () => {
 
   test('exact is infeasible when the source is narrower than one canvas', () => {
     assert.strictEqual(fitReport(900, 3000, 0, '4:5', 'exact').feasible, false);
+  });
+});
+
+describe('backgroundFit', () => {
+  test('cover, no crop: n frames tile evenly with no seam', () => {
+    // 2000×1000 into two 1080×1080 slides: the deck aspect (2160/1080) equals
+    // the source aspect (2000/1000) exactly, so nothing is trimmed in either
+    // direction — every excess is ~0 and every position guards to 0.
+    const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ~ ${b}`);
+    const frame0 = backgroundFit(2000, 1000, '1:1', 2, 'cover', 0.5, 1, 0);
+    const frame1 = backgroundFit(2000, 1000, '1:1', 2, 'cover', 0.5, 1, 1);
+    const stage = backgroundFit(2000, 1000, '1:1', 2, 'cover', 0.5, 2, 0);
+
+    near(frame0.size[0], 200);
+    near(frame0.size[1], 100);
+    near(frame0.position[0], 0);
+    near(frame1.size[0], 200);
+    near(frame1.position[0], 100);
+    near(stage.size[0], 100);
+    near(stage.size[1], 100);
+  });
+
+  test('cover with a real horizontal trim centres on the stage and every frame', () => {
+    // Same source/count as the fitReport downscale case: trimmedW = 3200.
+    const stage = backgroundFit(8000, 2000, '4:5', 3, 'cover', 0.5, 3, 0);
+    assert.strictEqual(stage.position[0], 50);
+    // size matches scale·srcW / (n·dstW) — scale is 0.675 here.
+    assert.ok(Math.abs(stage.size[0] - (8000 * 0.675) / (3 * 1080) * 100) < 1e-9);
+  });
+
+  test('exact centres its trim — the stage sits at 50%, frames step symmetrically', () => {
+    // 4096×2000 exact: n=3, trimmedW=856 (matches the fitReport case above).
+    const stage = backgroundFit(4096, 2000, '4:5', 3, 'exact', 0.5, 3, 0);
+    assert.strictEqual(stage.position[0], 50);
+
+    const first = backgroundFit(4096, 2000, '4:5', 3, 'exact', 0.5, 1, 0);
+    const last = backgroundFit(4096, 2000, '4:5', 3, 'exact', 0.5, 1, 2);
+    // Pixel-exact: every frame shows the same 4096×2000 image at scale 1, so
+    // its size relative to a 1080×1350 frame box is strategy-independent —
+    // only the position (which window of it shows) differs.
+    assert.deepStrictEqual(first.size, last.size);
+    assert.ok(Math.abs(first.size[0] - (4096 / 1080) * 100) < 1e-9);
+    // The crop is centred, so the first and last frame's offsets from their
+    // respective edges are mirror images of each other.
+    assert.ok(Math.abs(first.position[0] + last.position[0] - 100) < 1e-9);
+  });
+
+  test('pad sits flush-left — the stage and the padded last frame both start at 0%', () => {
+    // 4096×2000 pad: n=4, padPx=224 (matches the fitReport case above).
+    const stage = backgroundFit(4096, 2000, '4:5', 4, 'pad', 0.5, 4, 0);
+    assert.strictEqual(stage.position[0], 0);
+    assert.ok(!Object.is(stage.position[0], -0), 'normalized away from -0');
+
+    const last = backgroundFit(4096, 2000, '4:5', 4, 'pad', 0.5, 1, 3);
+    // The image only reaches 4096-3·1080=856px into the last 1080px frame —
+    // recovering that gap from size/position pins the pad hatch's width.
+    const boxW = 1080;
+    const bgWpx = (last.size[0] / 100) * boxW;
+    const offsetXpx = (boxW - bgWpx) * (last.position[0] / 100);
+    const imageRightEdgePx = offsetXpx + bgWpx; // where the source's last pixel lands
+    assert.ok(Math.abs((boxW - imageRightEdgePx) - 224) < 1e-6);
+  });
+
+  test('anchorY drives the vertical position on the stage and every frame alike', () => {
+    for (const anchorY of [0, 0.25, 1]) {
+      const stage = backgroundFit(4000, 5000, '4:5', 4, 'cover', anchorY, 4, 0);
+      const frame = backgroundFit(4000, 5000, '4:5', 4, 'cover', anchorY, 1, 2);
+      assert.ok(Math.abs(stage.position[1] - anchorY * 100) < 1e-9);
+      assert.ok(Math.abs(frame.position[1] - anchorY * 100) < 1e-9);
+    }
   });
 });
 

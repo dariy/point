@@ -29,7 +29,13 @@ import { getCarousel, saveCarousel } from "../../api/carousel.js";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { REFRESH_SVG } from "../../utils/icons.js";
-import { canvasSize, fitReport, safeAreaRect, slideCountOptions } from "./geometry.js";
+import {
+  backgroundFit,
+  canvasSize,
+  fitReport,
+  safeAreaRect,
+  slideCountOptions,
+} from "./geometry.js";
 import {
   applyCarouselBlock,
   emptyDocument,
@@ -48,6 +54,13 @@ const DEFAULT_SLIDES = 3;
 
 /** Clamp a slide count into the studio's bounds. */
 const clampSlides = (v) => Math.min(MAX_SLIDES, Math.max(MIN_SLIDES, Math.floor(v)));
+
+/** Behind the source image on the stage and every filmstrip frame — visible
+ *  only where the image doesn't reach (the `pad` strategy's trailing gap on
+ *  its last slide), so padding reads as a deliberate block rather than a
+ *  stretched or missing image. */
+const PAD_HATCH =
+  "repeating-linear-gradient(45deg, var(--surface-hover) 0 6px, transparent 6px 12px)";
 
 /** Fit-panel radio: the two `cover` variants (free count vs. width-filling
  *  count) plus the two pixel-exact strategies. `fill` stores `strategy: 'cover'`
@@ -429,12 +442,11 @@ export default class CarouselStudioPage extends Component {
       : "";
 
     const strip = Array.from({ length: n }, (_, i) => {
-      const posX = n > 1 ? (i / (n - 1)) * 100 : 0;
       return html`
         <div
           class="carousel-studio__frame"
           data-slice="${String(i)}"
-          style="aspect-ratio:${String(w)}/${String(h)};background-position:${String(posX)}% 50%;background-size:${String(n * 100)}% 100%"
+          style="aspect-ratio:${String(w)}/${String(h)}"
         ></div>`;
     });
 
@@ -609,15 +621,47 @@ export default class CarouselStudioPage extends Component {
 
     // The source image drives both the stage and every filmstrip frame as a
     // CSS background — set from JS so a media path never lands in a style
-    // string the html`` tag can only HTML-escape, not CSS-escape.
-    const { source } = this.state;
+    // string the html`` tag can only HTML-escape, not CSS-escape. Size and
+    // position reproduce the real per-slide crop (`backgroundFit`, mirroring
+    // `sliceRects`) so the preview never lies about what the render will
+    // produce; a hatch layer sits behind the image so `pad`'s trailing gap
+    // reads as a deliberate block instead of stretched or missing image.
+    const { source, n, aspect, anchorY, srcW, srcH } = this.state;
+    const strategy = /** @type {'cover'|'exact'|'pad'} */ (this.state.strategy);
     if (source) {
-      const bg = `url("${encodeURI(source)}")`;
+      const bg = `url("${encodeURI(source)}"), ${PAD_HATCH}`;
       const stage = this.$(".carousel-studio__stage");
-      if (stage) stage.style.backgroundImage = bg;
-      this.$$(".carousel-studio__frame").forEach((el) => {
+      const frames = this.$$(".carousel-studio__frame");
+      const applyBg = (el, size, position) => {
         el.style.backgroundImage = bg;
-      });
+        el.style.backgroundRepeat = "no-repeat, no-repeat";
+        el.style.backgroundSize = `${size[0]}% ${size[1]}%, 100% 100%`;
+        el.style.backgroundPosition = `${position[0]}% ${position[1]}%, 0% 0%`;
+      };
+
+      if (srcW && srcH) {
+        if (stage) {
+          const fit = backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, n, 0);
+          applyBg(stage, fit.size, fit.position);
+        }
+        frames.forEach((el, i) => {
+          const fit = backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, 1, i);
+          applyBg(el, fit.size, fit.position);
+        });
+      } else {
+        // Dimensions not known yet (probe in flight or failed) — no aspect
+        // ratio to compute a real crop from, so fall back to CSS `cover` on
+        // the stage (its declared default) and a plain stretch per frame, as
+        // before. Self-corrects once the probe resolves and re-renders.
+        if (stage) {
+          stage.style.backgroundImage = `url("${encodeURI(source)}")`;
+          stage.style.backgroundRepeat = "no-repeat";
+        }
+        frames.forEach((el, i) => {
+          const posX = n > 1 ? (i / (n - 1)) * 100 : 0;
+          applyBg(el, [n * 100, 100], [posX, 50]);
+        });
+      }
     }
 
     const nInput = /** @type {HTMLInputElement|null} */ (this.$("#carousel-n"));
