@@ -81,7 +81,8 @@ describe('CarouselStudioPage', () => {
   function fakeRenderDeps(upload) {
     return {
       fetchBlob: async () => new Blob(['src']),
-      decode: async () => ({ width: 3000, height: 1000, close() {} }),
+      probeSize: async () => ({ w: 3000, h: 1000 }),
+      decode: async (blob, o) => ({ width: o.resizeWidth, height: o.resizeHeight, close() {} }),
       makeSurface: () => ({ canvas: {}, ctx: { clearRect() {}, drawImage() {} } }),
       encode: async () => new Blob(['jpg']),
       upload,

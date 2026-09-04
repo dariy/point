@@ -4,46 +4,72 @@
  * render.js issues no measurements of its own (all from geometry.js) and
  * touches nothing real: decode, canvas, encode and upload go through an
  * injected `deps` object. These tests drive it with a recording fake and
- * assert the call SEQUENCE — clearRect then drawImage, once per slide — and
- * the surrounding decode/encode/upload contract, not pixels.
+ * assert the call SEQUENCE — clearRect then (pad fill then) drawImage, one
+ * crop-and-resize decode per slide — and the surrounding
+ * decode/probe/encode/upload contract, not pixels.
  */
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import {
-  stripWidth,
   paintSlide,
   renderSplit,
   renderAndUpload,
 } from '../src/plugins/carousel/render.js';
 import { sliceRects, canvasSize } from '../src/plugins/carousel/geometry.js';
 
-/** A ctx that records every call as `[method, ...args]`. */
+/** A ctx that records every call and style assignment as `[name, ...args]`. */
 function recordingCtx(log) {
-  return {
+  const ctx = {
     clearRect: (...a) => log.push(['clearRect', ...a]),
     drawImage: (...a) => log.push(['drawImage', ...a]),
+    fillRect: (...a) => log.push(['fillRect', ...a]),
+    save: () => log.push(['save']),
+    restore: () => log.push(['restore']),
   };
+  for (const prop of ['fillStyle', 'filter']) {
+    let v;
+    Object.defineProperty(ctx, prop, {
+      get: () => v,
+      set: (next) => {
+        v = next;
+        log.push([prop, next]);
+      },
+    });
+  }
+  return ctx;
 }
 
 /**
- * A deps fake: a fixed-size source bitmap, canvases that share the call log,
- * an encoder that returns a labelled blob, and an upload that echoes back a
- * media row.
+ * A deps fake: a fixed natural source size, a decode that records its crop +
+ * resize opts and hands back a bitmap sized to the resize, canvases that share
+ * the call log, an encoder that returns a labelled blob, and an upload that
+ * echoes back a media row.
  */
 function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']) } = {}) {
   const log = [];
+  const decodeCalls = [];
   const closed = { count: 0 };
   const uploads = [];
+  const progress = [];
   const deps = {
     fetchBlob: async (url) => {
       log.push(['fetchBlob', url]);
       return new Blob(['src']);
     },
+    probeSize: async (url) => {
+      log.push(['probeSize', url]);
+      return { w: srcW, h: srcH };
+    },
     decode: async (blob, opts) => {
-      log.push(['decode', opts.resizeWidth, opts.resizeQuality]);
-      return { width: srcW, height: srcH, close: () => { closed.count++; } };
+      decodeCalls.push(opts);
+      log.push(['decode', opts.sx, opts.sy, opts.sw, opts.sh, opts.resizeWidth, opts.resizeHeight]);
+      return {
+        width: opts.resizeWidth,
+        height: opts.resizeHeight,
+        close: () => { closed.count++; },
+      };
     },
     makeSurface: (w, h) => {
       log.push(['makeSurface', w, h]);
@@ -58,89 +84,164 @@ function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']) }
       return { id: uploads.length, path: `/2026/08/${file.name}` };
     },
   };
-  return { deps, log, closed, uploads };
+  return { deps, log, decodeCalls, closed, uploads, progress, onProgress: (p) => progress.push(p) };
 }
 
-describe('stripWidth', () => {
-  test('n · slideWidth, capped', () => {
-    assert.strictEqual(stripWidth(3, '4:5'), 3240);
-    assert.strictEqual(stripWidth(1, '1:1'), 1080);
-    assert.strictEqual(stripWidth(10, '4:5'), 4096); // 10800 clamped to the cap
-  });
-});
-
 describe('paintSlide', () => {
-  test('clears then blits the source rect, in that order', () => {
+  test('no pad: clears then blits the column 1:1', () => {
     const log = [];
     const rect = { sx: 10, sy: 0, sw: 100, sh: 200, dx: 0, dy: 0, dw: 1080, dh: 1350 };
     paintSlide(recordingCtx(log), 'BMP', rect, 1080, 1350);
     assert.deepStrictEqual(log, [
       ['clearRect', 0, 0, 1080, 1350],
-      ['drawImage', 'BMP', 10, 0, 100, 200, 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+    ]);
+  });
+
+  test('pad + solid bg: fills the pad rect from bg.color BEFORE the blit', () => {
+    const log = [];
+    const rect = { dx: 0, dy: 0, dw: 340, dh: 1350, pad: { x: 340, w: 740 } };
+    paintSlide(recordingCtx(log), 'BMP', rect, 1080, 1350, { type: 'solid', color: '#123456' });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['fillStyle', '#123456'],
+      ['fillRect', 340, 0, 740, 1350],
+      ['drawImage', 'BMP', 0, 0, 340, 1350],
+    ]);
+  });
+
+  test('pad + blur bg (the default): stretched blurred column under save/restore, then the blit', () => {
+    const log = [];
+    const rect = { dx: 0, dy: 0, dw: 340, dh: 1350, pad: { x: 340, w: 740 } };
+    paintSlide(recordingCtx(log), 'BMP', rect, 1080, 1350, null);
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['save'],
+      ['filter', 'blur(54px)'],
+      ['drawImage', 'BMP', 0, 0, 340, 1350, 0, 0, 1080, 1350],
+      ['restore'],
+      ['drawImage', 'BMP', 0, 0, 340, 1350],
     ]);
   });
 });
 
 describe('renderSplit', () => {
-  test('decodes once (downscaled), paints clearRect→drawImage per slide, closes the bitmap', async () => {
-    const { deps, log, closed } = fakeDeps({ srcW: 3000, srcH: 1000 });
-    const blobs = await renderSplit('/2026/08/wide.jpg', 3, '4:5', deps);
+  test('one crop-and-resize decode per slide, painted + closed, progress once per slide', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const blobs = await renderSplit(
+      { source: '/2026/08/wide.jpg', n: 3, aspect: '4:5' },
+      f.deps,
+      f.onProgress,
+    );
 
     assert.strictEqual(blobs.length, 3);
-    assert.strictEqual(closed.count, 1, 'bitmap closed exactly once');
+    assert.strictEqual(f.closed.count, 3, 'every bitmap closed');
+    assert.deepStrictEqual(f.progress, [
+      { done: 1, total: 3 },
+      { done: 2, total: 3 },
+      { done: 3, total: 3 },
+    ]);
 
     const [w, h] = canvasSize('4:5');
-    const rects = sliceRects(3000, 1000, 3, '4:5');
-    const expected = [
-      ['fetchBlob', '/2026/08/wide.jpg'],
-      ['decode', 3240, 'high'],
-    ];
-    for (let i = 0; i < 3; i++) {
-      const r = rects[i];
-      expected.push(['makeSurface', w, h]);
-      expected.push(['clearRect', 0, 0, w, h]);
-      expected.push(['drawImage', undefined, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh]);
-      expected.push(['encode', 'image/jpeg', 0.92]);
-    }
-    // drawImage's bitmap arg is the object the fake decode returned; compare
-    // the rest positionally by blanking it.
-    const normalized = log.map((entry) =>
-      entry[0] === 'drawImage' ? ['drawImage', undefined, ...entry.slice(2)] : entry,
+    const rects = sliceRects(3000, 1000, 3, '4:5', {});
+    // The decode call carries the exact source crop rect and resizes straight
+    // to the slide column, so the blit is 1:1.
+    assert.deepStrictEqual(
+      f.decodeCalls.map((o) => [o.sx, o.sy, o.sw, o.sh, o.resizeWidth, o.resizeHeight]),
+      rects.map((r) => [r.sx, r.sy, r.sw, r.sh, r.dw, r.dh]),
     );
-    assert.deepStrictEqual(normalized, expected);
+    assert.ok(f.decodeCalls.every((o) => o.resizeQuality === 'high'));
+
+    const draws = f.log.filter((e) => e[0] === 'drawImage').map((e) => e.slice(2));
+    assert.deepStrictEqual(draws, rects.map((r) => [r.dx, r.dy, r.dw, r.dh]));
+    assert.deepStrictEqual(
+      f.log.filter((e) => e[0] === 'clearRect'),
+      rects.map(() => ['clearRect', 0, 0, w, h]),
+    );
+  });
+
+  test('a 4096-wide source at `exact` decodes 1080px columns at scale 1 — the old cap regression', async () => {
+    const f = fakeDeps({ srcW: 4096, srcH: 1400 });
+    await renderSplit(
+      { source: '/x.jpg', n: 3, aspect: '4:5', strategy: 'exact' },
+      f.deps,
+    );
+    assert.strictEqual(f.decodeCalls.length, 3, 'floor(4096/1080) = 3 slides');
+    for (const o of f.decodeCalls) {
+      assert.strictEqual(o.sw, 1080, 'source column is a full canvas wide');
+      assert.strictEqual(o.resizeWidth, 1080, 'resampled 1:1, not downscaled under a 4096 cap');
+    }
+  });
+
+  test('`pad` fills before it blits on the short tail slide', async () => {
+    const f = fakeDeps({ srcW: 2500, srcH: 1400 });
+    await renderSplit(
+      { source: '/x.jpg', n: 3, aspect: '4:5', strategy: 'pad', bg: { type: 'solid', color: '#abcdef' } },
+      f.deps,
+    );
+    const rects = sliceRects(2500, 1400, 3, '4:5', { strategy: 'pad' });
+    assert.ok(rects[2].pad, 'geometry produced a pad rect for slide 3');
+
+    // The only fillRect in the run belongs to the tail slide, and it precedes
+    // that slide's drawImage.
+    const fillAt = f.log.findIndex((e) => e[0] === 'fillRect');
+    const lastDrawAt = f.log.map((e) => e[0]).lastIndexOf('drawImage');
+    assert.ok(fillAt !== -1 && fillAt < lastDrawAt, 'pad fill comes before the final blit');
+    assert.deepStrictEqual(
+      f.log[fillAt],
+      ['fillRect', rects[2].pad.x, 0, rects[2].pad.w, 1350],
+    );
+  });
+
+  test('anchorY threads through to geometry', async () => {
+    const f = fakeDeps({ srcW: 2000, srcH: 3000 });
+    await renderSplit({ source: '/x.jpg', n: 2, aspect: '1:1', anchorY: 0 }, f.deps);
+    const top = sliceRects(2000, 3000, 2, '1:1', { anchorY: 0 });
+    assert.strictEqual(f.decodeCalls[0].sy, top[0].sy);
   });
 
   test('a null from the encoder is a hard error, not a skipped slide', async () => {
     const { deps } = fakeDeps({ encode: () => null });
     await assert.rejects(
-      () => renderSplit('/x.jpg', 2, '1:1', deps),
+      () => renderSplit({ source: '/x.jpg', n: 2, aspect: '1:1' }, deps),
       /toBlob returned null/,
     );
   });
 
   test('closes the bitmap even when a slide fails', async () => {
     const { deps, closed } = fakeDeps({ encode: () => null });
-    await renderSplit('/x.jpg', 2, '1:1', deps).catch(() => {});
-    assert.strictEqual(closed.count, 1);
+    await renderSplit({ source: '/x.jpg', n: 2, aspect: '1:1' }, deps).catch(() => {});
+    assert.strictEqual(closed.count, 1, 'the one decoded bitmap is closed before the throw');
+  });
+
+  test('skips the probe when the caller already knows the source size', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    await renderSplit(
+      { source: '/x.jpg', n: 2, aspect: '4:5', srcW: 3000, srcH: 1000 },
+      f.deps,
+    );
+    assert.ok(!f.log.some((e) => e[0] === 'probeSize'), 'probeSize not called');
   });
 });
 
 describe('renderAndUpload', () => {
-  test('uploads each slide with post_id set, in deck order', async () => {
-    const { deps, uploads } = fakeDeps();
+  test('uploads each slide with post_id set, in deck order, forwarding progress', async () => {
+    const f = fakeDeps();
     const media = await renderAndUpload(
       { source: '/2026/08/wide.jpg', n: 3, aspect: '4:5', postId: 42 },
-      deps,
+      f.deps,
+      f.onProgress,
     );
 
     assert.deepStrictEqual(
-      uploads.map((u) => u.name),
+      f.uploads.map((u) => u.name),
       ['carousel-42-1.jpg', 'carousel-42-2.jpg', 'carousel-42-3.jpg'],
     );
-    assert.ok(uploads.every((u) => u.meta.post_id === 42));
+    assert.ok(f.uploads.every((u) => u.meta.post_id === 42));
     assert.deepStrictEqual(
       media.map((m) => m.path),
       ['/2026/08/carousel-42-1.jpg', '/2026/08/carousel-42-2.jpg', '/2026/08/carousel-42-3.jpg'],
     );
+    assert.strictEqual(f.progress.length, 3);
   });
 });
