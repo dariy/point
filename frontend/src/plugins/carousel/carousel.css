@@ -51,8 +51,14 @@
   position: relative;
   width: 100%;
   background-color: var(--surface-card);
+  /* Fallback only — used while the source's pixel size is still unknown.
+   * Once it's known, JS sets background-size/-position explicitly per the
+   * chosen strategy (`backgroundFit` in afterRender) so `exact` and `pad`
+   * preview truthfully too; `cover` here happens to already agree with that
+   * computation, which is why this default looks right on its own. */
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   border-radius: var(--border-radius);
   overflow: hidden;
 }

@@ -113,6 +113,57 @@ export function fitReport(srcW, srcH, n, aspect, strategy = 'cover') {
 }
 
 /**
+ * The CSS `background-size`/`background-position` (each an `[x, y]` percent
+ * pair) that reproduces {@link sliceRects}' crop for one box spanning `span`
+ * slide-widths, `offset` slide-widths into the deck — `span=1, offset=i` for
+ * filmstrip frame `i`, `span=n, offset=0` for the whole stage.
+ *
+ * Percentages only: the box's actual rendered pixel size never enters the
+ * arithmetic, so the result holds at any CSS size as long as the box's aspect
+ * ratio is locked to `canvasSize(aspect)[0]*span : canvasSize(aspect)[1]` —
+ * every caller sets that via an inline `aspect-ratio`. This is what lets a
+ * single formula stand in for `cover`'s resample, `exact`'s centred trim and
+ * `pad`'s flush-left tail: `fitReport` already resolved the strategy into a
+ * scale plus a trimmed width/height, centred for `cover`/`exact` and
+ * left-aligned for `pad`; here that trim (and `anchorY`, vertically) become
+ * an offset into the same scaled image every slide's box shares.
+ *
+ * @param {number} srcW @param {number} srcH @param {string} aspect
+ * @param {number} n slide count @param {'cover'|'exact'|'pad'} strategy
+ * @param {number} anchorY 0..1 vertical placement of the crop band in its slack
+ * @param {number} span how many slide-widths the box spans (1 or `n`)
+ * @param {number} offset how many slide-widths precede this box (0..`n`-1)
+ * @returns {{size: [number, number], position: [number, number]}} percent pairs
+ */
+export function backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, span, offset) {
+  const [dstW, dstH] = canvasSize(aspect);
+  const { scale, trimmedW, trimmedH } = fitReport(srcW, srcH, n, aspect, strategy);
+  const hAlign = strategy === 'pad' ? 0 : 0.5;
+
+  const bgW = srcW * scale;
+  const bgH = srcH * scale;
+  const boxW = dstW * span;
+  const boxH = dstH;
+
+  const bgX = -(trimmedW * hAlign * scale) - offset * dstW;
+  const bgY = -(trimmedH * anchorY * scale);
+  const excessX = boxW - bgW;
+  const excessY = boxH - bgH;
+
+  // `0 / -excess` produces -0 (e.g. a centred strategy with no trim, offset
+  // 0) — `=== 0` catches -0 too, so this normalizes it to +0 without touching
+  // any other value.
+  const pct = (v) => (v === 0 ? 0 : v);
+  return {
+    size: [pct((bgW / boxW) * 100), pct((bgH / boxH) * 100)],
+    position: [
+      pct(Math.abs(excessX) < 1e-6 ? 0 : (bgX / excessX) * 100),
+      pct(Math.abs(excessY) < 1e-6 ? 0 : (bgY / excessY) * 100),
+    ],
+  };
+}
+
+/**
  * @typedef {object} SlideCountOption
  * @property {number} n
  * @property {'cover'|'exact'|'pad'} strategy
