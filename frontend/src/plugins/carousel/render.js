@@ -19,7 +19,7 @@
  */
 
 import { canvasSize, sliceRects } from './geometry.js';
-import { uploadMedia } from '../../api/media.js';
+import { deleteMedia, uploadMedia } from '../../api/media.js';
 
 /** Fixed so identical inputs encode to identical bytes → SHA256 dedup reuses
  *  the same media row and re-render is idempotent. */
@@ -45,6 +45,7 @@ const JPEG_TYPE = 'image/jpeg';
  * @property {(w: number, h: number) => { canvas: any, ctx: any }} makeSurface  a fresh canvas + 2D ctx
  * @property {(canvas: any, type: string, quality: number) => Promise<Blob|null>} encode  canvas.toBlob
  * @property {(file: File, meta: object) => Promise<{ id: number, path: string }>} upload
+ * @property {(id: number) => Promise<any>} deleteMedia  used only to unwind a partial upload failure
  */
 
 /**
@@ -79,6 +80,7 @@ export function browserDeps() {
     encode: (canvas, type, quality) =>
       new Promise((resolve) => canvas.toBlob(resolve, type, quality)),
     upload: (file, meta) => uploadMedia(file, meta),
+    deleteMedia: (id) => deleteMedia(id),
   };
 }
 
@@ -132,9 +134,14 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg) {
  * }} spec  `srcW`/`srcH` skip the `probeSize` call when the caller already knows them
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
- * @returns {Promise<Blob[]>} the encoded slides, in deck order
+ * @param {Array<{id:number,path:string}|null>} [keep]  per-slide reuse: a
+ *   truthy entry at index `i` means slide `i`'s inputs are unchanged since the
+ *   last render (see `specHash` in document.js) — skip its decode/encode
+ *   entirely and leave a `null` placeholder in its slot.
+ * @returns {Promise<(Blob|null)[]>} the encoded slides, in deck order — `null`
+ *   at every index `keep` reused
  */
-export async function renderSplit(spec, deps, onProgress) {
+export async function renderSplit(spec, deps, onProgress, keep) {
   const { source, aspect, strategy, anchorY } = spec;
   const bg = spec.bg ?? null;
   const count = Math.max(1, Math.floor(spec.n));
@@ -147,6 +154,11 @@ export async function renderSplit(spec, deps, onProgress) {
   const rects = sliceRects(srcW, srcH, count, aspect, { strategy, anchorY });
   const slides = [];
   for (let i = 0; i < rects.length; i++) {
+    if (keep && keep[i]) {
+      slides.push(null);
+      onProgress?.({ done: i + 1, total: rects.length });
+      continue;
+    }
     const rect = rects[i];
     const bitmap = await deps.decode(blob, {
       sx: rect.sx,
@@ -185,16 +197,36 @@ export async function renderSplit(spec, deps, onProgress) {
  *   srcW?: number, srcH?: number }} spec
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
+ * @param {Array<{id:number,path:string}|null>} [keep]  see `renderSplit` — a
+ *   kept slide is reused verbatim and never uploaded
  * @returns {Promise<Array<{ id: number, path: string }>>}
  */
-export async function renderAndUpload(spec, deps, onProgress) {
-  const blobs = await renderSplit(spec, deps, onProgress);
+export async function renderAndUpload(spec, deps, onProgress, keep) {
+  const blobs = await renderSplit(spec, deps, onProgress, keep);
   const uploaded = [];
-  for (let i = 0; i < blobs.length; i++) {
-    const file = new File([blobs[i]], `carousel-${spec.postId}-${i + 1}.jpg`, {
-      type: JPEG_TYPE,
-    });
-    uploaded.push(await deps.upload(file, { post_id: spec.postId }));
+  // Uploads made *this run* — as opposed to `keep` entries, which already
+  // existed — so a failure partway through can unwind exactly those and
+  // nothing else, leaving no orphaned rows behind (ListOrphanedMedia only
+  // catches uploads with no post_id, and every upload here carries one).
+  const uploadedThisRun = [];
+  try {
+    for (let i = 0; i < blobs.length; i++) {
+      if (keep && keep[i]) {
+        uploaded.push(keep[i]);
+        continue;
+      }
+      const file = new File([blobs[i]], `carousel-${spec.postId}-${i + 1}.jpg`, {
+        type: JPEG_TYPE,
+      });
+      const media = await deps.upload(file, { post_id: spec.postId });
+      uploaded.push(media);
+      uploadedThisRun.push(media);
+    }
+  } catch (err) {
+    if (uploadedThisRun.length) {
+      await Promise.allSettled(uploadedThisRun.map((m) => deps.deleteMedia(m.id)));
+    }
+    throw err;
   }
   return uploaded;
 }

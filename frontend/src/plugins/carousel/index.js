@@ -25,8 +25,9 @@ import {
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
 import { getPost, updatePost } from "../../api/posts.js";
 import { deleteMedia } from "../../api/media.js";
-import { getCarousel, saveCarousel } from "../../api/carousel.js";
+import { deleteCarousel, getCarousel, saveCarousel } from "../../api/carousel.js";
 import { setToast } from "../../store.js";
+import { showConfirm } from "../../utils/dialogs.js";
 import { html, raw } from "../../utils/helpers.js";
 import { REFRESH_SVG } from "../../utils/icons.js";
 import {
@@ -112,11 +113,20 @@ export default class CarouselStudioPage extends Component {
       showGuides: true,
       busy: false,
       rendered: [],
+      renderProgress: null,
+      hasCarousel: false,
     };
     this._picker = null;
     // { path, media_id } for every slide the *saved* document currently points
     // at — the set a re-render supersedes and must clean up (see _render).
     this._priorRendered = [];
+    // The last-loaded/saved CarouselDoc — per-slide specHash comparisons in
+    // _render() skip re-encoding a slide whose inputs haven't changed.
+    this._priorDoc = null;
+    // {source, n, aspect, strategy, anchorY} of the last fully-rendered doc,
+    // or null before anything has ever been rendered — the dirty-state
+    // baseline (see _isDirty).
+    this._savedSpec = null;
   }
 
   actions = {
@@ -125,6 +135,9 @@ export default class CarouselStudioPage extends Component {
     },
     render() {
       this._render();
+    },
+    "remove-carousel"() {
+      this._confirmRemove();
     },
     "fit-chip"(_e, el) {
       this.setState({
@@ -166,7 +179,18 @@ export default class CarouselStudioPage extends Component {
       this._priorRendered = doc.slides
         .map((s) => s.rendered)
         .filter((r) => r && r.media_id);
+      this._priorDoc = doc;
       const first = doc.slides[0];
+      const fullyRendered = doc.slides.length > 0 && doc.slides.every((s) => s.rendered);
+      this._savedSpec = fullyRendered
+        ? {
+            source: first.source,
+            n: doc.slides.length,
+            aspect: doc.aspect,
+            strategy: doc.strategy,
+            anchorY: doc.anchorY,
+          }
+        : null;
       this.setState({
         loading: false,
         post,
@@ -178,6 +202,7 @@ export default class CarouselStudioPage extends Component {
         rendered: doc.slides
           .map((s) => s.rendered && s.rendered.path)
           .filter(Boolean),
+        hasCarousel: Boolean(carousel),
       });
       // The document does not store source pixels — re-probe them so the fit
       // panel has its numbers. The image is cache-warm from the CSS background.
@@ -276,15 +301,47 @@ export default class CarouselStudioPage extends Component {
     };
   }
 
+  /** Whether the current controls disagree with the last fully-rendered doc —
+   *  a stale post fence with nothing on screen saying so, absent this check.
+   *  `null` before anything has ever been rendered: nothing to be dirty against. */
+  _isDirty() {
+    const s = this._savedSpec;
+    if (!s || !this.state.source) return false;
+    const { source, n, aspect, strategy, anchorY } = this.state;
+    return (
+      source !== s.source ||
+      n !== s.n ||
+      aspect !== s.aspect ||
+      strategy !== s.strategy ||
+      anchorY !== s.anchorY
+    );
+  }
+
   async _render() {
     const { postId, post, source, n, aspect, anchorY, srcW, srcH } = this.state;
     const strategy = /** @type {'cover'|'exact'|'pad'} */ (this.state.strategy);
     if (!source || this.state.busy) return;
 
-    this.setState({ busy: true, error: null });
+    this.setState({ busy: true, error: null, renderProgress: { done: 0, total: n } });
     try {
       const deps = this.props.renderDeps || browserDeps();
       const doc = splitDocument({ source, n, aspect, strategy, anchorY });
+
+      // A slide whose specHash matches the prior doc's slide at the same
+      // index has identical inputs (source/crop/fit/bg/aspect/strategy/anchorY)
+      // — reuse its media row rather than re-encode and re-upload it. specHash
+      // folds in the crop band, so a slide-count or aspect change already
+      // misses on every index without any extra bookkeeping here.
+      const priorSlides = this._priorDoc?.slides || [];
+      const keep = doc.slides.map((slide, i) => {
+        const prior = priorSlides[i];
+        if (!prior?.rendered || !Number.isFinite(prior.rendered.media_id)) return null;
+        const hash = specHash(slide, aspect, { strategy, anchorY });
+        return hash === prior.rendered.specHash
+          ? { id: prior.rendered.media_id, path: prior.rendered.path }
+          : null;
+      });
+
       const media = await renderAndUpload(
         {
           source,
@@ -297,6 +354,10 @@ export default class CarouselStudioPage extends Component {
           srcH: srcH || undefined,
         },
         deps,
+        (p) => {
+          if (!this._unmounted) this.setState({ renderProgress: p });
+        },
+        keep,
       );
 
       // Byte-identical slides dedup to one media row server-side (SHA256), so
@@ -324,7 +385,8 @@ export default class CarouselStudioPage extends Component {
       // The previous generation's slides are now unreferenced: orphan detection
       // keys on `post_id IS NULL` and these carry a post_id, so they would sit
       // on disk forever. Delete each superseded row explicitly — but never one
-      // whose path still appears in the post (a slide reused inline, say).
+      // whose path still appears in the post (a slide reused inline, say), and
+      // never one this render just reused via `keep`.
       const keptIds = new Set(media.map((m) => m.id));
       const superseded = this._priorRendered.filter(
         (r) => !keptIds.has(r.media_id) && !finalContent.includes(r.path),
@@ -335,18 +397,80 @@ export default class CarouselStudioPage extends Component {
       this._priorRendered = doc.slides
         .map((s) => s.rendered)
         .filter((r) => r && r.media_id);
+      this._priorDoc = doc;
+      this._savedSpec = { source, n, aspect, strategy, anchorY };
 
       if (this._unmounted) return;
       this.setState({
         busy: false,
+        renderProgress: null,
+        hasCarousel: true,
         post: { ...post, content: finalContent },
         rendered: media.map((m) => m.path),
       });
       setToast({ message: `Carousel rendered — ${media.length} slides.`, type: "success" });
     } catch (err) {
       if (this._unmounted) return;
-      this.setState({ busy: false, error: err?.message || "Render failed." });
+      this.setState({ busy: false, renderProgress: null, error: err?.message || "Render failed." });
       setToast({ message: `Carousel render failed: ${err?.message || err}`, type: "error" });
+    }
+  }
+
+  /** Imperative confirm/prompt plumbing, broken out so a test can override it
+   *  without touching the DOM (see PostEditPage's `_showConfirm` for the same
+   *  pattern). */
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    showConfirm({ title, message, confirmText, variant, onConfirm });
+  }
+
+  _confirmRemove() {
+    this._showConfirm(
+      "Remove carousel",
+      "Delete this carousel? Its slides are removed from the post and their media deleted. This cannot be undone.",
+      "Remove",
+      "danger",
+      () => this._removeCarousel(),
+    );
+  }
+
+  async _removeCarousel() {
+    const { postId, post } = this.state;
+    if (!postId || !post || this.state.busy) return;
+
+    this.setState({ busy: true, error: null });
+    try {
+      await deleteCarousel(postId);
+      const content = applyCarouselBlock(post.content, emptyDocument());
+      const updated = await updatePost(postId, this._postPayload(post, content));
+      const finalContent = updated?.content ?? content;
+
+      const toDelete = this._priorRendered.filter((r) => r.media_id);
+      if (toDelete.length) {
+        await Promise.allSettled(toDelete.map((r) => deleteMedia(r.media_id)));
+      }
+      this._priorRendered = [];
+      this._priorDoc = null;
+      this._savedSpec = null;
+
+      if (this._unmounted) return;
+      this.setState({
+        busy: false,
+        post: { ...post, content: finalContent },
+        source: "",
+        srcW: null,
+        srcH: null,
+        n: DEFAULT_SLIDES,
+        aspect: "4:5",
+        strategy: "cover",
+        anchorY: 0.5,
+        rendered: [],
+        hasCarousel: false,
+      });
+      setToast({ message: "Carousel removed.", type: "success" });
+    } catch (err) {
+      if (this._unmounted) return;
+      this.setState({ busy: false, error: err?.message || "Could not remove carousel." });
+      setToast({ message: `Remove failed: ${err?.message || err}`, type: "error" });
     }
   }
 
@@ -375,16 +499,51 @@ export default class CarouselStudioPage extends Component {
   }
 
   _renderActions() {
-    const { source, busy } = this.state;
+    const { source, busy, renderProgress, hasCarousel } = this.state;
+    const dirty = this._isDirty();
+    const label = busy
+      ? renderProgress
+        ? `Rendering… ${renderProgress.done}/${renderProgress.total}`
+        : "Rendering…"
+      : "Render";
     return html`
       <button
         id="carousel-render-btn"
-        class="btn btn-primary"
+        class="btn btn-primary ${dirty && !busy ? "carousel-studio__render-btn--dirty" : ""}"
         data-action="render"
         ${!source || busy ? "disabled" : ""}
       >
-        ${raw(REFRESH_SVG)}<span class="btn-label">${busy ? "Rendering…" : "Render"}</span>
-      </button>`;
+        ${raw(REFRESH_SVG)}<span class="btn-label">${label}</span>
+      </button>
+      ${busy && renderProgress
+        ? html`
+            <div
+              class="carousel-studio__progress"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="${String(renderProgress.total)}"
+              aria-valuenow="${String(renderProgress.done)}"
+            >
+              <div
+                class="carousel-studio__progress-bar"
+                style="width:${String(Math.round((renderProgress.done / renderProgress.total) * 100))}%"
+              ></div>
+            </div>`
+        : ""}
+      ${dirty && !busy
+        ? html`<span class="carousel-studio__dirty-badge" role="status"
+            >Unsaved — press Render</span
+          >`
+        : ""}
+      ${hasCarousel
+        ? html`<button
+            class="btn btn-danger"
+            data-action="remove-carousel"
+            ${busy ? "disabled" : ""}
+          >
+            Remove carousel
+          </button>`
+        : ""}`;
   }
 
   _renderStudio() {

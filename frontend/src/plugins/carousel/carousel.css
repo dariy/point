@@ -197,3 +197,29 @@
   font-size: var(--font-size-sm);
   color: var(--color-warning);
 }
+
+/* ── Render lifecycle ────────────────────────────────────────────────────── */
+
+.carousel-studio__render-btn--dirty {
+  outline: 2px solid var(--color-warning);
+  outline-offset: 2px;
+}
+
+.carousel-studio__dirty-badge {
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+}
+
+.carousel-studio__progress {
+  width: 8rem;
+  height: 0.4rem;
+  border-radius: var(--border-radius);
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+
+.carousel-studio__progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.15s ease-out;
+}

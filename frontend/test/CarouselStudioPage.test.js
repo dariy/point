@@ -15,6 +15,7 @@ import assert from 'node:assert';
 import { setupDOM, click, fire } from './helpers/dom.js';
 import { setSettings, setUser } from '../src/store.js';
 import { backgroundFit } from '../src/plugins/carousel/geometry.js';
+import { specHash, splitDocument } from '../src/plugins/carousel/document.js';
 
 /** Route `fetch` by URL; unmatched paths 404. */
 function installFetch(routes) {
@@ -79,7 +80,7 @@ describe('CarouselStudioPage', () => {
    * fixed-size decoded strip, no-op surface, a labelled blob, and an `upload`
    * the test supplies to control which media rows come back.
    */
-  function fakeRenderDeps(upload) {
+  function fakeRenderDeps(upload, deleteMedia) {
     return {
       fetchBlob: async () => new Blob(['src']),
       probeSize: async () => ({ w: 3000, h: 1000 }),
@@ -92,6 +93,7 @@ describe('CarouselStudioPage', () => {
       }),
       encode: async () => new Blob(['jpg']),
       upload,
+      deleteMedia: deleteMedia || (async () => {}),
     };
   }
 
@@ -514,6 +516,190 @@ describe('CarouselStudioPage', () => {
         !calls.some((c) => c.method === 'PUT' && /\/api\/posts\/42$/.test(c.url)),
         'post content was not written',
       );
+    });
+
+    test('a mid-loop upload failure deletes what it uploaded, and touches nothing else', async () => {
+      let n = 0;
+      const deleted = [];
+      const deps = fakeRenderDeps(
+        async () => {
+          n += 1;
+          if (n === 2) throw new Error('upload failed');
+          return { id: 200 + n, path: `/2026/08/new${n}.jpg` };
+        },
+        async (id) => { deleted.push(id); },
+      );
+      await mount({ post: '42' }, routes(), { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      assert.match(page.state.error, /upload failed/);
+      assert.deepEqual(deleted, [201], 'the one slide uploaded before the failure is unwound');
+      assert.ok(
+        !calls.some((c) => c.method === 'PUT' && /\/api\/carousel/.test(c.url)),
+        'nothing was saved after the failed render',
+      );
+      assert.ok(
+        !calls.some((c) => c.method === 'DELETE' && /\/api\/media\/(100|101)$/.test(c.url)),
+        'the pre-existing slides were never touched',
+      );
+    });
+  });
+
+  describe('render lifecycle', () => {
+    test('progress is exposed on state while busy, and cleared once the render settles', async () => {
+      const el = await mount({ post: '42' }, undefined, {
+        renderDeps: fakeRenderDeps(async () => ({ id: 1, path: '/2026/08/s1.jpg' })),
+      });
+      click(el.querySelector('[data-action="pick-source"]'));
+      page._picker.props.onConfirm([{ path: '/2026/08/pano.jpg', width: 3000, height: 1000 }]);
+      await settle();
+
+      const run = page._render();
+      assert.deepEqual(page.state.renderProgress, { done: 0, total: page.state.n });
+      assert.ok(page.state.busy);
+      await run;
+
+      assert.equal(page.state.renderProgress, null);
+      assert.equal(page.state.busy, false);
+    });
+
+    test('changing a control after a render marks the studio dirty; re-rendering clears it', async () => {
+      const doc = {
+        version: 1,
+        aspect: '4:5',
+        mode: 'split',
+        slides: [
+          { source: '/2026/08/w.jpg', rendered: { path: '/2026/08/old1.jpg', media_id: 100 } },
+          { source: '/2026/08/w.jpg', rendered: { path: '/2026/08/old2.jpg', media_id: 101 } },
+        ],
+      };
+      const routes = [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: POST })],
+        [/\/api\/carousel/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } })],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+      let k = 0;
+      const deps = fakeRenderDeps(async () => {
+        k += 1;
+        return { id: 900 + k, path: `/2026/08/s${k}.jpg` };
+      });
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'not dirty right after load');
+
+      const range = el.querySelector('#carousel-n');
+      range.value = '3';
+      fire(range, 'change');
+      await settle();
+
+      assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'dirty after the count changes');
+
+      await page._render();
+      await settle();
+
+      assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean again after render');
+    });
+
+    test('a slide whose specHash is unchanged is neither re-uploaded nor deleted', async () => {
+      const spec = { source: '/2026/08/w.jpg', n: 3, aspect: '4:5', strategy: 'cover', anchorY: 0.5 };
+      const doc = splitDocument(spec);
+      doc.slides.forEach((s, i) => {
+        s.rendered = {
+          path: `/2026/08/old${i + 1}.jpg`,
+          media_id: 100 + i,
+          specHash: specHash(s, spec.aspect, { strategy: spec.strategy, anchorY: spec.anchorY }),
+        };
+      });
+      const routes = [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: POST })],
+        [/\/api\/carousel/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } })],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+      let uploadCount = 0;
+      const deps = fakeRenderDeps(async () => {
+        uploadCount += 1;
+        throw new Error('should not upload an unchanged slide');
+      });
+      await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      assert.equal(page.state.error, null);
+      assert.equal(uploadCount, 0, 'no slide was re-encoded/re-uploaded');
+      assert.deepEqual(page.state.rendered, ['/2026/08/old1.jpg', '/2026/08/old2.jpg', '/2026/08/old3.jpg']);
+      assert.ok(
+        !calls.some((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url)),
+        'nothing superseded — every kept slide is still referenced',
+      );
+    });
+  });
+
+  describe('remove carousel', () => {
+    const CAROUSEL_POST = {
+      ...POST,
+      content: ':::{.carousel-block}\n\n/2026/08/old1.jpg\n\n/2026/08/old2.jpg\n\n:::',
+    };
+    const priorDoc = {
+      version: 1,
+      aspect: '4:5',
+      mode: 'split',
+      slides: [
+        { source: '/2026/08/w.jpg', rendered: { path: '/2026/08/old1.jpg', media_id: 100 } },
+        { source: '/2026/08/w.jpg', rendered: { path: '/2026/08/old2.jpg', media_id: 101 } },
+      ],
+    };
+
+    function routes() {
+      return [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: CAROUSEL_POST })],
+        [/\/api\/carousel/, (url, opts) =>
+          opts.method === 'DELETE' || opts.method === 'PUT'
+            ? { body: {} }
+            : { body: { post_id: 42, doc: priorDoc } }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+    }
+
+    test('shows a Remove carousel action once a carousel exists', async () => {
+      const el = await mount({ post: '42' }, routes(), { renderDeps: fakeRenderDeps(async () => ({})) });
+      assert.ok(el.querySelector('[data-action="remove-carousel"]'), 'remove action shown');
+    });
+
+    test('no Remove action before anything has ever been rendered', async () => {
+      const el = await mount({ post: '42' });
+      assert.ok(!el.querySelector('[data-action="remove-carousel"]'));
+    });
+
+    test('confirming Remove deletes the document, clears the fence, and deletes the slide media', async () => {
+      const el = await mount({ post: '42' }, routes(), { renderDeps: fakeRenderDeps(async () => ({})) });
+      let confirmed = null;
+      page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+        confirmed = { title, variant };
+        onConfirm();
+      };
+
+      click(el.querySelector('[data-action="remove-carousel"]'));
+      await settle();
+      await settle();
+
+      assert.ok(confirmed, 'a confirmation was shown');
+      assert.equal(confirmed.variant, 'danger');
+      assert.ok(calls.some((c) => c.method === 'DELETE' && /\/api\/carousel/.test(c.url)), 'the document was deleted');
+      const mediaDeletes = calls
+        .filter((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url))
+        .map((c) => c.url.match(/\/api\/media\/(\d+)$/)[1]);
+      assert.deepEqual(mediaDeletes.sort(), ['100', '101']);
+
+      const postPut = calls.find((c) => c.method === 'PUT' && /\/api\/posts\/42$/.test(c.url));
+      assert.ok(postPut, 'post content was rewritten');
+      assert.ok(!JSON.parse(postPut.body).content.includes('carousel-block'), 'the fence is gone');
+
+      assert.equal(page.state.source, '');
+      assert.equal(page.state.hasCarousel, false);
+      assert.ok(!el.querySelector('[data-action="remove-carousel"]'), 'action hidden after removal');
     });
   });
 });
