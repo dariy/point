@@ -13,6 +13,8 @@ import {
   ASPECTS,
   canvasSize,
   sliceRects,
+  fitReport,
+  slideCountOptions,
   fitRect,
   safeAreaRect,
   clampPan,
@@ -92,6 +94,167 @@ describe('sliceRects', () => {
 
   test('n<1 is treated as a single slide', () => {
     assert.strictEqual(sliceRects(1000, 1000, 0, '1:1').length, 1);
+  });
+
+  test('every source rect field is a whole pixel', () => {
+    for (const [w, h, n] of [[5000, 999, 3], [500, 1000, 4], [4096, 3771, 7]]) {
+      for (const r of sliceRects(w, h, n, '4:5')) {
+        for (const k of ['sx', 'sy', 'sw', 'sh', 'dx', 'dy', 'dw', 'dh']) {
+          assert.ok(Number.isInteger(r[k]), `${w}x${h} n=${n}: ${k}=${r[k]} not integer`);
+        }
+      }
+    }
+  });
+
+  test('the 5th arg is optional and anchorY 0.5 reproduces the centred crop', () => {
+    const bare = sliceRects(3000, 2000, 3, '4:5');
+    assert.deepStrictEqual(bare, sliceRects(3000, 2000, 3, '4:5', {}));
+    assert.deepStrictEqual(bare, sliceRects(3000, 2000, 3, '4:5', { anchorY: 0.5 }));
+    assert.deepStrictEqual(bare, sliceRects(3000, 2000, 3, '4:5', { strategy: 'cover' }));
+  });
+
+  test('anchorY slides the vertical band through the slack', () => {
+    // 500x3000 into 1:1: a 500px-tall band with 2500px of vertical slack.
+    const top = sliceRects(500, 3000, 1, '1:1', { anchorY: 0 })[0];
+    const mid = sliceRects(500, 3000, 1, '1:1', { anchorY: 0.5 })[0];
+    const bot = sliceRects(500, 3000, 1, '1:1', { anchorY: 1 })[0];
+    assert.strictEqual(top.sy, 0);
+    assert.strictEqual(mid.sy, 1250);
+    assert.strictEqual(bot.sy, 2500);
+    assert.ok(bot.sy + bot.sh <= 3000, 'the band never runs past the source');
+    // anchorY is clamped to [0, 1]
+    assert.deepStrictEqual(sliceRects(500, 3000, 1, '1:1', { anchorY: -5 })[0], top);
+    assert.deepStrictEqual(sliceRects(500, 3000, 1, '1:1', { anchorY: 5 })[0], bot);
+  });
+
+  test("strategy 'exact' lays n 1:1 canvases side by side, centred", () => {
+    const rects = sliceRects(4096, 2000, 3, '4:5', { strategy: 'exact' });
+    assert.strictEqual(rects.length, 3);
+    assert.deepStrictEqual(rects.map((r) => r.sx), [428, 1508, 2588]); // (4096-3240)/2 = 428
+    for (const r of rects) {
+      assert.strictEqual(r.sw, 1080);
+      assert.strictEqual(r.sh, 1350);
+      assert.deepStrictEqual([r.dx, r.dy, r.dw, r.dh], [0, 0, 1080, 1350]);
+      assert.ok(!('pad' in r));
+    }
+  });
+
+  test("strategy 'pad' runs flush left; the last slide carries the tail + a pad region", () => {
+    const rects = sliceRects(4096, 2000, 4, '4:5', { strategy: 'pad' });
+    assert.strictEqual(rects.length, 4);
+    for (let i = 0; i < 3; i++) {
+      assert.strictEqual(rects[i].sx, i * 1080);
+      assert.strictEqual(rects[i].sw, 1080);
+      assert.strictEqual(rects[i].dw, 1080);
+      assert.ok(!('pad' in rects[i]));
+    }
+    const tail = rects[3];
+    assert.strictEqual(tail.sx, 3240);
+    assert.strictEqual(tail.sw, 856); // 4096 - 3*1080
+    assert.strictEqual(tail.dw, 856); // drawn 1:1, flush left
+    assert.deepStrictEqual(tail.pad, { x: 856, w: 224 }); // 224 = 4*1080 - 4096
+  });
+
+  test("'exact'/'pad' fall back to cover when the source is too short or too narrow", () => {
+    // too short for a 1:1 band at scale 1
+    assert.deepStrictEqual(
+      sliceRects(3000, 1000, 3, '4:5', { strategy: 'exact' }),
+      sliceRects(3000, 1000, 3, '4:5'),
+    );
+    // too narrow for 3 full columns
+    assert.deepStrictEqual(
+      sliceRects(2000, 2000, 3, '4:5', { strategy: 'exact' }),
+      sliceRects(2000, 2000, 3, '4:5'),
+    );
+  });
+});
+
+describe('fitReport', () => {
+  test('cover reports an upscale when the source is smaller than the deck', () => {
+    const r = fitReport(4000, 5000, 4, '4:5');
+    assert.strictEqual(r.n, 4);
+    assert.strictEqual(r.feasible, true);
+    assert.ok(Math.abs(r.scale - 1.08) < 1e-9); // 4*1080 / 4000
+    assert.strictEqual(r.quality, 'upscale');
+    assert.strictEqual(r.padPx, 0);
+    assert.ok(Math.abs(r.stripW - 4000) < 1e-9);
+    assert.ok(Math.abs(r.trimmedH - 3750) < 1e-9); // 5000 - 1350/1.08
+  });
+
+  test('cover reports a downscale when the source dwarfs the deck', () => {
+    const r = fitReport(8000, 2000, 3, '4:5');
+    assert.ok(Math.abs(r.scale - 0.675) < 1e-9); // 1350 / 2000
+    assert.strictEqual(r.quality, 'downscale');
+    assert.ok(Math.abs(r.trimmedW - 3200) < 1e-9); // 8000 - 3240/0.675
+  });
+
+  test('exact takes floor(srcW/dstW) slides at scale 1 and trims the width remainder', () => {
+    const r = fitReport(4096, 2000, 0, '4:5', 'exact');
+    assert.deepStrictEqual(
+      [r.n, r.scale, r.feasible, r.quality, r.padPx],
+      [3, 1, true, 'exact', 0],
+    );
+    assert.strictEqual(r.trimmedW, 856); // 4096 - 3*1080
+    assert.strictEqual(r.trimmedH, 650); // 2000 - 1350
+  });
+
+  test('pad takes ceil(srcW/dstW) slides at scale 1 and reports the tail fill', () => {
+    const r = fitReport(4096, 2000, 0, '4:5', 'pad');
+    assert.deepStrictEqual([r.n, r.scale, r.feasible], [4, 1, true]);
+    assert.strictEqual(r.padPx, 224); // 4*1080 - 4096
+    assert.strictEqual(r.trimmedW, 0);
+  });
+
+  test('an exact multiple pads to zero', () => {
+    assert.strictEqual(fitReport(3240, 2000, 0, '4:5', 'pad').padPx, 0);
+  });
+
+  test('exact/pad are infeasible when the source is shorter than one canvas', () => {
+    assert.strictEqual(fitReport(4096, 1000, 0, '4:5', 'exact').feasible, false);
+    assert.strictEqual(fitReport(4096, 1000, 0, '4:5', 'pad').feasible, false);
+  });
+
+  test('exact is infeasible when the source is narrower than one canvas', () => {
+    assert.strictEqual(fitReport(900, 3000, 0, '4:5', 'exact').feasible, false);
+  });
+});
+
+describe('slideCountOptions', () => {
+  test('one feasible entry per stored strategy, scale-1 strategies ranked first', () => {
+    const opts = slideCountOptions(4096, 2000, '4:5', { min: 2, max: 20 });
+    assert.strictEqual(opts.length, 3);
+    assert.deepStrictEqual(
+      opts
+        .map((o) => o.strategy)
+        .slice(0, 2)
+        .sort(),
+      ['exact', 'pad'],
+    );
+    assert.strictEqual(opts.at(-1).strategy, 'cover');
+
+    const exact = opts.find((o) => o.strategy === 'exact');
+    assert.deepStrictEqual(
+      [exact.n, exact.scale, exact.padPx, exact.label],
+      [3, 1, 0, '3 slides · pixel-exact'],
+    );
+    const pad = opts.find((o) => o.strategy === 'pad');
+    assert.deepStrictEqual([pad.n, pad.padPx, pad.label], [4, 224, '4 slides · 224px padding']);
+    const cover = opts.find((o) => o.strategy === 'cover');
+    assert.deepStrictEqual([cover.n, cover.label], [4, '4 slides · 5% upscale']);
+  });
+
+  test('infeasible exact/pad are omitted, leaving only cover', () => {
+    const opts = slideCountOptions(4096, 1000, '4:5', {});
+    assert.deepStrictEqual(
+      opts.map((o) => o.strategy),
+      ['cover'],
+    );
+  });
+
+  test('exact/pad outside the count bounds are omitted; cover is clamped in', () => {
+    const opts = slideCountOptions(4096, 2000, '4:5', { min: 6, max: 20 });
+    assert.strictEqual(opts.length, 1);
+    assert.deepStrictEqual([opts[0].strategy, opts[0].n], ['cover', 6]);
   });
 });
 
