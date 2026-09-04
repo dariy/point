@@ -20,10 +20,15 @@ export const ASPECTS = ['4:5', '1:1', '1.91:1'];
 export const MODES = ['split', 'deck'];
 export const FITS = ['cover', 'contain'];
 export const BG_TYPES = ['blur', 'solid', 'gradient'];
+/** Doc-level split strategy (see `geometry.sliceRects`): resample-to-fill,
+ *  pixel-exact with a trimmed remainder, or pixel-exact with a padded tail. */
+export const STRATEGIES = ['cover', 'exact', 'pad'];
 
 const DEFAULT_ASPECT = '4:5';
 const DEFAULT_MODE = 'split';
 const DEFAULT_FIT = 'cover';
+const DEFAULT_STRATEGY = 'cover';
+const DEFAULT_ANCHOR_Y = 0.5;
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 const isObj = (v) => v != null && typeof v === 'object';
@@ -59,6 +64,8 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  * @property {number} version
  * @property {string} aspect
  * @property {string} mode
+ * @property {'cover'|'exact'|'pad'} strategy  how `split` mode fits the source to the deck
+ * @property {number} anchorY  0..1 vertical placement of the crop band in its slack
  * @property {CarouselSlide[]} slides
  * @property {object[]} spanLayers
  * @property {{id:string,custom:boolean}|null} template
@@ -134,6 +141,8 @@ export function normalizeDocument(input) {
     version: DOC_VERSION,
     aspect: ASPECTS.includes(doc.aspect) ? doc.aspect : DEFAULT_ASPECT,
     mode: MODES.includes(doc.mode) ? doc.mode : DEFAULT_MODE,
+    strategy: STRATEGIES.includes(doc.strategy) ? doc.strategy : DEFAULT_STRATEGY,
+    anchorY: clamp(num(doc.anchorY, DEFAULT_ANCHOR_Y), 0, 1),
     slides: Array.isArray(doc.slides) ? doc.slides.map(normalizeSlide) : [],
     spanLayers: Array.isArray(doc.spanLayers) ? doc.spanLayers.slice() : [],
     template: normalizeTemplate(doc.template),
@@ -220,15 +229,18 @@ export function applyCarouselBlock(content, doc) {
  * covers so the document is self-describing and every slide's `specHash` is
  * distinct (equal hashes would collapse under the C8 re-render dedup).
  *
- * @param {{ source: string, n: number, aspect: string }} spec
+ * @param {{ source: string, n: number, aspect: string,
+ *   strategy?: 'cover'|'exact'|'pad', anchorY?: number }} spec
  * @returns {CarouselDoc}
  */
-export function splitDocument({ source, n, aspect }) {
+export function splitDocument({ source, n, aspect, strategy, anchorY }) {
   const count = Math.max(1, Math.floor(n));
   return normalizeDocument({
     version: DOC_VERSION,
     aspect,
     mode: 'split',
+    strategy,
+    anchorY,
     slides: Array.from({ length: count }, (_, i) => ({
       source,
       crop: { x: i / count, y: 0, w: 1 / count, h: 1 },
@@ -257,18 +269,24 @@ function fnv1a(str) {
 /**
  * Stable hash of the inputs that determine a slide's pixels — source, crop,
  * fit, background, layers — but NOT its `rendered` block. Equal hashes across
- * two saves (with the same doc-level `aspect`, which the caller folds in) mean
- * the slide can reuse its existing render instead of re-encoding.
+ * two saves (with the same doc-level `aspect` / `strategy` / `anchorY`, which
+ * the caller folds in) mean the slide can reuse its existing render instead of
+ * re-encoding.
  *
  * @param {*} slide
  * @param {string} [aspect] doc-level aspect, included in the hash when given
+ * @param {{ strategy?: string, anchorY?: number }} [deck] doc-level split
+ *   strategy and vertical anchor — a change to either re-slices every column,
+ *   so folding them in invalidates the cached render
  * @returns {string}
  */
-export function specHash(slide, aspect = '') {
+export function specHash(slide, aspect = '', deck = {}) {
   const s = normalizeSlide(slide);
   return fnv1a(
     stableStringify({
       aspect,
+      strategy: deck.strategy ?? '',
+      anchorY: deck.anchorY ?? null,
       source: s.source,
       crop: s.crop,
       fit: s.fit,

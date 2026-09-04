@@ -29,7 +29,7 @@ import { getCarousel, saveCarousel } from "../../api/carousel.js";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { REFRESH_SVG } from "../../utils/icons.js";
-import { canvasSize, safeAreaRect } from "./geometry.js";
+import { canvasSize, fitReport, safeAreaRect, slideCountOptions } from "./geometry.js";
 import {
   applyCarouselBlock,
   emptyDocument,
@@ -39,10 +39,25 @@ import {
 } from "./document.js";
 import { browserDeps, renderAndUpload } from "./render.js";
 
-/** Slide-count bounds — Instagram tops out at 10 images per carousel. */
+/** Slide-count bounds. Instagram accepts up to 20 images per carousel
+ *  (`api/internal/services/post_publish.go` truncates there;
+ *  `docs/features/carousel-studio.md` says 2–20) — the studio spans the range. */
 const MIN_SLIDES = 2;
-const MAX_SLIDES = 10;
+const MAX_SLIDES = 20;
 const DEFAULT_SLIDES = 3;
+
+/** Clamp a slide count into the studio's bounds. */
+const clampSlides = (v) => Math.min(MAX_SLIDES, Math.max(MIN_SLIDES, Math.floor(v)));
+
+/** Fit-panel radio: the two `cover` variants (free count vs. width-filling
+ *  count) plus the two pixel-exact strategies. `fill` stores `strategy: 'cover'`
+ *  and only differs from `cover` by the slide count it sets. */
+const FIT_MODES = [
+  ["cover", "Cover"],
+  ["fill", "Fill"],
+  ["exact", "Exact"],
+  ["pad", "Pad"],
+];
 
 const ASPECT_OPTIONS = [
   ["4:5", "Portrait 4:5"],
@@ -75,8 +90,12 @@ export default class CarouselStudioPage extends Component {
       error: null,
       post: null,
       source: "",
+      srcW: null,
+      srcH: null,
       n: DEFAULT_SLIDES,
       aspect: "4:5",
+      strategy: "cover",
+      anchorY: 0.5,
       showGuides: true,
       busy: false,
       rendered: [],
@@ -93,6 +112,15 @@ export default class CarouselStudioPage extends Component {
     },
     render() {
       this._render();
+    },
+    "fit-chip"(_e, el) {
+      this.setState({
+        n: clampSlides(Number(el.dataset.n)),
+        strategy: el.dataset.strategy,
+      });
+    },
+    "change:fit-mode"(_e, el) {
+      this._applyFitMode(/** @type {HTMLInputElement} */ (el).value);
     },
   };
 
@@ -132,10 +160,15 @@ export default class CarouselStudioPage extends Component {
         source: first ? first.source : "",
         n: doc.slides.length >= MIN_SLIDES ? doc.slides.length : DEFAULT_SLIDES,
         aspect: doc.aspect || "4:5",
+        strategy: doc.strategy,
+        anchorY: doc.anchorY,
         rendered: doc.slides
           .map((s) => s.rendered && s.rendered.path)
           .filter(Boolean),
       });
+      // The document does not store source pixels — re-probe them so the fit
+      // panel has its numbers. The image is cache-warm from the CSS background.
+      if (first && first.source) this._probeSource(first.source);
     } catch (err) {
       if (this._unmounted) return;
       this.setState({ loading: false, error: err?.message || "Could not load the post." });
@@ -147,12 +180,66 @@ export default class CarouselStudioPage extends Component {
       this._picker = new MediaPickerDialog({
         onConfirm: (items) => {
           const img = (items || []).find((m) => isImagePath(m?.path));
-          if (img) this.setState({ source: img.path, rendered: [] });
+          if (!img) return;
+          // The media mapper emits width/height (api/internal/api/mappers.go);
+          // they are null for a pre-dimensions upload — probe the bitmap then.
+          const w = Number.isFinite(img.width) ? img.width : null;
+          const h = Number.isFinite(img.height) ? img.height : null;
+          this.setState({
+            source: img.path,
+            srcW: w,
+            srcH: h,
+            strategy: "cover",
+            anchorY: 0.5,
+            rendered: [],
+          });
+          if (!w || !h) this._probeSource(img.path);
         },
       });
       this._picker.mount();
     }
     this._picker.open();
+  }
+
+  /** Fill `srcW`/`srcH` from a natural-size probe of the source image. On
+   *  failure the fit panel simply stays hidden and the bare slider is used. */
+  async _probeSource(path) {
+    try {
+      const deps = this.props.renderDeps || browserDeps();
+      const { w, h } = await deps.probeSize(path);
+      if (this._unmounted || this.state.source !== path) return;
+      this.setState({ srcW: w || null, srcH: h || null });
+    } catch {
+      /* no dimensions — _renderFitPanel() falls back to the plain controls */
+    }
+  }
+
+  /**
+   * Apply a fit-panel radio choice: `cover` keeps the current count; `fill`,
+   * `exact` and `pad` each snap the count to what the strategy makes from this
+   * source (`ceil`/`floor` of `srcW / slideW`), clamped to the studio bounds.
+   *
+   * @param {string} mode  one of `FIT_MODES`
+   */
+  _applyFitMode(mode) {
+    const { srcW, aspect, n } = this.state;
+    const [dstW] = canvasSize(aspect);
+    const ceilN = srcW ? clampSlides(Math.ceil(srcW / dstW)) : n;
+    const floorN = srcW ? clampSlides(Math.floor(srcW / dstW)) : n;
+    if (mode === "exact") this.setState({ strategy: "exact", n: floorN });
+    else if (mode === "pad") this.setState({ strategy: "pad", n: ceilN });
+    else if (mode === "fill") this.setState({ strategy: "cover", n: ceilN });
+    else this.setState({ strategy: "cover" });
+  }
+
+  /** Which `FIT_MODES` radio the current state reads as. `cover` at exactly the
+   *  width-filling count is shown as `fill`; the two are otherwise identical. */
+  _currentFitMode() {
+    const { strategy, n, srcW, aspect } = this.state;
+    if (strategy === "exact" || strategy === "pad") return strategy;
+    const [dstW] = canvasSize(aspect);
+    if (srcW && n === clampSlides(Math.ceil(srcW / dstW))) return "fill";
+    return "cover";
   }
 
   /** The full post payload — a partial PUT would wipe unsent fields (excerpt,
@@ -177,14 +264,27 @@ export default class CarouselStudioPage extends Component {
   }
 
   async _render() {
-    const { postId, post, source, n, aspect } = this.state;
+    const { postId, post, source, n, aspect, anchorY, srcW, srcH } = this.state;
+    const strategy = /** @type {'cover'|'exact'|'pad'} */ (this.state.strategy);
     if (!source || this.state.busy) return;
 
     this.setState({ busy: true, error: null });
     try {
       const deps = this.props.renderDeps || browserDeps();
-      const doc = splitDocument({ source, n, aspect });
-      const media = await renderAndUpload({ source, n, aspect, postId }, deps);
+      const doc = splitDocument({ source, n, aspect, strategy, anchorY });
+      const media = await renderAndUpload(
+        {
+          source,
+          n,
+          aspect,
+          postId,
+          strategy,
+          anchorY,
+          srcW: srcW || undefined,
+          srcH: srcH || undefined,
+        },
+        deps,
+      );
 
       // Byte-identical slides dedup to one media row server-side (SHA256), so
       // two slides would share a path — which the blog renders twice but
@@ -200,7 +300,7 @@ export default class CarouselStudioPage extends Component {
         doc.slides[i].rendered = {
           path: m.path,
           media_id: m.id,
-          specHash: specHash(doc.slides[i], aspect),
+          specHash: specHash(doc.slides[i], aspect, { strategy, anchorY }),
         };
       });
       await saveCarousel(postId, doc);
@@ -361,6 +461,8 @@ export default class CarouselStudioPage extends Component {
 
         <div class="carousel-studio__filmstrip" aria-label="Slide preview">${strip}</div>
 
+        ${this._renderFitPanel()}
+
         <div class="carousel-studio__controls">
           <label class="carousel-studio__control">
             <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
@@ -395,6 +497,113 @@ export default class CarouselStudioPage extends Component {
       </div>`;
   }
 
+  /**
+   * The fit panel: source dimensions, one-click count/strategy chips, the
+   * strategy radio, a live `fitReport` readout for the current selection, an
+   * upscale warning, and a vertical-anchor slider that appears only when the
+   * crop leaves vertical slack. Hidden entirely until the source pixel size is
+   * known (a probe may still be in flight, or have failed).
+   */
+  _renderFitPanel() {
+    const { srcW, srcH, aspect, n, anchorY } = this.state;
+    const strategy = /** @type {'cover'|'exact'|'pad'} */ (this.state.strategy);
+    if (!srcW || !srcH) return "";
+
+    const [dstW, dstH] = canvasSize(aspect);
+    const report = fitReport(srcW, srcH, n, aspect, strategy);
+    const chips = slideCountOptions(srcW, srcH, aspect, {
+      min: MIN_SLIDES,
+      max: MAX_SLIDES,
+    });
+    const fitMode = this._currentFitMode();
+
+    const scaleTxt =
+      Math.abs(report.scale - 1) < 0.005
+        ? "pixel-exact"
+        : `${(report.scale * 100).toFixed(1)}% scale`;
+    const tail =
+      report.padPx > 0 ? `${Math.round(report.padPx)} px padding` : "full bleed";
+    const readout = [
+      `${report.n} ${report.n === 1 ? "slide" : "slides"}`,
+      scaleTxt,
+      `${Math.round(report.trimmedW)} px trimmed`,
+      tail,
+    ].join(" · ");
+
+    return html`
+      <div class="carousel-studio__fit">
+        <p class="carousel-studio__fit-dims">
+          Source ${String(srcW)} × ${String(srcH)} · slide ${String(dstW)} ×
+          ${String(dstH)} · ${(srcW / dstW).toFixed(2)} slides
+        </p>
+
+        <div
+          class="carousel-studio__fit-chips"
+          role="group"
+          aria-label="Suggested slide counts"
+        >
+          ${chips.map((c) => {
+            const label = `${c.n} ${c.strategy === "cover" ? "fill" : c.strategy}`;
+            const active = c.n === n && c.strategy === strategy;
+            return html`
+              <button
+                type="button"
+                class="carousel-studio__chip ${active ? "is-active" : ""}"
+                data-action="fit-chip"
+                data-n="${String(c.n)}"
+                data-strategy="${c.strategy}"
+                title="${c.label}"
+              >
+                ${label}
+              </button>`;
+          })}
+        </div>
+
+        <fieldset class="carousel-studio__fit-modes">
+          <legend>Fit</legend>
+          ${FIT_MODES.map(
+            ([val, text]) => html`
+              <label class="carousel-studio__fit-mode">
+                <input
+                  type="radio"
+                  name="carousel-fit"
+                  value="${val}"
+                  data-action="fit-mode"
+                  ${val === fitMode ? "checked" : ""}
+                />
+                <span>${text}</span>
+              </label>`,
+          )}
+        </fieldset>
+
+        <p class="carousel-studio__fit-readout" aria-live="polite">${readout}</p>
+        ${report.scale > 1.02
+          ? html`<p class="carousel-studio__fit-warning" role="status">
+              warning: upscaling — slides will be soft
+            </p>`
+          : ""}
+        ${report.trimmedH > 1
+          ? html`
+              <label class="carousel-studio__control">
+                <span
+                  >Vertical anchor:
+                  <output id="carousel-anchor-out"
+                    >${String(Math.round(anchorY * 100))}%</output
+                  ></span
+                >
+                <input
+                  type="range"
+                  id="carousel-anchor"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="${String(anchorY)}"
+                />
+              </label>`
+          : ""}
+      </div>`;
+  }
+
   afterRender() {
     setupAdminLayout(this, { currentPath: "/light/carousel" });
 
@@ -419,7 +628,10 @@ export default class CarouselStudioPage extends Component {
       if (nOut) nOut.textContent = String(nInput.value);
     });
     this.on(nInput, "change", () => {
-      this.setState({ n: Number(nInput.value) });
+      // A manual count is a free `cover` count — the pixel-exact strategies own
+      // their slide count, so leaving `strategy` on `exact`/`pad` here would
+      // show a stale readout. The chips and the radio set both together.
+      this.setState({ n: Number(nInput.value), strategy: "cover" });
     });
 
     this.on(this.$("#carousel-aspect"), "change", (e) => {
@@ -428,5 +640,18 @@ export default class CarouselStudioPage extends Component {
     this.on(this.$("#carousel-guides"), "change", (e) => {
       this.setState({ showGuides: /** @type {HTMLInputElement} */ (e.target).checked });
     });
+
+    const anchor = /** @type {HTMLInputElement|null} */ (this.$("#carousel-anchor"));
+    if (anchor) {
+      const anchorOut = this.$("#carousel-anchor-out");
+      this.on(anchor, "input", () => {
+        if (anchorOut) {
+          anchorOut.textContent = `${Math.round(Number(anchor.value) * 100)}%`;
+        }
+      });
+      this.on(anchor, "change", () => {
+        this.setState({ anchorY: Number(anchor.value) });
+      });
+    }
   }
 }

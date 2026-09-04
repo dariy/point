@@ -37,7 +37,17 @@ Ahead of S2, `geometry.js` gained the inverse of the split question — `fitRepo
 and `slideCountOptions` say how many slides a source makes and at what scale
 (`cover` resamples to fill; `exact`/`pad` stay pixel-for-pixel), and `sliceRects`
 takes a `{ strategy, anchorY }` option and rounds every column edge to a whole
-source pixel. The 4-argument `sliceRects` call is unchanged.
+source pixel. The 4-argument `sliceRects` call is unchanged. The studio surfaces
+this in a fit panel: source pixel size, one-click count/strategy chips from
+`slideCountOptions`, a Cover/Fill/Exact/Pad radio, a live `fitReport` readout
+(scale, trimmed width, pad or full-bleed) with an upscale warning past 2% scale,
+and a vertical-anchor slider shown only when the crop leaves vertical slack.
+`strategy` (default `cover`) and `anchorY` (default `0.5`) are now doc-level
+fields — additive, so `DOC_VERSION` stays 1 — and fold into `specHash` so a
+strategy or anchor change invalidates a cached render. The source's own
+`width`/`height` are not stored in the document; the studio re-probes them on
+load (preferring the picked media item's own fields; falling back to an
+`Image()` probe otherwise).
 
 `render.js` acts on that: one `createImageBitmap(blob, sx, sy, sw, sh, { resizeWidth,
 resizeHeight, resizeQuality })` **per slide**, cropping the column and resampling it
@@ -119,8 +129,10 @@ render.
 ```jsonc
 {
   "version": 1,
-  "aspect": "4:5",              // 4:5 (1080x1350) | 1:1 | 1.91:1
-  "mode":   "split",            // split: one source across slides / deck: one per slide
+  "aspect":    "4:5",           // 4:5 (1080x1350) | 1:1 | 1.91:1
+  "mode":      "split",         // split: one source across slides / deck: one per slide
+  "strategy":  "cover",         // split only: cover (resample) | exact | pad — see geometry.sliceRects
+  "anchorY":   0.5,             // split only: 0..1, vertical placement of the crop band in its slack
   "slides": [{
     "source": "/2026/08/x.jpg",
     "crop":   { "x": 0, "y": 0, "w": 0.333, "h": 1 },   // normalized to source

@@ -28,6 +28,8 @@ describe('normalizeDocument', () => {
       version: DOC_VERSION,
       aspect: '4:5',
       mode: 'split',
+      strategy: 'cover',
+      anchorY: 0.5,
       slides: [],
       spanLayers: [],
       template: null,
@@ -95,6 +97,40 @@ describe('normalizeDocument', () => {
       id: 't',
       custom: true,
     });
+  });
+});
+
+describe('doc-level strategy / anchorY', () => {
+  test('default in: cover, centred', () => {
+    const d = normalizeDocument({});
+    assert.strictEqual(d.strategy, 'cover');
+    assert.strictEqual(d.anchorY, 0.5);
+  });
+
+  test('an unknown strategy falls back to cover; a known one is kept', () => {
+    assert.strictEqual(normalizeDocument({ strategy: 'nope' }).strategy, 'cover');
+    assert.strictEqual(normalizeDocument({ strategy: 'exact' }).strategy, 'exact');
+    assert.strictEqual(normalizeDocument({ strategy: 'pad' }).strategy, 'pad');
+  });
+
+  test('anchorY is coerced to a number and clamped to 0..1', () => {
+    assert.strictEqual(normalizeDocument({ anchorY: 0.25 }).anchorY, 0.25);
+    assert.strictEqual(normalizeDocument({ anchorY: -3 }).anchorY, 0);
+    assert.strictEqual(normalizeDocument({ anchorY: 9 }).anchorY, 1);
+    assert.strictEqual(normalizeDocument({ anchorY: 'x' }).anchorY, 0.5);
+  });
+
+  test('round trip: parse(serialize(doc)) === normalize(doc)', () => {
+    const doc = { strategy: 'pad', anchorY: 0.2, slides: [{ source: '/a.jpg' }] };
+    assert.deepStrictEqual(parseDocument(serializeDocument(doc)), normalizeDocument(doc));
+  });
+
+  test('an old document with neither field still parses (additive, DOC_VERSION 1)', () => {
+    const legacy = '{"version":1,"aspect":"1:1","mode":"split","slides":[]}';
+    const d = parseDocument(legacy);
+    assert.strictEqual(d.version, DOC_VERSION);
+    assert.strictEqual(d.strategy, 'cover');
+    assert.strictEqual(d.anchorY, 0.5);
   });
 });
 
@@ -183,6 +219,24 @@ describe('splitDocument', () => {
     const hashes = doc.slides.map((s) => specHash(s, doc.aspect));
     assert.strictEqual(new Set(hashes).size, 4);
   });
+
+  test('carries the strategy and anchorY through to the document', () => {
+    const doc = splitDocument({
+      source: '/x.jpg',
+      n: 3,
+      aspect: '4:5',
+      strategy: 'pad',
+      anchorY: 0.1,
+    });
+    assert.strictEqual(doc.strategy, 'pad');
+    assert.strictEqual(doc.anchorY, 0.1);
+  });
+
+  test('an unknown strategy / out-of-range anchorY fall back', () => {
+    const doc = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5', strategy: 'nope', anchorY: 5 });
+    assert.strictEqual(doc.strategy, 'cover');
+    assert.strictEqual(doc.anchorY, 1);
+  });
 });
 
 describe('applyCarouselBlock', () => {
@@ -262,5 +316,13 @@ describe('specHash', () => {
   test('folds in the doc-level aspect when passed', () => {
     assert.notStrictEqual(specHash(slide, '4:5'), specHash(slide, '1:1'));
     assert.strictEqual(specHash(slide, '4:5'), specHash(slide, '4:5'));
+  });
+
+  test('folds in the doc-level strategy and anchorY — a change invalidates the render', () => {
+    const base = specHash(slide, '4:5', { strategy: 'cover', anchorY: 0.5 });
+    assert.notStrictEqual(base, specHash(slide, '4:5', { strategy: 'exact', anchorY: 0.5 }));
+    assert.notStrictEqual(base, specHash(slide, '4:5', { strategy: 'pad', anchorY: 0.5 }));
+    assert.notStrictEqual(base, specHash(slide, '4:5', { strategy: 'cover', anchorY: 0 }));
+    assert.strictEqual(base, specHash(slide, '4:5', { strategy: 'cover', anchorY: 0.5 }));
   });
 });
