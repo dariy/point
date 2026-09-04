@@ -15,6 +15,8 @@ import {
   sliceRects,
   fitReport,
   backgroundFit,
+  deckSlideRects,
+  deckSlideFitCSS,
   slideCountOptions,
   fitRect,
   safeAreaRect,
@@ -326,6 +328,229 @@ describe('slideCountOptions', () => {
     const opts = slideCountOptions(4096, 2000, '4:5', { min: 6, max: 20 });
     assert.strictEqual(opts.length, 1);
     assert.deepStrictEqual([opts[0].strategy, opts[0].n], ['cover', 6]);
+  });
+});
+
+describe('deckSlideRects', () => {
+  test('cover fills the frame, centre-cropping the crop to the slide aspect', () => {
+    // Crop is the whole 2000×1000 source; 4:5 wants 1080:1350, so the source is
+    // far too wide — full height, a centred 800px-wide column.
+    const r = deckSlideRects(2000, 1000, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'cover');
+    assert.deepStrictEqual([r.dx, r.dy, r.dw, r.dh], [0, 0, 1080, 1350]);
+    assert.deepStrictEqual([r.sx, r.sy, r.sw, r.sh], [600, 0, 800, 1000]);
+    assert.strictEqual(r.pad, undefined, 'cover never pads');
+  });
+
+  test('cover honours pan and zoom — the crop selects, the frame aspect trims', () => {
+    // A half-width, half-height window at (0.25, 0.25) of a 4000×4000 source:
+    // 1000×1000 px, which a 1:1 slide takes whole.
+    const r = deckSlideRects(4000, 4000, '1:1', { x: 0.25, y: 0.25, w: 0.25, h: 0.25 }, 'cover');
+    assert.deepStrictEqual([r.sx, r.sy, r.sw, r.sh], [1000, 1000, 1000, 1000]);
+    assert.deepStrictEqual([r.dx, r.dy, r.dw, r.dh], [0, 0, 1080, 1080]);
+  });
+
+  test('contain shows the whole crop, letterboxed, and reports both pad bars', () => {
+    // A 2000×1000 crop is wider than a 1:1 frame, so it keeps the full width
+    // and gives up height — a bar above and a bar below.
+    const r = deckSlideRects(2000, 1000, '1:1', { x: 0, y: 0, w: 1, h: 1 }, 'contain');
+    assert.deepStrictEqual([r.sx, r.sy, r.sw, r.sh], [0, 0, 2000, 1000]);
+    assert.strictEqual(r.dw, 1080);
+    assert.strictEqual(r.dh, 540);
+    assert.strictEqual(r.dx, 0);
+    assert.strictEqual(r.dy, 270);
+    assert.strictEqual(r.pad.length, 2, 'a bar above and a bar below');
+    for (const p of r.pad) assert.strictEqual(p.w, 1080);
+    assert.deepStrictEqual(
+      r.pad.map((p) => [p.y, p.h]),
+      [
+        [0, 270],
+        [810, 270],
+      ],
+    );
+  });
+
+  test('contain pillarboxes a tall crop, and the pad rects tile the uncovered area', () => {
+    const r = deckSlideRects(1000, 2000, '1:1', { x: 0, y: 0, w: 1, h: 1 }, 'contain');
+    assert.deepStrictEqual([r.dx, r.dy, r.dw, r.dh], [270, 0, 540, 1080]);
+    const padArea = r.pad.reduce((sum, p) => sum + p.w * p.h, 0);
+    assert.strictEqual(padArea, 1080 * 1080 - 540 * 1080, 'pad + content = the frame');
+    // Disjoint: no two pad rects overlap, so a fill cannot double-paint.
+    for (let i = 0; i < r.pad.length; i++) {
+      for (let j = i + 1; j < r.pad.length; j++) {
+        const a = r.pad[i];
+        const b = r.pad[j];
+        const overlaps =
+          a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        assert.ok(!overlaps, `pad ${i} and ${j} overlap`);
+      }
+    }
+  });
+
+  test('contain omits pad when the crop already matches the slide aspect', () => {
+    const r = deckSlideRects(2000, 2500, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'contain');
+    assert.deepStrictEqual([r.dx, r.dy, r.dw, r.dh], [0, 0, 1080, 1350]);
+    assert.strictEqual(r.pad, undefined);
+  });
+
+  test('source rects are whole pixels and stay inside the source', () => {
+    const sources = [
+      [1999, 1333],
+      [777, 1001],
+      [4001, 3],
+    ];
+    for (const [w, h] of sources) {
+      for (const fit of ['cover', 'contain']) {
+        const r = deckSlideRects(w, h, '4:5', { x: 0.137, y: 0.291, w: 0.613, h: 0.409 }, fit);
+        for (const k of ['sx', 'sy', 'sw', 'sh', 'dx', 'dy', 'dw', 'dh']) {
+          assert.ok(Number.isInteger(r[k]), `${w}×${h} ${fit}: ${k}=${r[k]} is a whole pixel`);
+        }
+        assert.ok(r.sw >= 1 && r.sh >= 1, `${w}×${h} ${fit}: non-empty source rect`);
+        assert.ok(r.sx >= 0 && r.sx + r.sw <= w, `${w}×${h} ${fit}: inside source width`);
+        assert.ok(r.sy >= 0 && r.sy + r.sh <= h, `${w}×${h} ${fit}: inside source height`);
+      }
+    }
+  });
+
+  test('degenerate inputs clamp instead of throwing', () => {
+    const finite = (r) => Object.values(r).every((v) => (Array.isArray(v) ? true : Number.isFinite(v)));
+
+    // No source yet: nothing to draw, the whole frame is background.
+    const none = deckSlideRects(0, 0, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'cover');
+    assert.deepStrictEqual([none.sw, none.sh, none.dw, none.dh], [0, 0, 0, 0]);
+    assert.deepStrictEqual(none.pad, [{ x: 0, y: 0, w: 1080, h: 1350 }]);
+
+    // A zero-area crop is pinned to one source pixel by clampPan.
+    const zero = deckSlideRects(2000, 1000, '4:5', { x: 0.5, y: 0.5, w: 0, h: 0 }, 'cover');
+    assert.ok(finite(zero) && zero.sw >= 1 && zero.sh >= 1);
+
+    // Garbage in — an unknown fit falls back to cover, NaN to the full frame.
+    const junk = deckSlideRects(2000, 1000, '4:5', { x: NaN, y: undefined, w: 'x', h: null }, 'wat');
+    assert.deepStrictEqual(junk, deckSlideRects(2000, 1000, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'cover'));
+    assert.ok(finite(deckSlideRects(-5, -5, '1:1', undefined, 'contain')));
+  });
+});
+
+describe('deckSlideFitCSS', () => {
+  test('agrees with deckSlideRects on the source region, for every fit and crop', () => {
+    // The assertion that actually protects the feature: the DOM preview and the
+    // canvas render must show the same pixels. Resolve the CSS percentages
+    // against a nominal box of the slide's own canvas size, then check where the
+    // source's crop edges land against the rects' destination.
+    const sources = [
+      [2000, 1000],
+      [1000, 2000],
+      [4096, 3072],
+      [1999, 1333],
+      [900, 900],
+    ];
+    const crops = [
+      { x: 0, y: 0, w: 1, h: 1 },
+      { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },
+      { x: 0, y: 0.4, w: 0.33, h: 0.6 },
+      { x: 0.6, y: 0, w: 0.4, h: 0.2 },
+      { x: 0.137, y: 0.291, w: 0.613, h: 0.409 },
+    ];
+
+    for (const [srcW, srcH] of sources) {
+      for (const aspect of Object.keys(ASPECTS)) {
+        for (const crop of crops) {
+          for (const fit of ['cover', 'contain']) {
+            const label = `${srcW}×${srcH} ${aspect} ${fit} ${JSON.stringify(crop)}`;
+            const r = deckSlideRects(srcW, srcH, aspect, crop, fit);
+            const css = deckSlideFitCSS(srcW, srcH, aspect, crop, fit);
+            const [frameW, frameH] = canvasSize(aspect);
+            // The image element, per `box`, in frame pixels.
+            const elX = (css.box.x / 100) * frameW;
+            const elY = (css.box.y / 100) * frameH;
+            const elW = (css.box.w / 100) * frameW;
+            const elH = (css.box.h / 100) * frameH;
+
+            // Exactly what a browser does with background-size/position %.
+            const bgW = (css.size[0] / 100) * elW;
+            const bgH = (css.size[1] / 100) * elH;
+            const bgX = elX + (css.position[0] / 100) * (elW - bgW);
+            const bgY = elY + (css.position[1] / 100) * (elH - bgH);
+            // Where source pixel u/v lands in the frame.
+            const atX = (u) => bgX + (u / srcW) * bgW;
+            const atY = (v) => bgY + (v / srcH) * bgH;
+
+            const near = (a, b, what) =>
+              assert.ok(Math.abs(a - b) < 1, `${label}: ${what} — ${a} vs ${b}`);
+            // The element clips to the destination rect...
+            near(elX, r.dx, 'element x');
+            near(elY, r.dy, 'element y');
+            near(elW, r.dw, 'element width');
+            near(elH, r.dh, 'element height');
+            // ...and the crop lands exactly on it.
+            near(atX(r.sx), r.dx, 'crop left edge');
+            near(atX(r.sx + r.sw), r.dx + r.dw, 'crop right edge');
+            near(atY(r.sy), r.dy, 'crop top edge');
+            near(atY(r.sy + r.sh), r.dy + r.dh, 'crop bottom edge');
+          }
+        }
+      }
+    }
+  });
+
+  test('cover with no crop matches backgroundFit for the single-slide case', () => {
+    // A one-slide `cover` split IS a full-frame `cover` deck slide: same source,
+    // same frame, no trim to anchor. The two families must not disagree.
+    const deck = deckSlideFitCSS(2000, 1000, '1:1', { x: 0, y: 0, w: 1, h: 1 }, 'cover');
+    const split = backgroundFit(2000, 1000, '1:1', 1, 'cover', 0.5, 1, 0);
+    assert.ok(Math.abs(deck.size[0] - split.size[0]) < 0.01, `${deck.size[0]} ~ ${split.size[0]}`);
+    assert.ok(Math.abs(deck.size[1] - split.size[1]) < 0.01, `${deck.size[1]} ~ ${split.size[1]}`);
+    assert.ok(Math.abs(deck.position[0] - split.position[0]) < 0.01);
+    assert.ok(Math.abs(deck.position[1] - split.position[1]) < 0.01);
+    assert.deepStrictEqual(deck.box, { x: 0, y: 0, w: 100, h: 100 }, 'cover needs no inner box');
+  });
+
+  test('contain letterboxes the element, and the image fills that element', () => {
+    // 2000×1000 into 1:1: the element is the middle half of the frame, and the
+    // whole source fills it — the pad is the frame showing through above and
+    // below, not part of the image element.
+    const css = deckSlideFitCSS(2000, 1000, '1:1', { x: 0, y: 0, w: 1, h: 1 }, 'contain');
+    assert.deepStrictEqual(css.box, { x: 0, y: 25, w: 100, h: 50 });
+    assert.deepStrictEqual(css.size, [100, 100]);
+    assert.deepStrictEqual(css.position, [0, 0]);
+    assert.ok(!Object.is(css.position[0], -0), 'normalized away from -0');
+  });
+
+  test('contain clips a zoomed crop to the element, so the rest cannot bleed', () => {
+    // The failure this contract exists for: a crop whose scaled full source is
+    // exactly the frame height. Percent positions cannot offset an image that
+    // matches its box, so a full-frame element would show the wrong band.
+    const crop = { x: 0.6, y: 0, w: 0.4, h: 0.2 };
+    const css = deckSlideFitCSS(2000, 1000, '4:5', crop, 'contain');
+    const r = deckSlideRects(2000, 1000, '4:5', crop, 'contain');
+    assert.deepStrictEqual(
+      [css.box.x, css.box.y, css.box.w, css.box.h].map((v) => Math.round(v)),
+      [0, Math.round((r.dy / 1350) * 100), 100, Math.round((r.dh / 1350) * 100)],
+    );
+    // Inside that element the image is oversized on both axes and pinned to the
+    // crop's own corner — 100% x because the crop runs to the source's right edge.
+    assert.ok(css.size[0] > 100 && css.size[1] > 100);
+    assert.strictEqual(css.position[0], 100);
+    assert.strictEqual(css.position[1], 0);
+  });
+
+  test('degenerate inputs give a neutral pair, never NaN', () => {
+    for (const args of [
+      [0, 0, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'cover'],
+      [NaN, 100, '1:1', undefined, 'contain'],
+      [1000, 0, '1.91:1', { x: 0.5, y: 0.5, w: 0.1, h: 0.1 }, 'cover'],
+    ]) {
+      const css = deckSlideFitCSS(...args);
+      assert.deepStrictEqual(css, {
+        size: [100, 100],
+        position: [50, 50],
+        box: { x: 0, y: 0, w: 100, h: 100 },
+      });
+    }
+    const zeroCrop = deckSlideFitCSS(2000, 1000, '4:5', { x: 0.5, y: 0.5, w: 0, h: 0 }, 'cover');
+    assert.ok(
+      [...zeroCrop.size, ...zeroCrop.position].every(Number.isFinite),
+      'a zero-area crop still resolves',
+    );
   });
 });
 
