@@ -12,7 +12,13 @@ only for a saved post, that links straight to it.
 Off by default: published `:::{.carousel-block}` output stays styled with the plugin
 disabled (the public CSS is in the main bundle, not the plugin dir), so only editors who
 want the builder turn it on. Disabling the plugin 404s the studio chunk and `/api/carousel`
-entirely. The builder UI lands in stages — this is the gated skeleton.
+entirely.
+
+The builder itself is past the gated-skeleton stage: the splitter (source picker, fit
+panel with count/strategy chips, live sizing readout), per-slide crop-accurate rendering
+with progress, dirty-state tracking, and a confirmed remove action are all live behind
+this gate. There is no settings-drawer affordance for the plugin yet — see "Out of scope"
+in the feature doc. Framing, layers, and templates (S2 onward) are still ahead.
 
 `GET/PUT/DELETE /api/carousel?post=<id>` stores one carousel document per post in the
 `carousels` table (`post_id` UNIQUE, `ON DELETE CASCADE`). The document body is opaque —

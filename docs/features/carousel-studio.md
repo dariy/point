@@ -103,10 +103,49 @@ If this contract ever breaks, the fix is to emit the `<div>` and `<img>` tags
 directly from the block writer rather than relying on markdown expansion — and this
 doc, plus the epic, must be updated.
 
+## Sizing
+
+`geometry.js` answers two questions about one source image and one target aspect:
+"how many slides, and what happens to the pixels that don't divide evenly?" There
+are three strategies, all cutting the same full-height band:
+
+| Strategy | Slide count `n` | Scale | What happens to the remainder |
+|---|---|---|---|
+| `cover` (default) | whatever the caller/chip picks | `max(n·dstW/srcW, dstH/srcH)` — may up- or downscale | no remainder — the strip is resampled to fill every canvas exactly |
+| `exact` | `floor(nExact)` | 1 (pixel-for-pixel) | `srcW − n·dstW` px of width trimmed off, split evenly off both sides |
+| `pad` | `ceil(nExact)` | 1 (pixel-for-pixel) | the last slide's tail is flush left; the gap is filled from `slide.bg` (`blur`: the column stretched under `ctx.filter`; `solid`: `fillRect`) |
+
+`nExact = srcW / dstW` — the continuous slide count the source would need to cover
+at scale 1. `exact`'s `n` rounds it down (never split a source pixel across two
+slides); `pad`'s rounds it up (never crop the source — the shortfall is padding
+instead).
+
+`exact` and `pad` are **pixel-exact** strategies: nothing is resampled, so a slide
+is the source's own pixels, one-to-one. That is only possible when the source is
+large enough — the feasibility rule `fitReport` checks is:
+
+```
+n · dstW <= srcW   AND   dstH <= srcH
+```
+
+i.e. the source must be at least as tall as one canvas, and at least as wide as
+`n` canvases side by side. `sliceRects` falls back to `cover` whenever a caller
+asks for `exact`/`pad` on a source that fails this — the studio itself never
+offers an infeasible chip, because `slideCountOptions` drops any strategy whose
+`fitReport` is infeasible before it reaches the UI. `cover` has no feasibility
+condition — it always produces exactly the `n` requested, at whatever scale that
+takes.
+
+`anchorY` (0..1) places the crop band vertically within the slack a source taller
+than `dstH` leaves behind — `(srcH - dstH) * anchorY` from the top, the same
+formula for all three strategies. Horizontally, `cover`/`exact` centre the kept
+strip; `pad` is always flush left from `x = 0`.
+
 ## Decisions
 
 | Decision | Choice | Rationale |
 |---|---|---|
+| Slide decode | One `createImageBitmap(blob, sx, sy, sw, sh, {resizeWidth, resizeHeight, resizeQuality})` crop+resize decode **per slide**, not one decode of a single strip | A strip wide enough for the whole deck at source resolution could exceed browser canvas/bitmap limits, so the old code capped it at `MAX_STRIP_WIDTH = 4096px` and downscaled anything wider — silently, and only past 4 slides at typical source widths, so "pixel-exact" was a lie for exactly the decks where it mattered most. Per-slide decode holds a constant `slideW × slideH` RGBA buffer (~5.8 MB at 4:5) regardless of source megapixels or slide count, and the crop is genuinely 1:1. Cost: `n` JPEG decodes instead of one, and `MAX_STRIP_WIDTH`/`stripWidth` are gone from the codebase — accepted, and nothing in this doc should assume they still exist |
 | Packaging | New `carousel` plugin, `DefaultEnabled: false` | Useful without Meta credentials (blog carousel, download); grows an Instagram affordance when the `instagram` plugin is also on |
 | Renderer | Browser Canvas 2D only | Zero new Go deps; the binary is CGO-free and `imaging` has no text rasterizer. Precedent: `frontend/src/utils/videoPoster.js` |
 | Output contract | `:::{.carousel-block}` fenced div of bare paths written into post content | Media goes public through the *existing* visibility rule — privacy-critical sync code is untouched |
@@ -167,7 +206,9 @@ document delete its own superseded slide rows: orphan detection is `post_id IS N
 
 C1–C9 are tracked as beads under the Carousel Studio epic; later stages (S2–S5) are
 **not** scheduled until C1–C9 land, because C5/C6's schema decisions determine whether
-they are extensions or rewrites.
+they are extensions or rewrites. U1–U6 are a sizing-and-studio-UX pass that landed after
+C9, ahead of S2 — `anchorY` (vertical crop placement) lands here rather than in S2, so
+S2 narrows to per-slide pan/zoom on **both** axes plus cover/contain and `deck` mode.
 
 | Stage | Scope |
 |---|---|
@@ -180,6 +221,12 @@ they are extensions or rewrites.
 | **C7** | Splitter MVP: source picker, N/aspect controls, safe-area guides, thin `render.js`, `createImageBitmap` downscale, upload, write block, save document. **Done** — `frontend/src/plugins/carousel/{index,render}.js`, `document.js` gains `splitDocument` / `applyCarouselBlock`, tests in `frontend/test/carousel{Render,Document,StudioPage}.test.js`. |
 | **C8** | Superseded-slide cleanup on re-render; "carousel block wins" + the >20 rule in `post_publish.go`; resolve the duplicate-path divergence between Go (`ExtractMediaPaths` dedups) and the browser (`extractMedia` does not). **Done** — `index.js` `_render` deletes superseded `media_id`s and refuses byte-identical slides; `post_publish.go` `carouselBlockPaths` selects the fence's slides; see the Decisions rows above. |
 | **C9** | Public block CSS partial; verify non-immersive and immersive rendering, including `mediaFromHtml` expansion in the immersive viewer. **Done** — `frontend/css/public/carousel-block.css` appended to the **main** bundle list in `build-css.sh` (not the plugin chunk); `mediaFromHtml` (`postMedia.js`) expands a `<div class="carousel-block">` into its N media items on the `<hr>` path and marks each `carousel: true`; the immersive `MediaViewer` pans between same-deck slides rather than crossfading (see Decisions); grid-thumbnail behaviour recorded below. |
+| **U1** | `fitReport` + `slideCountOptions` in `geometry.js`: given a source and target aspect, how many slides at what cost. **Done** — see "Sizing" above; `sliceRects` gains `{strategy, anchorY}`, column edges rounded to whole source pixels. |
+| **U2** | Per-slide crop decode, `MAX_STRIP_WIDTH` removed. **Done** — see the Decisions row above. |
+| **U3** | Fit panel: source pixel size, count/strategy chips, live `fitReport` readout, upscale warning, `anchorY` slider. **Done** — `strategy`/`anchorY` are additive doc-level fields (`DOC_VERSION` stays 1) folded into `specHash`; `MAX_SLIDES` raised 10 → 20. |
+| **U4** | Filmstrip + stage preview computed from the same numbers `sliceRects` renders from, replacing a `background-size: cover` guess that only agreed with the `cover` strategy. **Done** — `exact`/`pad` now preview truthfully, including the padded region as a distinct hatched block. |
+| **U5** | Render lifecycle: progress (`onProgress({done,total})`), dirty-state badge when slide count/aspect/strategy/anchorY drift from the saved document, `specHash`-gated skip of unchanged slides, a confirmed remove-carousel action, and upload cleanup on a mid-loop failure. **Done**. |
+| **U6** | Open Carousel Studio from the Visual editor's read-only carousel card (today: post-editor overflow menu only), and a clearer way back to the post. Navigation only — no render-contract, schema, or editing-surface change. |
 | **S2** | Framing — per-slide pan/zoom, cover/contain, background fill, `deck` mode. |
 | **S3** | Layers — per-slide and canvas-space spanning layers, text with wrap/auto-fit, logo, counters. Uses the active theme's font stack, **not** bundled WOFF2 (`docs/vendors.md`). |
 | **S4** | Predefined canvases as JSON in the repo; placeholders reuse the caption-template vocabulary (`{title}`, `{excerpt}`, `{tags}`, `{link}`). |
@@ -191,6 +238,7 @@ they are extensions or rewrites.
 - A custom-template editor (S5 note).
 - Video / Reels slides — the Instagram publish path is image-only (`instagram-integration.md`).
 - Changing the media library or `ListOrphanedMedia` to understand generated slides — the document tracks its own `media_id`s.
+- A Plugins-page settings affordance for `carousel`: it appears in neither `PLUGIN_SETTINGS` nor `SETTINGS_PAGE_PATHS` (`frontend/src/pages/light/PluginsPage.js`), so today the plugin toggle has no settings drawer/link. S5's brand kit is what will need one.
 
 ## Prove it
 
