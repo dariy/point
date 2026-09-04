@@ -33,6 +33,13 @@ slides of one deck pans instead of crossfading, so the seam reads as a single
 image. Framing, layers and templates (S2–S5) are not built yet. See
 "Delivery stages".
 
+Ahead of S2, `geometry.js` gained the inverse of the split question — `fitReport`
+and `slideCountOptions` say how many slides a source makes and at what scale
+(`cover` resamples to fill; `exact`/`pad` stay pixel-for-pixel), and `sliceRects`
+takes a `{ strategy, anchorY }` option and rounds every column edge to a whole
+source pixel so the next layer can crop per slide with `createImageBitmap`. The
+4-argument `sliceRects` call is unchanged.
+
 ## The output contract
 
 Slides are written into post content as a fenced div of bare media paths:
