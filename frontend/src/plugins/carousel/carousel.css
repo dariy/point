@@ -118,3 +118,76 @@
   font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
+
+/* ── Fit panel ─────────────────────────────────────────────────────────────
+ * Source size, one-click count/strategy chips, the strategy radio and a live
+ * fitReport readout. Shown only once the source pixel size is known. */
+.carousel-studio__fit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-card);
+}
+
+.carousel-studio__fit-dims {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.carousel-studio__fit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.carousel-studio__chip {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.carousel-studio__chip.is-active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.carousel-studio__fit-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--font-size-sm);
+}
+
+.carousel-studio__fit-modes legend {
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.carousel-studio__fit-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.carousel-studio__fit-readout {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.carousel-studio__fit-warning {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+}

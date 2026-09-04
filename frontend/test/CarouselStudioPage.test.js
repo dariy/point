@@ -12,7 +12,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM, click, fire } from './helpers/dom.js';
 import { setSettings, setUser } from '../src/store.js';
 
 /** Route `fetch` by URL; unmatched paths 404. */
@@ -83,7 +83,12 @@ describe('CarouselStudioPage', () => {
       fetchBlob: async () => new Blob(['src']),
       probeSize: async () => ({ w: 3000, h: 1000 }),
       decode: async (blob, o) => ({ width: o.resizeWidth, height: o.resizeHeight, close() {} }),
-      makeSurface: () => ({ canvas: {}, ctx: { clearRect() {}, drawImage() {} } }),
+      // save/restore/filter cover paintSlide's blur-pad branch (the last slide
+      // of a `pad` deck when its tail is narrower than a full column).
+      makeSurface: () => ({
+        canvas: {},
+        ctx: { clearRect() {}, drawImage() {}, save() {}, restore() {}, fillRect() {} },
+      }),
       encode: async () => new Blob(['jpg']),
       upload,
     };
@@ -176,6 +181,148 @@ describe('CarouselStudioPage', () => {
       el.querySelector('.light-header h1')?.textContent.trim(),
       'Carousel Studio',
     );
+  });
+
+  describe('fit panel', () => {
+    /** A doc of `n` split slides from one source, plus render deps whose probe
+     *  reports a fixed source size. */
+    function sized(n, w, h) {
+      const doc = {
+        version: 1,
+        aspect: '4:5',
+        mode: 'split',
+        slides: Array.from({ length: n }, () => ({ source: '/2026/08/pano.jpg' })),
+      };
+      const routes = [
+        [/\/api\/posts\/42/, { body: POST }],
+        [/\/api\/carousel/, { body: { post_id: 42, doc } }],
+      ];
+      const deps = { ...fakeRenderDeps(async () => ({})), probeSize: async () => ({ w, h }) };
+      return { routes, deps };
+    }
+
+    test('shows the source size, the fractional slide count and a live readout', async () => {
+      const { routes, deps } = sized(4, 4096, 2731);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const panel = el.querySelector('.carousel-studio__fit');
+      assert.ok(panel, 'fit panel rendered');
+      assert.equal(page.state.srcW, 4096);
+
+      const dims = panel.querySelector('.carousel-studio__fit-dims').textContent.replace(/\s+/g, ' ');
+      assert.match(dims, /4096 × 2731/);
+      assert.match(dims, /1080 × 1350/);
+      assert.match(dims, /3\.79 slides/);
+
+      // n=4 cover across a 4096-wide source: scale 4320/4096 ≈ 1.055 → upscale.
+      const readout = panel.querySelector('.carousel-studio__fit-readout').textContent.trim();
+      assert.match(readout, /^4 slides/);
+      assert.match(readout, /105\.5% scale/);
+      assert.match(readout, /0 px trimmed/);
+      assert.match(readout, /full bleed/);
+      assert.ok(panel.querySelector('.carousel-studio__fit-warning'), 'upscale warning row');
+      assert.ok(panel.querySelector('#carousel-anchor'), 'anchor slider shown (vertical slack)');
+    });
+
+    test('no panel until the source size is known', async () => {
+      const doc = { version: 1, aspect: '4:5', mode: 'split', slides: [{ source: '/x.jpg' }] };
+      const el = await mount({ post: '42' }, [
+        [/\/api\/posts\/42/, { body: POST }],
+        [/\/api\/carousel/, { body: { post_id: 42, doc } }],
+      ], { renderDeps: { ...fakeRenderDeps(async () => ({})), probeSize: async () => { throw new Error('no'); } } });
+
+      assert.ok(el.querySelector('.carousel-studio__builder'), 'builder still renders');
+      assert.ok(!el.querySelector('.carousel-studio__fit'), 'fit panel hidden');
+    });
+
+    test('a chip click sets the slide count AND the strategy', async () => {
+      // 4096×2000, 4:5: exact → floor(4096/1080)=3, pad → ceil=4.
+      const { routes, deps } = sized(2, 4096, 2000);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const chips = [...el.querySelectorAll('.carousel-studio__chip')];
+      const exact = chips.find((c) => c.dataset.strategy === 'exact');
+      assert.ok(exact, 'an exact chip is offered');
+      assert.equal(exact.dataset.n, '3');
+
+      click(exact);
+      await settle();
+
+      assert.equal(page.state.strategy, 'exact');
+      assert.equal(page.state.n, 3);
+      assert.equal(el.querySelectorAll('.carousel-studio__frame').length, 3, 'preview follows');
+    });
+
+    test('the Pad radio snaps the count to what pad makes and stores the strategy', async () => {
+      const { routes, deps } = sized(2, 4096, 2000);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const pad = [...el.querySelectorAll('input[name="carousel-fit"]')].find((r) => r.value === 'pad');
+      assert.ok(pad);
+      fire(pad, 'change');
+      await settle();
+
+      assert.equal(page.state.strategy, 'pad');
+      assert.equal(page.state.n, 4); // ceil(4096/1080)
+    });
+
+    test('dragging the slider drops back to a free cover count', async () => {
+      const { routes, deps } = sized(2, 4096, 2000);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const exact = [...el.querySelectorAll('.carousel-studio__chip')].find((c) => c.dataset.strategy === 'exact');
+      click(exact);
+      await settle();
+      assert.equal(page.state.strategy, 'exact');
+
+      const range = el.querySelector('#carousel-n');
+      range.value = '6';
+      fire(range, 'change');
+      await settle();
+
+      assert.equal(page.state.n, 6);
+      assert.equal(page.state.strategy, 'cover');
+    });
+
+    test('the chosen strategy and anchorY are written into the saved document', async () => {
+      const doc = { version: 1, aspect: '4:5', mode: 'split', slides: [
+        { source: '/2026/08/pano.jpg' }, { source: '/2026/08/pano.jpg' }, { source: '/2026/08/pano.jpg' },
+      ] };
+      const saved = [];
+      const routes = [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: POST })],
+        [/\/api\/carousel/, (url, opts) => {
+          if (opts.method === 'PUT') {
+            saved.push(JSON.parse(opts.body).doc);
+            return { body: {} };
+          }
+          return { body: { post_id: 42, doc } };
+        }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+      let k = 0;
+      const deps = {
+        ...fakeRenderDeps(async () => {
+          k += 1;
+          return { id: 900 + k, path: `/2026/08/s${k}.jpg` };
+        }),
+        probeSize: async () => ({ w: 4096, h: 2000 }),
+      };
+      await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const pad = [...page.container.querySelectorAll('input[name="carousel-fit"]')].find((r) => r.value === 'pad');
+      fire(pad, 'change');
+      await settle();
+      page.setState({ anchorY: 0.25 });
+      await settle();
+
+      await page._render();
+      await settle();
+
+      assert.equal(saved.length, 1, 'carousel document saved once');
+      assert.equal(saved[0].strategy, 'pad');
+      assert.equal(saved[0].anchorY, 0.25);
+    });
   });
 
   describe('re-render', () => {
