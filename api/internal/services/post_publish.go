@@ -178,7 +178,10 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 
 // carouselBlockRe matches the first :::{.carousel-block} fence in post content.
 // (?s) lets . span newlines; the match is non-greedy to the first closing :::,
-// which a bare slide path can never contain.
+// which a bare slide path can never contain. The "carousel-block" class name is
+// hardcoded a second time as CAROUSEL_BLOCK_CLASS in frontend/src/utils/postNodes.js
+// and a third time as CAROUSEL_BLOCK_RE in frontend/src/utils/postMedia.js — Go and
+// JS cannot share a constant. Changing the class name means updating all three.
 var carouselBlockRe = regexp.MustCompile(`(?s):::\{\.carousel-block\}\n(.*?)\n:::`)
 
 // carouselBlockPaths returns the media paths inside a post's :::{.carousel-block}

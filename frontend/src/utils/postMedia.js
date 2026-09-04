@@ -86,7 +86,10 @@ export function extractMedia(html) {
 /**
  * The class on the fenced div that wraps a Carousel Studio slide deck. Kept in
  * sync with CAROUSEL_BLOCK_CLASS in postNodes.js — duplicated rather than
- * imported so this module stays dependency-free for the preload path.
+ * imported so this module stays dependency-free for the preload path. Also
+ * hardcoded as carouselBlockRe in api/internal/services/post_publish.go — Go
+ * and JS cannot share a constant. Changing the class name means updating all
+ * three.
  */
 const CAROUSEL_BLOCK_RE = /class="[^"]*\bcarousel-block\b[^"]*"/;
 
