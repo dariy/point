@@ -47,11 +47,12 @@ function recordingCtx(log) {
  * the call log, an encoder that returns a labelled blob, and an upload that
  * echoes back a media row.
  */
-function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']) } = {}) {
+function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']), upload } = {}) {
   const log = [];
   const decodeCalls = [];
   const closed = { count: 0 };
   const uploads = [];
+  const deletes = [];
   const progress = [];
   const deps = {
     fetchBlob: async (url) => {
@@ -79,12 +80,17 @@ function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']) }
       log.push(['encode', type, quality]);
       return encode();
     },
-    upload: async (file, meta) => {
-      uploads.push({ name: file.name, meta });
-      return { id: uploads.length, path: `/2026/08/${file.name}` };
+    upload:
+      upload ||
+      (async (file, meta) => {
+        uploads.push({ name: file.name, meta });
+        return { id: uploads.length, path: `/2026/08/${file.name}` };
+      }),
+    deleteMedia: async (id) => {
+      deletes.push(id);
     },
   };
-  return { deps, log, decodeCalls, closed, uploads, progress, onProgress: (p) => progress.push(p) };
+  return { deps, log, decodeCalls, closed, uploads, deletes, progress, onProgress: (p) => progress.push(p) };
 }
 
 describe('paintSlide', () => {
@@ -243,5 +249,71 @@ describe('renderAndUpload', () => {
       ['/2026/08/carousel-42-1.jpg', '/2026/08/carousel-42-2.jpg', '/2026/08/carousel-42-3.jpg'],
     );
     assert.strictEqual(f.progress.length, 3);
+  });
+
+  test('a kept slide is neither decoded nor uploaded, and its media row is reused verbatim', async () => {
+    const f = fakeDeps();
+    const keep = [null, { id: 900, path: '/2026/08/kept.jpg' }, null];
+    const media = await renderAndUpload(
+      { source: '/2026/08/wide.jpg', n: 3, aspect: '4:5', postId: 42 },
+      f.deps,
+      f.onProgress,
+      keep,
+    );
+
+    assert.strictEqual(f.decodeCalls.length, 2, 'the kept slide skips decode');
+    assert.deepStrictEqual(f.uploads.map((u) => u.name), ['carousel-42-1.jpg', 'carousel-42-3.jpg']);
+    assert.deepStrictEqual(
+      media.map((m) => m.id),
+      [1, 900, 2],
+    );
+    assert.strictEqual(f.progress.length, 3, 'progress still fires once per slide, kept or not');
+  });
+
+  test('a mid-loop upload failure deletes every slide this run already uploaded', async () => {
+    let calls = 0;
+    const f = fakeDeps({
+      upload: async (file) => {
+        calls += 1;
+        if (calls === 3) throw new Error('upload failed');
+        return { id: calls, path: `/2026/08/${file.name}` };
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        renderAndUpload(
+          { source: '/2026/08/wide.jpg', n: 4, aspect: '4:5', postId: 42 },
+          f.deps,
+        ),
+      /upload failed/,
+    );
+
+    assert.deepStrictEqual(f.deletes.sort(), [1, 2], 'the two slides uploaded before the failure are removed');
+  });
+
+  test('a mid-loop upload failure never deletes a kept (reused) slide', async () => {
+    let calls = 0;
+    const f = fakeDeps({
+      upload: async (file) => {
+        calls += 1;
+        if (calls === 2) throw new Error('upload failed');
+        return { id: 100 + calls, path: `/2026/08/${file.name}` };
+      },
+    });
+    const keep = [{ id: 900, path: '/2026/08/kept.jpg' }, null, null];
+
+    await assert.rejects(
+      () =>
+        renderAndUpload(
+          { source: '/2026/08/wide.jpg', n: 3, aspect: '4:5', postId: 42 },
+          f.deps,
+          undefined,
+          keep,
+        ),
+      /upload failed/,
+    );
+
+    assert.deepStrictEqual(f.deletes, [101], 'only the fresh upload is deleted, not the kept row');
   });
 });
