@@ -22,7 +22,13 @@
  * render report per-slide progress. See `docs/features/carousel-studio.md`.
  */
 
-import { canvasSize, deckSlideRects, sliceRects } from './geometry.js';
+import {
+  canvasSize,
+  deckSlideRects,
+  gradientLine,
+  padRects,
+  sliceRects,
+} from './geometry.js';
 import { deleteMedia, uploadMedia } from '../../api/media.js';
 
 /** Fixed so identical inputs encode to identical bytes → SHA256 dedup reuses
@@ -89,29 +95,72 @@ export function browserDeps() {
 }
 
 /**
- * Paint one slide: clear the canvas, fill the pad region (`pad` slides only,
- * from `bg`), then blit the decoded column 1:1 — the bitmap is already cropped
- * and scaled to `rect.dw × rect.dh` by `deps.decode`. Pure call-issuer — no
- * measurement — so a recording fake ctx can assert the exact sequence, and the
- * pad fill always precedes the blit.
+ * The gradient `bg` describes, or `null` when it cannot make one.
+ *
+ * `document.normalizeBg` always writes an angle and two usable stops, so this
+ * only bites a caller that hands `paintSlide` a background no document ever
+ * normalized — which then falls through to the default fill rather than
+ * throwing out of `addColorStop` half way through an encode.
+ *
+ * @param {import('./document.js').CarouselBg|null|undefined} bg
+ * @returns {{angle: number, stops: Array<{at:number,color:string}>}|null}
+ */
+function gradientFill(bg) {
+  if (!bg || bg.type !== 'gradient') return null;
+  const stops = Array.isArray(bg.stops) ? bg.stops : [];
+  if (stops.length < 2) return null;
+  const usable = stops.every(
+    (s) => s && Number.isFinite(s.at) && typeof s.color === 'string' && s.color,
+  );
+  return usable ? { angle: Number.isFinite(bg.angle) ? bg.angle : 180, stops } : null;
+}
+
+/**
+ * Paint one slide: clear the canvas, fill the background wherever the slide's
+ * own pixels do not reach, then blit the decoded column 1:1 — the bitmap is
+ * already cropped and scaled to `rect.dw × rect.dh` by `deps.decode`. Pure
+ * call-issuer — the region comes from `geometry.padRects`, the gradient axis
+ * from `geometry.gradientLine`, and nothing here measures anything — so a
+ * recording fake ctx can assert the exact sequence, and the fill always
+ * precedes the blit.
+ *
+ * The fill covers every rect `padRects` reports, which is what makes one code
+ * path serve both shapes: the split path's full-height tail column, and a
+ * contained deck slide letterboxed on two opposite sides at once.
+ *
+ * - `solid`: `bg.color`, black by default.
+ * - `gradient`: one canvas gradient across the whole frame, clipped to the pad
+ *   rects by the fills — so two letterbox bars read as ends of one gradient
+ *   rather than two independent ones.
+ * - `blur` (the default, and the fallback for anything unusable): the slide's
+ *   own pixels stretched across the frame under a blur, so the gap bleeds
+ *   instead of hard-edging.
  *
  * @param {any} ctx 2D context
  * @param {ImageBitmap} bitmap the decoded column, sized `rect.dw × rect.dh`
- * @param {{dx:number,dy:number,dw:number,dh:number,pad?:{x:number,w:number}}} rect from `sliceRects`
+ * @param {{dx:number,dy:number,dw:number,dh:number,
+ *   pad?:{x:number,w:number}|Array<{x:number,y:number,w:number,h:number}>}} rect
+ *   from `sliceRects` (split) or `deckSlideRects` (deck)
  * @param {number} w canvas width
  * @param {number} h canvas height
- * @param {{type?:string,color?:string,radius?:number}|null} [bg] fill for the pad region
+ * @param {import('./document.js').CarouselBg|null} [bg] fill for the pad region
  */
 export function paintSlide(ctx, bitmap, rect, w, h, bg) {
   ctx.clearRect(0, 0, w, h);
-  if (rect.pad) {
+  const pad = padRects(rect, w, h);
+  if (pad.length) {
+    const fill = gradientFill(bg);
     if (bg && bg.type === 'solid') {
       ctx.fillStyle = bg.color || '#000000';
-      ctx.fillRect(rect.pad.x, 0, rect.pad.w, h);
+      for (const p of pad) ctx.fillRect(p.x, p.y, p.w, p.h);
+    } else if (fill) {
+      const line = gradientLine(fill.angle, w, h);
+      const gradient = ctx.createLinearGradient(line.x0, line.y0, line.x1, line.y1);
+      for (const s of fill.stops) gradient.addColorStop(s.at, s.color);
+      ctx.fillStyle = gradient;
+      for (const p of pad) ctx.fillRect(p.x, p.y, p.w, p.h);
     } else {
-      // blur (the default): the short column stretched across the whole canvas
-      // under a blur, so the tail slide's gap bleeds instead of hard-edging.
-      const radius = Math.max(1, Math.round((bg && bg.radius) || w * 0.05));
+      const radius = Math.max(1, Math.round((bg && 'radius' in bg && bg.radius) || w * 0.05));
       ctx.save();
       ctx.filter = `blur(${radius}px)`;
       ctx.drawImage(bitmap, 0, 0, rect.dw, rect.dh, 0, 0, w, h);
@@ -135,7 +184,8 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg) {
  * @param {Blob} blob the source image bytes
  * @param {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:any}} rect
  *   from `sliceRects` (split) or `deckSlideRects` (deck)
- * @param {{type?:string}|null|undefined} bg background fill for the pad region
+ * @param {import('./document.js').CarouselBg|null|undefined} bg background fill
+ *   for the pad region
  * @param {number} slideW @param {number} slideH canvas size
  * @param {RenderDeps} deps
  * @returns {Promise<Blob>}
@@ -173,7 +223,7 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps) {
  * @property {string} aspect
  * @property {'cover'|'exact'|'pad'} [strategy]
  * @property {number} [anchorY]
- * @property {{type?:string}|null} [bg]
+ * @property {import('./document.js').CarouselBg|null} [bg]
  * @property {number} [srcW]
  * @property {number} [srcH]
  */
@@ -271,11 +321,10 @@ function sourceLoader(deps, seed) {
  * image. Lazily, too: a deck whose every slide is in `keep` touches the network
  * not at all.
  *
- * Background fill is passed through to `paintSlide` as-is. A contained slide's
- * `pad` is an array of canvas rects (`deckSlideRects`), which `paintSlide` does
- * not yet fill per-rect — it blurs the slide's own pixels across the frame, as
- * it does for the split path's tail column. Making every `BG_TYPES` value paint
- * the real letterbox is a later bead's job, not this sequencer's.
+ * Background fill is passed through to `paintSlide` as-is: a contained slide's
+ * `pad` is an array of canvas rects (`deckSlideRects`) and the draw layer fills
+ * every one of them, so a letterbox on two opposite sides is painted by the same
+ * code as the split path's single tail column.
  *
  * @param {import('./document.js').CarouselDoc} doc a normalized deck document
  * @param {RenderDeps} deps

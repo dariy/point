@@ -17,6 +17,8 @@ import {
   backgroundFit,
   deckSlideRects,
   deckSlideFitCSS,
+  padRects,
+  gradientLine,
   slideCountOptions,
   fitRect,
   safeAreaRect,
@@ -427,6 +429,77 @@ describe('deckSlideRects', () => {
     const junk = deckSlideRects(2000, 1000, '4:5', { x: NaN, y: undefined, w: 'x', h: null }, 'wat');
     assert.deepStrictEqual(junk, deckSlideRects(2000, 1000, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'cover'));
     assert.ok(finite(deckSlideRects(-5, -5, '1:1', undefined, 'contain')));
+  });
+});
+
+describe('padRects', () => {
+  test("the split path's {x, w} tail gap becomes one full-height rect", () => {
+    const [rect] = sliceRects(3000, 1350, 3, '4:5', { strategy: 'pad' }).slice(-1);
+    assert.ok(rect.pad, 'the tail slide is short');
+    assert.deepStrictEqual(padRects(rect, 1080, 1350), [
+      { x: rect.pad.x, y: 0, w: rect.pad.w, h: 1350 },
+    ]);
+  });
+
+  test("the deck path's rect array passes through, so both fill the same way", () => {
+    const rect = deckSlideRects(2000, 1000, '1:1', { x: 0, y: 0, w: 1, h: 1 }, 'contain');
+    assert.deepStrictEqual(padRects(rect, 1080, 1080), rect.pad);
+  });
+
+  test('a fully covered frame reports no rects at all', () => {
+    const cover = deckSlideRects(2000, 1000, '4:5', { x: 0, y: 0, w: 1, h: 1 }, 'cover');
+    assert.deepStrictEqual(padRects(cover, 1080, 1350), []);
+    assert.deepStrictEqual(padRects({}, 1080, 1350), []);
+    assert.deepStrictEqual(padRects(null, 1080, 1350), []);
+  });
+
+  test('zero-area and garbage entries are dropped, not painted', () => {
+    const rect = {
+      pad: [
+        { x: 0, y: 0, w: 0, h: 1350 },
+        { x: 0, y: 0, w: 100, h: 0 },
+        null,
+        { x: 10, y: 20, w: 30, h: 40 },
+      ],
+    };
+    assert.deepStrictEqual(padRects(rect, 1080, 1350), [{ x: 10, y: 20, w: 30, h: 40 }]);
+  });
+});
+
+describe('gradientLine', () => {
+  test('follows the CSS linear-gradient() angle convention', () => {
+    // 0deg points to the top, so the line RUNS from the bottom edge upward.
+    assert.deepStrictEqual(gradientLine(0, 1080, 1350), { x0: 540, y0: 1350, x1: 540, y1: 0 });
+    assert.deepStrictEqual(gradientLine(90, 1080, 1350), { x0: 0, y0: 675, x1: 1080, y1: 675 });
+    assert.deepStrictEqual(gradientLine(180, 1080, 1350), { x0: 540, y0: 0, x1: 540, y1: 1350 });
+    assert.deepStrictEqual(gradientLine(270, 1080, 1350), { x0: 1080, y0: 675, x1: 0, y1: 675 });
+  });
+
+  test('the line is long enough to reach the corner-most stop', () => {
+    // At 45° across a square, |w·sin| + |h·cos| is the diagonal.
+    const l = gradientLine(45, 1000, 1000);
+    const len = Math.hypot(l.x1 - l.x0, l.y1 - l.y0);
+    assert.ok(Math.abs(len - Math.SQRT2 * 1000) < 1, `length ${len}`);
+    // Centred on the frame either way.
+    assert.strictEqual((l.x0 + l.x1) / 2, 500);
+    assert.strictEqual((l.y0 + l.y1) / 2, 500);
+  });
+
+  test('angles wrap, and an unusable one falls back to top → bottom', () => {
+    const down = gradientLine(180, 1080, 1350);
+    assert.deepStrictEqual(gradientLine(540, 1080, 1350), down);
+    assert.deepStrictEqual(gradientLine(-180, 1080, 1350), down);
+    assert.deepStrictEqual(gradientLine(NaN, 1080, 1350), down);
+    assert.deepStrictEqual(gradientLine(undefined, 1080, 1350), down);
+  });
+
+  test('endpoints are whole pixels, so the call sequence is assertable', () => {
+    for (const deg of [0, 17, 45, 123, 200, 359]) {
+      const l = gradientLine(deg, 1080, 1350);
+      for (const k of ['x0', 'y0', 'x1', 'y1']) {
+        assert.ok(Number.isInteger(l[k]), `${deg}deg: ${k}=${l[k]}`);
+      }
+    }
   });
 });
 

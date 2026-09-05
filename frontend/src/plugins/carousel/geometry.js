@@ -22,6 +22,7 @@ export const ASPECTS = {
 /** @typedef {keyof typeof ASPECTS} AspectKey */
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+const num = (v, fallback) => (Number.isFinite(v) ? /** @type {number} */ (v) : fallback);
 
 /**
  * Canvas `[width, height]` for an aspect key, falling back to 4:5.
@@ -344,7 +345,6 @@ export function sliceRects(srcW, srcH, n, aspect, opts) {
 /** Sanitize a possibly-absent, possibly-garbage crop into the full frame. */
 function safeCrop(crop) {
   const c = crop && typeof crop === 'object' ? crop : {};
-  const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
   return { x: num(c.x, 0), y: num(c.y, 0), w: num(c.w, 1), h: num(c.h, 1) };
 }
 
@@ -441,7 +441,8 @@ function deckSlideFrame(srcW, srcH, aspect, crop, fit) {
  * (left+right, or top+bottom), which one rect cannot describe. It is omitted
  * entirely when the frame is fully covered. The region is derivable from
  * `dx/dy/dw/dh`, but naming it explicitly keeps the draw layer a pure
- * call-issuer that measures nothing.
+ * call-issuer that measures nothing — see {@link padRects}, which flattens both
+ * shapes into the one list `paintSlide` fills.
  *
  * Source fields are whole pixels — `createImageBitmap`'s crop arguments must
  * be integers, and rounding here (rather than in the caller) is what keeps the
@@ -552,6 +553,82 @@ export function deckSlideFitCSS(srcW, srcH, aspect, crop, fit = 'cover') {
             w: (f.dw / f.dstW) * 100,
             h: (f.dh / f.dstH) * 100,
           },
+  };
+}
+
+/**
+ * The canvas rects a slide's background fill covers — the one measurement the
+ * draw layer needs to paint `bg`, so `paintSlide` can stay a pure call-issuer.
+ *
+ * Normalizes the two `pad` shapes this module produces into one list, which is
+ * what lets the draw layer fill a split tail column and a deck letterbox with
+ * the same loop:
+ *
+ * - {@link sliceRects} reports `pad: {x, w}` — the `pad` strategy's trailing gap
+ *   on the tail slide, always full height, so `y`/`h` default to the frame.
+ * - {@link deckSlideRects} reports `pad: [{x, y, w, h}, …]` — a contained slide
+ *   is letterboxed on two opposite sides at once, which one rect cannot say.
+ *
+ * Zero-area rects are dropped, so an empty result means "the frame is fully
+ * covered, paint no background at all".
+ *
+ * @param {{pad?: {x:number,w:number,y?:number,h?:number}
+ *   | Array<{x:number,y:number,w:number,h:number}>}} rect a rect from either producer
+ * @param {number} dstW canvas width — the default width of a shapeless pad
+ * @param {number} dstH canvas height — the default height of a full-height pad
+ * @returns {Array<{x:number,y:number,w:number,h:number}>}
+ */
+export function padRects(rect, dstW, dstH) {
+  const pad = rect && typeof rect === 'object' ? rect.pad : null;
+  if (!pad) return [];
+  const list = Array.isArray(pad) ? pad : [pad];
+  return list
+    .filter((p) => p && typeof p === 'object')
+    .map((p) => ({
+      x: num(p.x, 0),
+      y: num(p.y, 0),
+      w: num(p.w, dstW),
+      h: num(p.h, dstH),
+    }))
+    .filter((p) => p.w > 0 && p.h > 0);
+}
+
+/**
+ * The two endpoints of a linear gradient's axis across a `w × h` frame, for
+ * `createLinearGradient`.
+ *
+ * Follows the CSS `linear-gradient(<angle>)` convention exactly — `0deg` points
+ * to the top, angles turn clockwise, and the line is long enough that its ends
+ * sit where the corner-most stop lands (`|w·sin a| + |h·cos a|`, centred). That
+ * is deliberate: the studio's live preview is a CSS gradient on a DOM element
+ * and the render is a canvas gradient, and the two must agree pixel for pixel or
+ * the preview lies. Rounded to whole pixels so the call sequence is assertable.
+ *
+ * @param {number} angleDeg CSS gradient angle in degrees; any real number (it
+ *   wraps), defaulting to `180` (top → bottom) when not finite
+ * @param {number} w frame width @param {number} h frame height
+ * @returns {{x0:number, y0:number, x1:number, y1:number}}
+ */
+export function gradientLine(angleDeg, w, h) {
+  const deg = ((num(angleDeg, 180) % 360) + 360) % 360;
+  const rad = (deg * Math.PI) / 180;
+  // Screen coordinates: y grows downward, so `to top` is -1 on y.
+  const dx = Math.sin(rad);
+  const dy = -Math.cos(rad);
+  const len = Math.abs(w * dx) + Math.abs(h * dy);
+  const cx = w / 2;
+  const cy = h / 2;
+  // `sin(π)` is not quite zero, so an axis-aligned angle can round to -0;
+  // `=== 0` catches it and normalizes to +0.
+  const px = (v) => {
+    const r = Math.round(v);
+    return r === 0 ? 0 : r;
+  };
+  return {
+    x0: px(cx - (dx * len) / 2),
+    y0: px(cy - (dy * len) / 2),
+    x1: px(cx + (dx * len) / 2),
+    y1: px(cy + (dy * len) / 2),
   };
 }
 

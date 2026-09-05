@@ -26,6 +26,10 @@ import {
   toDeckDocument,
 } from '../src/plugins/carousel/document.js';
 
+/** Gradient handles the fake ctx has handed out, so a `fillStyle` carrying one
+ *  logs as the plain string `'gradient'` instead of an unassertable object. */
+const GRADIENTS = new WeakSet();
+
 /** A ctx that records every call and style assignment as `[name, ...args]`. */
 function recordingCtx(log) {
   const ctx = {
@@ -34,6 +38,12 @@ function recordingCtx(log) {
     fillRect: (...a) => log.push(['fillRect', ...a]),
     save: () => log.push(['save']),
     restore: () => log.push(['restore']),
+    createLinearGradient: (...line) => {
+      log.push(['createLinearGradient', ...line]);
+      const grad = { addColorStop: (at, color) => log.push(['addColorStop', at, color]) };
+      GRADIENTS.add(grad);
+      return grad;
+    },
   };
   for (const prop of ['fillStyle', 'filter']) {
     let v;
@@ -41,7 +51,7 @@ function recordingCtx(log) {
       get: () => v,
       set: (next) => {
         v = next;
-        log.push([prop, next]);
+        log.push([prop, GRADIENTS.has(next) ? 'gradient' : next]);
       },
     });
   }
@@ -135,6 +145,72 @@ describe('paintSlide', () => {
       ['restore'],
       ['drawImage', 'BMP', 0, 0, 340, 1350],
     ]);
+  });
+
+  /** A contained deck slide is letterboxed on two opposite sides at once, so
+   *  `pad` is a list of rects — the split path's single full-height column is
+   *  only the simplest case of the same fill. */
+  test('a letterbox fills every rect the geometry reports, not just a right-hand strip', () => {
+    const rect = deckSlideRects(2000, 1000, '1:1', { x: 0, y: 0, w: 1, h: 1 }, 'contain');
+    assert.strictEqual(rect.pad.length, 2, 'a bar above and a bar below');
+
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', rect, 1080, 1080, { type: 'solid', color: '#123456' });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1080],
+      ['fillStyle', '#123456'],
+      ['fillRect', 0, 0, 1080, 270],
+      ['fillRect', 0, 810, 1080, 270],
+      ['drawImage', 'BMP', 0, 270, 1080, 540],
+    ]);
+  });
+
+  test('gradient bg: one gradient across the frame, filled into each pad rect', () => {
+    const log = [];
+    const rect = { dx: 0, dy: 270, dw: 1080, dh: 540, pad: [
+      { x: 0, y: 0, w: 1080, h: 270 },
+      { x: 0, y: 810, w: 1080, h: 270 },
+    ] };
+    paintSlide(recordingCtx(log), 'BMP', rect, 1080, 1080, {
+      type: 'gradient',
+      angle: 90,
+      stops: [
+        { at: 0, color: '#000000' },
+        { at: 1, color: '#ffffff' },
+      ],
+    });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1080],
+      // 90deg is `to right`, so the axis runs the frame's full width — the same
+      // line for both bars, which is what makes them read as one gradient.
+      ['createLinearGradient', 0, 540, 1080, 540],
+      ['addColorStop', 0, '#000000'],
+      ['addColorStop', 1, '#ffffff'],
+      ['fillStyle', 'gradient'],
+      ['fillRect', 0, 0, 1080, 270],
+      ['fillRect', 0, 810, 1080, 270],
+      ['drawImage', 'BMP', 0, 270, 1080, 540],
+    ]);
+  });
+
+  test('a gradient no document normalized falls back to the default fill', () => {
+    // `normalizeBg` always writes two stops; a caller that skips it must not be
+    // able to throw out of `addColorStop` half way through an encode.
+    const rect = { dx: 0, dy: 0, dw: 340, dh: 1350, pad: { x: 340, w: 740 } };
+    for (const bg of [
+      { type: 'gradient' },
+      { type: 'gradient', stops: [] },
+      { type: 'gradient', stops: [{ at: 0, color: '#000' }] },
+      { type: 'gradient', stops: [{ at: 0, color: '#000' }, { color: '#fff' }] },
+    ]) {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', rect, 1080, 1350, bg);
+      assert.deepStrictEqual(
+        log.map((e) => e[0]),
+        ['clearRect', 'save', 'filter', 'drawImage', 'restore', 'drawImage'],
+        `blur fallback for ${JSON.stringify(bg)}`,
+      );
+    }
   });
 });
 
@@ -296,6 +372,32 @@ describe('renderDeck', () => {
     assert.deepStrictEqual(
       f.log.filter((e) => e[0] === 'clearRect'),
       rects.map(() => ['clearRect', 0, 0, w, h]),
+    );
+  });
+
+  test("a contained slide's own bg fills its letterbox, slide by slide", async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const base = deckOf('/x.jpg', 3, '4:5', 3000, 1000);
+    // Slide 1 alone is letterboxed, and carries a solid fill; the others cover.
+    const doc = normalizeDocument({
+      ...base,
+      slides: base.slides.map((s, i) =>
+        i === 1
+          ? { ...s, crop: { x: 0, y: 0, w: 1, h: 1 }, fit: 'contain', bg: { type: 'solid', color: '#abcdef' } }
+          : s,
+      ),
+    });
+    await renderDeck(doc, f.deps, undefined, undefined, { srcW: 3000, srcH: 1000 });
+
+    const pad = deckSlideRects(3000, 1000, '4:5', doc.slides[1].crop, 'contain').pad;
+    assert.ok(pad.length >= 2, 'the contained slide really is letterboxed');
+    assert.deepStrictEqual(
+      f.log.filter((e) => e[0] === 'fillStyle' || e[0] === 'fillRect'),
+      [
+        ['fillStyle', '#abcdef'],
+        ...pad.map((p) => ['fillRect', p.x, p.y, p.w, p.h]),
+      ],
+      'exactly one slide fills, and it fills every bar of its own letterbox',
     );
   });
 

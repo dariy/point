@@ -28,7 +28,10 @@
  * Live preview is CSS, never canvas: a pan or a zoom writes
  * `background-size`/`background-position` from `deckSlideFitCSS` straight onto
  * the frame's image element and commits to the document only when the gesture
- * ends, so dragging costs no decode and no re-render.
+ * ends, so dragging costs no decode and no re-render. A slide's background fill
+ * is CSS too — a layer behind that image element, mirroring the pad fill
+ * `paintSlide` paints — so the filmstrip shows the letterbox the JPEG will
+ * carry rather than a placeholder.
  */
 
 import { Component } from "../../components/Component.js";
@@ -49,7 +52,9 @@ import {
   canvasSize,
   clampPan,
   deckSlideFitCSS,
+  deckSlideRects,
   fitReport,
+  padRects,
   safeAreaRect,
   slideCountOptions,
 } from "./geometry.js";
@@ -76,10 +81,11 @@ const DEFAULT_SLIDES = 3;
 /** Clamp a slide count into the studio's bounds. */
 const clampSlides = (v) => Math.min(MAX_SLIDES, Math.max(MIN_SLIDES, Math.floor(v)));
 
-/** Behind the source image on the stage and every filmstrip frame — visible
- *  only where the image doesn't reach (the `pad` strategy's trailing gap on
- *  its last slide, a contained deck slide's letterbox), so padding reads as a
- *  deliberate block rather than a stretched or missing image. */
+/** Behind the source image on the split stage and every split filmstrip frame —
+ *  visible only where the image doesn't reach (the `pad` strategy's trailing gap
+ *  on its last slide), so padding reads as a deliberate block rather than a
+ *  stretched or missing image. Deck frames carry the same hatch from
+ *  `carousel.css`, where it shows only until there is a real fill to paint. */
 const PAD_HATCH =
   "repeating-linear-gradient(45deg, var(--surface-hover) 0 6px, transparent 6px 12px)";
 
@@ -98,6 +104,31 @@ const SLIDE_FITS = [
   ["cover", "Cover"],
   ["contain", "Contain"],
 ];
+
+/** Per-slide background fill, deck mode only and only where a slide actually
+ *  has a letterbox to fill. `blur` is stored as `bg: null` — it is the render's
+ *  default, and storing it explicitly would change the slide's `specHash`
+ *  without changing a pixel. */
+const SLIDE_BGS = [
+  ["blur", "Blur"],
+  ["solid", "Solid"],
+  ["gradient", "Gradient"],
+];
+
+/** What a background chip writes, given the type. Bare defaults: the colour and
+ *  angle inputs then edit them, and `normalizeBg` is the only clamp. */
+const BG_PRESETS = {
+  blur: null,
+  solid: { type: "solid", color: "#000000" },
+  gradient: {
+    type: "gradient",
+    angle: 180,
+    stops: [
+      { at: 0, color: "#000000" },
+      { at: 1, color: "#2b2b2b" },
+    ],
+  },
+};
 
 const ASPECT_OPTIONS = [
   ["4:5", "Portrait 4:5"],
@@ -128,6 +159,17 @@ function readPostId(query) {
 /** A picked media item is usable as a split source only if it is an image. */
 function isImagePath(path) {
   return typeof path === "string" && !/\.(mp4|mov|webm|m4v|avi)$/i.test(path);
+}
+
+/** `<input type="color">` accepts `#rrggbb` and nothing else, so a shorthand or
+ *  alpha hex from the document is widened for display rather than silently
+ *  reset to black by the browser. */
+function colorInputValue(color) {
+  const c = String(color || "").trim().toLowerCase();
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])[0-9a-f]?$/.exec(c);
+  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`;
+  if (/^#[0-9a-f]{8}$/.test(c)) return c.slice(0, 7);
+  return /^#[0-9a-f]{6}$/.test(c) ? c : "#000000";
 }
 
 /** The midpoint and spread of the live pointers — one finger gives `dist: 0`,
@@ -217,6 +259,12 @@ export default class CarouselStudioPage extends Component {
     "slide-fit"(_e, el) {
       this._setSlideFraming(Number(el.dataset.slide), { fit: el.dataset.fit });
     },
+    "slide-bg"(_e, el) {
+      const preset = BG_PRESETS[el.dataset.bg];
+      this._setSlideFraming(Number(el.dataset.slide), {
+        bg: preset ? { ...preset } : null,
+      });
+    },
     "reset-slide"(_e, el) {
       this._setSlideFraming(Number(el.dataset.slide), {
         crop: { x: 0, y: 0, w: 1, h: 1 },
@@ -243,6 +291,29 @@ export default class CarouselStudioPage extends Component {
    *  stage; until then slide 0 answers for the deck. */
   _source() {
     return this.state.doc.slides[0]?.source || "";
+  }
+
+  /** The slide the deck panel is editing — the selection, pinned inside the
+   *  deck in case it shrank under it. */
+  _selectedIndex() {
+    return Math.min(this.state.selected, this.state.doc.slides.length - 1);
+  }
+
+  /**
+   * Whether a deck slide leaves a letterbox for its background to fill — the
+   * same question `paintSlide` asks, answered from the same `deckSlideRects`
+   * pad, so the control and the preview cannot disagree with the render. False
+   * with no source or no source dimensions: there is nothing to fill around.
+   *
+   * @param {import('./document.js').CarouselSlide} slide
+   */
+  _hasPad(slide) {
+    const { srcW, srcH } = this.state;
+    if (!slide?.source || !srcW || !srcH) return false;
+    const { aspect } = this.state.doc;
+    const [dstW, dstH] = canvasSize(aspect);
+    const rect = deckSlideRects(srcW, srcH, aspect, slide.crop, slide.fit);
+    return padRects(rect, dstW, dstH).length > 0;
   }
 
   /** Paths of the slides the post currently points at — the "Rendered slides"
@@ -734,12 +805,21 @@ export default class CarouselStudioPage extends Component {
       </div>`;
   }
 
-  /** The image layer of one deck frame. Its own element, not the frame's
-   *  background, because a contained slide's box is smaller than the frame —
-   *  only an element cut down to the content rect keeps the source from
-   *  bleeding into the letterbox the canvas fills with `bg`. */
-  _deckImage() {
-    return html`<span class="carousel-studio__frame-img"></span>`;
+  /**
+   * The two layers of one deck frame, in paint order.
+   *
+   * The fill spans the whole frame and the image sits on top of it, exactly as
+   * `paintSlide` fills the canvas and then blits the crop over it. Both are
+   * their own elements rather than backgrounds of the frame: a contained
+   * slide's box is smaller than the frame, so only an element cut down to the
+   * content rect keeps the source from bleeding into the letterbox — and only a
+   * separate element can carry the `blur()` the fill needs without blurring the
+   * image and the frame's border with it.
+   */
+  _deckLayers() {
+    return html`
+      <span class="carousel-studio__frame-bg"></span>
+      <span class="carousel-studio__frame-img"></span>`;
   }
 
   _renderBuilder() {
@@ -778,7 +858,7 @@ export default class CarouselStudioPage extends Component {
               data-slice="${String(i)}"
               style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
             >
-              ${this._deckImage()}
+              ${this._deckLayers()}
             </span>`,
         )
       : "";
@@ -796,7 +876,7 @@ export default class CarouselStudioPage extends Component {
               aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
               style="aspect-ratio:${String(w)}/${String(h)}"
             >
-              ${this._deckImage()}
+              ${this._deckLayers()}
             </div>`
         : html`
             <div
@@ -919,7 +999,7 @@ export default class CarouselStudioPage extends Component {
    */
   _renderDeckPanel() {
     const doc = this.state.doc;
-    const i = Math.min(this.state.selected, doc.slides.length - 1);
+    const i = this._selectedIndex();
     const slide = doc.slides[i];
     if (!slide) return "";
 
@@ -962,7 +1042,97 @@ export default class CarouselStudioPage extends Component {
           </button>
         </div>
 
+        ${this._renderBgControl(i, slide)}
+
         <p class="carousel-studio__fit-readout" aria-live="polite">${readout}</p>
+      </div>`;
+  }
+
+  /**
+   * The background control for one deck slide — shown only when the slide
+   * really has a letterbox to fill. A `cover` slide covers its frame, and
+   * offering a fill that paints nothing is worse than offering none.
+   *
+   * `solid` adds a colour input; `gradient` adds an angle and its two ends. Both
+   * write through `_setSlideFraming`, so `normalizeBg` is the only thing that
+   * decides what a value means.
+   *
+   * @param {number} i
+   * @param {import('./document.js').CarouselSlide} slide
+   */
+  _renderBgControl(i, slide) {
+    if (!this._hasPad(slide)) return "";
+
+    const bg = slide.bg;
+    const type = bg?.type || "blur";
+    const solid = bg?.type === "solid" ? bg : null;
+    const gradient = bg?.type === "gradient" ? bg : null;
+
+    return html`
+      <div class="carousel-studio__bg">
+        <span class="carousel-studio__bg-label" id="carousel-bg-label">Letterbox fill</span>
+        <div class="carousel-studio__fit-chips" role="group" aria-labelledby="carousel-bg-label">
+          ${SLIDE_BGS.map(
+            ([val, text]) => html`
+              <button
+                type="button"
+                class="carousel-studio__chip ${type === val ? "is-active" : ""}"
+                data-action="slide-bg"
+                data-slide="${String(i)}"
+                data-bg="${val}"
+                aria-pressed="${type === val ? "true" : "false"}"
+              >
+                ${text}
+              </button>`,
+          )}
+        </div>
+
+        ${solid
+          ? html`
+              <label class="carousel-studio__bg-field">
+                <span>Colour</span>
+                <input
+                  type="color"
+                  id="carousel-bg-color"
+                  value="${colorInputValue(solid.color)}"
+                />
+              </label>`
+          : ""}
+        ${gradient
+          ? html`
+              <label class="carousel-studio__bg-field">
+                <span>From</span>
+                <input
+                  type="color"
+                  id="carousel-bg-from"
+                  value="${colorInputValue(gradient.stops[0].color)}"
+                />
+              </label>
+              <label class="carousel-studio__bg-field">
+                <span>To</span>
+                <input
+                  type="color"
+                  id="carousel-bg-to"
+                  value="${colorInputValue(
+                    gradient.stops[gradient.stops.length - 1].color,
+                  )}"
+                />
+              </label>
+              <label class="carousel-studio__bg-field">
+                <span
+                  >Angle:
+                  <output id="carousel-bg-angle-out">${String(gradient.angle)}°</output></span
+                >
+                <input
+                  type="range"
+                  id="carousel-bg-angle"
+                  min="0"
+                  max="359"
+                  step="1"
+                  value="${String(gradient.angle)}"
+                />
+              </label>`
+          : ""}
       </div>`;
   }
 
@@ -1178,6 +1348,67 @@ export default class CarouselStudioPage extends Component {
       el.style.width = `${fit.box.w}%`;
       el.style.height = `${fit.box.h}%`;
     });
+    this._paintDeckBg(i, slide, fit, url);
+  }
+
+  /**
+   * The fill layer behind one slide — the CSS twin of `paintSlide`'s pad fill,
+   * so the filmstrip shows the background the JPEG will really carry instead of
+   * the hatch placeholder.
+   *
+   * - `solid` / `gradient` are literal CSS: `gradientLine` follows the
+   *   `linear-gradient(<angle>)` convention precisely so the canvas and this
+   *   agree on where the axis runs.
+   * - `blur` (the default) is the slide's own image stretched from its content
+   *   box to the whole frame, which is exactly what the canvas does — and in
+   *   percentages that is the *same* `background-size`/`position` pair on a
+   *   bigger element, so the numbers are simply reused. The radius is in `cqw`
+   *   against the frame's inline size (`carousel.css` makes each frame a query
+   *   container), which keeps it proportional to the canvas radius at any
+   *   preview size without measuring anything.
+   *
+   * A slide with nothing to fill — no letterbox, or no usable source yet —
+   * keeps the layer empty, leaving the frame's hatch to show through as the
+   * "nothing to preview yet" affordance it was added for.
+   *
+   * @param {number} i
+   * @param {import('./document.js').CarouselSlide} slide
+   * @param {ReturnType<import('./geometry.js').deckSlideFitCSS>} fit
+   * @param {string} url the slide's source as a CSS `url()`, or `"none"`
+   */
+  _paintDeckBg(i, slide, fit, url) {
+    const [dstW] = canvasSize(this.state.doc.aspect);
+    const bg = slide.bg;
+
+    let image = "none";
+    let color = "transparent";
+    let filter = "none";
+    let size = "";
+    let position = "";
+    if (!this._hasPad(slide)) {
+      // Nothing to fill: either the frame is covered, or there is no source to
+      // fill it from yet and the frame's hatch should show through.
+    } else if (bg?.type === "solid") {
+      color = bg.color;
+    } else if (bg?.type === "gradient") {
+      const stops = bg.stops.map((s) => `${s.color} ${s.at * 100}%`).join(", ");
+      image = `linear-gradient(${bg.angle}deg, ${stops})`;
+    } else {
+      const radius = Math.max(1, Math.round((bg && "radius" in bg && bg.radius) || dstW * 0.05));
+      image = url;
+      filter = `blur(${((radius / dstW) * 100).toFixed(2)}cqw)`;
+      size = `${fit.size[0]}% ${fit.size[1]}%`;
+      position = `${fit.position[0]}% ${fit.position[1]}%`;
+    }
+
+    this.$$(`[data-slice="${i}"] .carousel-studio__frame-bg`).forEach((el) => {
+      el.style.backgroundImage = image;
+      el.style.backgroundColor = color;
+      el.style.backgroundRepeat = "no-repeat";
+      el.style.backgroundSize = size || "100% 100%";
+      el.style.backgroundPosition = position || "0% 0%";
+      el.style.filter = filter;
+    });
   }
 
   // ── Control wiring ────────────────────────────────────────────────────────
@@ -1223,6 +1454,76 @@ export default class CarouselStudioPage extends Component {
         this._setSplit({ anchorY: Number(anchor.value) });
       });
     }
+
+    this._wireBgFields();
+  }
+
+  /**
+   * The background fill's own fields — the colour ends and the gradient angle.
+   * The type chips are an action; these edit the type that is already chosen.
+   *
+   * Same split as every other live control here: `input` repaints the fill
+   * layer straight into the DOM, `change` commits it to the document. Dragging
+   * a colour picker across a hue ramp therefore costs two style writes per step
+   * rather than a document mutation and a rebuild.
+   */
+  _wireBgFields() {
+    const angle = /** @type {HTMLInputElement|null} */ (this.$("#carousel-bg-angle"));
+    const angleOut = this.$("#carousel-bg-angle-out");
+    const fields = ["#carousel-bg-color", "#carousel-bg-from", "#carousel-bg-to"]
+      .map((sel) => this.$(sel))
+      .concat(angle)
+      .filter(Boolean);
+
+    for (const el of fields) {
+      this.on(el, "input", () => {
+        const i = this._selectedIndex();
+        const slide = this.state.doc.slides[i];
+        if (!slide) return;
+        if (angleOut && angle) angleOut.textContent = `${angle.value}°`;
+        this._paintDeckSlide(i, { ...slide, bg: this._bgFromFields(slide) });
+      });
+      this.on(el, "change", () => {
+        const i = this._selectedIndex();
+        const slide = this.state.doc.slides[i];
+        if (slide) this._setSlideFraming(i, { bg: this._bgFromFields(slide) });
+      });
+    }
+  }
+
+  /**
+   * The background the panel's fields currently describe, over `slide`'s own
+   * type. Reads the DOM rather than an event, so one handler serves every
+   * field: whichever moved, the result is the whole fill.
+   *
+   * A gradient is rebuilt as its two ends — the control edits a `from` and a
+   * `to`, and a hand-authored document with more stops renders them all but
+   * loses the middle ones the moment this panel writes.
+   *
+   * @param {import('./document.js').CarouselSlide} slide
+   * @returns {object|null}
+   */
+  _bgFromFields(slide) {
+    const value = (sel, fallback) => {
+      const el = /** @type {HTMLInputElement|null} */ (this.$(sel));
+      return el ? el.value : fallback;
+    };
+    const bg = slide.bg;
+    if (bg?.type === "solid") {
+      return { type: "solid", color: value("#carousel-bg-color", bg.color) };
+    }
+    if (bg?.type === "gradient") {
+      const last = bg.stops[bg.stops.length - 1];
+      return {
+        type: "gradient",
+        angle: Number(value("#carousel-bg-angle", String(bg.angle))),
+        stops: [
+          { at: 0, color: value("#carousel-bg-from", bg.stops[0].color) },
+          { at: 1, color: value("#carousel-bg-to", last.color) },
+        ],
+      };
+    }
+    return bg;
   }
 
   // ── Deck gestures ─────────────────────────────────────────────────────────

@@ -87,6 +87,103 @@ describe('normalizeDocument', () => {
     assert.strictEqual(normalizeDocument({ slides: [{ bg: 'blur' }] }).slides[0].bg, null);
   });
 
+  /** `bg` is what the render paints around a contained slide, so an unusable
+   *  value has to degrade here — `addColorStop` throws mid-encode otherwise. */
+  describe('bg fill', () => {
+    const bgOf = (bg) => normalizeDocument({ slides: [{ bg }] }).slides[0].bg;
+
+    test('solid defaults to black and rejects a colour canvas could not parse', () => {
+      assert.deepStrictEqual(bgOf({ type: 'solid' }), { type: 'solid', color: '#000000' });
+      assert.deepStrictEqual(bgOf({ type: 'solid', color: 'rebeccapurple' }), {
+        type: 'solid',
+        color: '#000000',
+      });
+      assert.deepStrictEqual(bgOf({ type: 'solid', color: ' #AABBCC ' }), {
+        type: 'solid',
+        color: '#aabbcc',
+      });
+      assert.deepStrictEqual(bgOf({ type: 'solid', color: 'transparent' }), {
+        type: 'solid',
+        color: 'transparent',
+      });
+    });
+
+    test('blur keeps a positive radius and drops anything else', () => {
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: 40 }), { type: 'blur', radius: 40 });
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: 0 }), { type: 'blur' });
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: -8 }), { type: 'blur' });
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: 'wide' }), { type: 'blur' });
+    });
+
+    test('gradient fills in the angle and stops it was not given', () => {
+      const bg = bgOf({ type: 'gradient' });
+      assert.strictEqual(bg.angle, 180, 'top → bottom');
+      assert.strictEqual(bg.stops.length, 2, 'a gradient needs two stops to be one');
+      assert.deepStrictEqual(
+        bg.stops.map((s) => s.at),
+        [0, 1],
+      );
+    });
+
+    test('gradient angles wrap into 0..360 and stops clamp into 0..1', () => {
+      const stops = [
+        { at: -1, color: '#000' },
+        { at: 9, color: '#fff' },
+      ];
+      assert.deepStrictEqual(bgOf({ type: 'gradient', angle: 450, stops }), {
+        type: 'gradient',
+        angle: 90,
+        stops: [
+          { at: 0, color: '#000' },
+          { at: 1, color: '#fff' },
+        ],
+      });
+      assert.strictEqual(bgOf({ type: 'gradient', angle: -90, stops }).angle, 270);
+      assert.strictEqual(bgOf({ type: 'gradient', angle: 'sideways', stops }).angle, 180);
+    });
+
+    test('gradient stops with no `at` are spread evenly across the line', () => {
+      const bg = bgOf({
+        type: 'gradient',
+        stops: [{ color: '#000000' }, { color: '#808080' }, { color: '#ffffff' }],
+      });
+      assert.deepStrictEqual(
+        bg.stops.map((s) => s.at),
+        [0, 0.5, 1],
+      );
+    });
+
+    test('a gradient the canvas could not paint degrades to the default', () => {
+      const fallback = bgOf({ type: 'gradient' }).stops;
+      // Unparseable colours are dropped; fewer than two left is not a gradient.
+      for (const stops of [
+        undefined,
+        'red to blue',
+        [],
+        [{ color: '#000000' }],
+        [{ color: 'octarine' }, { color: 'ultraviolet' }],
+        [{ color: '#000000' }, { at: 1 }],
+      ]) {
+        assert.deepStrictEqual(
+          bgOf({ type: 'gradient', stops }).stops,
+          fallback,
+          `stops: ${JSON.stringify(stops)}`,
+        );
+      }
+    });
+
+    test('a normalized bg is idempotent, for every type', () => {
+      for (const bg of [
+        { type: 'blur', radius: 30 },
+        { type: 'solid', color: '#123456' },
+        { type: 'gradient', angle: 45, stops: [{ at: 0.2, color: '#fff' }, { at: 0.9, color: '#000' }] },
+      ]) {
+        const once = bgOf(bg);
+        assert.deepStrictEqual(bgOf(once), once, bg.type);
+      }
+    });
+  });
+
   test('rendered needs a path, and fills media_id / specHash', () => {
     assert.strictEqual(
       normalizeDocument({ slides: [{ rendered: { media_id: 3 } }] }).slides[0].rendered,
@@ -601,6 +698,33 @@ describe('specHash', () => {
     assert.notStrictEqual(h, specHash({ ...slide, fit: 'contain' }));
     assert.notStrictEqual(h, specHash({ ...slide, bg: { type: 'solid' } }));
     assert.notStrictEqual(h, specHash({ ...slide, layers: [] }));
+  });
+
+  test('a background edit re-encodes exactly the slide it touched', () => {
+    // The fill is part of the pixels, so every field of it has to move the hash
+    // — otherwise the C8 dedup would keep a slide rendered with the old fill.
+    const solid = { ...slide, bg: { type: 'solid', color: '#112233' } };
+    const gradient = {
+      ...slide,
+      bg: { type: 'gradient', angle: 180, stops: [{ at: 0, color: '#000000' }, { at: 1, color: '#ffffff' }] },
+    };
+    const hashes = [
+      specHash(slide),
+      specHash(solid),
+      specHash({ ...solid, bg: { ...solid.bg, color: '#332211' } }),
+      specHash(gradient),
+      specHash({ ...gradient, bg: { ...gradient.bg, angle: 90 } }),
+      specHash({
+        ...gradient,
+        bg: { ...gradient.bg, stops: [{ at: 0, color: '#000000' }, { at: 1, color: '#cccccc' }] },
+      }),
+    ];
+    assert.strictEqual(new Set(hashes).size, hashes.length, `distinct: ${hashes.join()}`);
+    // And a fill that only *looks* different does not: `#FFF` is `#fff`.
+    assert.strictEqual(
+      specHash({ ...slide, bg: { type: 'solid', color: '#FFF' } }),
+      specHash({ ...slide, bg: { type: 'solid', color: '#fff' } }),
+    );
   });
 
   test('folds in the doc-level aspect when passed', () => {

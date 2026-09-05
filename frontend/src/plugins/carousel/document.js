@@ -51,11 +51,21 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  */
 
 /**
+ * The background fill behind a slide's pixels. `blur` carries an optional
+ * `radius` in canvas px, `solid` a `color`, `gradient` a CSS `angle` in degrees
+ * plus its `stops`. `null` means the default, which renders as `blur`.
+ *
+ * @typedef {{type:'blur', radius?:number}
+ *   | {type:'solid', color:string}
+ *   | {type:'gradient', angle:number, stops:Array<{at:number,color:string}>}} CarouselBg
+ */
+
+/**
  * @typedef {object} CarouselSlide
  * @property {string} source
  * @property {CarouselCrop} crop
  * @property {'cover'|'contain'} fit
- * @property {{type:string}|null} bg
+ * @property {CarouselBg|null} bg
  * @property {object[]} layers
  * @property {CarouselRendered|null} rendered
  */
@@ -90,10 +100,87 @@ function normalizeCrop(crop) {
   };
 }
 
-/** @param {*} bg @returns {{type:string}|null} */
+/**
+ * Colours are hex or the `transparent` keyword, and nothing else.
+ *
+ * Deliberately narrower than CSS: a gradient stop reaches
+ * `CanvasGradient.addColorStop`, which **throws** on a string it cannot parse,
+ * so a colour that survives normalization has to be one the canvas is certain
+ * to accept. Rejecting here is what keeps a bad background a normalization
+ * problem instead of a render-time exception. Lowercased, so two spellings of
+ * one colour hash the same.
+ */
+const COLOR_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+/** @param {*} value @param {string} fallback @returns {string} */
+function normalizeColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const c = value.trim().toLowerCase();
+  if (c === 'transparent') return c;
+  return COLOR_RE.test(c) ? c : fallback;
+}
+
+const DEFAULT_BG_COLOR = '#000000';
+/** Top → bottom, the CSS convention `geometry.gradientLine` reproduces. */
+const DEFAULT_GRADIENT_ANGLE = 180;
+/** Two stops, because a gradient needs at least two to be one. Near-black so
+ *  the letterbox reads as a deliberate frame rather than a colour choice. */
+const DEFAULT_GRADIENT_STOPS = [
+  { at: 0, color: '#000000' },
+  { at: 1, color: '#2b2b2b' },
+];
+
+/**
+ * Gradient stops, or `null` when the value cannot make a gradient at all.
+ * Entries whose colour the canvas would reject are dropped; a stop with no
+ * usable `at` is spread evenly across what survives, so `[{color}, {color}]`
+ * is a complete gradient.
+ *
+ * @param {*} stops
+ * @returns {Array<{at:number,color:string}>|null}
+ */
+function normalizeStops(stops) {
+  if (!Array.isArray(stops)) return null;
+  const kept = [];
+  for (const s of stops) {
+    if (!isObj(s)) continue;
+    const color = normalizeColor(s.color, '');
+    if (color) kept.push({ at: s.at, color });
+  }
+  if (kept.length < 2) return null;
+  const last = kept.length - 1;
+  return kept.map((s, i) => ({ at: clamp(num(s.at, i / last), 0, 1), color: s.color }));
+}
+
+/**
+ * A slide's background fill: what the render paints wherever the slide's own
+ * pixels do not reach (a `contain` slide's letterbox, the `pad` strategy's tail
+ * gap). Normalized per type — unknown fields dropped, like everywhere in this
+ * module — and `null` for "the default", which the draw layer paints as `blur`.
+ *
+ * An unusable value degrades rather than throwing: a gradient with no parseable
+ * stops falls back to {@link DEFAULT_GRADIENT_STOPS}, an unrecognized type to
+ * `null`. `render.js` may not discover a bad background mid-encode.
+ *
+ * @param {*} bg
+ * @returns {CarouselBg|null}
+ */
 function normalizeBg(bg) {
   if (!isObj(bg) || !BG_TYPES.includes(bg.type)) return null;
-  return { ...bg, type: bg.type };
+  if (bg.type === 'solid') {
+    return { type: 'solid', color: normalizeColor(bg.color, DEFAULT_BG_COLOR) };
+  }
+  if (bg.type === 'gradient') {
+    return {
+      type: 'gradient',
+      angle: ((num(bg.angle, DEFAULT_GRADIENT_ANGLE) % 360) + 360) % 360,
+      stops: normalizeStops(bg.stops) || DEFAULT_GRADIENT_STOPS.map((s) => ({ ...s })),
+    };
+  }
+  // blur: `radius` is optional — the draw layer derives one from the canvas
+  // width when it is absent, so a zero or negative value is simply dropped.
+  const radius = num(bg.radius, 0);
+  return radius > 0 ? { type: 'blur', radius } : { type: 'blur' };
 }
 
 /** @param {*} rendered @returns {CarouselRendered|null} */

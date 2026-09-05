@@ -99,7 +99,14 @@ describe('CarouselStudioPage', () => {
       // of a `pad` deck when its tail is narrower than a full column).
       makeSurface: () => ({
         canvas: {},
-        ctx: { clearRect() {}, drawImage() {}, save() {}, restore() {}, fillRect() {} },
+        ctx: {
+          clearRect() {},
+          drawImage() {},
+          save() {},
+          restore() {},
+          fillRect() {},
+          createLinearGradient: () => ({ addColorStop() {} }),
+        },
       }),
       encode: async () => new Blob(['jpg']),
       upload,
@@ -907,30 +914,170 @@ describe('CarouselStudioPage', () => {
       assert.ok(page.state.doc.slides[2].crop.w > w, 'the crop widened');
     });
 
-    test('a per-slide contain letterboxes that slide in the preview', async () => {
-      const el = await toDeck();
-      // Reset slide 0 to the whole source (4096×2000, far wider than 4:5), so
-      // `contain` has a real letterbox to show rather than a one-pixel sliver.
+    /** Reset slide 0 to the whole source (4096×2000, far wider than 4:5) and
+     *  contain it, so it has a real letterbox rather than a one-pixel sliver. */
+    async function containSlide0(el) {
       click(el.querySelector('.carousel-studio__deck [data-action="reset-slide"]'));
       await settle();
-      assert.deepEqual(page.state.doc.slides[0].crop, { x: 0, y: 0, w: 1, h: 1 });
-
       const contain = page.container.querySelector(
         '.carousel-studio__deck [data-action="slide-fit"][data-fit="contain"]',
       );
       assert.ok(contain, 'a contain control is offered');
       click(contain);
       await settle();
+      return contain;
+    }
+
+    test('a per-slide contain letterboxes that slide in the preview', async () => {
+      const el = await toDeck();
+      await containSlide0(el);
+      assert.deepEqual(page.state.doc.slides[0].crop, { x: 0, y: 0, w: 1, h: 1 });
 
       assert.equal(page.state.doc.slides[0].fit, 'contain');
       const img = deckImg(el, 0);
       const wanted = deckSlideFitCSS(SRC_W, SRC_H, '4:5', page.state.doc.slides[0].crop, 'contain');
       assert.ok(wanted.box.h < 50, `the content rect is letterboxed: ${wanted.box.h}%`);
       assert.equal(img.style.height, `${wanted.box.h}%`);
-      assert.ok(parseFloat(img.style.top) > 0, 'and centred, leaving the letterbox to the hatch');
-      // The letterbox itself is the frame's hatch showing through.
+      assert.ok(parseFloat(img.style.top) > 0, 'and centred, leaving the letterbox to the fill');
+      // The letterbox belongs to the fill layer, not to the frame itself: the
+      // frame only carries the hatch, and a blur() on it would blur the image.
       const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
       assert.ok(!frame.style.backgroundImage, 'the frame carries no image of its own');
+    });
+
+    /** The letterbox `.6` made real: the render fills it from `slide.bg`, and
+     *  the filmstrip has to show the same fill or the WYSIWYG promise breaks. */
+    describe('background fill', () => {
+      const deckBg = (el, i) =>
+        el.querySelector(
+          `.carousel-studio__frame--deck[data-slice="${i}"] .carousel-studio__frame-bg`,
+        );
+      const bgChip = (type) =>
+        page.container.querySelector(`[data-action="slide-bg"][data-bg="${type}"]`);
+
+      test('offered only for a slide that has a letterbox to fill', async () => {
+        const el = await toDeck();
+        // Slide 0 covers its frame straight out of the freeze — a fill would
+        // paint nothing, so there is no control to mislead with.
+        assert.equal(page.state.doc.slides[0].fit, 'cover');
+        assert.ok(!page.container.querySelector('.carousel-studio__bg'), 'no fill control');
+
+        await containSlide0(el);
+        assert.ok(page.container.querySelector('.carousel-studio__bg'), 'now there is one');
+        assert.equal(bgChip('blur').getAttribute('aria-pressed'), 'true', 'blur is the default');
+      });
+
+      test('blur (the default) bleeds the slide across the frame, as the canvas does', async () => {
+        const el = await toDeck();
+        await containSlide0(el);
+
+        const bg = deckBg(el, 0);
+        const img = deckImg(el, 0);
+        assert.match(bg.style.backgroundImage, /pano\.jpg/, "the slide's own pixels");
+        // paintSlide stretches the content rect over the whole frame; in
+        // percentages that is the same pair on a full-frame element.
+        assert.equal(bg.style.backgroundSize, img.style.backgroundSize);
+        assert.equal(bg.style.backgroundPosition, img.style.backgroundPosition);
+        // 5% of the canvas width, expressed against the frame's inline size.
+        assert.equal(bg.style.filter, 'blur(5.00cqw)');
+        assert.equal(page.state.doc.slides[0].bg, null, 'the default is stored as no bg at all');
+      });
+
+      test('solid writes the colour and paints it behind the slide', async () => {
+        const el = await toDeck();
+        await containSlide0(el);
+        click(bgChip('solid'));
+        await settle();
+
+        assert.deepEqual(page.state.doc.slides[0].bg, { type: 'solid', color: '#000000' });
+        const bg = deckBg(el, 0);
+        assert.equal(bg.style.backgroundColor, '#000000');
+        assert.equal(bg.style.backgroundImage, 'none', 'no bleed under a solid fill');
+        assert.equal(bg.style.filter, 'none', 'and nothing to blur');
+
+        // The colour input repaints live and commits on change — the same split
+        // the pan gestures use, so dragging a hue ramp costs no rebuild.
+        const input = page.container.querySelector('#carousel-bg-color');
+        assert.ok(input, 'a colour input is offered');
+        input.value = '#ff0088';
+        fire(input, 'input');
+        assert.equal(deckBg(el, 0).style.backgroundColor, '#ff0088', 'painted');
+        assert.equal(page.state.doc.slides[0].bg.color, '#000000', 'not committed yet');
+
+        fire(input, 'change');
+        await settle();
+        assert.equal(page.state.doc.slides[0].bg.color, '#ff0088');
+        // Only that slide moved.
+        assert.equal(page.state.doc.slides[1].bg, null);
+      });
+
+      test('gradient stores angle + stops, and the preview is the CSS twin', async () => {
+        const el = await toDeck();
+        await containSlide0(el);
+        click(bgChip('gradient'));
+        await settle();
+
+        assert.equal(page.state.doc.slides[0].bg.type, 'gradient');
+        assert.equal(page.state.doc.slides[0].bg.angle, 180);
+        assert.equal(deckBg(el, 0).style.backgroundImage, 'linear-gradient(180deg, #000000 0%, #2b2b2b 100%)');
+
+        const angle = page.container.querySelector('#carousel-bg-angle');
+        angle.value = '90';
+        fire(angle, 'input');
+        assert.equal(
+          page.container.querySelector('#carousel-bg-angle-out').textContent,
+          '90°',
+          'the readout follows the slider',
+        );
+        fire(angle, 'change');
+        await settle();
+
+        assert.equal(page.state.doc.slides[0].bg.angle, 90);
+        assert.match(deckBg(el, 0).style.backgroundImage, /^linear-gradient\(90deg,/);
+
+        // Both ends are editable, and land on the stops the render reads.
+        const to = page.container.querySelector('#carousel-bg-to');
+        to.value = '#ffffff';
+        fire(to, 'change');
+        await settle();
+        assert.deepEqual(page.state.doc.slides[0].bg.stops, [
+          { at: 0, color: '#000000' },
+          { at: 1, color: '#ffffff' },
+        ]);
+      });
+
+      test('a fill change re-renders exactly the slide it touched', async () => {
+        const el = await toDeck();
+        await containSlide0(el);
+        const before = page.state.doc.slides.map((s) => specHash(s, '4:5'));
+        click(bgChip('solid'));
+        await settle();
+
+        const after = page.state.doc.slides.map((s) => specHash(s, '4:5'));
+        assert.notEqual(after[0], before[0], 'the filled slide must be re-encoded');
+        assert.deepEqual(after.slice(1), before.slice(1), 'the others are reused');
+      });
+
+      test('switching a slide back to cover retires its fill control', async () => {
+        const el = await toDeck();
+        await containSlide0(el);
+        click(bgChip('solid'));
+        await settle();
+
+        click(
+          page.container.querySelector(
+            '.carousel-studio__deck [data-action="slide-fit"][data-fit="cover"]',
+          ),
+        );
+        await settle();
+
+        assert.ok(!page.container.querySelector('.carousel-studio__bg'), 'nothing left to fill');
+        // The bg stays on the document — going back to contain finds it again —
+        // but the covered frame paints none of it.
+        assert.deepEqual(page.state.doc.slides[0].bg, { type: 'solid', color: '#000000' });
+        assert.equal(deckBg(el, 0).style.backgroundImage, 'none');
+        assert.equal(deckBg(el, 0).style.backgroundColor, 'transparent');
+      });
     });
 
     test('going back to split confirms first, then discards the per-slide framing', async () => {
