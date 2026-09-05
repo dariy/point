@@ -19,8 +19,15 @@ import {
   buildCarouselBlock,
   applyCarouselBlock,
   splitDocument,
+  toDeckDocument,
+  updateSlideFraming,
   specHash,
 } from '../src/plugins/carousel/document.js';
+import {
+  canvasSize,
+  sliceRects,
+  deckSlideRects,
+} from '../src/plugins/carousel/geometry.js';
 
 describe('normalizeDocument', () => {
   test('an empty input becomes the default document', () => {
@@ -78,6 +85,103 @@ describe('normalizeDocument', () => {
     );
     assert.strictEqual(normalizeDocument({ slides: [{ bg: { type: 'wat' } }] }).slides[0].bg, null);
     assert.strictEqual(normalizeDocument({ slides: [{ bg: 'blur' }] }).slides[0].bg, null);
+  });
+
+  /** `bg` is what the render paints around a contained slide, so an unusable
+   *  value has to degrade here — `addColorStop` throws mid-encode otherwise. */
+  describe('bg fill', () => {
+    const bgOf = (bg) => normalizeDocument({ slides: [{ bg }] }).slides[0].bg;
+
+    test('solid defaults to black and rejects a colour canvas could not parse', () => {
+      assert.deepStrictEqual(bgOf({ type: 'solid' }), { type: 'solid', color: '#000000' });
+      assert.deepStrictEqual(bgOf({ type: 'solid', color: 'rebeccapurple' }), {
+        type: 'solid',
+        color: '#000000',
+      });
+      assert.deepStrictEqual(bgOf({ type: 'solid', color: ' #AABBCC ' }), {
+        type: 'solid',
+        color: '#aabbcc',
+      });
+      assert.deepStrictEqual(bgOf({ type: 'solid', color: 'transparent' }), {
+        type: 'solid',
+        color: 'transparent',
+      });
+    });
+
+    test('blur keeps a positive radius and drops anything else', () => {
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: 40 }), { type: 'blur', radius: 40 });
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: 0 }), { type: 'blur' });
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: -8 }), { type: 'blur' });
+      assert.deepStrictEqual(bgOf({ type: 'blur', radius: 'wide' }), { type: 'blur' });
+    });
+
+    test('gradient fills in the angle and stops it was not given', () => {
+      const bg = bgOf({ type: 'gradient' });
+      assert.strictEqual(bg.angle, 180, 'top → bottom');
+      assert.strictEqual(bg.stops.length, 2, 'a gradient needs two stops to be one');
+      assert.deepStrictEqual(
+        bg.stops.map((s) => s.at),
+        [0, 1],
+      );
+    });
+
+    test('gradient angles wrap into 0..360 and stops clamp into 0..1', () => {
+      const stops = [
+        { at: -1, color: '#000' },
+        { at: 9, color: '#fff' },
+      ];
+      assert.deepStrictEqual(bgOf({ type: 'gradient', angle: 450, stops }), {
+        type: 'gradient',
+        angle: 90,
+        stops: [
+          { at: 0, color: '#000' },
+          { at: 1, color: '#fff' },
+        ],
+      });
+      assert.strictEqual(bgOf({ type: 'gradient', angle: -90, stops }).angle, 270);
+      assert.strictEqual(bgOf({ type: 'gradient', angle: 'sideways', stops }).angle, 180);
+    });
+
+    test('gradient stops with no `at` are spread evenly across the line', () => {
+      const bg = bgOf({
+        type: 'gradient',
+        stops: [{ color: '#000000' }, { color: '#808080' }, { color: '#ffffff' }],
+      });
+      assert.deepStrictEqual(
+        bg.stops.map((s) => s.at),
+        [0, 0.5, 1],
+      );
+    });
+
+    test('a gradient the canvas could not paint degrades to the default', () => {
+      const fallback = bgOf({ type: 'gradient' }).stops;
+      // Unparseable colours are dropped; fewer than two left is not a gradient.
+      for (const stops of [
+        undefined,
+        'red to blue',
+        [],
+        [{ color: '#000000' }],
+        [{ color: 'octarine' }, { color: 'ultraviolet' }],
+        [{ color: '#000000' }, { at: 1 }],
+      ]) {
+        assert.deepStrictEqual(
+          bgOf({ type: 'gradient', stops }).stops,
+          fallback,
+          `stops: ${JSON.stringify(stops)}`,
+        );
+      }
+    });
+
+    test('a normalized bg is idempotent, for every type', () => {
+      for (const bg of [
+        { type: 'blur', radius: 30 },
+        { type: 'solid', color: '#123456' },
+        { type: 'gradient', angle: 45, stops: [{ at: 0.2, color: '#fff' }, { at: 0.9, color: '#000' }] },
+      ]) {
+        const once = bgOf(bg);
+        assert.deepStrictEqual(bgOf(once), once, bg.type);
+      }
+    });
   });
 
   test('rendered needs a path, and fills media_id / specHash', () => {
@@ -239,6 +343,289 @@ describe('splitDocument', () => {
   });
 });
 
+describe('toDeckDocument', () => {
+  const SRC = '/2026/08/wide.jpg';
+
+  test('every slide keeps its source and gains the crop it was already showing', () => {
+    const split = splitDocument({ source: SRC, n: 3, aspect: '4:5' });
+    const deck = toDeckDocument(split, 4000, 1500);
+    assert.strictEqual(deck.mode, 'deck');
+    assert.strictEqual(deck.slides.length, 3);
+    assert.ok(deck.slides.every((s) => s.source === SRC));
+    assert.ok(deck.slides.every((s) => s.fit === 'cover'));
+    // The naive bands splitDocument wrote (x = i/n, w = 1/n, full frame) are
+    // replaced by the real projection: three 4:5 slides use a 3600px centred
+    // strip of this 4000px source, so the deck starts 200px in and each column
+    // is narrower than a third.
+    assert.strictEqual(split.slides[0].crop.x, 0);
+    assert.strictEqual(deck.slides[0].crop.x, 200 / 4000);
+    assert.ok(deck.slides.every((s) => s.crop.w < 1 / 3));
+    assert.ok(deck.slides[0].crop.x < deck.slides[1].crop.x);
+  });
+
+  test('the input document is not mutated', () => {
+    const split = splitDocument({ source: SRC, n: 3, aspect: '4:5' });
+    const before = serializeDocument(split);
+    toDeckDocument(split, 4000, 1500);
+    assert.strictEqual(serializeDocument(split), before);
+    assert.strictEqual(split.mode, 'split');
+  });
+
+  test('strategy and anchorY stay on the document (a return to split needs them)', () => {
+    const split = splitDocument({ source: SRC, n: 3, aspect: '1:1', strategy: 'pad', anchorY: 0.2 });
+    const deck = toDeckDocument(split, 3000, 1200);
+    assert.strictEqual(deck.strategy, 'pad');
+    assert.strictEqual(deck.anchorY, 0.2);
+  });
+
+  test('a deck document round-trips through serialize unchanged', () => {
+    const deck = toDeckDocument(splitDocument({ source: SRC, n: 4, aspect: '1.91:1' }), 5000, 1400);
+    assert.deepStrictEqual(parseDocument(serializeDocument(deck)), deck);
+    assert.deepStrictEqual(normalizeDocument(deck), deck);
+  });
+
+  test('already deck, no slides, or no source dimensions: the mode flips, crops stay', () => {
+    const split = splitDocument({ source: SRC, n: 2, aspect: '4:5' });
+    for (const [w, h] of [
+      [0, 0],
+      [NaN, 800],
+      [-10, 800],
+    ]) {
+      const deck = toDeckDocument(split, w, h);
+      assert.strictEqual(deck.mode, 'deck');
+      assert.deepStrictEqual(
+        deck.slides.map((s) => s.crop),
+        split.slides.map((s) => s.crop),
+      );
+    }
+    // Idempotent: converting a deck document again is a no-op.
+    const once = toDeckDocument(split, 4000, 1500);
+    assert.deepStrictEqual(toDeckDocument(once, 4000, 1500), once);
+    assert.deepStrictEqual(toDeckDocument({}, 4000, 1500).slides, []);
+  });
+
+  test("a pad deck's short tail slide is the only contain slide", () => {
+    const [dstW, dstH] = canvasSize('4:5');
+    // 3 columns' worth of width minus a bit: pad gives 3 slides, the last short.
+    const srcW = 3 * dstW - 200;
+    const split = splitDocument({ source: SRC, n: 3, aspect: '4:5', strategy: 'pad' });
+    const deck = toDeckDocument(split, srcW, dstH + 400);
+    assert.deepStrictEqual(
+      deck.slides.map((s) => s.fit),
+      ['cover', 'cover', 'contain'],
+    );
+    assert.strictEqual(Math.round(deck.slides[2].crop.w * srcW), dstW - 200);
+  });
+
+  // The acceptance test for the whole conversion: what the renderer draws after
+  // it must be what the renderer drew before it.
+  describe('renders the same pixels as the split document it came from', () => {
+    const sources = [
+      [4000, 1200],
+      [3000, 3000],
+      [1200, 4000],
+      [5001, 1333],
+      [2160, 1080],
+      [7331, 997],
+    ];
+    const aspects = ['4:5', '1:1', '1.91:1'];
+    const anchors = [0, 0.25, 0.5, 0.75, 1];
+
+    /** Every slide of every deck the studio can build from these sources. */
+    const sweep = (fn) => {
+      for (const [srcW, srcH] of sources) {
+        for (const aspect of aspects) {
+          for (const strategy of ['cover', 'exact', 'pad']) {
+            for (const anchorY of anchors) {
+              for (const n of [2, 3, 5]) {
+                const doc = splitDocument({ source: SRC, n, aspect, strategy, anchorY });
+                const before = sliceRects(srcW, srcH, n, aspect, { strategy, anchorY });
+                const after = toDeckDocument(doc, srcW, srcH).slides.map((s) =>
+                  deckSlideRects(srcW, srcH, aspect, s.crop, s.fit),
+                );
+                const where = `${srcW}x${srcH} ${aspect} ${strategy} anchorY=${anchorY} n=${n}`;
+                before.forEach((rect, i) =>
+                  fn(rect, after[i], { where: `${where} slide ${i}`, aspect }),
+                );
+              }
+            }
+          }
+        }
+      }
+    };
+
+    test('the source region is the same, to within a rounded pixel an edge', () => {
+      sweep((split, deck, { where }) => {
+        // Never wider than what the split path was showing — the deck path can
+        // only centre-crop further, never reveal source the user had not seen.
+        assert.ok(deck.sx >= split.sx, `${where}: sx moved left`);
+        assert.ok(deck.sx + deck.sw <= split.sx + split.sw, `${where}: right edge moved out`);
+        assert.ok(deck.sy >= split.sy, `${where}: sy moved up`);
+        assert.ok(deck.sy + deck.sh <= split.sy + split.sh, `${where}: bottom edge moved out`);
+        assert.ok(deck.sx - split.sx <= 1, `${where}: sx off by ${deck.sx - split.sx}`);
+        assert.ok(split.sw - deck.sw <= 2, `${where}: sw off by ${split.sw - deck.sw}`);
+        assert.ok(deck.sy - split.sy <= 1, `${where}: sy off by ${deck.sy - split.sy}`);
+        assert.ok(split.sh - deck.sh <= 2, `${where}: sh off by ${split.sh - deck.sh}`);
+      });
+    });
+
+    test('the destination rect is identical — except a pad tail, which re-centres', () => {
+      let tails = 0;
+      sweep((split, deck, { where, aspect }) => {
+        assert.strictEqual(deck.dy, split.dy, `${where}: dy`);
+        assert.strictEqual(deck.dh, split.dh, `${where}: dh`);
+        assert.strictEqual(deck.dw, split.dw, `${where}: dw`);
+        if (!split.pad) {
+          assert.strictEqual(deck.dx, split.dx, `${where}: dx`);
+          assert.ok(!deck.pad, `${where}: a covered frame reports no pad`);
+          return;
+        }
+        // The one visible difference. Split lays the short tail flush left and
+        // fills the gap on the right; a contain slide is centred, so the same
+        // total gap is split between the two sides.
+        tails += 1;
+        const [dstW] = canvasSize(aspect);
+        assert.strictEqual(split.dx, 0, `${where}: the split tail is flush left`);
+        assert.strictEqual(deck.dx, Math.round((dstW - deck.dw) / 2), `${where}: centred tail`);
+        assert.ok(Array.isArray(deck.pad), `${where}: the gap is still reported as pad`);
+        const gap = deck.pad.reduce((sum, p) => sum + p.w * p.h, 0);
+        assert.strictEqual(gap, (dstW - split.dw) * split.dh, `${where}: same gap area`);
+      });
+      assert.ok(tails > 0, 'the sweep should cover at least one padded tail slide');
+    });
+
+    test('a feasible exact or pad deck converts pixel-for-pixel', () => {
+      // Sized so neither strategy has to fall back to cover: tall enough for a
+      // canvas, wide enough for the columns.
+      for (const aspect of ['4:5', '1:1', '1.91:1']) {
+        const [dstW, dstH] = canvasSize(aspect);
+        for (const n of [2, 4]) {
+          for (const strategy of ['exact', 'pad']) {
+            const srcW = strategy === 'exact' ? n * dstW + 137 : (n - 1) * dstW + 400;
+            const srcH = dstH + 311;
+            for (const anchorY of [0, 0.5, 1]) {
+              const doc = splitDocument({ source: SRC, n, aspect, strategy, anchorY });
+              const before = sliceRects(srcW, srcH, n, aspect, { strategy, anchorY });
+              const after = toDeckDocument(doc, srcW, srcH).slides.map((s) =>
+                deckSlideRects(srcW, srcH, aspect, s.crop, s.fit),
+              );
+              before.forEach((rect, i) => {
+                const where = `${aspect} ${strategy} n=${n} anchorY=${anchorY} slide ${i}`;
+                assert.deepStrictEqual(
+                  { sx: after[i].sx, sy: after[i].sy, sw: after[i].sw, sh: after[i].sh },
+                  { sx: rect.sx, sy: rect.sy, sw: rect.sw, sh: rect.sh },
+                  where,
+                );
+              });
+            }
+          }
+        }
+      }
+    });
+  });
+});
+
+describe('updateSlideFraming', () => {
+  const deckDoc = () =>
+    normalizeDocument({
+      mode: 'deck',
+      aspect: '4:5',
+      slides: [
+        { source: '/a.jpg', crop: { x: 0, y: 0, w: 0.5, h: 0.5 } },
+        { source: '/b.jpg', crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 } },
+      ],
+    });
+
+  test('sets crop, fit and bg on the named slide only', () => {
+    const doc = deckDoc();
+    const next = updateSlideFraming(
+      doc,
+      1,
+      { crop: { x: 0.1, y: 0.2, w: 0.4, h: 0.4 }, fit: 'contain', bg: { type: 'solid', color: '#fff' } },
+      { srcW: 2000, srcH: 1000 },
+    );
+    assert.deepStrictEqual(next.slides[1].crop, { x: 0.1, y: 0.2, w: 0.4, h: 0.4 });
+    assert.strictEqual(next.slides[1].fit, 'contain');
+    assert.deepStrictEqual(next.slides[1].bg, { type: 'solid', color: '#fff' });
+    assert.deepStrictEqual(next.slides[0], doc.slides[0]);
+  });
+
+  test('a partial crop merges over the current one — a pan does not reset the zoom', () => {
+    const next = updateSlideFraming(deckDoc(), 0, { crop: { x: 0.3 } }, { srcW: 2000, srcH: 1000 });
+    assert.deepStrictEqual(next.slides[0].crop, { x: 0.3, y: 0, w: 0.5, h: 0.5 });
+  });
+
+  test('the crop is clamped through clampPan, using the source dimensions given', () => {
+    const next = updateSlideFraming(
+      deckDoc(),
+      0,
+      { crop: { x: 0.9, y: -1, w: 0.5, h: 4 } },
+      { srcW: 2000, srcH: 1000 },
+    );
+    assert.deepStrictEqual(next.slides[0].crop, { x: 0.5, y: 0, w: 0.5, h: 1 });
+    // No dimensions: still clamped to the normalized 0..1 box.
+    const blind = updateSlideFraming(deckDoc(), 0, { crop: { x: 5, y: 5 } });
+    assert.deepStrictEqual(blind.slides[0].crop, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 });
+  });
+
+  test('unknown keys and values the schema rejects are dropped', () => {
+    const doc = deckDoc();
+    const next = updateSlideFraming(
+      doc,
+      0,
+      { fit: 'stretch', source: '/hijacked.jpg', layers: [{ t: 'x' }], nope: 1 },
+      { srcW: 2000, srcH: 1000 },
+    );
+    assert.strictEqual(next.slides[0].fit, doc.slides[0].fit);
+    assert.strictEqual(next.slides[0].source, '/a.jpg');
+    assert.deepStrictEqual(next.slides[0].layers, []);
+    assert.ok(!('nope' in next.slides[0]));
+    // An explicit bg of garbage clears it, as normalizeBg does everywhere else.
+    assert.strictEqual(updateSlideFraming(doc, 0, { bg: { type: 'plaid' } }).slides[0].bg, null);
+    assert.strictEqual(updateSlideFraming(doc, 0, { bg: null }).slides[0].bg, null);
+  });
+
+  test('an out-of-range or nonsense slide index returns an equal document', () => {
+    const doc = deckDoc();
+    const same = serializeDocument(doc);
+    for (const i of [-1, 2, 99, 1.5, NaN, undefined, null, 'one']) {
+      assert.strictEqual(
+        serializeDocument(updateSlideFraming(doc, i, { fit: 'contain' })),
+        same,
+        `index ${String(i)}`,
+      );
+    }
+    assert.strictEqual(serializeDocument(updateSlideFraming(doc, 0, null)), same);
+  });
+
+  test('the input document is not mutated, and the result is already normal', () => {
+    const doc = deckDoc();
+    const before = serializeDocument(doc);
+    const next = updateSlideFraming(doc, 0, { crop: { x: 0.4, y: 0.4 } }, { srcW: 100, srcH: 100 });
+    assert.strictEqual(serializeDocument(doc), before);
+    assert.deepStrictEqual(normalizeDocument(next), next);
+    assert.deepStrictEqual(parseDocument(serializeDocument(next)), next);
+  });
+
+  test('one slide re-renders, the rest are reused: only its specHash changes', () => {
+    const doc = normalizeDocument({
+      mode: 'deck',
+      aspect: '4:5',
+      slides: Array.from({ length: 5 }, (_, i) => ({
+        source: '/a.jpg',
+        crop: { x: i / 5, y: 0, w: 0.2, h: 1 },
+      })),
+    });
+    const hash = (d) => d.slides.map((s) => specHash(s, d.aspect, d));
+    const before = hash(doc);
+    const after = hash(updateSlideFraming(doc, 3, { crop: { y: 0.1, h: 0.8 } }, { srcW: 2000, srcH: 1000 }));
+    after.forEach((h, i) => {
+      if (i === 3) assert.notStrictEqual(h, before[i], 'slide 3 must miss');
+      else assert.strictEqual(h, before[i], `slide ${i} must hit`);
+    });
+  });
+});
+
 describe('applyCarouselBlock', () => {
   const doc = {
     slides: [{ rendered: { path: '/2026/08/1.jpg' } }, { rendered: { path: '/2026/08/2.jpg' } }],
@@ -311,6 +698,33 @@ describe('specHash', () => {
     assert.notStrictEqual(h, specHash({ ...slide, fit: 'contain' }));
     assert.notStrictEqual(h, specHash({ ...slide, bg: { type: 'solid' } }));
     assert.notStrictEqual(h, specHash({ ...slide, layers: [] }));
+  });
+
+  test('a background edit re-encodes exactly the slide it touched', () => {
+    // The fill is part of the pixels, so every field of it has to move the hash
+    // — otherwise the C8 dedup would keep a slide rendered with the old fill.
+    const solid = { ...slide, bg: { type: 'solid', color: '#112233' } };
+    const gradient = {
+      ...slide,
+      bg: { type: 'gradient', angle: 180, stops: [{ at: 0, color: '#000000' }, { at: 1, color: '#ffffff' }] },
+    };
+    const hashes = [
+      specHash(slide),
+      specHash(solid),
+      specHash({ ...solid, bg: { ...solid.bg, color: '#332211' } }),
+      specHash(gradient),
+      specHash({ ...gradient, bg: { ...gradient.bg, angle: 90 } }),
+      specHash({
+        ...gradient,
+        bg: { ...gradient.bg, stops: [{ at: 0, color: '#000000' }, { at: 1, color: '#cccccc' }] },
+      }),
+    ];
+    assert.strictEqual(new Set(hashes).size, hashes.length, `distinct: ${hashes.join()}`);
+    // And a fill that only *looks* different does not: `#FFF` is `#fff`.
+    assert.strictEqual(
+      specHash({ ...slide, bg: { type: 'solid', color: '#FFF' } }),
+      specHash({ ...slide, bg: { type: 'solid', color: '#fff' } }),
+    );
   });
 
   test('folds in the doc-level aspect when passed', () => {

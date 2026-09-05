@@ -1,13 +1,17 @@
 /**
  * Carousel Studio — the draw layer.
  *
- * A thin, branch-free sequencer over `geometry.js`: it fetches one source
- * image, asks geometry for the per-slide source rects, then — once per slide —
- * decodes that rect cropped and resampled straight to the slide canvas and
- * encodes it. Every measurement comes from geometry; every side effect —
- * decode, canvas creation, encode, upload — goes through the injected `deps`
- * object, so the logic never touches `document` or the network directly and a
- * test drives it with a recording fake.
+ * Two sequencers over `geometry.js` behind one facade. `renderSplit` fetches a
+ * single source and asks `sliceRects` for the columns; `renderDeck` walks a
+ * deck document where every slide names its own source and crop and asks
+ * `deckSlideRects` for its rect. Both then do the same thing per slide: decode
+ * that source rect cropped and resampled straight to the slide canvas, paint,
+ * encode. `renderCarousel` dispatches on `doc.mode` so callers never branch.
+ *
+ * Every measurement comes from geometry; every side effect — decode, canvas
+ * creation, encode, upload — goes through the injected `deps` object, so the
+ * logic never touches `document` or the network directly and a test drives it
+ * with a recording fake.
  *
  * Memory: one decode per slide, cropped + resized in the same
  * `createImageBitmap` call, so the decoder never holds more than a single
@@ -18,7 +22,13 @@
  * render report per-slide progress. See `docs/features/carousel-studio.md`.
  */
 
-import { canvasSize, sliceRects } from './geometry.js';
+import {
+  canvasSize,
+  deckSlideRects,
+  gradientLine,
+  padRects,
+  sliceRects,
+} from './geometry.js';
 import { deleteMedia, uploadMedia } from '../../api/media.js';
 
 /** Fixed so identical inputs encode to identical bytes → SHA256 dedup reuses
@@ -85,29 +95,72 @@ export function browserDeps() {
 }
 
 /**
- * Paint one slide: clear the canvas, fill the pad region (`pad` slides only,
- * from `bg`), then blit the decoded column 1:1 — the bitmap is already cropped
- * and scaled to `rect.dw × rect.dh` by `deps.decode`. Pure call-issuer — no
- * measurement — so a recording fake ctx can assert the exact sequence, and the
- * pad fill always precedes the blit.
+ * The gradient `bg` describes, or `null` when it cannot make one.
+ *
+ * `document.normalizeBg` always writes an angle and two usable stops, so this
+ * only bites a caller that hands `paintSlide` a background no document ever
+ * normalized — which then falls through to the default fill rather than
+ * throwing out of `addColorStop` half way through an encode.
+ *
+ * @param {import('./document.js').CarouselBg|null|undefined} bg
+ * @returns {{angle: number, stops: Array<{at:number,color:string}>}|null}
+ */
+function gradientFill(bg) {
+  if (!bg || bg.type !== 'gradient') return null;
+  const stops = Array.isArray(bg.stops) ? bg.stops : [];
+  if (stops.length < 2) return null;
+  const usable = stops.every(
+    (s) => s && Number.isFinite(s.at) && typeof s.color === 'string' && s.color,
+  );
+  return usable ? { angle: Number.isFinite(bg.angle) ? bg.angle : 180, stops } : null;
+}
+
+/**
+ * Paint one slide: clear the canvas, fill the background wherever the slide's
+ * own pixels do not reach, then blit the decoded column 1:1 — the bitmap is
+ * already cropped and scaled to `rect.dw × rect.dh` by `deps.decode`. Pure
+ * call-issuer — the region comes from `geometry.padRects`, the gradient axis
+ * from `geometry.gradientLine`, and nothing here measures anything — so a
+ * recording fake ctx can assert the exact sequence, and the fill always
+ * precedes the blit.
+ *
+ * The fill covers every rect `padRects` reports, which is what makes one code
+ * path serve both shapes: the split path's full-height tail column, and a
+ * contained deck slide letterboxed on two opposite sides at once.
+ *
+ * - `solid`: `bg.color`, black by default.
+ * - `gradient`: one canvas gradient across the whole frame, clipped to the pad
+ *   rects by the fills — so two letterbox bars read as ends of one gradient
+ *   rather than two independent ones.
+ * - `blur` (the default, and the fallback for anything unusable): the slide's
+ *   own pixels stretched across the frame under a blur, so the gap bleeds
+ *   instead of hard-edging.
  *
  * @param {any} ctx 2D context
  * @param {ImageBitmap} bitmap the decoded column, sized `rect.dw × rect.dh`
- * @param {{dx:number,dy:number,dw:number,dh:number,pad?:{x:number,w:number}}} rect from `sliceRects`
+ * @param {{dx:number,dy:number,dw:number,dh:number,
+ *   pad?:{x:number,w:number}|Array<{x:number,y:number,w:number,h:number}>}} rect
+ *   from `sliceRects` (split) or `deckSlideRects` (deck)
  * @param {number} w canvas width
  * @param {number} h canvas height
- * @param {{type?:string,color?:string,radius?:number}|null} [bg] fill for the pad region
+ * @param {import('./document.js').CarouselBg|null} [bg] fill for the pad region
  */
 export function paintSlide(ctx, bitmap, rect, w, h, bg) {
   ctx.clearRect(0, 0, w, h);
-  if (rect.pad) {
+  const pad = padRects(rect, w, h);
+  if (pad.length) {
+    const fill = gradientFill(bg);
     if (bg && bg.type === 'solid') {
       ctx.fillStyle = bg.color || '#000000';
-      ctx.fillRect(rect.pad.x, 0, rect.pad.w, h);
+      for (const p of pad) ctx.fillRect(p.x, p.y, p.w, p.h);
+    } else if (fill) {
+      const line = gradientLine(fill.angle, w, h);
+      const gradient = ctx.createLinearGradient(line.x0, line.y0, line.x1, line.y1);
+      for (const s of fill.stops) gradient.addColorStop(s.at, s.color);
+      ctx.fillStyle = gradient;
+      for (const p of pad) ctx.fillRect(p.x, p.y, p.w, p.h);
     } else {
-      // blur (the default): the short column stretched across the whole canvas
-      // under a blur, so the tail slide's gap bleeds instead of hard-edging.
-      const radius = Math.max(1, Math.round((bg && bg.radius) || w * 0.05));
+      const radius = Math.max(1, Math.round((bg && 'radius' in bg && bg.radius) || w * 0.05));
       ctx.save();
       ctx.filter = `blur(${radius}px)`;
       ctx.drawImage(bitmap, 0, 0, rect.dw, rect.dh, 0, 0, w, h);
@@ -118,20 +171,69 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg) {
 }
 
 /**
+ * Decode one source rect, paint it, encode the slide — the shared body of both
+ * sequencers, so a split slide and a deck slide are produced by literally the
+ * same calls in the same order. The bitmap is decoded already cropped and
+ * resized to `rect.dw × rect.dh` and closed in a `finally`, which is what keeps
+ * exactly one decoded slide alive at a time no matter how many slides or how
+ * many megapixels the source has.
+ *
+ * A `null` from `deps.encode` is a hard error — a silently dropped slide would
+ * be worse.
+ *
+ * @param {Blob} blob the source image bytes
+ * @param {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:any}} rect
+ *   from `sliceRects` (split) or `deckSlideRects` (deck)
+ * @param {import('./document.js').CarouselBg|null|undefined} bg background fill
+ *   for the pad region
+ * @param {number} slideW @param {number} slideH canvas size
+ * @param {RenderDeps} deps
+ * @returns {Promise<Blob>}
+ */
+async function encodeSlide(blob, rect, bg, slideW, slideH, deps) {
+  const bitmap = await deps.decode(blob, {
+    sx: rect.sx,
+    sy: rect.sy,
+    sw: rect.sw,
+    sh: rect.sh,
+    resizeWidth: rect.dw,
+    resizeHeight: rect.dh,
+    resizeQuality: 'high',
+  });
+  try {
+    const { canvas, ctx } = deps.makeSurface(slideW, slideH);
+    paintSlide(ctx, bitmap, rect, slideW, slideH, bg);
+    const encoded = await deps.encode(canvas, JPEG_TYPE, JPEG_QUALITY);
+    if (!encoded) {
+      throw new Error('carousel render: canvas.toBlob returned null (encoder failure)');
+    }
+    return encoded;
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+/**
+ * The flat, doc-free spec the split path has taken since S1: one source, a
+ * count, and the doc-level framing every column is a slave of.
+ *
+ * @typedef {object} SplitSpec
+ * @property {string} source
+ * @property {number} n
+ * @property {string} aspect
+ * @property {'cover'|'exact'|'pad'} [strategy]
+ * @property {number} [anchorY]
+ * @property {import('./document.js').CarouselBg|null} [bg]
+ * @property {number} [srcW]
+ * @property {number} [srcH]
+ */
+
+/**
  * Slice one source image into `n` slide JPEGs — one crop-and-resize decode per
  * slide, each painted + encoded onto its own `slideW × slideH` canvas. A `null`
  * from `deps.encode` is a hard error — a silently dropped slide would be worse.
  *
- * @param {{
- *   source: string,
- *   n: number,
- *   aspect: string,
- *   strategy?: 'cover'|'exact'|'pad',
- *   anchorY?: number,
- *   bg?: {type?:string}|null,
- *   srcW?: number,
- *   srcH?: number,
- * }} spec  `srcW`/`srcH` skip the `probeSize` call when the caller already knows them
+ * @param {SplitSpec} spec  `srcW`/`srcH` skip the `probeSize` call when the caller already knows them
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
  * @param {Array<{id:number,path:string}|null>} [keep]  per-slide reuse: a
@@ -159,30 +261,144 @@ export async function renderSplit(spec, deps, onProgress, keep) {
       onProgress?.({ done: i + 1, total: rects.length });
       continue;
     }
-    const rect = rects[i];
-    const bitmap = await deps.decode(blob, {
-      sx: rect.sx,
-      sy: rect.sy,
-      sw: rect.sw,
-      sh: rect.sh,
-      resizeWidth: rect.dw,
-      resizeHeight: rect.dh,
-      resizeQuality: 'high',
-    });
-    try {
-      const { canvas, ctx } = deps.makeSurface(slideW, slideH);
-      paintSlide(ctx, bitmap, rect, slideW, slideH, bg);
-      const encoded = await deps.encode(canvas, JPEG_TYPE, JPEG_QUALITY);
-      if (!encoded) {
-        throw new Error('carousel render: canvas.toBlob returned null (encoder failure)');
-      }
-      slides.push(encoded);
-    } finally {
-      bitmap.close?.();
-    }
+    slides.push(await encodeSlide(blob, rects[i], bg, slideW, slideH, deps));
     onProgress?.({ done: i + 1, total: rects.length });
   }
   return slides;
+}
+
+/**
+ * A fetch-and-probe deduplicated per source path. A deck frozen from a split
+ * names the same image on every slide, so without this an eight-slide deck
+ * would issue eight identical GETs and eight probes; with it, one of each.
+ *
+ * The cache holds the *compressed* blob, not a decoded bitmap — that is what
+ * makes it safe to keep for the whole render. The memory bound the module
+ * header promises is about decoded RGBA, and `encodeSlide` still keeps exactly
+ * one of those alive at a time.
+ *
+ * @param {RenderDeps} deps
+ * @param {{w:number,h:number}|null} seed source size the caller already knows,
+ *   skipping the probe — only valid when every slide shares one source
+ * @returns {(source: string) => Promise<{blob: Blob, w: number, h: number}>}
+ */
+function sourceLoader(deps, seed) {
+  /** @type {Map<string, Promise<{blob: Blob, w: number, h: number}>>} */
+  const cache = new Map();
+  return (source) => {
+    let pending = cache.get(source);
+    if (!pending) {
+      pending = (async () => {
+        const blob = await deps.fetchBlob(source);
+        const { w, h } = seed || (await deps.probeSize(source));
+        // Geometry clamps a degenerate size to an empty frame rather than
+        // throwing; here it would mean decoding a 0×0 rect, so it is fatal.
+        if (!(w >= 1) || !(h >= 1)) {
+          throw new Error(`carousel render: source has no pixel dimensions: ${source}`);
+        }
+        return { blob, w, h };
+      })();
+      cache.set(source, pending);
+    }
+    return pending;
+  };
+}
+
+/**
+ * @typedef {object} RenderOpts
+ * @property {number} [srcW] source pixel width the caller already probed
+ * @property {number} [srcH] source pixel height — skips a `probeSize` call.
+ *   Never a document field: the document stores no derived data.
+ */
+
+/**
+ * Render a `deck` document: every slide names its own `source` and its own
+ * normalized `crop`, so each one gets its rect from `deckSlideRects` instead of
+ * being a slave of the doc-level strategy `renderSplit` applies.
+ *
+ * Sources are fetched and probed once each, however many slides share them —
+ * the common case is a deck frozen from a split, where all N slides name one
+ * image. Lazily, too: a deck whose every slide is in `keep` touches the network
+ * not at all.
+ *
+ * Background fill is passed through to `paintSlide` as-is: a contained slide's
+ * `pad` is an array of canvas rects (`deckSlideRects`) and the draw layer fills
+ * every one of them, so a letterbox on two opposite sides is painted by the same
+ * code as the split path's single tail column.
+ *
+ * @param {import('./document.js').CarouselDoc} doc a normalized deck document
+ * @param {RenderDeps} deps
+ * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
+ * @param {Array<{id:number,path:string}|null>} [keep] per-slide reuse — see `renderSplit`
+ * @param {RenderOpts} [opts]
+ * @returns {Promise<(Blob|null)[]>} the encoded slides, in deck order — `null`
+ *   at every index `keep` reused
+ */
+export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
+  const slides = doc?.slides || [];
+  const [slideW, slideH] = canvasSize(doc?.aspect);
+  // A single-source deck can take the caller's dimensions; with two sources in
+  // play they would be ambiguous, so every source is probed instead.
+  const singleSource = slides.length > 0 && slides.every((s) => s.source === slides[0].source);
+  const seed =
+    singleSource && opts.srcW >= 1 && opts.srcH >= 1 ? { w: opts.srcW, h: opts.srcH } : null;
+  const load = sourceLoader(deps, seed);
+
+  const out = [];
+  for (let i = 0; i < slides.length; i++) {
+    if (keep && keep[i]) {
+      out.push(null);
+      onProgress?.({ done: i + 1, total: slides.length });
+      continue;
+    }
+    const slide = slides[i];
+    const { blob, w, h } = await load(slide.source);
+    const rect = deckSlideRects(w, h, doc.aspect, slide.crop, slide.fit);
+    out.push(await encodeSlide(blob, rect, slide.bg, slideW, slideH, deps));
+    onProgress?.({ done: i + 1, total: slides.length });
+  }
+  return out;
+}
+
+/**
+ * Render a carousel document, whichever mode it is in — the one entry point
+ * callers use, so the studio never branches on `doc.mode` itself.
+ *
+ * `split` is adapted into the flat spec `renderSplit` has always taken: the
+ * shared source and count come from the slides, the framing from the doc-level
+ * `strategy`/`anchorY`. The background comes from the **last** slide, the only
+ * one `sliceRects` can leave a pad on.
+ *
+ * @param {import('./document.js').CarouselDoc} doc a normalized document
+ * @param {RenderDeps} deps
+ * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
+ * @param {Array<{id:number,path:string}|null>} [keep] per-slide reuse — see `renderSplit`
+ * @param {RenderOpts} [opts]
+ * @returns {Promise<(Blob|null)[]>} the encoded slides, in deck order — `null`
+ *   at every index `keep` reused
+ */
+export async function renderCarousel(doc, deps, onProgress, keep, opts = {}) {
+  const slides = doc?.slides || [];
+  // Nothing to draw. Guarded here rather than in the sequencers, because
+  // `renderSplit` would round an empty deck up to one slide and fetch `''`.
+  if (!slides.length) return [];
+  if (doc.mode === 'deck') return renderDeck(doc, deps, onProgress, keep, opts);
+
+  return renderSplit(
+    {
+      source: slides[0].source,
+      n: slides.length,
+      aspect: doc.aspect,
+      strategy: doc.strategy,
+      anchorY: doc.anchorY,
+      bg: slides[slides.length - 1].bg,
+      srcW: opts.srcW,
+      srcH: opts.srcH,
+    },
+    deps,
+    onProgress,
+    keep,
+  );
 }
 
 /**
@@ -192,9 +408,13 @@ export async function renderSplit(spec, deps, onProgress, keep) {
  * (`ListOrphanedMedia` keys on `post_id IS NULL`). Returns the uploaded media
  * rows in deck order, ready for `slides[].rendered`.
  *
- * @param {{ source: string, n: number, aspect: string, postId: number,
- *   strategy?: 'cover'|'exact'|'pad', anchorY?: number, bg?: {type?:string}|null,
- *   srcW?: number, srcH?: number }} spec
+ * Takes either shape: a `{ doc, postId }` document — any mode, rendered through
+ * {@link renderCarousel} — or the flat split spec from S1. One front door, so
+ * the upload and partial-failure unwind below are shared by both paths rather
+ * than copied into a deck-shaped twin.
+ *
+ * @param {({ doc: import('./document.js').CarouselDoc } & RenderOpts & { postId: number })
+ *   | (SplitSpec & { postId: number })} spec
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
  * @param {Array<{id:number,path:string}|null>} [keep]  see `renderSplit` — a
@@ -202,7 +422,10 @@ export async function renderSplit(spec, deps, onProgress, keep) {
  * @returns {Promise<Array<{ id: number, path: string }>>}
  */
 export async function renderAndUpload(spec, deps, onProgress, keep) {
-  const blobs = await renderSplit(spec, deps, onProgress, keep);
+  const blobs =
+    'doc' in spec
+      ? await renderCarousel(spec.doc, deps, onProgress, keep, spec)
+      : await renderSplit(spec, deps, onProgress, keep);
   const uploaded = [];
   // Uploads made *this run* — as opposed to `keep` entries, which already
   // existed — so a failure partway through can unwind exactly those and
