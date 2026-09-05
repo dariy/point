@@ -63,6 +63,25 @@
   overflow: hidden;
 }
 
+/* Deck mode: the stage is n independently framed slides side by side, each one
+ * clipping its own image element, rather than one crop band projected across
+ * the whole strip. */
+.carousel-studio__stage--deck {
+  background-image: none;
+}
+
+.carousel-studio__stage-slide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--surface-hover) 0 6px,
+    transparent 6px 12px
+  );
+}
+
 .carousel-studio__divider {
   position: absolute;
   top: 0;
@@ -94,10 +113,64 @@
   border-radius: var(--border-radius);
 }
 
+/* A deck frame is the pan/zoom surface: the hatch shows through wherever a
+ * contained slide's image element doesn't reach, which is the letterbox the
+ * render fills from `bg`. `touch-action: none` is what makes a one-finger drag
+ * pan the slide instead of scrolling the filmstrip. */
+.carousel-studio__frame--deck {
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 8rem;
+  cursor: grab;
+  touch-action: none;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--surface-hover) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+.carousel-studio__frame--deck.is-dragging {
+  cursor: grabbing;
+}
+
+.carousel-studio__frame--deck.is-selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.carousel-studio__frame--deck:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* The image layer of a deck slide. Its own element because a contained slide's
+ * box is smaller than the frame — the background is clipped to the element, so
+ * only a cut-down one keeps the source out of the letterbox. */
+.carousel-studio__frame-img {
+  position: absolute;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
 .carousel-studio__slide {
   flex: 0 0 8rem;
   height: auto;
   border-radius: var(--border-radius);
+}
+
+/* ── Mode toggle ───────────────────────────────────────────────────────────── */
+
+.carousel-studio__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.carousel-studio__mode-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .carousel-studio__controls {
@@ -158,6 +231,11 @@
   background: var(--surface-hover);
   color: var(--text-primary);
   cursor: pointer;
+}
+
+.carousel-studio__chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .carousel-studio__chip.is-active {

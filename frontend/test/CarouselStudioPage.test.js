@@ -7,6 +7,12 @@
  * valid id loads the post and its carousel document; a missing or junk id
  * renders the empty state; an existing document restores the source, slide
  * count and aspect.
+ *
+ * Since S2 the page holds ONE `CarouselDoc` as its state — there is no loose
+ * `n`/`strategy`/`anchorY` to assert on, so every expectation about what the
+ * user changed reads `page.state.doc`. The deck-mode block at the bottom covers
+ * the framing half: the split → deck freeze is invisible, a pan moves one
+ * slide, and only that slide re-uploads.
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
@@ -14,8 +20,12 @@ import assert from 'node:assert';
 
 import { setupDOM, click, fire } from './helpers/dom.js';
 import { setSettings, setUser } from '../src/store.js';
-import { backgroundFit } from '../src/plugins/carousel/geometry.js';
-import { specHash, splitDocument } from '../src/plugins/carousel/document.js';
+import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
+import {
+  specHash,
+  splitDocument,
+  toDeckDocument,
+} from '../src/plugins/carousel/document.js';
 
 /** Route `fetch` by URL; unmatched paths 404. */
 function installFetch(routes) {
@@ -148,9 +158,9 @@ describe('CarouselStudioPage', () => {
     ]);
 
     assert.ok(el.querySelector('.carousel-studio__builder'), 'builder shown');
-    assert.equal(page.state.source, '/2026/08/wide.jpg');
-    assert.equal(page.state.n, 4);
-    assert.equal(page.state.aspect, '1:1');
+    assert.equal(page.state.doc.slides[0].source, '/2026/08/wide.jpg');
+    assert.equal(page.state.doc.slides.length, 4);
+    assert.equal(page.state.doc.aspect, '1:1');
     assert.equal(el.querySelectorAll('.carousel-studio__slide').length, 4, 'rendered slides shown');
     // 4 columns → 3 dividers.
     assert.equal(el.querySelectorAll('.carousel-studio__divider').length, 3);
@@ -168,7 +178,7 @@ describe('CarouselStudioPage', () => {
     range.dispatchEvent(new dom.window.Event('change'));
     await settle();
 
-    assert.equal(page.state.n, 5);
+    assert.equal(page.state.doc.slides.length, 5);
     assert.equal(el.querySelectorAll('.carousel-studio__frame').length, 5);
   });
 
@@ -256,8 +266,8 @@ describe('CarouselStudioPage', () => {
       click(exact);
       await settle();
 
-      assert.equal(page.state.strategy, 'exact');
-      assert.equal(page.state.n, 3);
+      assert.equal(page.state.doc.strategy, 'exact');
+      assert.equal(page.state.doc.slides.length, 3);
       assert.equal(el.querySelectorAll('.carousel-studio__frame').length, 3, 'preview follows');
     });
 
@@ -270,8 +280,8 @@ describe('CarouselStudioPage', () => {
       fire(pad, 'change');
       await settle();
 
-      assert.equal(page.state.strategy, 'pad');
-      assert.equal(page.state.n, 4); // ceil(4096/1080)
+      assert.equal(page.state.doc.strategy, 'pad');
+      assert.equal(page.state.doc.slides.length, 4); // ceil(4096/1080)
     });
 
     test('dragging the slider drops back to a free cover count', async () => {
@@ -281,15 +291,15 @@ describe('CarouselStudioPage', () => {
       const exact = [...el.querySelectorAll('.carousel-studio__chip')].find((c) => c.dataset.strategy === 'exact');
       click(exact);
       await settle();
-      assert.equal(page.state.strategy, 'exact');
+      assert.equal(page.state.doc.strategy, 'exact');
 
       const range = el.querySelector('#carousel-n');
       range.value = '6';
       fire(range, 'change');
       await settle();
 
-      assert.equal(page.state.n, 6);
-      assert.equal(page.state.strategy, 'cover');
+      assert.equal(page.state.doc.slides.length, 6);
+      assert.equal(page.state.doc.strategy, 'cover');
     });
 
     test('the chosen strategy and anchorY are written into the saved document', async () => {
@@ -321,7 +331,9 @@ describe('CarouselStudioPage', () => {
       const pad = [...page.container.querySelectorAll('input[name="carousel-fit"]')].find((r) => r.value === 'pad');
       fire(pad, 'change');
       await settle();
-      page.setState({ anchorY: 0.25 });
+      const anchor = page.container.querySelector('#carousel-anchor');
+      anchor.value = '0.25';
+      fire(anchor, 'change');
       await settle();
 
       await page._render();
@@ -562,7 +574,10 @@ describe('CarouselStudioPage', () => {
       await settle();
 
       const run = page._render();
-      assert.deepEqual(page.state.renderProgress, { done: 0, total: page.state.n });
+      assert.deepEqual(page.state.renderProgress, {
+        done: 0,
+        total: page.state.doc.slides.length,
+      });
       assert.ok(page.state.busy);
       await run;
 
@@ -634,7 +649,10 @@ describe('CarouselStudioPage', () => {
 
       assert.equal(page.state.error, null);
       assert.equal(uploadCount, 0, 'no slide was re-encoded/re-uploaded');
-      assert.deepEqual(page.state.rendered, ['/2026/08/old1.jpg', '/2026/08/old2.jpg', '/2026/08/old3.jpg']);
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered.path),
+        ['/2026/08/old1.jpg', '/2026/08/old2.jpg', '/2026/08/old3.jpg'],
+      );
       assert.ok(
         !calls.some((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url)),
         'nothing superseded — every kept slide is still referenced',
@@ -702,9 +720,300 @@ describe('CarouselStudioPage', () => {
       assert.ok(postPut, 'post content was rewritten');
       assert.ok(!JSON.parse(postPut.body).content.includes('carousel-block'), 'the fence is gone');
 
-      assert.equal(page.state.source, '');
+      assert.deepEqual(page.state.doc.slides, [], 'the document is empty again');
       assert.equal(page.state.hasCarousel, false);
       assert.ok(!el.querySelector('[data-action="remove-carousel"]'), 'action hidden after removal');
+    });
+  });
+
+  describe('deck mode', () => {
+    const SRC = '/2026/08/pano.jpg';
+    const SRC_W = 4096;
+    const SRC_H = 2000;
+
+    /** A split doc of `n` slides from one source, and deps that probe it. */
+    function split(n, extra = {}) {
+      const doc = {
+        version: 1,
+        aspect: '4:5',
+        mode: 'split',
+        strategy: 'cover',
+        slides: Array.from({ length: n }, () => ({ source: SRC })),
+        ...extra,
+      };
+      const routes = [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: POST })],
+        [/\/api\/carousel/, (url, opts) =>
+          opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+      const deps = {
+        ...fakeRenderDeps(async () => ({})),
+        probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+      };
+      return { routes, deps };
+    }
+
+    /** `"300% 117.2%"` → `[300, 117.2]`. Deck frames carry one layer only — the
+     *  hatch is the parent frame's, so the letterbox shows through it. */
+    const pair = (css) => css.trim().split(/\s+/).map((v) => Number(v.replace('%', '')));
+
+    const deckImg = (el, i) =>
+      el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"] .carousel-studio__frame-img`);
+
+    /** linkedom has no layout, and the pan converts pixels to crop units — give
+     *  the image element the box a browser would have measured. */
+    function withBox(img, width = 216, height = 270) {
+      img.getBoundingClientRect = () => ({
+        width, height, left: 0, top: 0, right: width, bottom: height,
+      });
+      return img;
+    }
+
+    function drag(frame, img, dx, dy) {
+      withBox(img);
+      fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: 200, clientY: 200 });
+      fire(frame, 'pointermove', { pointerId: 1, clientX: 200 + dx, clientY: 200 + dy });
+      return () => fire(frame, 'pointerup', { pointerId: 1, clientX: 200 + dx, clientY: 200 + dy });
+    }
+
+    async function toDeck(query = { post: '42' }, n = 3) {
+      const { routes, deps } = split(n);
+      const el = await mount(query, routes, { renderDeps: deps });
+      click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
+      await settle();
+      return el;
+    }
+
+    test('the Deck toggle is unavailable until the source size is known', async () => {
+      const doc = { version: 1, aspect: '4:5', mode: 'split', slides: [{ source: SRC }, { source: SRC }] };
+      const el = await mount({ post: '42' }, [
+        [/\/api\/posts\/42/, { body: POST }],
+        [/\/api\/carousel/, { body: { post_id: 42, doc } }],
+      ], {
+        renderDeps: {
+          ...fakeRenderDeps(async () => ({})),
+          probeSize: async () => { throw new Error('no dimensions'); },
+        },
+      });
+
+      const deck = el.querySelector('[data-action="mode"][data-mode="deck"]');
+      assert.ok(deck, 'the toggle is still shown');
+      assert.ok(deck.hasAttribute('disabled'), 'but cannot be used without source pixels');
+      click(deck);
+      await settle();
+      assert.equal(page.state.doc.mode, 'split');
+    });
+
+    test('switching to deck freezes the split projection — the preview does not move', async () => {
+      const el = await toDeck();
+      assert.equal(page.state.doc.mode, 'deck');
+
+      // Each deck slide must land where `backgroundFit` was putting the split
+      // column. Not bit-identical: `deckSlideRects` re-derives the frame aspect
+      // from the rounded crop, which can shift the source rect by a pixel (see
+      // toDeckDocument) — hence a tolerance rather than deepEqual.
+      for (let i = 0; i < 3; i++) {
+        const img = deckImg(el, i);
+        assert.ok(img, `slide ${i} has an image layer`);
+        const wanted = backgroundFit(SRC_W, SRC_H, '4:5', 3, 'cover', 0.5, 1, i);
+        const size = pair(img.style.backgroundSize);
+        const position = pair(img.style.backgroundPosition);
+        assert.ok(Math.abs(size[0] - wanted.size[0]) < 0.5, `slide ${i} width: ${size[0]}`);
+        assert.ok(Math.abs(size[1] - wanted.size[1]) < 0.5, `slide ${i} height: ${size[1]}`);
+        assert.ok(Math.abs(position[0] - wanted.position[0]) < 1, `slide ${i} x: ${position[0]}`);
+        assert.ok(Math.abs(position[1] - wanted.position[1]) < 1, `slide ${i} y: ${position[1]}`);
+        // `cover` fills the frame, so the image element is the whole frame.
+        assert.equal(img.style.width, '100%');
+      }
+    });
+
+    test('deck mode replaces the split-only controls with per-slide framing', async () => {
+      const el = await toDeck();
+
+      assert.ok(!el.querySelector('#carousel-n'), 'the slide-count slider is gone');
+      assert.ok(!el.querySelector('input[name="carousel-fit"]'), 'the strategy radios are gone');
+      assert.ok(!el.querySelector('#carousel-anchor'), 'the anchor slider is gone');
+      assert.ok(el.querySelector('.carousel-studio__deck'), 'the deck panel is shown');
+      assert.ok(el.querySelector('#carousel-aspect'), 'aspect still applies to a deck');
+      assert.equal(el.querySelectorAll('.carousel-studio__frame--deck').length, 3);
+      // The stage stays a continuity check — one framed slide per column.
+      assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 3);
+    });
+
+    test('dragging a frame pans that slide only, and commits on release', async () => {
+      const el = await toDeck();
+      const before = page.state.doc.slides.map((s) => ({ ...s.crop }));
+
+      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
+      const img = deckImg(el, 1);
+      const release = drag(frame, img, -50, 0);
+
+      // Mid-gesture: the DOM has moved, the document has not.
+      assert.ok(
+        pair(img.style.backgroundPosition)[0] !== pair(deckImg(el, 0).style.backgroundPosition)[0],
+        'the dragged frame repainted',
+      );
+      assert.deepEqual(page.state.doc.slides.map((s) => ({ ...s.crop })), before,
+        'nothing committed while the pointer is still down');
+
+      release();
+      await settle();
+
+      const after = page.state.doc.slides.map((s) => s.crop);
+      assert.ok(after[1].x > before[1].x + 0.05, `slide 1 panned right: ${after[1].x}`);
+      assert.deepEqual({ ...after[0] }, before[0], 'slide 0 untouched');
+      assert.deepEqual({ ...after[2] }, before[2], 'slide 2 untouched');
+      assert.equal(page.state.selected, 1, 'the dragged slide is selected');
+    });
+
+    test('a pan is clamped at the source edge instead of running off it', async () => {
+      const { routes, deps } = split(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+      click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
+      await settle();
+      const clean = JSON.stringify(page.state.doc);
+
+      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
+      // Slide 0 already starts at x=0; dragging its image right would pan past
+      // the left edge of the source.
+      drag(frame, deckImg(el, 0), 400, 0)();
+      await settle();
+
+      assert.equal(page.state.doc.slides[0].crop.x, 0, 'pinned, not negative');
+      // And the drag that went nowhere is not a change: a clamp that lands back
+      // on the same source pixels must not dirty the document, or the next
+      // render would re-encode a slide whose pixels are identical.
+      assert.equal(JSON.stringify(page.state.doc), clean, 'the document is untouched');
+    });
+
+    test('arrow keys nudge the focused slide and keep it focused', async () => {
+      const el = await toDeck();
+      const before = page.state.doc.slides[2].crop.x;
+
+      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="2"]');
+      assert.equal(frame.getAttribute('tabindex'), '0', 'a frame is focusable');
+      fire(frame, 'keydown', { key: 'ArrowLeft' });
+      await settle();
+
+      assert.ok(page.state.doc.slides[2].crop.x < before, 'the crop moved left');
+      assert.ok(el.querySelector('.carousel-studio__dirty-badge') === null,
+        'nothing rendered yet, so nothing to be dirty against');
+
+      // `-` zooms out: the crop widens.
+      const w = page.state.doc.slides[2].crop.w;
+      fire(el.querySelector('.carousel-studio__frame--deck[data-slice="2"]'), 'keydown', { key: '-' });
+      await settle();
+      assert.ok(page.state.doc.slides[2].crop.w > w, 'the crop widened');
+    });
+
+    test('a per-slide contain letterboxes that slide in the preview', async () => {
+      const el = await toDeck();
+      // Reset slide 0 to the whole source (4096×2000, far wider than 4:5), so
+      // `contain` has a real letterbox to show rather than a one-pixel sliver.
+      click(el.querySelector('.carousel-studio__deck [data-action="reset-slide"]'));
+      await settle();
+      assert.deepEqual(page.state.doc.slides[0].crop, { x: 0, y: 0, w: 1, h: 1 });
+
+      const contain = page.container.querySelector(
+        '.carousel-studio__deck [data-action="slide-fit"][data-fit="contain"]',
+      );
+      assert.ok(contain, 'a contain control is offered');
+      click(contain);
+      await settle();
+
+      assert.equal(page.state.doc.slides[0].fit, 'contain');
+      const img = deckImg(el, 0);
+      const wanted = deckSlideFitCSS(SRC_W, SRC_H, '4:5', page.state.doc.slides[0].crop, 'contain');
+      assert.ok(wanted.box.h < 50, `the content rect is letterboxed: ${wanted.box.h}%`);
+      assert.equal(img.style.height, `${wanted.box.h}%`);
+      assert.ok(parseFloat(img.style.top) > 0, 'and centred, leaving the letterbox to the hatch');
+      // The letterbox itself is the frame's hatch showing through.
+      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
+      assert.ok(!frame.style.backgroundImage, 'the frame carries no image of its own');
+    });
+
+    test('going back to split confirms first, then discards the per-slide framing', async () => {
+      const el = await toDeck();
+      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
+      drag(frame, deckImg(el, 1), -60, 0)();
+      await settle();
+      const panned = page.state.doc.slides[1].crop.x;
+
+      let confirmed = null;
+      page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+        confirmed = { title, variant, onConfirm };
+      };
+      click(el.querySelector('[data-action="mode"][data-mode="split"]'));
+      await settle();
+
+      assert.ok(confirmed, 'a confirmation was shown');
+      assert.equal(confirmed.variant, 'danger');
+      assert.equal(page.state.doc.mode, 'deck', 'still deck until confirmed');
+
+      confirmed.onConfirm();
+      await settle();
+
+      assert.equal(page.state.doc.mode, 'split');
+      assert.notEqual(page.state.doc.slides[1].crop.x, panned, 'the pan is gone');
+      assert.ok(el.querySelector('#carousel-n'), 'the split controls are back');
+    });
+
+    test('nudging one slide re-uploads exactly that slide', async () => {
+      // A deck that has already been rendered: every slide carries the specHash
+      // its render was made from, so an untouched slide is reused verbatim.
+      const base = splitDocument({ source: SRC, n: 3, aspect: '4:5', strategy: 'cover', anchorY: 0.5 });
+      const doc = toDeckDocument(base, SRC_W, SRC_H);
+      doc.slides.forEach((s, i) => {
+        s.rendered = {
+          path: `/2026/08/old${i + 1}.jpg`,
+          media_id: 100 + i,
+          specHash: specHash(s, doc.aspect, { strategy: doc.strategy, anchorY: doc.anchorY }),
+        };
+      });
+      const post = {
+        ...POST,
+        content: ':::{.carousel-block}\n\n/2026/08/old1.jpg\n\n/2026/08/old2.jpg\n\n/2026/08/old3.jpg\n\n:::',
+      };
+      const routes = [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: post })],
+        [/\/api\/carousel/, (url, opts) =>
+          opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+      const uploads = [];
+      const deps = {
+        ...fakeRenderDeps(async (file) => {
+          uploads.push(file.name);
+          return { id: 500 + uploads.length, path: `/2026/08/new${uploads.length}.jpg` };
+        }),
+        probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+      };
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+      assert.equal(page.state.doc.mode, 'deck', 'loaded as a deck');
+      assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean on load');
+
+      // Re-rendering an untouched deck uploads nothing at all.
+      await page._render();
+      await settle();
+      assert.equal(page.state.error, null);
+      assert.deepEqual(uploads, [], 'every slide was reused');
+
+      fire(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'), 'keydown', { key: 'ArrowRight' });
+      await settle();
+      assert.ok(page.state.doc.slides[1].crop.x > doc.slides[1].crop.x, 'slide 1 moved');
+      assert.ok(page.container.querySelector('.carousel-studio__dirty-badge'), 'and the studio is dirty');
+
+      await page._render();
+      await settle();
+
+      assert.equal(page.state.error, null);
+      assert.deepEqual(uploads, ['carousel-42-2.jpg'], 'only slide 2 of 3 was re-encoded');
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered.path),
+        ['/2026/08/old1.jpg', '/2026/08/new1.jpg', '/2026/08/old3.jpg'],
+      );
+      assert.ok(!page.container.querySelector('.carousel-studio__dirty-badge'), 'clean again');
     });
   });
 });
