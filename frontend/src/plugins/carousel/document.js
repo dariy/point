@@ -61,12 +61,49 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  */
 
 /**
+ * A layer's placement box: `{x, y, w, h}` in 0..1 of the canvas it sits on.
+ *
+ * @typedef {object} CarouselBox
+ * @property {number} x
+ * @property {number} y
+ * @property {number} w
+ * @property {number} h
+ */
+
+/**
+ * The typography a `text` and a `counter` layer share. `size` is the type size
+ * as a fraction of the canvas height, or `null` to auto-fit the box. Opacity
+ * lives in `color`'s alpha (`#rrggbbaa`), which is why neither carries one.
+ *
+ * @typedef {object} CarouselTextStyle
+ * @property {'left'|'center'|'right'} align
+ * @property {'top'|'middle'|'bottom'} valign
+ * @property {string} color
+ * @property {number} weight
+ * @property {number|null} size
+ * @property {boolean} shadow
+ */
+
+/**
+ * One drawable placed over a slide's image, in that slide's canvas space — or,
+ * in `doc.spanLayers`, in the deck's. A tagged union over five `type`s sharing
+ * one `box`; {@link normalizeLayer} is the only thing that produces one.
+ *
+ * @typedef {{type:'text', box:CarouselBox, text:string, lineHeight:number} & CarouselTextStyle} CarouselTextLayer
+ * @typedef {{type:'image', box:CarouselBox, source:string, fit:'cover'|'contain', opacity:number}} CarouselImageLayer
+ * @typedef {{type:'rect', box:CarouselBox, fill:string, opacity:number, radius:number}} CarouselRectLayer
+ * @typedef {{type:'counter', box:CarouselBox, format:string} & CarouselTextStyle} CarouselCounterLayer
+ * @typedef {{type:'arrow', box:CarouselBox, direction:'left'|'right', color:string, opacity:number}} CarouselArrowLayer
+ * @typedef {CarouselTextLayer|CarouselImageLayer|CarouselRectLayer|CarouselCounterLayer|CarouselArrowLayer} CarouselLayer
+ */
+
+/**
  * @typedef {object} CarouselSlide
  * @property {string} source
  * @property {CarouselCrop} crop
  * @property {'cover'|'contain'} fit
  * @property {CarouselBg|null} bg
- * @property {object[]} layers
+ * @property {CarouselLayer[]} layers
  * @property {CarouselRendered|null} rendered
  */
 
@@ -78,7 +115,8 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  * @property {'cover'|'exact'|'pad'} strategy  how `split` mode fits the source to the deck
  * @property {number} anchorY  0..1 vertical placement of the crop band in its slack
  * @property {CarouselSlide[]} slides
- * @property {object[]} spanLayers
+ * @property {CarouselLayer[]} spanLayers  layers in the deck's canvas space,
+ *   sliced across slide boundaries (addressed as slide {@link SPAN_SLIDE})
  * @property {{id:string,custom:boolean}|null} template
  */
 
@@ -183,6 +221,220 @@ function normalizeBg(bg) {
   return radius > 0 ? { type: 'blur', radius } : { type: 'blur' };
 }
 
+/* ── Layers ─────────────────────────────────────────────────────────────── */
+
+export const ALIGNS = ['left', 'center', 'right'];
+export const VALIGNS = ['top', 'middle', 'bottom'];
+export const DIRECTIONS = ['left', 'right'];
+
+/**
+ * `slideIndex` addressing `doc.spanLayers` rather than a slide's own list, so
+ * every mutator below has one call site in the studio instead of two parallel
+ * families. Negative by construction: no slide can ever collide with it.
+ */
+export const SPAN_SLIDE = -1;
+
+/**
+ * The smallest a layer box may be on either axis: one pixel of the 1080px
+ * canvas width, the one dimension every aspect shares. A box is normalized to
+ * the canvas rather than to an aspect — `aspect` is a document-level switch and
+ * layers move with the frame — so the clamp has no single canvas height to
+ * measure against, and the width is the honest floor. Below it a layer is
+ * invisible in the render and impossible to grab in the studio.
+ */
+const MIN_BOX = 1 / 1080;
+
+const DEFAULT_ALIGN = 'left';
+const DEFAULT_VALIGN = 'top';
+/** White: a layer is a mark over a photograph, and dark photographs are the
+ *  common case. The alpha channel of a `#rrggbbaa` colour is its opacity. */
+const DEFAULT_LAYER_COLOR = '#ffffff';
+const DEFAULT_WEIGHT = 400;
+/** The CSS `font-weight` range, not the 100..900 of a static family: the theme
+ *  font may be variable, and the canvas takes whatever CSS takes. */
+const MIN_WEIGHT = 1;
+const MAX_WEIGHT = 1000;
+const DEFAULT_LINE_HEIGHT = 1.2;
+/** Below 0.5 lines overprint illegibly; above 4 the box holds one line anyway. */
+const MIN_LINE_HEIGHT = 0.5;
+const MAX_LINE_HEIGHT = 4;
+const DEFAULT_COUNTER_FORMAT = '{i}/{n}';
+/** `contain`, unlike a slide's `cover`: an image layer is a logo or a mark, and
+ *  cropping one to fill its box is never what was meant. */
+const DEFAULT_LAYER_FIT = 'contain';
+/** Rightward — an arrow layer is the swipe-onward hint. */
+const DEFAULT_DIRECTION = 'right';
+
+/**
+ * A layer's box, clamped so the layer stays inside the canvas however it was
+ * dragged or resized: `w`/`h` pinned to at least {@link MIN_BOX}, then the
+ * origin so that `x+w <= 1` and `y+h <= 1`. The same discipline `clampPan`
+ * keeps for a crop against its source, done arithmetically here — a box has no
+ * source to measure against, which is what keeps this module independent of
+ * `geometry.js`.
+ *
+ * A span layer's box clamps against this same 0..1 range. That its `1` means
+ * "the whole deck" rather than "one slide" is the renderer's business.
+ *
+ * @param {*} box
+ * @param {*} [base] an already-normal box whose fields stand in for the
+ *   defaults — see {@link normalizeLayer}
+ * @returns {CarouselBox}
+ */
+function normalizeBox(box, base) {
+  const b = isObj(box) ? box : {};
+  const d = isObj(base) ? base : { x: 0, y: 0, w: 1, h: 1 };
+  const w = clamp(num(b.w, d.w), MIN_BOX, 1);
+  const h = clamp(num(b.h, d.h), MIN_BOX, 1);
+  return {
+    x: clamp(num(b.x, d.x), 0, 1 - w),
+    y: clamp(num(b.y, d.y), 0, 1 - h),
+    w,
+    h,
+  };
+}
+
+/**
+ * Type size as a fraction of the canvas height, or `null` for "auto-fit the
+ * box" — which is the default, because a headline that fits is worth more than
+ * one that is exactly 7% tall. Anything unusable falls back rather than
+ * throwing: `render.js` cannot discover a bad size mid-encode.
+ */
+function normalizeSize(value, fallback) {
+  return Number.isFinite(value) ? clamp(value, MIN_BOX, 1) : fallback;
+}
+
+/** The three types that carry their own opacity; the other two use `color`'s alpha. */
+function normalizeOpacity(l, fb) {
+  return clamp(num(l.opacity, fb('opacity', 1)), 0, 1);
+}
+
+/**
+ * The typography `text` and `counter` share. Split out so the two cannot drift:
+ * `.3` paints one and `.4` the other, from the same fields.
+ *
+ * @param {*} l the raw layer
+ * @param {(key: string, dflt: *) => *} fb the fallback resolver
+ * @returns {CarouselTextStyle}
+ */
+function normalizeTextStyle(l, fb) {
+  return {
+    align: ALIGNS.includes(l.align) ? l.align : fb('align', DEFAULT_ALIGN),
+    valign: VALIGNS.includes(l.valign) ? l.valign : fb('valign', DEFAULT_VALIGN),
+    color: normalizeColor(l.color, fb('color', DEFAULT_LAYER_COLOR)),
+    weight: clamp(Math.round(num(l.weight, fb('weight', DEFAULT_WEIGHT))), MIN_WEIGHT, MAX_WEIGHT),
+    size: normalizeSize(l.size, fb('size', null)),
+    shadow: Boolean(l.shadow ?? fb('shadow', false)),
+  };
+}
+
+/**
+ * One builder per `type`: the full shape that type normalizes to, given the raw
+ * layer, the fallback resolver and an already-clamped box. A table rather than
+ * a switch so that {@link LAYER_TYPES} can be derived from it — the list of
+ * what is valid and the code that produces it cannot disagree — and so adding a
+ * sixth type is one entry rather than a longer function.
+ *
+ * @type {Record<string, (l: *, fb: (key: string, dflt: *) => *, box: CarouselBox) => CarouselLayer>}
+ */
+const LAYER_BUILDERS = {
+  text: (l, fb, box) => ({
+    type: 'text',
+    box,
+    text: typeof l.text === 'string' ? l.text : fb('text', ''),
+    lineHeight: clamp(
+      num(l.lineHeight, fb('lineHeight', DEFAULT_LINE_HEIGHT)),
+      MIN_LINE_HEIGHT,
+      MAX_LINE_HEIGHT,
+    ),
+    ...normalizeTextStyle(l, fb),
+  }),
+
+  image: (l, fb, box) => ({
+    type: 'image',
+    box,
+    source: typeof l.source === 'string' ? l.source : fb('source', ''),
+    fit: FITS.includes(l.fit) ? l.fit : fb('fit', DEFAULT_LAYER_FIT),
+    opacity: normalizeOpacity(l, fb),
+  }),
+
+  rect: (l, fb, box) => ({
+    type: 'rect',
+    box,
+    fill: normalizeColor(l.fill, fb('fill', DEFAULT_BG_COLOR)),
+    opacity: normalizeOpacity(l, fb),
+    // A fraction of the box's shorter side, so 0.5 is a pill and the corner
+    // survives a resize. Canvas px would not: the box is normalized.
+    radius: clamp(num(l.radius, fb('radius', 0)), 0, 0.5),
+  }),
+
+  counter: (l, fb, box) => ({
+    type: 'counter',
+    box,
+    // `{i}` is the 1-based slide number, `{n}` the deck's length; anything else
+    // in the string is literal. A non-string is the only rejection — a format
+    // with neither placeholder is a caption, and that is allowed.
+    format: typeof l.format === 'string' ? l.format : fb('format', DEFAULT_COUNTER_FORMAT),
+    ...normalizeTextStyle(l, fb),
+  }),
+
+  arrow: (l, fb, box) => ({
+    type: 'arrow',
+    box,
+    direction: DIRECTIONS.includes(l.direction) ? l.direction : fb('direction', DEFAULT_DIRECTION),
+    color: normalizeColor(l.color, fb('color', DEFAULT_LAYER_COLOR)),
+    opacity: normalizeOpacity(l, fb),
+  }),
+};
+
+/** The five things a layer can be. An unrecognized sixth is dropped, not kept. */
+export const LAYER_TYPES = Object.keys(LAYER_BUILDERS);
+
+/**
+ * Coerce any value into a valid layer, or `null` when it cannot be one.
+ *
+ * **This is the one place the schema drops user data.** A layer's fields mean
+ * nothing without its `type`, so an unrecognized one cannot be migrated, only
+ * dropped — {@link normalizeLayers} filters the `null` out. `DOC_VERSION`
+ * deliberately does not move for it: `layers` and `spanLayers` have been
+ * reserved-but-unvalidated since version 1 and no released code ever wrote a
+ * layer, so tightening them cannot invalidate a document in the wild. Every
+ * other field degrades instead — out of range is clamped, unrecognized is
+ * defaulted, unknown is dropped, exactly as everywhere else in this module.
+ *
+ * @param {*} layer
+ * @param {*} [base] an already-normal layer of the same `type` whose fields
+ *   stand in for the schema defaults. This is how {@link updateLayer} keeps
+ *   `updateSlideFraming`'s contract — a patch value the schema rejects leaves
+ *   the layer's own — without a second predicate per field.
+ * @returns {CarouselLayer|null}
+ */
+export function normalizeLayer(layer, base = undefined) {
+  const l = /** @type {*} */ (layer);
+  if (!isObj(l) || !LAYER_TYPES.includes(l.type)) return null;
+  const b = isObj(base) && /** @type {*} */ (base).type === l.type ? /** @type {*} */ (base) : {};
+  /** The base layer's field when it has one, else the schema default. */
+  const fb = (key, dflt) => (b[key] === undefined ? dflt : b[key]);
+  return LAYER_BUILDERS[l.type](l, fb, normalizeBox(l.box, b.box));
+}
+
+/**
+ * A layer list: every entry normalized, the ones that cannot be a layer at all
+ * dropped. Painted back to front, so order is meaning and is preserved.
+ *
+ * @param {*} layers
+ * @returns {CarouselLayer[]}
+ */
+function normalizeLayers(layers) {
+  if (!Array.isArray(layers)) return [];
+  const out = [];
+  for (const layer of layers) {
+    const normal = normalizeLayer(layer);
+    if (normal) out.push(normal);
+  }
+  return out;
+}
+
 /** @param {*} rendered @returns {CarouselRendered|null} */
 function normalizeRendered(rendered) {
   if (!isObj(rendered)) return null;
@@ -203,7 +455,7 @@ function normalizeSlide(slide) {
     crop: normalizeCrop(s.crop),
     fit: FITS.includes(s.fit) ? s.fit : DEFAULT_FIT,
     bg: normalizeBg(s.bg),
-    layers: Array.isArray(s.layers) ? s.layers.slice() : [],
+    layers: normalizeLayers(s.layers),
     rendered: normalizeRendered(s.rendered),
   };
 }
@@ -232,7 +484,7 @@ export function normalizeDocument(input) {
     strategy: STRATEGIES.includes(doc.strategy) ? doc.strategy : DEFAULT_STRATEGY,
     anchorY: clamp(num(doc.anchorY, DEFAULT_ANCHOR_Y), 0, 1),
     slides: Array.isArray(doc.slides) ? doc.slides.map(normalizeSlide) : [],
-    spanLayers: Array.isArray(doc.spanLayers) ? doc.spanLayers.slice() : [],
+    spanLayers: normalizeLayers(doc.spanLayers),
     template: normalizeTemplate(doc.template),
   };
 }
@@ -470,6 +722,161 @@ export function updateSlideFraming(doc, slideIndex, update, opts = {}) {
   });
 }
 
+/**
+ * The layer list a `slideIndex` addresses — `doc.spanLayers` at
+ * {@link SPAN_SLIDE}, a slide's own otherwise — or `null` when it names
+ * nothing. `doc` must already be normal.
+ *
+ * @param {CarouselDoc} doc
+ * @param {*} slideIndex
+ * @returns {CarouselLayer[]|null}
+ */
+function layersAt(doc, slideIndex) {
+  const i = Number(slideIndex);
+  if (slideIndex == null || !Number.isInteger(i)) return null;
+  if (i === SPAN_SLIDE) return doc.spanLayers;
+  return i >= 0 && i < doc.slides.length ? doc.slides[i].layers : null;
+}
+
+/**
+ * `layerIndex` as an index into `list`, or `-1` when it names no layer there.
+ * The one definition of "in range" the three mutators below share, so none of
+ * them can disagree with the others about what an out-of-range index is.
+ *
+ * @param {CarouselLayer[]|null} list
+ * @param {*} layerIndex
+ * @returns {number}
+ */
+function layerIndexIn(list, layerIndex) {
+  const j = Number(layerIndex);
+  return list && Number.isInteger(j) && j >= 0 && j < list.length ? j : -1;
+}
+
+/**
+ * `doc` with the list `slideIndex` addresses replaced. Normalized on the way
+ * out like every other writer here, so the result is a document the renderer
+ * and the preview cannot read differently.
+ *
+ * @param {CarouselDoc} doc
+ * @param {number} slideIndex
+ * @param {CarouselLayer[]} layers
+ * @returns {CarouselDoc}
+ */
+function withLayers(doc, slideIndex, layers) {
+  const i = Number(slideIndex);
+  if (i === SPAN_SLIDE) return normalizeDocument({ ...doc, spanLayers: layers });
+  return normalizeDocument({
+    ...doc,
+    slides: doc.slides.map((s, j) => (j === i ? { ...s, layers } : s)),
+  });
+}
+
+/**
+ * Append a layer to a slide's list, or to `doc.spanLayers` at
+ * {@link SPAN_SLIDE}. Appending, not inserting, because the list paints back to
+ * front: a new layer belongs on top of what is already there.
+ *
+ * A layer the schema rejects outright, or an out-of-range `slideIndex`, returns
+ * an equal document rather than throwing — the same contract
+ * {@link updateSlideFraming} keeps, and for the same reason: these run from UI
+ * handlers where a throw strands the studio.
+ *
+ * @param {*} doc
+ * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
+ * @param {*} layer
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function addLayer(doc, slideIndex, layer) {
+  const base = normalizeDocument(doc);
+  const list = layersAt(base, slideIndex);
+  const next = normalizeLayer(layer);
+  if (!list || !next) return base;
+  return withLayers(base, slideIndex, [...list, next]);
+}
+
+/**
+ * Merge a partial layer over the one at `layerIndex`, normalized.
+ *
+ * `patch` follows {@link updateSlideFraming}'s contract exactly: unknown keys
+ * are dropped, and a value the schema rejects leaves the layer's own rather
+ * than resetting it to the schema default — which is what passing the current
+ * layer to {@link normalizeLayer} as its `base` buys. `box` merges field by
+ * field over the current one, so a drag can send `{box:{x, y}}` without
+ * resetting the size, exactly as a pan sends `{crop:{x, y}}`.
+ *
+ * A layer's `type` is fixed: patching it is ignored, because every other field
+ * means something different under a different type. Remove and re-add instead.
+ *
+ * @param {*} doc
+ * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
+ * @param {number} layerIndex
+ * @param {*} patch
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function updateLayer(doc, slideIndex, layerIndex, patch) {
+  const base = normalizeDocument(doc);
+  const list = layersAt(base, slideIndex);
+  const j = layerIndexIn(list, layerIndex);
+  if (!list || j < 0 || !isObj(patch)) return base;
+
+  const current = list[j];
+  const p = /** @type {*} */ (patch);
+  const merged = { ...current, ...p, type: current.type };
+  if ('box' in p) merged.box = mergeCrop(current.box, p.box);
+  const next = normalizeLayer(merged, current);
+  if (!next) return base;
+
+  return withLayers(
+    base,
+    slideIndex,
+    list.map((layer, k) => (k === j ? next : layer)),
+  );
+}
+
+/**
+ * Drop the layer at `layerIndex`. An out-of-range index is a no-op.
+ *
+ * @param {*} doc
+ * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
+ * @param {number} layerIndex
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function removeLayer(doc, slideIndex, layerIndex) {
+  const base = normalizeDocument(doc);
+  const list = layersAt(base, slideIndex);
+  const j = layerIndexIn(list, layerIndex);
+  if (!list || j < 0) return base;
+  return withLayers(
+    base,
+    slideIndex,
+    list.filter((_, k) => k !== j),
+  );
+}
+
+/**
+ * Move the layer at `from` to `to`, shifting the rest — a reorder, not a swap,
+ * because the list is the paint order and dragging a layer up the stack must
+ * not exchange it with whatever it landed on. Either index out of range is a
+ * no-op; `from === to` returns an equal document.
+ *
+ * @param {*} doc
+ * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
+ * @param {number} from
+ * @param {number} to
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function reorderLayer(doc, slideIndex, from, to) {
+  const base = normalizeDocument(doc);
+  const list = layersAt(base, slideIndex);
+  const a = layerIndexIn(list, from);
+  const b = layerIndexIn(list, to);
+  if (!list || a < 0 || b < 0) return base;
+
+  const next = list.slice();
+  next.splice(b, 0, next.splice(a, 1)[0]);
+  return withLayers(base, slideIndex, next);
+}
+
 /** Deterministic JSON: object keys sorted recursively. */
 function stableStringify(value) {
   if (!isObj(value)) return JSON.stringify(value) ?? 'null';
@@ -491,15 +898,18 @@ function fnv1a(str) {
 /**
  * Stable hash of the inputs that determine a slide's pixels — source, crop,
  * fit, background, layers — but NOT its `rendered` block. Equal hashes across
- * two saves (with the same doc-level `aspect` / `strategy` / `anchorY`, which
- * the caller folds in) mean the slide can reuse its existing render instead of
- * re-encoding.
+ * two saves (with the same doc-level `aspect` / `strategy` / `anchorY` /
+ * `spanLayers`, which the caller folds in) mean the slide can reuse its
+ * existing render instead of re-encoding.
  *
  * @param {*} slide
  * @param {string} [aspect] doc-level aspect, included in the hash when given
- * @param {{ strategy?: string, anchorY?: number }} [deck] doc-level split
- *   strategy and vertical anchor — a change to either re-slices every column,
- *   so folding them in invalidates the cached render
+ * @param {{ strategy?: string, anchorY?: number, spanLayers?: * }} [deck]
+ *   doc-level inputs that reach into a single slide's pixels: the split
+ *   strategy and vertical anchor, a change to either re-slicing every column,
+ *   and the span layers, which paint across this slide whether it knows about
+ *   them or not. Folding them in invalidates the cached render, which is the
+ *   point — `specHash` sees one slide and cannot find them itself
  * @returns {string}
  */
 export function specHash(slide, aspect = '', deck = {}) {
@@ -509,6 +919,7 @@ export function specHash(slide, aspect = '', deck = {}) {
       aspect,
       strategy: deck.strategy ?? '',
       anchorY: deck.anchorY ?? null,
+      spanLayers: normalizeLayers(deck.spanLayers),
       source: s.source,
       crop: s.crop,
       fit: s.fit,

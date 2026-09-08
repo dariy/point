@@ -22,6 +22,13 @@ import {
   toDeckDocument,
   updateSlideFraming,
   specHash,
+  normalizeLayer,
+  addLayer,
+  updateLayer,
+  removeLayer,
+  reorderLayer,
+  LAYER_TYPES,
+  SPAN_SLIDE,
 } from '../src/plugins/carousel/document.js';
 import {
   canvasSize,
@@ -626,6 +633,352 @@ describe('updateSlideFraming', () => {
   });
 });
 
+describe('layer schema', () => {
+  /** The layers of a one-slide document, normalized. */
+  const layersOf = (layers) => normalizeDocument({ slides: [{ layers }] }).slides[0].layers;
+  /** One normalized layer, or null. */
+  const one = (layer) => layersOf([layer])[0] ?? null;
+  const FULL_BOX = { x: 0, y: 0, w: 1, h: 1 };
+
+  test('every type normalizes to its full shape, from nothing but a type', () => {
+    assert.deepStrictEqual(one({ type: 'text' }), {
+      type: 'text',
+      box: FULL_BOX,
+      text: '',
+      lineHeight: 1.2,
+      align: 'left',
+      valign: 'top',
+      color: '#ffffff',
+      weight: 400,
+      size: null,
+      shadow: false,
+    });
+    assert.deepStrictEqual(one({ type: 'image' }), {
+      type: 'image',
+      box: FULL_BOX,
+      source: '',
+      fit: 'contain',
+      opacity: 1,
+    });
+    assert.deepStrictEqual(one({ type: 'rect' }), {
+      type: 'rect',
+      box: FULL_BOX,
+      fill: '#000000',
+      opacity: 1,
+      radius: 0,
+    });
+    assert.deepStrictEqual(one({ type: 'counter' }), {
+      type: 'counter',
+      box: FULL_BOX,
+      format: '{i}/{n}',
+      align: 'left',
+      valign: 'top',
+      color: '#ffffff',
+      weight: 400,
+      size: null,
+      shadow: false,
+    });
+    assert.deepStrictEqual(one({ type: 'arrow' }), {
+      type: 'arrow',
+      box: FULL_BOX,
+      direction: 'right',
+      color: '#ffffff',
+      opacity: 1,
+    });
+  });
+
+  test('every type round-trips through parse(serialize(doc))', () => {
+    const doc = {
+      slides: [
+        {
+          source: '/2026/08/a.jpg',
+          layers: [
+            { type: 'text', box: { x: 0.08, y: 0.62, w: 0.84, h: 0.3 }, text: 'Hello', align: 'center', valign: 'bottom', color: '#ff0000', weight: 700, size: 0.09, lineHeight: 1.4, shadow: true },
+            { type: 'image', box: { x: 0.7, y: 0.05, w: 0.25, h: 0.1 }, source: '/2026/08/logo.png', fit: 'cover', opacity: 0.8 },
+            { type: 'rect', box: { x: 0, y: 0.8, w: 1, h: 0.2 }, fill: '#00000080', opacity: 0.5, radius: 0.25 },
+            { type: 'counter', box: { x: 0.85, y: 0.02, w: 0.13, h: 0.06 }, format: 'Slide {i} of {n}', align: 'right', color: 'transparent' },
+            { type: 'arrow', box: { x: 0.9, y: 0.45, w: 0.08, h: 0.1 }, direction: 'left', color: '#fff', opacity: 0.6 },
+          ],
+        },
+      ],
+      spanLayers: [{ type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'Across the seam' }],
+    };
+    const normal = normalizeDocument(doc);
+    assert.strictEqual(normal.slides[0].layers.length, 5);
+    assert.strictEqual(normal.spanLayers.length, 1);
+    assert.deepStrictEqual(parseDocument(serializeDocument(doc)), normal);
+  });
+
+  test('an unrecognized type is dropped, and so is anything that is not a layer', () => {
+    // The one place the schema loses user data — deliberate: a layer's fields
+    // mean nothing without its type, so there is nothing to migrate.
+    assert.deepStrictEqual(layersOf([{ type: 'video' }, { type: '' }, {}]), []);
+    assert.deepStrictEqual(layersOf(['text', null, undefined, 42, [], [{ type: 'rect' }]]), []);
+    assert.deepStrictEqual(layersOf('rect'), []);
+    assert.deepStrictEqual(layersOf(undefined), []);
+    assert.strictEqual(normalizeLayer({ type: 'video' }), null);
+  });
+
+  test('the survivors keep their order; the casualties do not leave a hole', () => {
+    const kept = layersOf([{ type: 'rect' }, null, { type: 'nope' }, { type: 'arrow' }]);
+    assert.deepStrictEqual(
+      kept.map((l) => l.type),
+      ['rect', 'arrow'],
+    );
+  });
+
+  test('unknown fields are dropped, as everywhere in this module', () => {
+    assert.deepStrictEqual(Object.keys(one({ type: 'rect', bogus: 1, text: 'no' })).sort(), [
+      'box',
+      'fill',
+      'opacity',
+      'radius',
+      'type',
+    ]);
+  });
+
+  test('a box is clamped to 0..1 and pushed back inside the canvas', () => {
+    assert.deepStrictEqual(one({ type: 'rect', box: { x: 0.9, y: 0.9, w: 0.5, h: 0.5 } }).box, {
+      x: 0.5,
+      y: 0.5,
+      w: 0.5,
+      h: 0.5,
+    });
+    assert.deepStrictEqual(one({ type: 'rect', box: { x: -1, y: 2, w: 0, h: 99 } }).box, {
+      x: 0,
+      y: 0,
+      w: 1 / 1080, // one canvas pixel: below that a layer cannot be seen or grabbed
+      h: 1,
+    });
+    assert.deepStrictEqual(one({ type: 'rect', box: 'nope' }).box, FULL_BOX);
+    assert.deepStrictEqual(one({ type: 'rect', box: { w: 0.4 } }).box, { x: 0, y: 0, w: 0.4, h: 1 });
+  });
+
+  test('a span layer box clamps against the same 0..1 range', () => {
+    // A span box means "the whole deck" rather than "one slide" — the
+    // renderer's business; the schema clamps it to the same 0..1 either way.
+    const doc = normalizeDocument({ spanLayers: [{ type: 'text', box: { x: 0.8, y: 0, w: 0.75, h: 1 } }] });
+    assert.deepStrictEqual(doc.spanLayers[0].box, { x: 0.25, y: 0, w: 0.75, h: 1 });
+  });
+
+  test('colours go through the one hex validator normalizeBg already uses', () => {
+    assert.strictEqual(one({ type: 'text', color: '#ABC' }).color, '#abc');
+    assert.strictEqual(one({ type: 'text', color: '  #11223344 ' }).color, '#11223344');
+    assert.strictEqual(one({ type: 'text', color: 'transparent' }).color, 'transparent');
+    assert.strictEqual(one({ type: 'text', color: 'rebeccapurple' }).color, '#ffffff');
+    assert.strictEqual(one({ type: 'rect', fill: '#123456' }).fill, '#123456');
+    assert.strictEqual(one({ type: 'rect', fill: 'octarine' }).fill, '#000000');
+  });
+
+  test('numbers are clamped, not rejected', () => {
+    assert.strictEqual(one({ type: 'text', weight: 5000 }).weight, 1000);
+    assert.strictEqual(one({ type: 'text', weight: -3 }).weight, 1);
+    assert.strictEqual(one({ type: 'text', weight: 612.4 }).weight, 612);
+    assert.strictEqual(one({ type: 'text', weight: 'bold' }).weight, 400);
+    assert.strictEqual(one({ type: 'text', lineHeight: 0.1 }).lineHeight, 0.5);
+    assert.strictEqual(one({ type: 'text', lineHeight: 99 }).lineHeight, 4);
+    assert.strictEqual(one({ type: 'text', lineHeight: 'x' }).lineHeight, 1.2);
+    assert.strictEqual(one({ type: 'rect', opacity: 2 }).opacity, 1);
+    assert.strictEqual(one({ type: 'rect', opacity: -1 }).opacity, 0);
+    assert.strictEqual(one({ type: 'rect', opacity: 'half' }).opacity, 1);
+    assert.strictEqual(one({ type: 'rect', radius: 3 }).radius, 0.5);
+    assert.strictEqual(one({ type: 'rect', radius: -1 }).radius, 0);
+  });
+
+  test('size is null for auto-fit, a fraction of the canvas otherwise', () => {
+    assert.strictEqual(one({ type: 'text', size: null }).size, null);
+    assert.strictEqual(one({ type: 'text', size: 'big' }).size, null);
+    assert.strictEqual(one({ type: 'text', size: 0.07 }).size, 0.07);
+    assert.strictEqual(one({ type: 'text', size: 4 }).size, 1);
+    assert.strictEqual(one({ type: 'text', size: 0 }).size, 1 / 1080);
+  });
+
+  test('the remaining enums and coercions', () => {
+    assert.strictEqual(one({ type: 'text', align: 'center' }).align, 'center');
+    assert.strictEqual(one({ type: 'text', align: 'justify' }).align, 'left');
+    assert.strictEqual(one({ type: 'text', valign: 'middle' }).valign, 'middle');
+    assert.strictEqual(one({ type: 'text', valign: 'baseline' }).valign, 'top');
+    assert.strictEqual(one({ type: 'text', text: 42 }).text, '');
+    assert.strictEqual(one({ type: 'text', shadow: 1 }).shadow, true);
+    assert.strictEqual(one({ type: 'text', shadow: 0 }).shadow, false);
+    assert.strictEqual(one({ type: 'image', fit: 'cover' }).fit, 'cover');
+    assert.strictEqual(one({ type: 'image', fit: 'stretch' }).fit, 'contain');
+    assert.strictEqual(one({ type: 'image', source: 8 }).source, '');
+    assert.strictEqual(one({ type: 'counter', format: 'Slide {i}' }).format, 'Slide {i}');
+    assert.strictEqual(one({ type: 'counter', format: 42 }).format, '{i}/{n}');
+    assert.strictEqual(one({ type: 'arrow', direction: 'left' }).direction, 'left');
+    assert.strictEqual(one({ type: 'arrow', direction: 'up' }).direction, 'right');
+  });
+
+  test('normalizeDocument stays idempotent over a document full of layers', () => {
+    // The property the bare `.slice()` passthrough was silently failing.
+    const doc = {
+      mode: 'deck',
+      slides: [
+        { source: '/a.jpg', layers: [{ type: 'text', text: 'hi', weight: 5000, box: { x: 0.9, w: 0.5 } }] },
+        { source: '/b.jpg', layers: LAYER_TYPES.map((type) => ({ type })) },
+      ],
+      spanLayers: [{ type: 'arrow', direction: 'left' }, { type: 'video' }],
+    };
+    const once = normalizeDocument(doc);
+    assert.deepStrictEqual(normalizeDocument(once), once);
+    assert.strictEqual(serializeDocument(once), serializeDocument(normalizeDocument(once)));
+    for (const layer of [...once.slides[0].layers, ...once.slides[1].layers, ...once.spanLayers]) {
+      assert.deepStrictEqual(normalizeLayer(layer), layer, layer.type);
+    }
+  });
+});
+
+describe('layer mutators', () => {
+  const docOf = (...layers) =>
+    normalizeDocument({
+      mode: 'deck',
+      slides: [{ source: '/a.jpg', layers }, { source: '/b.jpg' }],
+    });
+  const text = { type: 'text', text: 'one', box: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } };
+  const rect = { type: 'rect', fill: '#112233' };
+  const arrow = { type: 'arrow', direction: 'left' };
+
+  test('addLayer appends — the list paints back to front', () => {
+    const doc = addLayer(addLayer(docOf(), 0, text), 0, rect);
+    assert.deepStrictEqual(
+      doc.slides[0].layers.map((l) => l.type),
+      ['text', 'rect'],
+    );
+    assert.strictEqual(doc.slides[0].layers[0].text, 'one');
+    assert.strictEqual(doc.slides[1].layers.length, 0, 'other slides untouched');
+  });
+
+  test('addLayer normalizes on the way in, and rejects what cannot be a layer', () => {
+    assert.strictEqual(addLayer(docOf(), 0, { type: 'text', weight: 5000 }).slides[0].layers[0].weight, 1000);
+    const doc = docOf();
+    for (const bad of [{ type: 'video' }, null, 'text', 42]) {
+      assert.strictEqual(serializeDocument(addLayer(doc, 0, bad)), serializeDocument(doc), String(bad));
+    }
+  });
+
+  test('updateLayer merges a patch, and box merges field by field', () => {
+    const doc = updateLayer(docOf(text), 0, 0, { text: 'two', box: { x: 0.4 } });
+    assert.strictEqual(doc.slides[0].layers[0].text, 'two');
+    assert.deepStrictEqual(doc.slides[0].layers[0].box, { x: 0.4, y: 0.1, w: 0.5, h: 0.5 });
+  });
+
+  test('a patch value the schema rejects leaves the layer its own', () => {
+    // updateSlideFraming's contract, kept field for field: a rejected value is
+    // not a reset to the default.
+    const doc = docOf({ ...text, align: 'center', color: '#ff0000', size: 0.2 });
+    const next = updateLayer(doc, 0, 0, { align: 'sideways', color: 'rebeccapurple', size: 'big' });
+    const layer = next.slides[0].layers[0];
+    assert.strictEqual(layer.align, 'center');
+    assert.strictEqual(layer.color, '#ff0000');
+    assert.strictEqual(layer.size, 0.2);
+  });
+
+  test('updateLayer cannot change a type, and drops unknown keys', () => {
+    const next = updateLayer(docOf(text), 0, 0, { type: 'image', source: '/logo.png', bogus: 1 });
+    assert.deepStrictEqual(Object.keys(next.slides[0].layers[0]).sort(), [
+      'align',
+      'box',
+      'color',
+      'lineHeight',
+      'shadow',
+      'size',
+      'text',
+      'type',
+      'valign',
+      'weight',
+    ]);
+    assert.strictEqual(next.slides[0].layers[0].type, 'text');
+  });
+
+  test('removeLayer drops exactly one, keeping the order of the rest', () => {
+    const doc = removeLayer(docOf(text, rect, arrow), 0, 1);
+    assert.deepStrictEqual(
+      doc.slides[0].layers.map((l) => l.type),
+      ['text', 'arrow'],
+    );
+  });
+
+  test('reorderLayer shifts the rest — it is not a swap', () => {
+    const doc = docOf(text, rect, arrow);
+    const types = (d) => d.slides[0].layers.map((l) => l.type);
+    assert.deepStrictEqual(types(reorderLayer(doc, 0, 0, 2)), ['rect', 'arrow', 'text']);
+    assert.deepStrictEqual(types(reorderLayer(doc, 0, 2, 0)), ['arrow', 'text', 'rect']);
+    assert.deepStrictEqual(types(reorderLayer(doc, 0, 1, 1)), ['text', 'rect', 'arrow']);
+  });
+
+  test('a slideIndex of -1 addresses doc.spanLayers, through the same four calls', () => {
+    let doc = addLayer(addLayer(docOf(), SPAN_SLIDE, text), SPAN_SLIDE, rect);
+    assert.strictEqual(SPAN_SLIDE, -1);
+    assert.deepStrictEqual(
+      doc.spanLayers.map((l) => l.type),
+      ['text', 'rect'],
+    );
+    assert.strictEqual(doc.slides[0].layers.length, 0, 'span layers are not a slide');
+
+    doc = updateLayer(doc, SPAN_SLIDE, 0, { text: 'across' });
+    assert.strictEqual(doc.spanLayers[0].text, 'across');
+
+    doc = reorderLayer(doc, SPAN_SLIDE, 1, 0);
+    assert.deepStrictEqual(
+      doc.spanLayers.map((l) => l.type),
+      ['rect', 'text'],
+    );
+
+    doc = removeLayer(doc, SPAN_SLIDE, 0);
+    assert.deepStrictEqual(
+      doc.spanLayers.map((l) => l.type),
+      ['text'],
+    );
+  });
+
+  test('an out-of-range index returns an equal document rather than throwing', () => {
+    const doc = docOf(text);
+    const same = serializeDocument(doc);
+    const cases = [
+      () => addLayer(doc, 9, rect),
+      () => addLayer(doc, -2, rect),
+      () => addLayer(doc, null, rect),
+      () => addLayer(doc, 0.5, rect),
+      () => updateLayer(doc, 0, 3, { text: 'x' }),
+      () => updateLayer(doc, 9, 0, { text: 'x' }),
+      () => updateLayer(doc, SPAN_SLIDE, 0, { text: 'x' }),
+      () => updateLayer(doc, 0, 0, null),
+      () => removeLayer(doc, 0, 7),
+      () => removeLayer(doc, -3, 0),
+      () => reorderLayer(doc, 0, 0, 4),
+      () => reorderLayer(doc, 0, -1, 0),
+      () => reorderLayer(doc, 9, 0, 0),
+    ];
+    cases.forEach((run, i) => assert.strictEqual(serializeDocument(run()), same, `case ${String(i)}`));
+  });
+
+  test('every mutator is pure, and returns an already-normal document', () => {
+    const doc = docOf(text, rect);
+    const before = serializeDocument(doc);
+    for (const next of [
+      addLayer(doc, 0, arrow),
+      updateLayer(doc, 0, 0, { text: 'edited' }),
+      removeLayer(doc, 0, 0),
+      reorderLayer(doc, 0, 0, 1),
+      addLayer(doc, SPAN_SLIDE, rect),
+    ]) {
+      assert.strictEqual(serializeDocument(doc), before, 'input not mutated');
+      assert.deepStrictEqual(normalizeDocument(next), next);
+      assert.deepStrictEqual(parseDocument(serializeDocument(next)), next);
+    }
+  });
+
+  test('a layer edit re-renders exactly the slide it touched', () => {
+    const doc = docOf(text);
+    const hash = (d) => d.slides.map((s) => specHash(s, d.aspect, d));
+    const before = hash(doc);
+    const after = hash(updateLayer(doc, 0, 0, { text: 'changed' }));
+    assert.notStrictEqual(after[0], before[0], 'slide 0 must miss');
+    assert.strictEqual(after[1], before[1], 'slide 1 must hit');
+  });
+});
+
 describe('applyCarouselBlock', () => {
   const doc = {
     slides: [{ rendered: { path: '/2026/08/1.jpg' } }, { rendered: { path: '/2026/08/2.jpg' } }],
@@ -730,6 +1083,26 @@ describe('specHash', () => {
   test('folds in the doc-level aspect when passed', () => {
     assert.notStrictEqual(specHash(slide, '4:5'), specHash(slide, '1:1'));
     assert.strictEqual(specHash(slide, '4:5'), specHash(slide, '4:5'));
+  });
+
+  test('folds in the doc-level spanLayers — they paint across a slide that cannot see them', () => {
+    const deck = { strategy: 'cover', anchorY: 0.5 };
+    const base = specHash(slide, '4:5', deck);
+    const span = (...spanLayers) => specHash(slide, '4:5', { ...deck, spanLayers });
+    assert.strictEqual(base, span(), 'no span layers is the document that had none');
+    assert.notStrictEqual(base, span({ type: 'rect', fill: '#123456' }));
+    assert.notStrictEqual(
+      span({ type: 'rect', fill: '#123456' }),
+      span({ type: 'rect', fill: '#654321' }),
+      'editing one must invalidate the render',
+    );
+    assert.notStrictEqual(
+      span({ type: 'rect' }, { type: 'arrow' }),
+      span({ type: 'arrow' }, { type: 'rect' }),
+      'paint order is part of the pixels',
+    );
+    // A span layer the schema drops cannot change anything either.
+    assert.strictEqual(base, span({ type: 'video' }));
   });
 
   test('folds in the doc-level strategy and anchorY — a change invalidates the render', () => {
