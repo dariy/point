@@ -1222,19 +1222,8 @@ textarea.is-maximized,
 }
 
 /* ===========================
-   Editor header: back link, Publish/Update split-button, overflow menu
+   Editor header: Publish/Update split-button, overflow menu
    =========================== */
-.header-back-link {
-    text-decoration: none;
-    color: var(--text-muted);
-    margin-right: var(--spacing-xs);
-    font-weight: 400;
-}
-
-.header-back-link:hover {
-    color: var(--text-primary);
-}
-
 .header-split-button {
     position: relative;
     display: inline-flex;

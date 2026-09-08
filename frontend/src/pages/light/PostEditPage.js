@@ -116,9 +116,18 @@ export default class PostEditPage extends Component {
       loading,
       menuOpen
     } = this.state;
-    const titleText = isNew ? "New Post" : "Edit Post";
+    let backUrl = "/light/posts";
+    try {
+      const stored = sessionStorage.getItem('point:admin:posts-list-url');
+      if (stored) backUrl = stored;
+    } catch {/* ignore */}
     if (loading) return adminLayoutTemplate({
-      title: titleText,
+      // The title crumb is left out rather than filled with a placeholder
+      // like "Edit Post" — a placeholder swapping to the real title once the
+      // post loads reads as a jump, not a fill-in.
+      breadcrumbs: isNew
+        ? [{ label: "Posts", href: backUrl }, { label: "New Post" }]
+        : [{ label: "Posts", href: backUrl }],
       content: html`<div class="loading-spinner" aria-label="Loading…"></div>`
     });
     const p = post || {};
@@ -161,13 +170,11 @@ export default class PostEditPage extends Component {
         ${raw(SETTINGS_SVG)}
         <span class="btn-label">Details</span>
       </button>`;
-    let backUrl = "/light/posts";
-    try {
-      const stored = sessionStorage.getItem('point:admin:posts-list-url');
-      if (stored) backUrl = stored;
-    } catch {/* ignore */}
     return adminLayoutTemplate({
-      title: html`<a href="${backUrl}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
+      breadcrumbs: [
+        { label: "Posts", href: backUrl },
+        { label: isNew ? "New Post" : (p.title || "Untitled") },
+      ],
       actions: html`${detailsToggle}${actions}`,
       content: this._renderContent(),
       contentClass: "editor-full-width"

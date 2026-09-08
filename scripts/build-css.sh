@@ -70,6 +70,7 @@ bundle "$CSS_DIR"/light.css \
     "$CSS_DIR"/light/themes.css \
     "$CSS_DIR"/light/plugins.css \
     "$CSS_DIR"/light/exif.css \
+    "$CSS_DIR"/public/carousel-block.css \
     "$CSS_DIR"/light/responsive.css
 
 # Public bundle

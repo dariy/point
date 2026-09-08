@@ -169,6 +169,23 @@ describe('PostEditPage (mounted)', () => {
       assert.deepEqual(page._tags, ['harbour']);
     });
 
+    test('the title crumb is left out — not a placeholder like "Edit Post" — until the post loads', async () => {
+      dom.location.pathname = '/light/posts/7/edit';
+      const el = dom.document.createElement('div');
+      dom.document.body.appendChild(el);
+      page = new PostEditPage(el, { params: { id: '7' } });
+      page.mount();
+
+      const crumbs = () => [...el.querySelectorAll('.light-header h1 .breadcrumb-link, .light-header h1 .breadcrumb-current')]
+        .map(n => n.textContent.trim());
+      assert.deepStrictEqual(crumbs(), ['Posts'], 'no title crumb while the post is still loading');
+
+      await settle();
+      await settle();
+
+      assert.deepStrictEqual(crumbs(), ['Posts', 'Harbour lights'], 'fills in the real title once loaded');
+    });
+
     test('a load failure leaves the editor for the list instead of showing a blank form', async () => {
       routes['GET /api/posts/7'] = () => fail(500, 'boom');
 
