@@ -33,6 +33,7 @@ import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { mediaFromHtml } from '../../utils/postMedia.js';
 import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.js';
 import { immersiveNavTargets } from '../../utils/immersiveNav.js';
+import { imgEl, computeDeckGeometry, applyDeckClip, clearDeckClip, setImgTranslateX, clearImgTransform } from '../../utils/deckTransition.js';
 const MIN_SHOW_MS = 2000;
 
 // Set just before a seamless cross-post navigation so the next MediaViewer
@@ -62,6 +63,10 @@ export class MediaViewer extends Component {
     this._peekEl = null; // neighbor element currently being dragged into view
     this._peekDir = null;
     this._neighborVersion = 0; // guards stale async preloads
+    // Deck-panoramic geometry cache — {key: "oldIndex:newIndex", geo} — recomputed
+    // once per drag/step (getBoundingClientRect forces layout), not per pointermove.
+    this._deckGeo = null;
+    this._deckClipEls = null; // slide boxes currently clip-pathed, for precise cleanup
   }
   render() {
     const {
@@ -243,20 +248,7 @@ export class MediaViewer extends Component {
       const newSlide = slides[newIndex];
       this._index = newIndex;
       this._clearPeek();
-      if (oldSlide) {
-        oldSlide.querySelector('video')?.pause();
-        oldSlide.classList.remove('active', 'immersive-fade-in');
-        oldSlide.style.cssText = '';
-      }
-      if (newSlide) {
-        newSlide.classList.add('active', 'immersive-fade-in');
-        // Clear any leftover drag/peek inline styling so the slide lands centered.
-        newSlide.style.transition = '';
-        newSlide.style.transform = '';
-        newSlide.style.opacity = '';
-        newSlide.style.zIndex = '';
-        newSlide.querySelector('video')?.play().catch(() => {});
-      }
+      this._generalSwap(oldSlide, newSlide);
       dots.forEach((d, j) => d.classList.toggle('active', j === this._index));
       this._resetZoom();
       this._updateExif();
@@ -541,10 +533,92 @@ export class MediaViewer extends Component {
   }
 
   /**
-   * Step between two seamless carousel slides with a pan instead of the CSS
-   * opacity crossfade: the incoming slice starts one viewport width to the side
-   * at full opacity and both slides translate together, so the seam reads as a
-   * single continuous image.
+   * Panoramic deck geometry for the (oldIndex, newIndex) pair, cached for the
+   * life of one drag/step — getBoundingClientRect() forces layout, so this is
+   * computed once rather than on every pointermove. Returns null when the
+   * equal-width guard fails (see deckTransition.computeDeckGeometry); callers
+   * fall back to the legacy full-viewport pan in that case.
+   */
+  _deckGeometry(oldIndex, newIndex, oldSlide, newSlide) {
+    const key = `${oldIndex}:${newIndex}`;
+    if (this._deckGeo && this._deckGeo.key === key) return this._deckGeo.geo;
+    const geo = computeDeckGeometry(oldSlide, newSlide);
+    this._deckGeo = { key, geo };
+    return geo;
+  }
+
+  /**
+   * Admin-configured strategy for transitions outside a carousel deck (between
+   * unrelated photos/videos, and post-to-post nav). Only 'fade' exists today;
+   * this getter plus the switch in _generalSwap()/_generalCommitFade() is the
+   * extension point a future strategy plugs into — deliberately separate from
+   * the deck strategy above, which is curated by the carousel feature, not
+   * admin-configurable.
+   */
+  _transitionStrategy() {
+    return (getSettings() || {}).transition_strategy || 'fade';
+  }
+
+  /**
+   * Instant (no-animation) slide swap for a non-seamless step between ordinary
+   * slides — used by goTo() for dot/keyboard/post-nav steps that aren't part of
+   * a carousel deck. The caller owns index/dot/zoom state; this only mutates
+   * the slide DOM.
+   */
+  _generalSwap(oldSlide, newSlide) {
+    switch (this._transitionStrategy()) {
+      case 'fade':
+      default:
+        if (oldSlide) {
+          oldSlide.querySelector('video')?.pause();
+          oldSlide.classList.remove('active', 'immersive-fade-in');
+          oldSlide.style.cssText = '';
+        }
+        if (newSlide) {
+          newSlide.classList.add('active', 'immersive-fade-in');
+          // Clear any leftover drag/peek inline styling so the slide lands centered.
+          newSlide.style.transition = '';
+          newSlide.style.transform = '';
+          newSlide.style.opacity = '';
+          newSlide.style.zIndex = '';
+          newSlide.querySelector('video')?.play().catch(() => {});
+        }
+    }
+  }
+
+  /**
+   * Animate a committed drag to rest for a non-seamless (or geometry-guard-
+   * failed) step: the active slide finishes sliding off-screen and fading out,
+   * its neighbor finishes sliding to centre.
+   */
+  _generalCommitFade(active, neighbor, dir, seamless) {
+    const W = window.innerWidth;
+    switch (this._transitionStrategy()) {
+      case 'fade':
+      default: {
+        const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
+        if (active) {
+          active.style.transition = T;
+          active.style.transform = `translateX(${dir === 'fwd' ? -W : W}px)`;
+          active.style.opacity = seamless ? '1' : '0';
+        }
+        if (neighbor) {
+          neighbor.style.transition = T;
+          neighbor.style.transform = 'translateX(0)';
+          neighbor.style.opacity = '1';
+          neighbor.style.zIndex = '11';
+        }
+      }
+    }
+  }
+
+  /**
+   * Step between two seamless carousel slides. When the two slices render at
+   * the same width (deckTransition's equal-width guard), only the inner <img>
+   * of each slide pans by its own rendered width — clipped to its letterbox
+   * margin — so the seam reads as a single continuous panorama with no gap.
+   * Otherwise falls back to translating the whole slide box by a full
+   * viewport width, exactly as before.
    */
   _seamlessStep(oldIndex, newIndex, slides, dots) {
     this._clearPeek();
@@ -555,23 +629,33 @@ export class MediaViewer extends Component {
     const fwd = newIndex > oldIndex;
     this._index = newIndex;
     dots.forEach((d, j) => d.classList.toggle('active', j === newIndex));
+    const geo = this._deckGeometry(oldIndex, newIndex, oldSlide, newSlide);
+    if (geo) applyDeckClip([oldSlide, newSlide], geo.marginW);
+    this._deckClipEls = geo ? [oldSlide, newSlide] : null;
     if (newSlide) {
       newSlide.classList.add('active');
       newSlide.style.transition = 'none';
       newSlide.style.opacity = '1';
       newSlide.style.zIndex = '11';
-      newSlide.style.transform = `translateX(${fwd ? W : -W}px)`;
+      if (geo) {
+        newSlide.style.transform = '';
+        setImgTranslateX(newSlide, fwd ? geo.imgW : -geo.imgW);
+      } else {
+        newSlide.style.transform = `translateX(${fwd ? W : -W}px)`;
+      }
     }
     requestAnimationFrame(() => {
-      const T = 'transform 0.3s ease';
+      const T = geo ? 'opacity 0.3s ease' : 'transform 0.3s ease';
       if (newSlide) {
         newSlide.style.transition = T;
-        newSlide.style.transform = 'translateX(0)';
+        if (geo) setImgTranslateX(newSlide, 0, { transition: 'transform 0.3s ease' });
+        else newSlide.style.transform = 'translateX(0)';
       }
       if (oldSlide) {
         oldSlide.style.transition = T;
         oldSlide.style.opacity = '1';
-        oldSlide.style.transform = `translateX(${fwd ? -W : W}px)`;
+        if (geo) setImgTranslateX(oldSlide, fwd ? -geo.imgW : geo.imgW, { transition: 'transform 0.3s ease' });
+        else oldSlide.style.transform = `translateX(${fwd ? -W : W}px)`;
       }
     });
     window.setTimeout(() => {
@@ -586,6 +670,7 @@ export class MediaViewer extends Component {
         oldSlide.style.transition = 'none';
         oldSlide.style.opacity = '0';
         oldSlide.style.transform = '';
+        clearImgTransform(oldSlide);
         oldSlide.classList.remove('active', 'immersive-fade-in');
         requestAnimationFrame(() => { oldSlide.style.cssText = ''; });
       }
@@ -594,8 +679,12 @@ export class MediaViewer extends Component {
         newSlide.style.transform = '';
         newSlide.style.opacity = '';
         newSlide.style.zIndex = '';
+        clearImgTransform(newSlide);
         newSlide.querySelector('video')?.play().catch(() => {});
       }
+      clearDeckClip(this._deckClipEls || [oldSlide, newSlide]);
+      this._deckClipEls = null;
+      this._deckGeo = null;
     }, 320);
   }
 
@@ -619,22 +708,30 @@ export class MediaViewer extends Component {
       this._navigatePost(dir);
       return;
     }
-    const W = window.innerWidth;
     const active = this._slides[this._index];
     // Between two slides of the same carousel deck the outgoing slice keeps
     // full opacity as it pans off — the pair should read as one image.
     const seamless = !crossing && this._seamlessPair(this._index, newIndex);
-    const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
-    if (active) {
-      active.style.transition = T;
-      active.style.transform = `translateX(${dir === 'fwd' ? -W : W}px)`;
-      active.style.opacity = seamless ? '1' : '0';
-    }
-    if (neighbor) {
-      neighbor.style.transition = T;
-      neighbor.style.transform = 'translateX(0)';
-      neighbor.style.opacity = '1';
-      neighbor.style.zIndex = '11';
+    const geo = seamless ? this._deckGeometry(this._index, newIndex, active, neighbor) : null;
+    if (geo) {
+      const imgT = 'transform 0.28s ease-out';
+      applyDeckClip([active, neighbor], geo.marginW);
+      this._deckClipEls = [active, neighbor];
+      if (active) {
+        active.style.transition = 'opacity 0.28s ease-out';
+        active.style.transform = '';
+        active.style.opacity = '1';
+        setImgTranslateX(active, dir === 'fwd' ? -geo.imgW : geo.imgW, { transition: imgT });
+      }
+      if (neighbor) {
+        neighbor.style.transition = 'opacity 0.28s ease-out';
+        neighbor.style.transform = '';
+        neighbor.style.opacity = '1';
+        neighbor.style.zIndex = '11';
+        setImgTranslateX(neighbor, 0, { transition: imgT });
+      }
+    } else {
+      this._generalCommitFade(active, neighbor, dir, seamless);
     }
     setTimeout(() => {
       if (crossing) this._navigatePost(dir, {
@@ -657,6 +754,7 @@ export class MediaViewer extends Component {
       old.querySelector('video')?.pause();
       old.classList.remove('active', 'immersive-fade-in');
       old.style.cssText = '';
+      clearImgTransform(old);
     }
     if (next) {
       next.classList.add('active');
@@ -664,8 +762,12 @@ export class MediaViewer extends Component {
       next.style.transform = '';
       next.style.opacity = '';
       next.style.zIndex = '';
+      clearImgTransform(next);
       next.querySelector('video')?.play().catch(() => {});
     }
+    clearDeckClip(this._deckClipEls || [old, next]);
+    this._deckClipEls = null;
+    this._deckGeo = null;
     this._dots.forEach((d, j) => d.classList.toggle('active', j === this._index));
     this._resetZoom();
     this.props.onStep?.(this._index);
@@ -686,6 +788,11 @@ export class MediaViewer extends Component {
     el.style.transform = '';
     el.style.opacity = '';
     el.style.zIndex = '';
+    clearImgTransform(el);
+    clearImgTransform(this._slides?.[this._index]);
+    clearDeckClip(this._deckClipEls || [this._slides?.[this._index], el]);
+    this._deckClipEls = null;
+    this._deckGeo = null;
     this._peekEl = null;
     this._peekDir = null;
   }
@@ -696,12 +803,21 @@ export class MediaViewer extends Component {
     const dir = this._peekDir;
     if (!el) return;
     const W = window.innerWidth;
+    const newIndex = dir === 'fwd' ? this._index + 1 : this._index - 1;
     // A seamless deck neighbor pans back out at full opacity — no edge fade.
-    const seamless = this._seamlessPair(
-      this._index, dir === 'fwd' ? this._index + 1 : this._index - 1);
+    const seamless = this._seamlessPair(this._index, newIndex);
+    const key = `${this._index}:${newIndex}`;
+    const geo = seamless && this._deckGeo?.key === key ? this._deckGeo.geo : null;
     el.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-    el.style.transform = `translateX(${dir === 'fwd' ? W : -W}px)`;
     el.style.opacity = seamless ? '1' : '0';
+    if (geo) {
+      el.style.transform = '';
+      setImgTranslateX(el, dir === 'fwd' ? geo.imgW : -geo.imgW, { transition: 'transform 0.3s ease' });
+    } else {
+      el.style.transform = `translateX(${dir === 'fwd' ? W : -W}px)`;
+    }
+    // Deferred to _clearPeek()'s call here: removing the clip-path early would
+    // flash the letterbox gap mid settle-back animation.
     setTimeout(() => this._clearPeek(), 300);
   }
 
@@ -779,6 +895,11 @@ export class MediaViewer extends Component {
       target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
       target.style.transform = '';
       target.style.opacity = '1';
+      const img = imgEl(target);
+      if (img) {
+        img.style.transition = 'transform 0.3s ease';
+        img.style.transform = '';
+      }
     }
     this._settlePeek();
   }
@@ -824,10 +945,30 @@ export class MediaViewer extends Component {
     const dir = tx < 0 ? 'fwd' : 'back';
     const neighbor = this._neighborEl(dir);
     const ratio = Math.min(1, Math.abs(tx) / W);
+    const newIndex = dir === 'fwd' ? this._index + 1 : this._index - 1;
     // Dragging within one carousel deck: both slices ride at full opacity so
     // the seam between them tracks the finger like a single panned image.
-    const seamless = neighbor && this._seamlessPair(
-      this._index, dir === 'fwd' ? this._index + 1 : this._index - 1);
+    const seamless = neighbor && this._seamlessPair(this._index, newIndex);
+    const geo = seamless ? this._deckGeometry(this._index, newIndex, active, neighbor) : null;
+    if (geo) {
+      applyDeckClip([active, neighbor], geo.marginW);
+      this._deckClipEls = [active, neighbor];
+      // Clamp to the image's own width — the swap completes once the finger
+      // has moved that far, rather than tracking the full viewport width.
+      const clamped = Math.sign(tx) * Math.min(Math.abs(tx), geo.imgW);
+      active.style.transition = 'none';
+      active.style.transform = '';
+      active.style.opacity = '1';
+      setImgTranslateX(active, clamped);
+      this._setPeek(dir, neighbor);
+      const offset = dir === 'fwd' ? geo.imgW : -geo.imgW;
+      neighbor.style.transition = 'none';
+      neighbor.style.transform = '';
+      neighbor.style.opacity = '1';
+      neighbor.style.zIndex = '11';
+      setImgTranslateX(neighbor, offset + clamped);
+      return;
+    }
     active.style.transition = 'none';
     active.style.transform = `translateX(${tx}px)`;
     // With a neighbor revealed, fade the outgoing slide fully out; otherwise
@@ -910,5 +1051,7 @@ export class MediaViewer extends Component {
     };
     this._peekEl = null;
     this._peekDir = null;
+    this._deckGeo = null;
+    this._deckClipEls = null;
   }
 }

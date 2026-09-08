@@ -786,20 +786,16 @@ export default class CarouselStudioPage extends Component {
 
   _renderStudio() {
     const { loading, error, postId } = this.state;
-    const lead = html`
-      <p class="carousel-studio__lead">Building slides for this post.</p>`;
 
     if (loading) {
       return html`
         <section class="carousel-studio" data-post-id="${String(postId)}">
-          ${lead}
           <div class="loading-spinner" aria-label="Loading…"></div>
         </section>`;
     }
 
     return html`
       <section class="carousel-studio" data-post-id="${String(postId)}">
-        ${lead}
         ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
         ${this._source() ? this._renderBuilder() : this._renderPickPrompt()}
       </section>`;

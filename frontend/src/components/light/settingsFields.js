@@ -17,6 +17,7 @@ export const LABEL_OVERRIDES = {
   tags_visibility: "Tags visible to",
   default_post_title_format: "Title for untitled posts",
   show_title_dropdown: "Root-tag dropdown on the site title",
+  transition_strategy: "Transition style",
   atlas_post_limit: "Atlas posts to fetch",
   // Not a second "enable the plugin" switch — the plugin list owns that. This
   // gates cross-posting on publish, so label it for what it does.
@@ -154,6 +155,16 @@ function inputHtml(key, value, { posts = [] }) {
       <select name="${key}" id="${key}" class="form-select">
         <option value="chronological"${!isFeed ? " selected" : ""}>Chronological (◁ older, ▷ newer)</option>
         <option value="feed"${isFeed ? " selected" : ""}>Feed order (◁ newer, ▷ older)</option>
+      </select>`;
+  }
+  if (key === "transition_strategy") {
+    // Governs the crossfade/pan used between unrelated slides and across
+    // posts — not the carousel deck's own panoramic pan, which the carousel
+    // plugin curates directly (no admin choice, exactly one strategy today).
+    const v = value || "fade";
+    return html`
+      <select name="${key}" id="${key}" class="form-select">
+        <option value="fade"${v === "fade" ? " selected" : ""}>Fade</option>
       </select>`;
   }
   if (key === "exif_visibility") {
