@@ -716,6 +716,134 @@ export function safeAreaRect(aspect) {
 }
 
 /**
+ * @typedef {{box?: {x?:number, y?:number, w?:number, h?:number}}} BoxedLayer a
+ *   layer-shaped object. Only `box` is read here, so a bare `{box}` is a valid
+ *   argument and this module stays free of the layer schema — `document.js`
+ *   imports this file, never the other way round.
+ */
+
+/**
+ * Resolve a layer's normalized `box` into a whole-pixel rect on a
+ * `frameW × frameH` canvas.
+ *
+ * Shared by {@link layerRect} and {@link layerCSS} — the same pairing
+ * {@link deckSlideRects} and {@link deckSlideFitCSS} have, for the same reason:
+ * the studio's preview is DOM and the export is canvas, and two formulas
+ * rounding independently is how a filmstrip starts lying about the render.
+ * {@link spanLayerRect} resolves against the deck box with this helper too, so
+ * a spanning layer is sliced from the same numbers a single-slide one uses.
+ *
+ * Edges are rounded, not the size: `w` is `round(x1) − round(x0)`, exactly how
+ * {@link sliceRects} derives its column widths. Rounding a width independently
+ * would let two boxes sharing an edge round apart and leave a hairline.
+ *
+ * Degenerate input clamps rather than throws, following {@link clampPan}: a
+ * missing or malformed field falls back to the full frame rather than `NaN`,
+ * the box is pinned to at least one pixel (so a zero-area box is a sliver, not
+ * an empty rect), and it cannot start outside the canvas — the same window
+ * `normalizeBox` (`document.js`) already holds a stored layer to.
+ *
+ * @param {*} box
+ * @param {number} frameW
+ * @param {number} frameH
+ * @returns {{x:number, y:number, w:number, h:number}}
+ */
+function layerFrame(box, frameW, frameH) {
+  const b = box && typeof box === 'object' ? box : {};
+  const w = clamp(num(b.w, 1), Math.min(1, 1 / frameW), 1);
+  const h = clamp(num(b.h, 1), Math.min(1, 1 / frameH), 1);
+  const x = clamp(num(b.x, 0), 0, 1 - w);
+  const y = clamp(num(b.y, 0), 0, 1 - h);
+  const x0 = Math.round(x * frameW);
+  const y0 = Math.round(y * frameH);
+  // `w >= 1/frameW` and rounding is monotone, so both spans are >= 1px.
+  return {
+    x: x0,
+    y: y0,
+    w: Math.round((x + w) * frameW) - x0,
+    h: Math.round((y + h) * frameH) - y0,
+  };
+}
+
+/**
+ * A layer's rect in canvas pixels, on the slide's own canvas — where
+ * `render.js` draws it.
+ *
+ * The Canvas half of the layer pair; {@link layerCSS} is the DOM half and both
+ * resolve through {@link layerFrame}. For a layer in `doc.spanLayers`, whose
+ * box is normalized to the whole deck rather than one slide, use
+ * {@link spanLayerRect} instead.
+ *
+ * @param {BoxedLayer} layer a normalized layer; only its `box` is read
+ * @param {string} aspect aspect key
+ * @returns {{x:number, y:number, w:number, h:number}} canvas pixels
+ */
+export function layerRect(layer, aspect) {
+  const [w, h] = canvasSize(aspect);
+  return layerFrame(layer?.box, w, h);
+}
+
+/**
+ * The same region as {@link layerRect}, in percent of the slide frame — ready
+ * to write onto a preview element's `left`/`top`/`width`/`height` the way
+ * `_paintDeckSlide` (`index.js`) already writes framing.
+ *
+ * Percentages only, and derived from the pixel rect rather than from the box,
+ * so the preview cannot round differently from the render: the result holds at
+ * whatever CSS size the filmstrip gives the frame, and a layer nudged one
+ * canvas pixel moves one canvas pixel in the preview too.
+ *
+ * @param {BoxedLayer} layer a normalized layer; only its `box` is read
+ * @param {string} aspect aspect key
+ * @returns {{x:number, y:number, w:number, h:number}} percent of the frame
+ */
+export function layerCSS(layer, aspect) {
+  const [frameW, frameH] = canvasSize(aspect);
+  const r = layerFrame(layer?.box, frameW, frameH);
+  return {
+    x: (r.x / frameW) * 100,
+    y: (r.y / frameH) * 100,
+    w: (r.w / frameW) * 100,
+    h: (r.h / frameH) * 100,
+  };
+}
+
+/**
+ * A spanning layer's rect on slide `i` of `n`, in that slide's canvas pixels,
+ * or `null` when the layer does not reach this slide.
+ *
+ * A `doc.spanLayers` box is normalized to the **deck** — `n · slideW` wide by
+ * `slideH` tall — which is what lets one headline run across every slide of the
+ * carousel. The deck rect is resolved once, by {@link layerFrame}, and then
+ * offset into slide `i`'s coordinates; because the slide columns are exact
+ * multiples of `slideW`, the seam is continuous by construction rather than by
+ * two roundings happening to agree.
+ *
+ * The result is **slide-local and unclipped**: a layer crossing a seam yields a
+ * negative `x` on the right-hand slide, and that is the point — the canvas
+ * clips for free, and clipping here would re-wrap text that starts off-slide
+ * and break the continuation.
+ *
+ * @param {BoxedLayer} layer a normalized layer; only its `box` is read
+ * @param {number} i slide index, 0-based
+ * @param {number} n slides in the deck (clamped to at least 1)
+ * @param {string} aspect aspect key
+ * @returns {{x:number, y:number, w:number, h:number}|null} canvas pixels in
+ *   slide `i`'s space, or `null` when the layer misses this slide
+ */
+export function spanLayerRect(layer, i, n, aspect) {
+  const [slideW, slideH] = canvasSize(aspect);
+  const count = Math.max(1, Math.floor(num(n, 1)));
+  const index = Math.floor(num(i, 0));
+  if (index < 0 || index >= count) return null;
+
+  const deck = layerFrame(layer?.box, count * slideW, slideH);
+  const left = index * slideW;
+  if (deck.x >= left + slideW || deck.x + deck.w <= left) return null;
+  return { x: deck.x - left, y: deck.y, w: deck.w, h: deck.h };
+}
+
+/**
  * Clamp a normalized crop rect (all fields 0..1, relative to the source) so it
  * stays fully inside the source however it was panned or zoomed. Width and
  * height are pinned to at least one source pixel and at most the whole image;
