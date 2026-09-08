@@ -22,6 +22,7 @@ export const ASPECTS = {
 /** @typedef {keyof typeof ASPECTS} AspectKey */
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+const num = (v, fallback) => (Number.isFinite(v) ? /** @type {number} */ (v) : fallback);
 
 /**
  * Canvas `[width, height]` for an aspect key, falling back to 4:5.
@@ -335,6 +336,300 @@ export function sliceRects(srcW, srcH, n, aspect, opts) {
     prevX = nextX;
   }
   return rects;
+}
+
+/**
+ * @typedef {{x:number, y:number, w:number, h:number}} CropRect normalized 0..1, relative to the source
+ */
+
+/** Sanitize a possibly-absent, possibly-garbage crop into the full frame. */
+function safeCrop(crop) {
+  const c = crop && typeof crop === 'object' ? crop : {};
+  return { x: num(c.x, 0), y: num(c.y, 0), w: num(c.w, 1), h: num(c.h, 1) };
+}
+
+/**
+ * Resolve a normalized crop into the whole-pixel source region a deck slide
+ * shows, and the whole-pixel frame region it covers.
+ *
+ * Shared by {@link deckSlideRects} and {@link deckSlideFitCSS} so the canvas
+ * render and the CSS preview cannot drift: both read the same rounded numbers
+ * rather than each rounding a formula of their own.
+ *
+ * @param {number} srcW @param {number} srcH @param {string} aspect
+ * @param {CropRect} crop @param {'cover'|'contain'} fit
+ * @returns {{ok:boolean, dstW:number, dstH:number, sx:number, sy:number, sw:number,
+ *   sh:number, dx:number, dy:number, dw:number, dh:number}}
+ */
+function deckSlideFrame(srcW, srcH, aspect, crop, fit) {
+  const [dstW, dstH] = canvasSize(aspect);
+  const w0 = Number.isFinite(srcW) ? Math.floor(srcW) : 0;
+  const h0 = Number.isFinite(srcH) ? Math.floor(srcH) : 0;
+  if (w0 < 1 || h0 < 1) {
+    return { ok: false, dstW, dstH, sx: 0, sy: 0, sw: 0, sh: 0, dx: 0, dy: 0, dw: 0, dh: 0 };
+  }
+
+  // clampPan already pins the crop to at least one source pixel and inside the
+  // image, which is what makes a zero-width crop harmless here.
+  const c = clampPan(safeCrop(crop), w0, h0);
+  const x0 = clamp(Math.round(c.x * w0), 0, w0 - 1);
+  const y0 = clamp(Math.round(c.y * h0), 0, h0 - 1);
+  const cw = clamp(Math.round(c.w * w0), 1, w0 - x0);
+  const ch = clamp(Math.round(c.h * h0), 1, h0 - y0);
+
+  const cropAspect = cw / ch;
+  const frameAspect = dstW / dstH;
+
+  if (fit === 'contain') {
+    // The whole crop is shown; the frame gives up the axis it has to spare.
+    let dw = dstW;
+    let dh = dstH;
+    if (cropAspect > frameAspect) dh = clamp(Math.round(dstW / cropAspect), 1, dstH);
+    else dw = clamp(Math.round(dstH * cropAspect), 1, dstW);
+    return {
+      ok: true,
+      dstW,
+      dstH,
+      sx: x0,
+      sy: y0,
+      sw: cw,
+      sh: ch,
+      dx: Math.round((dstW - dw) / 2),
+      dy: Math.round((dstH - dh) / 2),
+      dw,
+      dh,
+    };
+  }
+
+  // cover (the default, and the fallback for an unknown `fit`): the frame is
+  // filled, so the crop is centre-cropped further on whichever axis is long.
+  let sw = cw;
+  let sh = ch;
+  if (cropAspect > frameAspect) sw = clamp(Math.round(ch * frameAspect), 1, cw);
+  else sh = clamp(Math.round(cw / frameAspect), 1, ch);
+  return {
+    ok: true,
+    dstW,
+    dstH,
+    sx: x0 + Math.round((cw - sw) / 2),
+    sy: y0 + Math.round((ch - sh) / 2),
+    sw,
+    sh,
+    dx: 0,
+    dy: 0,
+    dw: dstW,
+    dh: dstH,
+  };
+}
+
+/**
+ * One deck slide's `drawImage` rect: which region of ITS OWN source shows, and
+ * where on the slide canvas it lands. The deck-mode counterpart of
+ * {@link sliceRects} — same 8-tuple — but driven by a per-slide normalized
+ * `crop` (what pan/zoom edits) plus a `fit`, instead of a doc-level strategy
+ * every slide is a slave of. `paintSlide` (`render.js`) consumes either
+ * without branching.
+ *
+ * - `cover`: the frame is filled. If the crop's aspect differs from the slide's
+ *   it is centre-cropped further, so zooming out past the frame aspect widens
+ *   what is *available* without ever letterboxing.
+ * - `contain`: the whole crop is shown, centred, and `pad` reports what is left
+ *   over for the background fill.
+ *
+ * `pad` is an **array of canvas rects**, not the split path's single `{x, w}`
+ * tail gap: a contained slide is letterboxed on two opposite sides at once
+ * (left+right, or top+bottom), which one rect cannot describe. It is omitted
+ * entirely when the frame is fully covered. The region is derivable from
+ * `dx/dy/dw/dh`, but naming it explicitly keeps the draw layer a pure
+ * call-issuer that measures nothing — see {@link padRects}, which flattens both
+ * shapes into the one list `paintSlide` fills.
+ *
+ * Source fields are whole pixels — `createImageBitmap`'s crop arguments must
+ * be integers, and rounding here (rather than in the caller) is what keeps the
+ * CSS preview and the render agreeing on the same pixel.
+ *
+ * @param {number} srcW source width in pixels
+ * @param {number} srcH source height in pixels
+ * @param {string} aspect aspect key
+ * @param {CropRect} crop normalized crop, 0..1 relative to the source
+ * @param {'cover'|'contain'} [fit='cover']
+ * @returns {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:Array<{x:number,y:number,w:number,h:number}>}}
+ */
+export function deckSlideRects(srcW, srcH, aspect, crop, fit = 'cover') {
+  const f = deckSlideFrame(srcW, srcH, aspect, crop, fit);
+  /** @type {any} */
+  const rect = {
+    sx: f.sx,
+    sy: f.sy,
+    sw: f.sw,
+    sh: f.sh,
+    dx: f.dx,
+    dy: f.dy,
+    dw: f.dw,
+    dh: f.dh,
+  };
+  if (!f.ok) {
+    // Nothing to draw (no source yet, or a degenerate one): the whole frame is
+    // background. Clamped, not thrown — same convention as `clampPan`.
+    rect.pad = [{ x: 0, y: 0, w: f.dstW, h: f.dstH }];
+    return rect;
+  }
+
+  // Pillars run full height; the letterbox bars stop at the pillars, so the
+  // rects never overlap and their areas sum to the true uncovered region.
+  const pad = [
+    { x: 0, y: 0, w: f.dx, h: f.dstH },
+    { x: f.dx + f.dw, y: 0, w: f.dstW - f.dx - f.dw, h: f.dstH },
+    { x: f.dx, y: 0, w: f.dw, h: f.dy },
+    { x: f.dx, y: f.dy + f.dh, w: f.dw, h: f.dstH - f.dy - f.dh },
+  ].filter((p) => p.w > 0 && p.h > 0);
+  if (pad.length) rect.pad = pad;
+  return rect;
+}
+
+/**
+ * The CSS that reproduces {@link deckSlideRects} in the DOM preview — the
+ * deck-mode counterpart of {@link backgroundFit}. `size`/`position` are the
+ * `background-size`/`background-position` percent pairs `applyBg` in `index.js`
+ * already consumes; `box` says which part of the slide frame that element
+ * covers, also in percent.
+ *
+ * Percentages only: no rendered pixel size enters the arithmetic, so the result
+ * holds at any CSS size — the caller locks the frame's `aspect-ratio` to
+ * `canvasSize(aspect)` and sizes the image element from `box`. That is what
+ * lets a pan/zoom gesture repaint at 60fps by writing CSS instead of
+ * re-decoding a bitmap.
+ *
+ * **`box` is not decoration.** For `cover` it is the whole frame
+ * (`0,0,100,100`) and one element does the job. For `contain` it must be
+ * honoured: the background is clipped to its element, and only an element cut
+ * down to the letterboxed content rect hides the parts of the source outside
+ * the crop — a full-frame element would bleed them into the pad region the
+ * canvas fills with `bg`. The pad is then simply the frame showing through.
+ *
+ * Derived from the rects {@link deckSlideRects} returns rather than from the
+ * crop directly, so the two cannot round differently: `background-size` is the
+ * scale that takes the source's full width to `dw` (so the `sw` region spans
+ * the element), and `background-position` is the fraction of the leftover that
+ * puts source pixel `sx` at the element's left edge. The axes are computed
+ * independently, reproducing the same non-uniform stretch `drawImage` applies
+ * when rounding leaves `sw:sh` slightly off the frame ratio.
+ *
+ * @param {number} srcW @param {number} srcH @param {string} aspect
+ * @param {CropRect} crop normalized crop, 0..1 relative to the source
+ * @param {'cover'|'contain'} [fit='cover']
+ * @returns {{size: [number, number], position: [number, number],
+ *   box: {x:number, y:number, w:number, h:number}}} percent pairs, plus the
+ *   image element's rect as a percentage of the slide frame
+ */
+export function deckSlideFitCSS(srcW, srcH, aspect, crop, fit = 'cover') {
+  const f = deckSlideFrame(srcW, srcH, aspect, crop, fit);
+  const fullBox = { x: 0, y: 0, w: 100, h: 100 };
+  // No usable source: the neutral "fills the box, centred" pair, so a preview
+  // waiting on a probe shows nothing odd rather than `NaN%`.
+  if (!f.ok) return { size: [100, 100], position: [50, 50], box: fullBox };
+
+  const bgW = (Math.floor(srcW) * f.dw) / f.sw;
+  const bgH = (Math.floor(srcH) * f.dh) / f.sh;
+  const bgX = -(f.sx * f.dw) / f.sw;
+  const bgY = -(f.sy * f.dh) / f.sh;
+  const excessX = f.dw - bgW;
+  const excessY = f.dh - bgH;
+
+  // `0 / -excess` produces -0; `=== 0` catches it and normalizes to +0.
+  const pct = (v) => (v === 0 ? 0 : v);
+  return {
+    size: [pct((bgW / f.dw) * 100), pct((bgH / f.dh) * 100)],
+    position: [
+      pct(Math.abs(excessX) < 1e-6 ? 0 : (bgX / excessX) * 100),
+      pct(Math.abs(excessY) < 1e-6 ? 0 : (bgY / excessY) * 100),
+    ],
+    box:
+      f.dx === 0 && f.dy === 0 && f.dw === f.dstW && f.dh === f.dstH
+        ? fullBox
+        : {
+            x: (f.dx / f.dstW) * 100,
+            y: (f.dy / f.dstH) * 100,
+            w: (f.dw / f.dstW) * 100,
+            h: (f.dh / f.dstH) * 100,
+          },
+  };
+}
+
+/**
+ * The canvas rects a slide's background fill covers — the one measurement the
+ * draw layer needs to paint `bg`, so `paintSlide` can stay a pure call-issuer.
+ *
+ * Normalizes the two `pad` shapes this module produces into one list, which is
+ * what lets the draw layer fill a split tail column and a deck letterbox with
+ * the same loop:
+ *
+ * - {@link sliceRects} reports `pad: {x, w}` — the `pad` strategy's trailing gap
+ *   on the tail slide, always full height, so `y`/`h` default to the frame.
+ * - {@link deckSlideRects} reports `pad: [{x, y, w, h}, …]` — a contained slide
+ *   is letterboxed on two opposite sides at once, which one rect cannot say.
+ *
+ * Zero-area rects are dropped, so an empty result means "the frame is fully
+ * covered, paint no background at all".
+ *
+ * @param {{pad?: {x:number,w:number,y?:number,h?:number}
+ *   | Array<{x:number,y:number,w:number,h:number}>}} rect a rect from either producer
+ * @param {number} dstW canvas width — the default width of a shapeless pad
+ * @param {number} dstH canvas height — the default height of a full-height pad
+ * @returns {Array<{x:number,y:number,w:number,h:number}>}
+ */
+export function padRects(rect, dstW, dstH) {
+  const pad = rect && typeof rect === 'object' ? rect.pad : null;
+  if (!pad) return [];
+  const list = Array.isArray(pad) ? pad : [pad];
+  return list
+    .filter((p) => p && typeof p === 'object')
+    .map((p) => ({
+      x: num(p.x, 0),
+      y: num(p.y, 0),
+      w: num(p.w, dstW),
+      h: num(p.h, dstH),
+    }))
+    .filter((p) => p.w > 0 && p.h > 0);
+}
+
+/**
+ * The two endpoints of a linear gradient's axis across a `w × h` frame, for
+ * `createLinearGradient`.
+ *
+ * Follows the CSS `linear-gradient(<angle>)` convention exactly — `0deg` points
+ * to the top, angles turn clockwise, and the line is long enough that its ends
+ * sit where the corner-most stop lands (`|w·sin a| + |h·cos a|`, centred). That
+ * is deliberate: the studio's live preview is a CSS gradient on a DOM element
+ * and the render is a canvas gradient, and the two must agree pixel for pixel or
+ * the preview lies. Rounded to whole pixels so the call sequence is assertable.
+ *
+ * @param {number} angleDeg CSS gradient angle in degrees; any real number (it
+ *   wraps), defaulting to `180` (top → bottom) when not finite
+ * @param {number} w frame width @param {number} h frame height
+ * @returns {{x0:number, y0:number, x1:number, y1:number}}
+ */
+export function gradientLine(angleDeg, w, h) {
+  const deg = ((num(angleDeg, 180) % 360) + 360) % 360;
+  const rad = (deg * Math.PI) / 180;
+  // Screen coordinates: y grows downward, so `to top` is -1 on y.
+  const dx = Math.sin(rad);
+  const dy = -Math.cos(rad);
+  const len = Math.abs(w * dx) + Math.abs(h * dy);
+  const cx = w / 2;
+  const cy = h / 2;
+  // `sin(π)` is not quite zero, so an axis-aligned angle can round to -0;
+  // `=== 0` catches it and normalizes to +0.
+  const px = (v) => {
+    const r = Math.round(v);
+    return r === 0 ? 0 : r;
+  };
+  return {
+    x0: px(cx - (dx * len) / 2),
+    y0: px(cy - (dy * len) / 2),
+    x1: px(cx + (dx * len) / 2),
+    y1: px(cy + (dy * len) / 2),
+  };
 }
 
 /**

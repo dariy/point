@@ -21,7 +21,13 @@
 /** A bare media path on its own line — how the visual editor stores an image. */
 export const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
-/** The class on the fenced div that wraps a carousel's slides. */
+/**
+ * The class on the fenced div that wraps a carousel's slides. Hardcoded a
+ * second time as CAROUSEL_BLOCK_RE in postMedia.js (duplicated, not imported,
+ * to keep that module dependency-free for the preload path) and a third time
+ * as carouselBlockRe in api/internal/services/post_publish.go — Go and JS
+ * cannot share a constant. Changing the class name means updating all three.
+ */
 export const CAROUSEL_BLOCK_CLASS = "carousel-block";
 
 const CAROUSEL_FENCE_OPEN = `:::{.${CAROUSEL_BLOCK_CLASS}}`;
