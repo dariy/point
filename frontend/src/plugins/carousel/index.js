@@ -561,7 +561,11 @@ export default class CarouselStudioPage extends Component {
     try {
       const deps = this.props.renderDeps || browserDeps();
       const hashOf = (slide) =>
-        specHash(slide, doc.aspect, { strategy: doc.strategy, anchorY: doc.anchorY });
+        specHash(slide, doc.aspect, {
+          strategy: doc.strategy,
+          anchorY: doc.anchorY,
+          spanLayers: doc.spanLayers,
+        });
 
       // A slide whose specHash still matches the one stored with its render has
       // identical inputs (source/crop/fit/bg, plus the doc-level framing folded
