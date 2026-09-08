@@ -23,11 +23,14 @@
  */
 
 import {
+  autoFitText,
   canvasSize,
   deckSlideRects,
   gradientLine,
+  layerRect,
   padRects,
   sliceRects,
+  wrapText,
 } from './geometry.js';
 import { deleteMedia, uploadMedia } from '../../api/media.js';
 
@@ -35,6 +38,41 @@ import { deleteMedia, uploadMedia } from '../../api/media.js';
  *  the same media row and re-render is idempotent. */
 const JPEG_QUALITY = 0.92;
 const JPEG_TYPE = 'image/jpeg';
+
+/**
+ * The `--font-family` token's own value (`frontend/css/common/tokens.css`), for
+ * when the dep cannot resolve one: a headless render, a document whose theme
+ * CSS never loaded, a browser that refused the computed style. Type in the
+ * built-in stack is worth more than a failed encode, and there is no bundled
+ * WOFF2 to fall back to — see `docs/vendors.md` for why there never will be.
+ */
+const DEFAULT_FONT_STACK =
+  '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif';
+
+/** Floor for auto-fit, in canvas pixels: below this the type is unreadable at
+ *  any size the slide is viewed, so clipping is the more honest failure. */
+const MIN_AUTO_PX = 8;
+
+/** `shadow: true` is one opinionated preset — legibility over a photograph, not
+ *  a typographic control surface. Both numbers are multiples of the font size,
+ *  so the shadow survives a resize and an aspect change with the type. */
+const TEXT_SHADOW = { color: 'rgba(0, 0, 0, 0.55)', blur: 0.16, offsetY: 0.05 };
+
+/** Where the wrapped block sits in the slack its box leaves, per `valign`. */
+const VALIGN_SLACK = {
+  top: () => 0,
+  middle: (slack) => slack / 2,
+  bottom: (slack) => slack,
+};
+
+/** Where the text anchor sits in the box, per `align`. The keys double as the
+ *  canvas `textAlign` values, which is what keeps the offset and the alignment
+ *  it pairs with from drifting apart. */
+const ALIGN_ANCHOR = {
+  left: () => 0,
+  center: (w) => w / 2,
+  right: (w) => w,
+};
 
 /**
  * @typedef {object} SliceOpts
@@ -56,6 +94,9 @@ const JPEG_TYPE = 'image/jpeg';
  * @property {(canvas: any, type: string, quality: number) => Promise<Blob|null>} encode  canvas.toBlob
  * @property {(file: File, meta: object) => Promise<{ id: number, path: string }>} upload
  * @property {(id: number) => Promise<any>} deleteMedia  used only to unwind a partial upload failure
+ * @property {() => Promise<string>} [resolveFont]  the active theme's font
+ *   stack, awaited once per render before the first layer is painted. Optional:
+ *   a deps object without one paints in {@link DEFAULT_FONT_STACK}.
  */
 
 /**
@@ -89,6 +130,17 @@ export function browserDeps() {
     },
     encode: (canvas, type, quality) =>
       new Promise((resolve) => canvas.toBlob(resolve, type, quality)),
+    resolveFont: async () => {
+      // Await the face, not just the stack: `measureText` on a canvas whose
+      // font has not loaded silently measures — and paints — a system
+      // fallback, so the JPEG disagrees with the CSS preview beside it. That
+      // only happens on a cold load, which is exactly the kind that ships.
+      await document.fonts?.ready;
+      const stack = getComputedStyle(document.documentElement)
+        .getPropertyValue('--font-family')
+        .trim();
+      return stack || DEFAULT_FONT_STACK;
+    },
     upload: (file, meta) => uploadMedia(file, meta),
     deleteMedia: (id) => deleteMedia(id),
   };
@@ -116,6 +168,132 @@ function gradientFill(bg) {
 }
 
 /**
+ * The CSS font shorthand for one line of layer type.
+ *
+ * @param {number} weight 1..1000, as the schema clamps it
+ * @param {number} size canvas pixels
+ * @param {string} family the resolved stack
+ */
+function fontSpec(weight, size, family) {
+  return `${Math.round(weight) || 400} ${size}px ${family}`;
+}
+
+/**
+ * Paint one `text` layer inside `box`: wrapped to the box, and either auto-fit
+ * to it (`size: null`, the default) or set at the layer's own size.
+ *
+ * Measurement is the slide context's own `measureText` bound to the size being
+ * tried — which is the whole reason {@link wrapText} and {@link autoFitText}
+ * take a `measure` callback rather than guessing a metric from the character
+ * count. Neither is reimplemented here; this function only decides which one to
+ * ask and where to put the answer.
+ *
+ * A numeric `size` is a fraction of the canvas **height**, not a pixel count:
+ * the box is normalized, so the type set against it has to survive an aspect
+ * change the same way the box does.
+ *
+ * Everything the context is asked to remember — font, fill, alignment, shadow —
+ * is set inside one `save`/`restore`, the measuring passes included, so no
+ * layer can leak state into the next one.
+ *
+ * @param {any} ctx 2D context
+ * @param {import('./document.js').CarouselTextLayer} layer a normalized layer
+ * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ * @param {number} frameH canvas height — what a numeric `size` is a fraction of
+ * @param {string} family the resolved font stack
+ */
+function paintTextLayer(ctx, layer, box, frameH, family) {
+  const text = typeof layer.text === 'string' ? layer.text : '';
+  if (!text.trim()) return;
+  const lineHeight = layer.lineHeight > 0 ? layer.lineHeight : 1.2;
+
+  ctx.save();
+  try {
+    const measure = (candidate, size) => {
+      ctx.font = fontSpec(layer.weight, size, family);
+      return ctx.measureText(candidate);
+    };
+
+    let fontSize;
+    /** @type {string[]} */
+    let lines;
+    if (layer.size == null) {
+      // Bounded by the box on both axes before the scan starts: one line can
+      // never be taller than the box, and a glyph roughly wider than the box
+      // can never fit on one. Both only shorten `autoFitText`'s walk down —
+      // the sizes they rule out are sizes it would have rejected anyway.
+      const max = Math.max(MIN_AUTO_PX, Math.floor(Math.min(box.h / lineHeight, box.w)));
+      ({ fontSize, lines } = autoFitText({
+        text,
+        maxWidth: box.w,
+        maxHeight: box.h,
+        measure,
+        lineHeight,
+        min: MIN_AUTO_PX,
+        max,
+      }));
+    } else {
+      fontSize = Math.max(1, Math.round(layer.size * frameH));
+      lines = wrapText(text, box.w, fontSize, measure);
+    }
+    if (!lines.length) return;
+
+    const lineBox = fontSize * lineHeight;
+    // Negative slack — a fixed `size` too big for its box — centres or bottoms
+    // the overflow rather than pinning it to the top, which is what the two
+    // alignments would mean if the box did fit.
+    const slack = box.h - lines.length * lineBox;
+    const top = box.y + (VALIGN_SLACK[layer.valign] || VALIGN_SLACK.top)(slack);
+    const x = box.x + (ALIGN_ANCHOR[layer.align] || ALIGN_ANCHOR.left)(box.w);
+
+    ctx.font = fontSpec(layer.weight, fontSize, family);
+    ctx.fillStyle = layer.color || '#ffffff';
+    ctx.textAlign = ALIGN_ANCHOR[layer.align] ? layer.align : 'left';
+    // The em box centred in its line box: one term per line, and it puts the
+    // block's optical centre where `valign: middle` says it is.
+    ctx.textBaseline = 'middle';
+    if (layer.shadow) {
+      ctx.shadowColor = TEXT_SHADOW.color;
+      ctx.shadowBlur = fontSize * TEXT_SHADOW.blur;
+      ctx.shadowOffsetY = fontSize * TEXT_SHADOW.offsetY;
+    }
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], x, top + (i + 0.5) * lineBox);
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
+ * Paint a slide's layers over the image, back to front — list order is meaning
+ * and `normalizeLayers` (`document.js`) preserves it, so this does not sort.
+ *
+ * Only `text` is drawn here; `image`, `rect`, `counter` and `arrow` are the
+ * next bead and are skipped rather than half-painted. A layer type this build
+ * does not know how to draw is not an error — the schema keeps it, and a later
+ * version paints it.
+ *
+ * `aspect` rather than the pixel size, because {@link layerRect} is the Canvas
+ * half of the layer pair and resolving a box any other way is how a filmstrip
+ * starts lying about the render.
+ *
+ * @param {any} ctx 2D context
+ * @param {import('./document.js').CarouselLayer[]|null|undefined} layers
+ * @param {string} aspect the aspect key `ctx`'s canvas was sized from
+ * @param {string} [font] the resolved font stack; the built-in default when empty
+ */
+export function paintLayers(ctx, layers, aspect, font) {
+  if (!Array.isArray(layers) || !layers.length) return;
+  const [, frameH] = canvasSize(aspect);
+  const family = font || DEFAULT_FONT_STACK;
+  for (const layer of layers) {
+    if (!layer || layer.type !== 'text') continue;
+    paintTextLayer(ctx, layer, layerRect(layer, aspect), frameH, family);
+  }
+}
+
+/**
  * Paint one slide: clear the canvas, fill the background wherever the slide's
  * own pixels do not reach, then blit the decoded column 1:1 — the bitmap is
  * already cropped and scaled to `rect.dw × rect.dh` by `deps.decode`. Pure
@@ -136,6 +314,12 @@ function gradientFill(bg) {
  *   own pixels stretched across the frame under a blur, so the gap bleeds
  *   instead of hard-edging.
  *
+ * Layers are painted last, over the image, by {@link paintLayers} — a layer is
+ * baked into the JPEG, never composited afterwards. A slide with none leaves
+ * this function byte-for-byte where it was before layers existed: `paintLayers`
+ * returns on an empty list without touching the context, so the S1/S2 render
+ * paths encode exactly the bytes they always did.
+ *
  * @param {any} ctx 2D context
  * @param {ImageBitmap} bitmap the decoded column, sized `rect.dw × rect.dh`
  * @param {{dx:number,dy:number,dw:number,dh:number,
@@ -144,8 +328,13 @@ function gradientFill(bg) {
  * @param {number} w canvas width
  * @param {number} h canvas height
  * @param {import('./document.js').CarouselBg|null} [bg] fill for the pad region
+ * @param {import('./document.js').CarouselLayer[]} [layers] the slide's own
+ *   layers, painted back to front over the image
+ * @param {{aspect?: string, font?: string}} [opts] `aspect` is the key `w`/`h`
+ *   were sized from — layer boxes resolve against it; `font` is the stack
+ *   resolved once per render by `deps.resolveFont`
  */
-export function paintSlide(ctx, bitmap, rect, w, h, bg) {
+export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
   ctx.clearRect(0, 0, w, h);
   const pad = padRects(rect, w, h);
   if (pad.length) {
@@ -168,6 +357,7 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg) {
     }
   }
   ctx.drawImage(bitmap, rect.dx, rect.dy, rect.dw, rect.dh);
+  paintLayers(ctx, layers, opts.aspect, opts.font);
 }
 
 /**
@@ -188,9 +378,11 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg) {
  *   for the pad region
  * @param {number} slideW @param {number} slideH canvas size
  * @param {RenderDeps} deps
+ * @param {{aspect?: string, layers?: import('./document.js').CarouselLayer[],
+ *   font?: string}} [paint] what `paintSlide` draws over the image
  * @returns {Promise<Blob>}
  */
-async function encodeSlide(blob, rect, bg, slideW, slideH, deps) {
+async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
   const bitmap = await deps.decode(blob, {
     sx: rect.sx,
     sy: rect.sy,
@@ -202,7 +394,10 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps) {
   });
   try {
     const { canvas, ctx } = deps.makeSurface(slideW, slideH);
-    paintSlide(ctx, bitmap, rect, slideW, slideH, bg);
+    paintSlide(ctx, bitmap, rect, slideW, slideH, bg, paint.layers, {
+      aspect: paint.aspect,
+      font: paint.font,
+    });
     const encoded = await deps.encode(canvas, JPEG_TYPE, JPEG_QUALITY);
     if (!encoded) {
       throw new Error('carousel render: canvas.toBlob returned null (encoder failure)');
@@ -211,6 +406,40 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps) {
   } finally {
     bitmap.close?.();
   }
+}
+
+/**
+ * Resolve the theme's font stack once per render, and only if something is
+ * actually going to be typeset — a deck with no layers must not wait on
+ * `document.fonts.ready`, and must issue exactly the calls it issued before
+ * layers existed.
+ *
+ * The await belongs to the dep, not to the loop: `browserDeps.resolveFont`
+ * waits for the face to load, and memoizing the promise here means slide 9 pays
+ * nothing for what slide 1 already waited for. A dep without a `resolveFont`,
+ * one that returns nothing usable, and one that throws all land on
+ * {@link DEFAULT_FONT_STACK} — type in the wrong face beats a failed encode.
+ *
+ * @param {RenderDeps} deps
+ * @returns {(layers: unknown[]) => Promise<string>}
+ */
+function fontResolver(deps) {
+  /** @type {Promise<string>|null} */
+  let pending = null;
+  return async (layers) => {
+    if (!layers.length) return '';
+    if (!pending) {
+      pending = (async () => {
+        try {
+          const stack = await deps.resolveFont?.();
+          return (typeof stack === 'string' && stack.trim()) || DEFAULT_FONT_STACK;
+        } catch {
+          return DEFAULT_FONT_STACK;
+        }
+      })();
+    }
+    return pending;
+  };
 }
 
 /**
@@ -226,6 +455,9 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps) {
  * @property {import('./document.js').CarouselBg|null} [bg]
  * @property {number} [srcW]
  * @property {number} [srcH]
+ * @property {import('./document.js').CarouselLayer[][]} [layers]  each column's
+ *   own layer list, index-aligned with the slides. Layers are not deck-only: a
+ *   split deck carrying a headline is the headline use case.
  */
 
 /**
@@ -254,6 +486,7 @@ export async function renderSplit(spec, deps, onProgress, keep) {
   if (!srcW || !srcH) ({ w: srcW, h: srcH } = await deps.probeSize(source));
 
   const rects = sliceRects(srcW, srcH, count, aspect, { strategy, anchorY });
+  const font = fontResolver(deps);
   const slides = [];
   for (let i = 0; i < rects.length; i++) {
     if (keep && keep[i]) {
@@ -261,7 +494,14 @@ export async function renderSplit(spec, deps, onProgress, keep) {
       onProgress?.({ done: i + 1, total: rects.length });
       continue;
     }
-    slides.push(await encodeSlide(blob, rects[i], bg, slideW, slideH, deps));
+    const layers = spec.layers?.[i] || [];
+    slides.push(
+      await encodeSlide(blob, rects[i], bg, slideW, slideH, deps, {
+        aspect,
+        layers,
+        font: await font(layers),
+      }),
+    );
     onProgress?.({ done: i + 1, total: rects.length });
   }
   return slides;
@@ -343,6 +583,7 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
   const seed =
     singleSource && opts.srcW >= 1 && opts.srcH >= 1 ? { w: opts.srcW, h: opts.srcH } : null;
   const load = sourceLoader(deps, seed);
+  const font = fontResolver(deps);
 
   const out = [];
   for (let i = 0; i < slides.length; i++) {
@@ -354,7 +595,14 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
     const slide = slides[i];
     const { blob, w, h } = await load(slide.source);
     const rect = deckSlideRects(w, h, doc.aspect, slide.crop, slide.fit);
-    out.push(await encodeSlide(blob, rect, slide.bg, slideW, slideH, deps));
+    const layers = slide.layers || [];
+    out.push(
+      await encodeSlide(blob, rect, slide.bg, slideW, slideH, deps, {
+        aspect: doc.aspect,
+        layers,
+        font: await font(layers),
+      }),
+    );
     onProgress?.({ done: i + 1, total: slides.length });
   }
   return out;
@@ -367,7 +615,8 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
  * `split` is adapted into the flat spec `renderSplit` has always taken: the
  * shared source and count come from the slides, the framing from the doc-level
  * `strategy`/`anchorY`. The background comes from the **last** slide, the only
- * one `sliceRects` can leave a pad on.
+ * one `sliceRects` can leave a pad on; the layers come from every slide, since
+ * unlike `crop`/`fit` they are painted in both modes.
  *
  * @param {import('./document.js').CarouselDoc} doc a normalized document
  * @param {RenderDeps} deps
@@ -392,6 +641,7 @@ export async function renderCarousel(doc, deps, onProgress, keep, opts = {}) {
       strategy: doc.strategy,
       anchorY: doc.anchorY,
       bg: slides[slides.length - 1].bg,
+      layers: slides.map((s) => s.layers || []),
       srcW: opts.srcW,
       srcH: opts.srcH,
     },

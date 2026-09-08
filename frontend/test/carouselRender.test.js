@@ -19,9 +19,15 @@ import {
   renderCarousel,
   renderAndUpload,
 } from '../src/plugins/carousel/render.js';
-import { sliceRects, deckSlideRects, canvasSize } from '../src/plugins/carousel/geometry.js';
+import {
+  sliceRects,
+  deckSlideRects,
+  canvasSize,
+  layerRect,
+} from '../src/plugins/carousel/geometry.js';
 import {
   normalizeDocument,
+  normalizeLayer,
   splitDocument,
   toDeckDocument,
 } from '../src/plugins/carousel/document.js';
@@ -30,12 +36,48 @@ import {
  *  logs as the plain string `'gradient'` instead of an unassertable object. */
 const GRADIENTS = new WeakSet();
 
-/** A ctx that records every call and style assignment as `[name, ...args]`. */
+/** A stand-in for a real face: every glyph is half an em wide, so a measured
+ *  width is `length x 0.5 x fontSize` — enough for wrap and auto-fit to have
+ *  something monotone to decide against, and deterministic across machines. */
+const CHAR_EM = 0.5;
+
+/** The px size out of a CSS font shorthand (`600 42px "Inter", sans-serif`). */
+function fontPx(font) {
+  const m = /(\d+(?:\.\d+)?)px/.exec(font || '');
+  return m ? Number(m[1]) : 0;
+}
+
+/** Every `fillText` in a log, with the font that was in effect for it. */
+function painted(log) {
+  return log
+    .filter((e) => e[0] === 'fillText')
+    .map(([, text, x, y, font]) => ({ text, x, y, size: fontPx(font), font }));
+}
+
+/** The log split per slide canvas — one segment per `makeSurface`. */
+function surfaces(log) {
+  const out = [];
+  for (const entry of log) {
+    if (entry[0] === 'makeSurface') out.push([]);
+    else if (out.length) out[out.length - 1].push(entry);
+  }
+  return out;
+}
+
+/** A ctx that records every call and style assignment as `[name, ...args]`.
+ *
+ *  `font` is the exception: `measureText` sets it once per candidate size, so
+ *  logging the assignments would bury the paint in the auto-fit scan. It is
+ *  stored and reported as the last element of each `fillText` entry instead —
+ *  which is the only place its value is a claim about the render. */
 function recordingCtx(log) {
   const ctx = {
+    font: '',
     clearRect: (...a) => log.push(['clearRect', ...a]),
     drawImage: (...a) => log.push(['drawImage', ...a]),
     fillRect: (...a) => log.push(['fillRect', ...a]),
+    fillText: (text, x, y) => log.push(['fillText', text, x, y, ctx.font]),
+    measureText: (text) => ({ width: text.length * CHAR_EM * fontPx(ctx.font) }),
     save: () => log.push(['save']),
     restore: () => log.push(['restore']),
     createLinearGradient: (...line) => {
@@ -45,7 +87,15 @@ function recordingCtx(log) {
       return grad;
     },
   };
-  for (const prop of ['fillStyle', 'filter']) {
+  for (const prop of [
+    'fillStyle',
+    'filter',
+    'textAlign',
+    'textBaseline',
+    'shadowColor',
+    'shadowBlur',
+    'shadowOffsetY',
+  ]) {
     let v;
     Object.defineProperty(ctx, prop, {
       get: () => v,
@@ -64,13 +114,21 @@ function recordingCtx(log) {
  * the call log, an encoder that returns a labelled blob, and an upload that
  * echoes back a media row.
  */
-function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']), upload } = {}) {
+function fakeDeps({
+  srcW = 3000,
+  srcH = 1000,
+  encode = () => new Blob(['jpg']),
+  upload,
+  // `null` omits the dep entirely — a deps object built before layers existed.
+  resolveFont = async () => 'TestFace, sans-serif',
+} = {}) {
   const log = [];
   const decodeCalls = [];
   const closed = { count: 0 };
   const uploads = [];
   const deletes = [];
   const progress = [];
+  const fontCalls = { count: 0 };
   const deps = {
     fetchBlob: async (url) => {
       log.push(['fetchBlob', url]);
@@ -107,7 +165,13 @@ function fakeDeps({ srcW = 3000, srcH = 1000, encode = () => new Blob(['jpg']), 
       deletes.push(id);
     },
   };
-  return { deps, log, decodeCalls, closed, uploads, deletes, progress, onProgress: (p) => progress.push(p) };
+  if (resolveFont) {
+    deps.resolveFont = async () => {
+      fontCalls.count++;
+      return resolveFont();
+    };
+  }
+  return { deps, log, decodeCalls, closed, uploads, deletes, progress, fontCalls, onProgress: (p) => progress.push(p) };
 }
 
 describe('paintSlide', () => {
@@ -210,6 +274,183 @@ describe('paintSlide', () => {
         ['clearRect', 'save', 'filter', 'drawImage', 'restore', 'drawImage'],
         `blur fallback for ${JSON.stringify(bg)}`,
       );
+    }
+  });
+});
+
+/** A schema-true text layer: the defaults are the schema's (left/top, white,
+ *  weight 400, `size: null` = auto-fit, lineHeight 1.2), so a test that does
+ *  not name a field is asserting the default the studio will produce. */
+const textLayer = (patch) =>
+  normalizeLayer({
+    type: 'text',
+    text: 'Hello',
+    box: { x: 0.1, y: 0.1, w: 0.8, h: 0.2 },
+    ...patch,
+  });
+
+/** A 1080x1350 no-pad rect: nothing to fill, so the log is the blit and the
+ *  layers, and nothing else can be confused for them. */
+const FULL_RECT = { sx: 0, sy: 0, sw: 100, sh: 125, dx: 0, dy: 0, dw: 1080, dh: 1350 };
+
+const round1 = (n) => Math.round(n * 10) / 10;
+
+describe('paintSlide — text layers', () => {
+  test('no layers: exactly the call sequence from before layers existed', () => {
+    const before = [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+    ];
+    for (const layers of [undefined, [], null]) {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, layers, {
+        aspect: '4:5',
+        font: 'TestFace, sans-serif',
+      });
+      assert.deepStrictEqual(log, before, `layers=${JSON.stringify(layers)}`);
+    }
+  });
+
+  test('a text layer is painted after the blit, in its layerRect, auto-fit to the box', () => {
+    const layer = textLayer();
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], {
+      aspect: '4:5',
+      font: 'TestFace, sans-serif',
+    });
+
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['fillStyle', '#ffffff'],
+      ['textAlign', 'left'],
+      ['textBaseline', 'middle'],
+      // 864x270 box, one line of 5 half-em glyphs: the height is what binds,
+      // so auto-fit lands on 270/1.2 = 225px and the line centres in the box.
+      ['fillText', 'Hello', 108, 270, '400 225px TestFace, sans-serif'],
+      ['restore'],
+    ]);
+    const box = layerRect(layer, '4:5');
+    assert.strictEqual(painted(log)[0].x, box.x, 'the anchor is the geometry rect, not a local formula');
+  });
+
+  test('auto-fit shrinks when the box shrinks', () => {
+    const sizeFor = (h) => {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer({ box: { x: 0.1, y: 0.1, w: 0.8, h } })], { aspect: '4:5' });
+      return painted(log)[0].size;
+    };
+    assert.strictEqual(sizeFor(0.2), 225);
+    assert.strictEqual(sizeFor(0.1), 112, 'half the height, half the type');
+    assert.ok(sizeFor(0.1) < sizeFor(0.2));
+  });
+
+  test('a numeric size is a fraction of the canvas height, not a pixel count', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer({ size: 0.1 })], {
+      aspect: '4:5',
+      font: 'TestFace',
+    });
+    const [line] = painted(log);
+    assert.strictEqual(line.size, 135, '0.1 of a 1350px canvas');
+    // Same layer on a square canvas: the fraction follows the frame, which is
+    // the whole reason it is not stored in pixels.
+    const square = [];
+    paintSlide(recordingCtx(square), 'BMP', FULL_RECT, 1080, 1080, null, [textLayer({ size: 0.1 })], {
+      aspect: '1:1',
+      font: 'TestFace',
+    });
+    assert.strictEqual(painted(square)[0].size, 108);
+  });
+
+  test('a fixed size wraps to the box width, line by line', () => {
+    const log = [];
+    const layer = textLayer({ text: 'Hello world here', size: 0.05, box: { x: 0.1, y: 0.1, w: 0.2, h: 0.6 } });
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+
+    const lines = painted(log);
+    assert.deepStrictEqual(lines.map((l) => l.text), ['Hello', 'world', 'here']);
+    assert.deepStrictEqual(lines.map((l) => l.x), [108, 108, 108], 'left-aligned to the box edge');
+    // 68px type, lineHeight 1.2 → an 81.6px line box, each line centred in its own.
+    assert.deepStrictEqual(lines.map((l) => round1(l.y)), [175.8, 257.4, 339]);
+  });
+
+  test('align and valign place the wrapped block inside the box', () => {
+    const log = [];
+    const layer = textLayer({
+      text: 'Hello world here',
+      size: 0.05,
+      align: 'center',
+      valign: 'middle',
+      box: { x: 0.1, y: 0.1, w: 0.2, h: 0.6 },
+    });
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+
+    assert.ok(log.some((e) => e[0] === 'textAlign' && e[1] === 'center'));
+    const lines = painted(log);
+    // 216px box from x=108 → the anchor is its centre; 810px tall box holding a
+    // 244.8px block → the block starts half the slack down.
+    assert.deepStrictEqual(lines.map((l) => l.x), [216, 216, 216]);
+    assert.strictEqual(round1(lines[0].y), round1(135 + (810 - 3 * 68 * 1.2) / 2 + (68 * 1.2) / 2));
+
+    const bottom = [];
+    paintSlide(recordingCtx(bottom), 'BMP', FULL_RECT, 1080, 1350, null,
+      [normalizeLayer({ ...layer, valign: 'bottom' })], { aspect: '4:5' });
+    assert.strictEqual(round1(painted(bottom)[0].y), round1(135 + 810 - 3 * 68 * 1.2 + (68 * 1.2) / 2));
+  });
+
+  test('shadow is one fixed preset, scaled by the font size, and off by default', () => {
+    const off = [];
+    paintSlide(recordingCtx(off), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer()], { aspect: '4:5' });
+    assert.deepStrictEqual(off.filter((e) => String(e[0]).startsWith('shadow')), []);
+
+    const on = [];
+    paintSlide(recordingCtx(on), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer({ shadow: true })], { aspect: '4:5' });
+    assert.deepStrictEqual(
+      on
+        .filter((e) => String(e[0]).startsWith('shadow'))
+        .map(([k, v]) => [k, typeof v === 'number' ? round1(v) : v]),
+      [
+        ['shadowColor', 'rgba(0, 0, 0, 0.55)'],
+        ['shadowBlur', 36],
+        ['shadowOffsetY', 11.3],
+      ],
+    );
+  });
+
+  test('colour and weight come from the layer', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [textLayer({ color: '#ff0088', weight: 700 })], { aspect: '4:5', font: 'TestFace' });
+    assert.ok(log.some((e) => e[0] === 'fillStyle' && e[1] === '#ff0088'));
+    assert.strictEqual(painted(log)[0].font, '700 225px TestFace');
+  });
+
+  test('blank text paints nothing at all', () => {
+    for (const text of ['', '   ', '\n\t']) {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer({ text })], { aspect: '4:5' });
+      assert.deepStrictEqual(painted(log), [], JSON.stringify(text));
+    }
+  });
+
+  test('layers paint back to front, and a type this build cannot draw is skipped', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [
+      textLayer({ text: 'under' }),
+      // `.4` paints these; until then they are skipped, not half-drawn.
+      normalizeLayer({ type: 'rect', box: { x: 0, y: 0, w: 1, h: 1 } }),
+      textLayer({ text: 'over' }),
+    ], { aspect: '4:5' });
+    assert.deepStrictEqual(painted(log).map((l) => l.text), ['under', 'over']);
+  });
+
+  test('no font resolved: the built-in stack, not a throw', () => {
+    for (const font of [undefined, '', null]) {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer()], { aspect: '4:5', font });
+      assert.match(painted(log)[0].font, /Inter/, `font=${JSON.stringify(font)}`);
     }
   });
 });
@@ -511,6 +752,101 @@ describe('renderCarousel', () => {
     const doc = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5' });
     await renderCarousel(doc, f.deps, undefined, undefined, { srcW: 3000, srcH: 1000 });
     assert.deepStrictEqual(urlsOf(f.log, 'probeSize'), []);
+  });
+});
+
+/**
+ * Layers through both sequencers. The rule the whole S3 render path rests on is
+ * the negative one: a slide carrying no layers must issue the calls it issued
+ * before layers existed, or the S1/S2 renders stop being byte-identical and
+ * every stored `specHash` starts lying about what is on disk.
+ */
+describe('layers through the sequencers', () => {
+  test('a deck slide paints its own layers, after the blit, and only its own', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    doc.slides[0].layers = [textLayer({ text: 'One' })];
+    await renderDeck(doc, f.deps);
+
+    const [first, second] = surfaces(f.log);
+    assert.deepStrictEqual(painted(first).map((l) => l.text), ['One']);
+    assert.deepStrictEqual(painted(second), [], 'a layer belongs to its slide, not to the deck');
+    assert.ok(
+      first.findIndex((e) => e[0] === 'drawImage') < first.findIndex((e) => e[0] === 'fillText'),
+      'the image is blitted before any type is set over it',
+    );
+  });
+
+  test('a slide with no layers encodes exactly what it encoded before layers existed', async () => {
+    const withLayer = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    doc.slides[0].layers = [textLayer()];
+    await renderDeck(doc, withLayer.deps);
+
+    const bare = fakeDeps({ srcW: 3000, srcH: 1000 });
+    await renderDeck(deckOf('/x.jpg', 2, '4:5', 3000, 1000), bare.deps);
+
+    // The decoded bitmap is a fresh fake per render, so compare it by shape:
+    // what is under test is the call sequence, which is what the encoder sees.
+    const shape = (seg) => seg.map((e) => e.map((v) => (v && typeof v === 'object' ? 'BMP' : v)));
+    assert.deepStrictEqual(shape(surfaces(withLayer.log)[1]), shape(surfaces(bare.log)[1]));
+  });
+
+  test('layers are not deck-only: the split path paints them too', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5' });
+    doc.slides[1].layers = [textLayer({ text: 'Two' })];
+    await renderCarousel(doc, f.deps);
+
+    const [first, second] = surfaces(f.log);
+    assert.deepStrictEqual(painted(first), []);
+    assert.deepStrictEqual(painted(second).map((l) => l.text), ['Two']);
+  });
+
+  test('the theme font is resolved once for the whole render, and only when something needs it', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 3, '4:5', 3000, 1000);
+    for (const slide of doc.slides) slide.layers = [textLayer()];
+    await renderDeck(doc, f.deps);
+
+    assert.strictEqual(f.fontCalls.count, 1, 'one await on document.fonts.ready per render');
+    assert.deepStrictEqual(
+      painted(f.log).map((l) => l.font),
+      Array(3).fill('400 225px TestFace, sans-serif'),
+    );
+
+    const bare = fakeDeps({ srcW: 3000, srcH: 1000 });
+    await renderDeck(deckOf('/x.jpg', 3, '4:5', 3000, 1000), bare.deps);
+    assert.strictEqual(bare.fontCalls.count, 0, 'a deck with no layers never waits on a font');
+  });
+
+  test('a font that cannot be resolved falls back rather than failing the encode', async () => {
+    const cases = {
+      'no resolveFont dep at all': null,
+      'a dep that returns nothing usable': async () => '  ',
+      'a dep that throws': async () => {
+        throw new Error('fonts unavailable');
+      },
+    };
+    for (const [name, resolveFont] of Object.entries(cases)) {
+      const f = fakeDeps({ srcW: 3000, srcH: 1000, resolveFont });
+      const doc = deckOf('/x.jpg', 1, '4:5', 3000, 1000);
+      doc.slides[0].layers = [textLayer()];
+      const blobs = await renderDeck(doc, f.deps);
+
+      assert.strictEqual(blobs.length, 1, name);
+      assert.match(painted(f.log)[0].font, /Inter/, name);
+    }
+  });
+
+  test('a kept slide paints nothing, layers included', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    for (const slide of doc.slides) slide.layers = [textLayer()];
+    await renderDeck(doc, f.deps, undefined, [{ id: 7, path: '/kept.jpg' }, null]);
+
+    assert.strictEqual(surfaces(f.log).length, 1, 'one canvas, for the slide that was re-encoded');
+    assert.strictEqual(painted(f.log).length, 1);
   });
 });
 
