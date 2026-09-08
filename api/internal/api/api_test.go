@@ -450,6 +450,117 @@ func TestOptionalAuthMiddleware_RevelioOff(t *testing.T) {
 	}
 }
 
+// Revelio narrows the public site, never the admin area. The admin screens read
+// the same OptionalAuth endpoints the public pages do, so with the switch off
+// they used to be answered as a guest and lost every hidden tag — off the
+// screens that exist to edit them. The referring document is what tells the two
+// apart; the principal itself still has to validate, so a guest gains nothing.
+func TestOptionalAuthMiddleware_RevelioOffFromAdminArea(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	authSvc := services.NewAuthService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	apiKeySvc := services.NewApiKeyService(repo, settingsSvc)
+	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
+
+	e := echo.New()
+	handler := func(c echo.Context) error { return c.String(http.StatusOK, "ok") }
+
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "u4", Email: "u4@t.com", PasswordHash: "h", DisplayName: "U4",
+	})
+	token := "valid-token-revelio-admin"
+	expiresAt := time.Now().Add(1 * time.Hour).UTC().Round(0)
+	_, _ = authSvc.CreateSession(context.Background(), user.ID, "1.1.1.1", "agent", expiresAt, token)
+
+	// The tag manager listing /api/tags with the switch left off: the owner is
+	// authenticated and in the admin area, so they keep their principal and see
+	// everything there is to administer.
+	req := httptest.NewRequest(http.MethodGet, "/api/tags", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	req.Header.Set(RevelioHeader, "off")
+	req.Header.Set("Referer", "https://example.test/light/tags")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if err := middleware(handler)(c); err != nil {
+		t.Fatalf("middleware failed: %v", err)
+	}
+	if c.Get("user") == nil {
+		t.Error("an admin-area read must keep the principal — hidden tags are what it is for")
+	}
+	if IsGuestView(c) {
+		t.Error("an admin-area read is not a guest view")
+	}
+
+	// The same page, the same header, no session: the Referer reveals nothing on
+	// its own. (A guest cannot reach the admin area at all — AuthMiddleware
+	// guards it — but the header is client-supplied, so prove it here.)
+	req = httptest.NewRequest(http.MethodGet, "/api/tags", nil)
+	req.Header.Set(RevelioHeader, "off")
+	req.Header.Set("Referer", "https://example.test/light/tags")
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	if err := middleware(handler)(c); err != nil {
+		t.Fatalf("middleware failed: %v", err)
+	}
+	if c.Get("user") != nil {
+		t.Error("a forged admin-area Referer must not conjure a principal")
+	}
+
+	// The owner reading a public page is still narrowed — that is the switch
+	// doing its job, and the admin exemption must not swallow it.
+	req = httptest.NewRequest(http.MethodGet, "/api/tags", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	req.Header.Set(RevelioHeader, "off")
+	req.Header.Set("Referer", "https://example.test/tags/taganay")
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	if err := middleware(handler)(c); err != nil {
+		t.Fatalf("middleware failed: %v", err)
+	}
+	if c.Get("user") != nil {
+		t.Error("revelio off on a public page must still withhold the principal")
+	}
+	if !IsGuestView(c) {
+		t.Error("the public-page read is still a guest view")
+	}
+}
+
+// Which referring documents count as the admin area. A missing or unparseable
+// Referer is a public read: the exemption has to be positively established,
+// never assumed.
+func TestFromAdminArea(t *testing.T) {
+	cases := []struct {
+		referer string
+		want    bool
+	}{
+		{"https://example.test/light", true},
+		{"https://example.test/light/tags", true},
+		{"https://example.test/light/posts/12/edit", true},
+		{"https://example.test/setup", true},
+		{"/light/tags", true},
+		{"https://example.test/light/tags?q=taganay#top", true},
+		{"", false},
+		{"https://example.test/", false},
+		{"https://example.test/tags/taganay", false},
+		{"https://example.test/lighthouse", false},
+		{"https://example.test/blog/light", false},
+		{"://not a url", false},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/api/tags", nil)
+		if tc.referer != "" {
+			req.Header.Set("Referer", tc.referer)
+		}
+		if got := fromAdminArea(req); got != tc.want {
+			t.Errorf("fromAdminArea(%q) = %v, want %v", tc.referer, got, tc.want)
+		}
+	}
+}
+
 func TestCustomHTTPErrorHandler(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = CustomHTTPErrorHandler
