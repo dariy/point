@@ -4,7 +4,8 @@ Full-screen, distraction-free post viewing. The viewer is a plugin family around
 `post-viewer` enhancer slot:
 
 - **`immersive`** (default) — the standard full-screen carousel
-  (`frontend/src/plugins/immersive/MediaViewer.js`): keyboard navigation
+  (`frontend/src/components/shared/MediaViewer.js`, mounted by
+  `frontend/src/plugins/immersive/`): keyboard navigation
   (arrows/Home/End/PageUp/PageDown), swipe with gesture handling (`gestures.js`),
   pinch-to-zoom and drag-to-pan on touch, slide indicators, chrome auto-hide
   (`body.ui-hidden` fades header/footer/close/dots), cross-post navigation (advancing
@@ -22,6 +23,69 @@ Full-screen, distraction-free post viewing. The viewer is a plugin family around
 
 Post-level control: posts have an immersive mode setting (auto-detect by content, with
 per-post override in the editor's Details). Esc always exits.
+
+## Transitions
+
+Stepping from one slide to the next is not one behavior but **two independent
+layers**, chosen by what the two slides are to each other — not by how the step was
+triggered. Every entry point (arrow key, dot, swipe commit, cross-post nav) funnels
+through the same choice, so a keyboard step and a finger step look identical.
+
+| Layer | Applies to | Chosen by | Configurable |
+|---|---|---|---|
+| **Deck (panoramic)** | Two slides of the *same* rendered `:::{.carousel-block}` | `MediaViewer._seamlessPair()` — both items carry `carousel: true` from `postMedia.js` | No. Curated by the carousel feature; exactly one strategy |
+| **General** | Everything else — unrelated photos/videos in a post, and post-to-post nav | `MediaViewer._transitionStrategy()` | Yes — the `transition_strategy` public setting |
+
+### The deck strategy: panoramic
+
+`frontend/src/utils/deckTransition.js` — pure geometry plus four DOM primitives, no
+viewer internals. The studio slices one photo into continuity-matched columns, so two
+adjacent slides are two halves of one picture and the step should read as a **pan
+across a single image**, not a swap of two pictures.
+
+The naive full-screen carousel step translates the whole viewport-sized
+`.carousel-slide` box by ±`window.innerWidth`. On a letterboxed slide that is wrong
+twice over: the two images are separated by the width of *two* letterbox margins, so a
+gap of backdrop opens between them mid-step, and the outgoing slice crossfades to
+`opacity: 0` through it. Instead:
+
+1. `computeDeckGeometry()` measures both slides' rendered `<img>` and returns
+   `{ imgW, marginW, viewportW }` — or `null` if either image is missing or the two
+   differ in width by more than 1px, in which case the caller falls back to the legacy
+   full-viewport pan unchanged.
+2. `applyDeckClip()` sets `clip-path: inset(0 <marginW>px)` on **both** slide boxes.
+   That is the mechanism behind "the image slides *under* the margin field": each box
+   is now a window exactly the width of its own image, and the arithmetic overshoot
+   past it is invisible rather than painted.
+3. `setImgTranslateX()` translates each slide's inner `<img>` by ±`imgW` — its *own
+   rendered width*, not the viewport's. The incoming image therefore starts exactly
+   one image-width away, abutting the outgoing one edge to edge with no gap, and both
+   are held at full opacity for the whole 0.3s.
+
+Geometry is computed once per step and cached on `this._deckGeo`, keyed
+`"oldIndex:newIndex"` — `getBoundingClientRect()` forces layout, and the drag path
+would otherwise call it on every `pointermove`. The cache is cleared on step
+completion and on any teardown.
+
+The same primitives serve all three call sites, which is what keeps a drag and a
+keypress consistent: `_seamlessStep()` (discrete step), `_commitHorizontal()` (drag
+released past threshold) and the live drag handler, which clamps the finger offset to
+`±imgW` so a fast swipe cannot drag past the seam.
+
+### The general strategy: an admin setting
+
+`transition_strategy` is a public setting (Settings → Display; allowlisted in
+`api/internal/api/settings.go`, offered in `settingsFields.js`, read through
+`getSettings()`), defaulting to `fade`. It selects between the `switch` arms in
+`_generalSwap()` (instant swap for dot/keyboard/post-nav) and `_generalCommitFade()`
+(animated drag-to-rest), which are the two places a non-deck transition is drawn.
+
+`fade` is the only strategy shipped today, so the select currently offers one option —
+deliberately: the value of the seam is that a second strategy is a new `case` in two
+switches plus an `<option>`, with no call-site changes anywhere. The deck strategy is
+kept out of it on purpose. It is not a taste choice an admin should be able to break;
+it exists because the slices are pieces of one photo, and any other treatment shows a
+seam that is not in the source.
 
 ## Slideshow
 
