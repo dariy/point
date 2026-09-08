@@ -272,7 +272,8 @@ func TestAuthMiddleware(t *testing.T) {
 	}()
 
 	authSvc := services.NewAuthService(repo)
-	apiKeySvc := services.NewApiKeyService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	apiKeySvc := services.NewApiKeyService(repo, settingsSvc)
 	middleware := AuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
@@ -336,7 +337,8 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	}()
 
 	authSvc := services.NewAuthService(repo)
-	apiKeySvc := services.NewApiKeyService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	apiKeySvc := services.NewApiKeyService(repo, settingsSvc)
 	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
@@ -385,7 +387,8 @@ func TestOptionalAuthMiddleware_RevelioOff(t *testing.T) {
 	}()
 
 	authSvc := services.NewAuthService(repo)
-	apiKeySvc := services.NewApiKeyService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	apiKeySvc := services.NewApiKeyService(repo, settingsSvc)
 	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
@@ -414,6 +417,10 @@ func TestOptionalAuthMiddleware_RevelioOff(t *testing.T) {
 	}
 
 	// An API key is dropped the same way — the MCP/API clients share this route.
+	// The plugin has to be on for this leg to prove anything: a disabled
+	// api-keys plugin refuses the key outright (ValidateAPIKey), which would
+	// make the assertion below pass for the wrong reason.
+	enableAPIKeysPlugin(t, settingsSvc)
 	plain, _, err := apiKeySvc.GenerateAPIKey(context.Background(), user.ID, "revelio", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)

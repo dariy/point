@@ -50,7 +50,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 
 	settingsService := services.NewSettingsService(repo)
 	authService := services.NewAuthService(repo)
-	apiKeyService := services.NewApiKeyService(repo)
+	apiKeyService := services.NewApiKeyService(repo, settingsService)
 	tagService := services.NewTagService(repo)
 	instagramService := services.NewInstagramService(settingsService)
 	// One registry, shared by everything that runs work outside a request, so

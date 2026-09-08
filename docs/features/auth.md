@@ -35,7 +35,10 @@ Single-admin authentication with several credential surfaces. Services:
 - One admin identity; all auth mechanisms (password, passkey, API key, OAuth bearer)
   resolve to the same principal — authorization stays trivial.
 - Auth mechanisms are plugins where they're optional attack surface (passkeys,
-  api-keys, mcp): disabled → routes 404.
+  api-keys, mcp): disabled → routes 404. For `api-keys` the toggle also closes
+  authentication itself — `ValidateAPIKey` checks it before the key lookup, so
+  disabling the plugin makes existing keys stop working everywhere they are
+  accepted (admin API, public reads, MCP), not just on `/api/api-keys`.
 - Secrets (API keys, reset tokens, Instagram/Gemini credentials) are never returned by
   any endpoint; `*_is_set` booleans drive the UI.
 
