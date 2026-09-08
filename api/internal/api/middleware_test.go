@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"point-api/internal/models"
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
@@ -78,5 +79,77 @@ func TestRequirePlugin(t *testing.T) {
 	}
 	if code := call("instagram"); code != http.StatusOK || !hit {
 		t.Errorf("re-enabled plugin should pass: code=%d hit=%v", code, hit)
+	}
+}
+
+// enableAPIKeysPlugin turns the api-keys plugin on. It ships disabled, and
+// ValidateAPIKey refuses every key while it is off, so any test that means to
+// exercise bearer auth has to say so.
+func enableAPIKeysPlugin(t *testing.T, settings *services.SettingsService) {
+	t.Helper()
+	if err := settings.SetSetting(context.Background(), plugins.EnabledKey("api-keys"), "true", "string"); err != nil {
+		t.Fatalf("enable api-keys plugin: %v", err)
+	}
+}
+
+// RequirePlugin only guards the /api/api-keys management routes. The toggle has
+// to reach the authentication path as well, or a key minted while the plugin
+// was on keeps opening the whole admin API after the admin turns it off.
+func TestAuthMiddleware_APIKeyRefusedWhenPluginDisabled(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	settingsSvc := services.NewSettingsService(repo)
+	apiKeySvc := services.NewApiKeyService(repo, settingsSvc)
+	middleware := AuthMiddleware(services.NewAuthService(repo), apiKeySvc)
+
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "keyed", Email: "keyed@t.com", PasswordHash: "h", DisplayName: "Keyed",
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	enableAPIKeysPlugin(t, settingsSvc)
+	rawKey, _, err := apiKeySvc.GenerateAPIKey(ctx, user.ID, "admin-key", nil)
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+
+	e := echo.New()
+	call := func() (int, bool) {
+		reached := false
+		req := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		err := middleware(func(c echo.Context) error {
+			reached = true
+			return c.NoContent(http.StatusOK)
+		})(c)
+		if err != nil {
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
+				return he.Code, reached
+			}
+			t.Fatalf("unexpected non-HTTP error: %v", err)
+		}
+		return rec.Code, reached
+	}
+
+	if code, reached := call(); code != http.StatusOK || !reached {
+		t.Fatalf("enabled plugin: expected the key to authenticate, got %d (handler reached: %v)", code, reached)
+	}
+
+	if err := settingsSvc.SetSetting(ctx, plugins.EnabledKey("api-keys"), "false", "string"); err != nil {
+		t.Fatalf("disable api-keys plugin: %v", err)
+	}
+	code, reached := call()
+	if code != http.StatusUnauthorized {
+		t.Errorf("disabled plugin: expected 401, got %d", code)
+	}
+	if reached {
+		t.Error("disabled plugin: the handler must not run for an API-key request")
 	}
 }

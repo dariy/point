@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 
+	"point-api/internal/plugins"
+
 	"golang.org/x/term"
 )
 
@@ -49,5 +51,13 @@ func execCreateAPIKey(svcs *AppServices, name string, password []byte) error {
 	fmt.Println("--------------------------------------------------------------------------------")
 	fmt.Println("CRITICAL: This key is never stored in raw form and cannot be recovered.")
 	fmt.Println("Copy it now and store it securely (e.g., in your password manager).")
+
+	// The key is inert while the api-keys plugin is off, and it ships off. Say
+	// so here rather than let the admin discover it as an unexplained 401.
+	if all, err := svcs.Settings.Snapshot(ctx); err == nil && !plugins.IsEnabled("api-keys", all) {
+		fmt.Println()
+		fmt.Println("NOTE: the api-keys plugin is disabled, so this key will not authenticate.")
+		fmt.Println("Enable it on the Plugins page (Admin -> Plugins -> API Keys) to use it.")
+	}
 	return nil
 }

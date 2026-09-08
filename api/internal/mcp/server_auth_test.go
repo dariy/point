@@ -16,6 +16,7 @@ import (
 
 	"point-api/internal/mcp/oauth"
 	"point-api/internal/models"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
@@ -35,8 +36,8 @@ func newAuthTestDeps(t *testing.T) (Deps, repository.Repository) {
 	t.Cleanup(func() { _ = repo.Close() })
 
 	auth := services.NewAuthService(repo)
-	apiKey := services.NewApiKeyService(repo)
 	settings := services.NewSettingsService(repo)
+	apiKey := services.NewApiKeyService(repo, settings)
 	return Deps{
 		Echo:            echo.New(),
 		Auth:            auth,
@@ -46,6 +47,16 @@ func newAuthTestDeps(t *testing.T) (Deps, repository.Repository) {
 		BaseURL:         "https://point.test",
 		Version:         "test",
 	}, repo
+}
+
+// enableAPIKeys turns the api-keys plugin on for this Deps. It ships disabled,
+// and ValidateAPIKey refuses every key while it is off, so the API-key legs
+// below have to ask for it explicitly.
+func enableAPIKeys(t *testing.T, d Deps) {
+	t.Helper()
+	if err := d.SettingsService.SetSetting(context.Background(), plugins.EnabledKey("api-keys"), "true", "string"); err != nil {
+		t.Fatalf("enable api-keys plugin: %v", err)
+	}
 }
 
 // okHandler records that the request got past the middleware and reports which
@@ -268,6 +279,7 @@ func TestAuthMiddleware_APIKeyAuthenticatesAsItsOwner(t *testing.T) {
 		`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (7,'u','u@t.com','h','U')`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
+	enableAPIKeys(t, d)
 	raw, _, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
@@ -303,6 +315,7 @@ func TestAuthMiddleware_RejectsRevokedAPIKey(t *testing.T) {
 		`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (7,'u','u@t.com','h','U')`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
+	enableAPIKeys(t, d)
 	raw, key, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
@@ -368,4 +381,41 @@ func TestRepoOAuthStoreSurvivesRestart(t *testing.T) {
 func sha256Hex(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])
+}
+
+// The MCP bearer path validates API keys too, so the api-keys toggle has to
+// close it as well — otherwise disabling the plugin leaves /mcp reachable with
+// a key the admin believes is inert.
+func TestAuthMiddleware_RejectsAPIKeyWhenPluginDisabled(t *testing.T) {
+	d, repo := newAuthTestDeps(t)
+	ctx := context.Background()
+	if _, err := repo.DB().ExecContext(ctx,
+		`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (7,'u','u@t.com','h','U')`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	enableAPIKeys(t, d)
+	raw, _, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", nil)
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	if err := d.SettingsService.SetSetting(ctx, plugins.EnabledKey("api-keys"), "false", "string"); err != nil {
+		t.Fatalf("disable api-keys plugin: %v", err)
+	}
+
+	provider := oauth.New(oauth.Config{BaseURL: d.BaseURL})
+	e := echo.New()
+	var seen interface{}
+	e.GET("/mcp", okHandler(&seen), d.authMiddleware(provider))
+
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("API key was accepted with the api-keys plugin disabled: status = %d", rec.Code)
+	}
+	if seen != nil {
+		t.Error("disabled api-keys plugin still produced a principal")
+	}
 }
