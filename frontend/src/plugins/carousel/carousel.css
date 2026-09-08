@@ -96,15 +96,26 @@
   pointer-events: none;
 }
 
+/* The studio opts out of the admin content clamp the way the post editor does
+ * (`.light-content.editor-full-width`): a split stage is `n × 4:5` wide, so at
+ * eight slides it is a 6.4:1 strip that `--content-max-width` would shrink to
+ * an unreadable band. Scoped to the studio's own `<main>` rather than commented
+ * out of `.light-content` — every other admin page still wants the clamp. */
+.light-content.carousel-studio-full-width {
+  max-width: none;
+}
+
+/* No height here: each frame carries its own inline `aspect-ratio` and a fixed
+ * flex basis, so the strip is exactly as tall as one frame. A height on the
+ * container would stretch every frame to it (`align-items: stretch` beats
+ * `aspect-ratio`) and the filmstrip would stop previewing the real slide shape. */
 .carousel-studio__filmstrip,
 .carousel-studio__slides {
   display: flex;
   gap: var(--spacing-xs);
   overflow-x: auto;
   max-width: 100%;
-  height: 85dvh;
 }
-
 
 
 .carousel-studio__frame {
@@ -170,8 +181,15 @@
   pointer-events: none;
 }
 
+/* `min-width: 0` is load-bearing. These are the only *replaced* elements in
+ * either strip — the filmstrip frames are divs with a background — and a flex
+ * item's automatic minimum size is its content's, which for an <img> is the
+ * natural width. Without the override each 1080px slide ignored the 8rem basis
+ * and rendered at full size, so "Rendered slides" was one giant image with the
+ * rest of the deck off the right edge. */
 .carousel-studio__slide {
   flex: 0 0 8rem;
+  min-width: 0;
   height: auto;
   border-radius: var(--border-radius);
 }

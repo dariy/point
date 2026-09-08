@@ -731,6 +731,9 @@ export default class CarouselStudioPage extends Component {
       ],
       actions: this._renderActions(),
       content: this._renderStudio(),
+      // A split stage is n slides wide; the admin content clamp would squeeze
+      // it to a band. See `.carousel-studio-full-width` in carousel.css.
+      contentClass: "carousel-studio-full-width",
     });
   }
 
