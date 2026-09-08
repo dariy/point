@@ -19,13 +19,16 @@
  * slide count — a harder bound than the 4096px strip cap it replaced. Each
  * bitmap is closed before the next slide. Trade-off: `n` JPEG decodes instead
  * of one; accepted, because it is what makes the 1:1 mapping real and lets the
- * render report per-slide progress. See `docs/features/carousel-studio.md`.
+ * render report per-slide progress. An `image` layer holds to the same rule: it
+ * is decoded cropped and resized to its own box, and closed with the slide it
+ * was painted on. See `docs/features/carousel-studio.md`.
  */
 
 import {
   autoFitText,
   canvasSize,
   deckSlideRects,
+  fitRect,
   gradientLine,
   layerRect,
   padRects,
@@ -57,6 +60,18 @@ const MIN_AUTO_PX = 8;
  *  a typographic control surface. Both numbers are multiples of the font size,
  *  so the shadow survives a resize and an aspect change with the type. */
 const TEXT_SHADOW = { color: 'rgba(0, 0, 0, 0.55)', blur: 0.16, offsetY: 0.05 };
+
+/** White, matching the schema's own default: a layer is a mark over a
+ *  photograph, and dark photographs are the common case. */
+const DEFAULT_MARK_COLOR = '#ffffff';
+
+/** Black, matching `document.js`'s `DEFAULT_BG_COLOR` — a `rect` layer with no
+ *  usable fill is a scrim, and a scrim darkens. */
+const DEFAULT_RECT_FILL = '#000000';
+
+/** An arrow's stroke, as a fraction of its box's shorter side. Heavy enough to
+ *  read at feed size, light enough that the chevron is still a chevron. */
+const ARROW_STROKE = 0.16;
 
 /** Where the wrapped block sits in the slack its box leaves, per `valign`. */
 const VALIGN_SLACK = {
@@ -247,7 +262,7 @@ function paintTextLayer(ctx, layer, box, frameH, family) {
     const x = box.x + (ALIGN_ANCHOR[layer.align] || ALIGN_ANCHOR.left)(box.w);
 
     ctx.font = fontSpec(layer.weight, fontSize, family);
-    ctx.fillStyle = layer.color || '#ffffff';
+    ctx.fillStyle = layer.color || DEFAULT_MARK_COLOR;
     ctx.textAlign = ALIGN_ANCHOR[layer.align] ? layer.align : 'left';
     // The em box centred in its line box: one term per line, and it puts the
     // block's optical centre where `valign: middle` says it is.
@@ -265,14 +280,188 @@ function paintTextLayer(ctx, layer, box, frameH, family) {
   }
 }
 
+/** A number, or `fallback` when the value cannot be one. */
+function num(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * A layer's opacity as a canvas alpha, 0..1. The schema clamps it already; this
+ * is for a caller that hands `paintSlide` a layer no document normalized, which
+ * must dim the layer rather than poison the whole context with a `NaN` alpha.
+ */
+function alphaOf(layer) {
+  return Math.min(1, Math.max(0, num(layer.opacity, 1)));
+}
+
+/**
+ * Paint one `image` layer: a bitmap `deps.decode` already cropped and resized
+ * to its place in the box, so this is a single blit at whole-pixel coordinates
+ * and no fitting happens here.
+ *
+ * `placed` is what {@link loadLayerImages} resolved for this layer — absent
+ * when its source could not be fetched, decoded, or fitted into a box with
+ * area. A layer that could not load is skipped and the rest of the slide is
+ * painted: one broken logo must never cost a whole carousel.
+ *
+ * @param {any} ctx 2D context
+ * @param {import('./document.js').CarouselImageLayer} layer
+ * @param {{bitmap: any, x: number, y: number, w: number, h: number}} [placed]
+ */
+function paintImageLayer(ctx, layer, placed) {
+  const alpha = alphaOf(layer);
+  if (!placed || !placed.bitmap || alpha <= 0) return;
+  ctx.save();
+  try {
+    if (alpha < 1) ctx.globalAlpha = alpha;
+    ctx.drawImage(placed.bitmap, placed.x, placed.y, placed.w, placed.h);
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
+ * Paint one `rect` layer — the scrim a `text` layer later in the list is read
+ * against, which is why paint order is list order and this composites under
+ * whatever follows it rather than being drawn last.
+ *
+ * `radius` is a fraction of the box's shorter side (so `0.5` is a pill and the
+ * corner survives a resize), converted to canvas pixels here. Below half a
+ * pixel it is a square corner, and a context too old to have `roundRect` gets
+ * one too: a square scrim beats a thrown render.
+ *
+ * @param {any} ctx 2D context
+ * @param {import('./document.js').CarouselRectLayer} layer
+ * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ */
+function paintRectLayer(ctx, layer, box) {
+  const alpha = alphaOf(layer);
+  if (alpha <= 0 || box.w < 1 || box.h < 1) return;
+  const radius = Math.min(0.5, Math.max(0, num(layer.radius, 0))) * Math.min(box.w, box.h);
+
+  ctx.save();
+  try {
+    if (alpha < 1) ctx.globalAlpha = alpha;
+    ctx.fillStyle = layer.fill || DEFAULT_RECT_FILL;
+    if (radius >= 0.5 && typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(box.x, box.y, box.w, box.h, radius);
+      ctx.fill();
+    } else {
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
+ * A `counter` layer's format with `{i}` and `{n}` substituted. Everything else
+ * in the string is literal, including a format carrying neither — the schema
+ * allows that, because a fixed caption styled like a counter is a legitimate
+ * thing to want.
+ *
+ * @param {string} format
+ * @param {number} index 0-based slide index; `{i}` is `index + 1`
+ * @param {number} count slides in the deck
+ */
+function counterText(format, index, count) {
+  const f = typeof format === 'string' ? format : '';
+  return f.replace(/\{i\}/g, String(index + 1)).replace(/\{n\}/g, String(count));
+}
+
+/**
+ * Paint one `arrow` layer: a stroked chevron pointing `direction`, fitted to
+ * its box.
+ *
+ * A path rather than a glyph, because the theme font stack is whatever the
+ * theme says it is and nothing guarantees it carries an arrow — a `text` layer
+ * holding "→" is one missing face away from a tofu box baked into a JPEG.
+ *
+ * The box is the chevron's bounding box, inset by half the stroke so the round
+ * cap stays inside it: the studio sizes the box and the shape follows, rather
+ * than a fixed aspect the box would have to be reconciled with.
+ *
+ * @param {any} ctx 2D context
+ * @param {import('./document.js').CarouselArrowLayer} layer
+ * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ */
+function paintArrowLayer(ctx, layer, box) {
+  const alpha = alphaOf(layer);
+  if (alpha <= 0) return;
+  const stroke = Math.max(1, Math.round(Math.min(box.w, box.h) * ARROW_STROKE));
+  const inset = stroke / 2;
+  const x0 = box.x + inset;
+  const x1 = box.x + box.w - inset;
+  const y0 = box.y + inset;
+  const y1 = box.y + box.h - inset;
+  // A box too small to hold its own stroke: skip it rather than draw a blot.
+  if (!(x1 > x0) || !(y1 > y0)) return;
+  const [tipX, tailX] = layer.direction === 'left' ? [x0, x1] : [x1, x0];
+
+  ctx.save();
+  try {
+    if (alpha < 1) ctx.globalAlpha = alpha;
+    ctx.strokeStyle = layer.color || DEFAULT_MARK_COLOR;
+    ctx.lineWidth = stroke;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(tailX, y0);
+    ctx.lineTo(tipX, (y0 + y1) / 2);
+    ctx.lineTo(tailX, y1);
+    ctx.stroke();
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
+ * One painter per layer `type`, the draw-layer twin of `LAYER_BUILDERS` in
+ * `document.js`: a table rather than a switch, so a type the schema knows and
+ * this build cannot draw is a missing key — skipped whole — rather than a
+ * half-executed branch.
+ *
+ * Every painter takes the same four arguments so the dispatch below stays one
+ * line: the context, the layer, its already-resolved box, and the per-slide
+ * environment nothing in a layer can carry on its own — the canvas height a
+ * numeric type size is a fraction of, the resolved font stack, this slide's
+ * position in the deck (which is what a `counter` needs and no per-slide layer
+ * could know), and the images {@link loadLayerImages} decoded for this slide.
+ *
+ * @type {Record<string, (ctx: any, layer: any, box: {x:number,y:number,w:number,h:number}, env: any) => void>}
+ */
+const LAYER_PAINTERS = {
+  text: (ctx, layer, box, env) => paintTextLayer(ctx, layer, box, env.frameH, env.family),
+
+  image: (ctx, layer, box, env) => paintImageLayer(ctx, layer, env.images?.get(layer)),
+
+  rect: (ctx, layer, box) => paintRectLayer(ctx, layer, box),
+
+  // The same text path a `text` layer takes — same font resolution, same
+  // align/valign, same auto-fit — with the format substituted for the copy.
+  // Sharing the painter is what keeps a counter from drifting into a second,
+  // subtly different typesetter.
+  counter: (ctx, layer, box, env) =>
+    paintTextLayer(
+      ctx,
+      { ...layer, text: counterText(layer.format, env.index, env.count) },
+      box,
+      env.frameH,
+      env.family,
+    ),
+
+  arrow: (ctx, layer, box) => paintArrowLayer(ctx, layer, box),
+};
+
 /**
  * Paint a slide's layers over the image, back to front — list order is meaning
- * and `normalizeLayers` (`document.js`) preserves it, so this does not sort.
+ * and `normalizeLayers` (`document.js`) preserves it, so this does not sort. A
+ * `rect` scrim under a headline is exactly a rect earlier in the list.
  *
- * Only `text` is drawn here; `image`, `rect`, `counter` and `arrow` are the
- * next bead and are skipped rather than half-painted. A layer type this build
- * does not know how to draw is not an error — the schema keeps it, and a later
- * version paints it.
+ * A layer type this build does not know how to draw is not an error — the
+ * schema keeps it, and a later version paints it.
  *
  * `aspect` rather than the pixel size, because {@link layerRect} is the Canvas
  * half of the layer pair and resolving a box any other way is how a filmstrip
@@ -281,15 +470,27 @@ function paintTextLayer(ctx, layer, box, frameH, family) {
  * @param {any} ctx 2D context
  * @param {import('./document.js').CarouselLayer[]|null|undefined} layers
  * @param {string} aspect the aspect key `ctx`'s canvas was sized from
- * @param {string} [font] the resolved font stack; the built-in default when empty
+ * @param {{font?: string, index?: number, count?: number,
+ *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>}} [env]
+ *   `font` is the resolved stack (the built-in default when empty); `index` and
+ *   `count` place this slide in its deck for a `counter`; `images` holds what
+ *   {@link loadLayerImages} decoded for this slide's `image` layers
  */
-export function paintLayers(ctx, layers, aspect, font) {
+export function paintLayers(ctx, layers, aspect, env = {}) {
   if (!Array.isArray(layers) || !layers.length) return;
   const [, frameH] = canvasSize(aspect);
-  const family = font || DEFAULT_FONT_STACK;
+  const resolved = {
+    frameH,
+    family: env.font || DEFAULT_FONT_STACK,
+    // A direct caller that names neither reads as slide 1 of 1 rather than
+    // painting "NaN/NaN" into a JPEG.
+    index: Math.max(0, Math.floor(num(env.index, 0))),
+    count: Math.max(1, Math.floor(num(env.count, 1))),
+    images: env.images,
+  };
   for (const layer of layers) {
-    if (!layer || layer.type !== 'text') continue;
-    paintTextLayer(ctx, layer, layerRect(layer, aspect), frameH, family);
+    const paint = layer && LAYER_PAINTERS[layer.type];
+    if (paint) paint(ctx, layer, layerRect(layer, aspect), resolved);
   }
 }
 
@@ -330,9 +531,12 @@ export function paintLayers(ctx, layers, aspect, font) {
  * @param {import('./document.js').CarouselBg|null} [bg] fill for the pad region
  * @param {import('./document.js').CarouselLayer[]} [layers] the slide's own
  *   layers, painted back to front over the image
- * @param {{aspect?: string, font?: string}} [opts] `aspect` is the key `w`/`h`
- *   were sized from — layer boxes resolve against it; `font` is the stack
- *   resolved once per render by `deps.resolveFont`
+ * @param {{aspect?: string, font?: string, index?: number, count?: number,
+ *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>}} [opts]
+ *   `aspect` is the key `w`/`h` were sized from — layer boxes resolve against
+ *   it; `font` is the stack resolved once per render by `deps.resolveFont`;
+ *   `index`/`count` are this slide's place in the deck, which a `counter` layer
+ *   needs and cannot know; `images` are the decoded `image` layer sources
  */
 export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
   ctx.clearRect(0, 0, w, h);
@@ -357,7 +561,66 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
     }
   }
   ctx.drawImage(bitmap, rect.dx, rect.dy, rect.dw, rect.dh);
-  paintLayers(ctx, layers, opts.aspect, opts.font);
+  paintLayers(ctx, layers, opts.aspect, opts);
+}
+
+/**
+ * Decode every `image` layer on one slide, each cropped and resized to exactly
+ * the place it will occupy — so the blit in {@link paintImageLayer} is 1:1, the
+ * same discipline the slide's own bitmap follows, and a 24MP source dropped in
+ * as a logo costs its box rather than its megapixels.
+ *
+ * Bytes come from the render's shared `load`, so a logo on all ten slides is
+ * **one** fetch and one probe however many slides name it. The decode is not
+ * shared: it is per layer, and every bitmap is closed with the slide's, which
+ * is what keeps the memory bound the module header promises.
+ *
+ * Nothing here throws. A source that will not fetch, a decode that fails, a box
+ * with no area — each drops its own layer out of the map, and
+ * {@link paintImageLayer} skips what it cannot find. One broken layer must not
+ * be able to fail a whole render.
+ *
+ * @param {import('./document.js').CarouselLayer[]|undefined} layers
+ * @param {string|undefined} aspect the slide's aspect key
+ * @param {((source: string) => Promise<{blob: Blob, w: number, h: number}>)|undefined} load
+ * @param {RenderDeps} deps
+ * @returns {Promise<Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>>}
+ */
+async function loadLayerImages(layers, aspect, load, deps) {
+  /** @type {Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>} */
+  const images = new Map();
+  if (!load || !Array.isArray(layers)) return images;
+
+  for (const layer of layers) {
+    if (!layer || layer.type !== 'image' || !layer.source || images.has(layer)) continue;
+    try {
+      const { blob, w, h } = await load(layer.source);
+      const box = layerRect(layer, aspect);
+      const fit = fitRect(w, h, box.w, box.h, layer.fit === 'cover' ? 'cover' : 'contain');
+      const dw = Math.round(fit.dw);
+      const dh = Math.round(fit.dh);
+      if (dw < 1 || dh < 1) continue;
+      const bitmap = await deps.decode(blob, {
+        sx: Math.round(fit.sx),
+        sy: Math.round(fit.sy),
+        sw: Math.max(1, Math.round(fit.sw)),
+        sh: Math.max(1, Math.round(fit.sh)),
+        resizeWidth: dw,
+        resizeHeight: dh,
+        resizeQuality: 'high',
+      });
+      images.set(layer, {
+        bitmap,
+        x: box.x + Math.round(fit.dx),
+        y: box.y + Math.round(fit.dy),
+        w: dw,
+        h: dh,
+      });
+    } catch {
+      // Skipped, deliberately: the slide is painted without this layer.
+    }
+  }
+  return images;
 }
 
 /**
@@ -366,7 +629,8 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
  * same calls in the same order. The bitmap is decoded already cropped and
  * resized to `rect.dw × rect.dh` and closed in a `finally`, which is what keeps
  * exactly one decoded slide alive at a time no matter how many slides or how
- * many megapixels the source has.
+ * many megapixels the source has. Any `image` layer bitmaps are closed in the
+ * same `finally`, so the slide is still the bound.
  *
  * A `null` from `deps.encode` is a hard error — a silently dropped slide would
  * be worse.
@@ -379,7 +643,9 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
  * @param {number} slideW @param {number} slideH canvas size
  * @param {RenderDeps} deps
  * @param {{aspect?: string, layers?: import('./document.js').CarouselLayer[],
- *   font?: string}} [paint] what `paintSlide` draws over the image
+ *   font?: string, index?: number, count?: number,
+ *   load?: (source: string) => Promise<{blob: Blob, w: number, h: number}>}} [paint]
+ *   what `paintSlide` draws over the image
  * @returns {Promise<Blob>}
  */
 async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
@@ -392,11 +658,17 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
     resizeHeight: rect.dh,
     resizeQuality: 'high',
   });
+  /** @type {Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>} */
+  let images = new Map();
   try {
+    images = await loadLayerImages(paint.layers, paint.aspect, paint.load, deps);
     const { canvas, ctx } = deps.makeSurface(slideW, slideH);
     paintSlide(ctx, bitmap, rect, slideW, slideH, bg, paint.layers, {
       aspect: paint.aspect,
       font: paint.font,
+      index: paint.index,
+      count: paint.count,
+      images,
     });
     const encoded = await deps.encode(canvas, JPEG_TYPE, JPEG_QUALITY);
     if (!encoded) {
@@ -405,14 +677,19 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
     return encoded;
   } finally {
     bitmap.close?.();
+    for (const placed of images.values()) placed.bitmap.close?.();
   }
 }
 
+/** The layer types the typesetter runs for — and so the only ones that make a
+ *  render wait on a font. */
+const TYPESET_LAYERS = ['text', 'counter'];
+
 /**
  * Resolve the theme's font stack once per render, and only if something is
- * actually going to be typeset — a deck with no layers must not wait on
- * `document.fonts.ready`, and must issue exactly the calls it issued before
- * layers existed.
+ * actually going to be typeset — a deck with no layers, or one carrying only
+ * rects and arrows, must not wait on `document.fonts.ready`, and must issue
+ * exactly the calls it issued before layers existed.
  *
  * The await belongs to the dep, not to the loop: `browserDeps.resolveFont`
  * waits for the face to load, and memoizing the promise here means slide 9 pays
@@ -421,13 +698,13 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
  * {@link DEFAULT_FONT_STACK} — type in the wrong face beats a failed encode.
  *
  * @param {RenderDeps} deps
- * @returns {(layers: unknown[]) => Promise<string>}
+ * @returns {(layers: Array<{type?: string}|null|undefined>) => Promise<string>}
  */
 function fontResolver(deps) {
   /** @type {Promise<string>|null} */
   let pending = null;
   return async (layers) => {
-    if (!layers.length) return '';
+    if (!layers.some((l) => l && TYPESET_LAYERS.includes(l.type))) return '';
     if (!pending) {
       pending = (async () => {
         try {
@@ -437,6 +714,48 @@ function fontResolver(deps) {
           return DEFAULT_FONT_STACK;
         }
       })();
+    }
+    return pending;
+  };
+}
+
+/**
+ * A fetch-and-probe deduplicated per source path, shared by everything one
+ * render loads: the slides' own sources and the sources of their `image`
+ * layers. A deck frozen from a split names the same image on every slide, and a
+ * logo layer names the same file on every slide — so without this an
+ * eight-slide deck would issue eight identical GETs and eight probes, twice
+ * over; with it, one of each.
+ *
+ * The cache holds the *compressed* blob, not a decoded bitmap — that is what
+ * makes it safe to keep for the whole render. The memory bound the module
+ * header promises is about decoded RGBA, and `encodeSlide` still keeps exactly
+ * one slide's worth of those alive at a time.
+ *
+ * @param {RenderDeps} deps
+ * @param {{source: string, w: number, h: number}|null} seed a size the caller
+ *   already knows, skipping the probe — keyed by the path it describes, because
+ *   a layer image loaded through this same cache is a different picture and
+ *   must be probed on its own
+ * @returns {(source: string) => Promise<{blob: Blob, w: number, h: number}>}
+ */
+function sourceLoader(deps, seed) {
+  /** @type {Map<string, Promise<{blob: Blob, w: number, h: number}>>} */
+  const cache = new Map();
+  return (source) => {
+    let pending = cache.get(source);
+    if (!pending) {
+      pending = (async () => {
+        const blob = await deps.fetchBlob(source);
+        const { w, h } = seed && seed.source === source ? seed : await deps.probeSize(source);
+        // Geometry clamps a degenerate size to an empty frame rather than
+        // throwing; here it would mean decoding a 0×0 rect, so it is fatal.
+        if (!(w >= 1) || !(h >= 1)) {
+          throw new Error(`carousel render: source has no pixel dimensions: ${source}`);
+        }
+        return { blob, w, h };
+      })();
+      cache.set(source, pending);
     }
     return pending;
   };
@@ -481,9 +800,15 @@ export async function renderSplit(spec, deps, onProgress, keep) {
   const count = Math.max(1, Math.floor(spec.n));
   const [slideW, slideH] = canvasSize(aspect);
 
-  const blob = await deps.fetchBlob(source);
-  let { srcW, srcH } = spec;
-  if (!srcW || !srcH) ({ w: srcW, h: srcH } = await deps.probeSize(source));
+  // One loader for the whole render, seeded with the caller's size for the
+  // split source itself: an `image` layer names a different file, and it goes
+  // through this same cache so a logo repeated across the columns is fetched
+  // once rather than once per column.
+  const load = sourceLoader(
+    deps,
+    spec.srcW >= 1 && spec.srcH >= 1 ? { source, w: spec.srcW, h: spec.srcH } : null,
+  );
+  const { blob, w: srcW, h: srcH } = await load(source);
 
   const rects = sliceRects(srcW, srcH, count, aspect, { strategy, anchorY });
   const font = fontResolver(deps);
@@ -500,48 +825,14 @@ export async function renderSplit(spec, deps, onProgress, keep) {
         aspect,
         layers,
         font: await font(layers),
+        index: i,
+        count: rects.length,
+        load,
       }),
     );
     onProgress?.({ done: i + 1, total: rects.length });
   }
   return slides;
-}
-
-/**
- * A fetch-and-probe deduplicated per source path. A deck frozen from a split
- * names the same image on every slide, so without this an eight-slide deck
- * would issue eight identical GETs and eight probes; with it, one of each.
- *
- * The cache holds the *compressed* blob, not a decoded bitmap — that is what
- * makes it safe to keep for the whole render. The memory bound the module
- * header promises is about decoded RGBA, and `encodeSlide` still keeps exactly
- * one of those alive at a time.
- *
- * @param {RenderDeps} deps
- * @param {{w:number,h:number}|null} seed source size the caller already knows,
- *   skipping the probe — only valid when every slide shares one source
- * @returns {(source: string) => Promise<{blob: Blob, w: number, h: number}>}
- */
-function sourceLoader(deps, seed) {
-  /** @type {Map<string, Promise<{blob: Blob, w: number, h: number}>>} */
-  const cache = new Map();
-  return (source) => {
-    let pending = cache.get(source);
-    if (!pending) {
-      pending = (async () => {
-        const blob = await deps.fetchBlob(source);
-        const { w, h } = seed || (await deps.probeSize(source));
-        // Geometry clamps a degenerate size to an empty frame rather than
-        // throwing; here it would mean decoding a 0×0 rect, so it is fatal.
-        if (!(w >= 1) || !(h >= 1)) {
-          throw new Error(`carousel render: source has no pixel dimensions: ${source}`);
-        }
-        return { blob, w, h };
-      })();
-      cache.set(source, pending);
-    }
-    return pending;
-  };
 }
 
 /**
@@ -558,7 +849,8 @@ function sourceLoader(deps, seed) {
  *
  * Sources are fetched and probed once each, however many slides share them —
  * the common case is a deck frozen from a split, where all N slides name one
- * image. Lazily, too: a deck whose every slide is in `keep` touches the network
+ * image. `image` layers draw from the same cache, so a logo on every slide is
+ * one GET too. Lazily, too: a deck whose every slide is in `keep` touches the network
  * not at all.
  *
  * Background fill is passed through to `paintSlide` as-is: a contained slide's
@@ -581,7 +873,9 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
   // play they would be ambiguous, so every source is probed instead.
   const singleSource = slides.length > 0 && slides.every((s) => s.source === slides[0].source);
   const seed =
-    singleSource && opts.srcW >= 1 && opts.srcH >= 1 ? { w: opts.srcW, h: opts.srcH } : null;
+    singleSource && opts.srcW >= 1 && opts.srcH >= 1
+      ? { source: slides[0].source, w: opts.srcW, h: opts.srcH }
+      : null;
   const load = sourceLoader(deps, seed);
   const font = fontResolver(deps);
 
@@ -601,6 +895,9 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
         aspect: doc.aspect,
         layers,
         font: await font(layers),
+        index: i,
+        count: slides.length,
+        load,
       }),
     );
     onProgress?.({ done: i + 1, total: slides.length });

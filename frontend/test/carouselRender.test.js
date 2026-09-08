@@ -80,6 +80,12 @@ function recordingCtx(log) {
     measureText: (text) => ({ width: text.length * CHAR_EM * fontPx(ctx.font) }),
     save: () => log.push(['save']),
     restore: () => log.push(['restore']),
+    beginPath: () => log.push(['beginPath']),
+    moveTo: (...a) => log.push(['moveTo', ...a]),
+    lineTo: (...a) => log.push(['lineTo', ...a]),
+    stroke: () => log.push(['stroke']),
+    fill: () => log.push(['fill']),
+    roundRect: (...a) => log.push(['roundRect', ...a]),
     createLinearGradient: (...line) => {
       log.push(['createLinearGradient', ...line]);
       const grad = { addColorStop: (at, color) => log.push(['addColorStop', at, color]) };
@@ -90,6 +96,11 @@ function recordingCtx(log) {
   for (const prop of [
     'fillStyle',
     'filter',
+    'globalAlpha',
+    'lineCap',
+    'lineJoin',
+    'lineWidth',
+    'strokeStyle',
     'textAlign',
     'textBaseline',
     'shadowColor',
@@ -117,6 +128,11 @@ function recordingCtx(log) {
 function fakeDeps({
   srcW = 3000,
   srcH = 1000,
+  // Per-path natural sizes, for a render that loads more than one picture —
+  // an `image` layer's logo is not the shape of the slide's own source.
+  sizes = {},
+  // Paths whose GET rejects, for the broken-layer path.
+  badSources = [],
   encode = () => new Blob(['jpg']),
   upload,
   // `null` omits the dep entirely — a deps object built before layers existed.
@@ -132,11 +148,12 @@ function fakeDeps({
   const deps = {
     fetchBlob: async (url) => {
       log.push(['fetchBlob', url]);
+      if (badSources.includes(url)) throw new Error(`carousel test: no such source ${url}`);
       return new Blob(['src']);
     },
     probeSize: async (url) => {
       log.push(['probeSize', url]);
-      return { w: srcW, h: srcH };
+      return sizes[url] || { w: srcW, h: srcH };
     },
     decode: async (blob, opts) => {
       decodeCalls.push(opts);
@@ -452,6 +469,240 @@ describe('paintSlide — text layers', () => {
       paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [textLayer()], { aspect: '4:5', font });
       assert.match(painted(log)[0].font, /Inter/, `font=${JSON.stringify(font)}`);
     }
+  });
+});
+
+/** Schema-true layers of the other four types, defaulted the way the studio
+ *  will produce them — so a test that names no field asserts the default. */
+const rectLayer = (patch) =>
+  normalizeLayer({ type: 'rect', box: { x: 0, y: 0.8, w: 1, h: 0.2 }, ...patch });
+const imageLayer = (patch) =>
+  normalizeLayer({
+    type: 'image',
+    source: '/logo.png',
+    box: { x: 0.05, y: 0.05, w: 0.2, h: 0.1 },
+    ...patch,
+  });
+const counterLayer = (patch) =>
+  normalizeLayer({ type: 'counter', box: { x: 0.1, y: 0.1, w: 0.8, h: 0.2 }, ...patch });
+const arrowLayer = (patch) =>
+  normalizeLayer({ type: 'arrow', box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }, ...patch });
+
+/** A decoded layer image, as `loadLayerImages` hands it to `paintSlide`. */
+const placedImage = (layer, entry) => new Map([[layer, { bitmap: 'LOGO', ...entry }]]);
+
+/** Every `drawImage` in a log — the blit and any image layer over it. */
+const blits = (log) => log.filter((e) => e[0] === 'drawImage').map((e) => e.slice(1));
+
+describe('paintSlide — rect layers', () => {
+  test('fills its layerRect, in its own colour and opacity, over the blit', () => {
+    const layer = rectLayer({ fill: '#101820', opacity: 0.5 });
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['globalAlpha', 0.5],
+      ['fillStyle', '#101820'],
+      // The bottom fifth of a 4:5 frame — the geometry rect, not a local sum.
+      ['fillRect', 0, 1080, 1080, 270],
+      ['restore'],
+    ]);
+    const box = layerRect(layer, '4:5');
+    assert.deepStrictEqual(log.find((e) => e[0] === 'fillRect').slice(1), [box.x, box.y, box.w, box.h]);
+  });
+
+  test('an opaque rect sets no alpha at all — nothing to restore, nothing to leak', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [rectLayer()], { aspect: '4:5' });
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'globalAlpha'), []);
+    assert.ok(log.some((e) => e[0] === 'fillStyle' && e[1] === '#000000'), 'the schema default fill');
+  });
+
+  test('radius is a fraction of the shorter side, in canvas pixels', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [rectLayer({ radius: 0.5 })], {
+      aspect: '4:5',
+    });
+    // A 1080x270 box: half of the shorter side is 135, so the ends are pills.
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'roundRect'), [['roundRect', 0, 1080, 1080, 270, 135]]);
+    assert.ok(log.some((e) => e[0] === 'fill'), 'the rounded path is filled, not stroked');
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'fillRect'), [], 'not both');
+  });
+
+  test('a context with no roundRect gets a square corner rather than a throw', () => {
+    const log = [];
+    const ctx = recordingCtx(log);
+    delete ctx.roundRect;
+    paintSlide(ctx, 'BMP', FULL_RECT, 1080, 1350, null, [rectLayer({ radius: 0.5 })], { aspect: '4:5' });
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'fillRect'), [['fillRect', 0, 1080, 1080, 270]]);
+  });
+
+  test('a rect earlier in the list is the scrim the text after it is read against', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [
+      rectLayer({ opacity: 0.6 }),
+      textLayer({ text: 'Over', box: { x: 0, y: 0.8, w: 1, h: 0.2 } }),
+    ], { aspect: '4:5' });
+
+    const names = log.map((e) => e[0]);
+    assert.ok(names.indexOf('fillRect') < names.indexOf('fillText'), 'the scrim is under the type');
+    // …and the alpha it painted itself with is not still in effect for the type.
+    assert.ok(names.lastIndexOf('restore') > names.indexOf('fillText'));
+    assert.deepStrictEqual(
+      log.filter((e) => e[0] === 'globalAlpha'),
+      [['globalAlpha', 0.6]],
+      'the text layer sets none of its own',
+    );
+  });
+
+  test('a transparent rect paints nothing', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [rectLayer({ opacity: 0 })], {
+      aspect: '4:5',
+    });
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'fillRect'), []);
+  });
+});
+
+describe('paintSlide — image layers', () => {
+  test('blits the decoded bitmap where loadLayerImages placed it, honouring opacity', () => {
+    const layer = imageLayer({ opacity: 0.4 });
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], {
+      aspect: '4:5',
+      images: placedImage(layer, { x: 54, y: 82, w: 216, h: 108 }),
+    });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['globalAlpha', 0.4],
+      // Four args: the bitmap arrives already cropped and resized, so there is
+      // no fitting left to do here.
+      ['drawImage', 'LOGO', 54, 82, 216, 108],
+      ['restore'],
+    ]);
+  });
+
+  test('a source that never resolved is skipped, and the rest of the slide is painted', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [imageLayer(), textLayer({ text: 'Still here' })], { aspect: '4:5', images: new Map() });
+
+    assert.deepStrictEqual(blits(log), [['BMP', 0, 0, 1080, 1350]], 'no layer blit');
+    assert.deepStrictEqual(painted(log).map((l) => l.text), ['Still here']);
+  });
+});
+
+describe('paintSlide — counter layers', () => {
+  test('{i} is 1-based and {n} the deck length, typeset by the text path', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [counterLayer()], {
+      aspect: '4:5',
+      font: 'TestFace, sans-serif',
+      index: 2,
+      count: 8,
+    });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['fillStyle', '#ffffff'],
+      ['textAlign', 'left'],
+      ['textBaseline', 'middle'],
+      // The same 864x270 box the text tests use, so the same auto-fit answer:
+      // a counter is the text painter with the format substituted, not a twin.
+      ['fillText', '3/8', 108, 270, '400 225px TestFace, sans-serif'],
+      ['restore'],
+    ]);
+  });
+
+  test('the format is substituted at every index of a run', () => {
+    const texts = [];
+    for (let i = 0; i < 4; i++) {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+        [counterLayer({ format: 'Slide {i} of {n}' })], { aspect: '4:5', index: i, count: 4 });
+      texts.push(painted(log)[0].text);
+    }
+    assert.deepStrictEqual(texts, ['Slide 1 of 4', 'Slide 2 of 4', 'Slide 3 of 4', 'Slide 4 of 4']);
+  });
+
+  test('a format with no placeholder is a caption, and stays literal', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [counterLayer({ format: 'swipe' })], { aspect: '4:5', index: 1, count: 3 });
+    assert.strictEqual(painted(log)[0].text, 'swipe');
+  });
+
+  test('a caller that names no position reads as slide 1 of 1, never NaN', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [counterLayer()], { aspect: '4:5' });
+    assert.strictEqual(painted(log)[0].text, '1/1');
+  });
+
+  test('a counter carries the text style: align, colour and weight', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [counterLayer({ align: 'right', color: '#ff0088', weight: 700, size: 0.04 })],
+      { aspect: '4:5', font: 'TestFace', index: 0, count: 2 });
+    assert.ok(log.some((e) => e[0] === 'textAlign' && e[1] === 'right'));
+    assert.ok(log.some((e) => e[0] === 'fillStyle' && e[1] === '#ff0088'));
+    assert.strictEqual(painted(log)[0].font, '700 54px TestFace');
+  });
+});
+
+describe('paintSlide — arrow layers', () => {
+  test('a stroked chevron fitted to the box, pointing right by default', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [arrowLayer()], { aspect: '4:5' });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['strokeStyle', '#ffffff'],
+      // A 216x270 box: the stroke is 0.16 of the shorter side, and the path is
+      // inset by half of it so the round cap stays inside the box.
+      ['lineWidth', 35],
+      ['lineCap', 'round'],
+      ['lineJoin', 'round'],
+      ['beginPath'],
+      ['moveTo', 449.5, 557.5],
+      ['lineTo', 630.5, 675],
+      ['lineTo', 449.5, 792.5],
+      ['stroke'],
+      ['restore'],
+    ]);
+    assert.deepStrictEqual(painted(log), [], 'a path, not a glyph — no font is consulted');
+  });
+
+  test('direction mirrors the tip, and nothing else', () => {
+    const points = (direction) => {
+      const log = [];
+      paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+        [arrowLayer({ direction })], { aspect: '4:5' });
+      return log.filter((e) => e[0] === 'moveTo' || e[0] === 'lineTo').map((e) => e.slice(1));
+    };
+    assert.deepStrictEqual(points('left'), [[630.5, 557.5], [449.5, 675], [630.5, 792.5]]);
+    assert.deepStrictEqual(points('right'), [[449.5, 557.5], [630.5, 675], [449.5, 792.5]]);
+  });
+
+  test('colour and opacity come from the layer', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [arrowLayer({ color: '#ff0088', opacity: 0.25 })], { aspect: '4:5' });
+    assert.ok(log.some((e) => e[0] === 'strokeStyle' && e[1] === '#ff0088'));
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'globalAlpha'), [['globalAlpha', 0.25]]);
+  });
+
+  test('a box too small to hold its own stroke is skipped, not blotted', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [arrowLayer({ box: { x: 0.5, y: 0.5, w: 1 / 1080, h: 1 / 1080 } })], { aspect: '4:5' });
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'stroke'), []);
   });
 });
 
@@ -847,6 +1098,120 @@ describe('layers through the sequencers', () => {
 
     assert.strictEqual(surfaces(f.log).length, 1, 'one canvas, for the slide that was re-encoded');
     assert.strictEqual(painted(f.log).length, 1);
+  });
+
+  test('a logo on every slide is fetched and probed ONCE, decoded per placement', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000, sizes: { '/logo.png': { w: 200, h: 100 } } });
+    const doc = deckOf('/x.jpg', 3, '4:5', 3000, 1000);
+    for (const slide of doc.slides) slide.layers = [imageLayer()];
+    await renderDeck(doc, f.deps);
+
+    assert.deepStrictEqual(urlsOf(f.log, 'fetchBlob'), ['/x.jpg', '/logo.png'], 'one GET per path');
+    assert.deepStrictEqual(urlsOf(f.log, 'probeSize'), ['/x.jpg', '/logo.png']);
+    assert.strictEqual(f.decodeCalls.length, 6, 'three slides, three placements of the one logo');
+    assert.strictEqual(f.closed.count, 6, 'a layer bitmap is closed with the slide it was painted on');
+
+    // The logo arrives cropped and resized to the box it will occupy, exactly
+    // as the slide's own bitmap does — 200x100 contained in a 216x135 box.
+    const logo = f.decodeCalls.filter((o) => o.resizeWidth === 216);
+    assert.strictEqual(logo.length, 3);
+    assert.deepStrictEqual(
+      logo.map((o) => [o.sx, o.sy, o.sw, o.sh, o.resizeWidth, o.resizeHeight]),
+      Array(3).fill([0, 0, 200, 100, 216, 108]),
+    );
+    for (const seg of surfaces(f.log)) {
+      // The slide, then the logo letterboxed inside its box: dy is half the
+      // 27px of slack the contain leaves.
+      assert.deepStrictEqual(blits(seg).map((b) => b.slice(1)), [
+        [0, 0, 1080, 1350],
+        [54, 82, 216, 108],
+      ]);
+    }
+  });
+
+  test('`fit: cover` crops the source in the decode instead of letterboxing it', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000, sizes: { '/logo.png': { w: 200, h: 100 } } });
+    const doc = deckOf('/x.jpg', 1, '4:5', 3000, 1000);
+    doc.slides[0].layers = [imageLayer({ fit: 'cover' })];
+    await renderDeck(doc, f.deps);
+
+    const [logo] = f.decodeCalls.filter((o) => o.resizeWidth === 216);
+    assert.deepStrictEqual(
+      [logo.sx, logo.sy, logo.sw, logo.sh, logo.resizeWidth, logo.resizeHeight],
+      [20, 0, 160, 100, 216, 135],
+      'centre-cropped to the box aspect, then resampled to fill it',
+    );
+    assert.deepStrictEqual(blits(f.log)[1].slice(1), [54, 68, 216, 135], 'the whole box, no slack');
+  });
+
+  test('the split path shares the same loader — a logo across the columns is one GET', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000, sizes: { '/logo.png': { w: 200, h: 100 } } });
+    const doc = splitDocument({ source: '/x.jpg', n: 3, aspect: '4:5' });
+    for (const slide of doc.slides) slide.layers = [imageLayer()];
+    await renderCarousel(doc, f.deps);
+
+    assert.deepStrictEqual(urlsOf(f.log, 'fetchBlob'), ['/x.jpg', '/logo.png']);
+    assert.deepStrictEqual(urlsOf(f.log, 'probeSize'), ['/x.jpg', '/logo.png']);
+    assert.strictEqual(surfaces(f.log).filter((seg) => blits(seg).length === 2).length, 3);
+  });
+
+  test('the caller-supplied size seeds only the path it describes', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000, sizes: { '/logo.png': { w: 200, h: 100 } } });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    for (const slide of doc.slides) slide.layers = [imageLayer()];
+    await renderDeck(doc, f.deps, undefined, undefined, { srcW: 3000, srcH: 1000 });
+
+    assert.deepStrictEqual(
+      urlsOf(f.log, 'probeSize'),
+      ['/logo.png'],
+      'the slide source is seeded; the logo is a different picture and is probed',
+    );
+    assert.strictEqual(f.decodeCalls.filter((o) => o.resizeWidth === 216).length, 2);
+  });
+
+  test('a broken image source drops its own layer and nothing else', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000, badSources: ['/missing.png'] });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    for (const slide of doc.slides) {
+      slide.layers = [imageLayer({ source: '/missing.png' }), textLayer({ text: 'Kept' })];
+    }
+    const encoded = await renderDeck(doc, f.deps);
+
+    assert.strictEqual(encoded.length, 2, 'both slides still encoded');
+    assert.deepStrictEqual(
+      urlsOf(f.log, 'fetchBlob'),
+      ['/x.jpg', '/missing.png'],
+      'the failure is cached with everything else — one attempt, not one per slide',
+    );
+    for (const seg of surfaces(f.log)) {
+      assert.deepStrictEqual(blits(seg).length, 1, 'the slide image, and no layer image');
+      assert.deepStrictEqual(painted(seg).map((l) => l.text), ['Kept'], 'the rest of the slide is intact');
+    }
+  });
+
+  test('a counter reads its position from the deck, in both modes', async () => {
+    const deck = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 3, '4:5', 3000, 1000);
+    for (const slide of doc.slides) slide.layers = [counterLayer()];
+    await renderDeck(doc, deck.deps);
+    assert.deepStrictEqual(painted(deck.log).map((l) => l.text), ['1/3', '2/3', '3/3']);
+
+    const split = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const spec = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5' });
+    for (const slide of spec.slides) slide.layers = [counterLayer({ format: '{i} of {n}' })];
+    await renderCarousel(spec, split.deps);
+    assert.deepStrictEqual(painted(split.log).map((l) => l.text), ['1 of 2', '2 of 2']);
+  });
+
+  test('a deck of rects and arrows never waits on a font', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    doc.slides[0].layers = [rectLayer()];
+    doc.slides[1].layers = [arrowLayer()];
+    await renderDeck(doc, f.deps);
+
+    assert.strictEqual(f.fontCalls.count, 0, 'nothing to typeset, nothing to await');
+    assert.strictEqual(f.log.filter((e) => e[0] === 'stroke').length, 1);
   });
 });
 
