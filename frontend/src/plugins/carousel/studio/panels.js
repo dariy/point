@@ -178,6 +178,36 @@ function layerNodes(slide) {
   );
 }
 
+/** The eight resize-handle anchors, in DOM order. `hitLayer` in `gestures.js`
+ *  derives the same set geometrically — these are the visible affordance, not
+ *  the hit target. */
+const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+/**
+ * The selection chrome for a deck host: an outline box carrying the eight resize
+ * handles, plus an empty layer for `paintLayerChrome` to draw snap guides into.
+ * Emitted only for the selected slide's hosts and only while a layer is
+ * selected — its absence is how a deselect clears it on the next render.
+ *
+ * @param {boolean} active  this host shows the selected slide and a layer is selected
+ */
+function layerChrome(active) {
+  if (!active) return "";
+  return html`
+    <span class="carousel-studio__chrome">
+      <span class="carousel-studio__chrome-box">
+        ${HANDLE_ANCHORS.map(
+          (a) =>
+            html`<span
+              class="carousel-studio__handle carousel-studio__handle--${a}"
+              data-anchor="${a}"
+            ></span>`,
+        )}
+      </span>
+      <span class="carousel-studio__snap"></span>
+    </span>`;
+}
+
 /** A one-line name for a layer row: the type, plus the field that tells two of
  *  the same type apart. */
 function layerLabel(layer) {
@@ -258,7 +288,9 @@ export function builder({
             data-slice="${String(i)}"
             style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
-            ${deckLayers()}${layerNodes(slide)}
+            ${deckLayers()}${layerNodes(slide)}${layerChrome(
+              i === deckIndex && selectedLayer != null,
+            )}
           </span>`,
       )
     : "";
@@ -276,7 +308,9 @@ export function builder({
             aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
             style="aspect-ratio:${String(w)}/${String(h)}"
           >
-            ${deckLayers()}${layerNodes(slide)}
+            ${deckLayers()}${layerNodes(slide)}${layerChrome(
+              i === deckIndex && selectedLayer != null,
+            )}
           </div>`
       : html`
           <div

@@ -70,7 +70,7 @@ import {
 import { browserDeps, renderAndUpload } from "./render.js";
 import { DEFAULT_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
 import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
-import { paintDeckLayers, paintDeckSlide, paintSplit } from "./studio/preview.js";
+import { paintDeckLayers, paintDeckSlide, paintLayerChrome, paintSplit } from "./studio/preview.js";
 import { createDeckGestures } from "./studio/gestures.js";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
@@ -226,6 +226,23 @@ export default class CarouselStudioPage extends Component {
       refocus: (i) => {
         this._refocus = i;
       },
+      // Layer direct manipulation reuses the same machine over the box field —
+      // see studio/gestures.js. `activeLayer` is what routes a press between the
+      // two: a layer only takes the pointer when its own layer is selected.
+      activeLayer: () => {
+        const i = this._selectedIndex();
+        const j = this.state.selectedLayer;
+        const layer = j == null ? null : this.state.doc.slides[i]?.layers?.[j];
+        return layer ? { i, j, box: layer.box } : null;
+      },
+      safeArea: () => {
+        const { aspect } = this.state.doc;
+        const [w, h] = canvasSize(aspect);
+        const sa = safeAreaRect(aspect);
+        return { x: sa.x / w, y: sa.y / h, w: sa.w / w, h: sa.h / h };
+      },
+      paintLayer: (i, j, box, guides) => this._paintProvisionalLayer(i, j, box, guides),
+      commitLayer: (i, j, box) => this._commitLayerBox(i, j, box),
     });
   }
 
@@ -618,6 +635,17 @@ export default class CarouselStudioPage extends Component {
     this.setState({ doc: updateLayer(this.state.doc, i, j, patch) });
   }
 
+  /** The commit point for a drag or a keyboard nudge of a layer's box — the
+   *  gesture's twin of `_setSlideFraming`. `updateLayer` re-clamps the box, so
+   *  the gesture's own clamp is only for preview smoothness. */
+  _commitLayerBox(i, j, box) {
+    this.setState({
+      selected: i,
+      selectedLayer: j,
+      doc: updateLayer(this.state.doc, i, j, { box }),
+    });
+  }
+
   /** The selected slide index, its selected layer index, and that layer (or
    *  null) — the three things every layer-field handler needs. */
   _selectedLayerRef() {
@@ -934,6 +962,15 @@ export default class CarouselStudioPage extends Component {
     this._wireControls();
     this._gestures.attach(deck ? this.$$(".carousel-studio__frame--deck") : []);
 
+    // The selected layer's chrome (outline + handles) is markup; position it
+    // now that the frames exist. Cleared for free when nothing is selected —
+    // panels.js emits the chrome node only then.
+    if (deck && this.state.selectedLayer != null) {
+      const i = this._selectedIndex();
+      const layer = this.state.doc.slides[i]?.layers?.[this.state.selectedLayer];
+      if (layer) this._paintLayerChrome(i, layer.box, { v: [], h: [] });
+    }
+
     // A keyboard nudge rebuilds the strip under the user's fingers; put focus
     // back where it was so the next arrow press keeps working.
     if (this._refocus != null) {
@@ -1002,6 +1039,28 @@ export default class CarouselStudioPage extends Component {
         index: i,
         count: this.state.doc.slides.length,
       },
+    );
+  }
+
+  /** Repaint one layer at a provisional box mid-drag — the layer twin of the
+   *  provisional slide `_paintDeckSlide` takes. Also moves the selection chrome
+   *  and draws whatever snap guides engaged. No state change, so a drag costs
+   *  no rebuild. */
+  _paintProvisionalLayer(i, j, box, guides) {
+    const layers = (this.state.doc.slides[i]?.layers || []).map((l, k) =>
+      k === j ? { ...l, box } : l,
+    );
+    this._paintDeckSlideLayers(i, layers);
+    this._paintLayerChrome(i, box, guides);
+  }
+
+  /** Position the selection outline, handles and snap guides for the selected
+   *  layer over both elements that show slide `i`. `guides` is empty except
+   *  mid-drag. */
+  _paintLayerChrome(i, box, guides) {
+    paintLayerChrome(
+      { hosts: this.$$(`[data-slice="${i}"]`) },
+      { box, aspect: this.state.doc.aspect, guides: guides || { v: [], h: [] } },
     );
   }
 

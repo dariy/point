@@ -275,3 +275,50 @@ function paintLayerContent(el, layer, index, count, heightCqw) {
     el.style.alignItems = "center";
   }
 }
+
+/**
+ * Move the selection chrome — an outline box with eight resize handles — over
+ * the selected layer, and draw the snap guides that engaged this frame.
+ * `paintDeckLayers`'s twin for the one element that is UI, not preview: the
+ * chrome node is present only while a layer is selected (panels.js), so a host
+ * without one is simply skipped.
+ *
+ * @param {{hosts: ArrayLike<HTMLElement>}} els  the selected slide's `[data-slice]`
+ *   elements
+ * @param {{box: {x:number,y:number,w:number,h:number}, aspect: string,
+ *   guides: {v: number[], h: number[]}}} o  `guides` in canvas fractions, empty
+ *   except mid-drag
+ */
+export function paintLayerChrome({ hosts }, { box, aspect, guides }) {
+  const b = box ? layerCSS({ box }, aspect) : null;
+  const g = guides || { v: [], h: [] };
+  Array.from(hosts).forEach((host) => {
+    const chrome = host.querySelector(".carousel-studio__chrome");
+    if (!chrome) return;
+    const outline = /** @type {HTMLElement|null} */ (
+      chrome.querySelector(".carousel-studio__chrome-box")
+    );
+    if (outline && b) {
+      outline.style.left = `${b.x}%`;
+      outline.style.top = `${b.y}%`;
+      outline.style.width = `${b.w}%`;
+      outline.style.height = `${b.h}%`;
+    }
+    const snap = chrome.querySelector(".carousel-studio__snap");
+    if (!snap) return;
+    snap.textContent = "";
+    const doc = host.ownerDocument;
+    for (const x of g.v || []) {
+      const line = doc.createElement("span");
+      line.className = "carousel-studio__snap-line carousel-studio__snap-line--v";
+      line.style.left = `${x * 100}%`;
+      snap.appendChild(line);
+    }
+    for (const y of g.h || []) {
+      const line = doc.createElement("span");
+      line.className = "carousel-studio__snap-line carousel-studio__snap-line--h";
+      line.style.top = `${y * 100}%`;
+      snap.appendChild(line);
+    }
+  });
+}

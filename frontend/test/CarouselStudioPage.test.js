@@ -25,6 +25,7 @@ import {
   specHash,
   splitDocument,
   toDeckDocument,
+  updateLayer,
 } from '../src/plugins/carousel/document.js';
 
 /** Route `fetch` by URL; unmatched paths 404. */
@@ -1355,6 +1356,164 @@ describe('CarouselStudioPage', () => {
         page._select(2);
         await settle();
         assert.equal(page.state.selectedLayer, null, 'a stale index would edit the wrong slide');
+      });
+
+      // ── Direct manipulation (S3.7) ────────────────────────────────────────
+      describe('direct manipulation', () => {
+        const deckFrame = (el, i) =>
+          el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"]`);
+
+        /** linkedom has no layout — give the frame the box a browser would
+         *  have measured so pointer pixels convert to canvas fractions. A
+         *  200×250 frame keeps 1px = 0.005 of the canvas on both axes. */
+        function withFrameBox(frame, width = 200, height = 250) {
+          frame.getBoundingClientRect = () => ({
+            width, height, left: 0, top: 0, right: width, bottom: height,
+          });
+          return frame;
+        }
+
+        /** Fire press → moves → release on `frame`. `moves` is a list of
+         *  `[clientX, clientY]`; the last one is also the release point. */
+        function press(frame, cx, cy, moves, props = {}) {
+          fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: cx, clientY: cy, ...props });
+          for (const [mx, my] of moves) {
+            fire(frame, 'pointermove', { pointerId: 1, clientX: mx, clientY: my, ...props });
+          }
+          const [lx, ly] = moves[moves.length - 1] || [cx, cy];
+          fire(frame, 'pointerup', { pointerId: 1, clientX: lx, clientY: ly, ...props });
+        }
+
+        /** A deck with one text layer on slide 0, its box forced to `box` (a
+         *  small central rect by default, with room to move and resize). The
+         *  frame is re-queried by the caller — the setState re-renders it. */
+        async function withLayer(box = { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }, n = 3) {
+          const el = await toDeck({ post: '42' }, n);
+          click(addLayerBtn(el, 'text'));
+          await settle();
+          page.setState({ doc: updateLayer(page.state.doc, 0, 0, { box }) });
+          await settle();
+          return el;
+        }
+
+        test('dragging a selected layer moves its box through updateLayer', async () => {
+          const el = await withLayer();
+          const frame = withFrameBox(deckFrame(el, 0));
+          const before = page.state.doc;
+          // Box centre (0.5, 0.5) → (100, 125)px. +30px right, snap suppressed.
+          press(frame, 100, 125, [[130, 125]], { altKey: true });
+          await settle();
+
+          assert.notStrictEqual(page.state.doc, before, 'one new document');
+          const b = page.state.doc.slides[0].layers[0].box;
+          assert.ok(Math.abs(b.x - 0.55) < 0.02, `x ≈ 0.4 + 30/200: ${b.x}`);
+          assert.equal(page.state.doc.slides[1].layers.length, 0, 'no other slide touched');
+        });
+
+        test('a press under the slop selects and moves nothing', async () => {
+          const el = await withLayer();
+          const frame = withFrameBox(deckFrame(el, 0));
+          const before = page.state.doc;
+          press(frame, 100, 125, [[102, 126]]);
+          await settle();
+          assert.strictEqual(page.state.doc, before, 'the document did not change');
+        });
+
+        test('resizing past the frame edge comes back clamped by the mutator', async () => {
+          const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+          const frame = withFrameBox(deckFrame(el, 0));
+          // Right edge at x=0.6 → 120px. Drag it 400px past the frame.
+          press(frame, 120, 125, [[520, 125]], { altKey: true });
+          await settle();
+          const b = page.state.doc.slides[0].layers[0].box;
+          assert.ok(b.x >= -1e-9 && b.x + b.w <= 1 + 1e-9, `stays inside the canvas: ${b.x}..${b.x + b.w}`);
+          assert.ok(b.w > 0.2, 'it did get wider');
+        });
+
+        test('snapping engages within tolerance; the modifier suppresses it', async () => {
+          // Box centre at 0.46; a 6px (0.03) drag right lands the centre at 0.49,
+          // inside the 7px snap tolerance of the 0.5 centre line.
+          const el = await withLayer({ x: 0.36, y: 0.4, w: 0.2, h: 0.2 });
+          let frame = withFrameBox(deckFrame(el, 0));
+          press(frame, 0.46 * 200, 125, [[0.46 * 200 + 6, 125]]);
+          await settle();
+          const snapped = page.state.doc.slides[0].layers[0].box;
+          assert.ok(
+            Math.abs(snapped.x + snapped.w / 2 - 0.5) < 2e-3,
+            `centre snapped to 0.5: ${snapped.x + snapped.w / 2}`,
+          );
+
+          page.setState({
+            doc: updateLayer(page.state.doc, 0, 0, { box: { x: 0.36, y: 0.4, w: 0.2, h: 0.2 } }),
+          });
+          await settle();
+          frame = withFrameBox(deckFrame(el, 0));
+          press(frame, 0.46 * 200, 125, [[0.46 * 200 + 6, 125]], { altKey: true });
+          await settle();
+          const free = page.state.doc.slides[0].layers[0].box;
+          assert.ok(
+            Math.abs(free.x + free.w / 2 - 0.5) > 2e-3,
+            `not snapped — centre near 0.49: ${free.x + free.w / 2}`,
+          );
+        });
+
+        test('with a layer selected, a press off the layer still pans the crop', async () => {
+          const el = await withLayer();
+          const frame = withFrameBox(deckFrame(el, 0));
+          withBox(deckImg(el, 0));
+          const cropBefore = { ...page.state.doc.slides[0].crop };
+          const layerBefore = { ...page.state.doc.slides[0].layers[0].box };
+
+          // fx = 0.75 — well right of the box's 0.6 edge. Drag the image left so
+          // the crop pans right, which slide 0 has source room for.
+          press(frame, 150, 20, [[90, 20]]);
+          await settle();
+
+          assert.deepEqual(page.state.doc.slides[0].layers[0].box, layerBefore, 'the layer did not move');
+          assert.notDeepEqual(page.state.doc.slides[0].crop, cropBefore, 'the crop panned');
+        });
+
+        test('with no layer selected the crop gesture is unchanged', async () => {
+          const el = await toDeck();
+          const frame = withFrameBox(deckFrame(el, 0));
+          withBox(deckImg(el, 0));
+          const cropBefore = { ...page.state.doc.slides[0].crop };
+          press(frame, 150, 120, [[90, 120]]);
+          await settle();
+          assert.notDeepEqual(page.state.doc.slides[0].crop, cropBefore);
+        });
+
+        test('arrow keys nudge the selected layer; shift-arrows resize it', async () => {
+          const el = await withLayer();
+          const box0 = page.state.doc.slides[0].layers[0].box;
+
+          fire(deckFrame(el, 0), 'keydown', { key: 'ArrowRight', shiftKey: false });
+          await settle();
+          const box1 = page.state.doc.slides[0].layers[0].box;
+          assert.ok(box1.x > box0.x, 'a plain arrow nudged it right');
+          assert.ok(Math.abs(box1.w - box0.w) < 1e-9, 'the size held');
+
+          fire(deckFrame(el, 0), 'keydown', { key: 'ArrowRight', shiftKey: true });
+          await settle();
+          assert.ok(page.state.doc.slides[0].layers[0].box.w > box1.w, 'a shift-arrow widened it');
+        });
+
+        test('the selection chrome renders on the selected slide only', async () => {
+          const el = await withLayer();
+          assert.ok(
+            deckFrame(el, 0).querySelector('.carousel-studio__chrome'),
+            'chrome on the selected slide',
+          );
+          assert.ok(
+            !deckFrame(el, 1).querySelector('.carousel-studio__chrome'),
+            'no chrome on the others',
+          );
+          assert.equal(
+            deckFrame(el, 0).querySelectorAll('.carousel-studio__handle').length,
+            8,
+            'eight resize handles',
+          );
+        });
       });
     });
   });

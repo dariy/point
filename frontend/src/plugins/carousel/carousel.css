@@ -415,8 +415,9 @@
 
 /* One layer's live preview: positioned in percent of the frame by
  * `paintDeckLayers`, its content painted by type. `pointer-events: none` keeps
- * it from intercepting the deck frame's pan gesture (S3 is form-driven; S3.7
- * adds direct manipulation). The font stack matches the token the renderer
+ * it from intercepting the deck frame's gesture — a layer press is routed
+ * geometrically by `hitLayer` (gestures.js) against the selected layer's box,
+ * not by DOM hit-testing. The font stack matches the token the renderer
  * resolves, so preview and JPEG agree on wrap and size within a pixel or two. */
 .carousel-studio__layer {
   position: absolute;
@@ -428,6 +429,58 @@
   overflow-wrap: anywhere;
   line-height: 1.2;
 }
+
+/* ── Layer selection chrome (S3.7 direct manipulation) ─────────────────────── */
+
+/* The outline + eight handles over the selected layer, and the snap-guide
+ * layer. Positioned by `paintLayerChrome`; present in the markup only while a
+ * layer is selected (panels.js), so a deselect clears it on the next render. */
+.carousel-studio__chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.carousel-studio__chrome-box {
+  position: absolute;
+  outline: 1px solid var(--color-primary);
+}
+
+/* Handles are drawn on the box corners and edge midpoints. They opt back into
+ * pointer events purely for the resize cursor — the drag itself is captured by
+ * the frame and resolved geometrically, so the exact target does not matter. */
+.carousel-studio__handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: var(--surface-card);
+  border: 1px solid var(--color-primary);
+  pointer-events: auto;
+}
+
+.carousel-studio__handle--nw { left: 0; top: 0; cursor: nwse-resize; }
+.carousel-studio__handle--n { left: 50%; top: 0; cursor: ns-resize; }
+.carousel-studio__handle--ne { left: 100%; top: 0; cursor: nesw-resize; }
+.carousel-studio__handle--e { left: 100%; top: 50%; cursor: ew-resize; }
+.carousel-studio__handle--se { left: 100%; top: 100%; cursor: nwse-resize; }
+.carousel-studio__handle--s { left: 50%; top: 100%; cursor: ns-resize; }
+.carousel-studio__handle--sw { left: 0; top: 100%; cursor: nesw-resize; }
+.carousel-studio__handle--w { left: 0; top: 50%; cursor: ew-resize; }
+
+.carousel-studio__snap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.carousel-studio__snap-line {
+  position: absolute;
+  background: var(--color-warning);
+}
+
+.carousel-studio__snap-line--v { top: 0; bottom: 0; width: 1px; }
+.carousel-studio__snap-line--h { left: 0; right: 0; height: 1px; }
 
 /* ── Render lifecycle ────────────────────────────────────────────────────── */
 

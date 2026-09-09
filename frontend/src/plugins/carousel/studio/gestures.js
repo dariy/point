@@ -7,6 +7,15 @@
  * (bind, hand back the release) with one difference — the controller outlives a
  * render, because a wheel gesture's debounced commit has to.
  *
+ * The same machine drives two fields. With no layer selected a frame's pointer
+ * pans and zooms the slide's `crop` (S2). With a layer selected and the press
+ * landing on that layer or one of its eight resize handles, the identical
+ * provisional-write-then-commit cycle moves and resizes the layer's `box`
+ * instead — through `host.commitLayer` rather than `host.commit`, snapping to
+ * the safe area and canvas guides on the way. A press that misses the selected
+ * layer still falls through to the crop gesture, so pan/zoom is unchanged
+ * wherever a layer is not in the way.
+ *
  *   const gestures = createDeckGestures(host);   // once, at construction
  *   gestures.attach(frames);                     // after every render
  *   gestures.destroy();                          // at unmount
@@ -32,6 +41,172 @@ const KEY_ZOOM = 1.1;
 const WHEEL_COMMIT_MS = 140;
 /** Pointer travel below this is a click, not a drag. */
 const DRAG_SLOP_PX = 3;
+/** A press within this many CSS px of a selected layer's edge grabs the resize
+ *  handle there rather than moving the layer. */
+const HANDLE_GRAB_PX = 12;
+/** A dragged layer edge within this many CSS px of a guide clicks onto it. */
+const SNAP_PX = 7;
+/** The smallest a layer box may be on either axis — one pixel of the 1080px
+ *  canvas width, matching `MIN_BOX` in `document.js`. Below it a layer is
+ *  ungrabbable, so the preview clamp holds it here too. */
+const MIN_BOX = 1 / 1080;
+
+/** `frame.getBoundingClientRect()`, or a zero box where there is no layout
+ *  (a headless test frame that never opts into one). */
+function frameRect(frame) {
+  const r = frame.getBoundingClientRect?.();
+  return r && r.width ? r : { left: 0, top: 0, width: 0, height: 0 };
+}
+
+/**
+ * Which part of a selected layer a press at `(cx, cy)` lands on, or `null` when
+ * it misses — in which case the crop gesture takes the press instead. A press
+ * near an edge or corner (`HANDLE_GRAB_PX`, converted to box fractions through
+ * the frame's own size) is a resize with that edge's `{h, v}` anchor
+ * (`-1`/`0`/`1` per axis, `0` meaning "this axis does not move"); a press inside
+ * the box is a move.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number}} box  0..1 of the canvas
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {{mode:'move'|'resize', h:-1|0|1, v:-1|0|1}|null}
+ */
+export function hitLayer(rect, box, cx, cy) {
+  if (!rect.width || !rect.height) return null;
+  const fx = (cx - rect.left) / rect.width;
+  const fy = (cy - rect.top) / rect.height;
+  const tx = HANDLE_GRAB_PX / rect.width;
+  const ty = HANDLE_GRAB_PX / rect.height;
+  const withinX = fx >= box.x - tx && fx <= box.x + box.w + tx;
+  const withinY = fy >= box.y - ty && fy <= box.y + box.h + ty;
+  if (!withinX || !withinY) return null;
+
+  const nearL = Math.abs(fx - box.x) <= tx;
+  const nearR = Math.abs(fx - (box.x + box.w)) <= tx;
+  const nearT = Math.abs(fy - box.y) <= ty;
+  const nearB = Math.abs(fy - (box.y + box.h)) <= ty;
+  if (nearL || nearR || nearT || nearB) {
+    return { mode: "resize", h: nearL ? -1 : nearR ? 1 : 0, v: nearT ? -1 : nearB ? 1 : 0 };
+  }
+  return { mode: "move", h: 0, v: 0 };
+}
+
+/** Clamp a box to the canvas the way `normalizeBox` (`document.js`) does — a
+ *  preview-smoothness clamp only; the commit re-clamps through the mutator. */
+function clampBox(box) {
+  const w = Math.min(Math.max(box.w, MIN_BOX), 1);
+  const h = Math.min(Math.max(box.h, MIN_BOX), 1);
+  return {
+    x: Math.min(Math.max(box.x, 0), 1 - w),
+    y: Math.min(Math.max(box.y, 0), 1 - h),
+    w,
+    h,
+  };
+}
+
+/** The box a move or resize of `startBox` by `(dfx, dfy)` canvas fractions
+ *  produces, before snapping and clamping. A resize keeps the anchored edge put
+ *  and never crosses it — a width dragged past zero pins to `MIN_BOX`. */
+export function dragBox(startBox, mode, anchor, dfx, dfy) {
+  if (mode === "move") {
+    return { ...startBox, x: startBox.x + dfx, y: startBox.y + dfy };
+  }
+  let { x, y, w, h } = startBox;
+  if (anchor.h < 0) {
+    w = Math.max(MIN_BOX, startBox.w - dfx);
+    x = startBox.x + startBox.w - w;
+  } else if (anchor.h > 0) {
+    w = Math.max(MIN_BOX, startBox.w + dfx);
+  }
+  if (anchor.v < 0) {
+    h = Math.max(MIN_BOX, startBox.h - dfy);
+    y = startBox.y + startBox.h - h;
+  } else if (anchor.v > 0) {
+    h = Math.max(MIN_BOX, startBox.h + dfy);
+  }
+  return { x, y, w, h };
+}
+
+/**
+ * Snap a dragged box's live edges to the canvas guides — its own edges and
+ * centre lines at `0`, `0.5`, `1`, plus the safe-area rect — within `tol`
+ * fractions per axis. A `move` snaps whichever of the three verticals
+ * (left / centre / right) and three horizontals is closest; a `resize` snaps
+ * only the edges its anchor is dragging. Returns the adjusted box and the guide
+ * lines that engaged, for the caller to draw. `suppressed` (a modifier key held)
+ * returns the box untouched with no guides.
+ *
+ * @returns {{box:{x:number,y:number,w:number,h:number}, guides:{v:number[],h:number[]}}}
+ */
+export function snapBox(box, mode, anchor, safe, tol, suppressed) {
+  const guides = { v: [], h: [] };
+  if (suppressed) return { box, guides };
+
+  const vLines = [0, 0.5, 1, ...(safe ? [safe.x, safe.x + safe.w] : [])];
+  const hLines = [0, 0.5, 1, ...(safe ? [safe.y, safe.y + safe.h] : [])];
+  const next = { ...box };
+
+  /** Nearest line to `value` within `t`, or null. */
+  const near = (value, lines, t) => {
+    let best = null;
+    let bestD = t;
+    for (const line of lines) {
+      const d = Math.abs(value - line);
+      if (d <= bestD) {
+        bestD = d;
+        best = line;
+      }
+    }
+    return best;
+  };
+
+  // Which edges are live: a move drags all three; a resize only its anchor's.
+  const xEdges =
+    mode === "move"
+      ? [["x", 0], ["x", box.w / 2], ["x", box.w]]
+      : anchor.h < 0
+        ? [["x", 0]]
+        : anchor.h > 0
+          ? [["x", box.w]]
+          : [];
+  const yEdges =
+    mode === "move"
+      ? [["y", 0], ["y", box.h / 2], ["y", box.h]]
+      : anchor.v < 0
+        ? [["y", 0]]
+        : anchor.v > 0
+          ? [["y", box.h]]
+          : [];
+
+  for (const [, off] of xEdges) {
+    const line = near(box.x + off, vLines, tol.x);
+    if (line == null) continue;
+    if (mode === "move") next.x = line - off;
+    else if (anchor.h < 0) {
+      next.x = line;
+      next.w = box.x + box.w - line;
+    } else {
+      next.w = line - box.x;
+    }
+    guides.v.push(line);
+    break;
+  }
+  for (const [, off] of yEdges) {
+    const line = near(box.y + off, hLines, tol.y);
+    if (line == null) continue;
+    if (mode === "move") next.y = line - off;
+    else if (anchor.v < 0) {
+      next.y = line;
+      next.h = box.y + box.h - line;
+    } else {
+      next.h = line - box.y;
+    }
+    guides.h.push(line);
+    break;
+  }
+  return { box: next, guides };
+}
 
 /** The midpoint and spread of the live pointers — one finger gives `dist: 0`,
  *  which is what makes the same handler serve a drag and a pinch. */
@@ -96,6 +271,19 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  * @property {(i: number) => void} select  Make slide `i` the selection.
  * @property {(i: number) => void} refocus  Slide `i` is about to lose focus to
  *   a rebuild; put it back afterwards.
+ * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number}}|null} [activeLayer]
+ *   The selected layer — its slide index, its index in that slide, and its
+ *   current box (0..1 of the canvas) — or null when no layer is selected. Read
+ *   per press: it decides whether a press moves a layer or pans the slide.
+ * @property {() => {x:number,y:number,w:number,h:number}|null} [safeArea]
+ *   The slide's safe-area rect in canvas fractions, for snapping. Null disables
+ *   safe-area snap (centre and edge guides still apply).
+ * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}, guides: {v:number[],h:number[]}) => void} [paintLayer]
+ *   Paint layer `j` of slide `i` at a provisional box, plus the snap guides that
+ *   engaged — the layer twin of `paint`.
+ * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}) => void} [commitLayer]
+ *   Write a finished box into the document, through the layer mutator (which
+ *   re-clamps) — the layer twin of `commit`.
  */
 
 /**
@@ -108,7 +296,10 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
 export function createDeckGestures(host) {
   /** Listener removers for the currently bound frames. */
   let bound = [];
-  /** The in-flight gesture: { i, frame, pointers, crop, startCrop, start, moved }. */
+  /** The in-flight gesture, tagged by `kind`: a `"crop"` pan/pinch
+   *  ({ i, frame, pointers, crop, startCrop, start, moved }) or a `"layer"`
+   *  move/resize ({ i, j, frame, mode, anchor, rect, startX, startY, startBox,
+   *  box, moved }). One at a time — a press mid-gesture is ignored. */
   let drag = null;
   /** A crop written to the DOM but not yet committed to the document (a wheel
    *  gesture, which has no release event to commit on). */
@@ -149,12 +340,82 @@ export function createDeckGestures(host) {
     commitCrop(p.i, p.crop);
   };
 
+  /** True once a layer press has travelled past the slop threshold. */
+  const past = (a, b) => Math.abs(a) > DRAG_SLOP_PX || Math.abs(b) > DRAG_SLOP_PX;
+
+  const onLayerMove = (e) => {
+    if (!drag || drag.kind !== "layer") return;
+    const dfx = (e.clientX - drag.startX) / (drag.rect.width || 1);
+    const dfy = (e.clientY - drag.startY) / (drag.rect.height || 1);
+    if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
+
+    const raw = dragBox(drag.startBox, drag.mode, drag.anchor, dfx, dfy);
+    const tol = {
+      x: SNAP_PX / (drag.rect.width || 1),
+      y: SNAP_PX / (drag.rect.height || 1),
+    };
+    const { box, guides } = drag.moved
+      ? snapBox(raw, drag.mode, drag.anchor, host.safeArea?.() || null, tol, e.altKey || e.metaKey)
+      : { box: raw, guides: { v: [], h: [] } };
+    drag.box = clampBox(box);
+    host.paintLayer?.(drag.i, drag.j, drag.box, guides);
+    e.preventDefault?.();
+  };
+
+  const onLayerUp = (e, frame) => {
+    const ended = drag;
+    drag = null;
+    frame.releasePointerCapture?.(e.pointerId);
+    frame.classList.remove("is-dragging");
+    if (!ended.moved) {
+      // A press that never travelled: keep the layer selected, move nothing —
+      // the slop threshold is what stops a select-click from nudging.
+      host.select(ended.i);
+      return;
+    }
+    host.commitLayer?.(ended.i, ended.j, ended.box);
+  };
+
   const onPointerDown = (e, frame, i) => {
     if (e.button != null && e.button > 0) return;
     const slide = host.slideAt(i);
     if (!slide) return;
+
+    // A layer takes the press only when its own layer is selected and the press
+    // lands on it or a handle; anything else falls through to the crop gesture,
+    // so pan/zoom is unchanged wherever a layer is not in the way.
+    if (!drag) {
+      const active = host.activeLayer?.();
+      const rect = frameRect(frame);
+      const hit =
+        active && active.i === i
+          ? hitLayer(rect, active.box, e.clientX, e.clientY)
+          : null;
+      if (hit) {
+        frame.setPointerCapture?.(e.pointerId);
+        frame.classList.add("is-dragging");
+        drag = {
+          kind: "layer",
+          i,
+          j: active.j,
+          frame,
+          mode: hit.mode,
+          anchor: { h: hit.h, v: hit.v },
+          rect,
+          startX: e.clientX,
+          startY: e.clientY,
+          startBox: { ...active.box },
+          box: { ...active.box },
+          moved: false,
+        };
+        e.preventDefault?.();
+        return;
+      }
+    }
+    if (drag && drag.kind === "layer") return;
+
     if (!drag || drag.i !== i) {
-      drag = { i, frame, pointers: new Map(), crop: { ...slide.crop }, moved: false };
+      drag = { kind: "crop", i, frame, pointers: new Map(), crop: { ...slide.crop }, moved: false };
     }
     frame.setPointerCapture?.(e.pointerId);
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -167,6 +428,10 @@ export function createDeckGestures(host) {
   };
 
   const onPointerMove = (e, frame, i) => {
+    if (drag && drag.kind === "layer") {
+      if (drag.i === i) onLayerMove(e);
+      return;
+    }
     const slide = host.slideAt(i);
     if (!drag || drag.i !== i || !drag.pointers.has(e.pointerId) || !slide) return;
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -199,6 +464,10 @@ export function createDeckGestures(host) {
   };
 
   const onPointerUp = (e, frame, i) => {
+    if (drag && drag.kind === "layer") {
+      if (drag.i === i) onLayerUp(e, frame);
+      return;
+    }
     if (!drag || drag.i !== i) return;
     const ended = drag;
     ended.pointers.delete(e.pointerId);
@@ -242,6 +511,34 @@ export function createDeckGestures(host) {
   const onFrameKey = (e, i) => {
     const slide = host.slideAt(i);
     if (!slide) return;
+
+    // With a layer selected the arrows drive it, not the crop: a plain arrow
+    // nudges the box, shift-arrow resizes it from its far edge, both at the
+    // `KEY_PAN` scale the crop nudge uses.
+    const active = host.activeLayer?.();
+    if (active && active.i === i && typeof e.key === "string" && e.key.startsWith("Arrow")) {
+      const b = active.box;
+      const dx = KEY_PAN * b.w;
+      const dy = KEY_PAN * b.h;
+      let box = null;
+      if (e.shiftKey) {
+        if (e.key === "ArrowRight") box = { ...b, w: b.w + dx };
+        else if (e.key === "ArrowLeft") box = { ...b, w: b.w - dx };
+        else if (e.key === "ArrowDown") box = { ...b, h: b.h + dy };
+        else if (e.key === "ArrowUp") box = { ...b, h: b.h - dy };
+      } else {
+        if (e.key === "ArrowRight") box = { ...b, x: b.x + dx };
+        else if (e.key === "ArrowLeft") box = { ...b, x: b.x - dx };
+        else if (e.key === "ArrowDown") box = { ...b, y: b.y + dy };
+        else if (e.key === "ArrowUp") box = { ...b, y: b.y - dy };
+      }
+      if (!box) return;
+      e.preventDefault?.();
+      host.refocus(i);
+      host.commitLayer?.(i, active.j, clampBox(box));
+      return;
+    }
+
     const { crop } = slide;
     const step = KEY_PAN * (e.shiftKey ? 5 : 1);
     let next = null;
