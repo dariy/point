@@ -1195,5 +1195,167 @@ describe('CarouselStudioPage', () => {
       );
       assert.ok(!page.container.querySelector('.carousel-studio__dirty-badge'), 'clean again');
     });
+
+    describe('layers (S3)', () => {
+      const addLayerBtn = (el, type) =>
+        el.querySelector(`[data-action="add-layer"][data-type="${type}"]`);
+      const stageLayer = (el, slice, j) =>
+        el.querySelector(
+          `.carousel-studio__stage-slide[data-slice="${slice}"] .carousel-studio__layer[data-layer="${j}"]`,
+        );
+      const frameLayer = (el, slice, j) =>
+        el.querySelector(
+          `.carousel-studio__frame--deck[data-slice="${slice}"] .carousel-studio__layer[data-layer="${j}"]`,
+        );
+
+      /** A deck that has already been rendered — every slide carries a specHash,
+       *  so `_renderedDoc` is set and the studio starts clean. */
+      async function renderedDeck(n = 3) {
+        const base = splitDocument({ source: SRC, n, aspect: '4:5', strategy: 'cover', anchorY: 0.5 });
+        const doc = toDeckDocument(base, SRC_W, SRC_H);
+        doc.slides.forEach((s, i) => {
+          s.rendered = {
+            path: `/2026/08/old${i + 1}.jpg`,
+            media_id: 100 + i,
+            specHash: specHash(s, doc.aspect, { strategy: doc.strategy, anchorY: doc.anchorY }),
+          };
+        });
+        const routes = [
+          [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: POST })],
+          [/\/api\/carousel/, (url, opts) =>
+            opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } }],
+          [/\/api\/media\/\d+$/, { body: {} }],
+        ];
+        const deps = {
+          ...fakeRenderDeps(async () => ({})),
+          probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+        };
+        return mount({ post: '42' }, routes, { renderDeps: deps });
+      }
+
+      test('adding each type puts one normalized layer inside the safe area', async () => {
+        const el = await toDeck();
+        for (const type of ['text', 'image', 'rect', 'counter', 'arrow']) {
+          click(addLayerBtn(el, type));
+          await settle();
+        }
+        const layers = page.state.doc.slides[0].layers;
+        assert.deepEqual(layers.map((l) => l.type), ['text', 'image', 'rect', 'counter', 'arrow']);
+        for (const l of layers) {
+          assert.ok(l.box.x >= 0.049 && l.box.x + l.box.w <= 0.951, `${l.type} within safe width`);
+          assert.ok(l.box.y >= 0.13 && l.box.y + l.box.h <= 0.87, `${l.type} within safe height`);
+        }
+        // The newest layer is selected and its form is shown.
+        assert.equal(page.state.selectedLayer, 4);
+        assert.ok(el.querySelector('.carousel-studio__layer-form[data-layer-type="arrow"]'));
+      });
+
+      test('an image layer defaults its source to the logo_url setting', async () => {
+        setSettings({ blog_title: 'Test blog', logo_url: '/2026/01/wordmark.png' });
+        const el = await toDeck();
+        click(addLayerBtn(el, 'image'));
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers[0].source, '/2026/01/wordmark.png');
+      });
+
+      test('the list is topmost-first and reordering maps to the array move', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'text'));
+        await settle();
+        click(addLayerBtn(el, 'rect'));
+        await settle();
+        // Array is back-to-front: [text, rect]. The list shows rect first.
+        const names = [...el.querySelectorAll('.carousel-studio__layer-name')].map((b) =>
+          b.textContent.trim(),
+        );
+        assert.equal(names[0], 'Rectangle');
+        assert.ok(names[1].startsWith('Text'));
+
+        // "Move down" on the top (rect, index 1) drops it under the text layer.
+        click(el.querySelector('[data-action="layer-lower"][data-index="1"]'));
+        await settle();
+        assert.deepEqual(page.state.doc.slides[0].layers.map((l) => l.type), ['rect', 'text']);
+      });
+
+      test('the property form writes through updateLayer, not into state', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'text'));
+        await settle();
+
+        const before = page.state.doc;
+        const text = el.querySelector('#carousel-layer-text');
+        text.value = 'Swipe →';
+        fire(text, 'change');
+        await settle();
+
+        assert.notStrictEqual(page.state.doc, before, 'a new document was produced');
+        assert.equal(page.state.doc.slides[0].layers[0].text, 'Swipe →');
+
+        const color = el.querySelector('#carousel-layer-color');
+        color.value = '#ff0000';
+        fire(color, 'change');
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers[0].color, '#ff0000');
+      });
+
+      test('a layer renders in the stage and the filmstrip as a positioned element', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'text'));
+        await settle();
+        const textInput = el.querySelector('#carousel-layer-text');
+        textInput.value = 'Hello';
+        fire(textInput, 'change');
+        await settle();
+
+        for (const node of [stageLayer(el, 0, 0), frameLayer(el, 0, 0)]) {
+          assert.ok(node, 'the layer element exists');
+          assert.equal(node.textContent, 'Hello');
+          assert.ok(node.style.left.endsWith('%'), `positioned in percent: ${node.style.left}`);
+          assert.ok(parseFloat(node.style.width) > 0);
+        }
+      });
+
+      test('a layer edit flips the dirty badge without a parallel mechanism', async () => {
+        const el = await renderedDeck();
+        assert.equal(page.state.doc.mode, 'deck');
+        assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean on load');
+
+        click(addLayerBtn(el, 'counter'));
+        await settle();
+        assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'a new layer is a dirty document');
+      });
+
+      test('deleting a layer confirms first, then drops it', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'rect'));
+        await settle();
+
+        let confirmed = null;
+        page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+          confirmed = { variant, onConfirm };
+        };
+        click(el.querySelector('[data-action="delete-layer"][data-index="0"]'));
+        assert.ok(confirmed, 'a confirmation was shown');
+        assert.equal(confirmed.variant, 'danger');
+        assert.equal(page.state.doc.slides[0].layers.length, 1, 'still there until confirmed');
+
+        confirmed.onConfirm();
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 0);
+        assert.equal(page.state.selectedLayer, null);
+        assert.ok(!el.querySelector('.carousel-studio__layer-form'), 'the form is gone');
+      });
+
+      test('picking a slide clears the layer selection', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'text'));
+        await settle();
+        assert.equal(page.state.selectedLayer, 0);
+
+        page._select(2);
+        await settle();
+        assert.equal(page.state.selectedLayer, null, 'a stale index would edit the wrong slide');
+      });
+    });
   });
 });

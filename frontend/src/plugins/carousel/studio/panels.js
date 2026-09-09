@@ -50,6 +50,28 @@ const ASPECT_OPTIONS = [
   ["1.91:1", "Landscape 1.91:1"],
 ];
 
+/** The five layer types, with the label their "Add" chip and list row carry.
+ *  `image` is called "Logo" — the S3 use is a wordmark, and the default source
+ *  is the `logo_url` setting. */
+const LAYER_KINDS = [
+  ["text", "Text"],
+  ["image", "Logo"],
+  ["rect", "Rectangle"],
+  ["counter", "Counter"],
+  ["arrow", "Arrow"],
+];
+
+const LAYER_ALIGNS = [
+  ["left", "Left"],
+  ["center", "Centre"],
+  ["right", "Right"],
+];
+const LAYER_VALIGNS = [
+  ["top", "Top"],
+  ["middle", "Middle"],
+  ["bottom", "Bottom"],
+];
+
 /** `<input type="color">` accepts `#rrggbb` and nothing else, so a shorthand or
  *  alpha hex from the document is widened for display rather than silently
  *  reset to black by the browser. */
@@ -143,6 +165,35 @@ function deckLayers() {
 }
 
 /**
+ * One empty positioned element per layer of `slide`, in paint (array) order so
+ * DOM source order is the stacking order. `preview.js` (`paintDeckLayers`)
+ * fills them from `layerCSS`; an element whose `data-layer` outruns the list —
+ * a layer deleted since the last paint — is hidden there.
+ *
+ * @param {import('../document.js').CarouselSlide} slide
+ */
+function layerNodes(slide) {
+  return (slide.layers || []).map(
+    (_, j) => html`<span class="carousel-studio__layer" data-layer="${String(j)}"></span>`,
+  );
+}
+
+/** A one-line name for a layer row: the type, plus the field that tells two of
+ *  the same type apart. */
+function layerLabel(layer) {
+  if (layer.type === "text") {
+    const t = (layer.text || "").trim().replace(/\s+/g, " ");
+    if (!t) return "Text";
+    return `Text — ${t.length > 24 ? `${t.slice(0, 24)}…` : t}`;
+  }
+  if (layer.type === "image") return "Logo";
+  if (layer.type === "rect") return "Rectangle";
+  if (layer.type === "counter") return `Counter — ${layer.format || "{i}/{n}"}`;
+  if (layer.type === "arrow") return `Arrow ${layer.direction === "left" ? "←" : "→"}`;
+  return layer.type;
+}
+
+/**
  * The builder: mode toggle, stage, filmstrip, the mode's own panel, the
  * doc-level controls, and the strip of slides really in the post.
  *
@@ -156,6 +207,8 @@ function deckLayers() {
  * @param {boolean} o.busy
  * @param {string} o.fitMode       which `FIT_MODES` radio the document reads as
  * @param {boolean} o.hasPad       whether the deck's selected slide letterboxes
+ * @param {number|null} o.selectedLayer  index into the deck slide's `layers`
+ * @param {string} o.logoUrl       the `logo_url` setting, the image layer default
  * @param {string[]} o.renderedPaths
  */
 export function builder({
@@ -168,6 +221,8 @@ export function builder({
   busy,
   fitMode,
   hasPad,
+  selectedLayer,
+  logoUrl,
   renderedPaths,
 }) {
   const deck = doc.mode === "deck";
@@ -197,18 +252,18 @@ export function builder({
   // exactly the continuity check the user now needs.
   const stageSlides = deck
     ? doc.slides.map(
-        (_, i) => html`
+        (slide, i) => html`
           <span
             class="carousel-studio__stage-slide"
             data-slice="${String(i)}"
             style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
-            ${deckLayers()}
+            ${deckLayers()}${layerNodes(slide)}
           </span>`,
       )
     : "";
 
-  const strip = doc.slides.map((_, i) =>
+  const strip = doc.slides.map((slide, i) =>
     deck
       ? html`
           <div
@@ -221,7 +276,7 @@ export function builder({
             aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
             style="aspect-ratio:${String(w)}/${String(h)}"
           >
-            ${deckLayers()}
+            ${deckLayers()}${layerNodes(slide)}
           </div>`
       : html`
           <div
@@ -257,7 +312,12 @@ export function builder({
       <div class="carousel-studio__filmstrip" aria-label="Slide preview">${strip}</div>
 
       ${deck
-        ? deckPanel({ doc, index: deckIndex, hasPad })
+        ? html`${deckPanel({ doc, index: deckIndex, hasPad })}${layerPanel({
+            doc,
+            index: deckIndex,
+            selectedLayer,
+            logoUrl,
+          })}`
         : fitPanel({ doc, srcW, srcH, fitMode })}
 
       <div class="carousel-studio__controls">
@@ -480,6 +540,269 @@ export function bgControl({ index, slide }) {
             </label>`
         : ""}
     </div>`;
+}
+
+/**
+ * Deck mode's layer panel: add / select / reorder / delete for the selected
+ * slide's own layers, and the property form for whichever layer is selected.
+ *
+ * The list is shown **top of stack first**: users think in stacking order and
+ * `slide.layers` is back-to-front, so the view is reversed here, never the
+ * document. "Move up" raises a layer toward the front — a later array index.
+ *
+ * Every add / select / reorder / delete button is a delegated `action`; the
+ * form's fields carry the `#carousel-layer-*` ids `_wireLayerFields`
+ * (`index.js`) binds. The studio never constructs a layer literal — an add goes
+ * through `addLayer` and every edit through `updateLayer` (`document.js`), the
+ * same rule framing keeps.
+ *
+ * @param {{doc: import('../document.js').CarouselDoc, index: number,
+ *   selectedLayer: number|null, logoUrl: string}} o
+ */
+export function layerPanel({ doc, index, selectedLayer, logoUrl }) {
+  const slide = doc.slides[index];
+  if (!slide) return "";
+  const layers = slide.layers || [];
+  const selected = selectedLayer == null ? null : layers[selectedLayer] || null;
+
+  const rows = layers
+    .map((layer, j) => ({ layer, j }))
+    .reverse()
+    .map(
+      ({ layer, j }) => html`
+        <li class="carousel-studio__layer-row ${j === selectedLayer ? "is-selected" : ""}">
+          <button
+            type="button"
+            class="carousel-studio__layer-name"
+            data-action="select-layer"
+            data-index="${String(j)}"
+            aria-pressed="${j === selectedLayer ? "true" : "false"}"
+          >
+            ${layerLabel(layer)}
+          </button>
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="layer-raise"
+            data-index="${String(j)}"
+            aria-label="Move layer up"
+            ${j === layers.length - 1 ? "disabled" : ""}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="layer-lower"
+            data-index="${String(j)}"
+            aria-label="Move layer down"
+            ${j === 0 ? "disabled" : ""}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="delete-layer"
+            data-index="${String(j)}"
+            aria-label="Delete layer"
+          >
+            ✕
+          </button>
+        </li>`,
+    );
+
+  return html`
+    <div class="carousel-studio__layers">
+      <div class="carousel-studio__layers-head">
+        <span class="carousel-studio__bg-label" id="carousel-layers-label">Layers</span>
+        <div class="carousel-studio__fit-chips" role="group" aria-label="Add layer">
+          ${LAYER_KINDS.map(
+            ([type, text]) => html`
+              <button
+                type="button"
+                class="carousel-studio__chip"
+                data-action="add-layer"
+                data-type="${type}"
+              >
+                + ${text}
+              </button>`,
+          )}
+        </div>
+      </div>
+
+      ${layers.length
+        ? html`<ul
+            class="carousel-studio__layer-list"
+            aria-labelledby="carousel-layers-label"
+          >
+            ${rows}
+          </ul>`
+        : html`<p class="carousel-studio__fit-dims">No layers on this slide yet.</p>`}
+
+      ${selected ? layerForm(selected, logoUrl) : ""}
+    </div>`;
+}
+
+/**
+ * The property form for the selected layer, following `bgControl`'s shape: only
+ * the fields that layer's `type` has, each with a `#carousel-layer-*` id
+ * `index.js` wires for a live-preview `input` and a commit-on-`change`.
+ *
+ * @param {import('../document.js').CarouselLayer} layer a normalized layer
+ * @param {string} logoUrl the `logo_url` setting — shown as an `image` layer's
+ *   default source when it carries none of its own
+ */
+export function layerForm(layer, logoUrl) {
+  const t = layer.type;
+  // Narrowed views, the same shape `bgControl` uses for `bg`: a field is only
+  // read on the branch whose type actually has it.
+  const image = layer.type === "image" ? layer : null;
+  const rect = layer.type === "rect" ? layer : null;
+  const arrow = layer.type === "arrow" ? layer : null;
+  const text = layer.type === "text" ? layer : null;
+  const counter = layer.type === "counter" ? layer : null;
+
+  const opacityField = (value) => html`
+    <label class="carousel-studio__bg-field">
+      <span
+        >Opacity:
+        <output id="carousel-layer-opacity-out"
+          >${String(Math.round(value * 100))}%</output
+        ></span
+      >
+      <input
+        type="range"
+        id="carousel-layer-opacity"
+        min="0"
+        max="1"
+        step="0.01"
+        value="${String(value)}"
+      />
+    </label>`;
+
+  const colorField = (id, value) => html`
+    <label class="carousel-studio__bg-field">
+      <span>Colour</span>
+      <input type="color" id="${id}" value="${colorInputValue(value)}" />
+    </label>`;
+
+  const typeStyleFields = (l) => html`
+    ${colorField("carousel-layer-color", l.color)}
+    <label class="carousel-studio__bg-field">
+      <span>Align</span>
+      <select id="carousel-layer-align">
+        ${LAYER_ALIGNS.map(
+          ([v, label]) => html`
+            <option value="${v}" ${v === l.align ? "selected" : ""}>${label}</option>`,
+        )}
+      </select>
+    </label>
+    <label class="carousel-studio__bg-field">
+      <span>Vertical</span>
+      <select id="carousel-layer-valign">
+        ${LAYER_VALIGNS.map(
+          ([v, label]) => html`
+            <option value="${v}" ${v === l.valign ? "selected" : ""}>${label}</option>`,
+        )}
+      </select>
+    </label>
+    <label class="carousel-studio__bg-field">
+      <span
+        >Weight:
+        <output id="carousel-layer-weight-out">${String(l.weight)}</output></span
+      >
+      <input
+        type="range"
+        id="carousel-layer-weight"
+        min="100"
+        max="900"
+        step="50"
+        value="${String(l.weight)}"
+      />
+    </label>
+    <label class="carousel-studio__bg-field carousel-studio__bg-field--check">
+      <input type="checkbox" id="carousel-layer-shadow" ${l.shadow ? "checked" : ""} />
+      <span>Drop shadow</span>
+    </label>`;
+
+  const imageName = image
+    ? image.source
+      ? image.source.split("/").pop()
+      : logoUrl
+        ? "site logo (default)"
+        : "none picked"
+    : "";
+
+  /** @type {import('../../../utils/helpers.js').Slot} */
+  let body = "";
+  if (text) {
+    body = html`
+      <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
+        <span>Text</span>
+        <textarea id="carousel-layer-text" rows="2">${text.text || ""}</textarea>
+      </label>
+      ${typeStyleFields(text)}`;
+  } else if (counter) {
+    body = html`
+      <label class="carousel-studio__bg-field">
+        <span>Format</span>
+        <input type="text" id="carousel-layer-format" value="${counter.format}" />
+      </label>
+      ${typeStyleFields(counter)}`;
+  } else if (image) {
+    body = html`
+      <div class="carousel-studio__bg-field">
+        <span>Source</span>
+        <button type="button" class="btn btn-secondary" data-action="layer-pick-image">
+          Choose image
+        </button>
+        <span class="carousel-studio__fit-dims">${imageName}</span>
+      </div>
+      <label class="carousel-studio__bg-field">
+        <span>Fit</span>
+        <select id="carousel-layer-fit">
+          <option value="contain" ${image.fit === "contain" ? "selected" : ""}>Contain</option>
+          <option value="cover" ${image.fit === "cover" ? "selected" : ""}>Cover</option>
+        </select>
+      </label>
+      ${opacityField(image.opacity)}`;
+  } else if (rect) {
+    body = html`
+      <label class="carousel-studio__bg-field">
+        <span>Fill</span>
+        <input type="color" id="carousel-layer-fill" value="${colorInputValue(rect.fill)}" />
+      </label>
+      <label class="carousel-studio__bg-field">
+        <span
+          >Corner:
+          <output id="carousel-layer-radius-out"
+            >${String(Math.round(rect.radius * 100))}%</output
+          ></span
+        >
+        <input
+          type="range"
+          id="carousel-layer-radius"
+          min="0"
+          max="0.5"
+          step="0.01"
+          value="${String(rect.radius)}"
+        />
+      </label>
+      ${opacityField(rect.opacity)}`;
+  } else if (arrow) {
+    body = html`
+      <label class="carousel-studio__bg-field">
+        <span>Direction</span>
+        <select id="carousel-layer-direction">
+          <option value="right" ${arrow.direction === "right" ? "selected" : ""}>Right</option>
+          <option value="left" ${arrow.direction === "left" ? "selected" : ""}>Left</option>
+        </select>
+      </label>
+      ${colorField("carousel-layer-color", arrow.color)} ${opacityField(arrow.opacity)}`;
+  }
+
+  return html`<div class="carousel-studio__layer-form" data-layer-type="${t}">${body}</div>`;
 }
 
 /**

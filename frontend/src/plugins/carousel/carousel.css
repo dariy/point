@@ -334,6 +334,101 @@
   color: var(--text-secondary);
 }
 
+.carousel-studio__bg-field--wide {
+  flex: 0 0 100%;
+}
+
+.carousel-studio__bg-field--check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.carousel-studio__bg-field textarea {
+  resize: vertical;
+  min-height: 2.5rem;
+}
+
+/* ── Layers ────────────────────────────────────────────────────────────────
+ * Deck mode only: a per-slide list plus the selected layer's property form.
+ * The live preview of each layer is a positioned DOM element inside every
+ * `[data-slice]` host — the CSS twin of `render.js`'s `paintLayers`. */
+.carousel-studio__layers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-card);
+}
+
+.carousel-studio__layers-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.carousel-studio__layer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.carousel-studio__layer-row {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.carousel-studio__layer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.carousel-studio__layer-row.is-selected .carousel-studio__layer-name {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.carousel-studio__layer-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: flex-end;
+}
+
+/* One layer's live preview: positioned in percent of the frame by
+ * `paintDeckLayers`, its content painted by type. `pointer-events: none` keeps
+ * it from intercepting the deck frame's pan gesture (S3 is form-driven; S3.7
+ * adds direct manipulation). The font stack matches the token the renderer
+ * resolves, so preview and JPEG agree on wrap and size within a pixel or two. */
+.carousel-studio__layer {
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  pointer-events: none;
+  font-family: var(--font-family, sans-serif);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 /* ── Render lifecycle ────────────────────────────────────────────────────── */
 
 .carousel-studio__render-btn--dirty {

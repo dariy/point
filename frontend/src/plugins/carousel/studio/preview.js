@@ -13,7 +13,7 @@
  * a media path with a quote in it would otherwise break out of the `url()`.
  */
 
-import { backgroundFit, canvasSize, deckSlideFitCSS } from "../geometry.js";
+import { backgroundFit, canvasSize, deckSlideFitCSS, layerCSS } from "../geometry.js";
 
 /** Behind the source image on the split stage and every split filmstrip frame —
  *  visible only where the image doesn't reach (the `pad` strategy's trailing gap
@@ -155,4 +155,123 @@ function paintDeckBg(bgs, { slide, fit, url, aspect, hasPad }) {
     el.style.backgroundPosition = position || "0% 0%";
     el.style.filter = filter;
   });
+}
+
+/** Flex mapping for a text layer's horizontal / vertical alignment. */
+const FLEX_ALIGN = { left: "flex-start", center: "center", right: "flex-end" };
+const FLEX_VALIGN = { top: "flex-start", middle: "center", bottom: "flex-end" };
+
+/** `{i}` → 1-based slide number, `{n}` → deck length; the twin of `counterText`
+ *  in `render.js`, kept here so this module never imports the canvas layer. */
+function counterFormat(format, index, count) {
+  const f = typeof format === "string" ? format : "";
+  return f.replace(/\{i\}/g, String(index + 1)).replace(/\{n\}/g, String(count));
+}
+
+/**
+ * Paint a slide's own layers as positioned DOM elements over its image — the
+ * CSS twin of `render.js`'s `paintLayers`. Every `.carousel-studio__layer` the
+ * markup placed inside a `[data-slice]` host is resolved through `layerCSS`, so
+ * the preview cannot round a box differently from the canvas, then given the
+ * type's own paint. A `data-layer` index past the end of the list (the layer
+ * was deleted since the last render) hides its element rather than leaving a
+ * stale mark.
+ *
+ * The preview is honest about position, size and wrap; it does not promise
+ * pixel-parity with the canvas' text metrics and does not need to — see
+ * docs/features/carousel-studio.md, S3.
+ *
+ * @param {{hosts: ArrayLike<HTMLElement>}} els  the slide's `[data-slice]`
+ *   elements: the stage slice and the filmstrip frame
+ * @param {{layers: import('../document.js').CarouselLayer[]|undefined,
+ *   aspect: string, index: number, count: number}} o
+ */
+export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
+  const list = Array.isArray(layers) ? layers : [];
+  const [w, h] = canvasSize(aspect);
+  // A layer `size` is a fraction of canvas height; the frame is a `cqw` query
+  // container (carousel.css), and the frame's own aspect is the canvas', so one
+  // unit of canvas height is `(h / w) · 100` cqw of the frame.
+  const heightCqw = w > 0 ? (h / w) * 100 : 100;
+
+  Array.from(hosts).forEach((host) => {
+    const nodes = /** @type {NodeListOf<HTMLElement>} */ (
+      host.querySelectorAll(".carousel-studio__layer")
+    );
+    Array.from(nodes).forEach((el) => {
+      const layer = list[Number(el.dataset.layer)];
+      if (!layer) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "";
+      const box = layerCSS(layer, aspect);
+      el.style.left = `${box.x}%`;
+      el.style.top = `${box.y}%`;
+      el.style.width = `${box.w}%`;
+      el.style.height = `${box.h}%`;
+      paintLayerContent(el, layer, index, count, heightCqw);
+    });
+  });
+}
+
+/**
+ * The per-type paint for one layer element. Every property any branch below can
+ * set is reset first, so a layer that changed type (delete + re-add) does not
+ * inherit the previous mark's styling.
+ *
+ * @param {HTMLElement} el
+ * @param {import('../document.js').CarouselLayer} layer
+ * @param {number} index 0-based slide index (a `counter`'s `{i}`)
+ * @param {number} count slides in the deck (a `counter`'s `{n}`)
+ * @param {number} heightCqw one unit of canvas height in `cqw` of the frame
+ */
+function paintLayerContent(el, layer, index, count, heightCqw) {
+  el.textContent = "";
+  el.style.backgroundImage = "none";
+  el.style.backgroundColor = "transparent";
+  el.style.color = "";
+  el.style.opacity = "";
+  el.style.borderRadius = "";
+  el.style.textShadow = "";
+  el.style.fontWeight = "";
+  el.style.fontSize = "";
+  el.style.lineHeight = "";
+  el.style.textAlign = "";
+  el.style.justifyContent = "";
+  el.style.alignItems = "";
+
+  const cqw = (frac) => `${(frac * heightCqw).toFixed(2)}cqw`;
+
+  if (layer.type === "text" || layer.type === "counter") {
+    el.textContent =
+      layer.type === "counter"
+        ? counterFormat(layer.format, index, count)
+        : layer.text || "";
+    el.style.color = layer.color;
+    el.style.fontWeight = String(layer.weight);
+    el.style.lineHeight = String("lineHeight" in layer ? layer.lineHeight : 1.2);
+    el.style.fontSize = cqw(layer.size == null ? 0.09 : layer.size);
+    el.style.textAlign = layer.align;
+    el.style.justifyContent = FLEX_ALIGN[layer.align] || "flex-start";
+    el.style.alignItems = FLEX_VALIGN[layer.valign] || "flex-start";
+    if (layer.shadow) el.style.textShadow = "0 0.04em 0.12em rgba(0, 0, 0, 0.55)";
+  } else if (layer.type === "rect") {
+    el.style.backgroundColor = layer.fill;
+    el.style.opacity = String(layer.opacity);
+    el.style.borderRadius = `${(layer.radius * 100).toFixed(1)}%`;
+  } else if (layer.type === "image") {
+    el.style.backgroundImage = layer.source ? `url("${encodeURI(layer.source)}")` : "none";
+    el.style.backgroundRepeat = "no-repeat";
+    el.style.backgroundPosition = "center";
+    el.style.backgroundSize = layer.fit === "cover" ? "cover" : "contain";
+    el.style.opacity = String(layer.opacity);
+  } else if (layer.type === "arrow") {
+    el.textContent = layer.direction === "left" ? "❮" : "❯";
+    el.style.color = layer.color;
+    el.style.opacity = String(layer.opacity);
+    el.style.fontSize = cqw(0.5);
+    el.style.justifyContent = "center";
+    el.style.alignItems = "center";
+  }
 }

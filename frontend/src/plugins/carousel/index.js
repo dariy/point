@@ -48,25 +48,29 @@ import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
 import { getPost, updatePost } from "../../api/posts.js";
 import { deleteMedia } from "../../api/media.js";
 import { deleteCarousel, getCarousel, saveCarousel } from "../../api/carousel.js";
-import { setToast } from "../../store.js";
+import { getSettings, setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
-import { canvasSize, deckSlideRects, padRects } from "./geometry.js";
+import { canvasSize, deckSlideRects, padRects, safeAreaRect } from "./geometry.js";
 import {
+  addLayer,
   applyCarouselBlock,
   emptyDocument,
   normalizeDocument,
   parseDocument,
+  removeLayer,
+  reorderLayer,
   serializeDocument,
   specHash,
   splitDocument,
   toDeckDocument,
+  updateLayer,
   updateSlideFraming,
 } from "./document.js";
 import { browserDeps, renderAndUpload } from "./render.js";
 import { DEFAULT_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
 import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
-import { paintDeckSlide, paintSplit } from "./studio/preview.js";
+import { paintDeckLayers, paintDeckSlide, paintSplit } from "./studio/preview.js";
 import { createDeckGestures } from "./studio/gestures.js";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
@@ -181,12 +185,19 @@ export default class CarouselStudioPage extends Component {
       srcW: null,
       srcH: null,
       selected: 0,
+      // Which layer of the selected deck slide the property form is editing, or
+      // null. An index into `slides[selected].layers`, cleared whenever the
+      // slide selection moves (a stale index would edit the wrong layer).
+      selectedLayer: null,
       showGuides: true,
       busy: false,
       renderProgress: null,
       hasCarousel: false,
     };
     this._picker = null;
+    // A second media picker, for an `image` layer's source. Kept apart from
+    // `_picker` (the slide source) so confirming one cannot swap the other.
+    this._layerPicker = null;
     // The `rendered` block of every slide the *saved* document points at — the
     // slides really in the post right now. Two readers: the "Rendered slides"
     // strip, and the cleanup a re-render owes (see _render), which takes only
@@ -258,6 +269,26 @@ export default class CarouselStudioPage extends Component {
         fit: "cover",
       });
     },
+    "add-layer"(_e, el) {
+      this._addLayer(el.dataset.type);
+    },
+    "select-layer"(_e, el) {
+      this._selectLayer(Number(el.dataset.index));
+    },
+    "layer-raise"(_e, el) {
+      const j = Number(el.dataset.index);
+      this._reorderLayer(j, j + 1);
+    },
+    "layer-lower"(_e, el) {
+      const j = Number(el.dataset.index);
+      this._reorderLayer(j, j - 1);
+    },
+    "delete-layer"(_e, el) {
+      this._confirmDeleteLayer(Number(el.dataset.index));
+    },
+    "layer-pick-image"() {
+      this._openLayerPicker();
+    },
   };
 
   mount() {
@@ -268,6 +299,8 @@ export default class CarouselStudioPage extends Component {
   beforeUnmount() {
     this._picker?.destroy();
     this._picker = null;
+    this._layerPicker?.destroy();
+    this._layerPicker = null;
     this._gestures.destroy();
   }
 
@@ -485,9 +518,127 @@ export default class CarouselStudioPage extends Component {
   }
 
   /** Select a slide, if that is a change — the deck panel follows the selection,
-   *  so this re-renders and must never run mid-gesture. */
+   *  so this re-renders and must never run mid-gesture. The layer selection is
+   *  an index into *this* slide's list, so it cannot survive the move. */
   _select(i) {
-    if (this.state.selected !== i) this.setState({ selected: i });
+    if (this.state.selected !== i) this.setState({ selected: i, selectedLayer: null });
+  }
+
+  // ── Layers (deck mode) ────────────────────────────────────────────────────
+
+  /**
+   * A fresh layer of `type`, its box landed inside the slide's `safeAreaRect`
+   * (`geometry.js`) rather than at the origin — a layer outside the frame's
+   * honest bounds is one the user has to move before it is any use. Only the
+   * `box` (and an `image` layer's default source) is set here; every other
+   * field is `normalizeLayer`'s to fill, because the studio never authors a
+   * layer literal — see `addLayer` in `document.js`.
+   *
+   * @param {string} type one of `LAYER_TYPES`
+   */
+  _defaultLayer(type) {
+    const { aspect } = this.state.doc;
+    const [w, h] = canvasSize(aspect);
+    const sa = safeAreaRect(aspect);
+    const fx = sa.x / w;
+    const fy = sa.y / h;
+    const fw = sa.w / w;
+    const fh = sa.h / h;
+    const boxes = {
+      text: { x: fx, y: fy + fh * 0.5, w: fw, h: fh * 0.3 },
+      counter: { x: fx, y: fy + fh * 0.86, w: fw, h: fh * 0.14 },
+      image: { x: fx, y: fy, w: fw * 0.32, h: fh * 0.16 },
+      rect: { x: fx, y: fy + fh * 0.45, w: fw, h: fh * 0.4 },
+      arrow: { x: fx + fw * 0.82, y: fy + fh * 0.42, w: fw * 0.18, h: fh * 0.16 },
+    };
+    const layer = { type, box: boxes[type] || { x: fx, y: fy, w: fw, h: fh } };
+    if (type === "image") {
+      const logo = getSettings()?.logo_url;
+      if (logo) layer.source = logo;
+    }
+    return layer;
+  }
+
+  /** Add a layer to the selected slide and select it — a new layer lands on top
+   *  of the stack (`addLayer` appends), which is the row at the top of the list. */
+  _addLayer(type) {
+    const i = this._selectedIndex();
+    const doc = addLayer(this.state.doc, i, this._defaultLayer(type));
+    const layers = doc.slides[i]?.layers || [];
+    this.setState({ doc, selectedLayer: layers.length ? layers.length - 1 : null });
+  }
+
+  _selectLayer(j) {
+    if (this.state.selectedLayer !== j) this.setState({ selectedLayer: j });
+  }
+
+  /**
+   * Move the selected slide's layer from `from` to `to` in paint order,
+   * keeping the selection on whichever layer the user was pointing at. `to`
+   * out of range is a no-op — the list's end buttons are disabled, this is the
+   * belt-and-braces.
+   */
+  _reorderLayer(from, to) {
+    const i = this._selectedIndex();
+    const list = this.state.doc.slides[i]?.layers || [];
+    if (to < 0 || to >= list.length) return;
+    const doc = reorderLayer(this.state.doc, i, from, to);
+    let sel = this.state.selectedLayer;
+    if (sel === from) sel = to;
+    else if (sel > from && sel <= to) sel -= 1;
+    else if (sel < from && sel >= to) sel += 1;
+    this.setState({ doc, selectedLayer: sel });
+  }
+
+  _confirmDeleteLayer(j) {
+    this._showConfirm(
+      "Delete layer",
+      "This removes the layer from the slide. It cannot be undone.",
+      "Delete layer",
+      "danger",
+      () => this._removeLayer(j),
+    );
+  }
+
+  _removeLayer(j) {
+    const i = this._selectedIndex();
+    const doc = removeLayer(this.state.doc, i, j);
+    let sel = this.state.selectedLayer;
+    if (sel === j) sel = null;
+    else if (sel != null && sel > j) sel -= 1;
+    this.setState({ doc, selectedLayer: sel });
+  }
+
+  /** The single writer for a layer's fields — every property-form commit lands
+   *  here, and clamping/normalizing is `updateLayer`'s job, not the caller's. */
+  _setLayer(patch) {
+    const i = this._selectedIndex();
+    const j = this.state.selectedLayer;
+    if (j == null) return;
+    this.setState({ doc: updateLayer(this.state.doc, i, j, patch) });
+  }
+
+  /** The selected slide index, its selected layer index, and that layer (or
+   *  null) — the three things every layer-field handler needs. */
+  _selectedLayerRef() {
+    const i = this._selectedIndex();
+    const j = this.state.selectedLayer;
+    const layer = j == null ? null : this.state.doc.slides[i]?.layers?.[j] || null;
+    return { i, j, layer };
+  }
+
+  _openLayerPicker() {
+    if (this.state.selectedLayer == null) return;
+    if (!this._layerPicker) {
+      this._layerPicker = new MediaPickerDialog({
+        onConfirm: (items) => {
+          const img = (items || []).find((m) => isImagePath(m?.path));
+          if (img) this._setLayer({ source: img.path });
+        },
+      });
+      this._layerPicker.mount();
+    }
+    this._layerPicker.open();
   }
 
   /**
@@ -750,7 +901,7 @@ export default class CarouselStudioPage extends Component {
   /** Everything the builder markup needs, read off the state in one place —
    *  `studio/panels.js` answers no questions about the page itself. */
   _renderBuilder() {
-    const { doc, showGuides, selected, srcW, srcH, busy } = this.state;
+    const { doc, showGuides, selected, srcW, srcH, busy, selectedLayer } = this.state;
     const deckIndex = this._selectedIndex();
     return builder({
       doc,
@@ -762,6 +913,8 @@ export default class CarouselStudioPage extends Component {
       busy,
       fitMode: this._currentFitMode(),
       hasPad: this._hasPad(doc.slides[deckIndex]),
+      selectedLayer,
+      logoUrl: getSettings()?.logo_url || "",
       renderedPaths: this._renderedPaths(),
     });
   }
@@ -834,6 +987,22 @@ export default class CarouselStudioPage extends Component {
       },
       { slide, srcW, srcH, aspect: this.state.doc.aspect, hasPad: this._hasPad(slide) },
     );
+    this._paintDeckSlideLayers(i, slide.layers);
+  }
+
+  /** Paint one slide's layers onto both elements that show it. Split out so a
+   *  live property-form edit can repaint with a provisional list without
+   *  touching the crop. */
+  _paintDeckSlideLayers(i, layers) {
+    paintDeckLayers(
+      { hosts: this.$$(`[data-slice="${i}"]`) },
+      {
+        layers,
+        aspect: this.state.doc.aspect,
+        index: i,
+        count: this.state.doc.slides.length,
+      },
+    );
   }
 
   // ── Control wiring ────────────────────────────────────────────────────────
@@ -881,6 +1050,114 @@ export default class CarouselStudioPage extends Component {
     }
 
     this._wireBgFields();
+    this._wireLayerFields();
+  }
+
+  /**
+   * The selected layer's property-form fields. Same split as every other live
+   * control: `input` repaints that one layer's DOM elements from a provisional
+   * patch, `change` commits it through `updateLayer`. `text`'s `source` is set
+   * by the media picker, not a field here, so it is not in this list.
+   */
+  _wireLayerFields() {
+    const ids = [
+      "#carousel-layer-text",
+      "#carousel-layer-format",
+      "#carousel-layer-color",
+      "#carousel-layer-fill",
+      "#carousel-layer-align",
+      "#carousel-layer-valign",
+      "#carousel-layer-weight",
+      "#carousel-layer-shadow",
+      "#carousel-layer-fit",
+      "#carousel-layer-direction",
+      "#carousel-layer-radius",
+      "#carousel-layer-opacity",
+    ];
+    const fields = ids.map((sel) => this.$(sel)).filter(Boolean);
+
+    for (const el of fields) {
+      this.on(el, "input", () => {
+        const { i, j, layer } = this._selectedLayerRef();
+        if (!layer) return;
+        this._syncLayerOutputs();
+        const list = this.state.doc.slides[i].layers.map((l, k) =>
+          k === j ? { ...l, ...this._layerFromFields(layer) } : l,
+        );
+        this._paintDeckSlideLayers(i, list);
+      });
+      this.on(el, "change", () => {
+        const { layer } = this._selectedLayerRef();
+        if (layer) this._setLayer(this._layerFromFields(layer));
+      });
+    }
+  }
+
+  /** Mirror the layer form's range values into their `<output>`s while dragging,
+   *  before the change commits and rebuilds. */
+  _syncLayerOutputs() {
+    const put = (sel, text) => {
+      const out = this.$(sel);
+      if (out) out.textContent = text;
+    };
+    const opacity = /** @type {HTMLInputElement|null} */ (this.$("#carousel-layer-opacity"));
+    if (opacity) put("#carousel-layer-opacity-out", `${Math.round(Number(opacity.value) * 100)}%`);
+    const weight = /** @type {HTMLInputElement|null} */ (this.$("#carousel-layer-weight"));
+    if (weight) put("#carousel-layer-weight-out", weight.value);
+    const radius = /** @type {HTMLInputElement|null} */ (this.$("#carousel-layer-radius"));
+    if (radius) put("#carousel-layer-radius-out", `${Math.round(Number(radius.value) * 100)}%`);
+  }
+
+  /**
+   * The patch the layer form's fields currently describe, keyed by the layer's
+   * own `type`. Reads the DOM rather than an event, so one handler serves every
+   * field. A value the schema rejects (an empty number field) is left to
+   * `updateLayer` to drop back to the layer's own — its `base` argument.
+   *
+   * @param {import('./document.js').CarouselLayer} layer
+   * @returns {object}
+   */
+  _layerFromFields(layer) {
+    const val = (sel) => {
+      const el = /** @type {HTMLInputElement|null} */ (this.$(sel));
+      return el ? el.value : undefined;
+    };
+    const checked = (sel) => {
+      const el = /** @type {HTMLInputElement|null} */ (this.$(sel));
+      return el ? el.checked : undefined;
+    };
+    const t = layer.type;
+
+    if (t === "text" || t === "counter") {
+      const style = {
+        color: val("#carousel-layer-color"),
+        align: val("#carousel-layer-align"),
+        valign: val("#carousel-layer-valign"),
+        weight: Number(val("#carousel-layer-weight")),
+        shadow: checked("#carousel-layer-shadow"),
+      };
+      return t === "text"
+        ? { ...style, text: val("#carousel-layer-text") ?? layer.text }
+        : { ...style, format: val("#carousel-layer-format") ?? layer.format };
+    }
+    if (t === "image") {
+      return { fit: val("#carousel-layer-fit"), opacity: Number(val("#carousel-layer-opacity")) };
+    }
+    if (t === "rect") {
+      return {
+        fill: val("#carousel-layer-fill"),
+        radius: Number(val("#carousel-layer-radius")),
+        opacity: Number(val("#carousel-layer-opacity")),
+      };
+    }
+    if (t === "arrow") {
+      return {
+        direction: val("#carousel-layer-direction"),
+        color: val("#carousel-layer-color"),
+        opacity: Number(val("#carousel-layer-opacity")),
+      };
+    }
+    return {};
   }
 
   /**
