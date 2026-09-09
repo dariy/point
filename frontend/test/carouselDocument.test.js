@@ -348,6 +348,26 @@ describe('splitDocument', () => {
     assert.strictEqual(doc.strategy, 'cover');
     assert.strictEqual(doc.anchorY, 1);
   });
+
+  test('carries span layers through unchanged — a re-slice re-flows the headline, not drops it', () => {
+    const span = [
+      { type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'Across the seam' },
+    ];
+    const four = splitDocument({ source: '/x.jpg', n: 4, aspect: '4:5', spanLayers: span });
+    assert.strictEqual(four.spanLayers.length, 1);
+    assert.strictEqual(four.spanLayers[0].text, 'Across the seam');
+    // The studio passes the current document's span layers back in on every
+    // re-slice; a smaller count keeps them (the box is deck-normalized).
+    const two = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5', spanLayers: four.spanLayers });
+    assert.deepStrictEqual(two.spanLayers, four.spanLayers);
+  });
+
+  test('no span layers is an empty list, not undefined', () => {
+    assert.deepStrictEqual(
+      splitDocument({ source: '/x.jpg', n: 3, aspect: '4:5' }).spanLayers,
+      [],
+    );
+  });
 });
 
 describe('toDeckDocument', () => {

@@ -13,7 +13,13 @@
  * a media path with a quote in it would otherwise break out of the `url()`.
  */
 
-import { backgroundFit, canvasSize, deckSlideFitCSS, layerCSS } from "../geometry.js";
+import {
+  backgroundFit,
+  canvasSize,
+  deckSlideFitCSS,
+  layerCSS,
+  spanLayerRect,
+} from "../geometry.js";
 
 /** Behind the source image on the split stage and every split filmstrip frame —
  *  visible only where the image doesn't reach (the `pad` strategy's trailing gap
@@ -210,6 +216,48 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
       el.style.top = `${box.y}%`;
       el.style.width = `${box.w}%`;
       el.style.height = `${box.h}%`;
+      paintLayerContent(el, layer, index, count, heightCqw);
+    });
+  });
+}
+
+/**
+ * Paint the deck's spanning layers over one slide's `[data-slice]` hosts — the
+ * CSS twin of `render.js`'s `paintSpanLayers`. Each `.carousel-studio__span-layer`
+ * node is resolved through `spanLayerRect`: a slide-local rect that starts
+ * off-frame and overflows the width where the layer crosses a seam, so the
+ * host's `overflow: hidden` clips it exactly where the JPEG's frame edge will.
+ * A node that resolves to `null` (the layer misses this slide) or has no layer
+ * behind it (deleted since the last render) is hidden.
+ *
+ * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
+ * @param {{spanLayers: import('../document.js').CarouselLayer[]|undefined,
+ *   aspect: string, index: number, count: number, selected: number|null}} o
+ *   `selected` is the span-layer index the panel is editing, or `null`
+ */
+export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, selected }) {
+  const list = Array.isArray(spanLayers) ? spanLayers : [];
+  const [w, h] = canvasSize(aspect);
+  const heightCqw = w > 0 ? (h / w) * 100 : 100;
+
+  Array.from(hosts).forEach((host) => {
+    const nodes = /** @type {NodeListOf<HTMLElement>} */ (
+      host.querySelectorAll(".carousel-studio__span-layer")
+    );
+    Array.from(nodes).forEach((el) => {
+      const j = Number(el.dataset.spanLayer);
+      const layer = list[j];
+      const rect = layer ? spanLayerRect(layer, index, count, aspect) : null;
+      if (!rect) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "";
+      el.classList.toggle("is-selected", selected === j);
+      el.style.left = `${(rect.x / w) * 100}%`;
+      el.style.top = `${(rect.y / h) * 100}%`;
+      el.style.width = `${(rect.w / w) * 100}%`;
+      el.style.height = `${(rect.h / h) * 100}%`;
       paintLayerContent(el, layer, index, count, heightCqw);
     });
   });

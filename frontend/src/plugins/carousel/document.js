@@ -569,11 +569,17 @@ export function applyCarouselBlock(content, doc) {
  * covers so the document is self-describing and every slide's `specHash` is
  * distinct (equal hashes would collapse under the C8 re-render dedup).
  *
+ * `spanLayers` are carried through unchanged: their box is normalized to the
+ * **deck**, not to a slide count, so re-slicing to a different `n` re-flows the
+ * same headline across the new seams rather than dropping it (S3). The studio
+ * passes the current document's span layers in on every re-slice.
+ *
  * @param {{ source: string, n: number, aspect: string,
- *   strategy?: 'cover'|'exact'|'pad', anchorY?: number }} spec
+ *   strategy?: 'cover'|'exact'|'pad', anchorY?: number,
+ *   spanLayers?: CarouselLayer[] }} spec
  * @returns {CarouselDoc}
  */
-export function splitDocument({ source, n, aspect, strategy, anchorY }) {
+export function splitDocument({ source, n, aspect, strategy, anchorY, spanLayers }) {
   const count = Math.max(1, Math.floor(n));
   return normalizeDocument({
     version: DOC_VERSION,
@@ -585,6 +591,7 @@ export function splitDocument({ source, n, aspect, strategy, anchorY }) {
       source,
       crop: { x: i / count, y: 0, w: 1 / count, h: 1 },
     })),
+    spanLayers,
   });
 }
 

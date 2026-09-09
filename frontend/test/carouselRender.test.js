@@ -1213,6 +1213,72 @@ describe('layers through the sequencers', () => {
     assert.strictEqual(f.fontCalls.count, 0, 'nothing to typeset, nothing to await');
     assert.strictEqual(f.log.filter((e) => e[0] === 'stroke').length, 1);
   });
+
+  describe('span layers', () => {
+    const spanRect = normalizeLayer({
+      type: 'rect',
+      box: { x: 0.3, y: 0.4, w: 0.4, h: 0.2 },
+      fill: '#123456',
+    });
+
+    test('a span layer paints on every slide it crosses, sliced continuously', async () => {
+      const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+      const doc = { ...deckOf('/x.jpg', 3, '4:5', 3000, 1000), spanLayers: [spanRect] };
+      await renderDeck(doc, f.deps);
+
+      // One fillRect per surface — the span rect, sliced to that slide. 3240px
+      // deck box 972..2268; every slice is 1296 wide and offset by one 1080px
+      // slide, so the seam is continuous.
+      const rects = surfaces(f.log).map((seg) => seg.find((e) => e[0] === 'fillRect'));
+      assert.deepStrictEqual(rects, [
+        ['fillRect', 972, 540, 1296, 270],
+        ['fillRect', -108, 540, 1296, 270],
+        ['fillRect', -1188, 540, 1296, 270],
+      ]);
+    });
+
+    test('a span layer paints after the slide’s own layers', async () => {
+      const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+      const doc = { ...deckOf('/x.jpg', 2, '4:5', 3000, 1000), spanLayers: [spanRect] };
+      doc.slides[0].layers = [textLayer({ text: 'own' })];
+      await renderDeck(doc, f.deps);
+
+      const [first] = surfaces(f.log);
+      assert.ok(
+        first.findIndex((e) => e[0] === 'fillText') < first.findIndex((e) => e[0] === 'fillRect'),
+        'the span mark composites over the slide’s own type',
+      );
+    });
+
+    test('a span layer that misses a slide is not painted there', async () => {
+      const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+      const head = normalizeLayer({ type: 'rect', box: { x: 0, y: 0.1, w: 0.2, h: 0.2 }, fill: '#111' });
+      const doc = { ...deckOf('/x.jpg', 3, '4:5', 3000, 1000), spanLayers: [head] };
+      await renderDeck(doc, f.deps);
+
+      const rectCounts = surfaces(f.log).map((seg) => seg.filter((e) => e[0] === 'fillRect').length);
+      assert.deepStrictEqual(rectCounts, [1, 0, 0], 'only the head slide carries it');
+    });
+
+    test('the split path slices span layers too', async () => {
+      const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+      const doc = { ...splitDocument({ source: '/x.jpg', n: 3, aspect: '4:5' }), spanLayers: [spanRect] };
+      await renderCarousel(doc, f.deps);
+
+      const xs = surfaces(f.log).map((seg) => seg.find((e) => e[0] === 'fillRect')[1]);
+      assert.deepStrictEqual(xs, [972, -108, -1188]);
+    });
+
+    test('a span text layer makes the render wait on a font', async () => {
+      const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+      const doc = {
+        ...deckOf('/x.jpg', 2, '4:5', 3000, 1000),
+        spanLayers: [normalizeLayer({ type: 'text', text: 'Big', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 } })],
+      };
+      await renderDeck(doc, f.deps);
+      assert.strictEqual(f.fontCalls.count, 1, 'a span headline is typeset like any other');
+    });
+  });
 });
 
 describe('renderAndUpload', () => {

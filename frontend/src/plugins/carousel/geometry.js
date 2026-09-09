@@ -844,6 +844,27 @@ export function spanLayerRect(layer, i, n, aspect) {
 }
 
 /**
+ * The indices of the slides a spanning layer actually reaches, in a deck of `n`.
+ * The studio uses it two ways: to label a span row ("slides 2–3") and to flag
+ * one that reaches no slide at all as off-canvas rather than silently dropping
+ * it. Contiguous by construction — a layer box is one rectangle — so the array
+ * is `[]` or a run of consecutive indices.
+ *
+ * @param {BoxedLayer} layer a normalized layer; only its `box` is read
+ * @param {number} n slides in the deck (clamped to at least 1)
+ * @param {string} aspect aspect key
+ * @returns {number[]} covered slide indices, ascending
+ */
+export function spanLayerCoverage(layer, n, aspect) {
+  const count = Math.max(1, Math.floor(num(n, 1)));
+  const covered = [];
+  for (let i = 0; i < count; i++) {
+    if (spanLayerRect(layer, i, count, aspect)) covered.push(i);
+  }
+  return covered;
+}
+
+/**
  * Clamp a normalized crop rect (all fields 0..1, relative to the source) so it
  * stays fully inside the source however it was panned or zoomed. Width and
  * height are pinned to at least one source pixel and at most the whole image;

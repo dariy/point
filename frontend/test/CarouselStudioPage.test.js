@@ -1515,6 +1515,123 @@ describe('CarouselStudioPage', () => {
           );
         });
       });
+
+      // ── Span layers (S3.8) ───────────────────────────────────────────────
+      describe('span layers', () => {
+        const spanRow = (el, action, index) =>
+          el.querySelector(
+            `[data-action="${action}"][data-scope="span"][data-index="${index}"]`,
+          );
+
+        test('adding a deck layer lands in doc.spanLayers, not a slide', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+          await settle();
+
+          assert.equal(page.state.doc.spanLayers.length, 1);
+          assert.equal(page.state.doc.spanLayers[0].type, 'text');
+          assert.ok(
+            page.state.doc.slides.every((s) => (s.layers || []).length === 0),
+            'no slide gained a layer',
+          );
+          assert.equal(page.state.layerScope, 'span');
+          assert.equal(page.state.selectedLayer, 0);
+          assert.ok(el.querySelector('.carousel-studio__layer-form[data-layer-type="text"]'));
+        });
+
+        test('a span layer renders as a positioned element on every frame it crosses', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          await settle();
+          // The default span box is 0.06..0.94 of the deck — it crosses all 3.
+          const lefts = [0, 1, 2].map((i) => {
+            const node = el.querySelector(
+              `.carousel-studio__stage-slide[data-slice="${i}"] .carousel-studio__span-layer[data-span-layer="0"]`,
+            );
+            assert.ok(node && node.style.display !== 'none', `slide ${i} shows the span layer`);
+            return parseFloat(node.style.left);
+          });
+          // Each slice positions in its own frame, so a one-slide-width offset
+          // is a full 100% of the frame — that is the continuous seam.
+          assert.ok(Math.abs((lefts[0] - lefts[1]) - 100) < 0.5, `${lefts}`);
+          assert.ok(Math.abs((lefts[1] - lefts[2]) - 100) < 0.5, `${lefts}`);
+        });
+
+        test('editing a span layer re-hashes every slide, so a re-render re-uploads them all', async () => {
+          const el = await renderedDeck(3);
+          assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean after load');
+
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          await settle();
+          assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'a span layer is a dirty document');
+
+          // A ctx that no-ops every draw call and measures text, so a slide
+          // carrying a real layer actually paints instead of throwing.
+          const paintCtx = () =>
+            new Proxy(
+              { font: '' },
+              {
+                get: (t, p) =>
+                  p === 'measureText'
+                    ? (s) => ({ width: String(s).length * 5 })
+                    : p in t
+                      ? t[p]
+                      : () => {},
+                set: (t, p, v) => {
+                  t[p] = v;
+                  return true;
+                },
+              },
+            );
+          let uploads = 0;
+          const deps = {
+            ...fakeRenderDeps(async () => {
+              uploads += 1;
+              return { id: 700 + uploads, path: `/2026/08/new${uploads}.jpg` };
+            }),
+            makeSurface: () => ({ canvas: {}, ctx: paintCtx() }),
+            probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+          };
+          page.props.renderDeps = deps;
+          await page._render();
+          await settle();
+          assert.equal(uploads, 3, 'the span layer invalidated every cached slide');
+        });
+
+        test('reorder and delete on a span row route to the span list', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+          await settle();
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          await settle();
+          assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['text', 'rect']);
+
+          click(spanRow(el, 'layer-lower', '1'));
+          await settle();
+          assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['rect', 'text']);
+
+          page._removeLayer(0, 'span');
+          await settle();
+          assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['text']);
+        });
+
+        test('switching back to split keeps the deck layers', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+          await settle();
+
+          let confirmed = null;
+          page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+            confirmed = { onConfirm };
+          };
+          click(el.querySelector('[data-action="mode"][data-mode="split"]'));
+          confirmed.onConfirm();
+          await settle();
+
+          assert.equal(page.state.doc.mode, 'split');
+          assert.equal(page.state.doc.spanLayers.length, 1, 're-slicing keeps the headline');
+        });
+      });
     });
   });
 });

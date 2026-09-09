@@ -18,10 +18,16 @@ import {
   colorInputValue,
   deckPanel,
   fitPanel,
+  layerPanel,
   modeToggle,
   pickPrompt,
 } from '../src/plugins/carousel/studio/panels.js';
-import { emptyDocument, splitDocument } from '../src/plugins/carousel/document.js';
+import {
+  emptyDocument,
+  normalizeLayer,
+  splitDocument,
+  toDeckDocument,
+} from '../src/plugins/carousel/document.js';
 
 const doc3 = splitDocument({ source: '/m/x.jpg', n: 3, aspect: '4:5', strategy: 'cover' });
 
@@ -262,6 +268,58 @@ describe('carousel studio panels', () => {
         str(builder({ ...builderProps, showGuides: false })),
         /carousel-studio__safe/,
       );
+    });
+
+    test('deck mode emits a span-layer node per frame for each span layer', () => {
+      const deck = {
+        ...toDeckDocument(doc3, 3000, 1000),
+        spanLayers: [normalizeLayer({ type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'H' })],
+      };
+      const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
+      const nodes = out.match(/carousel-studio__span-layer" data-span-layer="0"/g) || [];
+      // one per stage slice and one per filmstrip frame — 3 slides → 6.
+      assert.strictEqual(nodes.length, 6);
+    });
+  });
+
+  describe('layerPanel — span layers', () => {
+    const deck = toDeckDocument(doc3, 3000, 1000);
+    const spanText = normalizeLayer({
+      type: 'text',
+      box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 },
+      text: 'Big idea',
+    });
+
+    test('renders a deck-layer list alongside the slide list, span-scoped', () => {
+      const out = str(layerPanel({ doc: { ...deck, spanLayers: [spanText] }, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
+      assert.match(out, /Slide 1 layers/);
+      assert.match(out, /Deck layers/);
+      // every add / select / reorder / delete in the span section carries the scope.
+      assert.match(out, /data-action="add-layer"[\s\S]*?data-scope="span"/);
+      assert.match(out, /data-action="select-layer"\s+data-scope="span"\s+data-index="0"/);
+      assert.match(out, /data-action="delete-layer"\s+data-scope="span"/);
+    });
+
+    test('a span row is labelled with the slides it spans', () => {
+      const out = str(layerPanel({ doc: { ...deck, spanLayers: [spanText] }, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
+      assert.match(out, /slides 1–3/);
+    });
+
+    test('the property form follows the active scope', () => {
+      const spanSel = str(layerPanel({ doc: { ...deck, spanLayers: [spanText] }, index: 0, selectedLayer: 0, layerScope: 'span', logoUrl: '' }));
+      // span layer 0 selected → its text form is shown.
+      assert.match(spanSel, /carousel-studio__layer-form[\s\S]*?carousel-layer-text/);
+      // the same index in slide scope names no slide layer → no form.
+      assert.doesNotMatch(
+        str(layerPanel({ doc: { ...deck, spanLayers: [spanText] }, index: 0, selectedLayer: 0, layerScope: 'slide', logoUrl: '' })),
+        /carousel-studio__layer-form/,
+      );
+    });
+
+    test('no span layers still offers the add chips and an explainer', () => {
+      const out = str(layerPanel({ doc: deck, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
+      assert.match(out, /data-action="add-layer"[\s\S]*?data-scope="span"/);
+      assert.match(out, /runs across the seams/);
     });
   });
 });

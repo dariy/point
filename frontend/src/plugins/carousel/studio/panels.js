@@ -15,7 +15,13 @@
 
 import { html, raw } from "../../../utils/helpers.js";
 import { REFRESH_SVG } from "../../../utils/icons.js";
-import { canvasSize, fitReport, safeAreaRect, slideCountOptions } from "../geometry.js";
+import {
+  canvasSize,
+  fitReport,
+  safeAreaRect,
+  slideCountOptions,
+  spanLayerCoverage,
+} from "../geometry.js";
 import { MAX_SLIDES, MIN_SLIDES } from "./bounds.js";
 
 /** Fit-panel radio: the two `cover` variants (free count vs. width-filling
@@ -178,6 +184,23 @@ function layerNodes(slide) {
   );
 }
 
+/**
+ * One empty positioned element per span layer, inside every `[data-slice]` host.
+ * `preview.js` (`paintSpanLayers`) positions each from `spanLayerRect` — a
+ * slide-local rect that starts off-frame and overflows where the layer crosses a
+ * seam, which the host's `overflow: hidden` then clips, so the preview shows the
+ * same discontinuity the JPEG will. A node whose `data-span-layer` outruns the
+ * list is hidden there.
+ *
+ * @param {import('../document.js').CarouselDoc} doc
+ */
+function spanLayerNodes(doc) {
+  return (doc.spanLayers || []).map(
+    (_, j) =>
+      html`<span class="carousel-studio__span-layer" data-span-layer="${String(j)}"></span>`,
+  );
+}
+
 /** The eight resize-handle anchors, in DOM order. `hitLayer` in `gestures.js`
  *  derives the same set geometrically — these are the visible affordance, not
  *  the hit target. */
@@ -237,7 +260,9 @@ function layerLabel(layer) {
  * @param {boolean} o.busy
  * @param {string} o.fitMode       which `FIT_MODES` radio the document reads as
  * @param {boolean} o.hasPad       whether the deck's selected slide letterboxes
- * @param {number|null} o.selectedLayer  index into the deck slide's `layers`
+ * @param {number|null} o.selectedLayer  index into the active list (a slide's
+ *   `layers`, or `doc.spanLayers` when `layerScope` is `"span"`)
+ * @param {"slide"|"span"} o.layerScope  which list `selectedLayer` indexes
  * @param {string} o.logoUrl       the `logo_url` setting, the image layer default
  * @param {string[]} o.renderedPaths
  */
@@ -252,12 +277,15 @@ export function builder({
   fitMode,
   hasPad,
   selectedLayer,
+  layerScope = "slide",
   logoUrl,
   renderedPaths,
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
   const [w, h] = canvasSize(doc.aspect);
+  const slideChrome = layerScope === "slide" && selectedLayer != null;
+  const spanNodes = spanLayerNodes(doc);
 
   const dividers = Array.from({ length: n - 1 }, (_, i) => {
     const left = ((i + 1) / n) * 100;
@@ -288,8 +316,8 @@ export function builder({
             data-slice="${String(i)}"
             style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
-            ${deckLayers()}${layerNodes(slide)}${layerChrome(
-              i === deckIndex && selectedLayer != null,
+            ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
+              i === deckIndex && slideChrome,
             )}
           </span>`,
       )
@@ -308,8 +336,8 @@ export function builder({
             aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
             style="aspect-ratio:${String(w)}/${String(h)}"
           >
-            ${deckLayers()}${layerNodes(slide)}${layerChrome(
-              i === deckIndex && selectedLayer != null,
+            ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
+              i === deckIndex && slideChrome,
             )}
           </div>`
       : html`
@@ -350,6 +378,7 @@ export function builder({
             doc,
             index: deckIndex,
             selectedLayer,
+            layerScope,
             logoUrl,
           })}`
         : fitPanel({ doc, srcW, srcH, fitMode })}
@@ -576,29 +605,25 @@ export function bgControl({ index, slide }) {
     </div>`;
 }
 
-/**
- * Deck mode's layer panel: add / select / reorder / delete for the selected
- * slide's own layers, and the property form for whichever layer is selected.
- *
- * The list is shown **top of stack first**: users think in stacking order and
- * `slide.layers` is back-to-front, so the view is reversed here, never the
- * document. "Move up" raises a layer toward the front — a later array index.
- *
- * Every add / select / reorder / delete button is a delegated `action`; the
- * form's fields carry the `#carousel-layer-*` ids `_wireLayerFields`
- * (`index.js`) binds. The studio never constructs a layer literal — an add goes
- * through `addLayer` and every edit through `updateLayer` (`document.js`), the
- * same rule framing keeps.
- *
- * @param {{doc: import('../document.js').CarouselDoc, index: number,
- *   selectedLayer: number|null, logoUrl: string}} o
- */
-export function layerPanel({ doc, index, selectedLayer, logoUrl }) {
-  const slide = doc.slides[index];
-  if (!slide) return "";
-  const layers = slide.layers || [];
-  const selected = selectedLayer == null ? null : layers[selectedLayer] || null;
+/** A one-line "spans slides 2–3" (or "off-canvas") hint for a span row. */
+function spanRangeLabel(covered) {
+  if (!covered.length) return "off-canvas";
+  const first = covered[0] + 1;
+  const last = covered[covered.length - 1] + 1;
+  return first === last ? `slide ${first}` : `slides ${first}–${last}`;
+}
 
+/**
+ * One "top of stack first" list of layer rows, its buttons all tagged with
+ * `data-scope` so the delegated handlers in `index.js` route an edit to the
+ * slide's own `layers` or to `doc.spanLayers` without a second family of
+ * actions. `meta(j)` is an optional trailing note per row (the span range).
+ *
+ * @param {import('../document.js').CarouselLayer[]} layers
+ * @param {{scope: "slide"|"span", selectedLayer: number|null,
+ *   meta?: (j: number) => string, labelledBy: string}} o
+ */
+function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
   const rows = layers
     .map((layer, j) => ({ layer, j }))
     .reverse()
@@ -609,15 +634,17 @@ export function layerPanel({ doc, index, selectedLayer, logoUrl }) {
             type="button"
             class="carousel-studio__layer-name"
             data-action="select-layer"
+            data-scope="${scope}"
             data-index="${String(j)}"
             aria-pressed="${j === selectedLayer ? "true" : "false"}"
           >
-            ${layerLabel(layer)}
+            ${layerLabel(layer)}${meta ? html`<span class="carousel-studio__layer-meta"> · ${meta(j)}</span>` : ""}
           </button>
           <button
             type="button"
             class="carousel-studio__chip"
             data-action="layer-raise"
+            data-scope="${scope}"
             data-index="${String(j)}"
             aria-label="Move layer up"
             ${j === layers.length - 1 ? "disabled" : ""}
@@ -628,6 +655,7 @@ export function layerPanel({ doc, index, selectedLayer, logoUrl }) {
             type="button"
             class="carousel-studio__chip"
             data-action="layer-lower"
+            data-scope="${scope}"
             data-index="${String(j)}"
             aria-label="Move layer down"
             ${j === 0 ? "disabled" : ""}
@@ -638,6 +666,7 @@ export function layerPanel({ doc, index, selectedLayer, logoUrl }) {
             type="button"
             class="carousel-studio__chip"
             data-action="delete-layer"
+            data-scope="${scope}"
             data-index="${String(j)}"
             aria-label="Delete layer"
           >
@@ -646,33 +675,97 @@ export function layerPanel({ doc, index, selectedLayer, logoUrl }) {
         </li>`,
     );
 
+  return layers.length
+    ? html`<ul class="carousel-studio__layer-list" aria-labelledby="${labelledBy}">
+        ${rows}
+      </ul>`
+    : "";
+}
+
+/** The "+ Text / + Logo / …" add chips for one scope. */
+function addLayerChips(scope) {
+  return html`
+    <div class="carousel-studio__fit-chips" role="group" aria-label="Add layer">
+      ${LAYER_KINDS.map(
+        ([type, text]) => html`
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="add-layer"
+            data-scope="${scope}"
+            data-type="${type}"
+          >
+            + ${text}
+          </button>`,
+      )}
+    </div>`;
+}
+
+/**
+ * Deck mode's layer panel: add / select / reorder / delete for the selected
+ * slide's own layers **and** for the deck's spanning layers, plus the property
+ * form for whichever layer is selected.
+ *
+ * Each list is shown **top of stack first**: users think in stacking order and
+ * the arrays are back-to-front, so the view is reversed here, never the
+ * document. "Move up" raises a layer toward the front — a later array index.
+ *
+ * Every add / select / reorder / delete button is a delegated `action` carrying
+ * `data-scope` (`"slide"` or `"span"`); the form's fields carry the
+ * `#carousel-layer-*` ids `_wireLayerFields` (`index.js`) binds. Span layers
+ * reuse the same five types and the same form — a second family of editors for
+ * one schema is the failure mode. The studio never constructs a layer literal:
+ * an add goes through `addLayer` and every edit through `updateLayer`
+ * (`document.js`), the same rule framing keeps. Direct manipulation on the stage
+ * is per-slide only for now; a span layer is edited through its form.
+ *
+ * @param {{doc: import('../document.js').CarouselDoc, index: number,
+ *   selectedLayer: number|null, layerScope: "slide"|"span", logoUrl: string}} o
+ */
+export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", logoUrl }) {
+  const slide = doc.slides[index];
+  if (!slide) return "";
+  const slideLayers = slide.layers || [];
+  const spanLayers = doc.spanLayers || [];
+  const n = doc.slides.length;
+
+  const slideSel = layerScope === "slide" ? selectedLayer : null;
+  const spanSel = layerScope === "span" ? selectedLayer : null;
+  const list = layerScope === "span" ? spanLayers : slideLayers;
+  const selected = selectedLayer == null ? null : list[selectedLayer] || null;
+
   return html`
     <div class="carousel-studio__layers">
       <div class="carousel-studio__layers-head">
-        <span class="carousel-studio__bg-label" id="carousel-layers-label">Layers</span>
-        <div class="carousel-studio__fit-chips" role="group" aria-label="Add layer">
-          ${LAYER_KINDS.map(
-            ([type, text]) => html`
-              <button
-                type="button"
-                class="carousel-studio__chip"
-                data-action="add-layer"
-                data-type="${type}"
-              >
-                + ${text}
-              </button>`,
-          )}
-        </div>
+        <span class="carousel-studio__bg-label" id="carousel-layers-label">
+          Slide ${String(index + 1)} layers
+        </span>
+        ${addLayerChips("slide")}
       </div>
-
-      ${layers.length
-        ? html`<ul
-            class="carousel-studio__layer-list"
-            aria-labelledby="carousel-layers-label"
-          >
-            ${rows}
-          </ul>`
+      ${slideLayers.length
+        ? layerRows(slideLayers, {
+            scope: "slide",
+            selectedLayer: slideSel,
+            labelledBy: "carousel-layers-label",
+          })
         : html`<p class="carousel-studio__fit-dims">No layers on this slide yet.</p>`}
+
+      <div class="carousel-studio__layers-head carousel-studio__layers-head--span">
+        <span class="carousel-studio__bg-label" id="carousel-span-layers-label">
+          Deck layers <span class="carousel-studio__layer-meta">(across all slides)</span>
+        </span>
+        ${addLayerChips("span")}
+      </div>
+      ${spanLayers.length
+        ? layerRows(spanLayers, {
+            scope: "span",
+            selectedLayer: spanSel,
+            meta: (j) => spanRangeLabel(spanLayerCoverage(spanLayers[j], n, doc.aspect)),
+            labelledBy: "carousel-span-layers-label",
+          })
+        : html`<p class="carousel-studio__fit-dims">
+            No deck layers — a headline or logo lockup placed here runs across the seams.
+          </p>`}
 
       ${selected ? layerForm(selected, logoUrl) : ""}
     </div>`;

@@ -188,7 +188,7 @@
  * and rendered at full size, so "Rendered slides" was one giant image with the
  * rest of the deck off the right edge. */
 .carousel-studio__slide {
-  flex: 0 0 8rem;
+  /* flex: 0 0 8rem; */
   min-width: 0;
   height: auto;
   border-radius: var(--border-radius);
@@ -419,7 +419,8 @@
  * geometrically by `hitLayer` (gestures.js) against the selected layer's box,
  * not by DOM hit-testing. The font stack matches the token the renderer
  * resolves, so preview and JPEG agree on wrap and size within a pixel or two. */
-.carousel-studio__layer {
+.carousel-studio__layer,
+.carousel-studio__span-layer {
   position: absolute;
   overflow: hidden;
   display: flex;
@@ -428,6 +429,31 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.2;
+}
+
+/* A spanning layer's slice on one frame — positioned by `paintSpanLayers` from
+ * `spanLayerRect`, so it starts off-frame and overflows the frame edge where the
+ * layer crosses a seam; the frame's own `overflow: hidden` clips it exactly
+ * where the JPEG will. No stage handles yet (form-only editing), so a selected
+ * span layer just gets a dashed outline on every frame it touches. */
+.carousel-studio__span-layer.is-selected {
+  outline: 1px dashed var(--color-primary);
+  outline-offset: -1px;
+}
+
+/* The trailing "· slides 2–3" / "(across all slides)" note on a layer row and
+ * the span-list header — dimmer than the layer name it follows. */
+.carousel-studio__layer-meta {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* The span-layer list header sits under the slide list, so it needs a rule off
+ * the block above it. */
+.carousel-studio__layers-head--span {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: var(--border-width) solid var(--border-primary);
 }
 
 /* ── Layer selection chrome (S3.7 direct manipulation) ─────────────────────── */

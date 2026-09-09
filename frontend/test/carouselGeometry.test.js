@@ -25,6 +25,7 @@ import {
   layerRect,
   layerCSS,
   spanLayerRect,
+  spanLayerCoverage,
   clampPan,
   wrapText,
   autoFitText,
@@ -805,6 +806,32 @@ describe('spanLayerRect', () => {
     for (const n of [0, -3, NaN, undefined]) {
       assert.deepStrictEqual(spanLayerRect({ box }, 0, n, '4:5'), one);
       assert.strictEqual(spanLayerRect({ box }, 1, n, '4:5'), null);
+    }
+  });
+});
+
+describe('spanLayerCoverage', () => {
+  test('lists the consecutive slides a span layer reaches', () => {
+    assert.deepStrictEqual(
+      spanLayerCoverage({ box: { x: 0.3, y: 0, w: 0.4, h: 1 } }, 3, '4:5'),
+      [0, 1, 2],
+    );
+    assert.deepStrictEqual(
+      spanLayerCoverage({ box: { x: 0.5, y: 0, w: 0.5, h: 1 } }, 4, '4:5'),
+      [2, 3],
+    );
+  });
+
+  test('a narrow layer at the head reaches only its own slide', () => {
+    assert.deepStrictEqual(
+      spanLayerCoverage({ box: { x: 0, y: 0, w: 0.2, h: 1 } }, 5, '4:5'),
+      [0],
+    );
+  });
+
+  test('a degenerate n clamps to a single slide', () => {
+    for (const n of [0, -2, NaN, undefined]) {
+      assert.deepStrictEqual(spanLayerCoverage({ box: { x: 0.1, y: 0, w: 0.5, h: 1 } }, n, '4:5'), [0]);
     }
   });
 });

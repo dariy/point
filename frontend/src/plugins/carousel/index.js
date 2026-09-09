@@ -61,6 +61,7 @@ import {
   removeLayer,
   reorderLayer,
   serializeDocument,
+  SPAN_SLIDE,
   specHash,
   splitDocument,
   toDeckDocument,
@@ -70,7 +71,13 @@ import {
 import { browserDeps, renderAndUpload } from "./render.js";
 import { DEFAULT_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
 import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
-import { paintDeckLayers, paintDeckSlide, paintLayerChrome, paintSplit } from "./studio/preview.js";
+import {
+  paintDeckLayers,
+  paintDeckSlide,
+  paintLayerChrome,
+  paintSpanLayers,
+  paintSplit,
+} from "./studio/preview.js";
 import { createDeckGestures } from "./studio/gestures.js";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
@@ -185,10 +192,13 @@ export default class CarouselStudioPage extends Component {
       srcW: null,
       srcH: null,
       selected: 0,
-      // Which layer of the selected deck slide the property form is editing, or
-      // null. An index into `slides[selected].layers`, cleared whenever the
-      // slide selection moves (a stale index would edit the wrong layer).
+      // Which layer the property form is editing, or null. An index into the
+      // list `layerScope` names: the selected deck slide's `layers`, or
+      // `doc.spanLayers` when `layerScope` is `"span"`. A slide-scoped selection
+      // is cleared whenever the slide selection moves (a stale index would edit
+      // the wrong layer); a span-scoped one survives, since it is not slide-bound.
       selectedLayer: null,
+      layerScope: /** @type {"slide"|"span"} */ ("slide"),
       showGuides: true,
       busy: false,
       renderProgress: null,
@@ -230,6 +240,10 @@ export default class CarouselStudioPage extends Component {
       // see studio/gestures.js. `activeLayer` is what routes a press between the
       // two: a layer only takes the pointer when its own layer is selected.
       activeLayer: () => {
+        // Stage direct manipulation is per-slide only; a span layer is edited
+        // through its form (p-carousel-s3-ycna follow-up). A span-scoped
+        // selection reads as "no active layer", so a press pans the crop.
+        if (this.state.layerScope !== "slide") return null;
         const i = this._selectedIndex();
         const j = this.state.selectedLayer;
         const layer = j == null ? null : this.state.doc.slides[i]?.layers?.[j];
@@ -287,21 +301,21 @@ export default class CarouselStudioPage extends Component {
       });
     },
     "add-layer"(_e, el) {
-      this._addLayer(el.dataset.type);
+      this._addLayer(el.dataset.type, el.dataset.scope);
     },
     "select-layer"(_e, el) {
-      this._selectLayer(Number(el.dataset.index));
+      this._selectLayer(Number(el.dataset.index), el.dataset.scope);
     },
     "layer-raise"(_e, el) {
       const j = Number(el.dataset.index);
-      this._reorderLayer(j, j + 1);
+      this._reorderLayer(j, j + 1, el.dataset.scope);
     },
     "layer-lower"(_e, el) {
       const j = Number(el.dataset.index);
-      this._reorderLayer(j, j - 1);
+      this._reorderLayer(j, j - 1, el.dataset.scope);
     },
     "delete-layer"(_e, el) {
-      this._confirmDeleteLayer(Number(el.dataset.index));
+      this._confirmDeleteLayer(Number(el.dataset.index), el.dataset.scope);
     },
     "layer-pick-image"() {
       this._openLayerPicker();
@@ -452,7 +466,10 @@ export default class CarouselStudioPage extends Component {
    * Rebuild the split projection with `patch` applied over the current
    * doc-level controls. Each slide's `rendered` block is carried over by index
    * so an unchanged slide still skips its re-encode — its `specHash` simply
-   * misses wherever the projection actually moved (see `_render`).
+   * misses wherever the projection actually moved (see `_render`). The deck's
+   * span layers ride along untouched: their box is deck-normalized, so a new
+   * slide count re-flows the same headline across the new seams rather than
+   * dropping it.
    *
    * @param {{source?: string, n?: number, aspect?: string,
    *   strategy?: 'cover'|'exact'|'pad', anchorY?: number}} patch
@@ -466,6 +483,7 @@ export default class CarouselStudioPage extends Component {
       aspect: patch.aspect ?? doc.aspect,
       strategy: patch.strategy ?? doc.strategy,
       anchorY: patch.anchorY ?? doc.anchorY,
+      spanLayers: doc.spanLayers,
     });
     next.slides.forEach((slide, i) => {
       slide.rendered = doc.slides[i]?.rendered ?? null;
@@ -538,22 +556,46 @@ export default class CarouselStudioPage extends Component {
    *  so this re-renders and must never run mid-gesture. The layer selection is
    *  an index into *this* slide's list, so it cannot survive the move. */
   _select(i) {
-    if (this.state.selected !== i) this.setState({ selected: i, selectedLayer: null });
+    if (this.state.selected === i) return;
+    // A slide-scoped layer selection is an index into *this* slide's list, so it
+    // cannot survive the move; a span-scoped one is deck-wide and stays put.
+    const patch = { selected: i };
+    if (this.state.layerScope === "slide") patch.selectedLayer = null;
+    this.setState(patch);
   }
 
   // ── Layers (deck mode) ────────────────────────────────────────────────────
 
   /**
+   * The `slideIndex` and current list a layer scope addresses: the deck's
+   * spanning layers at {@link SPAN_SLIDE}, the selected slide's own otherwise.
+   * Every layer mutator routes through this, so one family of `document.js`
+   * calls serves both — see `layerPanel` in `studio/panels.js`.
+   *
+   * @param {"slide"|"span"} scope
+   */
+  _layerTarget(scope) {
+    if (scope === "span") {
+      return { slideIndex: SPAN_SLIDE, list: this.state.doc.spanLayers || [] };
+    }
+    const i = this._selectedIndex();
+    return { slideIndex: i, list: this.state.doc.slides[i]?.layers || [] };
+  }
+
+  /**
    * A fresh layer of `type`, its box landed inside the slide's `safeAreaRect`
    * (`geometry.js`) rather than at the origin — a layer outside the frame's
-   * honest bounds is one the user has to move before it is any use. Only the
-   * `box` (and an `image` layer's default source) is set here; every other
-   * field is `normalizeLayer`'s to fill, because the studio never authors a
-   * layer literal — see `addLayer` in `document.js`.
+   * honest bounds is one the user has to move before it is any use. A `"span"`
+   * layer keeps the type's vertical placement but stretches across the deck,
+   * since its box is normalized to the whole filmstrip and running across the
+   * seams is the use. Only the `box` (and an `image` layer's default source) is
+   * set here; every other field is `normalizeLayer`'s to fill, because the
+   * studio never authors a layer literal — see `addLayer` in `document.js`.
    *
    * @param {string} type one of `LAYER_TYPES`
+   * @param {"slide"|"span"} [scope]
    */
-  _defaultLayer(type) {
+  _defaultLayer(type, scope = "slide") {
     const { aspect } = this.state.doc;
     const [w, h] = canvasSize(aspect);
     const sa = safeAreaRect(aspect);
@@ -568,7 +610,17 @@ export default class CarouselStudioPage extends Component {
       rect: { x: fx, y: fy + fh * 0.45, w: fw, h: fh * 0.4 },
       arrow: { x: fx + fw * 0.82, y: fy + fh * 0.42, w: fw * 0.18, h: fh * 0.16 },
     };
-    const layer = { type, box: boxes[type] || { x: fx, y: fy, w: fw, h: fh } };
+    const box = boxes[type] || { x: fx, y: fy, w: fw, h: fh };
+    if (scope === "span") {
+      if (type === "image") {
+        box.x = 0.44;
+        box.w = 0.12;
+      } else {
+        box.x = 0.06;
+        box.w = 0.88;
+      }
+    }
+    const layer = { type, box };
     if (type === "image") {
       const logo = getSettings()?.logo_url;
       if (logo) layer.source = logo;
@@ -576,83 +628,106 @@ export default class CarouselStudioPage extends Component {
     return layer;
   }
 
-  /** Add a layer to the selected slide and select it — a new layer lands on top
+  /** Add a layer to the scope's list and select it — a new layer lands on top
    *  of the stack (`addLayer` appends), which is the row at the top of the list. */
-  _addLayer(type) {
-    const i = this._selectedIndex();
-    const doc = addLayer(this.state.doc, i, this._defaultLayer(type));
-    const layers = doc.slides[i]?.layers || [];
-    this.setState({ doc, selectedLayer: layers.length ? layers.length - 1 : null });
+  _addLayer(type, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    const { slideIndex } = this._layerTarget(s);
+    const doc = addLayer(this.state.doc, slideIndex, this._defaultLayer(type, s));
+    const list = s === "span" ? doc.spanLayers : doc.slides[this._selectedIndex()]?.layers || [];
+    this.setState({
+      doc,
+      layerScope: s,
+      selectedLayer: list.length ? list.length - 1 : null,
+    });
   }
 
-  _selectLayer(j) {
-    if (this.state.selectedLayer !== j) this.setState({ selectedLayer: j });
+  _selectLayer(j, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    if (this.state.layerScope === s && this.state.selectedLayer === j) return;
+    this.setState({ layerScope: s, selectedLayer: j });
   }
 
   /**
-   * Move the selected slide's layer from `from` to `to` in paint order,
-   * keeping the selection on whichever layer the user was pointing at. `to`
-   * out of range is a no-op — the list's end buttons are disabled, this is the
-   * belt-and-braces.
+   * Move a layer from `from` to `to` in paint order within its scope's list,
+   * keeping the selection on whichever layer the user was pointing at when the
+   * selection is in that same scope. `to` out of range is a no-op — the list's
+   * end buttons are disabled, this is the belt-and-braces.
    */
-  _reorderLayer(from, to) {
-    const i = this._selectedIndex();
-    const list = this.state.doc.slides[i]?.layers || [];
+  _reorderLayer(from, to, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    const { slideIndex, list } = this._layerTarget(s);
     if (to < 0 || to >= list.length) return;
-    const doc = reorderLayer(this.state.doc, i, from, to);
-    let sel = this.state.selectedLayer;
-    if (sel === from) sel = to;
-    else if (sel > from && sel <= to) sel -= 1;
-    else if (sel < from && sel >= to) sel += 1;
-    this.setState({ doc, selectedLayer: sel });
+    const doc = reorderLayer(this.state.doc, slideIndex, from, to);
+    const patch = { doc };
+    if (this.state.layerScope === s && this.state.selectedLayer != null) {
+      let sel = this.state.selectedLayer;
+      if (sel === from) sel = to;
+      else if (sel > from && sel <= to) sel -= 1;
+      else if (sel < from && sel >= to) sel += 1;
+      patch.selectedLayer = sel;
+    }
+    this.setState(patch);
   }
 
-  _confirmDeleteLayer(j) {
+  _confirmDeleteLayer(j, scope) {
+    const s = scope === "span" ? "span" : "slide";
     this._showConfirm(
       "Delete layer",
-      "This removes the layer from the slide. It cannot be undone.",
+      s === "span"
+        ? "This removes the layer from the deck. It cannot be undone."
+        : "This removes the layer from the slide. It cannot be undone.",
       "Delete layer",
       "danger",
-      () => this._removeLayer(j),
+      () => this._removeLayer(j, s),
     );
   }
 
-  _removeLayer(j) {
-    const i = this._selectedIndex();
-    const doc = removeLayer(this.state.doc, i, j);
-    let sel = this.state.selectedLayer;
-    if (sel === j) sel = null;
-    else if (sel != null && sel > j) sel -= 1;
-    this.setState({ doc, selectedLayer: sel });
+  _removeLayer(j, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    const { slideIndex } = this._layerTarget(s);
+    const doc = removeLayer(this.state.doc, slideIndex, j);
+    const patch = { doc };
+    if (this.state.layerScope === s) {
+      let sel = this.state.selectedLayer;
+      if (sel === j) sel = null;
+      else if (sel != null && sel > j) sel -= 1;
+      patch.selectedLayer = sel;
+    }
+    this.setState(patch);
   }
 
   /** The single writer for a layer's fields — every property-form commit lands
    *  here, and clamping/normalizing is `updateLayer`'s job, not the caller's. */
   _setLayer(patch) {
-    const i = this._selectedIndex();
     const j = this.state.selectedLayer;
     if (j == null) return;
-    this.setState({ doc: updateLayer(this.state.doc, i, j, patch) });
+    const { slideIndex } = this._layerTarget(this.state.layerScope);
+    this.setState({ doc: updateLayer(this.state.doc, slideIndex, j, patch) });
   }
 
   /** The commit point for a drag or a keyboard nudge of a layer's box — the
-   *  gesture's twin of `_setSlideFraming`. `updateLayer` re-clamps the box, so
-   *  the gesture's own clamp is only for preview smoothness. */
+   *  gesture's twin of `_setSlideFraming`. Stage direct manipulation is
+   *  slide-scoped only. `updateLayer` re-clamps the box, so the gesture's own
+   *  clamp is only for preview smoothness. */
   _commitLayerBox(i, j, box) {
     this.setState({
       selected: i,
+      layerScope: "slide",
       selectedLayer: j,
       doc: updateLayer(this.state.doc, i, j, { box }),
     });
   }
 
-  /** The selected slide index, its selected layer index, and that layer (or
-   *  null) — the three things every layer-field handler needs. */
+  /** The selected slide index, the `slideIndex` its layer scope addresses, the
+   *  scope, the selected layer index and that layer (or null) — everything a
+   *  layer-field handler needs. */
   _selectedLayerRef() {
-    const i = this._selectedIndex();
+    const scope = this.state.layerScope;
+    const { slideIndex, list } = this._layerTarget(scope);
     const j = this.state.selectedLayer;
-    const layer = j == null ? null : this.state.doc.slides[i]?.layers?.[j] || null;
-    return { i, j, layer };
+    const layer = j == null ? null : list[j] || null;
+    return { i: this._selectedIndex(), slideIndex, scope, j, layer };
   }
 
   _openLayerPicker() {
@@ -929,7 +1004,7 @@ export default class CarouselStudioPage extends Component {
   /** Everything the builder markup needs, read off the state in one place —
    *  `studio/panels.js` answers no questions about the page itself. */
   _renderBuilder() {
-    const { doc, showGuides, selected, srcW, srcH, busy, selectedLayer } = this.state;
+    const { doc, showGuides, selected, srcW, srcH, busy, selectedLayer, layerScope } = this.state;
     const deckIndex = this._selectedIndex();
     return builder({
       doc,
@@ -942,6 +1017,7 @@ export default class CarouselStudioPage extends Component {
       fitMode: this._currentFitMode(),
       hasPad: this._hasPad(doc.slides[deckIndex]),
       selectedLayer,
+      layerScope,
       logoUrl: getSettings()?.logo_url || "",
       renderedPaths: this._renderedPaths(),
     });
@@ -964,8 +1040,9 @@ export default class CarouselStudioPage extends Component {
 
     // The selected layer's chrome (outline + handles) is markup; position it
     // now that the frames exist. Cleared for free when nothing is selected —
-    // panels.js emits the chrome node only then.
-    if (deck && this.state.selectedLayer != null) {
+    // panels.js emits the chrome node only then. Span layers have no stage
+    // chrome yet (form-only), so this is slide-scoped.
+    if (deck && this.state.layerScope === "slide" && this.state.selectedLayer != null) {
       const i = this._selectedIndex();
       const layer = this.state.doc.slides[i]?.layers?.[this.state.selectedLayer];
       if (layer) this._paintLayerChrome(i, layer.box, { v: [], h: [] });
@@ -1006,6 +1083,30 @@ export default class CarouselStudioPage extends Component {
     this.state.doc.slides.forEach((slide, i) => this._paintDeckSlide(i, slide));
   }
 
+  /** Paint the deck's spanning layers over slide `i`, from `spanLayers` unless a
+   *  provisional list is given (a live span-form edit). Positioned per slide
+   *  through `spanLayerRect`, so the seam falls where the render puts it. */
+  _paintSpanLayersForSlide(i, spanLayers) {
+    paintSpanLayers(
+      { hosts: this.$$(`[data-slice="${i}"]`) },
+      {
+        spanLayers: spanLayers || this.state.doc.spanLayers,
+        aspect: this.state.doc.aspect,
+        index: i,
+        count: this.state.doc.slides.length,
+        selected: this.state.layerScope === "span" ? this.state.selectedLayer : null,
+      },
+    );
+  }
+
+  /** Repaint every slice's span layers — for a live span-form edit, where one
+   *  layer changing shows on every slide it crosses. */
+  _paintSpanLayers(spanLayers) {
+    for (let i = 0; i < this.state.doc.slides.length; i++) {
+      this._paintSpanLayersForSlide(i, spanLayers);
+    }
+  }
+
   /**
    * Paint one deck slide — the stage slice and the filmstrip frame both carry
    * `data-slice`, so one query finds every element showing it. Called with a
@@ -1025,6 +1126,7 @@ export default class CarouselStudioPage extends Component {
       { slide, srcW, srcH, aspect: this.state.doc.aspect, hasPad: this._hasPad(slide) },
     );
     this._paintDeckSlideLayers(i, slide.layers);
+    this._paintSpanLayersForSlide(i);
   }
 
   /** Paint one slide's layers onto both elements that show it. Split out so a
@@ -1137,13 +1239,15 @@ export default class CarouselStudioPage extends Component {
 
     for (const el of fields) {
       this.on(el, "input", () => {
-        const { i, j, layer } = this._selectedLayerRef();
+        const { i, scope, j, layer } = this._selectedLayerRef();
         if (!layer) return;
         this._syncLayerOutputs();
-        const list = this.state.doc.slides[i].layers.map((l, k) =>
+        const source = scope === "span" ? this.state.doc.spanLayers : this.state.doc.slides[i].layers;
+        const list = source.map((l, k) =>
           k === j ? { ...l, ...this._layerFromFields(layer) } : l,
         );
-        this._paintDeckSlideLayers(i, list);
+        if (scope === "span") this._paintSpanLayers(list);
+        else this._paintDeckSlideLayers(i, list);
       });
       this.on(el, "change", () => {
         const { layer } = this._selectedLayerRef();

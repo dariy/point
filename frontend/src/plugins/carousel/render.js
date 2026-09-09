@@ -33,6 +33,7 @@ import {
   layerRect,
   padRects,
   sliceRects,
+  spanLayerRect,
   wrapText,
 } from './geometry.js';
 import { deleteMedia, uploadMedia } from '../../api/media.js';
@@ -478,8 +479,19 @@ const LAYER_PAINTERS = {
  */
 export function paintLayers(ctx, layers, aspect, env = {}) {
   if (!Array.isArray(layers) || !layers.length) return;
+  const resolved = resolveLayerEnv(aspect, env);
+  for (const layer of layers) {
+    const paint = layer && LAYER_PAINTERS[layer.type];
+    if (paint) paint(ctx, layer, layerRect(layer, aspect), resolved);
+  }
+}
+
+/** The per-slide environment a layer painter needs and no layer can carry on
+ *  its own: the canvas height, the resolved font stack, this slide's place in
+ *  the deck (for a `counter`), and the decoded `image` layer bitmaps. */
+function resolveLayerEnv(aspect, env) {
   const [, frameH] = canvasSize(aspect);
-  const resolved = {
+  return {
     frameH,
     family: env.font || DEFAULT_FONT_STACK,
     // A direct caller that names neither reads as slide 1 of 1 rather than
@@ -488,10 +500,55 @@ export function paintLayers(ctx, layers, aspect, env = {}) {
     count: Math.max(1, Math.floor(num(env.count, 1))),
     images: env.images,
   };
-  for (const layer of layers) {
+}
+
+/**
+ * Paint the deck's spanning layers onto one slide, over its own layers — a span
+ * headline or logo lockup is the deck's top-level chrome, so it composites last.
+ *
+ * Each entry's `box` is already this slide's slice of the deck box, from
+ * {@link spanLayerRect}: slide-local canvas pixels, negative `x` and
+ * width past the frame edge where the layer crosses a seam. The painters take a
+ * pixel box directly (the same shape {@link layerRect} hands them), so the seam
+ * is continuous because every slice was cut from one deck rect, and the canvas
+ * clips the overflow for free.
+ *
+ * @param {any} ctx 2D context
+ * @param {Array<{layer: import('./document.js').CarouselLayer,
+ *   box: {x:number,y:number,w:number,h:number}}>|null|undefined} entries
+ * @param {string} aspect the aspect key `ctx`'s canvas was sized from
+ * @param {Parameters<typeof paintLayers>[3]} [env]
+ */
+export function paintSpanLayers(ctx, entries, aspect, env = {}) {
+  if (!Array.isArray(entries) || !entries.length) return;
+  const resolved = resolveLayerEnv(aspect, env);
+  for (const { layer, box } of entries) {
     const paint = layer && LAYER_PAINTERS[layer.type];
-    if (paint) paint(ctx, layer, layerRect(layer, aspect), resolved);
+    if (paint && box) paint(ctx, layer, box, resolved);
   }
+}
+
+/**
+ * The span layers that reach slide `i` of `n`, each paired with its slide-local
+ * rect. `null` rects (a layer that misses this slide) are dropped. Shared by the
+ * two render sequencers so a split deck and a deck deck slice span layers the
+ * same way.
+ *
+ * @param {import('./document.js').CarouselLayer[]|null|undefined} spanLayers
+ * @param {number} i slide index
+ * @param {number} n slides in the deck
+ * @param {string} aspect aspect key
+ * @returns {Array<{layer: import('./document.js').CarouselLayer,
+ *   box: {x:number,y:number,w:number,h:number}}>}
+ */
+function spanLayersForSlide(spanLayers, i, n, aspect) {
+  if (!Array.isArray(spanLayers) || !spanLayers.length) return [];
+  const out = [];
+  for (const layer of spanLayers) {
+    const box = spanLayerRect(layer, i, n, aspect);
+    if (box) out.push({ layer, box });
+  }
+  return out;
 }
 
 /**
@@ -532,11 +589,15 @@ export function paintLayers(ctx, layers, aspect, env = {}) {
  * @param {import('./document.js').CarouselLayer[]} [layers] the slide's own
  *   layers, painted back to front over the image
  * @param {{aspect?: string, font?: string, index?: number, count?: number,
- *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>}} [opts]
+ *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>,
+ *   spanLayers?: Array<{layer: import('./document.js').CarouselLayer,
+ *     box: {x:number,y:number,w:number,h:number}}>}} [opts]
  *   `aspect` is the key `w`/`h` were sized from — layer boxes resolve against
  *   it; `font` is the stack resolved once per render by `deps.resolveFont`;
  *   `index`/`count` are this slide's place in the deck, which a `counter` layer
- *   needs and cannot know; `images` are the decoded `image` layer sources
+ *   needs and cannot know; `images` are the decoded `image` layer sources;
+ *   `spanLayers` are the deck's spanning layers already sliced to this slide,
+ *   painted last (over the slide's own layers)
  */
 export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
   ctx.clearRect(0, 0, w, h);
@@ -562,6 +623,7 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
   }
   ctx.drawImage(bitmap, rect.dx, rect.dy, rect.dw, rect.dh);
   paintLayers(ctx, layers, opts.aspect, opts);
+  paintSpanLayers(ctx, opts.spanLayers, opts.aspect, opts);
 }
 
 /**
@@ -586,20 +648,19 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
  * @param {RenderDeps} deps
  * @returns {Promise<Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>>}
  */
-async function loadLayerImages(layers, aspect, load, deps) {
+async function loadLayerImages(layers, aspect, load, deps, spanEntries) {
   /** @type {Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>} */
   const images = new Map();
-  if (!load || !Array.isArray(layers)) return images;
+  if (!load) return images;
 
-  for (const layer of layers) {
-    if (!layer || layer.type !== 'image' || !layer.source || images.has(layer)) continue;
+  const place = async (layer, box) => {
+    if (!layer || layer.type !== 'image' || !layer.source || images.has(layer)) return;
     try {
       const { blob, w, h } = await load(layer.source);
-      const box = layerRect(layer, aspect);
       const fit = fitRect(w, h, box.w, box.h, layer.fit === 'cover' ? 'cover' : 'contain');
       const dw = Math.round(fit.dw);
       const dh = Math.round(fit.dh);
-      if (dw < 1 || dh < 1) continue;
+      if (dw < 1 || dh < 1) return;
       const bitmap = await deps.decode(blob, {
         sx: Math.round(fit.sx),
         sy: Math.round(fit.sy),
@@ -619,6 +680,16 @@ async function loadLayerImages(layers, aspect, load, deps) {
     } catch {
       // Skipped, deliberately: the slide is painted without this layer.
     }
+  };
+
+  for (const layer of Array.isArray(layers) ? layers : []) {
+    await place(layer, layerRect(layer, aspect));
+  }
+  // Span `image` layers resolve against a box already sliced to this slide, so
+  // the blit lands in deck coordinates and the canvas clips whatever crosses
+  // the frame edge — the same continuity the per-slide box gets for free.
+  for (const { layer, box } of Array.isArray(spanEntries) ? spanEntries : []) {
+    await place(layer, box);
   }
   return images;
 }
@@ -644,7 +715,9 @@ async function loadLayerImages(layers, aspect, load, deps) {
  * @param {RenderDeps} deps
  * @param {{aspect?: string, layers?: import('./document.js').CarouselLayer[],
  *   font?: string, index?: number, count?: number,
- *   load?: (source: string) => Promise<{blob: Blob, w: number, h: number}>}} [paint]
+ *   load?: (source: string) => Promise<{blob: Blob, w: number, h: number}>,
+ *   spanLayers?: Array<{layer: import('./document.js').CarouselLayer,
+ *     box: {x:number,y:number,w:number,h:number}}>}} [paint]
  *   what `paintSlide` draws over the image
  * @returns {Promise<Blob>}
  */
@@ -661,7 +734,13 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
   /** @type {Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>} */
   let images = new Map();
   try {
-    images = await loadLayerImages(paint.layers, paint.aspect, paint.load, deps);
+    images = await loadLayerImages(
+      paint.layers,
+      paint.aspect,
+      paint.load,
+      deps,
+      paint.spanLayers,
+    );
     const { canvas, ctx } = deps.makeSurface(slideW, slideH);
     paintSlide(ctx, bitmap, rect, slideW, slideH, bg, paint.layers, {
       aspect: paint.aspect,
@@ -669,6 +748,7 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
       index: paint.index,
       count: paint.count,
       images,
+      spanLayers: paint.spanLayers,
     });
     const encoded = await deps.encode(canvas, JPEG_TYPE, JPEG_QUALITY);
     if (!encoded) {
@@ -777,6 +857,9 @@ function sourceLoader(deps, seed) {
  * @property {import('./document.js').CarouselLayer[][]} [layers]  each column's
  *   own layer list, index-aligned with the slides. Layers are not deck-only: a
  *   split deck carrying a headline is the headline use case.
+ * @property {import('./document.js').CarouselLayer[]} [spanLayers]  the deck's
+ *   spanning layers, sliced per column by {@link spanLayerRect} — a headline
+ *   that runs across the seams of a split deck is exactly this.
  */
 
 /**
@@ -820,11 +903,13 @@ export async function renderSplit(spec, deps, onProgress, keep) {
       continue;
     }
     const layers = spec.layers?.[i] || [];
+    const spanLayers = spanLayersForSlide(spec.spanLayers, i, rects.length, aspect);
     slides.push(
       await encodeSlide(blob, rects[i], bg, slideW, slideH, deps, {
         aspect,
         layers,
-        font: await font(layers),
+        spanLayers,
+        font: await font(layers.concat(spanLayers.map((s) => s.layer))),
         index: i,
         count: rects.length,
         load,
@@ -890,11 +975,13 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
     const { blob, w, h } = await load(slide.source);
     const rect = deckSlideRects(w, h, doc.aspect, slide.crop, slide.fit);
     const layers = slide.layers || [];
+    const spanLayers = spanLayersForSlide(doc.spanLayers, i, slides.length, doc.aspect);
     out.push(
       await encodeSlide(blob, rect, slide.bg, slideW, slideH, deps, {
         aspect: doc.aspect,
         layers,
-        font: await font(layers),
+        spanLayers,
+        font: await font(layers.concat(spanLayers.map((s) => s.layer))),
         index: i,
         count: slides.length,
         load,
@@ -939,6 +1026,7 @@ export async function renderCarousel(doc, deps, onProgress, keep, opts = {}) {
       anchorY: doc.anchorY,
       bg: slides[slides.length - 1].bg,
       layers: slides.map((s) => s.layers || []),
+      spanLayers: doc.spanLayers,
       srcW: opts.srcW,
       srcH: opts.srcH,
     },
