@@ -22,8 +22,13 @@
  *                    the CSS pair that reproduces each in the DOM)
  *   - `render.js`    the thin draw layer (decode → drawImage → encode → upload)
  *   - `document.js`  the carousel document + its `:::{.carousel-block}` output
- * — and this file is the chrome that drives them. Layers and templates land in
- * later stages (see docs/features/carousel-studio.md).
+ * — and the studio's own three halves live under `studio/`:
+ *   - `studio/panels.js`    the markup, as pure functions of what they are given
+ *   - `studio/preview.js`   the CSS writers that put a crop on screen
+ *   - `studio/gestures.js`  deck-mode drag / pinch / wheel / arrow keys
+ * What is left here is the Component: the route, the lifecycle, the actions
+ * map, and the one document every one of those modules is handed a piece of.
+ * Layers and templates land in later stages (see docs/features/carousel-studio.md).
  *
  * Live preview is CSS, never canvas: a pan or a zoom writes
  * `background-size`/`background-position` from `deckSlideFitCSS` straight onto
@@ -45,19 +50,8 @@ import { deleteMedia } from "../../api/media.js";
 import { deleteCarousel, getCarousel, saveCarousel } from "../../api/carousel.js";
 import { setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
-import { html, navigate, raw } from "../../utils/helpers.js";
-import { REFRESH_SVG } from "../../utils/icons.js";
-import {
-  backgroundFit,
-  canvasSize,
-  clampPan,
-  deckSlideFitCSS,
-  deckSlideRects,
-  fitReport,
-  padRects,
-  safeAreaRect,
-  slideCountOptions,
-} from "./geometry.js";
+import { html, navigate } from "../../utils/helpers.js";
+import { canvasSize, deckSlideRects, padRects } from "./geometry.js";
 import {
   applyCarouselBlock,
   emptyDocument,
@@ -70,50 +64,10 @@ import {
   updateSlideFraming,
 } from "./document.js";
 import { browserDeps, renderAndUpload } from "./render.js";
-
-/** Slide-count bounds. Instagram accepts up to 20 images per carousel
- *  (`api/internal/services/post_publish.go` truncates there;
- *  `docs/features/carousel-studio.md` says 2–20) — the studio spans the range. */
-const MIN_SLIDES = 2;
-const MAX_SLIDES = 20;
-const DEFAULT_SLIDES = 3;
-
-/** Clamp a slide count into the studio's bounds. */
-const clampSlides = (v) => Math.min(MAX_SLIDES, Math.max(MIN_SLIDES, Math.floor(v)));
-
-/** Behind the source image on the split stage and every split filmstrip frame —
- *  visible only where the image doesn't reach (the `pad` strategy's trailing gap
- *  on its last slide), so padding reads as a deliberate block rather than a
- *  stretched or missing image. Deck frames carry the same hatch from
- *  `carousel.css`, where it shows only until there is a real fill to paint. */
-const PAD_HATCH =
-  "repeating-linear-gradient(45deg, var(--surface-hover) 0 6px, transparent 6px 12px)";
-
-/** Fit-panel radio: the two `cover` variants (free count vs. width-filling
- *  count) plus the two pixel-exact strategies. `fill` stores `strategy: 'cover'`
- *  and only differs from `cover` by the slide count it sets. */
-const FIT_MODES = [
-  ["cover", "Cover"],
-  ["fill", "Fill"],
-  ["exact", "Exact"],
-  ["pad", "Pad"],
-];
-
-/** Per-slide fit, deck mode only. */
-const SLIDE_FITS = [
-  ["cover", "Cover"],
-  ["contain", "Contain"],
-];
-
-/** Per-slide background fill, deck mode only and only where a slide actually
- *  has a letterbox to fill. `blur` is stored as `bg: null` — it is the render's
- *  default, and storing it explicitly would change the slide's `specHash`
- *  without changing a pixel. */
-const SLIDE_BGS = [
-  ["blur", "Blur"],
-  ["solid", "Solid"],
-  ["gradient", "Gradient"],
-];
+import { DEFAULT_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
+import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
+import { paintDeckSlide, paintSplit } from "./studio/preview.js";
+import { createDeckGestures } from "./studio/gestures.js";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
  *  angle inputs then edit them, and `normalizeBg` is the only clamp. */
@@ -130,26 +84,6 @@ const BG_PRESETS = {
   },
 };
 
-const ASPECT_OPTIONS = [
-  ["4:5", "Portrait 4:5"],
-  ["1:1", "Square 1:1"],
-  ["1.91:1", "Landscape 1.91:1"],
-];
-
-/** Wheel-notch → zoom factor. One notch (100px) is ~16%, and the exponential
- *  keeps zooming in and back out along the same path. */
-const WHEEL_ZOOM = 0.0015;
-/** One arrow press pans this fraction of the visible crop (5× with shift). */
-const KEY_PAN = 0.02;
-/** One `+`/`-` press zooms by this factor. */
-const KEY_ZOOM = 1.1;
-/** A wheel gesture has no release event — commit this long after the last tick.
- *  Long enough that a scroll burst is one document mutation, short enough that
- *  the dirty badge feels immediate. */
-const WHEEL_COMMIT_MS = 140;
-/** Pointer travel below this is a click, not a drag. */
-const DRAG_SLOP_PX = 3;
-
 /** The post id from `?post=`, or null when absent/malformed. */
 function readPostId(query) {
   const raw = /** @type {{ post?: string }} */ (query || {}).post;
@@ -161,27 +95,69 @@ function isImagePath(path) {
   return typeof path === "string" && !/\.(mp4|mov|webm|m4v|avi)$/i.test(path);
 }
 
-/** `<input type="color">` accepts `#rrggbb` and nothing else, so a shorthand or
- *  alpha hex from the document is widened for display rather than silently
- *  reset to black by the browser. */
-function colorInputValue(color) {
-  const c = String(color || "").trim().toLowerCase();
-  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])[0-9a-f]?$/.exec(c);
-  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`;
-  if (/^#[0-9a-f]{8}$/.test(c)) return c.slice(0, 7);
-  return /^#[0-9a-f]{6}$/.test(c) ? c : "#000000";
+/** The `rendered` blocks of a document's slides that actually carry a path. */
+function renderedBlocks(doc) {
+  return doc.slides.map((s) => s.rendered).filter((r) => r && r.path);
 }
 
-/** The midpoint and spread of the live pointers — one finger gives `dist: 0`,
- *  which is what makes the same handler serve a drag and a pinch. */
-function pointerCentroid(pointers) {
-  const pts = [...pointers.values()];
-  if (!pts.length) return { cx: 0, cy: 0, dist: 0 };
-  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-  const dist =
-    pts.length < 2 ? 0 : Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-  return { cx, cy, dist };
+/** One slide's spec hash under its document's framing — the doc-level fields
+ *  are folded in, so a strategy or anchor change invalidates every slide. */
+function slideSpecHash(doc, slide) {
+  return specHash(slide, doc.aspect, {
+    strategy: doc.strategy,
+    anchorY: doc.anchorY,
+    spanLayers: doc.spanLayers,
+  });
+}
+
+/**
+ * The media rows this render can reuse instead of re-encoding, one entry per
+ * slide (null where there is nothing to reuse).
+ *
+ * A slide whose specHash still matches the one stored with its render has
+ * identical inputs (source/crop/fit/bg, plus the doc-level framing folded in) —
+ * reuse its media row rather than re-encode and re-upload it. In deck mode that
+ * is what makes nudging one slide re-upload exactly one.
+ */
+function reusableMedia(doc) {
+  return doc.slides.map((slide) => {
+    const prior = slide.rendered;
+    if (!prior || !Number.isFinite(prior.media_id)) return null;
+    return slideSpecHash(doc, slide) === prior.specHash
+      ? { id: prior.media_id, path: prior.path }
+      : null;
+  });
+}
+
+/**
+ * Byte-identical slides dedup to one media row server-side (SHA256), so two
+ * slides would share a path — which the blog renders twice but Instagram
+ * (ExtractMediaPaths dedups) renders once. Rather than let the two disagree,
+ * forbid it here. See docs/features/carousel-studio.md.
+ */
+function assertDistinctMedia(media) {
+  if (new Set(media.map((m) => m.id)).size !== media.length) {
+    throw new Error(
+      "Two slides came out byte-identical — change the slide count, the aspect or one slide's framing so every slide is distinct.",
+    );
+  }
+}
+
+/** The document as it stands once `media` has been uploaded for it: every slide
+ *  carries the row it rendered to, plus the hash that lets the next render skip
+ *  it. */
+function documentWithRenders(doc, media) {
+  return normalizeDocument({
+    ...doc,
+    slides: doc.slides.map((slide, i) => ({
+      ...slide,
+      rendered: {
+        path: media[i].path,
+        media_id: media[i].id,
+        specHash: slideSpecHash(doc, slide),
+      },
+    })),
+  });
 }
 
 export default class CarouselStudioPage extends Component {
@@ -221,14 +197,25 @@ export default class CarouselStudioPage extends Component {
     // A serialized document, not a five-field spec: per-slide framing has no
     // doc-level control to compare, so a spec would report "clean" after a pan.
     this._renderedDoc = null;
-    // The in-flight gesture: { i, frame, pointers, crop, startCrop, start, moved }.
-    this._drag = null;
-    // A crop written to the DOM but not yet committed to the document (a wheel
-    // gesture, which has no release event to commit on).
-    this._pending = null;
-    this._pendingTimer = null;
     // Slide index to restore focus to after a keyboard nudge rebuilds the strip.
     this._refocus = null;
+    // Deck direct manipulation. Built once and re-attached per render rather
+    // than rebuilt with the frames: a wheel gesture's debounced commit has to
+    // outlive the rebuild a neighbouring control can cause mid-burst.
+    this._gestures = createDeckGestures({
+      dims: () => ({
+        srcW: this.state.srcW,
+        srcH: this.state.srcH,
+        aspect: this.state.doc.aspect,
+      }),
+      slideAt: (i) => this.state.doc.slides[i] || null,
+      paint: (i, slide) => this._paintDeckSlide(i, slide),
+      commit: (i, crop) => this._setSlideFraming(i, { crop }),
+      select: (i) => this._select(i),
+      refocus: (i) => {
+        this._refocus = i;
+      },
+    });
   }
 
   actions = {
@@ -281,8 +268,7 @@ export default class CarouselStudioPage extends Component {
   beforeUnmount() {
     this._picker?.destroy();
     this._picker = null;
-    clearTimeout(this._pendingTimer);
-    this._pendingTimer = null;
+    this._gestures.destroy();
   }
 
   // ── Document accessors ────────────────────────────────────────────────────
@@ -338,25 +324,32 @@ export default class CarouselStudioPage extends Component {
         }),
       ]);
       if (this._unmounted) return;
-      const doc = carousel ? parseDocument(carousel.doc) : emptyDocument();
-      this._priorRendered = doc.slides.map((s) => s.rendered).filter((r) => r && r.path);
-      const fullyRendered = doc.slides.length > 0 && doc.slides.every((s) => s.rendered);
-      this._renderedDoc = fullyRendered ? serializeDocument(doc) : null;
-      this.setState({
-        loading: false,
-        post,
-        doc,
-        selected: 0,
-        hasCarousel: Boolean(carousel),
-      });
-      // The document does not store source pixels — re-probe them so the fit
-      // panel has its numbers. The image is cache-warm from the CSS background.
-      const source = doc.slides[0]?.source;
-      if (source) this._probeSource(source);
+      this._adoptLoaded(post, carousel);
     } catch (err) {
       if (this._unmounted) return;
       this.setState({ loading: false, error: err?.message || "Could not load the post." });
     }
+  }
+
+  /** Take a freshly loaded post and its carousel (or null) as the working
+   *  state, including the dirty-state baseline: only a document whose every
+   *  slide has been rendered is something later edits can be dirty against. */
+  _adoptLoaded(post, carousel) {
+    const doc = carousel ? parseDocument(carousel.doc) : emptyDocument();
+    this._priorRendered = renderedBlocks(doc);
+    const fullyRendered = doc.slides.length > 0 && doc.slides.every((s) => s.rendered);
+    this._renderedDoc = fullyRendered ? serializeDocument(doc) : null;
+    this.setState({
+      loading: false,
+      post,
+      doc,
+      selected: 0,
+      hasCarousel: Boolean(carousel),
+    });
+    // The document does not store source pixels — re-probe them so the fit
+    // panel has its numbers. The image is cache-warm from the CSS background.
+    const source = doc.slides[0]?.source;
+    if (source) this._probeSource(source);
   }
 
   _openPicker() {
@@ -399,7 +392,7 @@ export default class CarouselStudioPage extends Component {
       if (this._unmounted || this._source() !== path) return;
       this.setState({ srcW: w || null, srcH: h || null });
     } catch {
-      /* no dimensions — _renderFitPanel() falls back to the plain controls */
+      /* no dimensions — the fit panel falls back to the plain controls */
     }
   }
 
@@ -491,12 +484,18 @@ export default class CarouselStudioPage extends Component {
     });
   }
 
+  /** Select a slide, if that is a change — the deck panel follows the selection,
+   *  so this re-renders and must never run mid-gesture. */
+  _select(i) {
+    if (this.state.selected !== i) this.setState({ selected: i });
+  }
+
   /**
    * Apply a fit-panel radio choice: `cover` keeps the current count; `fill`,
    * `exact` and `pad` each snap the count to what the strategy makes from this
    * source (`ceil`/`floor` of `srcW / slideW`), clamped to the studio bounds.
    *
-   * @param {string} mode  one of `FIT_MODES`
+   * @param {string} mode  one of the fit panel's modes
    */
   _applyFitMode(mode) {
     const { srcW } = this.state;
@@ -511,8 +510,8 @@ export default class CarouselStudioPage extends Component {
     else this._setSplit({ strategy: "cover" });
   }
 
-  /** Which `FIT_MODES` radio the current document reads as. `cover` at exactly
-   *  the width-filling count is shown as `fill`; the two are otherwise identical. */
+  /** Which fit radio the current document reads as. `cover` at exactly the
+   *  width-filling count is shown as `fill`; the two are otherwise identical. */
   _currentFitMode() {
     const { srcW } = this.state;
     const { strategy, aspect, slides } = this.state.doc;
@@ -551,90 +550,30 @@ export default class CarouselStudioPage extends Component {
     return serializeDocument(this.state.doc) !== this._renderedDoc;
   }
 
+  // ── Render / save ─────────────────────────────────────────────────────────
+
+  /**
+   * Render every slide, put the result in the post, and clean up after the
+   * generation it replaced. The phases are one method each below; this is the
+   * order they run in and the only place the studio's own state moves.
+   */
   async _render() {
-    const { postId, post, srcW, srcH } = this.state;
+    const { postId, post } = this.state;
     const doc = this.state.doc;
     if (!this._source() || !doc.slides.length || this.state.busy) return;
     const total = doc.slides.length;
 
     this.setState({ busy: true, error: null, renderProgress: { done: 0, total } });
     try {
-      const deps = this.props.renderDeps || browserDeps();
-      const hashOf = (slide) =>
-        specHash(slide, doc.aspect, {
-          strategy: doc.strategy,
-          anchorY: doc.anchorY,
-          spanLayers: doc.spanLayers,
-        });
+      const media = await this._uploadSlides(doc, postId);
+      assertDistinctMedia(media);
 
-      // A slide whose specHash still matches the one stored with its render has
-      // identical inputs (source/crop/fit/bg, plus the doc-level framing folded
-      // in) — reuse its media row rather than re-encode and re-upload it. In
-      // deck mode that is what makes nudging one slide re-upload exactly one.
-      const keep = doc.slides.map((slide) => {
-        const prior = slide.rendered;
-        if (!prior || !Number.isFinite(prior.media_id)) return null;
-        return hashOf(slide) === prior.specHash
-          ? { id: prior.media_id, path: prior.path }
-          : null;
-      });
+      const next = documentWithRenders(doc, media);
+      const finalContent = await this._saveRendered(postId, post, next);
+      // Reads `_priorRendered`, so it runs before the new generation replaces it.
+      await this._deleteSuperseded(media, finalContent);
 
-      const media = await renderAndUpload(
-        {
-          doc,
-          postId,
-          srcW: srcW || undefined,
-          srcH: srcH || undefined,
-        },
-        deps,
-        (p) => {
-          if (!this._unmounted) this.setState({ renderProgress: p });
-        },
-        keep,
-      );
-
-      // Byte-identical slides dedup to one media row server-side (SHA256), so
-      // two slides would share a path — which the blog renders twice but
-      // Instagram (ExtractMediaPaths dedups) renders once. Rather than let the
-      // two disagree, forbid it here. See docs/features/carousel-studio.md.
-      if (new Set(media.map((m) => m.id)).size !== media.length) {
-        throw new Error(
-          "Two slides came out byte-identical — change the slide count, the aspect or one slide's framing so every slide is distinct.",
-        );
-      }
-
-      const next = normalizeDocument({
-        ...doc,
-        slides: doc.slides.map((slide, i) => ({
-          ...slide,
-          rendered: {
-            path: media[i].path,
-            media_id: media[i].id,
-            specHash: hashOf(slide),
-          },
-        })),
-      });
-      await saveCarousel(postId, next);
-      const content = applyCarouselBlock(post.content, next);
-      const updated = await updatePost(postId, this._postPayload(post, content));
-      const finalContent = updated?.content ?? content;
-
-      // The previous generation's slides are now unreferenced: orphan detection
-      // keys on `post_id IS NULL` and these carry a post_id, so they would sit
-      // on disk forever. Delete each superseded row explicitly — but never one
-      // whose path still appears in the post (a slide reused inline, say), and
-      // never one this render just reused via `keep`.
-      const keptIds = new Set(media.map((m) => m.id));
-      const superseded = this._priorRendered.filter(
-        (r) =>
-          Number.isFinite(r.media_id) &&
-          !keptIds.has(r.media_id) &&
-          !finalContent.includes(r.path),
-      );
-      if (superseded.length) {
-        await Promise.allSettled(superseded.map((r) => deleteMedia(r.media_id)));
-      }
-      this._priorRendered = next.slides.map((s) => s.rendered).filter((r) => r && r.path);
+      this._priorRendered = renderedBlocks(next);
       this._renderedDoc = serializeDocument(next);
 
       if (this._unmounted) return;
@@ -650,6 +589,50 @@ export default class CarouselStudioPage extends Component {
       if (this._unmounted) return;
       this.setState({ busy: false, renderProgress: null, error: err?.message || "Render failed." });
       setToast({ message: `Carousel render failed: ${err?.message || err}`, type: "error" });
+    }
+  }
+
+  /** Draw and upload the slides this render owes, reusing every media row whose
+   *  inputs have not moved, and reporting progress as they land. */
+  _uploadSlides(doc, postId) {
+    const { srcW, srcH } = this.state;
+    const deps = this.props.renderDeps || browserDeps();
+    return renderAndUpload(
+      { doc, postId, srcW: srcW || undefined, srcH: srcH || undefined },
+      deps,
+      (p) => {
+        if (!this._unmounted) this.setState({ renderProgress: p });
+      },
+      reusableMedia(doc),
+    );
+  }
+
+  /** Save the rendered document and write its block into the post. Returns the
+   *  post content as it ended up — the server's copy where it sent one back. */
+  async _saveRendered(postId, post, doc) {
+    await saveCarousel(postId, doc);
+    const content = applyCarouselBlock(post.content, doc);
+    const updated = await updatePost(postId, this._postPayload(post, content));
+    return updated?.content ?? content;
+  }
+
+  /**
+   * The previous generation's slides are now unreferenced: orphan detection
+   * keys on `post_id IS NULL` and these carry a post_id, so they would sit on
+   * disk forever. Delete each superseded row explicitly — but never one whose
+   * path still appears in the post (a slide reused inline, say), and never one
+   * this render just reused.
+   */
+  async _deleteSuperseded(media, finalContent) {
+    const keptIds = new Set(media.map((m) => m.id));
+    const superseded = this._priorRendered.filter(
+      (r) =>
+        Number.isFinite(r.media_id) &&
+        !keptIds.has(r.media_id) &&
+        !finalContent.includes(r.path),
+    );
+    if (superseded.length) {
+      await Promise.allSettled(superseded.map((r) => deleteMedia(r.media_id)));
     }
   }
 
@@ -733,62 +716,18 @@ export default class CarouselStudioPage extends Component {
         ...(postCrumb ? [{ label: postCrumb, href: `/light/posts/${postId}/edit` }] : []),
         { label: "Carousel Studio" },
       ],
-      actions: this._renderActions(),
+      actions: actionsBar({
+        busy: this.state.busy,
+        renderProgress: this.state.renderProgress,
+        hasCarousel: this.state.hasCarousel,
+        dirty: this._isDirty(),
+        hasSource: Boolean(this._source()),
+      }),
       content: this._renderStudio(),
       // A split stage is n slides wide; the admin content clamp would squeeze
       // it to a band. See `.carousel-studio-full-width` in carousel.css.
       contentClass: "carousel-studio-full-width",
     });
-  }
-
-  _renderActions() {
-    const { busy, renderProgress, hasCarousel } = this.state;
-    const dirty = this._isDirty();
-    const source = this._source();
-    const label = busy
-      ? renderProgress
-        ? `Rendering… ${renderProgress.done}/${renderProgress.total}`
-        : "Rendering…"
-      : "Render";
-    return html`
-      <button class="btn btn-secondary" data-action="back-to-post">&larr; Back to post</button>
-      <button
-        id="carousel-render-btn"
-        class="btn btn-primary ${dirty && !busy ? "carousel-studio__render-btn--dirty" : ""}"
-        data-action="render"
-        ${!source || busy ? "disabled" : ""}
-      >
-        ${raw(REFRESH_SVG)}<span class="btn-label">${label}</span>
-      </button>
-      ${busy && renderProgress
-        ? html`
-            <div
-              class="carousel-studio__progress"
-              role="progressbar"
-              aria-valuemin="0"
-              aria-valuemax="${String(renderProgress.total)}"
-              aria-valuenow="${String(renderProgress.done)}"
-            >
-              <div
-                class="carousel-studio__progress-bar"
-                style="width:${String(Math.round((renderProgress.done / renderProgress.total) * 100))}%"
-              ></div>
-            </div>`
-        : ""}
-      ${dirty && !busy
-        ? html`<span class="carousel-studio__dirty-badge" role="status"
-            >Unsaved — press Render</span
-          >`
-        : ""}
-      ${hasCarousel
-        ? html`<button
-            class="btn btn-danger"
-            data-action="remove-carousel"
-            ${busy ? "disabled" : ""}
-          >
-            Remove carousel
-          </button>`
-        : ""}`;
   }
 
   _renderStudio() {
@@ -804,457 +743,27 @@ export default class CarouselStudioPage extends Component {
     return html`
       <section class="carousel-studio" data-post-id="${String(postId)}">
         ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
-        ${this._source() ? this._renderBuilder() : this._renderPickPrompt()}
+        ${this._source() ? this._renderBuilder() : pickPrompt()}
       </section>`;
   }
 
-  _renderPickPrompt() {
-    return html`
-      <div class="carousel-studio__pick">
-        <p>Pick one image to slice into slides.</p>
-        <button class="btn btn-primary" data-action="pick-source">Choose image</button>
-      </div>`;
-  }
-
-  /**
-   * The two layers of one deck frame, in paint order.
-   *
-   * The fill spans the whole frame and the image sits on top of it, exactly as
-   * `paintSlide` fills the canvas and then blits the crop over it. Both are
-   * their own elements rather than backgrounds of the frame: a contained
-   * slide's box is smaller than the frame, so only an element cut down to the
-   * content rect keeps the source from bleeding into the letterbox — and only a
-   * separate element can carry the `blur()` the fill needs without blurring the
-   * image and the frame's border with it.
-   */
-  _deckLayers() {
-    return html`
-      <span class="carousel-studio__frame-bg"></span>
-      <span class="carousel-studio__frame-img"></span>`;
-  }
-
+  /** Everything the builder markup needs, read off the state in one place —
+   *  `studio/panels.js` answers no questions about the page itself. */
   _renderBuilder() {
-    const { showGuides, selected } = this.state;
-    const doc = this.state.doc;
-    const deck = doc.mode === "deck";
-    const n = doc.slides.length;
-    const [w, h] = canvasSize(doc.aspect);
-
-    const dividers = Array.from({ length: n - 1 }, (_, i) => {
-      const left = ((i + 1) / n) * 100;
-      return html`<span class="carousel-studio__divider" style="left:${String(left)}%"></span>`;
+    const { doc, showGuides, selected, srcW, srcH, busy } = this.state;
+    const deckIndex = this._selectedIndex();
+    return builder({
+      doc,
+      showGuides,
+      selected,
+      deckIndex,
+      srcW,
+      srcH,
+      busy,
+      fitMode: this._currentFitMode(),
+      hasPad: this._hasPad(doc.slides[deckIndex]),
+      renderedPaths: this._renderedPaths(),
     });
-
-    const sa = safeAreaRect(doc.aspect);
-    const guides = showGuides
-      ? Array.from({ length: n }, (_, i) => {
-          const style = [
-            `left:${String(((i + sa.x / w) / n) * 100)}%`,
-            `width:${String((sa.w / w / n) * 100)}%`,
-            `top:${String((sa.y / h) * 100)}%`,
-            `height:${String((sa.h / h) * 100)}%`,
-          ].join(";");
-          return html`<span class="carousel-studio__safe" style="${style}"></span>`;
-        })
-      : "";
-
-    // In deck mode the stage is no longer one crop band projected across the
-    // deck — it is n independently framed slides laid side by side, which is
-    // exactly the continuity check the user now needs.
-    const stageSlides = deck
-      ? doc.slides.map(
-          (_, i) => html`
-            <span
-              class="carousel-studio__stage-slide"
-              data-slice="${String(i)}"
-              style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
-            >
-              ${this._deckLayers()}
-            </span>`,
-        )
-      : "";
-
-    const strip = doc.slides.map((_, i) =>
-      deck
-        ? html`
-            <div
-              class="carousel-studio__frame carousel-studio__frame--deck ${i === selected
-                ? "is-selected"
-                : ""}"
-              data-slice="${String(i)}"
-              tabindex="0"
-              role="group"
-              aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
-              style="aspect-ratio:${String(w)}/${String(h)}"
-            >
-              ${this._deckLayers()}
-            </div>`
-        : html`
-            <div
-              class="carousel-studio__frame"
-              data-slice="${String(i)}"
-              style="aspect-ratio:${String(w)}/${String(h)}"
-            ></div>`,
-    );
-
-    const paths = this._renderedPaths();
-    const renderedStrip = paths.length
-      ? html`
-          <div class="carousel-studio__rendered">
-            <h2 class="carousel-studio__subhead">Rendered slides</h2>
-            <div class="carousel-studio__slides">
-              ${paths.map(
-                (p) => html`<img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />`,
-              )}
-            </div>
-          </div>`
-      : "";
-
-    return html`
-      <div class="carousel-studio__builder">
-        ${this._renderModeToggle()}
-
-        <div
-          class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""}"
-          style="aspect-ratio:${String(n * w)}/${String(h)}"
-        >
-          ${stageSlides}${dividers}${guides}
-        </div>
-
-        <div class="carousel-studio__filmstrip" aria-label="Slide preview">${strip}</div>
-
-        ${deck ? this._renderDeckPanel() : this._renderFitPanel()}
-
-        <div class="carousel-studio__controls">
-          ${deck
-            ? ""
-            : html`
-                <label class="carousel-studio__control">
-                  <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
-                  <input
-                    type="range"
-                    id="carousel-n"
-                    min="${String(MIN_SLIDES)}"
-                    max="${String(MAX_SLIDES)}"
-                    value="${String(n)}"
-                  />
-                </label>`}
-
-          <label class="carousel-studio__control">
-            <span>Aspect</span>
-            <select id="carousel-aspect">
-              ${ASPECT_OPTIONS.map(
-                ([val, text]) => html`
-                  <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
-              )}
-            </select>
-          </label>
-
-          <label class="carousel-studio__control carousel-studio__control--check">
-            <input type="checkbox" id="carousel-guides" ${showGuides ? "checked" : ""} />
-            <span>Safe-area guides</span>
-          </label>
-
-          <button class="btn btn-secondary" data-action="pick-source">Change image</button>
-        </div>
-
-        ${renderedStrip}
-      </div>`;
-  }
-
-  /** Split / Deck. Deck is unavailable until the source pixel size is known —
-   *  there would be nothing to derive the per-slide crops from. */
-  _renderModeToggle() {
-    const { srcW, srcH, busy } = this.state;
-    const mode = this.state.doc.mode;
-    const canDeck = Boolean(srcW && srcH);
-    return html`
-      <div class="carousel-studio__modes" role="group" aria-label="Framing mode">
-        <button
-          type="button"
-          class="carousel-studio__chip ${mode === "split" ? "is-active" : ""}"
-          data-action="mode"
-          data-mode="split"
-          aria-pressed="${mode === "split" ? "true" : "false"}"
-          ${busy ? "disabled" : ""}
-          title="One image sliced into continuous columns"
-        >
-          Split
-        </button>
-        <button
-          type="button"
-          class="carousel-studio__chip ${mode === "deck" ? "is-active" : ""}"
-          data-action="mode"
-          data-mode="deck"
-          aria-pressed="${mode === "deck" ? "true" : "false"}"
-          ${busy || !canDeck ? "disabled" : ""}
-          title="${canDeck
-            ? "Frame each slide on its own — nothing moves when you switch"
-            : "Waiting for the source dimensions"}"
-        >
-          Deck
-        </button>
-        <span class="carousel-studio__mode-hint">
-          ${mode === "deck"
-            ? "Each slide is framed on its own. Going back to Split discards that."
-            : "Every slide is a column of one strip."}
-        </span>
-      </div>`;
-  }
-
-  /**
-   * Deck mode's panel: which slide is selected, what it shows, and the per-slide
-   * `fit`. The split fit panel (count chips, strategy radios, `anchorY` slider)
-   * is not shown here at all — none of those controls drives a deck slide, and
-   * leaving them live would be a lie.
-   */
-  _renderDeckPanel() {
-    const doc = this.state.doc;
-    const i = this._selectedIndex();
-    const slide = doc.slides[i];
-    if (!slide) return "";
-
-    const { crop } = slide;
-    const zoom = crop.w > 0 ? Math.round(100 / crop.w) : 100;
-    const readout = [
-      `showing ${Math.round(crop.w * 100)}% × ${Math.round(crop.h * 100)}% of the source`,
-      `${zoom}% zoom`,
-      slide.fit === "contain" ? "letterboxed" : "filling the frame",
-    ].join(" · ");
-
-    return html`
-      <div class="carousel-studio__fit carousel-studio__deck">
-        <p class="carousel-studio__fit-dims">
-          Slide ${String(i + 1)} of ${String(doc.slides.length)} · drag to pan ·
-          wheel or pinch to zoom · arrow keys nudge
-        </p>
-
-        <div class="carousel-studio__fit-chips" role="group" aria-label="Slide fit">
-          ${SLIDE_FITS.map(
-            ([val, text]) => html`
-              <button
-                type="button"
-                class="carousel-studio__chip ${slide.fit === val ? "is-active" : ""}"
-                data-action="slide-fit"
-                data-slide="${String(i)}"
-                data-fit="${val}"
-                aria-pressed="${slide.fit === val ? "true" : "false"}"
-              >
-                ${text}
-              </button>`,
-          )}
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="reset-slide"
-            data-slide="${String(i)}"
-          >
-            Reset framing
-          </button>
-        </div>
-
-        ${this._renderBgControl(i, slide)}
-
-        <p class="carousel-studio__fit-readout" aria-live="polite">${readout}</p>
-      </div>`;
-  }
-
-  /**
-   * The background control for one deck slide — shown only when the slide
-   * really has a letterbox to fill. A `cover` slide covers its frame, and
-   * offering a fill that paints nothing is worse than offering none.
-   *
-   * `solid` adds a colour input; `gradient` adds an angle and its two ends. Both
-   * write through `_setSlideFraming`, so `normalizeBg` is the only thing that
-   * decides what a value means.
-   *
-   * @param {number} i
-   * @param {import('./document.js').CarouselSlide} slide
-   */
-  _renderBgControl(i, slide) {
-    if (!this._hasPad(slide)) return "";
-
-    const bg = slide.bg;
-    const type = bg?.type || "blur";
-    const solid = bg?.type === "solid" ? bg : null;
-    const gradient = bg?.type === "gradient" ? bg : null;
-
-    return html`
-      <div class="carousel-studio__bg">
-        <span class="carousel-studio__bg-label" id="carousel-bg-label">Letterbox fill</span>
-        <div class="carousel-studio__fit-chips" role="group" aria-labelledby="carousel-bg-label">
-          ${SLIDE_BGS.map(
-            ([val, text]) => html`
-              <button
-                type="button"
-                class="carousel-studio__chip ${type === val ? "is-active" : ""}"
-                data-action="slide-bg"
-                data-slide="${String(i)}"
-                data-bg="${val}"
-                aria-pressed="${type === val ? "true" : "false"}"
-              >
-                ${text}
-              </button>`,
-          )}
-        </div>
-
-        ${solid
-          ? html`
-              <label class="carousel-studio__bg-field">
-                <span>Colour</span>
-                <input
-                  type="color"
-                  id="carousel-bg-color"
-                  value="${colorInputValue(solid.color)}"
-                />
-              </label>`
-          : ""}
-        ${gradient
-          ? html`
-              <label class="carousel-studio__bg-field">
-                <span>From</span>
-                <input
-                  type="color"
-                  id="carousel-bg-from"
-                  value="${colorInputValue(gradient.stops[0].color)}"
-                />
-              </label>
-              <label class="carousel-studio__bg-field">
-                <span>To</span>
-                <input
-                  type="color"
-                  id="carousel-bg-to"
-                  value="${colorInputValue(
-                    gradient.stops[gradient.stops.length - 1].color,
-                  )}"
-                />
-              </label>
-              <label class="carousel-studio__bg-field">
-                <span
-                  >Angle:
-                  <output id="carousel-bg-angle-out">${String(gradient.angle)}°</output></span
-                >
-                <input
-                  type="range"
-                  id="carousel-bg-angle"
-                  min="0"
-                  max="359"
-                  step="1"
-                  value="${String(gradient.angle)}"
-                />
-              </label>`
-          : ""}
-      </div>`;
-  }
-
-  /**
-   * The fit panel: source dimensions, one-click count/strategy chips, the
-   * strategy radio, a live `fitReport` readout for the current selection, an
-   * upscale warning, and a vertical-anchor slider that appears only when the
-   * crop leaves vertical slack. Hidden entirely until the source pixel size is
-   * known (a probe may still be in flight, or have failed).
-   */
-  _renderFitPanel() {
-    const { srcW, srcH } = this.state;
-    const doc = this.state.doc;
-    const { anchorY } = doc;
-    const n = doc.slides.length;
-    const strategy = /** @type {'cover'|'exact'|'pad'} */ (doc.strategy);
-    if (!srcW || !srcH) return "";
-
-    const [dstW, dstH] = canvasSize(doc.aspect);
-    const report = fitReport(srcW, srcH, n, doc.aspect, strategy);
-    const chips = slideCountOptions(srcW, srcH, doc.aspect, {
-      min: MIN_SLIDES,
-      max: MAX_SLIDES,
-    });
-    const fitMode = this._currentFitMode();
-
-    const scaleTxt =
-      Math.abs(report.scale - 1) < 0.005
-        ? "pixel-exact"
-        : `${(report.scale * 100).toFixed(1)}% scale`;
-    const tail =
-      report.padPx > 0 ? `${Math.round(report.padPx)} px padding` : "full bleed";
-    const readout = [
-      `${report.n} ${report.n === 1 ? "slide" : "slides"}`,
-      scaleTxt,
-      `${Math.round(report.trimmedW)} px trimmed`,
-      tail,
-    ].join(" · ");
-
-    return html`
-      <div class="carousel-studio__fit">
-        <p class="carousel-studio__fit-dims">
-          Source ${String(srcW)} × ${String(srcH)} · slide ${String(dstW)} ×
-          ${String(dstH)} · ${(srcW / dstW).toFixed(2)} slides
-        </p>
-
-        <div
-          class="carousel-studio__fit-chips"
-          role="group"
-          aria-label="Suggested slide counts"
-        >
-          ${chips.map((c) => {
-            const label = `${c.n} ${c.strategy === "cover" ? "fill" : c.strategy}`;
-            const active = c.n === n && c.strategy === strategy;
-            return html`
-              <button
-                type="button"
-                class="carousel-studio__chip ${active ? "is-active" : ""}"
-                data-action="fit-chip"
-                data-n="${String(c.n)}"
-                data-strategy="${c.strategy}"
-                title="${c.label}"
-              >
-                ${label}
-              </button>`;
-          })}
-        </div>
-
-        <fieldset class="carousel-studio__fit-modes">
-          <legend>Fit</legend>
-          ${FIT_MODES.map(
-            ([val, text]) => html`
-              <label class="carousel-studio__fit-mode">
-                <input
-                  type="radio"
-                  name="carousel-fit"
-                  value="${val}"
-                  data-action="fit-mode"
-                  ${val === fitMode ? "checked" : ""}
-                />
-                <span>${text}</span>
-              </label>`,
-          )}
-        </fieldset>
-
-        <p class="carousel-studio__fit-readout" aria-live="polite">${readout}</p>
-        ${report.scale > 1.02
-          ? html`<p class="carousel-studio__fit-warning" role="status">
-              warning: upscaling — slides will be soft
-            </p>`
-          : ""}
-        ${report.trimmedH > 1
-          ? html`
-              <label class="carousel-studio__control">
-                <span
-                  >Vertical anchor:
-                  <output id="carousel-anchor-out"
-                    >${String(Math.round(anchorY * 100))}%</output
-                  ></span
-                >
-                <input
-                  type="range"
-                  id="carousel-anchor"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value="${String(anchorY)}"
-                />
-              </label>`
-          : ""}
-      </div>`;
   }
 
   // ── Preview painting ──────────────────────────────────────────────────────
@@ -1262,14 +771,15 @@ export default class CarouselStudioPage extends Component {
   afterRender() {
     setupAdminLayout(this, { currentPath: "/light/carousel" });
 
+    const deck = this.state.doc.mode === "deck";
     const source = this._source();
     if (source) {
-      if (this.state.doc.mode === "deck") this._paintDeck();
+      if (deck) this._paintDeck();
       else this._paintSplit(source);
     }
 
     this._wireControls();
-    if (this.state.doc.mode === "deck") this._wireGestures();
+    this._gestures.attach(deck ? this.$$(".carousel-studio__frame--deck") : []);
 
     // A keyboard nudge rebuilds the strip under the user's fingers; put focus
     // back where it was so the next arrow press keeps working.
@@ -1280,55 +790,25 @@ export default class CarouselStudioPage extends Component {
     }
   }
 
-  /**
-   * Split-mode preview. The source image drives both the stage and every
-   * filmstrip frame as a CSS background — set from JS so a media path never
-   * lands in a style string the html`` tag can only HTML-escape, not
-   * CSS-escape. Size and position reproduce the real per-slide crop
-   * (`backgroundFit`, mirroring `sliceRects`) so the preview never lies about
-   * what the render will produce; a hatch layer sits behind the image so
-   * `pad`'s trailing gap reads as a deliberate block instead of stretched or
-   * missing image.
-   */
+  /** Split-mode preview: one crop band across the stage, one column per frame. */
   _paintSplit(source) {
     const { srcW, srcH } = this.state;
-    const { aspect, anchorY } = this.state.doc;
-    const n = this.state.doc.slides.length;
-    const strategy = /** @type {'cover'|'exact'|'pad'} */ (this.state.doc.strategy);
-
-    const bg = `url("${encodeURI(source)}"), ${PAD_HATCH}`;
-    const stage = this.$(".carousel-studio__stage");
-    const frames = this.$$(".carousel-studio__frame");
-    const applyBg = (el, size, position) => {
-      el.style.backgroundImage = bg;
-      el.style.backgroundRepeat = "no-repeat, no-repeat";
-      el.style.backgroundSize = `${size[0]}% ${size[1]}%, 100% 100%`;
-      el.style.backgroundPosition = `${position[0]}% ${position[1]}%, 0% 0%`;
-    };
-
-    if (srcW && srcH) {
-      if (stage) {
-        const fit = backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, n, 0);
-        applyBg(stage, fit.size, fit.position);
-      }
-      frames.forEach((el, i) => {
-        const fit = backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, 1, i);
-        applyBg(el, fit.size, fit.position);
-      });
-    } else {
-      // Dimensions not known yet (probe in flight or failed) — no aspect
-      // ratio to compute a real crop from, so fall back to CSS `cover` on
-      // the stage (its declared default) and a plain stretch per frame, as
-      // before. Self-corrects once the probe resolves and re-renders.
-      if (stage) {
-        stage.style.backgroundImage = `url("${encodeURI(source)}")`;
-        stage.style.backgroundRepeat = "no-repeat";
-      }
-      frames.forEach((el, i) => {
-        const posX = n > 1 ? (i / (n - 1)) * 100 : 0;
-        applyBg(el, [n * 100, 100], [posX, 50]);
-      });
-    }
+    const { aspect, anchorY, slides } = this.state.doc;
+    paintSplit(
+      {
+        stage: this.$(".carousel-studio__stage"),
+        frames: this.$$(".carousel-studio__frame"),
+      },
+      {
+        source,
+        srcW,
+        srcH,
+        aspect,
+        anchorY,
+        n: slides.length,
+        strategy: /** @type {'cover'|'exact'|'pad'} */ (this.state.doc.strategy),
+      },
+    );
   }
 
   /** Deck-mode preview: every slide's own crop, on its own image element. */
@@ -1337,89 +817,23 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Write one slide's framing onto both elements that show it (the stage slice
-   * and the filmstrip frame). The only place deck framing reaches the DOM — a
-   * gesture calls it with a provisional slide, so the drag and the committed
-   * document are painted by identical code.
+   * Paint one deck slide — the stage slice and the filmstrip frame both carry
+   * `data-slice`, so one query finds every element showing it. Called with a
+   * provisional slide mid-gesture and with the document's own slide otherwise,
+   * which is what keeps a drag and a commit painting identically.
    *
    * @param {number} i
    * @param {import('./document.js').CarouselSlide} slide
    */
   _paintDeckSlide(i, slide) {
     const { srcW, srcH } = this.state;
-    const fit = deckSlideFitCSS(srcW || 0, srcH || 0, this.state.doc.aspect, slide.crop, slide.fit);
-    const url = slide.source ? `url("${encodeURI(slide.source)}")` : "none";
-    this.$$(`[data-slice="${i}"] .carousel-studio__frame-img`).forEach((el) => {
-      el.style.backgroundImage = url;
-      el.style.backgroundRepeat = "no-repeat";
-      el.style.backgroundSize = `${fit.size[0]}% ${fit.size[1]}%`;
-      el.style.backgroundPosition = `${fit.position[0]}% ${fit.position[1]}%`;
-      el.style.left = `${fit.box.x}%`;
-      el.style.top = `${fit.box.y}%`;
-      el.style.width = `${fit.box.w}%`;
-      el.style.height = `${fit.box.h}%`;
-    });
-    this._paintDeckBg(i, slide, fit, url);
-  }
-
-  /**
-   * The fill layer behind one slide — the CSS twin of `paintSlide`'s pad fill,
-   * so the filmstrip shows the background the JPEG will really carry instead of
-   * the hatch placeholder.
-   *
-   * - `solid` / `gradient` are literal CSS: `gradientLine` follows the
-   *   `linear-gradient(<angle>)` convention precisely so the canvas and this
-   *   agree on where the axis runs.
-   * - `blur` (the default) is the slide's own image stretched from its content
-   *   box to the whole frame, which is exactly what the canvas does — and in
-   *   percentages that is the *same* `background-size`/`position` pair on a
-   *   bigger element, so the numbers are simply reused. The radius is in `cqw`
-   *   against the frame's inline size (`carousel.css` makes each frame a query
-   *   container), which keeps it proportional to the canvas radius at any
-   *   preview size without measuring anything.
-   *
-   * A slide with nothing to fill — no letterbox, or no usable source yet —
-   * keeps the layer empty, leaving the frame's hatch to show through as the
-   * "nothing to preview yet" affordance it was added for.
-   *
-   * @param {number} i
-   * @param {import('./document.js').CarouselSlide} slide
-   * @param {ReturnType<import('./geometry.js').deckSlideFitCSS>} fit
-   * @param {string} url the slide's source as a CSS `url()`, or `"none"`
-   */
-  _paintDeckBg(i, slide, fit, url) {
-    const [dstW] = canvasSize(this.state.doc.aspect);
-    const bg = slide.bg;
-
-    let image = "none";
-    let color = "transparent";
-    let filter = "none";
-    let size = "";
-    let position = "";
-    if (!this._hasPad(slide)) {
-      // Nothing to fill: either the frame is covered, or there is no source to
-      // fill it from yet and the frame's hatch should show through.
-    } else if (bg?.type === "solid") {
-      color = bg.color;
-    } else if (bg?.type === "gradient") {
-      const stops = bg.stops.map((s) => `${s.color} ${s.at * 100}%`).join(", ");
-      image = `linear-gradient(${bg.angle}deg, ${stops})`;
-    } else {
-      const radius = Math.max(1, Math.round((bg && "radius" in bg && bg.radius) || dstW * 0.05));
-      image = url;
-      filter = `blur(${((radius / dstW) * 100).toFixed(2)}cqw)`;
-      size = `${fit.size[0]}% ${fit.size[1]}%`;
-      position = `${fit.position[0]}% ${fit.position[1]}%`;
-    }
-
-    this.$$(`[data-slice="${i}"] .carousel-studio__frame-bg`).forEach((el) => {
-      el.style.backgroundImage = image;
-      el.style.backgroundColor = color;
-      el.style.backgroundRepeat = "no-repeat";
-      el.style.backgroundSize = size || "100% 100%";
-      el.style.backgroundPosition = position || "0% 0%";
-      el.style.filter = filter;
-    });
+    paintDeckSlide(
+      {
+        imgs: this.$$(`[data-slice="${i}"] .carousel-studio__frame-img`),
+        bgs: this.$$(`[data-slice="${i}"] .carousel-studio__frame-bg`),
+      },
+      { slide, srcW, srcH, aspect: this.state.doc.aspect, hasPad: this._hasPad(slide) },
+    );
   }
 
   // ── Control wiring ────────────────────────────────────────────────────────
@@ -1535,220 +949,5 @@ export default class CarouselStudioPage extends Component {
       };
     }
     return bg;
-  }
-
-  // ── Deck gestures ─────────────────────────────────────────────────────────
-
-  _wireGestures() {
-    this.$$(".carousel-studio__frame--deck").forEach((frame) => {
-      const i = Number(frame.dataset.slice);
-      this.on(frame, "pointerdown", (e) => this._onPointerDown(e, frame, i));
-      this.on(frame, "pointermove", (e) => this._onPointerMove(e, frame, i));
-      this.on(frame, "pointerup", (e) => this._onPointerUp(e, frame, i));
-      this.on(frame, "pointercancel", (e) => this._onPointerUp(e, frame, i));
-      // Not passive: a zoom over the strip must not also scroll the page.
-      this.on(frame, "wheel", (e) => this._onWheel(e, i), { passive: false });
-      this.on(frame, "keydown", (e) => this._onFrameKey(e, i));
-      this.on(frame, "focus", () => {
-        if (!this._drag) this._select(i);
-      });
-    });
-  }
-
-  /** Select a slide, if that is a change — the deck panel follows the selection,
-   *  so this re-renders and must never run mid-gesture. */
-  _select(i) {
-    if (this.state.selected !== i) this.setState({ selected: i });
-  }
-
-  /**
-   * Normalized source units per CSS pixel of the slide's image element, read
-   * from the same `deckSlideFitCSS` the preview draws with — which is what makes
-   * a 100px drag move the image 100px, at any zoom and either `fit`.
-   */
-  _panScale(crop, fit, box) {
-    const { srcW, srcH } = this.state;
-    const css = deckSlideFitCSS(srcW || 0, srcH || 0, this.state.doc.aspect, crop, fit);
-    const per = (sizePct, px) => (sizePct > 0 && px > 0 ? 100 / sizePct / px : 0);
-    return { x: per(css.size[0], box.width), y: per(css.size[1], box.height) };
-  }
-
-  /** Scale a crop about its own centre. `ratio > 1` widens the crop (zooms out). */
-  _zoomCrop(crop, ratio) {
-    const w = crop.w * ratio;
-    const h = crop.h * ratio;
-    return { x: crop.x + (crop.w - w) / 2, y: crop.y + (crop.h - h) / 2, w, h };
-  }
-
-  /** Clamp through the same helper `updateSlideFraming` commits with, so the
-   *  preview is pinned at the edges exactly where the document will be. */
-  _clamp(crop) {
-    const { srcW, srcH } = this.state;
-    return clampPan(crop, srcW || 0, srcH || 0);
-  }
-
-  /** Whether two crops resolve to the same whole source pixels — the only
-   *  difference the render can see, since `deckSlideRects` rounds there. */
-  _sameCrop(a, b) {
-    const w = this.state.srcW || 1;
-    const h = this.state.srcH || 1;
-    return (
-      Math.round(a.x * w) === Math.round(b.x * w) &&
-      Math.round(a.y * h) === Math.round(b.y * h) &&
-      Math.round(a.w * w) === Math.round(b.w * w) &&
-      Math.round(a.h * h) === Math.round(b.h * h)
-    );
-  }
-
-  /**
-   * The one commit point for a gesture's crop. A drag that ran into the edge of
-   * the source lands back on the crop it started from — give or take a float
-   * ulp from the clamp — and committing that would mark the studio dirty and
-   * re-encode a slide whose pixels are identical. So: repaint from the document
-   * and leave it alone.
-   */
-  _commitCrop(i, crop) {
-    const slide = this.state.doc.slides[i];
-    if (!slide) return;
-    const next = this._clamp(crop);
-    if (this._sameCrop(next, slide.crop)) {
-      this._paintDeckSlide(i, slide);
-      this._select(i);
-      return;
-    }
-    this._setSlideFraming(i, { crop: next });
-  }
-
-  _onPointerDown(e, frame, i) {
-    if (e.button != null && e.button > 0) return;
-    const slide = this.state.doc.slides[i];
-    if (!slide) return;
-    if (!this._drag || this._drag.i !== i) {
-      this._drag = { i, frame, pointers: new Map(), crop: { ...slide.crop }, moved: false };
-    }
-    frame.setPointerCapture?.(e.pointerId);
-    this._drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    // Re-baseline on every pointer down: a second finger arriving starts a
-    // pinch from where the drag left off rather than from where it began.
-    this._drag.start = pointerCentroid(this._drag.pointers);
-    this._drag.startCrop = { ...this._drag.crop };
-    frame.classList.add("is-dragging");
-    e.preventDefault?.();
-  }
-
-  _onPointerMove(e, frame, i) {
-    const drag = this._drag;
-    if (!drag || drag.i !== i || !drag.pointers.has(e.pointerId)) return;
-    drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    const now = pointerCentroid(drag.pointers);
-    const img = frame.querySelector(".carousel-studio__frame-img");
-    const box = img?.getBoundingClientRect?.() || { width: 0, height: 0 };
-    // Two fingers spreading apart shrink the crop; one finger leaves it alone.
-    const ratio =
-      drag.start.dist > 0 && now.dist > 0 ? drag.start.dist / now.dist : 1;
-    const zoomed = this._zoomCrop(drag.startCrop, ratio);
-    const scale = this._panScale(drag.startCrop, this.state.doc.slides[i].fit, box);
-    const dx = now.cx - drag.start.cx;
-    const dy = now.cy - drag.start.cy;
-    // The image follows the pointer, so the crop moves the other way.
-    const crop = this._clamp({
-      ...zoomed,
-      x: zoomed.x - dx * scale.x,
-      y: zoomed.y - dy * scale.y,
-    });
-
-    if (Math.abs(dx) > DRAG_SLOP_PX || Math.abs(dy) > DRAG_SLOP_PX || ratio !== 1) {
-      drag.moved = true;
-    }
-    drag.crop = crop;
-    // Straight to the DOM — no setState, so a drag costs no rebuild and no
-    // decode, only two style writes per frame.
-    this._paintDeckSlide(i, { ...this.state.doc.slides[i], crop });
-    e.preventDefault?.();
-  }
-
-  _onPointerUp(e, frame, i) {
-    const drag = this._drag;
-    if (!drag || drag.i !== i) return;
-    drag.pointers.delete(e.pointerId);
-    frame.releasePointerCapture?.(e.pointerId);
-    if (drag.pointers.size) {
-      // A finger lifted out of a pinch — carry on with the rest.
-      drag.start = pointerCentroid(drag.pointers);
-      drag.startCrop = { ...drag.crop };
-      return;
-    }
-
-    frame.classList.remove("is-dragging");
-    this._drag = null;
-    if (!drag.moved) {
-      // A click, not a drag: select the slide and leave its framing alone.
-      this._select(i);
-      return;
-    }
-    this._commitCrop(i, drag.crop);
-  }
-
-  _onWheel(e, i) {
-    const slide = this.state.doc.slides[i];
-    if (!slide || !e.deltaY) return;
-    e.preventDefault?.();
-    // deltaMode: 0 pixels, 1 lines, 2 pages — normalize to pixels so a Firefox
-    // notch and a Chrome notch zoom by the same amount.
-    const px =
-      e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
-    const base = this._pending?.i === i ? this._pending.crop : slide.crop;
-    const crop = this._clamp(this._zoomCrop(base, Math.exp(px * WHEEL_ZOOM)));
-
-    this._pending = { i, crop };
-    this._paintDeckSlide(i, { ...slide, crop });
-    // A wheel gesture has no release event, so the commit is debounced: one
-    // document mutation per burst instead of one per notch.
-    clearTimeout(this._pendingTimer);
-    this._pendingTimer = setTimeout(() => this._commitPending(), WHEEL_COMMIT_MS);
-  }
-
-  _commitPending() {
-    const pending = this._pending;
-    this._pending = null;
-    this._pendingTimer = null;
-    if (!pending || this._unmounted) return;
-    this._commitCrop(pending.i, pending.crop);
-  }
-
-  _onFrameKey(e, i) {
-    const slide = this.state.doc.slides[i];
-    if (!slide) return;
-    const { crop } = slide;
-    const step = KEY_PAN * (e.shiftKey ? 5 : 1);
-    let next = null;
-    switch (e.key) {
-      case "ArrowLeft":
-        next = { ...crop, x: crop.x - crop.w * step };
-        break;
-      case "ArrowRight":
-        next = { ...crop, x: crop.x + crop.w * step };
-        break;
-      case "ArrowUp":
-        next = { ...crop, y: crop.y - crop.h * step };
-        break;
-      case "ArrowDown":
-        next = { ...crop, y: crop.y + crop.h * step };
-        break;
-      case "+":
-      case "=":
-        next = this._zoomCrop(crop, 1 / KEY_ZOOM);
-        break;
-      case "-":
-      case "_":
-        next = this._zoomCrop(crop, KEY_ZOOM);
-        break;
-      default:
-        return;
-    }
-    e.preventDefault?.();
-    this._refocus = i;
-    this._commitCrop(i, next);
   }
 }
