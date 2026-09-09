@@ -24,7 +24,7 @@ import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.js';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { renderTagLink, buildTagIndex } from '../../utils/tagLinks.js';
+import { renderTagLink, buildTagIndex, parseTagUrl } from '../../utils/tagLinks.js';
 import { setupTagFlyout } from '../../utils/tagFlyout.js';
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.js';
 import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.js';
@@ -157,9 +157,10 @@ export class ImmersiveSheetViewer extends MediaViewer {
       const navTags = getNavTags() || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
       this._sheetFlyoutCleanup = setupTagFlyout(tagsEl, tagIndex, url => {
-        const slug = url.replace('/tags/', '');
+        const { tag, navPath } = parseTagUrl(url);
         ViewContext.update({
-          tag: slug,
+          tag,
+          navPath,
           postSlug: null,
           query: null
         });
