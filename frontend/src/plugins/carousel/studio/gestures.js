@@ -67,6 +67,27 @@ function frameRect(frame) {
 }
 
 /**
+ * The coordinate space one layer gesture runs in: the rect the layer's `box` is
+ * fractions of, the snap tolerance `SNAP_PX` is worth in that rect, and the
+ * safe-area rect to snap against.
+ *
+ * Resolved once per press and read by every move until the release — in one
+ * place rather than in each handler, so a layer whose box is normalized to
+ * something other than the frame that was pressed is a change here and nowhere
+ * else.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number}|null} safe
+ */
+export function layerSpace(rect, safe) {
+  return {
+    rect,
+    safe: safe || null,
+    tol: { x: SNAP_PX / (rect.width || 1), y: SNAP_PX / (rect.height || 1) },
+  };
+}
+
+/**
  * Which part of a selected layer a press at `(cx, cy)` lands on, or `null` when
  * it misses — in which case the crop gesture takes the press instead. A press
  * near an edge or corner (`HANDLE_GRAB_PX`, converted to box fractions through
@@ -306,7 +327,7 @@ export function createDeckGestures(host) {
   let bound = [];
   /** The in-flight gesture, tagged by `kind`: a `"crop"` pan/pinch
    *  ({ i, frame, pointers, crop, startCrop, start, moved }) or a `"layer"`
-   *  move/resize ({ i, j, frame, mode, anchor, rect, startX, startY, startBox,
+   *  move/resize ({ i, j, frame, mode, anchor, space, startX, startY, startBox,
    *  box, moved }). One at a time — a press mid-gesture is ignored. */
   let drag = null;
   /** A crop written to the DOM but not yet committed to the document (a wheel
@@ -353,17 +374,14 @@ export function createDeckGestures(host) {
 
   const onLayerMove = (e) => {
     if (!drag || drag.kind !== "layer") return;
-    const dfx = (e.clientX - drag.startX) / (drag.rect.width || 1);
-    const dfy = (e.clientY - drag.startY) / (drag.rect.height || 1);
+    const { rect, safe, tol } = drag.space;
+    const dfx = (e.clientX - drag.startX) / (rect.width || 1);
+    const dfy = (e.clientY - drag.startY) / (rect.height || 1);
     if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
 
     const raw = dragBox(drag.startBox, drag.mode, drag.anchor, dfx, dfy);
-    const tol = {
-      x: SNAP_PX / (drag.rect.width || 1),
-      y: SNAP_PX / (drag.rect.height || 1),
-    };
     const { box, guides } = drag.moved
-      ? snapBox(raw, drag.mode, drag.anchor, host.safeArea?.() || null, tol, e.altKey || e.metaKey)
+      ? snapBox(raw, drag.mode, drag.anchor, safe, tol, e.altKey || e.metaKey)
       : { box: raw, guides: { v: [], h: [] } };
     drag.box = clampBox(box);
     host.paintLayer?.(drag.i, drag.j, drag.box, guides);
@@ -417,7 +435,7 @@ export function createDeckGestures(host) {
           frame,
           mode: hit.mode,
           anchor: { h: hit.h, v: hit.v },
-          rect,
+          space: layerSpace(rect, host.safeArea?.() || null),
           startX: e.clientX,
           startY: e.clientY,
           startBox: { ...active.box },
