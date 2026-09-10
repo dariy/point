@@ -26,6 +26,7 @@
  *   - `studio/panels.js`    the markup, as pure functions of what they are given
  *   - `studio/preview.js`   the CSS writers that put a crop on screen
  *   - `studio/gestures.js`  deck-mode drag / pinch / wheel / arrow keys
+ *   - `studio/history.js`   the undo/redo ring over that document
  * What is left here is the Component: the route, the lifecycle, the actions
  * map, and the one document every one of those modules is handed a piece of.
  * Layers and templates land in later stages (see docs/features/carousel-studio.md).
@@ -85,6 +86,7 @@ import {
   paintSplit,
 } from "./studio/preview.js";
 import { createDeckGestures } from "./studio/gestures.js";
+import { createHistory } from "./studio/history.js";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
  *  angle inputs then edit them, and `normalizeBg` is the only clamp. */
@@ -105,6 +107,15 @@ const BG_PRESETS = {
 function readPostId(query) {
   const raw = /** @type {{ post?: string }} */ (query || {}).post;
   return raw != null && /^[0-9]+$/.test(String(raw)) ? Number(raw) : null;
+}
+
+/** Does `el` own the keystroke? A text entry keeps its own undo stack — inside
+ *  one, Ctrl+Z is the browser's, and it is the only thing that can put a
+ *  half-typed caption back (the studio never sees the keystrokes that built it,
+ *  since the form commits on `change`). */
+function isTextEntry(el) {
+  const tag = el?.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || Boolean(el?.isContentEditable);
 }
 
 /** A picked media item is usable as a split source only if it is an image. */
@@ -233,6 +244,11 @@ export default class CarouselStudioPage extends Component {
     this._renderedDoc = null;
     // Slide index to restore focus to after a keyboard nudge rebuilds the strip.
     this._refocus = null;
+    // Undo/redo. A ring of `doc` references, not a log of operations — the
+    // document is immutable by construction, so the previous state is simply
+    // the previous reference (see studio/history.js). Every write goes through
+    // `_setDoc`, which is the only thing that pushes onto it.
+    this._history = createHistory();
     // Deck direct manipulation. Built once and re-attached per render rather
     // than rebuilt with the frames: a wheel gesture's debounced commit has to
     // outlive the rebuild a neighbouring control can cause mid-burst.
@@ -286,6 +302,12 @@ export default class CarouselStudioPage extends Component {
     "remove-carousel"() {
       this._confirmRemove();
     },
+    undo() {
+      this._undo();
+    },
+    redo() {
+      this._redo();
+    },
     "fit-chip"(_e, el) {
       this._setSplit({
         n: clampSlides(Number(el.dataset.n)),
@@ -328,7 +350,7 @@ export default class CarouselStudioPage extends Component {
       this._reorderLayer(j, j - 1, el.dataset.scope);
     },
     "delete-layer"(_e, el) {
-      this._confirmDeleteLayer(Number(el.dataset.index), el.dataset.scope);
+      this._removeLayer(Number(el.dataset.index), el.dataset.scope);
     },
     "layer-pick-image"() {
       this._openLayerPicker();
@@ -425,13 +447,19 @@ export default class CarouselStudioPage extends Component {
     this._priorRendered = renderedBlocks(doc);
     const fullyRendered = doc.slides.length > 0 && doc.slides.every((s) => s.rendered);
     this._renderedDoc = fullyRendered ? serializeDocument(doc) : null;
-    this.setState({
-      loading: false,
-      post,
+    // What was loaded is the floor of the history: there is no edit before it
+    // to undo to, and a document from a previous visit is not one either.
+    this._history.reset(doc);
+    this._setDoc(
       doc,
-      selected: 0,
-      hasCarousel: Boolean(carousel),
-    });
+      {
+        loading: false,
+        post,
+        selected: 0,
+        hasCarousel: Boolean(carousel),
+      },
+      { history: false },
+    );
     // The document does not store source pixels — re-probe them so the fit
     // panel has its numbers. The image is cache-warm from the CSS background.
     const source = doc.slides[0]?.source;
@@ -460,7 +488,7 @@ export default class CarouselStudioPage extends Component {
                   slides: doc.slides.map((s) => ({ ...s, source: img.path })),
                 })
               : this._splitDoc({ source: img.path, strategy: "cover", anchorY: 0.5 });
-          this.setState({ doc: next, srcW: w, srcH: h });
+          this._setDoc(next, { srcW: w, srcH: h });
           if (!w || !h) this._probeSource(img.path);
         },
       });
@@ -483,6 +511,75 @@ export default class CarouselStudioPage extends Component {
   }
 
   // ── Document mutation ─────────────────────────────────────────────────────
+
+  /**
+   * The one writer for the document. Every mutator below lands here, and this
+   * is the only place a `doc` reaches `setState` — which is what lets undo be a
+   * ring of references rather than a set of inverse operations.
+   *
+   * `patch` carries whatever else moves with the document (the selection, the
+   * layer scope); it is merged ahead of `doc`, so a caller cannot smuggle a
+   * second document past the history by putting one in there.
+   *
+   * `history: false` writes without adding a step — for a write that is not an
+   * edit the user made. Only `_render` uses it, and it repairs the current
+   * entry itself (see below).
+   *
+   * @param {*} doc  the next document
+   * @param {object} [patch]  state to set alongside it
+   * @param {{history?: boolean}} [options]
+   */
+  _setDoc(doc, patch = {}, { history = true } = {}) {
+    if (history) this._history.push(doc);
+    this.setState({ ...patch, doc });
+  }
+
+  /**
+   * Step the history and show what it hands back, or do nothing at the end of
+   * the ring. The layer selection is dropped: it is an index into a list the
+   * other document may not have (or may have differently), and a stale one
+   * edits the wrong layer. `_selectedIndex` already pins the slide selection
+   * inside whatever deck arrives, so that one can stay.
+   *
+   * A document restored across a source change needs its pixel dimensions
+   * re-probed — they are derived data, deliberately not document fields, so the
+   * ring does not carry them.
+   *
+   * @param {"undo"|"redo"} direction
+   */
+  _step(direction) {
+    if (this.state.busy) return;
+    const prevSource = this._source();
+    const doc = direction === "undo" ? this._history.undo() : this._history.redo();
+    if (!doc) return;
+    this._setDoc(doc, { selectedLayer: null }, { history: false });
+    const source = doc.slides[0]?.source;
+    if (source && source !== prevSource) this._probeSource(source);
+  }
+
+  _undo() {
+    this._step("undo");
+  }
+
+  _redo() {
+    this._step("redo");
+  }
+
+  /**
+   * Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z, bound on `document` for the life of the
+   * render — a page-level shortcut has to work when nothing inside the studio
+   * holds focus, which a listener on the container cannot do. A text entry
+   * keeps its own (see `isTextEntry`).
+   *
+   * @param {KeyboardEvent} e
+   */
+  _onHistoryKey(e) {
+    const combo = (e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === "z";
+    if (!combo || isTextEntry(/** @type {HTMLElement|null} */ (e.target))) return;
+    e.preventDefault();
+    if (e.shiftKey) this._redo();
+    else this._undo();
+  }
 
   /**
    * Rebuild the split projection with `patch` applied over the current
@@ -516,7 +613,7 @@ export default class CarouselStudioPage extends Component {
   /** Apply a doc-level split control. */
   _setSplit(patch) {
     const doc = this._splitDoc(patch);
-    this.setState({ doc, selected: Math.min(this.state.selected, doc.slides.length - 1) });
+    this._setDoc(doc, { selected: Math.min(this.state.selected, doc.slides.length - 1) });
   }
 
   /**
@@ -537,7 +634,7 @@ export default class CarouselStudioPage extends Component {
       // preview would show a projection the render does not agree with.
       if (!srcW || !srcH) return;
       const next = toDeckDocument(doc, srcW, srcH);
-      this.setState({ doc: next, selected: 0 });
+      this._setDoc(next, { selected: 0 });
       // The freeze is invisible except for one case: `pad`'s short tail column
       // sat flush left with its gap on the right, and a deck slide can only
       // centre a contained crop. Say so, rather than let the user hunt for what
@@ -552,26 +649,23 @@ export default class CarouselStudioPage extends Component {
       return;
     }
 
-    this._showConfirm(
-      "Back to split mode",
-      "Split mode re-derives every slide from one strip. The per-slide pan, zoom and fit set here are discarded — this cannot be undone.",
-      "Discard framing",
-      "danger",
-      () => this.setState({ doc: this._splitDoc(), selected: 0 }),
-    );
+    // No dialog: the switch is a document write like any other, so it is one
+    // Ctrl+Z away. A confirm in front of a reversible step asks the user to
+    // decide before they can see what it does — the toast tells them after, and
+    // carries the way back.
+    this._setDoc(this._splitDoc(), { selected: 0 });
+    this._undoToast("Back to split mode — the per-slide pan, zoom and fit are gone.");
   }
 
   /** The single writer for per-slide framing — every gesture, key and button
    *  lands here, and clamping is `updateSlideFraming`'s job, not the caller's. */
   _setSlideFraming(i, update) {
     const { srcW, srcH } = this.state;
-    this.setState({
-      selected: i,
-      doc: updateSlideFraming(this.state.doc, i, update, {
-        srcW: srcW || 0,
-        srcH: srcH || 0,
-      }),
+    const doc = updateSlideFraming(this.state.doc, i, update, {
+      srcW: srcW || 0,
+      srcH: srcH || 0,
     });
+    this._setDoc(doc, { selected: i });
   }
 
   /** Select a slide, if that is a change — the deck panel follows the selection,
@@ -657,8 +751,7 @@ export default class CarouselStudioPage extends Component {
     const { slideIndex } = this._layerTarget(s);
     const doc = addLayer(this.state.doc, slideIndex, this._defaultLayer(type, s));
     const list = s === "span" ? doc.spanLayers : doc.slides[this._selectedIndex()]?.layers || [];
-    this.setState({
-      doc,
+    this._setDoc(doc, {
       layerScope: s,
       selectedLayer: list.length ? list.length - 1 : null,
     });
@@ -681,7 +774,7 @@ export default class CarouselStudioPage extends Component {
     const { slideIndex, list } = this._layerTarget(s);
     if (to < 0 || to >= list.length) return;
     const doc = reorderLayer(this.state.doc, slideIndex, from, to);
-    const patch = { doc };
+    const patch = {};
     if (this.state.layerScope === s && this.state.selectedLayer != null) {
       let sel = this.state.selectedLayer;
       if (sel === from) sel = to;
@@ -689,34 +782,24 @@ export default class CarouselStudioPage extends Component {
       else if (sel < from && sel >= to) sel += 1;
       patch.selectedLayer = sel;
     }
-    this.setState(patch);
+    this._setDoc(doc, patch);
   }
 
-  _confirmDeleteLayer(j, scope) {
-    const s = scope === "span" ? "span" : "slide";
-    this._showConfirm(
-      "Delete layer",
-      s === "span"
-        ? "This removes the layer from the deck. It cannot be undone."
-        : "This removes the layer from the slide. It cannot be undone.",
-      "Delete layer",
-      "danger",
-      () => this._removeLayer(j, s),
-    );
-  }
-
+  /** Drop a layer. No confirm — the removal is a document write, so it is one
+   *  Ctrl+Z (or one toast button) away; see `_undoToast`. */
   _removeLayer(j, scope) {
     const s = scope === "span" ? "span" : "slide";
     const { slideIndex } = this._layerTarget(s);
     const doc = removeLayer(this.state.doc, slideIndex, j);
-    const patch = { doc };
+    const patch = {};
     if (this.state.layerScope === s) {
       let sel = this.state.selectedLayer;
       if (sel === j) sel = null;
       else if (sel != null && sel > j) sel -= 1;
       patch.selectedLayer = sel;
     }
-    this.setState(patch);
+    this._setDoc(doc, patch);
+    this._undoToast(s === "span" ? "Layer removed from the deck." : "Layer removed from the slide.");
   }
 
   /** The single writer for a layer's fields — every property-form commit lands
@@ -725,7 +808,7 @@ export default class CarouselStudioPage extends Component {
     const j = this.state.selectedLayer;
     if (j == null) return;
     const { slideIndex } = this._layerTarget(this.state.layerScope);
-    this.setState({ doc: updateLayer(this.state.doc, slideIndex, j, patch) });
+    this._setDoc(updateLayer(this.state.doc, slideIndex, j, patch));
   }
 
   /** The commit point for a drag or a keyboard nudge of a layer's box — the
@@ -733,11 +816,10 @@ export default class CarouselStudioPage extends Component {
    *  slide-scoped only. `updateLayer` re-clamps the box, so the gesture's own
    *  clamp is only for preview smoothness. */
   _commitLayerBox(i, j, box) {
-    this.setState({
+    this._setDoc(updateLayer(this.state.doc, i, j, { box }), {
       selected: i,
       layerScope: "slide",
       selectedLayer: j,
-      doc: updateLayer(this.state.doc, i, j, { box }),
     });
   }
 
@@ -853,13 +935,21 @@ export default class CarouselStudioPage extends Component {
       this._renderedDoc = serializeDocument(next);
 
       if (this._unmounted) return;
-      this.setState({
-        busy: false,
-        renderProgress: null,
-        hasCarousel: true,
-        post: { ...post, content: finalContent },
-        doc: next,
-      });
+      // A render is not an edit: it stamps `rendered` blocks onto the document
+      // already on screen. So no new step — but the current entry has to carry
+      // them, or undoing the *next* edit would land on a document that has to
+      // re-encode every slide.
+      this._history.replace(next);
+      this._setDoc(
+        next,
+        {
+          busy: false,
+          renderProgress: null,
+          hasCarousel: true,
+          post: { ...post, content: finalContent },
+        },
+        { history: false },
+      );
       setToast({ message: `Carousel rendered — ${media.length} slides.`, type: "success" });
     } catch (err) {
       if (this._unmounted) return;
@@ -919,6 +1009,17 @@ export default class CarouselStudioPage extends Component {
     showConfirm({ title, message, confirmText, variant, onConfirm });
   }
 
+  /** Report a step that used to ask permission first, and offer the way back.
+   *  Everything it fronts is a document write, so "the way back" is exactly one
+   *  history step — the same one Ctrl+Z takes. */
+  _undoToast(message) {
+    setToast({
+      message,
+      type: "success",
+      action: { label: "Undo", onAction: () => this._undo() },
+    });
+  }
+
   _confirmRemove() {
     this._showConfirm(
       "Remove carousel",
@@ -948,15 +1049,24 @@ export default class CarouselStudioPage extends Component {
       this._renderedDoc = null;
 
       if (this._unmounted) return;
-      this.setState({
-        busy: false,
-        post: { ...post, content: finalContent },
-        doc: emptyDocument(),
-        srcW: null,
-        srcH: null,
-        selected: 0,
-        hasCarousel: false,
-      });
+      // Undo cannot reach this — the media rows are gone from the server, not
+      // just from the document — so the history starts over rather than
+      // offering a way back to slides that no longer exist.
+      const empty = emptyDocument();
+      this._history.reset(empty);
+      this._setDoc(
+        empty,
+        {
+          busy: false,
+          post: { ...post, content: finalContent },
+          srcW: null,
+          srcH: null,
+          selected: 0,
+          selectedLayer: null,
+          hasCarousel: false,
+        },
+        { history: false },
+      );
       setToast({ message: "Carousel removed.", type: "success" });
     } catch (err) {
       if (this._unmounted) return;
@@ -998,6 +1108,8 @@ export default class CarouselStudioPage extends Component {
         hasCarousel: this.state.hasCarousel,
         dirty: this._isDirty(),
         hasSource: Boolean(this._source()),
+        canUndo: this._history.canUndo,
+        canRedo: this._history.canRedo,
       }),
       content: this._renderStudio(),
       // A split stage is n slides wide; the admin content clamp would squeeze
@@ -1106,6 +1218,10 @@ export default class CarouselStudioPage extends Component {
 
   afterRender() {
     setupAdminLayout(this, { currentPath: "/light/carousel" });
+
+    // Re-taken every render, released with it (see Component's resource
+    // contract) — so navigating off the studio takes the shortcut with it.
+    this.on(document, "keydown", (e) => this._onHistoryKey(/** @type {KeyboardEvent} */ (e)));
 
     const deck = this.state.doc.mode === "deck";
     const source = this._source();
@@ -1266,10 +1382,10 @@ export default class CarouselStudioPage extends Component {
       const aspect = /** @type {HTMLSelectElement} */ (e.target).value;
       // Deck slides carry their own crops, so an aspect change reframes them
       // where a split deck has to be re-sliced from scratch.
-      this.setState(
+      this._setDoc(
         this.state.doc.mode === "deck"
-          ? { doc: normalizeDocument({ ...this.state.doc, aspect }) }
-          : { doc: this._splitDoc({ aspect }) },
+          ? normalizeDocument({ ...this.state.doc, aspect })
+          : this._splitDoc({ aspect }),
       );
     });
     this.on(this.$("#carousel-guides"), "change", (e) => {

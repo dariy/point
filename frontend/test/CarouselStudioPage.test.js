@@ -19,7 +19,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire } from './helpers/dom.js';
-import { setSettings, setUser } from '../src/store.js';
+import { getToast, setSettings, setUser } from '../src/store.js';
 import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
 import {
   specHash,
@@ -1114,7 +1114,7 @@ describe('CarouselStudioPage', () => {
       });
     });
 
-    test('going back to split confirms first, then discards the per-slide framing', async () => {
+    test('going back to split discards the per-slide framing — and offers Undo', async () => {
       const el = await toDeck();
       const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
       drag(frame, deckImg(el, 1), -60, 0)();
@@ -1122,22 +1122,24 @@ describe('CarouselStudioPage', () => {
       const panned = page.state.doc.slides[1].crop.x;
 
       let confirmed = null;
-      page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
-        confirmed = { title, variant, onConfirm };
+      page._showConfirm = (...args) => {
+        confirmed = args;
       };
       click(el.querySelector('[data-action="mode"][data-mode="split"]'));
       await settle();
 
-      assert.ok(confirmed, 'a confirmation was shown');
-      assert.equal(confirmed.variant, 'danger');
-      assert.equal(page.state.doc.mode, 'deck', 'still deck until confirmed');
-
-      confirmed.onConfirm();
-      await settle();
-
+      assert.equal(confirmed, null, 'no dialog — the step is undoable');
       assert.equal(page.state.doc.mode, 'split');
       assert.notEqual(page.state.doc.slides[1].crop.x, panned, 'the pan is gone');
       assert.ok(el.querySelector('#carousel-n'), 'the split controls are back');
+
+      const toast = getToast();
+      assert.equal(toast.action.label, 'Undo', 'the toast carries the way back');
+      toast.action.onAction();
+      await settle();
+
+      assert.equal(page.state.doc.mode, 'deck', 'undone');
+      assert.equal(page.state.doc.slides[1].crop.x, panned, 'the pan is back');
     });
 
     test('nudging one slide re-uploads exactly that slide', async () => {
@@ -1326,25 +1328,28 @@ describe('CarouselStudioPage', () => {
         assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'a new layer is a dirty document');
       });
 
-      test('deleting a layer confirms first, then drops it', async () => {
+      test('deleting a layer drops it at once, and the toast offers Undo', async () => {
         const el = await toDeck();
         click(addLayerBtn(el, 'rect'));
         await settle();
 
         let confirmed = null;
-        page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
-          confirmed = { variant, onConfirm };
+        page._showConfirm = (...args) => {
+          confirmed = args;
         };
         click(el.querySelector('[data-action="delete-layer"][data-index="0"]'));
-        assert.ok(confirmed, 'a confirmation was shown');
-        assert.equal(confirmed.variant, 'danger');
-        assert.equal(page.state.doc.slides[0].layers.length, 1, 'still there until confirmed');
-
-        confirmed.onConfirm();
         await settle();
+
+        assert.equal(confirmed, null, 'no dialog — the step is undoable');
         assert.equal(page.state.doc.slides[0].layers.length, 0);
         assert.equal(page.state.selectedLayer, null);
         assert.ok(!el.querySelector('.carousel-studio__layer-form'), 'the form is gone');
+
+        const toast = getToast();
+        assert.equal(toast.action.label, 'Undo');
+        toast.action.onAction();
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 1, 'the layer is back');
       });
 
       test('picking a slide clears the layer selection', async () => {
@@ -1620,17 +1625,173 @@ describe('CarouselStudioPage', () => {
           click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
           await settle();
 
-          let confirmed = null;
-          page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
-            confirmed = { onConfirm };
-          };
           click(el.querySelector('[data-action="mode"][data-mode="split"]'));
-          confirmed.onConfirm();
           await settle();
 
           assert.equal(page.state.doc.mode, 'split');
           assert.equal(page.state.doc.spanLayers.length, 1, 're-slicing keeps the headline');
         });
+      });
+    });
+
+    /**
+     * Undo/redo (S6). The ring itself is covered in carouselStudioHistory.test.js
+     * — what is pinned here is the wiring: that every document write goes
+     * through the one funnel that pushes onto it, that the step size is the
+     * commit and not the paint, and that a text field keeps its own undo.
+     */
+    describe('undo / redo', () => {
+      const key = (opts) => fire(dom.document, 'keydown', { key: 'z', ...opts });
+      const addLayerBtn = (el, type) =>
+        el.querySelector(`[data-action="add-layer"][data-type="${type}"]`);
+
+      test('the header buttons start disabled and follow the ring', async () => {
+        const el = await toDeck();
+        const undo = () => el.querySelector('[data-action="undo"]');
+        const redo = () => el.querySelector('[data-action="redo"]');
+
+        // Reaching deck mode was itself an edit, so undo is already live.
+        assert.ok(undo(), 'the undo button is in the header');
+        assert.ok(!undo().hasAttribute('disabled'), 'the mode switch is undoable');
+        assert.ok(redo().hasAttribute('disabled'), 'nothing to come forward to yet');
+
+        click(undo());
+        await settle();
+        assert.equal(page.state.doc.mode, 'split');
+        assert.ok(undo().hasAttribute('disabled'), 'back at the loaded document');
+        assert.ok(!redo().hasAttribute('disabled'));
+
+        click(redo());
+        await settle();
+        assert.equal(page.state.doc.mode, 'deck');
+      });
+
+      test('a document edit is one step, and undo restores the reference itself', async () => {
+        const el = await toDeck();
+        const before = page.state.doc;
+
+        click(addLayerBtn(el, 'rect'));
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 1);
+
+        click(el.querySelector('[data-action="undo"]'));
+        await settle();
+        assert.strictEqual(page.state.doc, before, 'the previous document, not a rebuild of it');
+        assert.equal(page.state.selectedLayer, null, 'a stale layer index would edit the wrong layer');
+      });
+
+      test('Ctrl+Z undoes and Ctrl+Shift+Z redoes', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'text'));
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 1);
+
+        key({ ctrlKey: true });
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 0, 'Ctrl+Z');
+
+        key({ ctrlKey: true, shiftKey: true });
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 1, 'Ctrl+Shift+Z');
+
+        // The Mac pair drives the same two steps.
+        key({ metaKey: true });
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 0, 'Cmd+Z');
+      });
+
+      test('inside a text field Ctrl+Z is left to the browser', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'text'));
+        await settle();
+        const field = el.querySelector('#carousel-layer-text');
+        assert.ok(field, 'the layer form has a text field');
+
+        const before = page.state.doc;
+        const ev = fire(field, 'keydown', { key: 'z', ctrlKey: true });
+        await settle();
+
+        assert.equal(ev.defaultPrevented, false, 'native text undo still wins');
+        assert.strictEqual(page.state.doc, before, 'the document did not move');
+      });
+
+      test('a wheel burst is one undo step, not one per notch', async () => {
+        const el = await toDeck();
+        const before = page.state.doc.slides[0].crop.w;
+        const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
+        withBox(deckImg(el, 0));
+
+        fire(frame, 'wheel', { deltaY: 100, deltaMode: 0 });
+        fire(frame, 'wheel', { deltaY: 100, deltaMode: 0 });
+        fire(frame, 'wheel', { deltaY: 100, deltaMode: 0 });
+        await new Promise((r) => setTimeout(r, 250));
+        await settle();
+        assert.notEqual(page.state.doc.slides[0].crop.w, before, 'the burst zoomed');
+
+        click(el.querySelector('[data-action="undo"]'));
+        await settle();
+        assert.equal(page.state.doc.slides[0].crop.w, before, 'one step took the whole burst back');
+      });
+
+      test('a writer that rejects its value adds no step', async () => {
+        const el = await toDeck();
+        // Deck mode is already on; asking for it again returns early, and even a
+        // writer that ran would produce an equal document.
+        const undoable = !el.querySelector('[data-action="undo"]').hasAttribute('disabled');
+        assert.ok(undoable);
+        click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
+        await settle();
+
+        click(el.querySelector('[data-action="undo"]'));
+        await settle();
+        assert.equal(page.state.doc.mode, 'split', 'one undo was enough');
+      });
+
+      test('a render is not a step — it stamps the document already on screen', async () => {
+        let id = 700;
+        const { routes } = split(3);
+        const deps = {
+          ...fakeRenderDeps(async () => ({ id: ++id, path: `/2026/08/r${id}.jpg` })),
+          probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+        };
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+        click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
+        await settle();
+        click(addLayerBtn(el, 'rect'));
+        await settle();
+        const withLayer = page.state.doc;
+
+        click(el.querySelector('[data-action="render"]'));
+        await settle();
+        await settle();
+        assert.ok(page.state.doc.slides[0].rendered.specHash, 'the render stamped the slides');
+        assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean after a render');
+
+        click(el.querySelector('[data-action="undo"]'));
+        await settle();
+        assert.equal(
+          page.state.doc.slides[0].layers.length, 0,
+          'one undo goes back past the layer, not just past the render',
+        );
+
+        click(el.querySelector('[data-action="redo"]'));
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 1);
+        assert.ok(
+          page.state.doc.slides[0].rendered?.specHash,
+          'redo lands on the rendered document, so nothing has to re-encode',
+        );
+        assert.notStrictEqual(page.state.doc, withLayer, 'the stamped one, not the pre-render one');
+      });
+
+      test('loading a document is the floor — there is nothing before it to undo to', async () => {
+        const { routes, deps } = split(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+        assert.ok(
+          el.querySelector('[data-action="undo"]').hasAttribute('disabled'),
+          'a document from a previous visit is not an edit',
+        );
+        assert.ok(el.querySelector('[data-action="redo"]').hasAttribute('disabled'));
       });
     });
   });

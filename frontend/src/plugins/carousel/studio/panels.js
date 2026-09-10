@@ -90,13 +90,50 @@ export function colorInputValue(color) {
 }
 
 /**
- * The header actions: back, the render button and its progress, the dirty
- * badge, and Remove once a carousel exists.
+ * Undo and redo. Buttons as well as keys because a phone has no Ctrl — and
+ * their disabled state is the only place the history's depth is visible, so it
+ * is read straight off the ring rather than tracked in the page's state.
+ * Both go dark mid-render: the document a render is uploading from must not
+ * move under it.
+ *
+ * @param {{canUndo: boolean, canRedo: boolean, busy: boolean}} o
+ */
+export function historyButtons({ canUndo, canRedo, busy }) {
+  const step = (action, glyph, label, hint, enabled) => html`
+    <button
+      type="button"
+      class="carousel-studio__chip"
+      data-action="${action}"
+      title="${label} (${hint})"
+      aria-label="${label}"
+      ${enabled && !busy ? "" : "disabled"}
+    >
+      ${raw(glyph)}
+    </button>`;
+  return html`
+    <div class="carousel-studio__history" role="group" aria-label="History">
+      ${step("undo", "&#8630;", "Undo", "Ctrl+Z", canUndo)}
+      ${step("redo", "&#8631;", "Redo", "Ctrl+Shift+Z", canRedo)}
+    </div>`;
+}
+
+/**
+ * The header actions: back, undo/redo, the render button and its progress, the
+ * dirty badge, and Remove once a carousel exists.
  *
  * @param {{busy: boolean, renderProgress: {done: number, total: number}|null,
- *   hasCarousel: boolean, dirty: boolean, hasSource: boolean}} o
+ *   hasCarousel: boolean, dirty: boolean, hasSource: boolean,
+ *   canUndo?: boolean, canRedo?: boolean}} o
  */
-export function actionsBar({ busy, renderProgress, hasCarousel, dirty, hasSource }) {
+export function actionsBar({
+  busy,
+  renderProgress,
+  hasCarousel,
+  dirty,
+  hasSource,
+  canUndo = false,
+  canRedo = false,
+}) {
   const label = busy
     ? renderProgress
       ? `Rendering… ${renderProgress.done}/${renderProgress.total}`
@@ -104,6 +141,7 @@ export function actionsBar({ busy, renderProgress, hasCarousel, dirty, hasSource
     : "Render";
   return html`
     <button class="btn btn-secondary" data-action="back-to-post">&larr; Back to post</button>
+    ${historyButtons({ canUndo, canRedo, busy })}
     <button
       id="carousel-render-btn"
       class="btn btn-primary ${dirty && !busy ? "carousel-studio__render-btn--dirty" : ""}"

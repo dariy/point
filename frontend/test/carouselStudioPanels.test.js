@@ -109,6 +109,54 @@ describe('carousel studio panels', () => {
       assert.doesNotMatch(out, /data-action="remove-carousel"/);
     });
 
+    /** The one button tag carrying `data-action="<name>"`, up to its `>`. The
+     *  disabled state is per-button, so a whole-document regex would happily
+     *  read the *other* button's attribute. */
+    function buttonTag(out, name) {
+      const marker = `data-action="${name}"`;
+      const at = out.indexOf(marker);
+      assert.notStrictEqual(at, -1, `no ${name} button`);
+      return out.slice(out.lastIndexOf('<', at), out.indexOf('>', at));
+    }
+
+    test('undo and redo are offered, each disabled until the ring can serve it', () => {
+      const base = {
+        busy: false,
+        renderProgress: null,
+        hasCarousel: true,
+        dirty: false,
+        hasSource: true,
+      };
+      const undoable = str(actionsBar({ ...base, canUndo: true, canRedo: false }));
+      assert.ok(!buttonTag(undoable, 'undo').includes('disabled'), 'undo is live');
+      assert.ok(buttonTag(undoable, 'redo').includes('disabled'), 'nothing to redo');
+
+      const both = str(actionsBar({ ...base, canUndo: true, canRedo: true }));
+      assert.ok(!buttonTag(both, 'undo').includes('disabled'));
+      assert.ok(!buttonTag(both, 'redo').includes('disabled'));
+
+      const fresh = str(actionsBar(base));
+      assert.ok(buttonTag(fresh, 'undo').includes('disabled'), 'nothing to undo by default');
+      assert.ok(buttonTag(fresh, 'redo').includes('disabled'));
+    });
+
+    test('a render in flight takes undo and redo with it', () => {
+      // The document the render is uploading from must not move under it.
+      const out = str(
+        actionsBar({
+          busy: true,
+          renderProgress: { done: 1, total: 3 },
+          hasCarousel: true,
+          dirty: true,
+          hasSource: true,
+          canUndo: true,
+          canRedo: true,
+        }),
+      );
+      assert.ok(buttonTag(out, 'undo').includes('disabled'));
+      assert.ok(buttonTag(out, 'redo').includes('disabled'));
+    });
+
     test('a render in flight reports its progress and disables the button', () => {
       const out = str(
         actionsBar({

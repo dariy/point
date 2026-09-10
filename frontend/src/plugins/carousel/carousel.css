@@ -312,6 +312,18 @@
   gap: var(--spacing-xs);
 }
 
+/* Undo / redo, in the page header next to Render. A group rather than two loose
+   chips so the pair reads as one control at the small size the header gives it. */
+.carousel-studio__history {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.carousel-studio__history .carousel-studio__chip {
+  font-size: var(--font-size-md);
+  line-height: 1;
+}
+
 .carousel-studio__chip {
   padding: var(--spacing-xs) var(--spacing-sm);
   font-size: var(--font-size-xs);

@@ -11,6 +11,10 @@ const SHORTCUTS = [
   { group: 'Editor', items: [
     { key: 'Ctrl + S', label: 'Save post' },
   ]},
+  { group: 'Carousel Studio', items: [
+    { key: 'Ctrl + Z', label: 'Undo' },
+    { key: 'Ctrl + Shift + Z', label: 'Redo' },
+  ]},
   { group: 'Lists', items: [
     { key: 'J / K', label: 'Navigate items' },
     { key: 'Enter', label: 'Edit selected' },

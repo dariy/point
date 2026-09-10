@@ -46,8 +46,27 @@
 }
 
 .toast-message {
+    flex: 1 1 auto;
     font-size: var(--font-size-sm);
     font-weight: 500;
+}
+
+/* The optional action — "Undo" behind a step that reported itself rather than
+   asking permission first (see components/shared/Toast.js). It inherits the
+   type's colour instead of picking one, so it reads as part of the toast it
+   sits in rather than a second, competing signal. */
+.toast-action {
+    flex: none;
+    margin-left: var(--spacing-md);
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-bottom: var(--border-width) solid currentColor;
+    color: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
 }
 
 .toast-close {

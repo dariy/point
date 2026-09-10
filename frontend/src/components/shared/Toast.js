@@ -9,6 +9,15 @@
  * setToast({ message: 'Info', type: 'info' });
  *
  * Types: 'success' | 'error' | 'info' | 'warning'
+ *
+ * An optional `action` puts one button in front of the dismiss cross, so a
+ * destructive step can report itself and offer the way back instead of asking
+ * permission first:
+ *
+ *   setToast({ message: 'Layer deleted.', action: { label: 'Undo', onAction } });
+ *
+ * The action dismisses the toast after running — a second press would apply it
+ * twice, and the affordance is spent either way.
  */
 
 import { Component } from '../Component.js';
@@ -35,7 +44,7 @@ export class ToastContainer extends Component {
     });
   }
 
-  _add({ message, type = 'info' }) {
+  _add({ message, type = 'info', action = null }) {
     const id = this._nextId++;
 
     // Limit visible toasts.
@@ -61,7 +70,24 @@ export class ToastContainer extends Component {
     btn.textContent = '×';
     btn.addEventListener('click', () => this._remove(id));
 
-    el.append(msg, btn);
+    el.append(msg);
+    if (action && typeof action.onAction === 'function') {
+      const act = document.createElement('button');
+      act.className = 'toast-action';
+      act.textContent = action.label || 'Undo';
+      // Spent on the first press. Dismissal is a fade, so the button is still
+      // on screen and still clickable for the length of the transition — and
+      // applying an undo twice is exactly the bug the affordance is for.
+      let spent = false;
+      act.addEventListener('click', () => {
+        if (spent) return;
+        spent = true;
+        this._remove(id);
+        action.onAction();
+      });
+      el.append(act);
+    }
+    el.append(btn);
     this.container.appendChild(el);
 
     const entry = { id, el, timer: null };
