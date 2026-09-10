@@ -16,6 +16,7 @@
  */
 
 import { importPptx } from './pptx.js';
+import { importSvg } from './svg.js';
 
 export { ImportError, ASSET_LIMITS } from './adapter.js';
 
@@ -41,8 +42,25 @@ const PPTX = {
   read: importPptx,
 };
 
+/**
+ * One SVG per slide, in filename order — which is why {@link ImportAdapter} has
+ * `takesList`. Every design tool worth importing from exports SVG: Figma,
+ * Illustrator, Sketch and XD are all proprietary on disk, and Canva offers it
+ * beside the PPTX above.
+ *
+ * @type {ImportAdapter}
+ */
+const SVG = {
+  format: 'svg',
+  label: 'Figma, Illustrator, Sketch or Canva (.svg)',
+  extensions: ['.svg'],
+  accept: '.svg,image/svg+xml',
+  takesList: true,
+  read: importSvg,
+};
+
 /** Every format Point imports, in the order a picker should offer them. */
-export const IMPORTERS = [PPTX];
+export const IMPORTERS = [PPTX, SVG];
 
 /** One `accept` value for a file input that takes any of them. */
 export const IMPORT_ACCEPT = IMPORTERS.map((a) => a.accept).join(',');

@@ -85,6 +85,18 @@ const MIME_BY_EXT = {
 };
 
 /**
+ * The other direction, first spelling wins: `image/jpeg` is `.jpg`, not the
+ * `.jfif` that also maps to it. Derived from {@link MIME_BY_EXT} rather than
+ * written out, so the two cannot disagree about what Point stores.
+ *
+ * @type {Record<string, string>}
+ */
+const EXT_BY_MIME = {};
+for (const [ext, mime] of Object.entries(MIME_BY_EXT)) {
+  if (!EXT_BY_MIME[mime]) EXT_BY_MIME[mime] = ext;
+}
+
+/**
  * The image MIME type for a path, or `''` when nothing here decodes it.
  *
  * @param {string} name
@@ -114,6 +126,41 @@ function base64(bytes) {
  */
 export function dataUrl(bytes, mime) {
   return `data:${mime};base64,${base64(bytes)}`;
+}
+
+/**
+ * The inverse: a `data:` image URL back into bytes and a filename an importer
+ * can hand {@link ImportAssets.inline}, or `null` when it is not one this can
+ * store.
+ *
+ * SVG carries its images inline where a `.pptx` carries them as archive
+ * members, so the SVG importer arrives at the budget holding a URL rather than
+ * bytes. Decoding and letting `inline` re-encode costs one pass over the image
+ * and buys one accounting path for both formats — the alternative is a second
+ * place that knows what the 8 MB budget counts.
+ *
+ * `name` is synthetic and only exists so the shared code can read a type off it
+ * and quote it in a refusal: an inline image has no filename to report.
+ *
+ * @param {string} url
+ * @param {string} name what to call it in a report, without the extension
+ * @returns {{bytes: Uint8Array, mime: string, name: string}|null}
+ */
+export function fromDataUrl(url, name) {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]*)$/i.exec(String(url || ''));
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  const ext = EXT_BY_MIME[mime];
+  if (!ext) return null;
+  let raw;
+  try {
+    raw = atob(match[2].replace(/\s+/g, ''));
+  } catch {
+    return null;
+  }
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return { bytes, mime, name: `${name}.${ext}` };
 }
 
 /** Megabytes, one decimal, for a message a person reads. */
@@ -295,6 +342,36 @@ function fitNote(from, to, wide, margin) {
 }
 
 /**
+ * How much of the canvas a shape has to cover to be treated as the slide's own
+ * picture rather than as a layer over it. Generous on the offset because a
+ * full-bleed photo is often placed a hair outside the frame.
+ */
+const FULL_FRAME = { cover: 0.95, offset: 0.05 };
+
+/**
+ * Does this rectangle cover the source canvas? A full-frame picture becomes the
+ * slide's *own* source rather than an `image` layer, which is what makes the
+ * photo replaceable when the template is applied to a post — so both importers
+ * have to agree on where that line is.
+ *
+ * The rectangle is in source units with the canvas origin already subtracted: a
+ * `viewBox` may start anywhere, a slide always starts at zero.
+ *
+ * @param {{x: number, y: number, w: number, h: number}} rect
+ * @param {number} srcW
+ * @param {number} srcH
+ * @returns {boolean}
+ */
+export function coversCanvas(rect, srcW, srcH) {
+  return (
+    rect.w >= srcW * FULL_FRAME.cover &&
+    rect.h >= srcH * FULL_FRAME.cover &&
+    rect.x <= srcW * FULL_FRAME.offset &&
+    rect.y <= srcH * FULL_FRAME.offset
+  );
+}
+
+/**
  * @typedef {object} ImportReport
  * @property {string} format
  * @property {string} file
@@ -307,6 +384,9 @@ function fitNote(from, to, wide, margin) {
  * @property {Array<{slide: number|null, what: string, n: number}>} dropped
  * @property {Array<{slide: number|null, part: string, reason: string}>} failed
  * @property {string[]} warnings
+ * @property {string[]} order the files, in the order they became slides — empty
+ *   for a format that states its own order. A list of SVGs does not, so the
+ *   importer sorts them and this is how a person sees what it decided
  */
 
 /**
@@ -385,7 +465,8 @@ export function createReport(meta) {
      * The plain, serializable report.
      *
      * @param {{slides: number, sourceSlides: number, shapes: {kept: number, total: number},
-     *   aspect: ImportFit['aspectReport'], assets: {count: number, bytes: number}}} totals
+     *   aspect: ImportFit['aspectReport'], assets: {count: number, bytes: number},
+     *   order?: string[]}} totals
      * @returns {ImportReport}
      */
     finish(totals) {
@@ -401,6 +482,7 @@ export function createReport(meta) {
         dropped: [...dropped.values()],
         failed,
         warnings,
+        order: totals.order || [],
       };
     },
   };

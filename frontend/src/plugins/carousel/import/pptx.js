@@ -49,6 +49,7 @@ import { openZip, ZipError } from './zip.js';
 import {
   ImportError,
   centreFit,
+  coversCanvas,
   createAssets,
   createReport,
   metaFromFilename,
@@ -75,13 +76,6 @@ const PER_CENT = 100000;
 
 /** 60000ths of a degree, for `<a:lin ang>`. */
 const PER_DEGREE = 60000;
-
-/**
- * How much of the slide a shape has to cover to be treated as the slide's own
- * picture rather than as a layer over it. Generous on the offset because a
- * full-bleed photo is often placed a hair outside the slide.
- */
-const FULL_FRAME = { cover: 0.95, offset: 0.05 };
 
 /** The default corner on `roundRect` when the shape states no adjust value —
  *  16.667% of the shorter side, which is the preset's own default. */
@@ -647,24 +641,6 @@ function rectOf(ctx, shape, page, what) {
 }
 
 /**
- * Does this rectangle cover the slide? A full-frame picture becomes the slide's
- * *own* source rather than an `image` layer, which is what makes the photo
- * replaceable when the template is applied to a post.
- *
- * @param {PptxContext} ctx
- * @param {{x: number, y: number, w: number, h: number}} rect
- * @returns {boolean}
- */
-function isFullFrame(ctx, rect) {
-  return (
-    rect.w >= ctx.srcW * FULL_FRAME.cover &&
-    rect.h >= ctx.srcH * FULL_FRAME.cover &&
-    rect.x <= ctx.srcW * FULL_FRAME.offset &&
-    rect.y <= ctx.srcH * FULL_FRAME.offset
-  );
-}
-
-/**
  * Add a layer, normalized. Returns whether it survived — a shape the schema
  * rejects is counted rather than repaired, because the alternative is this
  * module deciding what a layer may be, which is `document.js`'s job.
@@ -895,7 +871,7 @@ function presetOf(spPr) {
  * @returns {boolean}
  */
 function shapeGradient(ctx, grad, rect, page) {
-  const stops = isFullFrame(ctx, rect) && !page.slide.bg ? gradient(grad, ctx, page.index) : null;
+  const stops = coversCanvas(rect, ctx.srcW, ctx.srcH) && !page.slide.bg ? gradient(grad, ctx, page.index) : null;
   if (!stops) {
     ctx.report.drop(page.index, 'gradient fill on a shape');
     return false;
@@ -944,7 +920,7 @@ async function importPic(ctx, pic, page) {
 
   // The slide's own picture, and only the first one: a second full-frame photo
   // is a layer over it, which is what it looks like on the slide too.
-  if (isFullFrame(ctx, rect) && !page.slide.source) {
+  if (coversCanvas(rect, ctx.srcW, ctx.srcH) && !page.slide.source) {
     return asSlidePhoto(ctx, page, { url, crop, opacity });
   }
   if (crop) ctx.report.drop(page.index, 'image crop on a layer');

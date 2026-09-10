@@ -187,13 +187,16 @@ export function attrBool(el, name, fallback = false) {
  * @param {string} text
  * @param {string} root expected local name of the document element
  * @param {typeof DOMParser} [Parser] the seam a test uses to supply linkedom's
+ * @param {DOMParserSupportedType} [mime] the type to parse as. `image/svg+xml`
+ *   for an SVG, so a browser builds the SVG DOM the file asked for rather than
+ *   the generic XML one
  * @returns {Element|null}
  */
-export function parseXml(text, root, Parser = globalThis.DOMParser) {
+export function parseXml(text, root, Parser = globalThis.DOMParser, mime = 'application/xml') {
   if (typeof Parser !== 'function') return null;
   let doc;
   try {
-    doc = new Parser().parseFromString(text, 'application/xml');
+    doc = new Parser().parseFromString(text, mime);
   } catch {
     return null;
   }
