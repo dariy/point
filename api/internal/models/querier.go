@@ -28,6 +28,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
 	DeleteCarouselByPostID(ctx context.Context, postID int64) error
+	DeleteCarouselTemplate(ctx context.Context, slug string) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
@@ -40,6 +41,7 @@ type Querier interface {
 	// One Carousel Studio document per post. doc is opaque JSON, stored and
 	// returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
 	GetCarouselByPostID(ctx context.Context, postID int64) (Carousel, error)
+	GetCarouselTemplateBySlug(ctx context.Context, slug string) (CarouselTemplate, error)
 	GetFirstUser(ctx context.Context) (User, error)
 	// MEDIA
 	GetMedia(ctx context.Context, id int64) (Medium, error)
@@ -69,6 +71,12 @@ type Querier interface {
 	GetUserSessions(ctx context.Context, userID int64) ([]Session, error)
 	IncrementPostViewCount(ctx context.Context, id int64) error
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
+	// CAROUSEL TEMPLATES
+	// A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as
+	// carousels.doc. ListCarouselTemplates deliberately names its columns and
+	// omits doc: a template inlines its assets as data: URLs, so SELECT * here
+	// would pull every asset of every template to draw a list of names.
+	ListCarouselTemplates(ctx context.Context) ([]ListCarouselTemplatesRow, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
@@ -98,6 +106,7 @@ type Querier interface {
 	UpdateUserLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertCarousel(ctx context.Context, arg UpsertCarouselParams) (Carousel, error)
+	UpsertCarouselTemplate(ctx context.Context, arg UpsertCarouselTemplateParams) (CarouselTemplate, error)
 	UpsertSecret(ctx context.Context, arg UpsertSecretParams) error
 	WithdrawPost(ctx context.Context, id int64) (Post, error)
 }

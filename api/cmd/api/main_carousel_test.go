@@ -16,9 +16,9 @@ import (
 // gate end to end: with a built chunk and the plugin enabled the studio chunk
 // serves and the manifest carries it; disabled, the chunk 404s and the manifest
 // forgets it ever existed. The /api/carousel prefix it declares is gated the
-// same way — disabled it 404s like a route nothing registered; enabled the
-// not-yet-built endpoints answer past the gate (401 without a session, since
-// auth runs after RequirePlugin), never the 200 SPA shell.
+// same way — disabled, every route under it 404s like a route nothing
+// registered; enabled, each answers past the gate (401 without a session,
+// since auth runs after RequirePlugin), never the 200 SPA shell.
 func TestCarouselPluginGate(t *testing.T) {
 	const id = "carousel"
 	root, chunk := writePluginFrontend(t, id)
@@ -33,11 +33,23 @@ func TestCarouselPluginGate(t *testing.T) {
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
 
-	get := func(path string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+	call := func(method, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		return rec
+	}
+	get := func(path string) *httptest.ResponseRecorder { return call(http.MethodGet, path) }
+	// Every route the carousel group declares, document and template alike:
+	// the gate is the group's, so each one has to answer the same way.
+	routes := [][2]string{
+		{http.MethodGet, "/api/carousel"},
+		{http.MethodPut, "/api/carousel"},
+		{http.MethodDelete, "/api/carousel"},
+		{http.MethodGet, "/api/carousel/templates"},
+		{http.MethodPost, "/api/carousel/templates"},
+		{http.MethodGet, "/api/carousel/templates/zine"},
+		{http.MethodDelete, "/api/carousel/templates/zine"},
 	}
 	setEnabled := func(on string) {
 		if err := svcs.Settings.SetSetting(context.Background(), plugins.EnabledKey(id), on, "boolean"); err != nil {
@@ -69,8 +81,10 @@ func TestCarouselPluginGate(t *testing.T) {
 
 	// The prefix is registered and gated: with the plugin on, the request gets
 	// past RequirePlugin and is stopped by auth (401) — not served the SPA shell.
-	if code := get("/api/carousel").Code; code != http.StatusUnauthorized {
-		t.Errorf("enabled /api/carousel should reach auth (401), got %d", code)
+	for _, r := range routes {
+		if code := call(r[0], r[1]).Code; code != http.StatusUnauthorized {
+			t.Errorf("enabled %s %s should reach auth (401), got %d", r[0], r[1], code)
+		}
 	}
 
 	// ── Disabled ─────────────────────────────────────────────────────────────
@@ -86,7 +100,9 @@ func TestCarouselPluginGate(t *testing.T) {
 	if strings.Contains(html, chunk) {
 		t.Errorf("disabled carousel chunk URL must not appear in the served HTML:\n%s", html)
 	}
-	if code := get("/api/carousel").Code; code != http.StatusNotFound {
-		t.Errorf("/api/carousel should 404 when disabled, got %d", code)
+	for _, r := range routes {
+		if code := call(r[0], r[1]).Code; code != http.StatusNotFound {
+			t.Errorf("%s %s should 404 when disabled, got %d", r[0], r[1], code)
+		}
 	}
 }

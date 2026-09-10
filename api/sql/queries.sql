@@ -485,6 +485,33 @@ RETURNING *;
 DELETE FROM carousels
 WHERE post_id = ?;
 
+-- CAROUSEL TEMPLATES
+-- A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as
+-- carousels.doc. ListCarouselTemplates deliberately names its columns and
+-- omits doc: a template inlines its assets as data: URLs, so SELECT * here
+-- would pull every asset of every template to draw a list of names.
+
+-- name: ListCarouselTemplates :many
+SELECT slug, name, created_at FROM carousel_templates
+ORDER BY name;
+
+-- name: GetCarouselTemplateBySlug :one
+SELECT * FROM carousel_templates
+WHERE slug = ? LIMIT 1;
+
+-- name: UpsertCarouselTemplate :one
+INSERT INTO carousel_templates (slug, name, doc, created_at, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(slug) DO UPDATE SET
+    name = excluded.name,
+    doc = excluded.doc,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING *;
+
+-- name: DeleteCarouselTemplate :exec
+DELETE FROM carousel_templates
+WHERE slug = ?;
+
 -- Queries for sqlc. Every entry here becomes a method on *models.Queries, which
 -- is embedded in sqliteRepository, so a name added here is also a name added to
 -- the repository -- and a hand-written method of the same name silently wins

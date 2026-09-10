@@ -31,6 +31,10 @@ type mockRepository struct {
 	MockGetCarouselByPostID       func(ctx context.Context, postID int64) (models.Carousel, error)
 	MockUpsertCarousel            func(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error)
 	MockDeleteCarouselByPostID    func(ctx context.Context, postID int64) error
+	MockListCarouselTemplates     func(ctx context.Context) ([]models.ListCarouselTemplatesRow, error)
+	MockGetCarouselTemplateBySlug func(ctx context.Context, slug string) (models.CarouselTemplate, error)
+	MockUpsertCarouselTemplate    func(ctx context.Context, arg models.UpsertCarouselTemplateParams) (models.CarouselTemplate, error)
+	MockDeleteCarouselTemplate    func(ctx context.Context, slug string) error
 	MockDeleteAPIKey              func(ctx context.Context, arg models.DeleteAPIKeyParams) error
 	MockDeleteExpiredSessions     func(ctx context.Context) error
 	MockDeleteMedia               func(ctx context.Context, id int64) error
@@ -208,6 +212,34 @@ func (m *mockRepository) DeleteCarouselByPostID(ctx context.Context, postID int6
 		return m.MockDeleteCarouselByPostID(ctx, postID)
 	}
 	return fmt.Errorf("DeleteCarouselByPostID not implemented")
+}
+
+func (m *mockRepository) ListCarouselTemplates(ctx context.Context) ([]models.ListCarouselTemplatesRow, error) {
+	if m.MockListCarouselTemplates != nil {
+		return m.MockListCarouselTemplates(ctx)
+	}
+	return nil, fmt.Errorf("ListCarouselTemplates not implemented")
+}
+
+func (m *mockRepository) GetCarouselTemplateBySlug(ctx context.Context, slug string) (models.CarouselTemplate, error) {
+	if m.MockGetCarouselTemplateBySlug != nil {
+		return m.MockGetCarouselTemplateBySlug(ctx, slug)
+	}
+	return models.CarouselTemplate{}, fmt.Errorf("GetCarouselTemplateBySlug not implemented")
+}
+
+func (m *mockRepository) UpsertCarouselTemplate(ctx context.Context, arg models.UpsertCarouselTemplateParams) (models.CarouselTemplate, error) {
+	if m.MockUpsertCarouselTemplate != nil {
+		return m.MockUpsertCarouselTemplate(ctx, arg)
+	}
+	return models.CarouselTemplate{}, fmt.Errorf("UpsertCarouselTemplate not implemented")
+}
+
+func (m *mockRepository) DeleteCarouselTemplate(ctx context.Context, slug string) error {
+	if m.MockDeleteCarouselTemplate != nil {
+		return m.MockDeleteCarouselTemplate(ctx, slug)
+	}
+	return fmt.Errorf("DeleteCarouselTemplate not implemented")
 }
 
 func (m *mockRepository) AddPostViewCount(ctx context.Context, arg models.AddPostViewCountParams) error {
