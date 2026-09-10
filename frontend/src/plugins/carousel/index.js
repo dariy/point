@@ -70,6 +70,12 @@ import {
 } from "./document.js";
 import { browserDeps, renderAndUpload } from "./render.js";
 import { DEFAULT_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
+import {
+  PROPS_PREF_KEY,
+  ZOOM_STEP,
+  clampZoom,
+  readPropsPref,
+} from "./studio/layout.js";
 import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
 import {
   paintDeckLayers,
@@ -203,7 +209,14 @@ export default class CarouselStudioPage extends Component {
       busy: false,
       renderProgress: null,
       hasCarousel: false,
+      // Rail wide, bottom sheet below 64em. Remembered only on a wide viewport
+      // — a sheet sitting over the stage always opens closed (see layout.js).
+      propsOpen: readPropsPref(),
     };
+    // The stage's zoom multiplier. A field, not state: it is applied by writing
+    // one custom property on the builder root, so changing it costs no rebuild
+    // — but the next render has to emit it, or a rebuild would snap back to 1.
+    this._stageZoom = 1;
     this._picker = null;
     // A second media picker, for an `image` layer's source. Kept apart from
     // `_picker` (the slide source) so confirming one cannot swap the other.
@@ -319,6 +332,15 @@ export default class CarouselStudioPage extends Component {
     },
     "layer-pick-image"() {
       this._openLayerPicker();
+    },
+    "toggle-props"() {
+      this._toggleProps();
+    },
+    "close-props"() {
+      this._toggleProps(false);
+    },
+    "stage-zoom"(_e, el) {
+      this._zoomStage(el.dataset.zoom);
     },
   };
 
@@ -1001,6 +1023,61 @@ export default class CarouselStudioPage extends Component {
       </section>`;
   }
 
+  // ── Stage layout ─────────────────────────────────────────────────────────
+  // Zoom and the properties panel are viewport state, not document state:
+  // both are applied straight to the DOM the way `PostEditPage._toggleDetails`
+  // does, so neither costs a rebuild (and a rebuild mid-gesture is exactly what
+  // a stage control must not cause). Every render re-emits them from the two
+  // fields below, so a rebuild from anywhere else keeps them.
+
+  /** Open, close, or flip the properties panel, and remember the choice. */
+  _toggleProps(force) {
+    const open = typeof force === "boolean" ? force : !this.state.propsOpen;
+    this.state.propsOpen = open;
+    this.$(".carousel-studio__builder")?.classList.toggle("is-details-open", open);
+    const toggle = this.$("#carousel-props-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Hide properties" : "Properties";
+    }
+    this.$("#carousel-props")?.setAttribute("aria-hidden", String(!open));
+    try {
+      localStorage.setItem(PROPS_PREF_KEY, open ? "1" : "0");
+    } catch {
+      /* private mode — the panel still works, it just won't be remembered */
+    }
+  }
+
+  /** One of the four zoom buttons. `fit` is the only one that has to measure. */
+  _zoomStage(which) {
+    if (which === "fit") return this._fitStageZoom();
+    if (which === "reset") return this._setStageZoom(1);
+    this._setStageZoom(this._stageZoom * (which === "in" ? ZOOM_STEP : 1 / ZOOM_STEP));
+  }
+
+  /** Write the zoom multiplier: one custom property, plus the readout. */
+  _setStageZoom(z) {
+    this._stageZoom = clampZoom(z);
+    this.$(".carousel-studio__builder")?.style?.setProperty(
+      "--carousel-stage-zoom",
+      String(this._stageZoom),
+    );
+    const out = this.$("#carousel-zoom-readout");
+    if (out) out.textContent = `${Math.round(this._stageZoom * 100)}%`;
+  }
+
+  /** The zoom at which the whole strip fits the scroller's width. Measured
+   *  rather than derived: the budget is a `clamp()` of `vh`, so only layout
+   *  knows what the stage is currently worth in pixels. */
+  _fitStageZoom() {
+    const scroll = this.$(".carousel-studio__stage-scroll");
+    const stage = this.$(".carousel-studio__stage");
+    const width = stage?.getBoundingClientRect?.().width || 0;
+    const room = scroll?.clientWidth || 0;
+    if (!width || !room) return;
+    this._setStageZoom((this._stageZoom * room) / width);
+  }
+
   /** Everything the builder markup needs, read off the state in one place —
    *  `studio/panels.js` answers no questions about the page itself. */
   _renderBuilder() {
@@ -1020,6 +1097,8 @@ export default class CarouselStudioPage extends Component {
       layerScope,
       logoUrl: getSettings()?.logo_url || "",
       renderedPaths: this._renderedPaths(),
+      propsOpen: this.state.propsOpen,
+      stageZoom: this._stageZoom,
     });
   }
 

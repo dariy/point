@@ -265,6 +265,84 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
 
+    test('a vertical touch drag is handed back to the page', () => {
+      // The frame is `touch-action: pan-y`: a thumb going down the page has to
+      // scroll it, or the studio is a wall on a phone.
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 0, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 2, clientY: 40 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 4, clientY: 90 });
+      frame.emit('pointerup', { pointerId: 1 });
+
+      assert.strictEqual(host.calls.paint.length, 0, 'nothing was painted — the page scrolled');
+      assert.strictEqual(host.calls.commit.length, 0);
+      assert.deepStrictEqual(host.calls.select, []);
+      gestures.destroy();
+    });
+
+    test('a horizontal touch drag past the threshold still pans the crop', () => {
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 0, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 3 });
+      frame.emit('pointerup', { pointerId: 1 });
+
+      assert.strictEqual(host.calls.paint.length, 1);
+      assert.strictEqual(host.calls.commit.length, 1);
+      gestures.destroy();
+    });
+
+    test('a touch below the movement threshold has not chosen yet', () => {
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 0, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 4, clientY: 4 });
+      assert.strictEqual(host.calls.paint.length, 0, 'noise moves nothing');
+
+      // …and the gesture is still available once the finger commits to an axis.
+      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 4 });
+      assert.strictEqual(host.calls.paint.length, 1);
+      gestures.destroy();
+    });
+
+    test('a tap selects the slide, direction never having come up', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 5, clientY: 5 });
+      frame.emit('pointerup', { pointerId: 1 });
+
+      assert.deepStrictEqual(host.calls.select, [0]);
+      gestures.destroy();
+    });
+
+    test('a second finger claims the gesture the first was still deciding', () => {
+      // A pinch is never a scroll, so it does not wait for a direction.
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+      frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 200, clientY: 100 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 104 });
+
+      assert.strictEqual(host.calls.paint.length, 1);
+      gestures.destroy();
+    });
+
     test('an arrow key refocuses and commits the nudge', () => {
       const host = fakeHost([{ crop: { x: 0.25, y: 0, w: 0.5, h: 0.5 }, fit: 'cover' }]);
       const gestures = createDeckGestures(host);

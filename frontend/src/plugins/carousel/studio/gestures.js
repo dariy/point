@@ -20,12 +20,20 @@
  *   gestures.attach(frames);                     // after every render
  *   gestures.destroy();                          // at unmount
  *
+ * A touch drag is not claimed at pointerdown. The frame is `touch-action:
+ * pan-y`, so a vertical drag belongs to the page — this waits for the movement
+ * to declare a direction (`gestureDirection`, the same helper and the same
+ * 8px threshold the tags manager separates swipe from scroll with) and lets go
+ * of a vertical one. A mouse or pen has no such ambiguity and still claims the
+ * press immediately, as does a second finger: a pinch is never a scroll.
+ *
  * Nothing here writes to the DOM by itself and nothing here holds a document:
  * a live gesture paints through `host.paint` with a provisional slide (no state
  * change, no rebuild, no decode) and lands in the document through
  * `host.commit` exactly once, when the gesture ends.
  */
 
+import { gestureDirection } from "../../../components/light/tags/tagGestures.js";
 import { clampPan, deckSlideFitCSS } from "../geometry.js";
 
 /** Wheel-notch → zoom factor. One notch (100px) is ~16%, and the exponential
@@ -376,6 +384,14 @@ export function createDeckGestures(host) {
     host.commitLayer?.(ended.i, ended.j, ended.box);
   };
 
+  /** Take the pointer for the crop gesture: capture it, dress the frame, and
+   *  stop the browser doing anything else with the event. */
+  const claimCrop = (e, frame) => {
+    frame.setPointerCapture?.(e.pointerId);
+    frame.classList.add("is-dragging");
+    e.preventDefault?.();
+  };
+
   const onPointerDown = (e, frame, i) => {
     if (e.button != null && e.button > 0) return;
     const slide = host.slideAt(i);
@@ -415,16 +431,27 @@ export function createDeckGestures(host) {
     if (drag && drag.kind === "layer") return;
 
     if (!drag || drag.i !== i) {
-      drag = { kind: "crop", i, frame, pointers: new Map(), crop: { ...slide.crop }, moved: false };
+      drag = {
+        kind: "crop",
+        i,
+        frame,
+        pointers: new Map(),
+        crop: { ...slide.crop },
+        moved: false,
+        // A single finger has not said yet whether it is panning the crop or
+        // scrolling the page; every other input has.
+        undecided: e.pointerType === "touch",
+      };
     }
-    frame.setPointerCapture?.(e.pointerId);
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A second finger is a pinch, and a pinch is never a scroll — take the
+    // gesture now, whatever the first finger was still deciding.
+    if (drag.pointers.size > 1) drag.undecided = false;
+    if (!drag.undecided) claimCrop(e, frame);
     // Re-baseline on every pointer down: a second finger arriving starts a
     // pinch from where the drag left off rather than from where it began.
     drag.start = pointerCentroid(drag.pointers);
     drag.startCrop = { ...drag.crop };
-    frame.classList.add("is-dragging");
-    e.preventDefault?.();
   };
 
   const onPointerMove = (e, frame, i) => {
@@ -434,6 +461,22 @@ export function createDeckGestures(host) {
     }
     const slide = host.slideAt(i);
     if (!drag || drag.i !== i || !drag.pointers.has(e.pointerId) || !slide) return;
+
+    // The undecided single finger, resolved. Below the threshold the movement
+    // is still noise, so nothing moves and nothing is claimed; a vertical call
+    // drops the gesture entirely and the page scrolls with the finger it was
+    // always meant for.
+    if (drag.undecided) {
+      const dir = gestureDirection(e.clientX - drag.start.cx, e.clientY - drag.start.cy);
+      if (!dir) return;
+      if (dir === "vertical") {
+        drag = null;
+        return;
+      }
+      drag.undecided = false;
+      claimCrop(e, frame);
+    }
+
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     const now = pointerCentroid(drag.pointers);

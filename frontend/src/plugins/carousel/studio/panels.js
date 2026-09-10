@@ -265,6 +265,11 @@ function layerLabel(layer) {
  * @param {"slide"|"span"} o.layerScope  which list `selectedLayer` indexes
  * @param {string} o.logoUrl       the `logo_url` setting, the image layer default
  * @param {string[]} o.renderedPaths
+ * @param {boolean} [o.propsOpen]  is the properties panel showing? A rail wide,
+ *   a bottom sheet below 64em — the same class name and the same state-class
+ *   placement the post editor's Details panel uses.
+ * @param {number} [o.stageZoom]   multiplier on the stage's CSS height budget,
+ *   emitted as the one custom property the stylesheet reads.
  */
 export function builder({
   doc,
@@ -280,6 +285,8 @@ export function builder({
   layerScope = "slide",
   logoUrl,
   renderedPaths,
+  propsOpen = true,
+  stageZoom = 1,
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
@@ -361,27 +368,50 @@ export function builder({
     : "";
 
   return html`
-    <div class="carousel-studio__builder">
+    <div
+      class="carousel-studio__builder ${propsOpen ? "is-details-open" : ""}"
+      style="--carousel-stage-zoom:${String(stageZoom)}"
+    >
       ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
 
-      <div
-        class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""}"
-        style="aspect-ratio:${String(n * w)}/${String(h)}"
-      >
-        ${stageSlides}${dividers}${guides}
+      <div class="carousel-studio__stage-scroll">
+        <div
+          class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""}"
+          style="aspect-ratio:${String(n * w)}/${String(h)}"
+        >
+          ${stageSlides}${dividers}${guides}
+        </div>
       </div>
+
+      ${stageBar({ propsOpen, stageZoom })}
 
       <div class="carousel-studio__filmstrip" aria-label="Slide preview">${strip}</div>
 
-      ${deck
-        ? html`${deckPanel({ doc, index: deckIndex, hasPad })}${layerPanel({
-            doc,
-            index: deckIndex,
-            selectedLayer,
-            layerScope,
-            logoUrl,
-          })}`
-        : fitPanel({ doc, srcW, srcH, fitMode })}
+      <div class="carousel-studio__props-backdrop" data-action="close-props"></div>
+      <aside
+        class="carousel-studio__props"
+        id="carousel-props"
+        aria-label="Slide properties"
+        aria-hidden="${propsOpen ? "false" : "true"}"
+      >
+        <button
+          type="button"
+          class="carousel-studio__props-close btn btn-secondary"
+          data-action="close-props"
+          aria-label="Close properties"
+        >
+          &times;
+        </button>
+        ${deck
+          ? html`${deckPanel({ doc, index: deckIndex, hasPad })}${layerPanel({
+              doc,
+              index: deckIndex,
+              selectedLayer,
+              layerScope,
+              logoUrl,
+            })}`
+          : fitPanel({ doc, srcW, srcH, fitMode })}
+      </aside>
 
       <div class="carousel-studio__controls">
         ${deck
@@ -417,6 +447,75 @@ export function builder({
       </div>
 
       ${renderedStrip}
+    </div>`;
+}
+
+/**
+ * The bar under the stage: stage zoom on the left, the properties toggle on the
+ * right. Neither touches the document — zoom writes one CSS custom property on
+ * the builder root and the toggle flips one state class, so both are applied
+ * without a rebuild (see `_setStageZoom` / `_toggleProps` in `index.js`).
+ *
+ * "100%" here means the stage's own height budget, not 1:1 with the 1350px
+ * canvas — the canvas is taller than any laptop.
+ *
+ * @param {{propsOpen: boolean, stageZoom: number}} o
+ */
+export function stageBar({ propsOpen, stageZoom }) {
+  return html`
+    <div class="carousel-studio__stage-bar">
+      <div class="carousel-studio__zoom" role="group" aria-label="Stage zoom">
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="stage-zoom"
+          data-zoom="out"
+          aria-label="Zoom out"
+        >
+          &minus;
+        </button>
+        <output class="carousel-studio__zoom-readout" id="carousel-zoom-readout"
+          >${String(Math.round(stageZoom * 100))}%</output
+        >
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="stage-zoom"
+          data-zoom="in"
+          aria-label="Zoom in"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="stage-zoom"
+          data-zoom="fit"
+          title="Fit the whole deck across the stage"
+        >
+          Fit
+        </button>
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="stage-zoom"
+          data-zoom="reset"
+          title="Back to the default stage height"
+        >
+          100%
+        </button>
+      </div>
+
+      <button
+        type="button"
+        id="carousel-props-toggle"
+        class="btn btn-secondary"
+        data-action="toggle-props"
+        aria-controls="carousel-props"
+        aria-expanded="${propsOpen ? "true" : "false"}"
+      >
+        ${propsOpen ? "Hide properties" : "Properties"}
+      </button>
     </div>`;
 }
 

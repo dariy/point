@@ -13,14 +13,6 @@
   gap: var(--spacing-md);
 }
 
-.carousel-studio__stage {
-  aspect-ratio: 4 / 5;
-  max-width: 22rem;
-  border: var(--border-width) dashed var(--border-primary);
-  border-radius: var(--border-radius);
-  background: var(--surface-card);
-}
-
 .carousel-studio--empty {
   padding: var(--spacing-lg) 0;
 }
@@ -39,12 +31,44 @@
   gap: var(--spacing-md);
 }
 
+/* The stage scrolls sideways rather than shrinking. A stage sized to the
+ * container's width is a sliver as soon as the deck is long — at the 20-slide
+ * maximum it is a 16:1 strip — so the stage takes a height budget instead and
+ * lets its width follow from the inline `aspect-ratio`. Whatever does not fit
+ * scrolls here, with the seam grid still legible at every count. */
+.carousel-studio__stage-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  /* A sideways flick that runs out of strip stops there instead of walking the
+   * page's own horizontal scroll. */
+  overscroll-behavior-x: contain;
+}
+
 /* The 1080·n × 1350 strip: source shown centre-cropped to the combined deck
  * aspect (background-image is set from JS), column dividers and per-slide
- * safe-area boxes drawn on top. */
+ * safe-area boxes drawn on top.
+ *
+ * `height` is the budget the zoom control multiplies (`--carousel-stage-zoom`,
+ * written by the page as one custom property); `width: fit-content` is what
+ * makes the inline `aspect-ratio` transfer that definite height into a width
+ * rather than stretching the stage to the scroller. The auto margins centre a
+ * short deck and collapse to zero once the strip overflows, so nothing is ever
+ * stranded off the scroller's left edge. */
 .carousel-studio__stage {
   position: relative;
-  width: 100%;
+  /* Fallback aspect only — the builder always sets `n·w / h` inline. */
+  aspect-ratio: 4 / 5;
+  /* No `max-width` here, deliberately: a cap would win over the ratio and
+   * squash the strip back into the band this replaced. */
+  width: fit-content;
+  height: calc(clamp(12rem, 45vh, 32rem) * var(--carousel-stage-zoom, 1));
+  margin-inline: auto;
+  border: var(--border-width) dashed var(--border-primary);
+  /* The stage is a scroll surface, not a gesture surface: a one-finger drag
+   * scrolls the strip or the page, in whichever direction it goes. The deck
+   * frames below are where a drag pans a crop. */
+  touch-action: pan-x pan-y;
   background-color: var(--surface-card);
   /* Fallback only — used while the source's pixel size is still unknown.
    * Once it's known, JS sets background-size/-position explicitly per the
@@ -96,6 +120,32 @@
   pointer-events: none;
 }
 
+/* ── Stage bar ─────────────────────────────────────────────────────────────
+ * Under the stage: the zoom control on the left, the properties toggle on the
+ * right. Both drive the layout rather than the document — nothing here can
+ * make the deck dirty. */
+.carousel-studio__stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.carousel-studio__zoom {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.carousel-studio__zoom-readout {
+  min-width: 3.5rem;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* The studio opts out of the admin content clamp the way the post editor does
  * (`.light-content.editor-full-width`): a split stage is `n × 4:5` wide, so at
  * eight slides it is a 6.4:1 strip that `--content-max-width` would shrink to
@@ -128,16 +178,20 @@
 
 /* A deck frame is the pan/zoom surface. Its own fill layer covers the letterbox
  * wherever a contained slide's image element doesn't reach; the hatch below is
- * what shows when there is nothing to fill it with yet. `touch-action: none` is
- * what makes a one-finger drag pan the slide instead of scrolling the
- * filmstrip, and `container-type` is what lets the fill's blur radius be a
- * fraction of the frame width. */
+ * what shows when there is nothing to fill it with yet. `container-type` is
+ * what lets the fill's blur radius be a fraction of the frame width.
+ *
+ * `touch-action: pan-y`, not `none`: a horizontal drag pans the slide, but a
+ * vertical one has to reach the page, or a phone user whose thumb lands on a
+ * frame cannot scroll past the studio at all. `gestures.js` claims a touch drag
+ * only once it has travelled far enough to call the direction, so the two never
+ * fight over the same finger. */
 .carousel-studio__frame--deck {
   position: relative;
   overflow: hidden;
   flex: 0 0 8rem;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y;
   container-type: inline-size;
   background-image: repeating-linear-gradient(
     45deg,
@@ -532,4 +586,115 @@
   height: 100%;
   background: var(--color-primary);
   transition: width 0.15s ease-out;
+}
+
+/* ── Properties panel ──────────────────────────────────────────────────────
+ * The mode's own panel — deck panel plus layers, or the split fit panel. Wide,
+ * it is a block in the builder column the toggle can collapse. Below 64em it
+ * becomes a bottom sheet over the stage, which is the pattern the post editor
+ * already ships (`.editor-details-panel`, `frontend/css/light/editor.css`):
+ * state class on the layout root, sibling backdrop, `85dvh`, translated off the
+ * bottom when closed. Copied rather than extracted — `components/shared/` has
+ * no sheet primitive, and inventing one for the second user is how a primitive
+ * ends up fitting neither. */
+.carousel-studio__props {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* Chrome the sheet needs and the rail does not. */
+.carousel-studio__props-close,
+.carousel-studio__props-backdrop {
+  display: none;
+}
+
+@media (min-width: 64em) {
+  .carousel-studio__builder:not(.is-details-open) .carousel-studio__props {
+    display: none;
+  }
+}
+
+@media (max-width: 64em) {
+  .carousel-studio__props {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    /* Laid out even when closed: the transform is what hides it, and a sheet
+     * that starts at `display: none` pops instead of sliding. The wide-side
+     * collapse above cannot reach here — that rule is in its own query. */
+    display: flex;
+    overflow-y: auto;
+    /* dvh keeps the cap on the visible viewport rather than the one behind a
+     * hidden browser toolbar. */
+    max-height: 85vh;
+    max-height: 85dvh;
+    padding: var(--spacing-md);
+    padding-bottom: max(var(--spacing-md), env(safe-area-inset-bottom, 0px));
+    background: var(--surface-card);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    z-index: 1001;
+  }
+
+  .carousel-studio__builder.is-details-open .carousel-studio__props {
+    transform: translateY(0);
+  }
+
+  .carousel-studio__props-close {
+    display: flex;
+    align-self: flex-end;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .carousel-studio__props-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--color-black-alpha-50, rgba(0, 0, 0, 0.5));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 1000;
+  }
+
+  .carousel-studio__builder.is-details-open .carousel-studio__props-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ── Phone ─────────────────────────────────────────────────────────────────
+ * The second admin breakpoint (`frontend/css/light/responsive.css:14`). The
+ * stage keeps its shape and gives up height — the strip is still scrollable,
+ * and zoom is there for a closer look. */
+@media (max-width: 48em) {
+  .carousel-studio__stage {
+    height: calc(clamp(9rem, 38vh, 20rem) * var(--carousel-stage-zoom, 1));
+  }
+
+  .carousel-studio__frame {
+    flex-basis: 4.5rem;
+  }
+
+  .carousel-studio__frame--deck {
+    flex-basis: 6rem;
+  }
+
+  .carousel-studio__stage-bar,
+  .carousel-studio__controls {
+    gap: var(--spacing-xs);
+  }
+
+  /* Every panel field goes full width rather than sharing a row with a
+   * neighbour it has no room for. */
+  .carousel-studio__bg-field,
+  .carousel-studio__control {
+    flex: 1 1 100%;
+  }
 }
