@@ -193,6 +193,8 @@ export default [
         FileReader: "readonly",
         FormData: "readonly",
         Blob: "readonly",
+        ReadableStream: "readonly",
+        DecompressionStream: "readonly",
         File: "readonly",
         createImageBitmap: "readonly",
         crypto: "readonly",
