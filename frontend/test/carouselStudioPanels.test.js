@@ -178,8 +178,24 @@ describe('carousel studio panels', () => {
       const out = str(modeToggle({ mode: 'split', canDeck: true, busy: false }));
       assert.match(out, /data-mode="split"/);
       assert.match(out, /data-mode="deck"/);
-      assert.match(out, /aria-pressed="true"[^>]*>\s*Split/m);
-      assert.match(out, /aria-pressed="false"[^>]*>\s*Deck/m);
+      assert.match(out, /aria-pressed="true"[^>]*>\s*Panorama/m);
+      assert.match(out, /aria-pressed="false"[^>]*>\s*Slides/m);
+    });
+
+    test('the chips are named for what the modes do, not for the stored value', () => {
+      const out = str(modeToggle({ mode: 'deck', canDeck: true, busy: false }));
+      assert.doesNotMatch(out, />\s*Split\s*</);
+      assert.doesNotMatch(out, />\s*Deck\s*</);
+      // The stored vocabulary is untouched — `MODES` never changed.
+      assert.match(out, /data-mode="split"/);
+      assert.match(out, /data-mode="deck"/);
+    });
+
+    test('the hint says what switching away from Slides costs', () => {
+      const out = str(modeToggle({ mode: 'deck', canDeck: true, busy: false }));
+      // The interpolation escapes the apostrophe, so match around it.
+      assert.match(out, /Panorama keeps only the first slide.{0,6}s photo/);
+      assert.match(out, /discards the framing/);
     });
 
     test('deck is disabled until the source pixels are known', () => {
@@ -220,6 +236,14 @@ describe('carousel studio panels', () => {
       const out = str(deckPanel({ doc: doc3, index: 2, hasPad: false }));
       assert.match(out, /data-action="slide-fit"[^>]*data-slide="2"/s);
       assert.match(out, /data-action="reset-slide"[^>]*data-slide="2"/s);
+    });
+
+    test('the photo button carries the slide index the page dispatches on', () => {
+      const out = str(deckPanel({ doc: doc3, index: 2, hasPad: false }));
+      assert.match(out, /data-action="pick-source"[^>]*data-slide="2"/s);
+      // `data-slice` would make the button a host the deck painters draw
+      // layer nodes into (see `_paintDeckSlideLayers`).
+      assert.doesNotMatch(out, /data-action="pick-source"[^>]*data-slice=/s);
     });
 
     test('the letterbox fill appears only when the slide really has one', () => {

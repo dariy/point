@@ -1229,6 +1229,188 @@ describe('CarouselStudioPage', () => {
       assert.ok(!page.container.querySelector('.carousel-studio__dirty-badge'), 'clean again');
     });
 
+    describe('a photo per slide', () => {
+      const ALT = '/2026/08/portrait.jpg';
+      const ALT_W = 1000;
+      const ALT_H = 1000;
+
+      /** Confirm a picker result the way MediaPickerDialog does: the per-call
+       *  handler `open()` was given wins over the constructor's. */
+      const confirmPick = (items) =>
+        (page._picker._onConfirmOverride || page._picker.props.onConfirm)(items);
+
+      /** Deps that answer per path, so the two sources are two sizes — which is
+       *  the whole point: a crop is normalized against its own source. */
+      const perPathDeps = (upload) => ({
+        ...fakeRenderDeps(upload || (async () => ({}))),
+        probeSize: async (path) =>
+          path === ALT ? { w: ALT_W, h: ALT_H } : { w: SRC_W, h: SRC_H },
+      });
+
+      /** Select slide `i` on the rail, then hand back its photo button — the
+       *  properties panel only ever shows the selected slide, so that is the
+       *  only slide whose button exists. */
+      async function photoButton(el, i) {
+        click(el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"]`));
+        await settle();
+        return el.querySelector(`[data-action="pick-source"][data-slide="${i}"]`);
+      }
+
+      async function deckWithPerPathProbe(n = 3) {
+        const { routes } = split(n);
+        const el = await mount({ post: '42' }, routes, { renderDeps: perPathDeps() });
+        click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
+        await settle();
+        return el;
+      }
+
+      test("the panel's button changes that slide's photo and no other", async () => {
+        const el = await deckWithPerPathProbe();
+        drag(stageCol(el, 1), stageImg(el, 1), -60, 0)();
+        await settle();
+        const panned = { ...page.state.doc.slides[1].crop };
+
+        click(el.querySelector('[data-action="pick-source"][data-slide="1"]'));
+        confirmPick([{ path: ALT, width: ALT_W, height: ALT_H }]);
+        await settle();
+
+        assert.deepEqual(
+          page.state.doc.slides.map((slide) => slide.source),
+          [SRC, ALT, SRC],
+          'only slide 2 of 3 changed photo',
+        );
+        // Crops are fractions of their own source, so the framing survives a
+        // swap to an image of a completely different size.
+        assert.deepEqual(page.state.doc.slides[1].crop, panned, 'the framing survived');
+        assert.equal(page.state.doc.mode, 'deck');
+      });
+
+      test("a slide's own pixel size drives its preview, not slide 0's", async () => {
+        const el = await deckWithPerPathProbe();
+        const before = pair(stageImg(el, 0).style.backgroundSize);
+
+        click(await photoButton(el, 1));
+        confirmPick([{ path: ALT, width: ALT_W, height: ALT_H }]);
+        await settle();
+
+        assert.deepEqual(pair(stageImg(el, 0).style.backgroundSize), before, 'slide 1 untouched');
+        assert.notDeepEqual(
+          pair(stageImg(el, 1).style.backgroundSize),
+          before,
+          'a square source cannot fill a 4:5 frame the way the panorama did',
+        );
+        // The document-level pair still describes the document's own source —
+        // the fit panel and the panorama projection measure that one.
+        assert.equal(page.state.srcW, SRC_W);
+        assert.equal(page.state.srcH, SRC_H);
+        assert.deepEqual(page.state.dims[ALT], { srcW: ALT_W, srcH: ALT_H });
+      });
+
+      test('a photo with no stored dimensions is probed instead', async () => {
+        const el = await deckWithPerPathProbe();
+        click(await photoButton(el, 2));
+        confirmPick([{ path: ALT }]);
+        await settle();
+
+        assert.equal(page.state.doc.slides[2].source, ALT);
+        assert.deepEqual(page.state.dims[ALT], { srcW: ALT_W, srcH: ALT_H });
+      });
+
+      test('the controls bar still puts one photo on every slide', async () => {
+        const el = await deckWithPerPathProbe();
+        drag(stageCol(el, 1), stageImg(el, 1), -60, 0)();
+        await settle();
+        const panned = { ...page.state.doc.slides[1].crop };
+
+        const all = el.querySelector('.carousel-studio__controls [data-action="pick-source"]');
+        assert.match(all.textContent, /Use one photo for all slides/);
+        assert.equal(all.dataset.slide, undefined, 'no slide index — it acts on the document');
+        click(all);
+        confirmPick([{ path: ALT, width: ALT_W, height: ALT_H }]);
+        await settle();
+
+        assert.deepEqual(
+          page.state.doc.slides.map((slide) => slide.source),
+          [ALT, ALT, ALT],
+        );
+        assert.deepEqual(page.state.doc.slides[1].crop, panned, 'the framing survived');
+        assert.equal(page.state.srcW, ALT_W, 'the document source moved, so its pair did too');
+      });
+
+      test('every source a loaded document names is measured, not just the first', async () => {
+        const doc = {
+          version: 1,
+          aspect: '4:5',
+          mode: 'deck',
+          slides: [
+            { source: SRC, crop: { x: 0, y: 0, w: 0.3, h: 1 }, fit: 'cover' },
+            { source: ALT, crop: { x: 0, y: 0, w: 1, h: 1 }, fit: 'cover' },
+          ],
+        };
+        const routes = [
+          [/\/api\/posts\/42/, { body: POST }],
+          [/\/api\/carousel/, { body: { post_id: 42, doc } }],
+        ];
+        await mount({ post: '42' }, routes, { renderDeps: perPathDeps() });
+        await settle();
+
+        assert.deepEqual(page.state.dims[SRC], { srcW: SRC_W, srcH: SRC_H });
+        assert.deepEqual(page.state.dims[ALT], { srcW: ALT_W, srcH: ALT_H });
+        assert.equal(page.state.srcW, SRC_W, "slide 0's source owns the document pair");
+      });
+
+      test('a per-slide photo change re-encodes exactly that slide', async () => {
+        const base = splitDocument({ source: SRC, n: 3, aspect: '4:5', strategy: 'cover', anchorY: 0.5 });
+        const doc = toDeckDocument(base, SRC_W, SRC_H);
+        doc.slides.forEach((slide, i) => {
+          slide.rendered = {
+            path: `/2026/08/old${i + 1}.jpg`,
+            media_id: 100 + i,
+            specHash: specHash(slide, doc.aspect, { strategy: doc.strategy, anchorY: doc.anchorY }),
+          };
+        });
+        const post = {
+          ...POST,
+          content: ':::{.carousel-block}\n\n/2026/08/old1.jpg\n\n/2026/08/old2.jpg\n\n/2026/08/old3.jpg\n\n:::',
+        };
+        const routes = [
+          [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: post })],
+          [/\/api\/carousel/, (url, opts) =>
+            opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } }],
+          [/\/api\/media\/\d+$/, { body: {} }],
+        ];
+        const uploads = [];
+        const fetched = [];
+        const deps = perPathDeps(async (file) => {
+          uploads.push(file.name);
+          return { id: 500 + uploads.length, path: `/2026/08/new${uploads.length}.jpg` };
+        });
+        deps.fetchBlob = async (path) => {
+          fetched.push(path);
+          return new Blob(['src']);
+        };
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+        assert.equal(page.state.doc.mode, 'deck', 'loaded as a deck');
+
+        click(await photoButton(el, 1));
+        confirmPick([{ path: ALT, width: ALT_W, height: ALT_H }]);
+        await settle();
+
+        await page._render();
+        await settle();
+
+        assert.equal(page.state.error, null);
+        assert.deepEqual(uploads, ['carousel-42-2.jpg'], 'only the slide that changed photo');
+        assert.deepEqual(
+          page.state.doc.slides.map((slide) => slide.rendered.path),
+          ['/2026/08/old1.jpg', '/2026/08/new1.jpg', '/2026/08/old3.jpg'],
+        );
+        // The reused slides are never fetched, so the only source the render
+        // needed was the new one.
+        assert.deepEqual(fetched, [ALT]);
+      });
+    });
+
     describe('layers (S3)', () => {
       const addLayerBtn = (el, type) =>
         el.querySelector(`[data-action="add-layer"][data-type="${type}"]`);

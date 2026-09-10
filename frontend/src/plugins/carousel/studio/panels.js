@@ -408,6 +408,21 @@ export function builder({
           ></div>`,
   );
 
+  // The controls bar acts on the whole document, so this carries no
+  // `data-slide` — and in Slides mode that is the studio's original behaviour,
+  // one photo on every slide with each slide's framing kept. It stays reachable
+  // here now that `deckPanel` can change a single slide's photo instead.
+  const sourceButton = html`
+    <button
+      class="btn btn-secondary"
+      data-action="pick-source"
+      title="${deck
+        ? "Put one photo on every slide, keeping each slide's framing"
+        : "Choose the photo to cut across the slides"}"
+    >
+      ${deck ? "Use one photo for all slides" : "Change photo"}
+    </button>`;
+
   const renderedStrip = renderedPaths.length
     ? html`
         <div class="carousel-studio__rendered">
@@ -496,7 +511,7 @@ export function builder({
           <span>Safe-area guides</span>
         </label>
 
-        <button class="btn btn-secondary" data-action="pick-source">Change image</button>
+        ${sourceButton}
       </div>
 
       ${renderedStrip}
@@ -572,8 +587,15 @@ export function stageBar({ propsOpen, stageZoom }) {
     </div>`;
 }
 
-/** Split / Deck. Deck is unavailable until the source pixel size is known —
- *  there would be nothing to derive the per-slide crops from.
+/**
+ * **Panorama** / **Slides** — the choice the user is actually making: one wide
+ * photo cut across every slide, or a photo per slide. The stored `doc.mode`
+ * values stay `split` and `deck` (`MODES` in `document.js`), so this is naming
+ * at the view layer only: no migration, and the code and the docs keep one
+ * vocabulary while the chips speak the user's.
+ *
+ * Slides is unavailable until the source pixel size is known — there would be
+ * nothing to derive the per-slide crops from.
  *
  * @param {{mode: string, canDeck: boolean, busy: boolean}} o
  */
@@ -587,9 +609,9 @@ export function modeToggle({ mode, canDeck, busy }) {
         data-mode="split"
         aria-pressed="${mode === "split" ? "true" : "false"}"
         ${busy ? "disabled" : ""}
-        title="One image sliced into continuous columns"
+        title="One wide photo cut across every slide"
       >
-        Split
+        Panorama
       </button>
       <button
         type="button"
@@ -599,15 +621,15 @@ export function modeToggle({ mode, canDeck, busy }) {
         aria-pressed="${mode === "deck" ? "true" : "false"}"
         ${busy || !canDeck ? "disabled" : ""}
         title="${canDeck
-          ? "Frame each slide on its own — nothing moves when you switch"
+          ? "A photo per slide — one shared, or a different one on each"
           : "Waiting for the source dimensions"}"
       >
-        Deck
+        Slides
       </button>
       <span class="carousel-studio__mode-hint">
         ${mode === "deck"
-          ? "Each slide is framed on its own. Going back to Split discards that."
-          : "Every slide is a column of one strip."}
+          ? "A photo per slide, framed slide by slide. Going back to Panorama keeps only the first slide's photo and discards the framing."
+          : "One wide photo, cut into a column per slide. Switching to Slides freezes exactly what you see — nothing moves."}
       </span>
     </div>`;
 }
@@ -662,6 +684,17 @@ export function deckPanel({ doc, index, hasPad }) {
           data-slide="${String(index)}"
         >
           Reset framing
+        </button>
+      </div>
+
+      <div class="carousel-studio__fit-chips" role="group" aria-label="Slide photo">
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="pick-source"
+          data-slide="${String(index)}"
+        >
+          Change this slide's photo
         </button>
       </div>
 

@@ -205,10 +205,16 @@ export default class CarouselStudioPage extends Component {
       // The document IS the state. Everything the user can change about the
       // slides lives here and nowhere else.
       doc: emptyDocument(),
-      // Source pixel size, re-probed on load and on every source change: derived
-      // data, so it is never a document field.
+      // The *document's* source pixel size — the panorama's photo, and the
+      // answer for any slide with no probe of its own. Re-probed on load and on
+      // every change to it: derived data, so it is never a document field.
       srcW: null,
       srcH: null,
+      // Pixel size per source path, for the slides that name their own photo.
+      // A probe is a decode, and a deck frozen from a panorama names one photo
+      // N times, so every probe lands here and no path is measured twice.
+      // Read through `_dimsFor`, never directly.
+      dims: /** @type {Record<string, {srcW: number, srcH: number}>} */ ({}),
       selected: 0,
       // Which layer the property form is editing, or null. An index into the
       // list `layerScope` names: the selected deck slide's `layers`, or
@@ -256,9 +262,8 @@ export default class CarouselStudioPage extends Component {
     // debounced commit has to outlive the rebuild a neighbouring control can
     // cause mid-burst.
     this._gestures = createDeckGestures({
-      dims: () => ({
-        srcW: this.state.srcW,
-        srcH: this.state.srcH,
+      dims: (i) => ({
+        ...this._dimsFor(this.state.doc.slides[i]),
         aspect: this.state.doc.aspect,
       }),
       slideAt: (i) => this.state.doc.slides[i] || null,
@@ -295,8 +300,13 @@ export default class CarouselStudioPage extends Component {
     "back-to-post"() {
       navigate(`/light/posts/${this.state.postId}/edit`);
     },
-    "pick-source"() {
-      this._openPicker();
+    // `data-slide`, not `data-slice`: every `[data-slice="i"]` element in the
+    // studio is a host the deck painters draw layer nodes into, and a button is
+    // not one. The panel's other per-slide controls use `data-slide` for the
+    // same reason.
+    "pick-source"(_e, el) {
+      const slide = el.dataset.slide;
+      this._openPicker(slide == null ? null : Number(slide));
     },
     render() {
       this._render();
@@ -386,10 +396,24 @@ export default class CarouselStudioPage extends Component {
 
   // ── Document accessors ────────────────────────────────────────────────────
 
-  /** The one source every slide is drawn from. Per-slide sources are a later
-   *  stage; until then slide 0 answers for the deck. */
+  /** The document's source: the one photo a panorama is cut from, and slide 0's
+   *  in Slides mode, where the other slides may each name their own. It answers
+   *  the page-level questions — is there anything to build, what does the fit
+   *  panel measure, which probe owns `srcW`/`srcH`. Per-slide questions go
+   *  through `_dimsFor` instead. */
   _source() {
     return this.state.doc.slides[0]?.source || "";
+  }
+
+  /** The pixel size of one slide's source. The per-path probe cache answers
+   *  first; the document-level pair is the fallback, which is the whole answer
+   *  for a deck that shares one photo.
+   *
+   * @param {import('./document.js').CarouselSlide} [slide]
+   * @returns {{srcW: number|null, srcH: number|null}}
+   */
+  _dimsFor(slide) {
+    return this.state.dims[slide?.source] || { srcW: this.state.srcW, srcH: this.state.srcH };
   }
 
   /** The slide the deck panel is editing — the selection, pinned inside the
@@ -407,7 +431,7 @@ export default class CarouselStudioPage extends Component {
    * @param {import('./document.js').CarouselSlide} slide
    */
   _hasPad(slide) {
-    const { srcW, srcH } = this.state;
+    const { srcW, srcH } = this._dimsFor(slide);
     if (!slide?.source || !srcW || !srcH) return false;
     const { aspect } = this.state.doc;
     const [dstW, dstH] = canvasSize(aspect);
@@ -466,50 +490,137 @@ export default class CarouselStudioPage extends Component {
       { history: false },
     );
     // The document does not store source pixels — re-probe them so the fit
-    // panel has its numbers. The image is cache-warm from the CSS background.
-    const source = doc.slides[0]?.source;
-    if (source) this._probeSource(source);
+    // panel has its numbers. The images are cache-warm from the CSS background.
+    this._probeSources(doc);
   }
 
-  _openPicker() {
+  /**
+   * Open the media picker for a slide source. `slice` names the one slide the
+   * choice lands on, or null for "every slide" — the studio's original
+   * behaviour, still reachable from the controls bar.
+   *
+   * One dialog either way: the scope rides on the per-call handler
+   * `MediaPickerDialog.open` takes, which is what that parameter exists for. A
+   * second dialog would be a second thing to keep mounted and in sync.
+   *
+   * @param {number|null} [slice]
+   */
+  _openPicker(slice = null) {
     if (!this._picker) {
       this._picker = new MediaPickerDialog({
-        onConfirm: (items) => {
-          const img = (items || []).find((m) => isImagePath(m?.path));
-          if (!img) return;
-          // The media mapper emits width/height (api/internal/api/mappers.go);
-          // they are null for a pre-dimensions upload — probe the bitmap then.
-          const w = Number.isFinite(img.width) ? img.width : null;
-          const h = Number.isFinite(img.height) ? img.height : null;
-          const doc = this.state.doc;
-          // In deck mode the slides carry framing the user set by hand: swap the
-          // source under them (crops are normalized, so they stay valid) rather
-          // than throwing that work away. Split mode has nothing per-slide to
-          // lose, so a new image starts a fresh projection.
-          const next =
-            doc.mode === "deck" && doc.slides.length
-              ? normalizeDocument({
-                  ...doc,
-                  slides: doc.slides.map((s) => ({ ...s, source: img.path })),
-                })
-              : this._splitDoc({ source: img.path, strategy: "cover", anchorY: 0.5 });
-          this._setDoc(next, { srcW: w, srcH: h });
-          if (!w || !h) this._probeSource(img.path);
-        },
+        onConfirm: (items) => this._applyPickedSource(items, null),
       });
       this._picker.mount();
     }
-    this._picker.open();
+    this._picker.open(slice == null ? null : (items) => this._applyPickedSource(items, slice));
   }
 
-  /** Fill `srcW`/`srcH` from a natural-size probe of the source image. On
-   *  failure the fit panel simply stays hidden and the bare slider is used. */
+  /** The first image in a picker result, with the dimensions its media row
+   *  carried. The media mapper emits width/height (api/internal/api/mappers.go);
+   *  they are null for a pre-dimensions upload, and the bitmap is probed then.
+   *
+   * @param {Array<{path?: string, width?: number, height?: number}>} items
+   * @returns {{path: string, srcW: number|null, srcH: number|null}|null}
+   */
+  _pickedImage(items) {
+    const img = (items || []).find((m) => isImagePath(m?.path));
+    if (!img) return null;
+    return {
+      path: img.path,
+      srcW: Number.isFinite(img.width) ? img.width : null,
+      srcH: Number.isFinite(img.height) ? img.height : null,
+    };
+  }
+
+  /**
+   * Put a picked image into the document.
+   *
+   * In Slides mode the slides carry framing the user set by hand, so the source
+   * is swapped *under* it — crops are normalized against their source, so they
+   * stay valid across a photo of any size — and `slice` decides whether that
+   * happens to one slide or to all of them. Panorama has nothing per-slide to
+   * lose and only ever has one source, so a new image starts a fresh
+   * projection whatever `slice` says.
+   *
+   * @param {Array<{path?: string, width?: number, height?: number}>} items
+   * @param {number|null} slice  the slide to change, or null for every slide
+   */
+  _applyPickedSource(items, slice) {
+    const img = this._pickedImage(items);
+    if (!img) return;
+    const doc = this.state.doc;
+    const deck = doc.mode === "deck" && doc.slides.length > 0;
+    const next = deck
+      ? normalizeDocument({
+          ...doc,
+          slides: doc.slides.map((s, i) =>
+            slice == null || i === slice ? { ...s, source: img.path } : s,
+          ),
+        })
+      : this._splitDoc({ source: img.path, strategy: "cover", anchorY: 0.5 });
+
+    const patch = {};
+    if (img.srcW && img.srcH) {
+      patch.dims = { ...this.state.dims, [img.path]: { srcW: img.srcW, srcH: img.srcH } };
+    }
+    // `srcW`/`srcH` describe the document's own source, so they move only when
+    // that is what was replaced. A swap on slide 3 leaves them alone — slide 3
+    // is answered for by `dims` from here on.
+    if (!deck || slice == null || slice === 0) {
+      patch.srcW = img.srcW;
+      patch.srcH = img.srcH;
+    }
+    this._setDoc(next, patch);
+    if (!img.srcW || !img.srcH) this._probeSource(img.path);
+  }
+
+  /** Make sure every distinct source the document names has been measured —
+   *  one slide's dimensions cannot answer for another once a deck carries more
+   *  than one photo.
+   *
+   * @param {import('./document.js').CarouselDoc} doc
+   */
+  _probeSources(doc) {
+    for (const path of new Set((doc.slides || []).map((s) => s.source).filter(Boolean))) {
+      this._ensureDims(path);
+    }
+  }
+
+  /** `_probeSource`, skipping the network for a path already measured — but
+   *  still re-seating `srcW`/`srcH` when that path is now the document's
+   *  source, which is what an undo across a source change needs.
+   *
+   * @param {string} path
+   */
+  _ensureDims(path) {
+    const known = this.state.dims[path];
+    if (!known) {
+      this._probeSource(path);
+      return;
+    }
+    if (this._source() !== path) return;
+    if (this.state.srcW === known.srcW && this.state.srcH === known.srcH) return;
+    this.setState({ srcW: known.srcW, srcH: known.srcH });
+  }
+
+  /** Measure a source image and record it. Fills the per-path `dims` cache, and
+   *  `srcW`/`srcH` too when the path is the document's own source. On failure
+   *  the fit panel simply stays hidden and the bare slider is used. */
   async _probeSource(path) {
     try {
       const deps = this.props.renderDeps || browserDeps();
       const { w, h } = await deps.probeSize(path);
-      if (this._unmounted || this._source() !== path) return;
-      this.setState({ srcW: w || null, srcH: h || null });
+      if (this._unmounted) return;
+      /** @type {Record<string, *>} */
+      const patch = {};
+      if (w && h) patch.dims = { ...this.state.dims, [path]: { srcW: w, srcH: h } };
+      // A slide that is not the document's source repaints off `dims`; setting
+      // the pair from it would hand the fit panel another slide's numbers.
+      if (this._source() === path) {
+        patch.srcW = w || null;
+        patch.srcH = h || null;
+      }
+      if (Object.keys(patch).length) this.setState(patch);
     } catch {
       /* no dimensions — the fit panel falls back to the plain controls */
     }
@@ -548,18 +659,17 @@ export default class CarouselStudioPage extends Component {
    *
    * A document restored across a source change needs its pixel dimensions
    * re-probed — they are derived data, deliberately not document fields, so the
-   * ring does not carry them.
+   * ring does not carry them. `_probeSources` is cached per path, so stepping
+   * back and forth over a swap costs one probe, not one per step.
    *
    * @param {"undo"|"redo"} direction
    */
   _step(direction) {
     if (this.state.busy) return;
-    const prevSource = this._source();
     const doc = direction === "undo" ? this._history.undo() : this._history.redo();
     if (!doc) return;
     this._setDoc(doc, { selectedLayer: null }, { history: false });
-    const source = doc.slides[0]?.source;
-    if (source && source !== prevSource) this._probeSource(source);
+    this._probeSources(doc);
   }
 
   _undo() {
@@ -624,8 +734,13 @@ export default class CarouselStudioPage extends Component {
   /**
    * Switch framing mode. Split → deck is a freeze: `toDeckDocument` writes each
    * slide the crop `sliceRects` was already deriving for it, so nothing on
-   * screen moves. Deck → split throws that per-slide work away, so it asks
-   * first rather than losing it to a mis-click.
+   * screen moves. Deck → split throws that per-slide work away — and, once the
+   * slides can name their own photos, every source but the first — so the toast
+   * says so and carries the way back.
+   *
+   * The user-facing words for the two modes are **Panorama** and **Slides**
+   * (`modeToggle` in `studio/panels.js`); the stored values stay `split` and
+   * `deck`, so everything below and every document on disk keeps one vocabulary.
    *
    * @param {string} mode
    */
@@ -647,8 +762,8 @@ export default class CarouselStudioPage extends Component {
       const recentred = next.slides.some((s) => s.fit === "contain");
       setToast({
         message: recentred
-          ? "Deck mode — drag a slide to pan, wheel to zoom. The padded slide is now centred, not flush left."
-          : "Deck mode — drag a slide to pan, wheel to zoom.",
+          ? "Slides mode — drag a slide to pan, wheel to zoom. The padded slide is now centred, not flush left."
+          : "Slides mode — drag a slide to pan, wheel to zoom.",
         type: "success",
       });
       return;
@@ -658,14 +773,22 @@ export default class CarouselStudioPage extends Component {
     // Ctrl+Z away. A confirm in front of a reversible step asks the user to
     // decide before they can see what it does — the toast tells them after, and
     // carries the way back.
+    // A panorama is one photo cut into columns, so a deck of several photos
+    // cannot survive the trip — say which one is left rather than let the user
+    // find out by counting.
+    const shared = new Set(doc.slides.map((slide) => slide.source)).size === 1;
     this._setDoc(this._splitDoc(), { selected: 0 });
-    this._undoToast("Back to split mode — the per-slide pan, zoom and fit are gone.");
+    this._undoToast(
+      shared
+        ? "Back to Panorama — the per-slide pan, zoom and fit are gone."
+        : "Back to Panorama — every slide now shows the first slide's photo, and the per-slide pan, zoom and fit are gone.",
+    );
   }
 
   /** The single writer for per-slide framing — every gesture, key and button
    *  lands here, and clamping is `updateSlideFraming`'s job, not the caller's. */
   _setSlideFraming(i, update) {
-    const { srcW, srcH } = this.state;
+    const { srcW, srcH } = this._dimsFor(this.state.doc.slides[i]);
     const doc = updateSlideFraming(this.state.doc, i, update, {
       srcW: srcW || 0,
       srcH: srcH || 0,
@@ -1345,7 +1468,7 @@ export default class CarouselStudioPage extends Component {
    * @param {import('./document.js').CarouselSlide} slide
    */
   _paintDeckSlide(i, slide) {
-    const { srcW, srcH } = this.state;
+    const { srcW, srcH } = this._dimsFor(slide);
     paintDeckSlide(
       {
         imgs: this.$$(`[data-slice="${i}"] .carousel-studio__frame-img`),

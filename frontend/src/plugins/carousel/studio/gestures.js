@@ -347,8 +347,10 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
 /**
  * @typedef {object} DeckGestureHost  Everything this module is not allowed to
  *   own: the source pixels, the document, and every write to either.
- * @property {() => {srcW: number|null, srcH: number|null, aspect: string}} dims
- *   The live source size and aspect — read per event, never cached.
+ * @property {(i: number) => {srcW: number|null, srcH: number|null, aspect: string}} dims
+ *   The pixel size of slide `i`'s source, and the deck's aspect — read per
+ *   event, never cached. Per slide, because a deck can name a different photo
+ *   on each one and a crop is normalized against its own source.
  * @property {(i: number) => import('../document.js').CarouselSlide|null} slideAt
  *   The document's slide `i`, or null if there is none.
  * @property {(i: number, slide: import('../document.js').CarouselSlide) => void} paint
@@ -406,8 +408,11 @@ export function createDeckGestures(host) {
   let pendingTimer = null;
   let destroyed = false;
 
-  const clamp = (crop) => {
-    const { srcW, srcH } = host.dims();
+  /** Clamp a crop against the pixels of slide `i`'s own source — a deck may
+   *  name a different photo per slide, so the dimensions are asked for per
+   *  slide rather than once for the deck. */
+  const clamp = (i, crop) => {
+    const { srcW, srcH } = host.dims(i);
     return clampPan(crop, srcW || 0, srcH || 0);
   };
 
@@ -421,8 +426,8 @@ export function createDeckGestures(host) {
   const commitCrop = (i, crop) => {
     const slide = host.slideAt(i);
     if (!slide) return;
-    const { srcW, srcH } = host.dims();
-    const next = clamp(crop);
+    const { srcW, srcH } = host.dims(i);
+    const next = clamp(i, crop);
     if (sameCrop(next, slide.crop, srcW, srcH)) {
       host.paint(i, slide);
       host.select(i);
@@ -582,11 +587,11 @@ export function createDeckGestures(host) {
     const ratio =
       drag.start.dist > 0 && now.dist > 0 ? drag.start.dist / now.dist : 1;
     const zoomed = zoomCrop(drag.startCrop, ratio);
-    const scale = panScale(drag.startCrop, slide.fit, box, host.dims());
+    const scale = panScale(drag.startCrop, slide.fit, box, host.dims(i));
     const dx = now.cx - drag.start.cx;
     const dy = now.cy - drag.start.cy;
     // The image follows the pointer, so the crop moves the other way.
-    const crop = clamp({
+    const crop = clamp(i, {
       ...zoomed,
       x: zoomed.x - dx * scale.x,
       y: zoomed.y - dy * scale.y,
@@ -637,7 +642,7 @@ export function createDeckGestures(host) {
     const px =
       e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
     const base = pending?.i === i ? pending.crop : slide.crop;
-    const crop = clamp(zoomCrop(base, Math.exp(px * WHEEL_ZOOM)));
+    const crop = clamp(i, zoomCrop(base, Math.exp(px * WHEEL_ZOOM)));
 
     pending = { i, crop };
     host.paint(i, { ...slide, crop });

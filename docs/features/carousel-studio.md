@@ -165,6 +165,13 @@ each slide carries its own `source`, its own normalized `crop`, its own `fit`,
 and its own background fill. That is what makes per-slide pan and zoom possible
 at all, and it is the substrate S3's layers sit on.
 
+`split` and `deck` are the *stored* values (`MODES`, `document.js`) and the words
+this document uses throughout. The studio's chips say **Panorama** and
+**Slides** — one wide photo cut across every slide, versus a photo per slide —
+because that is the choice a user is making. The naming lives in `modeToggle`
+(`studio/panels.js`) and nowhere else: no migration, one vocabulary in the code
+and on disk.
+
 **Split → deck is a one-way freeze, not a toggle.** `toDeckDocument(doc, srcW,
 srcH)` (`document.js`) runs `sliceRects` once and writes each column back as the
 slide's own `crop` (normalized against the source) plus a `fit` — `contain`
@@ -173,7 +180,22 @@ deck starts as an exact restatement of the split projection, and only diverges
 once the user edits a slide. Going back to split re-derives every slide from one
 strip and **discards** all per-slide framing, so the studio confirms first.
 Source pixel dimensions are arguments, never document fields — the document
-stores no derived data, and the studio re-probes on load.
+stores no derived data, and the studio re-probes on load. It probes **every
+distinct source** the document names and caches the answer per path (`dims` in
+`index.js`, read through `_dimsFor`), because a crop is fractions of its own
+source and one slide's pixels cannot answer for another's. `srcW`/`srcH` stay
+the document-level pair: the panorama's photo, slide 0's in Slides mode, and the
+fallback for any slide with no probe of its own.
+
+**A slide can name its own photo.** The properties panel's *Change this slide's
+photo* carries the selected slide's index (`data-slide`, not `data-slice` — every
+`[data-slice]` element is a host the deck painters draw layer nodes into) and
+sets that one slide's `source`; the controls bar's *Use one photo for all slides*
+carries none and sets every slide's, keeping each slide's framing. Both go
+through one `MediaPickerDialog`, the scope riding on the per-call handler
+`open(onConfirmOverride)` takes. The framing survives either swap because a
+`crop` is fractions of its own source, and `specHash` includes `source`, so a
+swap re-encodes exactly the slide it touched.
 
 Two seams are visible in the freeze, both from a per-slide model meeting a
 whole-strip one, and both are deliberate:
@@ -553,13 +575,6 @@ CSS has no `measureText`; line breaking is the browser's rather than
 path. The render is the contract — `paintSlide` is what produces bytes.
 
 ## What the studio does not yet offer
-
-The renderer and the schema support a deck built from N different photos — that
-is what the per-source dedup in `renderDeck` exists for. The **studio UI does
-not**: picking an image in deck mode swaps the source on every slide at once
-(keeping the per-slide crops, which are normalized and so stay valid). A
-per-slide source picker was the obvious next increment after S2 and is still not
-built; it was explicitly out of scope for S3 too.
 
 The background control is shown only for a slide that actually has a letterbox
 to fill — offering a fill that paints nothing is worse than offering none — and
