@@ -23,11 +23,13 @@ import { getToast, setSettings, setUser } from '../src/store.js';
 import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
 import {
   SPAN_SLIDE,
+  normalizeDocument,
   specHash,
   splitDocument,
   toDeckDocument,
   updateLayer,
 } from '../src/plugins/carousel/document.js';
+import { MAX_SLIDES, MIN_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
 
 /** Route `fetch` by URL; unmatched paths 404. */
 function installFetch(routes) {
@@ -2121,6 +2123,334 @@ describe('CarouselStudioPage', () => {
           'a document from a previous visit is not an edit',
         );
         assert.ok(el.querySelector('[data-action="redo"]').hasAttribute('disabled'));
+      });
+    });
+
+    /**
+     * The rail's slide controls — Slides mode only, since a panorama's count
+     * is the fit panel's. Add / duplicate / delete act on the selection;
+     * reorder is a pointer drag on the handle or the arrow keys on it, both
+     * landing in `moveSlide`.
+     */
+    describe('slide rail', () => {
+      const handle = (el, i) => el.querySelector(`.carousel-studio__rail-handle[data-slide="${i}"]`);
+      const railItem = (el, i) => el.querySelector(`.carousel-studio__rail-item[data-slide="${i}"]`);
+      const tool = (el, action) =>
+        el.querySelector(`.carousel-studio__rail-tools [data-action="${action}"]`);
+      const cropXs = () => page.state.doc.slides.map((s) => s.crop.x);
+
+      /** Drag the handle of slide `from` and release it over the right half of
+       *  slide `over` (`-1` for the head of the rail). linkedom has no layout,
+       *  so the boxes the reorder measures are supplied here. */
+      function dragSlide(el, from, over) {
+        const n = page.state.doc.slides.length;
+        for (let i = 0; i < n; i++) {
+          const left = i * 100;
+          railItem(el, i).getBoundingClientRect = () => ({
+            left, right: left + 100, width: 100, top: 0, bottom: 120, height: 120,
+          });
+        }
+        el.querySelector('.carousel-studio__filmstrip').getBoundingClientRect = () => ({
+          left: 0, right: n * 100, width: n * 100, top: 0, bottom: 120, height: 120,
+        });
+        const h = handle(el, from);
+        const x = over * 100 + 75;
+        fire(h, 'pointerdown', { pointerId: 3, button: 0, clientX: from * 100 + 50, clientY: 60 });
+        fire(h, 'pointermove', { pointerId: 3, clientX: x, clientY: 60 });
+        fire(h, 'pointerup', { pointerId: 3, clientX: x, clientY: 60 });
+      }
+
+      test('the rail carries a handle per slide and one row of slide controls', async () => {
+        const el = await toDeck();
+        assert.equal(el.querySelectorAll('.carousel-studio__rail-item').length, 3);
+        assert.ok(handle(el, 0), 'slide 0 has a drag handle');
+        // The handle is its own control: `attachPointerReorder` preventDefaults
+        // the press, so a handle that was the frame would eat the select click.
+        assert.notEqual(handle(el, 0), el.querySelector('.carousel-studio__frame--deck'));
+        for (const action of ['add-slide', 'duplicate-slide', 'delete-slide']) {
+          assert.ok(tool(el, action), `${action} is offered`);
+        }
+      });
+
+      test('Panorama mode offers none of it — the count is the fit panel there', async () => {
+        const { routes, deps } = split(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+        assert.equal(page.state.doc.mode, 'split');
+        assert.equal(el.querySelector('.carousel-studio__rail-tools'), null);
+        assert.equal(el.querySelector('.carousel-studio__rail-handle'), null);
+        assert.ok(el.querySelector('#carousel-n'), 'the count slider is the control there');
+      });
+
+      test('add lands a slide after the selection, on the same photo, and selects it', async () => {
+        const el = await toDeck();
+        click(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'));
+        await settle();
+        click(tool(el, 'add-slide'));
+        await settle();
+
+        assert.equal(page.state.doc.slides.length, 4);
+        assert.equal(page.state.selected, 2, 'the new slide is the one being edited');
+        const added = page.state.doc.slides[2];
+        assert.equal(added.source, SRC, 'it shows something rather than nothing');
+        assert.deepEqual(added.crop, { x: 0, y: 0, w: 1, h: 1 });
+        assert.equal(added.rendered, null);
+        assert.equal(page.container.querySelectorAll('.carousel-studio__rail-item').length, 4);
+        assert.equal(page.container.querySelectorAll('.carousel-studio__stage-slide').length, 4);
+      });
+
+      test('a slide that has never been rendered leaves the document dirty', async () => {
+        const { routes } = split(3);
+        let n = 0;
+        const el = await mount({ post: '42' }, routes, {
+          renderDeps: {
+            ...fakeRenderDeps(async () => {
+              n += 1;
+              return { id: 700 + n, path: `/2026/08/deck${String(n)}.jpg` };
+            }),
+            probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+          },
+        });
+        click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
+        await settle();
+        await page._render();
+        await settle();
+        assert.ok(!page._isDirty(), 'a freshly rendered document is clean');
+
+        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="add-slide"]'));
+        await settle();
+        assert.ok(page._isDirty(), 'the new slide has no render to be clean against');
+        assert.equal(page.state.doc.slides[1].rendered, null, 'because it has none');
+      });
+
+      test('duplicate copies the framing and lands the copy next door', async () => {
+        const el = await toDeck();
+        drag(stageCol(el, 0), stageImg(el, 0), -40, 0)();
+        await settle();
+        const panned = { ...page.state.doc.slides[0].crop };
+
+        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="duplicate-slide"]'));
+        await settle();
+
+        assert.equal(page.state.doc.slides.length, 4);
+        assert.deepEqual({ ...page.state.doc.slides[1].crop }, panned, 'the copy is framed alike');
+        assert.equal(page.state.selected, 1);
+        assert.match(getToast().message, /duplicated/i);
+      });
+
+      test('delete drops the selected slide and offers the way back', async () => {
+        const el = await toDeck();
+        click(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'));
+        await settle();
+        const kept = page.state.doc.slides.filter((_s, i) => i !== 1).map((s) => s.crop.x);
+
+        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="delete-slide"]'));
+        await settle();
+
+        assert.equal(page.state.doc.slides.length, 2);
+        assert.deepEqual(cropXs(), kept);
+        assert.equal(page.state.selected, 1, 'the selection stays inside the deck');
+
+        const toast = getToast();
+        assert.match(toast.message, /removed/i);
+        assert.equal(toast.action.label, 'Undo');
+        toast.action.onAction();
+        await settle();
+        assert.equal(page.state.doc.slides.length, 3, 'one step back');
+      });
+
+      test('the bounds are a disabled control and a toast, never an exception', async () => {
+        const el = await toDeck(undefined, MIN_SLIDES);
+        assert.equal(page.state.doc.slides.length, MIN_SLIDES);
+        assert.ok(tool(el, 'delete-slide').hasAttribute('disabled'), 'the end is disabled');
+        // …and the method behind it still refuses rather than writing a deck of
+        // one: these run from buttons, where a throw strands the studio.
+        page._removeSlide(0);
+        await settle();
+        assert.equal(page.state.doc.slides.length, MIN_SLIDES);
+        assert.match(getToast().message, new RegExp(`at least ${String(MIN_SLIDES)}`));
+
+        while (page.state.doc.slides.length < MAX_SLIDES) {
+          page._addSlide(page.state.doc.slides.length - 1);
+        }
+        await settle();
+        assert.equal(page.state.doc.slides.length, MAX_SLIDES);
+        assert.ok(
+          page.container
+            .querySelector('.carousel-studio__rail-tools [data-action="add-slide"]')
+            .hasAttribute('disabled'),
+        );
+        page._addSlide(0);
+        await settle();
+        assert.equal(page.state.doc.slides.length, MAX_SLIDES);
+        assert.match(getToast().message, new RegExp(`at most ${String(MAX_SLIDES)}`));
+      });
+
+      test('dragging a handle reorders the slides, both ways', async () => {
+        const el = await toDeck();
+        const before = cropXs();
+
+        dragSlide(el, 0, 1);
+        await settle();
+        assert.deepEqual(cropXs(), [before[1], before[0], before[2]], 'slide 0 landed after 1');
+
+        dragSlide(page.container, 2, -1);
+        await settle();
+        assert.deepEqual(cropXs(), [before[2], before[1], before[0]], 'and one back to the head');
+      });
+
+      test('the arrow keys on a handle do the same, and keep it focused', async () => {
+        const el = await toDeck();
+        const xs = cropXs();
+
+        // linkedom's `focus()` does not move `activeElement`, so record the
+        // calls instead — what matters is that the rebuilt handle gets one.
+        const proto = dom.window.HTMLElement.prototype;
+        const realFocus = proto.focus;
+        const focused = [];
+        proto.focus = function focusSpy() {
+          focused.push(this);
+        };
+        try {
+          fire(handle(el, 0), 'keydown', { key: 'ArrowRight' });
+          await settle();
+          assert.deepEqual(cropXs(), [xs[1], xs[0], xs[2]]);
+          assert.equal(
+            focused.at(-1),
+            handle(page.container, 1),
+            'focus follows the slide, so the next press keeps working',
+          );
+
+          // Off the end is a no-op, not an exception — and takes no focus with it.
+          const seen = focused.length;
+          fire(handle(page.container, 0), 'keydown', { key: 'ArrowLeft' });
+          await settle();
+          assert.deepEqual(cropXs(), [xs[1], xs[0], xs[2]]);
+          assert.equal(focused.length, seen, 'a refused move does not rebuild anything');
+        } finally {
+          proto.focus = realFocus;
+        }
+      });
+
+      test("a reorder carries the slide's own layers with it", async () => {
+        const el = await toDeck();
+        page._addLayer('text', 'slide');
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 1);
+
+        fire(handle(page.container, 0), 'keydown', { key: 'ArrowRight' });
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers.length, 0);
+        assert.equal(page.state.doc.slides[1].layers.length, 1, 'the layer moved with its slide');
+        assert.equal(page.state.selected, 1, 'and so did the selection');
+      });
+
+      test('every rail write is one undo step', async () => {
+        const el = await toDeck();
+        click(tool(el, 'add-slide'));
+        await settle();
+        assert.equal(page.state.doc.slides.length, 4);
+        page._undo();
+        await settle();
+        assert.equal(page.state.doc.slides.length, 3);
+        page._redo();
+        await settle();
+        assert.equal(page.state.doc.slides.length, 4);
+      });
+    });
+
+    /**
+     * The correctness risk this rail was written around: a deleted slide's
+     * rendered media row carries a `post_id`, so `ListOrphanedMedia`
+     * (`post_id IS NULL`) will never flag it. Nothing but `_deleteSuperseded`
+     * can ever collect it — so a delete followed by a render has to.
+     */
+    describe("a deleted slide's media", () => {
+      /** A rendered three-slide deck: each slide framed differently, and each
+       *  carrying the specHash its own inputs really hash to, so a re-render
+       *  reuses the survivors and re-encodes nothing (the fake `upload` throws
+       *  if anything does). */
+      function renderedDeck(inline = '') {
+        const base = normalizeDocument({
+          version: 1,
+          aspect: '4:5',
+          mode: 'deck',
+          slides: [
+            { source: SRC, crop: { x: 0, y: 0, w: 0.3, h: 1 } },
+            { source: SRC, crop: { x: 0.35, y: 0, w: 0.3, h: 1 } },
+            { source: SRC, crop: { x: 0.7, y: 0, w: 0.3, h: 1 } },
+          ],
+        });
+        const doc = {
+          ...base,
+          slides: base.slides.map((slide, i) => ({
+            ...slide,
+            rendered: {
+              path: `/2026/08/old${String(i + 1)}.jpg`,
+              media_id: 100 + i,
+              specHash: specHash(slide, base.aspect, base),
+            },
+          })),
+        };
+        const post = {
+          ...POST,
+          content:
+            `${inline}:::{.carousel-block}\n\n/2026/08/old1.jpg\n\n/2026/08/old2.jpg\n\n/2026/08/old3.jpg\n\n:::`,
+        };
+        const routes = [
+          [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: post })],
+          [/\/api\/carousel/, (url, opts) =>
+            (opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } })],
+          [/\/api\/media\/\d+$/, { body: {} }],
+        ];
+        const deps = {
+          ...fakeRenderDeps(async () => {
+            throw new Error('an unchanged slide must not be re-encoded');
+          }),
+          probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+        };
+        return { routes, deps };
+      }
+
+      const deletes = () =>
+        calls
+          .filter((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url))
+          .map((c) => Number(c.url.match(/\/api\/media\/(\d+)$/)[1]))
+          .sort((a, b) => a - b);
+
+      /** Load the rendered deck, delete the middle slide, render. */
+      async function deleteMiddleAndRender(inline) {
+        const { routes, deps } = renderedDeck(inline);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+        assert.equal(page.state.doc.slides.length, 3);
+        assert.ok(!page._isDirty(), 'the loaded document is fully rendered');
+
+        click(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'));
+        await settle();
+        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="delete-slide"]'));
+        await settle();
+
+        assert.deepEqual(deletes(), [], 'nothing is deleted while it is still one undo away');
+        assert.ok(page._isDirty(), 'but the post is now out of date');
+
+        await page._render();
+        await settle();
+        return el;
+      }
+
+      test('is deleted by the next render — nothing else would ever collect it', async () => {
+        await deleteMiddleAndRender();
+
+        assert.deepEqual(deletes(), [101], 'exactly the deleted slide, and only it');
+        const put = calls.find((c) => c.method === 'PUT' && /\/api\/posts\/42$/.test(c.url));
+        const content = JSON.parse(put.body).content;
+        assert.ok(!content.includes('/2026/08/old2.jpg'), 'and its path is out of the post');
+        assert.ok(content.includes('/2026/08/old1.jpg') && content.includes('/2026/08/old3.jpg'));
+        assert.deepEqual(page._priorRendered.map((r) => r.media_id), [100, 102]);
+      });
+
+      test('is kept when its path is still used elsewhere in the post', async () => {
+        await deleteMiddleAndRender('![keep](/2026/08/old2.jpg)\n\n');
+        assert.deepEqual(deletes(), [], 'the row is still referenced, so it stays');
       });
     });
   });

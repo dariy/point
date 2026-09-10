@@ -884,6 +884,136 @@ export function reorderLayer(doc, slideIndex, from, to) {
   return withLayers(base, slideIndex, next);
 }
 
+// ── Slides ──────────────────────────────────────────────────────────────────
+// The four writers below are to `slides` what the layer family above is to
+// `layers`, and they keep the same contract: an index that names nothing
+// returns an equal document, and nothing throws. They run from the rail's
+// pointer handlers, where a throw strands a gesture.
+//
+// No slide-count bounds here. `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
+// belong to the state owner, which can refuse in a toast; a model that refused
+// silently would leave its caller unable to tell a refusal from a no-op.
+//
+// Span layers need no work either way: their boxes are fractions of the whole
+// n-wide deck, so a changed slide count re-flows them across the new seams —
+// the same thing `splitDocument` relies on when it re-slices.
+
+/**
+ * `i` as an index into `slides`, or -1 when it names no slide — the slide twin
+ * of {@link layerIndexIn}, so the writers below cannot disagree with each other
+ * about what out of range means.
+ *
+ * @param {CarouselSlide[]} slides
+ * @param {*} i
+ * @returns {number}
+ */
+function slideIndexIn(slides, i) {
+  const j = Number(i);
+  // `i == null` before the coercion, because `Number(null)` is 0 and a control
+  // that forgot to say which slide it meant must not silently mean the first.
+  // The same guard `updateSlideFraming` opens with.
+  if (i == null || !Number.isInteger(j)) return -1;
+  return j >= 0 && j < slides.length ? j : -1;
+}
+
+/**
+ * Insert a slide at `at`, shifting the rest along. `at` is a *position* rather
+ * than an existing slide, so `slides.length` appends and `0` prepends; anything
+ * outside `0..slides.length` returns an equal document.
+ *
+ * `slide` is optional, and with nothing given the new slide shows the photo of
+ * the slide it follows (at the head, the one it precedes), uncropped: a slide
+ * with no source is one the stage cannot draw and the render refuses, and a
+ * control that adds an invisible slide has not added anything. Every other
+ * field is {@link normalizeSlide}'s to fill — the studio never authors a slide
+ * literal, the same rule {@link addLayer} keeps for layers.
+ *
+ * A new slide is never rendered, whatever it was handed. `rendered` names a
+ * media row, and two slides claiming one row is the state the supersede cleanup
+ * (`_deleteSuperseded` in `index.js`) cannot reason about — deleting one of the
+ * pair would take the other's image with it. So it is dropped here rather than
+ * trusted.
+ *
+ * @param {*} doc
+ * @param {number} at insertion position, `0..slides.length`
+ * @param {*} [slide] the slide to insert; omitted means "another like this one"
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function addSlide(doc, at, slide) {
+  const base = normalizeDocument(doc);
+  const i = Number(at);
+  if (at == null || !Number.isInteger(i) || i < 0 || i > base.slides.length) return base;
+
+  const neighbour = base.slides[i - 1] || base.slides[i] || null;
+  const next = normalizeSlide(isObj(slide) ? slide : { source: neighbour ? neighbour.source : '' });
+  next.rendered = null;
+  const slides = base.slides.slice();
+  slides.splice(i, 0, next);
+  return normalizeDocument({ ...base, slides });
+}
+
+/**
+ * Drop the slide at `i`. An out-of-range index is a no-op.
+ *
+ * The slide's `rendered` block goes with it, which is precisely why the caller
+ * still owes its media row a delete: the row carries a `post_id`, so
+ * `ListOrphanedMedia` will never flag it. `_deleteSuperseded` (`index.js`) does
+ * that on the next render, from the *saved* set rather than from the document.
+ *
+ * @param {*} doc
+ * @param {number} i
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function removeSlide(doc, i) {
+  const base = normalizeDocument(doc);
+  const j = slideIndexIn(base.slides, i);
+  if (j < 0) return base;
+  return normalizeDocument({ ...base, slides: base.slides.filter((_, k) => k !== j) });
+}
+
+/**
+ * Copy the slide at `i` and land the copy directly after it — source, framing,
+ * background and layers included, its `rendered` block not (see
+ * {@link addSlide}). An out-of-range index is a no-op.
+ *
+ * The copy is pixel-for-pixel its twin until something moves, and two
+ * byte-identical slides are what `assertDistinctMedia` (`index.js`) refuses —
+ * so a duplicate is a starting point, and the caller says so.
+ *
+ * @param {*} doc
+ * @param {number} i
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function duplicateSlide(doc, i) {
+  const base = normalizeDocument(doc);
+  const j = slideIndexIn(base.slides, i);
+  if (j < 0) return base;
+  return addSlide(base, j + 1, base.slides[j]);
+}
+
+/**
+ * Move the slide at `from` to `to`, shifting the rest — a reorder, not a swap,
+ * for the reason {@link reorderLayer} is one: the array is the order the
+ * carousel is read in, and dragging a slide along must not exchange it with
+ * whatever it landed on. Either index out of range is a no-op; `from === to`
+ * returns an equal document.
+ *
+ * @param {*} doc
+ * @param {number} from
+ * @param {number} to
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function moveSlide(doc, from, to) {
+  const base = normalizeDocument(doc);
+  const a = slideIndexIn(base.slides, from);
+  const b = slideIndexIn(base.slides, to);
+  if (a < 0 || b < 0) return base;
+
+  const slides = base.slides.slice();
+  slides.splice(b, 0, slides.splice(a, 1)[0]);
+  return normalizeDocument({ ...base, slides });
+}
+
 /** Deterministic JSON: object keys sorted recursively. */
 function stableStringify(value) {
   if (!isObj(value)) return JSON.stringify(value) ?? 'null';

@@ -52,14 +52,19 @@ import { deleteCarousel, getCarousel, saveCarousel } from "../../api/carousel.js
 import { getSettings, setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
+import { attachPointerReorder } from "../../utils/pointerReorder.js";
 import { canvasSize, deckSlideRects, padRects, safeAreaRect } from "./geometry.js";
 import {
   addLayer,
+  addSlide,
   applyCarouselBlock,
+  duplicateSlide,
   emptyDocument,
+  moveSlide,
   normalizeDocument,
   parseDocument,
   removeLayer,
+  removeSlide,
   reorderLayer,
   serializeDocument,
   SPAN_SLIDE,
@@ -70,7 +75,7 @@ import {
   updateSlideFraming,
 } from "./document.js";
 import { browserDeps, renderAndUpload } from "./render.js";
-import { DEFAULT_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
+import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
 import {
   PROPS_PREF_KEY,
   ZOOM_STEP,
@@ -251,6 +256,13 @@ export default class CarouselStudioPage extends Component {
     this._renderedDoc = null;
     // Slide index to restore focus to after a keyboard nudge rebuilds the strip.
     this._refocus = null;
+    // The same, for the rail's drag handle after a keyboard reorder — a
+    // different element, and only one of the two is ever pending.
+    this._refocusRail = null;
+    // `attachPointerReorder`'s teardown for the rail. Bound once in `mount`,
+    // since the util re-queries its containers per gesture and so survives a
+    // rebuild; released in `beforeUnmount`.
+    this._detachReorder = null;
     // Undo/redo. A ring of `doc` references, not a log of operations — the
     // document is immutable by construction, so the previous state is simply
     // the previous reference (see studio/history.js). Every write goes through
@@ -379,14 +391,26 @@ export default class CarouselStudioPage extends Component {
     "select-slide"(_e, el) {
       this._select(Number(el.dataset.slice));
     },
+    "add-slide"(_e, el) {
+      this._addSlide(Number(el.dataset.slide));
+    },
+    "duplicate-slide"(_e, el) {
+      this._duplicateSlide(Number(el.dataset.slide));
+    },
+    "delete-slide"(_e, el) {
+      this._removeSlide(Number(el.dataset.slide));
+    },
   };
 
   mount() {
     super.mount();
+    this._setupSlideReorder();
     this._load();
   }
 
   beforeUnmount() {
+    this._detachReorder?.();
+    this._detachReorder = null;
     this._picker?.destroy();
     this._picker = null;
     this._layerPicker?.destroy();
@@ -806,6 +830,158 @@ export default class CarouselStudioPage extends Component {
     const patch = { selected: i };
     if (this.state.layerScope === "slide") patch.selectedLayer = null;
     this.setState(patch);
+  }
+
+  // ── Slides (deck mode) ────────────────────────────────────────────────────
+  // Slides mode only. A panorama's slide count is the fit panel's — three
+  // controls that all re-derive the whole array from one strip through
+  // `splitDocument` — so a rail that could add or drop a column there would be
+  // offering to break the derivation. That is what the mode means.
+  //
+  // Every one of these is a plain document write through `_setDoc`, so it is
+  // one Ctrl+Z away; none of them touches the server. A removed slide's media
+  // row is deleted by the next render's `_deleteSuperseded`, reading the saved
+  // set rather than the document — which is exactly what makes the undo real.
+
+  /**
+   * Whether `n` is a slide count the studio will write. Refusing is a toast,
+   * not an exception: every caller is a button, the ends are disabled anyway,
+   * and the bounds are the user's business rather than a programming error.
+   *
+   * @param {number} n
+   */
+  _allowSlideCount(n) {
+    if (n < MIN_SLIDES) {
+      setToast({ message: `A carousel needs at least ${MIN_SLIDES} slides.`, type: "error" });
+      return false;
+    }
+    if (n > MAX_SLIDES) {
+      setToast({ message: `A carousel holds at most ${MAX_SLIDES} slides.`, type: "error" });
+      return false;
+    }
+    return true;
+  }
+
+  /** The state patch a change of selected slide owes: a slide-scoped layer
+   *  selection is an index into *that* slide's list, so it cannot survive the
+   *  move; a span-scoped one is deck-wide and stays. Same rule as `_select`. */
+  _selectSlidePatch(i) {
+    const patch = { selected: i };
+    if (this.state.layerScope === "slide") patch.selectedLayer = null;
+    return patch;
+  }
+
+  /** The slide a rail control names, or the selection when it names nothing. */
+  _slideArg(i) {
+    return Number.isInteger(i) ? i : this._selectedIndex();
+  }
+
+  /** Add a slide after `i` and select it. It starts on the same photo,
+   *  uncropped — `addSlide` decides that; the studio never authors a slide
+   *  literal, the same rule layers keep. */
+  _addSlide(i) {
+    const doc = this.state.doc;
+    if (doc.mode !== "deck" || this.state.busy) return;
+    if (!this._allowSlideCount(doc.slides.length + 1)) return;
+    const at = this._slideArg(i) + 1;
+    const next = addSlide(doc, at, null);
+    if (next.slides.length === doc.slides.length) return;
+    this._setDoc(next, this._selectSlidePatch(at));
+  }
+
+  /** Duplicate slide `i`, landing the copy after it and selecting it. The copy
+   *  is pixel-for-pixel its twin until something moves, and two byte-identical
+   *  slides are what `assertDistinctMedia` refuses — so the toast says what the
+   *  copy is for, rather than letting a failed render be the one to explain. */
+  _duplicateSlide(i) {
+    const doc = this.state.doc;
+    if (doc.mode !== "deck" || this.state.busy) return;
+    if (!this._allowSlideCount(doc.slides.length + 1)) return;
+    const j = this._slideArg(i);
+    const next = duplicateSlide(doc, j);
+    if (next.slides.length === doc.slides.length) return;
+    this._setDoc(next, this._selectSlidePatch(j + 1));
+    setToast({
+      message: "Slide duplicated — reframe it or give it its own photo; two identical slides cannot render.",
+      type: "success",
+    });
+  }
+
+  /** Drop slide `i`. No confirm — it is a document write, so it is one Ctrl+Z
+   *  (or the toast's button) away, and the image it rendered to is still on the
+   *  server until the next render says otherwise. */
+  _removeSlide(i) {
+    const doc = this.state.doc;
+    if (doc.mode !== "deck" || this.state.busy) return;
+    if (!this._allowSlideCount(doc.slides.length - 1)) return;
+    const j = this._slideArg(i);
+    const next = removeSlide(doc, j);
+    if (next.slides.length === doc.slides.length) return;
+    const shifted = this.state.selected > j ? this.state.selected - 1 : this.state.selected;
+    this._setDoc(next, this._selectSlidePatch(Math.min(shifted, next.slides.length - 1)));
+    this._undoToast("Slide removed — its rendered image goes when you next render.");
+  }
+
+  /**
+   * Move slide `from` to `to`, keeping the selection on the slide the user was
+   * pointing at. A slide carries its own layers, so the layer selection travels
+   * with it and needs no clearing. `to` out of range is a no-op — the rail's
+   * end controls stop before it, this is the belt-and-braces.
+   *
+   * `refocus` is for the keyboard path: the write rebuilds the rail out from
+   * under the handle the user is holding, so it is claimed *before* the write
+   * — `_setDoc` renders synchronously, and a flag set after it would be read
+   * by the render after next. The same order `gestures.js` nudges in.
+   *
+   * @param {number} from
+   * @param {number} to
+   * @param {{refocus?: boolean}} [opts]
+   * @returns {boolean} whether the document moved
+   */
+  _moveSlide(from, to, { refocus = false } = {}) {
+    const doc = this.state.doc;
+    if (doc.mode !== "deck" || this.state.busy) return false;
+    if (!Number.isInteger(from) || !Number.isInteger(to)) return false;
+    if (from === to || to < 0 || to >= doc.slides.length) return false;
+
+    let sel = this.state.selected;
+    if (sel === from) sel = to;
+    else if (sel > from && sel <= to) sel -= 1;
+    else if (sel < from && sel >= to) sel += 1;
+    if (refocus) this._refocusRail = to;
+    this._setDoc(moveSlide(doc, from, to), { selected: sel });
+    return true;
+  }
+
+  /**
+   * Slide reordering on the rail: a pointer drag over the filmstrip, and the
+   * arrow keys on the same handle (`_wireControls`). Pointer events rather than
+   * HTML5 drag-and-drop — `attachPointerReorder` says why — and the util owns
+   * the gesture and nothing else: the drop arrives here as an element and the
+   * item it landed after, and becomes a `moveSlide` write like any other.
+   *
+   * Bound once, for the life of the page. The util re-queries its containers
+   * per gesture, so the rebuild every write causes costs it nothing.
+   */
+  _setupSlideReorder() {
+    this._detachReorder?.();
+    this._detachReorder = attachPointerReorder({
+      handleSelector: ".carousel-studio__rail-handle",
+      itemSelector: ".carousel-studio__rail-item",
+      containers: () => [this.$(".carousel-studio__filmstrip")],
+      axis: "x",
+      isEnabled: () => this.state.doc.mode === "deck" && !this.state.busy,
+      onDrop: ({ item, afterEl }) => {
+        // The rail is in document order, so an item's `data-slide` *is* its
+        // index. Landing after a slide further along means taking its place
+        // once the drag has vacated its own — hence the +1 on that side only.
+        const from = Number(item?.dataset?.slide);
+        if (!Number.isInteger(from)) return;
+        if (afterEl === item) return;
+        const after = afterEl ? Number(afterEl.dataset.slide) : null;
+        this._moveSlide(from, after == null ? 0 : after > from ? after : after + 1);
+      },
+    });
   }
 
   // ── Layers (deck mode) ────────────────────────────────────────────────────
@@ -1406,6 +1582,14 @@ export default class CarouselStudioPage extends Component {
       this._refocus = null;
       this.$(`.carousel-studio__stage-slide[data-slice="${i}"]`)?.focus?.();
     }
+
+    // The same for the rail: a keyboard reorder rebuilds the strip out from
+    // under the handle the user is holding, so put focus on it where it landed.
+    if (this._refocusRail != null) {
+      const i = this._refocusRail;
+      this._refocusRail = null;
+      this.$(`.carousel-studio__rail-handle[data-slide="${i}"]`)?.focus?.();
+    }
   }
 
   /** Split-mode preview: one crop band across the stage, one column per frame. */
@@ -1591,6 +1775,23 @@ export default class CarouselStudioPage extends Component {
         this._setSplit({ anchorY: Number(anchor.value) });
       });
     }
+
+    // The keyboard half of the rail reorder: the handle is a button, so the
+    // arrows are free, and left/right is the axis the rail runs on (see
+    // `_setupSlideReorder`). Without this the reorder would be pointer-only,
+    // which is the failure the arrange mode in `PostEditPage` avoids the same
+    // way. Delegated on the strip, so it survives the rebuild a move causes.
+    this.on(this.$(".carousel-studio__filmstrip"), "keydown", (e) => {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+      const handle = /** @type {HTMLElement|null} */ (
+        /** @type {HTMLElement} */ (ev.target).closest?.(".carousel-studio__rail-handle")
+      );
+      if (!handle) return;
+      ev.preventDefault();
+      const from = Number(handle.dataset.slide);
+      this._moveSlide(from, from + (ev.key === "ArrowLeft" ? -1 : 1), { refocus: true });
+    });
 
     this._wireBgFields();
     this._wireLayerFields();

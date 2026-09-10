@@ -202,6 +202,64 @@
   border-radius: var(--border-radius);
 }
 
+/* ── Rail item ─────────────────────────────────────────────────────────────
+ * Slides mode wraps each rail frame with its own drag handle, so the flex
+ * basis that used to size the frame sizes the pair and the frame fills it.
+ * The handle is a separate control on purpose: `attachPointerReorder` claims
+ * the pointer on press, so a handle that *was* the frame would eat the click
+ * that selects the slide. */
+.carousel-studio__rail-item {
+  display: flex;
+  flex: 0 0 8rem;
+  flex-direction: column;
+  gap: var(--size-0-125);
+}
+
+.carousel-studio__rail-item .carousel-studio__frame--deck {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.carousel-studio__rail-item.is-dragging {
+  opacity: 0.4;
+}
+
+/* `touch-action: none` is what lets a finger drag the handle at all: without
+ * it the browser claims the gesture as a scroll of the strip before the
+ * pointer capture can take effect. */
+.carousel-studio__rail-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-0-125) 0;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--border-radius);
+  background: none;
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.carousel-studio__rail-handle:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.carousel-studio__rail-handle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Add / duplicate / delete act on the selected slide, so they sit under the
+ * rail as one row rather than repeating on every frame. */
+.carousel-studio__rail-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin-top: var(--spacing-xs);
+}
+
 /* A deck rail frame is a selection button showing a thumbnail — nothing is
  * edited here (that is the stage). Its own fill layer covers the letterbox
  * wherever a contained slide's image element doesn't reach; the hatch below is

@@ -14,7 +14,7 @@
  */
 
 import { html, raw } from "../../../utils/helpers.js";
-import { REFRESH_SVG } from "../../../utils/icons.js";
+import { GRIP_SVG, REFRESH_SVG } from "../../../utils/icons.js";
 import {
   canvasSize,
   fitReport,
@@ -383,23 +383,40 @@ export function builder({
   // a slide number and the selected state. Its only job is to move the
   // selection, so it is a button — the layer nodes, span nodes and chrome that
   // used to be duplicated here live on the stage alone.
+  //
+  // In Slides mode each frame is wrapped with its own drag handle, because
+  // `attachPointerReorder` claims the pointer on press: a handle *is* the
+  // frame would mean a press that never becomes the click that selects it.
+  // The handle carries `data-slide`, the frame `data-slice` — the frame is a
+  // paint host and the handle is not (see the note on `pick-source` in
+  // `index.js`).
   const strip = doc.slides.map((_slide, i) =>
     deck
       ? html`
-          <button
-            type="button"
-            class="carousel-studio__frame carousel-studio__frame--deck ${i === selected
-              ? "is-selected"
-              : ""}"
-            data-slice="${String(i)}"
-            data-action="select-slide"
-            aria-pressed="${i === selected ? "true" : "false"}"
-            aria-label="Select slide ${String(i + 1)}"
-            style="aspect-ratio:${String(w)}/${String(h)}"
-          >
-            ${deckLayers()}
-            <span class="carousel-studio__frame-num">${String(i + 1)}</span>
-          </button>`
+          <div class="carousel-studio__rail-item" data-slide="${String(i)}">
+            <button
+              type="button"
+              class="carousel-studio__frame carousel-studio__frame--deck ${i === selected
+                ? "is-selected"
+                : ""}"
+              data-slice="${String(i)}"
+              data-action="select-slide"
+              aria-pressed="${i === selected ? "true" : "false"}"
+              aria-label="Select slide ${String(i + 1)}"
+              style="aspect-ratio:${String(w)}/${String(h)}"
+            >
+              ${deckLayers()}
+              <span class="carousel-studio__frame-num">${String(i + 1)}</span>
+            </button>
+            <button
+              type="button"
+              class="carousel-studio__rail-handle"
+              data-slide="${String(i)}"
+              aria-label="Reorder slide ${String(i + 1)} — drag, or press the left and right arrow keys"
+            >
+              ${raw(GRIP_SVG)}
+            </button>
+          </div>`
       : html`
           <div
             class="carousel-studio__frame"
@@ -407,6 +424,47 @@ export function builder({
             style="aspect-ratio:${String(w)}/${String(h)}"
           ></div>`,
   );
+
+  // Add / duplicate / delete act on the selected slide, so they are one row
+  // under the rail rather than three chips on every frame. Slides mode only:
+  // a panorama's count is derived from the fit panel, and a control that added
+  // a column there would be offering to break the derivation.
+  const railTools = deck
+    ? html`
+        <div class="carousel-studio__rail-tools" role="group" aria-label="Slides">
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="add-slide"
+            data-slide="${String(deckIndex)}"
+            ${n >= MAX_SLIDES ? "disabled" : ""}
+          >
+            + Slide
+          </button>
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="duplicate-slide"
+            data-slide="${String(deckIndex)}"
+            ${n >= MAX_SLIDES ? "disabled" : ""}
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="delete-slide"
+            data-slide="${String(deckIndex)}"
+            ${n <= MIN_SLIDES ? "disabled" : ""}
+          >
+            Delete
+          </button>
+          <span class="carousel-studio__fit-dims">
+            ${String(n)} of ${String(MAX_SLIDES)} slides · acting on slide
+            ${String(deckIndex + 1)}
+          </span>
+        </div>`
+    : "";
 
   // The controls bar acts on the whole document, so this carries no
   // `data-slide` — and in Slides mode that is the studio's original behaviour,
@@ -453,7 +511,13 @@ export function builder({
 
       ${stageBar({ propsOpen, stageZoom })}
 
-      <div class="carousel-studio__filmstrip" aria-label="Slide preview">${strip}</div>
+      <div
+        class="carousel-studio__filmstrip"
+        aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
+      >
+        ${strip}
+      </div>
+      ${railTools}
 
       <div class="carousel-studio__props-backdrop" data-action="close-props"></div>
       <aside
