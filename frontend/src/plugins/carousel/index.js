@@ -82,6 +82,7 @@ import {
   paintDeckLayers,
   paintDeckSlide,
   paintLayerChrome,
+  paintSpanChrome,
   paintSpanLayers,
   paintSplit,
 } from "./studio/preview.js";
@@ -271,21 +272,20 @@ export default class CarouselStudioPage extends Component {
       // see studio/gestures.js. `activeLayer` is what routes a press between the
       // two: a layer only takes the pointer when its own layer is selected.
       activeLayer: () => {
-        // Stage direct manipulation is per-slide only; a span layer is edited
-        // through its form (p-carousel-s3-ycna follow-up). A span-scoped
-        // selection reads as "no active layer", so a press pans the crop.
-        if (this.state.layerScope !== "slide") return null;
-        const i = this._selectedIndex();
         const j = this.state.selectedLayer;
-        const layer = j == null ? null : this.state.doc.slides[i]?.layers?.[j];
-        return layer ? { i, j, box: layer.box } : null;
+        if (j == null) return null;
+        // A span layer's box is fractions of the whole deck, so it is grabbable
+        // on every column it reaches and commits against `SPAN_SLIDE` — the
+        // `scope` is what tells the gesture which space to run in.
+        if (this.state.layerScope === "span") {
+          const layer = this.state.doc.spanLayers?.[j];
+          return layer ? { i: SPAN_SLIDE, j, box: layer.box, scope: "span" } : null;
+        }
+        const i = this._selectedIndex();
+        const layer = this.state.doc.slides[i]?.layers?.[j];
+        return layer ? { i, j, box: layer.box, scope: "slide" } : null;
       },
-      safeArea: () => {
-        const { aspect } = this.state.doc;
-        const [w, h] = canvasSize(aspect);
-        const sa = safeAreaRect(aspect);
-        return { x: sa.x / w, y: sa.y / h, w: sa.w / w, h: sa.h / h };
-      },
+      safeArea: (scope) => this._safeAreaFor(scope),
       paintLayer: (i, j, box, guides) => this._paintProvisionalLayer(i, j, box, guides),
       commitLayer: (i, j, box) => this._commitLayerBox(i, j, box),
     });
@@ -816,16 +816,40 @@ export default class CarouselStudioPage extends Component {
     this._setDoc(updateLayer(this.state.doc, slideIndex, j, patch));
   }
 
+  /** The safe-area rect to snap a layer against, in the fractions of the space
+   *  that layer's box lives in. A slide layer gets the slide's own. A span
+   *  layer gets the *deck's*: vertically the same band, horizontally the left
+   *  inset of the first slide to the right inset of the last, so a headline
+   *  snaps to the margins that actually cut it off rather than to a seam it is
+   *  meant to cross (the seams are guides in their own right — `deckSeams`).
+   *
+   * @param {"slide"|"span"} [scope]
+   */
+  _safeAreaFor(scope) {
+    const { aspect } = this.state.doc;
+    const [w, h] = canvasSize(aspect);
+    const sa = safeAreaRect(aspect);
+    const rect = { x: sa.x / w, y: sa.y / h, w: sa.w / w, h: sa.h / h };
+    if (scope !== "span") return rect;
+    // Left edge: slide 0's inset, in deck fractions. Right edge: slide n-1's,
+    // which is `n - 1` whole slides along. The width is the difference.
+    const n = Math.max(1, this.state.doc.slides.length);
+    return { x: rect.x / n, y: rect.y, w: (n - 1 + rect.w) / n, h: rect.h };
+  }
+
   /** The commit point for a drag or a keyboard nudge of a layer's box — the
-   *  gesture's twin of `_setSlideFraming`. Stage direct manipulation is
-   *  slide-scoped only. `updateLayer` re-clamps the box, so the gesture's own
+   *  gesture's twin of `_setSlideFraming`. `i` is `SPAN_SLIDE` for a deck-wide
+   *  layer, whose selection is not slide-bound and so must not move the slide
+   *  selection with it. `updateLayer` re-clamps the box, so the gesture's own
    *  clamp is only for preview smoothness. */
   _commitLayerBox(i, j, box) {
-    this._setDoc(updateLayer(this.state.doc, i, j, { box }), {
-      selected: i,
-      layerScope: "slide",
-      selectedLayer: j,
-    });
+    const doc = updateLayer(this.state.doc, i, j, { box });
+    this._setDoc(
+      doc,
+      i === SPAN_SLIDE
+        ? { layerScope: "span", selectedLayer: j }
+        : { selected: i, layerScope: "slide", selectedLayer: j },
+    );
   }
 
   /** The selected slide index, the `slideIndex` its layer scope addresses, the
@@ -1239,13 +1263,17 @@ export default class CarouselStudioPage extends Component {
     this._gestures.attach(deck ? this.$$(".carousel-studio__stage-slide") : []);
 
     // The selected layer's chrome (outline + handles) is markup; position it
-    // now that the frames exist. Cleared for free when nothing is selected —
-    // panels.js emits the chrome node only then. Span layers have no stage
-    // chrome yet (form-only), so this is slide-scoped.
-    if (deck && this.state.layerScope === "slide" && this.state.selectedLayer != null) {
-      const i = this._selectedIndex();
-      const layer = this.state.doc.slides[i]?.layers?.[this.state.selectedLayer];
-      if (layer) this._paintLayerChrome(i, layer.box, { v: [], h: [] });
+    // now that the columns exist. Cleared for free when nothing is selected —
+    // panels.js emits the chrome node only then.
+    if (deck && this.state.selectedLayer != null) {
+      const j = this.state.selectedLayer;
+      if (this.state.layerScope === "span") {
+        this._paintSpanChrome(this.state.doc.spanLayers?.[j], null);
+      } else {
+        const i = this._selectedIndex();
+        const layer = this.state.doc.slides[i]?.layers?.[j];
+        if (layer) this._paintLayerChrome(i, layer.box, { v: [], h: [] });
+      }
     }
 
     // A keyboard nudge rebuilds the strip under the user's fingers; put focus
@@ -1347,13 +1375,44 @@ export default class CarouselStudioPage extends Component {
   /** Repaint one layer at a provisional box mid-drag — the layer twin of the
    *  provisional slide `_paintDeckSlide` takes. Also moves the selection chrome
    *  and draws whatever snap guides engaged. No state change, so a drag costs
-   *  no rebuild. */
+   *  no rebuild. `i` is `SPAN_SLIDE` for a deck-wide layer, which repaints on
+   *  every column instead of one, since a drag of it moves it on all of them. */
   _paintProvisionalLayer(i, j, box, guides) {
+    if (i === SPAN_SLIDE) {
+      const list = (this.state.doc.spanLayers || []).map((l, k) =>
+        k === j ? { ...l, box } : l,
+      );
+      this._paintSpanLayers(list);
+      this._paintSpanChrome(list[j], guides);
+      return;
+    }
     const layers = (this.state.doc.slides[i]?.layers || []).map((l, k) =>
       k === j ? { ...l, box } : l,
     );
     this._paintDeckSlideLayers(i, layers);
     this._paintLayerChrome(i, box, guides);
+  }
+
+  /** Position the selection chrome for a span layer on every stage column,
+   *  sliced per column by `spanLayerRect` the same way its preview element is —
+   *  so the outline and the handles run across a seam, and a column the layer
+   *  does not reach has its chrome hidden rather than removed. `guides` arrive
+   *  in deck fractions and are re-based per column; empty except mid-drag. */
+  _paintSpanChrome(layer, guides) {
+    const { aspect } = this.state.doc;
+    const count = this.state.doc.slides.length;
+    for (let i = 0; i < count; i++) {
+      paintSpanChrome(
+        { hosts: this.$$(`[data-slice="${i}"]`) },
+        {
+          layer: layer || null,
+          aspect,
+          index: i,
+          count,
+          guides: guides || { v: [], h: [] },
+        },
+      );
+    }
   }
 
   /** Position the selection outline, handles and snap guides for the selected

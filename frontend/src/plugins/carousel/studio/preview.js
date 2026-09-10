@@ -325,8 +325,55 @@ function paintLayerContent(el, layer, index, count, heightCqw) {
 }
 
 /**
+ * Write one chrome node per host: the outline box (which carries the eight
+ * resize handles) at `rect`, in percent of the host, and one element per snap
+ * guide, in host fractions. A `null` rect hides the chrome — that is how a
+ * spanning layer's chrome disappears from a column it does not reach, without
+ * the markup having to be re-emitted mid-drag.
+ *
+ * @param {ArrayLike<HTMLElement>} hosts
+ * @param {{x:number,y:number,w:number,h:number}|null} rect
+ * @param {{v:number[], h:number[]}} guides
+ */
+function paintChrome(hosts, rect, guides) {
+  Array.from(hosts).forEach((host) => {
+    const chrome = /** @type {HTMLElement|null} */ (
+      host.querySelector(".carousel-studio__chrome")
+    );
+    if (!chrome) return;
+    chrome.style.display = rect ? "" : "none";
+    if (!rect) return;
+    const outline = /** @type {HTMLElement|null} */ (
+      chrome.querySelector(".carousel-studio__chrome-box")
+    );
+    if (outline) {
+      outline.style.left = `${rect.x}%`;
+      outline.style.top = `${rect.y}%`;
+      outline.style.width = `${rect.w}%`;
+      outline.style.height = `${rect.h}%`;
+    }
+    const snap = chrome.querySelector(".carousel-studio__snap");
+    if (!snap) return;
+    snap.textContent = "";
+    const doc = host.ownerDocument;
+    for (const x of guides.v || []) {
+      const line = doc.createElement("span");
+      line.className = "carousel-studio__snap-line carousel-studio__snap-line--v";
+      line.style.left = `${x * 100}%`;
+      snap.appendChild(line);
+    }
+    for (const y of guides.h || []) {
+      const line = doc.createElement("span");
+      line.className = "carousel-studio__snap-line carousel-studio__snap-line--h";
+      line.style.top = `${y * 100}%`;
+      snap.appendChild(line);
+    }
+  });
+}
+
+/**
  * Move the selection chrome — an outline box with eight resize handles — over
- * the selected layer, and draw the snap guides that engaged this frame.
+ * the selected slide layer, and draw the snap guides that engaged this frame.
  * `paintDeckLayers`'s twin for the one element that is UI, not preview: the
  * chrome node is present only while a layer is selected (panels.js), so a host
  * without one is simply skipped.
@@ -338,35 +385,38 @@ function paintLayerContent(el, layer, index, count, heightCqw) {
  *   except mid-drag
  */
 export function paintLayerChrome({ hosts }, { box, aspect, guides }) {
-  const b = box ? layerCSS({ box }, aspect) : null;
+  paintChrome(hosts, box ? layerCSS({ box }, aspect) : null, guides || { v: [], h: [] });
+}
+
+/**
+ * The same chrome for a **spanning** layer, on one slide's hosts —
+ * `paintLayerChrome`'s deck-space twin, and `paintSpanLayers`'s chrome twin.
+ *
+ * The outline is the very `spanLayerRect` slice the preview element gets, so on
+ * a layer that crosses a seam the box and whichever of the eight handles falls
+ * inside this slide run continuously across it and the host's `overflow:
+ * hidden` does the clipping — the chrome is sliced exactly the way the thing it
+ * outlines is. Guides arrive in **deck** fractions, the space the drag snapped
+ * in, and are re-based into this slide's; one that lands outside the slide is
+ * clipped rather than filtered, for the same reason.
+ *
+ * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
+ * @param {{layer: import('../document.js').CarouselLayer|null, aspect: string,
+ *   index: number, count: number, guides: {v: number[], h: number[]}}} o
+ */
+export function paintSpanChrome({ hosts }, { layer, aspect, index, count, guides }) {
+  const [w, h] = canvasSize(aspect);
+  const n = Math.max(1, count);
+  const rect = layer ? spanLayerRect(layer, index, n, aspect) : null;
   const g = guides || { v: [], h: [] };
-  Array.from(hosts).forEach((host) => {
-    const chrome = host.querySelector(".carousel-studio__chrome");
-    if (!chrome) return;
-    const outline = /** @type {HTMLElement|null} */ (
-      chrome.querySelector(".carousel-studio__chrome-box")
-    );
-    if (outline && b) {
-      outline.style.left = `${b.x}%`;
-      outline.style.top = `${b.y}%`;
-      outline.style.width = `${b.w}%`;
-      outline.style.height = `${b.h}%`;
-    }
-    const snap = chrome.querySelector(".carousel-studio__snap");
-    if (!snap) return;
-    snap.textContent = "";
-    const doc = host.ownerDocument;
-    for (const x of g.v || []) {
-      const line = doc.createElement("span");
-      line.className = "carousel-studio__snap-line carousel-studio__snap-line--v";
-      line.style.left = `${x * 100}%`;
-      snap.appendChild(line);
-    }
-    for (const y of g.h || []) {
-      const line = doc.createElement("span");
-      line.className = "carousel-studio__snap-line carousel-studio__snap-line--h";
-      line.style.top = `${y * 100}%`;
-      snap.appendChild(line);
-    }
-  });
+  paintChrome(
+    hosts,
+    rect && {
+      x: (rect.x / w) * 100,
+      y: (rect.y / h) * 100,
+      w: (rect.w / w) * 100,
+      h: (rect.h / h) * 100,
+    },
+    { v: (g.v || []).map((v) => v * n - index), h: g.h || [] },
+  );
 }

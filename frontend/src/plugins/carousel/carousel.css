@@ -539,8 +539,9 @@
 /* A spanning layer's slice on one frame — positioned by `paintSpanLayers` from
  * `spanLayerRect`, so it starts off-frame and overflows the frame edge where the
  * layer crosses a seam; the frame's own `overflow: hidden` clips it exactly
- * where the JPEG will. No stage handles yet (form-only editing), so a selected
- * span layer just gets a dashed outline on every frame it touches. */
+ * where the JPEG will. The dashed outline marks the selected one on every frame
+ * it touches; the solid outline and the eight handles over the top of it are the
+ * chrome, sliced the same way by `paintSpanChrome`. */
 .carousel-studio__span-layer.is-selected {
   outline: 1px dashed var(--color-primary);
   outline-offset: -1px;

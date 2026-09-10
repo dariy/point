@@ -7,7 +7,7 @@
  * (bind, hand back the release) with one difference — the controller outlives a
  * render, because a wheel gesture's debounced commit has to.
  *
- * The same machine drives two fields. With no layer selected a frame's pointer
+ * The same machine drives two fields. With no layer selected a column's pointer
  * pans and zooms the slide's `crop` (S2). With a layer selected and the press
  * landing on that layer or one of its eight resize handles, the identical
  * provisional-write-then-commit cycle moves and resizes the layer's `box`
@@ -15,6 +15,15 @@
  * the safe area and canvas guides on the way. A press that misses the selected
  * layer still falls through to the crop gesture, so pan/zoom is unchanged
  * wherever a layer is not in the way.
+ *
+ * It drives that field in either of two coordinate spaces, because a layer's
+ * `box` is normalized to whatever it belongs to. A slide layer's is fractions
+ * of one slide, so the pressed column is the space. A spanning layer's is
+ * fractions of the whole deck, so the space is every column laid side by side
+ * — a press on *any* column it reaches grabs it, the pointer maths run in deck
+ * fractions, and the seams join the guides it snaps to. `layerSpace` is the one
+ * place that difference lives; every handler below reads it and knows nothing
+ * about which space it is in.
  *
  *   const gestures = createDeckGestures(host);   // once, at construction
  *   gestures.attach(frames);                     // after every render
@@ -67,22 +76,67 @@ function frameRect(frame) {
 }
 
 /**
+ * The whole rect a spanning layer's `box` is fractions of, from the rect of
+ * column `i` of `count`. The columns are equal widths laid side by side, so the
+ * deck box follows from any one of them exactly — no second measurement, and no
+ * dependence on the stage element the columns happen to sit in.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {number} i
+ * @param {number} count
+ */
+export function deckRect(rect, i, count) {
+  const n = Math.max(1, count);
+  return {
+    left: rect.left - i * rect.width,
+    top: rect.top,
+    width: rect.width * n,
+    height: rect.height,
+  };
+}
+
+/**
+ * The lines a dragged box snaps to, per axis, in the space it is dragged in:
+ * that space's edges and centre, its safe-area rect, and `seams` — the deck's
+ * slide boundaries, which exist only in deck space and are what makes a
+ * headline land *on* a seam rather than a pixel off it.
+ *
+ * @param {{x:number,y:number,w:number,h:number}|null} safe
+ * @param {number[]} [seams]  extra vertical lines, in the space's fractions
+ * @returns {{v:number[], h:number[]}}
+ */
+export function snapLines(safe, seams = []) {
+  return {
+    v: [0, 0.5, 1, ...(safe ? [safe.x, safe.x + safe.w] : []), ...seams],
+    h: [0, 0.5, 1, ...(safe ? [safe.y, safe.y + safe.h] : [])],
+  };
+}
+
+/** The deck's internal slide boundaries in deck fractions — `n - 1` of them,
+ *  since `0` and `1` are already guides in every space. */
+export function deckSeams(count) {
+  const n = Math.max(1, count);
+  return Array.from({ length: n - 1 }, (_, k) => (k + 1) / n);
+}
+
+/**
  * The coordinate space one layer gesture runs in: the rect the layer's `box` is
  * fractions of, the snap tolerance `SNAP_PX` is worth in that rect, and the
- * safe-area rect to snap against.
+ * guide lines to snap against.
  *
  * Resolved once per press and read by every move until the release — in one
  * place rather than in each handler, so a layer whose box is normalized to
- * something other than the frame that was pressed is a change here and nowhere
+ * something other than the column that was pressed is a change here and nowhere
  * else.
  *
  * @param {{left:number,top:number,width:number,height:number}} rect
  * @param {{x:number,y:number,w:number,h:number}|null} safe
+ * @param {number[]} [seams]
  */
-export function layerSpace(rect, safe) {
+export function layerSpace(rect, safe, seams = []) {
   return {
     rect,
-    safe: safe || null,
+    lines: snapLines(safe, seams),
     tol: { x: SNAP_PX / (rect.width || 1), y: SNAP_PX / (rect.height || 1) },
   };
 }
@@ -158,22 +212,27 @@ export function dragBox(startBox, mode, anchor, dfx, dfy) {
 }
 
 /**
- * Snap a dragged box's live edges to the canvas guides — its own edges and
- * centre lines at `0`, `0.5`, `1`, plus the safe-area rect — within `tol`
- * fractions per axis. A `move` snaps whichever of the three verticals
- * (left / centre / right) and three horizontals is closest; a `resize` snaps
- * only the edges its anchor is dragging. Returns the adjusted box and the guide
- * lines that engaged, for the caller to draw. `suppressed` (a modifier key held)
- * returns the box untouched with no guides.
+ * Snap a dragged box's live edges to `lines` — whatever `snapLines` resolved for
+ * the space this drag is in — within `tol` fractions per axis. A `move` snaps
+ * whichever of the three verticals (left / centre / right) and three
+ * horizontals is closest; a `resize` snaps only the edges its anchor is
+ * dragging. Returns the adjusted box and the guide lines that engaged, for the
+ * caller to draw. `suppressed` (a modifier key held) returns the box untouched
+ * with no guides.
  *
+ * The lines arrive resolved rather than being derived here: this function knows
+ * nothing about safe areas, canvases or decks, so a second coordinate space
+ * costs it no branch at all.
+ *
+ * @param {{v:number[], h:number[]}} lines
  * @returns {{box:{x:number,y:number,w:number,h:number}, guides:{v:number[],h:number[]}}}
  */
-export function snapBox(box, mode, anchor, safe, tol, suppressed) {
+export function snapBox(box, mode, anchor, lines, tol, suppressed) {
   const guides = { v: [], h: [] };
   if (suppressed) return { box, guides };
 
-  const vLines = [0, 0.5, 1, ...(safe ? [safe.x, safe.x + safe.w] : [])];
-  const hLines = [0, 0.5, 1, ...(safe ? [safe.y, safe.y + safe.h] : [])];
+  const vLines = lines?.v || [];
+  const hLines = lines?.h || [];
   const next = { ...box };
 
   /** Nearest line to `value` within `t`, or null. */
@@ -300,13 +359,18 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  * @property {(i: number) => void} select  Make slide `i` the selection.
  * @property {(i: number) => void} refocus  Slide `i` is about to lose focus to
  *   a rebuild; put it back afterwards.
- * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number}}|null} [activeLayer]
- *   The selected layer — its slide index, its index in that slide, and its
- *   current box (0..1 of the canvas) — or null when no layer is selected. Read
- *   per press: it decides whether a press moves a layer or pans the slide.
- * @property {() => {x:number,y:number,w:number,h:number}|null} [safeArea]
- *   The slide's safe-area rect in canvas fractions, for snapping. Null disables
- *   safe-area snap (centre and edge guides still apply).
+ * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number},
+ *   scope?: 'slide'|'span'}|null} [activeLayer]
+ *   The selected layer — the slide index to commit it to, its index in that
+ *   slide's list, its current box, and the space that box is fractions of
+ *   (`"slide"`, the default, or `"span"` for a deck-wide layer, whose `i` is
+ *   the document's span pseudo-slide). Null when no layer is selected. Read per
+ *   press: it decides whether a press moves a layer or pans the slide, and in
+ *   which space.
+ * @property {(scope: 'slide'|'span') => {x:number,y:number,w:number,h:number}|null} [safeArea]
+ *   The safe-area rect of `scope`'s space, in that space's fractions, for
+ *   snapping. Null disables safe-area snap (centre, edge and seam guides still
+ *   apply).
  * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}, guides: {v:number[],h:number[]}) => void} [paintLayer]
  *   Paint layer `j` of slide `i` at a provisional box, plus the snap guides that
  *   engaged — the layer twin of `paint`.
@@ -323,12 +387,18 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  * @param {DeckGestureHost} host
  */
 export function createDeckGestures(host) {
-  /** Listener removers for the currently bound frames. */
+  /** Listener removers for the currently bound columns. */
   let bound = [];
+  /** How many columns the last `attach` bound — the deck's slide count, which
+   *  is what turns one column's rect into the whole deck's. */
+  let count = 0;
   /** The in-flight gesture, tagged by `kind`: a `"crop"` pan/pinch
    *  ({ i, frame, pointers, crop, startCrop, start, moved }) or a `"layer"`
-   *  move/resize ({ i, j, frame, mode, anchor, space, startX, startY, startBox,
-   *  box, moved }). One at a time — a press mid-gesture is ignored. */
+   *  move/resize ({ i, slide, j, frame, mode, anchor, space, startX, startY,
+   *  startBox, box, moved }) — where `i` is the column holding the pointer and
+   *  `slide` the index the box commits to, the two being the same thing for
+   *  everything but a span layer. One at a time — a press mid-gesture is
+   *  ignored. */
   let drag = null;
   /** A crop written to the DOM but not yet committed to the document (a wheel
    *  gesture, which has no release event to commit on). */
@@ -374,17 +444,17 @@ export function createDeckGestures(host) {
 
   const onLayerMove = (e) => {
     if (!drag || drag.kind !== "layer") return;
-    const { rect, safe, tol } = drag.space;
+    const { rect, lines, tol } = drag.space;
     const dfx = (e.clientX - drag.startX) / (rect.width || 1);
     const dfy = (e.clientY - drag.startY) / (rect.height || 1);
     if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
 
     const raw = dragBox(drag.startBox, drag.mode, drag.anchor, dfx, dfy);
     const { box, guides } = drag.moved
-      ? snapBox(raw, drag.mode, drag.anchor, safe, tol, e.altKey || e.metaKey)
+      ? snapBox(raw, drag.mode, drag.anchor, lines, tol, e.altKey || e.metaKey)
       : { box: raw, guides: { v: [], h: [] } };
     drag.box = clampBox(box);
-    host.paintLayer?.(drag.i, drag.j, drag.box, guides);
+    host.paintLayer?.(drag.slide, drag.j, drag.box, guides);
     e.preventDefault?.();
   };
 
@@ -399,7 +469,7 @@ export function createDeckGestures(host) {
       host.select(ended.i);
       return;
     }
-    host.commitLayer?.(ended.i, ended.j, ended.box);
+    host.commitLayer?.(ended.slide, ended.j, ended.box);
   };
 
   /** Take the pointer for the crop gesture: capture it, dress the frame, and
@@ -417,12 +487,15 @@ export function createDeckGestures(host) {
 
     // A layer takes the press only when its own layer is selected and the press
     // lands on it or a handle; anything else falls through to the crop gesture,
-    // so pan/zoom is unchanged wherever a layer is not in the way.
+    // so pan/zoom is unchanged wherever a layer is not in the way. A slide layer
+    // is grabbable on its own column only; a span layer on every column it
+    // reaches, because its box spans them all.
     if (!drag) {
       const active = host.activeLayer?.();
-      const rect = frameRect(frame);
+      const span = active?.scope === "span";
+      const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
       const hit =
-        active && active.i === i
+        active && (span || active.i === i)
           ? hitLayer(rect, active.box, e.clientX, e.clientY)
           : null;
       if (hit) {
@@ -431,11 +504,16 @@ export function createDeckGestures(host) {
         drag = {
           kind: "layer",
           i,
+          slide: active.i,
           j: active.j,
           frame,
           mode: hit.mode,
           anchor: { h: hit.h, v: hit.v },
-          space: layerSpace(rect, host.safeArea?.() || null),
+          space: layerSpace(
+            rect,
+            host.safeArea?.(span ? "span" : "slide") || null,
+            span ? deckSeams(count) : [],
+          ),
           startX: e.clientX,
           startY: e.clientY,
           startBox: { ...active.box },
@@ -577,7 +655,12 @@ export function createDeckGestures(host) {
     // nudges the box, shift-arrow resizes it from its far edge, both at the
     // `KEY_PAN` scale the crop nudge uses.
     const active = host.activeLayer?.();
-    if (active && active.i === i && typeof e.key === "string" && e.key.startsWith("Arrow")) {
+    if (
+      active &&
+      (active.scope === "span" || active.i === i) &&
+      typeof e.key === "string" &&
+      e.key.startsWith("Arrow")
+    ) {
       const b = active.box;
       const dx = KEY_PAN * b.w;
       const dy = KEY_PAN * b.h;
@@ -596,7 +679,7 @@ export function createDeckGestures(host) {
       if (!box) return;
       e.preventDefault?.();
       host.refocus(i);
-      host.commitLayer?.(i, active.j, clampBox(box));
+      host.commitLayer?.(active.i, active.j, clampBox(box));
       return;
     }
 
@@ -643,14 +726,17 @@ export function createDeckGestures(host) {
 
   return {
     /**
-     * Bind to this render's deck frames, releasing the previous render's.
-     * Each frame's index comes from its own `data-slice`.
+     * Bind to this render's deck columns, releasing the previous render's.
+     * Each column's index comes from its own `data-slice`, and how many there
+     * are is the deck's slide count — which is what `deckRect` needs to turn
+     * one column into the whole deck.
      *
      * @param {ArrayLike<HTMLElement>} frames
      */
     attach(frames) {
       detach();
       if (destroyed) return;
+      count = Array.from(frames).length;
       for (const frame of Array.from(frames)) {
         const i = Number(frame.dataset.slice);
         /** @type {Array<[string, (e: any) => void, object|undefined]>} */

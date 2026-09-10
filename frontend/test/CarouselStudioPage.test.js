@@ -22,6 +22,7 @@ import { setupDOM, click, fire } from './helpers/dom.js';
 import { getToast, setSettings, setUser } from '../src/store.js';
 import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
 import {
+  SPAN_SLIDE,
   specHash,
   splitDocument,
   toDeckDocument,
@@ -1265,6 +1266,28 @@ describe('CarouselStudioPage', () => {
         return mount({ post: '42' }, routes, { renderDeps: deps });
       }
 
+      /** linkedom has no layout — give the column the box a browser would have
+       *  measured so pointer pixels convert to canvas fractions. A 200×250
+       *  column keeps 1px = 0.005 of the canvas on both axes; `left` is what
+       *  puts a deck's columns side by side, which a span layer needs. */
+      function withFrameBox(frame, width = 200, height = 250, left = 0) {
+        frame.getBoundingClientRect = () => ({
+          width, height, left, top: 0, right: left + width, bottom: height,
+        });
+        return frame;
+      }
+
+      /** Fire press → moves → release on `frame`. `moves` is a list of
+       *  `[clientX, clientY]`; the last one is also the release point. */
+      function press(frame, cx, cy, moves, props = {}) {
+        fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: cx, clientY: cy, ...props });
+        for (const [mx, my] of moves) {
+          fire(frame, 'pointermove', { pointerId: 1, clientX: mx, clientY: my, ...props });
+        }
+        const [lx, ly] = moves[moves.length - 1] || [cx, cy];
+        fire(frame, 'pointerup', { pointerId: 1, clientX: lx, clientY: ly, ...props });
+      }
+
       test('adding each type puts one normalized layer inside the safe area', async () => {
         const el = await toDeck();
         for (const type of ['text', 'image', 'rect', 'counter', 'arrow']) {
@@ -1395,27 +1418,6 @@ describe('CarouselStudioPage', () => {
 
       // ── Direct manipulation (S3.7) ────────────────────────────────────────
       describe('direct manipulation', () => {
-        /** linkedom has no layout — give the column the box a browser would
-         *  have measured so pointer pixels convert to canvas fractions. A
-         *  200×250 column keeps 1px = 0.005 of the canvas on both axes. */
-        function withFrameBox(frame, width = 200, height = 250) {
-          frame.getBoundingClientRect = () => ({
-            width, height, left: 0, top: 0, right: width, bottom: height,
-          });
-          return frame;
-        }
-
-        /** Fire press → moves → release on `frame`. `moves` is a list of
-         *  `[clientX, clientY]`; the last one is also the release point. */
-        function press(frame, cx, cy, moves, props = {}) {
-          fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: cx, clientY: cy, ...props });
-          for (const [mx, my] of moves) {
-            fire(frame, 'pointermove', { pointerId: 1, clientX: mx, clientY: my, ...props });
-          }
-          const [lx, ly] = moves[moves.length - 1] || [cx, cy];
-          fire(frame, 'pointerup', { pointerId: 1, clientX: lx, clientY: ly, ...props });
-        }
-
         /** A deck with one text layer on slide 0, its box forced to `box` (a
          *  small central rect by default, with room to move and resize). The
          *  frame is re-queried by the caller — the setState re-renders it. */
@@ -1650,6 +1652,117 @@ describe('CarouselStudioPage', () => {
           page._removeLayer(0, 'span');
           await settle();
           assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['text']);
+        });
+
+        /** A deck of three with one span layer at `box`, and every column given
+         *  the 200×250 rect a browser would have measured — so the deck box is
+         *  600×250 and a client x of 300 is dead centre of the deck. */
+        async function withSpanLayer(box) {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          await settle();
+          page.setState({ doc: updateLayer(page.state.doc, SPAN_SLIDE, 0, { box }) });
+          await settle();
+          for (let i = 0; i < 3; i++) withFrameBox(stageCol(el, i), 200, 250, i * 200);
+          return el;
+        }
+
+        test('the selection chrome is sliced across every column the layer crosses', async () => {
+          const el = await withSpanLayer({ x: 0.3, y: 0.4, w: 0.6, h: 0.2 });
+          const boxes = [0, 1, 2].map((i) =>
+            stageCol(el, i).querySelector('.carousel-studio__chrome-box'),
+          );
+          boxes.forEach((b, i) => assert.ok(b, `column ${i} carries chrome`));
+          // Each column positions in its own frame, so one slide of deck offset
+          // is a full 100% — the same continuity the preview element gets.
+          const lefts = boxes.map((b) => parseFloat(b.style.left));
+          assert.ok(Math.abs(lefts[0] - lefts[1] - 100) < 0.5, `${lefts}`);
+          assert.ok(Math.abs(lefts[1] - lefts[2] - 100) < 0.5, `${lefts}`);
+          assert.equal(
+            stageCol(el, 2).querySelectorAll('.carousel-studio__handle').length,
+            8,
+            'the handles come with it, and overflow does the clipping',
+          );
+        });
+
+        test('a column the layer misses has its chrome hidden, not removed', async () => {
+          const el = await withSpanLayer({ x: 0.02, y: 0.4, w: 0.2, h: 0.2 });
+          // 0.02..0.22 of the deck is inside column 0 alone.
+          assert.notEqual(
+            stageCol(el, 0).querySelector('.carousel-studio__chrome').style.display,
+            'none',
+          );
+          for (const i of [1, 2]) {
+            assert.equal(
+              stageCol(el, i).querySelector('.carousel-studio__chrome').style.display,
+              'none',
+              `column ${i} shows none of it`,
+            );
+          }
+        });
+
+        test('dragging a span layer moves its deck box, grabbed from any column', async () => {
+          const el = await withSpanLayer({ x: 0.3, y: 0.4, w: 0.6, h: 0.2 });
+          const before = page.state.doc;
+          const selected = page.state.selected;
+          // Deck x 0.833 → 500px, inside column 2 (400..600). +30px is 0.05 of
+          // the 600px deck; alt suppresses the seam snap so the number is exact.
+          press(stageCol(el, 2), 500, 125, [[530, 125]], { altKey: true });
+          await settle();
+
+          assert.notStrictEqual(page.state.doc, before, 'one new document');
+          assert.ok(
+            Math.abs(page.state.doc.spanLayers[0].box.x - 0.35) < 0.01,
+            `x = 0.3 + 30/600: ${page.state.doc.spanLayers[0].box.x}`,
+          );
+          assert.ok(
+            page.state.doc.slides.every((sl) => (sl.layers || []).length === 0),
+            'no slide gained a layer',
+          );
+          assert.equal(page.state.layerScope, 'span', 'still editing the deck layer');
+          assert.equal(page.state.selectedLayer, 0);
+          assert.equal(page.state.selected, selected, 'the slide selection did not move');
+        });
+
+        test('a span drag snaps to a seam, and the guide is drawn per column', async () => {
+          const el = await withSpanLayer({ x: 0.3, y: 0.4, w: 0.6, h: 0.2 });
+          // 0.3 → 180px; +20px puts the left edge on 0.3333, the seam itself,
+          // so approach it from 0.3233 (+14px) and let the snap close the gap.
+          press(stageCol(el, 1), 300, 125, [[314, 125]]);
+          await settle();
+          assert.ok(
+            Math.abs(page.state.doc.spanLayers[0].box.x - 1 / 3) < 1e-6,
+            `left edge on the seam: ${page.state.doc.spanLayers[0].box.x}`,
+          );
+        });
+
+        test('a press that misses the span layer still pans that column', async () => {
+          const el = await withSpanLayer({ x: 0.3, y: 0.4, w: 0.6, h: 0.2 });
+          withBox(stageImg(el, 0));
+          const cropBefore = { ...page.state.doc.slides[0].crop };
+          // y = 20 is well above the layer's 0.4..0.6 band.
+          press(stageCol(el, 0), 150, 20, [[90, 20]]);
+          await settle();
+          assert.deepEqual(
+            page.state.doc.spanLayers[0].box,
+            { x: 0.3, y: 0.4, w: 0.6, h: 0.2 },
+            'the layer did not move',
+          );
+          assert.notDeepEqual(page.state.doc.slides[0].crop, cropBefore, 'the crop panned');
+        });
+
+        test('arrow keys nudge a span layer from whichever column has focus', async () => {
+          const el = await withSpanLayer({ x: 0.3, y: 0.4, w: 0.6, h: 0.2 });
+          const cropBefore = { ...page.state.doc.slides[2].crop };
+          fire(stageCol(el, 2), 'keydown', { key: 'ArrowRight' });
+          await settle();
+          assert.ok(page.state.doc.spanLayers[0].box.x > 0.3, 'moved right');
+          assert.deepEqual(
+            { ...page.state.doc.slides[2].crop },
+            cropBefore,
+            'the arrow drove the layer, not the column it was pressed in',
+          );
+          assert.equal(page.state.layerScope, 'span');
         });
 
         test('switching back to split keeps the deck layers', async () => {

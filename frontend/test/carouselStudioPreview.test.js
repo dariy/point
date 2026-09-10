@@ -13,7 +13,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { paintDeckSlide, paintSplit } from '../src/plugins/carousel/studio/preview.js';
+import {
+  paintDeckSlide,
+  paintSpanChrome,
+  paintSplit,
+} from '../src/plugins/carousel/studio/preview.js';
 
 const FULL = { x: 0, y: 0, w: 1, h: 1 };
 const el = () => ({ style: {} });
@@ -250,6 +254,86 @@ describe('carousel studio preview', () => {
       assert.strictEqual(frames[0].style.backgroundSize, '200% 100%, 100% 100%');
       assert.strictEqual(frames[0].style.backgroundPosition, '0% 50%, 0% 0%');
       assert.strictEqual(frames[1].style.backgroundPosition, '100% 50%, 0% 0%');
+    });
+  });
+
+  /**
+   * The selection chrome of a *spanning* layer. Everything here is about one
+   * thing: a layer whose box is fractions of the whole deck has to be drawn as
+   * n slices that join, so the outline and the snap guides land where the seam
+   * really is rather than n frames each guessing.
+   */
+  describe('paintSpanChrome', () => {
+    /** The three elements `paintChrome` writes, plus the `createElement` the
+     *  snap lines come from. `lines` collects whatever was appended. */
+    function chromeHost() {
+      const box = el();
+      const lines = [];
+      const snap = {
+        appendChild: (n) => lines.push(n),
+        set textContent(_v) {
+          lines.length = 0;
+        },
+        get textContent() {
+          return '';
+        },
+      };
+      const chrome = {
+        style: {},
+        querySelector: (sel) =>
+          sel === '.carousel-studio__chrome-box'
+            ? box
+            : sel === '.carousel-studio__snap'
+              ? snap
+              : null,
+      };
+      return {
+        box,
+        lines,
+        chrome,
+        ownerDocument: { createElement: () => ({ style: {}, className: '' }) },
+        querySelector: (sel) => (sel === '.carousel-studio__chrome' ? chrome : null),
+      };
+    }
+
+    const paint = (index, layer, guides = { v: [], h: [] }) => {
+      const host = chromeHost();
+      paintSpanChrome({ hosts: [host] }, { layer, aspect: '4:5', index, count: 3, guides });
+      return host;
+    };
+
+    test('one slice per column, each continuing the last across the seam', () => {
+      const layer = { box: { x: 0.3, y: 0.4, w: 0.6, h: 0.2 } };
+      const lefts = [0, 1, 2].map((i) => parseFloat(paint(i, layer).box.style.left));
+      // A one-slide offset in deck space is a full 100% of a column — which is
+      // exactly what makes the outline continuous rather than merely close.
+      assert.ok(Math.abs(lefts[0] - lefts[1] - 100) < 0.5, `${lefts}`);
+      assert.ok(Math.abs(lefts[1] - lefts[2] - 100) < 0.5, `${lefts}`);
+      // And every slice is the same width — the box is one rectangle, clipped.
+      const widths = [0, 1, 2].map((i) => parseFloat(paint(i, layer).box.style.width));
+      assert.ok(Math.abs(widths[0] - widths[2]) < 0.5, `${widths}`);
+    });
+
+    test('a column the layer misses is hidden, not emptied', () => {
+      const host = paint(2, { box: { x: 0.02, y: 0.4, w: 0.2, h: 0.2 } });
+      assert.strictEqual(host.chrome.style.display, 'none');
+      const reached = paint(0, { box: { x: 0.02, y: 0.4, w: 0.2, h: 0.2 } });
+      assert.strictEqual(reached.chrome.style.display, '');
+    });
+
+    test('a deck-space guide is re-based into the column it is drawn on', () => {
+      const layer = { box: { x: 0.3, y: 0.4, w: 0.6, h: 0.2 } };
+      // The seam at 2/3 of the deck is column 2's left edge and column 1's right.
+      const at = (index) =>
+        parseFloat(paint(index, layer, { v: [2 / 3], h: [] }).lines[0].style.left);
+      assert.ok(Math.abs(at(2)) < 1e-6, `${at(2)}`);
+      assert.ok(Math.abs(at(1) - 100) < 1e-6, `${at(1)}`);
+    });
+
+    test('a horizontal guide is the same line in either space', () => {
+      const layer = { box: { x: 0.3, y: 0.4, w: 0.6, h: 0.2 } };
+      const host = paint(1, layer, { v: [], h: [0.13] });
+      assert.strictEqual(host.lines[0].style.top, '13%');
     });
   });
 });

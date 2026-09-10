@@ -247,10 +247,11 @@ const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 /**
  * The selection chrome for a stage column: an outline box carrying the eight
  * resize handles, plus an empty layer for `paintLayerChrome` to draw snap guides
- * into. Emitted only for the selected slide's column and only while a layer is
- * selected — its absence is how a deselect clears it on the next render.
+ * into. Emitted while a layer is selected — for the selected slide's column
+ * alone when that layer is a slide layer, for every column when it spans them.
+ * Its absence is how a deselect clears it on the next render.
  *
- * @param {boolean} active  this column shows the selected slide and a layer is selected
+ * @param {boolean} active  this column can show the selected layer
  */
 function layerChrome(active) {
   if (!active) return "";
@@ -330,6 +331,11 @@ export function builder({
   const n = doc.slides.length;
   const [w, h] = canvasSize(doc.aspect);
   const slideChrome = layerScope === "slide" && selectedLayer != null;
+  // A span layer is grabbable on every column it crosses, so every column gets
+  // a chrome node and `paintSpanChrome` hides the ones the layer misses — which
+  // also means a drag that carries it over a seam finds chrome waiting there,
+  // without a rebuild mid-gesture.
+  const spanChrome = layerScope === "span" && selectedLayer != null;
   const spanNodes = spanLayerNodes(doc);
 
   const dividers = Array.from({ length: n - 1 }, (_, i) => {
@@ -367,7 +373,7 @@ export function builder({
             style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
             ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
-              i === deckIndex && slideChrome,
+              (i === deckIndex && slideChrome) || spanChrome,
             )}
           </span>`,
       )
@@ -862,8 +868,9 @@ function addLayerChips(scope) {
  * reuse the same five types and the same form — a second family of editors for
  * one schema is the failure mode. The studio never constructs a layer literal:
  * an add goes through `addLayer` and every edit through `updateLayer`
- * (`document.js`), the same rule framing keeps. Direct manipulation on the stage
- * is per-slide only for now; a span layer is edited through its form.
+ * (`document.js`), the same rule framing keeps. The form is one of two ways in:
+ * a span layer is dragged, resized and snapped on the stage as well, in deck
+ * coordinates (`gestures.js`), and both routes commit through `updateLayer`.
  *
  * @param {{doc: import('../document.js').CarouselDoc, index: number,
  *   selectedLayer: number|null, layerScope: "slide"|"span", logoUrl: string}} o

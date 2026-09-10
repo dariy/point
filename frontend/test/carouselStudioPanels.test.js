@@ -356,15 +356,16 @@ describe('carousel studio panels', () => {
       assert.match(out, /<aside[\s\S]*?carousel-studio__layers[\s\S]*?<\/aside>/);
     });
 
-    test('deck mode emits a span-layer node per frame for each span layer', () => {
+    test('deck mode emits a span-layer node per stage column for each span layer', () => {
       const deck = {
         ...toDeckDocument(doc3, 3000, 1000),
         spanLayers: [normalizeLayer({ type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'H' })],
       };
       const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
       const nodes = out.match(/carousel-studio__span-layer" data-span-layer="0"/g) || [];
-      // one per stage slice and one per filmstrip frame — 3 slides → 6.
-      assert.strictEqual(nodes.length, 6);
+      // One per stage column, and none in the rail — the rail is a thumbnail
+      // strip, not a second editing surface.
+      assert.strictEqual(nodes.length, 3);
     });
   });
 
