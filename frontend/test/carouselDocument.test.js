@@ -5,6 +5,10 @@
  * content is regenerated output. These tests pin normalization (defaults,
  * clamping, unknown-field drop), the parse/serialize round trip, the block
  * writer's blank-line contract, and specHash's change detection.
+ *
+ * The template half pins the other direction: a template is this same document
+ * with placeholder values, so `applyTemplate` resolving one and `toTemplate`
+ * wrapping one have to round trip through `normalizeDocument`.
  */
 
 import { test, describe } from 'node:test';
@@ -33,7 +37,12 @@ import {
   reorderLayer,
   LAYER_TYPES,
   SPAN_SLIDE,
+  PLACEHOLDERS,
+  TEMPLATE_VERSION,
+  applyTemplate,
+  toTemplate,
 } from '../src/plugins/carousel/document.js';
+import { MIN_SLIDES, MAX_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
 import {
   canvasSize,
   sliceRects,
@@ -1312,5 +1321,486 @@ describe('specHash', () => {
     assert.notStrictEqual(base, specHash(slide, '4:5', { strategy: 'pad', anchorY: 0.5 }));
     assert.notStrictEqual(base, specHash(slide, '4:5', { strategy: 'cover', anchorY: 0 }));
     assert.strictEqual(base, specHash(slide, '4:5', { strategy: 'cover', anchorY: 0.5 }));
+  });
+});
+
+describe('PLACEHOLDERS', () => {
+  test('names the four post placeholders plus {logo}, and nothing else', () => {
+    assert.deepStrictEqual(
+      PLACEHOLDERS.map((p) => p.token),
+      ['{title}', '{excerpt}', '{tags}', '{link}', '{logo}'],
+    );
+  });
+
+  test('every entry carries the field it substitutes into, and help text', () => {
+    for (const p of PLACEHOLDERS) {
+      assert.ok(['text', 'source'].includes(p.field), `${p.token} field`);
+      assert.ok(p.label.length > 0, `${p.token} label`);
+      assert.ok(Object.isFrozen(p), `${p.token} frozen`);
+    }
+    assert.ok(Object.isFrozen(PLACEHOLDERS));
+    assert.deepStrictEqual(
+      PLACEHOLDERS.filter((p) => p.field === 'source').map((p) => p.token),
+      ['{logo}'],
+    );
+  });
+
+  test("does not claim a counter's {i}/{n} — those stay render-time", () => {
+    const tokens = PLACEHOLDERS.map((p) => p.token);
+    assert.ok(!tokens.includes('{i}'));
+    assert.ok(!tokens.includes('{n}'));
+  });
+});
+
+/** A two-slide template: a headline, a counter, and a logo mark. */
+const templateFixture = () => ({
+  templateVersion: 1,
+  id: 'seamless-cover-2',
+  name: 'Seamless cover + 1',
+  origin: { format: 'pptx', file: 'minimal.pptx' },
+  doc: {
+    version: DOC_VERSION,
+    aspect: '4:5',
+    mode: 'deck',
+    slides: [
+      {
+        source: '',
+        crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.5 },
+        fit: 'contain',
+        layers: [
+          { type: 'text', box: { x: 0, y: 0, w: 1, h: 0.3 }, text: '{title}' },
+          { type: 'image', box: { x: 0.8, y: 0.9, w: 0.1, h: 0.05 }, source: '{logo}' },
+        ],
+      },
+      {
+        source: '',
+        layers: [
+          { type: 'text', box: { x: 0, y: 0, w: 1, h: 0.5 }, text: '{excerpt}\n{tags}\n{link}' },
+          { type: 'counter', box: { x: 0, y: 0.9, w: 0.2, h: 0.06 }, format: '{i}/{n} · {title}' },
+        ],
+      },
+    ],
+  },
+});
+
+const fullContext = () => ({
+  post: {
+    title: 'Nine Days in Svalbard',
+    excerpt: 'Sea ice, and the light that comes with it.',
+    slug: 'nine-days-in-svalbard',
+    tags: [{ name: 'arctic' }, { name: 'travel' }],
+  },
+  settings: { logo_url: '/2024/01/logo.png', app_url: 'https://example.com' },
+  media: ['/2024/01/a.jpg', '/2024/01/b.jpg'],
+});
+
+describe('applyTemplate', () => {
+  test('substitutes the four post placeholders, and leaves {i}/{n} alone', () => {
+    const { doc, report } = applyTemplate(templateFixture(), fullContext());
+
+    assert.strictEqual(doc.slides[0].layers[0].text, 'Nine Days in Svalbard');
+    assert.strictEqual(
+      doc.slides[1].layers[0].text,
+      'Sea ice, and the light that comes with it.\n#arctic #travel\nhttps://example.com/posts/nine-days-in-svalbard',
+    );
+    // The counter keeps its render-time tokens and gains the resolved one.
+    assert.strictEqual(doc.slides[1].layers[1].format, '{i}/{n} · Nine Days in Svalbard');
+    assert.deepStrictEqual(report.unresolved, []);
+  });
+
+  test('an unresolvable placeholder keeps its literal text and is reported', () => {
+    const { doc, report } = applyTemplate(templateFixture(), {
+      post: { title: 'Only a title' },
+      settings: { logo_url: '/logo.png' },
+      media: ['/a.jpg', '/b.jpg'],
+    });
+
+    assert.strictEqual(doc.slides[0].layers[0].text, 'Only a title');
+    // No excerpt, no tags, no app_url — all three stay visible on the slide.
+    assert.strictEqual(doc.slides[1].layers[0].text, '{excerpt}\n{tags}\n{link}');
+    assert.deepStrictEqual(report.unresolved, ['{excerpt}', '{tags}', '{link}']);
+  });
+
+  test('a whitespace-only value is no value', () => {
+    const { doc, report } = applyTemplate(templateFixture(), {
+      post: { title: '   ' },
+      settings: {},
+    });
+    assert.strictEqual(doc.slides[0].layers[0].text, '{title}');
+    assert.ok(report.unresolved.includes('{title}'));
+  });
+
+  test('reports each token once however many layers carry it', () => {
+    const { report } = applyTemplate(
+      {
+        slides: [
+          { source: 'a.jpg', layers: [{ type: 'text', text: '{title}' }] },
+          { source: 'b.jpg', layers: [{ type: 'text', text: '{title}' }] },
+        ],
+      },
+      {},
+    );
+    assert.deepStrictEqual(report.unresolved, ['{title}']);
+  });
+
+  test('substitutes every occurrence in one string', () => {
+    const { doc } = applyTemplate(
+      { slides: [{ source: 'a.jpg', layers: [{ type: 'text', text: '{title}—{title}' }] }] },
+      { post: { title: 'Ice' } },
+    );
+    assert.strictEqual(doc.slides[0].layers[0].text, 'Ice—Ice');
+  });
+
+  test('a $-sequence in the post text is substituted literally', () => {
+    // `replaceAll` would read `$&` in the replacement as the matched token.
+    const { doc } = applyTemplate(
+      { slides: [{ source: 'a.jpg', layers: [{ type: 'text', text: '{title}' }] }] },
+      { post: { title: 'Fifty $& Fifty $` $$' } },
+    );
+    assert.strictEqual(doc.slides[0].layers[0].text, 'Fifty $& Fifty $` $$');
+  });
+
+  test('{tags} accepts plain strings and does not double the hash', () => {
+    const { doc } = applyTemplate(
+      { slides: [{ source: 'a.jpg', layers: [{ type: 'text', text: '{tags}' }] }] },
+      { post: { tags: ['arctic', '#travel', '', { name: 'ice' }, null] } },
+    );
+    assert.strictEqual(doc.slides[0].layers[0].text, '#arctic #travel #ice');
+  });
+
+  test("{link} prefers the caller's url, then app_url + slug", () => {
+    const oneLink = (post, settings) =>
+      applyTemplate(
+        { slides: [{ source: 'a.jpg', layers: [{ type: 'text', text: '{link}' }] }] },
+        { post, settings },
+      ).doc.slides[0].layers[0].text;
+
+    assert.strictEqual(oneLink({ url: 'https://short.example/p/9', slug: 's' }, {}), 'https://short.example/p/9');
+    // Trailing slashes on app_url do not double up in the path.
+    assert.strictEqual(
+      oneLink({ slug: 'a-post' }, { app_url: 'https://example.com//' }),
+      'https://example.com/posts/a-post',
+    );
+    assert.strictEqual(oneLink({ slug: '' }, { app_url: 'https://example.com' }), '{link}');
+  });
+
+  test('a {logo} image layer takes the logo_url setting', () => {
+    const { doc, report } = applyTemplate(templateFixture(), fullContext());
+    assert.strictEqual(doc.slides[0].layers[1].source, '/2024/01/logo.png');
+    assert.strictEqual(report.droppedLogoLayers, 0);
+  });
+
+  test('a {logo} image layer is dropped when there is no logo, and counted', () => {
+    const template = templateFixture();
+    template.doc.spanLayers = [
+      { type: 'image', box: { x: 0.4, y: 0.9, w: 0.1, h: 0.05 }, source: '{logo}' },
+      { type: 'rect', box: { x: 0, y: 0, w: 1, h: 0.2 }, fill: '#000000' },
+    ];
+    const { doc, report } = applyTemplate(template, { ...fullContext(), settings: {} });
+
+    assert.deepStrictEqual(
+      doc.slides[0].layers.map((l) => l.type),
+      ['text'],
+    );
+    assert.deepStrictEqual(
+      doc.spanLayers.map((l) => l.type),
+      ['rect'],
+    );
+    // Two dropped layers, and `{logo}` is not double-reported as unresolved.
+    assert.strictEqual(report.droppedLogoLayers, 2);
+    assert.ok(!report.unresolved.includes('{logo}'));
+  });
+
+  test('an image layer whose source is a real path is left alone', () => {
+    const { doc, report } = applyTemplate(
+      {
+        slides: [
+          {
+            source: 'a.jpg',
+            layers: [{ type: 'image', box: { x: 0, y: 0, w: 1, h: 1 }, source: '/mark.png' }],
+          },
+        ],
+      },
+      { settings: {} },
+    );
+    assert.strictEqual(doc.slides[0].layers[0].source, '/mark.png');
+    assert.strictEqual(report.droppedLogoLayers, 0);
+  });
+
+  test('a sourceless slide takes the next of media, keeping its crop and fit', () => {
+    const { doc, report } = applyTemplate(templateFixture(), fullContext());
+
+    assert.deepStrictEqual(
+      doc.slides.map((s) => s.source),
+      ['/2024/01/a.jpg', '/2024/01/b.jpg'],
+    );
+    // The crop is a fraction of whatever source it is handed, so it survives.
+    assert.deepStrictEqual(doc.slides[0].crop, { x: 0.1, y: 0.2, w: 0.5, h: 0.5 });
+    assert.strictEqual(doc.slides[0].fit, 'contain');
+    assert.deepStrictEqual(report.slidesWithoutSource, []);
+  });
+
+  test('a slide that already names a source does not consume one', () => {
+    const { doc } = applyTemplate(
+      {
+        slides: [{ source: '/fixed.jpg' }, { source: '' }, { source: '' }],
+      },
+      { media: ['/one.jpg', '/two.jpg'] },
+    );
+    assert.deepStrictEqual(
+      doc.slides.map((s) => s.source),
+      ['/fixed.jpg', '/one.jpg', '/two.jpg'],
+    );
+  });
+
+  test('media entries may be paths, picker items or API rows', () => {
+    const { doc } = applyTemplate(
+      { slides: [{ source: '' }, { source: '' }, { source: '' }] },
+      { media: [' /a.jpg ', { path: '/b.jpg' }, { original_path: '/c.jpg' }, null, {}] },
+    );
+    assert.deepStrictEqual(
+      doc.slides.map((s) => s.source),
+      ['/a.jpg', '/b.jpg', '/c.jpg'],
+    );
+  });
+
+  test('slides left without a source are named in the report', () => {
+    const { doc, report } = applyTemplate(
+      { slides: [{ source: '' }, { source: '' }, { source: '' }] },
+      { media: ['/only.jpg'] },
+    );
+    assert.deepStrictEqual(
+      doc.slides.map((s) => s.source),
+      ['/only.jpg', '', ''],
+    );
+    assert.deepStrictEqual(report.slidesWithoutSource, [1, 2]);
+  });
+
+  test('the slide count is clamped down to MAX_SLIDES, and the clamp reported', () => {
+    const slides = Array.from({ length: MAX_SLIDES + 3 }, (_, i) => ({ source: `/${i}.jpg` }));
+    const { doc, report } = applyTemplate({ slides }, {});
+
+    assert.strictEqual(doc.slides.length, MAX_SLIDES);
+    // The head is kept: a template's design is in its first slides.
+    assert.strictEqual(doc.slides[0].source, '/0.jpg');
+    assert.deepStrictEqual(report.clampedSlides, { from: MAX_SLIDES + 3, to: MAX_SLIDES });
+  });
+
+  test('the slide count is padded up to MIN_SLIDES, like the add control', () => {
+    const { doc, report } = applyTemplate({ slides: [{ source: '/a.jpg' }] }, {});
+
+    assert.strictEqual(doc.slides.length, MIN_SLIDES);
+    // `addSlide`'s contract: another slide like the one it follows.
+    assert.strictEqual(doc.slides[1].source, '/a.jpg');
+    assert.deepStrictEqual(report.clampedSlides, { from: 1, to: MIN_SLIDES });
+  });
+
+  test('a template with no slides at all still lands in range', () => {
+    const { doc, report } = applyTemplate({ slides: [] }, {});
+    assert.strictEqual(doc.slides.length, MIN_SLIDES);
+    assert.deepStrictEqual(report.clampedSlides, { from: 0, to: MIN_SLIDES });
+    assert.deepStrictEqual(report.slidesWithoutSource, [0, 1]);
+  });
+
+  test('an in-range count reports no clamp', () => {
+    const { report } = applyTemplate(templateFixture(), fullContext());
+    assert.strictEqual(report.clampedSlides, null);
+  });
+
+  test("the envelope's id lands in doc.template, marked custom", () => {
+    const { doc } = applyTemplate(templateFixture(), fullContext());
+    assert.deepStrictEqual(doc.template, { id: 'seamless-cover-2', custom: true });
+  });
+
+  test("a document's own template block stands in for a missing envelope id", () => {
+    const { doc } = applyTemplate(
+      { slides: [{ source: '/a.jpg' }, { source: '/b.jpg' }], template: { id: 'cover-3', custom: false } },
+      {},
+    );
+    assert.deepStrictEqual(doc.template, { id: 'cover-3', custom: false });
+  });
+
+  test('a template that names no id leaves doc.template null', () => {
+    const { doc } = applyTemplate({ slides: [{ source: '/a.jpg' }, { source: '/b.jpg' }] }, {});
+    assert.strictEqual(doc.template, null);
+  });
+
+  test('accepts a bare CarouselDoc as well as an envelope', () => {
+    const template = templateFixture();
+    const bare = applyTemplate(template.doc, fullContext());
+    const wrapped = applyTemplate({ ...template, id: '' }, fullContext());
+    assert.deepStrictEqual(bare.doc, wrapped.doc);
+    assert.deepStrictEqual(bare.report, wrapped.report);
+  });
+
+  test('no rendered block survives the apply', () => {
+    const { doc } = applyTemplate(
+      {
+        slides: [
+          { source: '/a.jpg', rendered: { path: '/other-post/1.jpg', media_id: 7, specHash: 'aaaa' } },
+          { source: '/b.jpg' },
+        ],
+      },
+      {},
+    );
+    assert.deepStrictEqual(
+      doc.slides.map((s) => s.rendered),
+      [null, null],
+    );
+  });
+
+  test('emits a normal document, and does not mutate its input', () => {
+    const template = templateFixture();
+    const before = JSON.stringify(template);
+    const { doc } = applyTemplate(template, fullContext());
+
+    assert.deepStrictEqual(normalizeDocument(doc), doc);
+    assert.strictEqual(JSON.stringify(template), before);
+  });
+
+  test('junk in place of a template is an empty document, not a throw', () => {
+    for (const junk of [null, undefined, 'nope', 42, []]) {
+      const { doc, report } = applyTemplate(junk, {});
+      assert.strictEqual(doc.slides.length, MIN_SLIDES);
+      assert.deepStrictEqual(report.clampedSlides, { from: 0, to: MIN_SLIDES });
+    }
+  });
+
+  test('junk in place of the context resolves nothing and throws nothing', () => {
+    const { doc, report } = applyTemplate(templateFixture(), /** @type {*} */ ('nope'));
+    assert.strictEqual(doc.slides[0].layers[0].text, '{title}');
+    assert.deepStrictEqual(report.unresolved, ['{title}', '{excerpt}', '{tags}', '{link}']);
+    assert.strictEqual(report.droppedLogoLayers, 1);
+  });
+});
+
+describe('toTemplate', () => {
+  test('wraps a document in the envelope', () => {
+    const doc = splitDocument({ source: '/a.jpg', n: 3, aspect: '1:1' });
+    const env = toTemplate(doc, {
+      id: 'panorama-3',
+      name: 'Panorama, three ways',
+      origin: {
+        format: 'pptx',
+        file: 'minimal-carousel.pptx',
+        fonts: ['Playfair Display', 'Inter'],
+        srcSize: { w: 1080, h: 1350 },
+        dropped: [{ slide: 2, what: 'prstGeom prst="ellipse"', n: 3 }],
+      },
+    });
+
+    assert.strictEqual(env.templateVersion, TEMPLATE_VERSION);
+    assert.strictEqual(env.id, 'panorama-3');
+    assert.strictEqual(env.name, 'Panorama, three ways');
+    assert.deepStrictEqual(env.origin, {
+      format: 'pptx',
+      file: 'minimal-carousel.pptx',
+      fonts: ['Playfair Display', 'Inter'],
+      srcSize: { w: 1080, h: 1350 },
+      dropped: [{ slide: 2, what: 'prstGeom prst="ellipse"', n: 3 }],
+    });
+    assert.deepStrictEqual(env.doc, doc);
+  });
+
+  test('defaults the whole envelope when no meta is given', () => {
+    const env = toTemplate(emptyDocument());
+    assert.deepStrictEqual(env, {
+      templateVersion: TEMPLATE_VERSION,
+      id: '',
+      name: '',
+      origin: { format: 'studio', file: '', fonts: [], srcSize: null, dropped: [] },
+      doc: emptyDocument(),
+    });
+  });
+
+  test('normalizes the origin: unknown format, unusable size, junk entries', () => {
+    const { origin } = toTemplate(emptyDocument(), {
+      origin: {
+        format: 'keynote',
+        file: 42,
+        fonts: ['Inter', '', null, '  Lora  '],
+        srcSize: { w: 0, h: 1350 },
+        dropped: [{ what: 'rotation' }, { slide: 1 }, null, { slide: -3, what: 'chart', n: 0 }],
+        unknown: 'dropped',
+      },
+    });
+
+    assert.strictEqual(origin.format, 'studio');
+    assert.strictEqual(origin.file, '');
+    assert.deepStrictEqual(origin.fonts, ['Inter', 'Lora']);
+    assert.strictEqual(origin.srcSize, null);
+    assert.deepStrictEqual(origin.dropped, [
+      { slide: null, what: 'rotation', n: 1 },
+      { slide: null, what: 'chart', n: 1 },
+    ]);
+    assert.ok(!('unknown' in origin));
+  });
+
+  test('the document keeps its literal text — no placeholders are re-introduced', () => {
+    const doc = normalizeDocument({
+      slides: [
+        {
+          source: '/a.jpg',
+          layers: [{ type: 'text', box: { x: 0, y: 0, w: 1, h: 0.2 }, text: 'Nine Days in Svalbard' }],
+        },
+      ],
+    });
+    const env = toTemplate(doc, { id: 't' });
+    assert.strictEqual(env.doc.slides[0].layers[0].text, 'Nine Days in Svalbard');
+  });
+
+  test("a stored template names no other post's media rows", () => {
+    const env = toTemplate(
+      {
+        slides: [{ source: '/a.jpg', rendered: { path: '/r/1.jpg', media_id: 7, specHash: 'aaaa' } }],
+      },
+      { id: 't' },
+    );
+    assert.strictEqual(env.doc.slides[0].rendered, null);
+  });
+
+  test("falls back to the document's own template id", () => {
+    const env = toTemplate({ template: { id: 'cover-3', custom: false } }, {});
+    assert.strictEqual(env.id, 'cover-3');
+  });
+
+  test('does not mutate the document it wraps', () => {
+    const doc = normalizeDocument({
+      slides: [{ source: '/a.jpg', rendered: { path: '/r/1.jpg', media_id: 7, specHash: 'aaaa' } }],
+    });
+    const before = JSON.stringify(doc);
+    toTemplate(doc, { id: 't' });
+    assert.strictEqual(JSON.stringify(doc), before);
+  });
+
+  test('round trip: a document with no placeholders and no renders survives', () => {
+    const doc = normalizeDocument({
+      aspect: '1:1',
+      mode: 'deck',
+      slides: [
+        {
+          source: '/a.jpg',
+          crop: { x: 0.1, y: 0, w: 0.5, h: 1 },
+          fit: 'contain',
+          bg: { type: 'solid', color: '#112233' },
+          layers: [
+            { type: 'text', box: { x: 0, y: 0, w: 1, h: 0.2 }, text: 'A literal headline' },
+            { type: 'counter', box: { x: 0, y: 0.9, w: 0.2, h: 0.06 }, format: '{i}/{n}' },
+          ],
+        },
+        { source: '/b.jpg' },
+      ],
+      spanLayers: [{ type: 'rect', box: { x: 0, y: 0.8, w: 1, h: 0.2 }, fill: '#000000' }],
+      template: { id: 'literal-2', custom: true },
+    });
+
+    const { doc: back, report } = applyTemplate(toTemplate(doc, { id: 'literal-2' }), fullContext());
+    assert.deepStrictEqual(back, doc);
+    assert.deepStrictEqual(report, {
+      unresolved: [],
+      droppedLogoLayers: 0,
+      slidesWithoutSource: [],
+      clampedSlides: null,
+    });
   });
 });
