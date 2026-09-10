@@ -2,8 +2,8 @@
  * Carousel Studio — deck-mode direct manipulation.
  *
  * Drag to pan, pinch or wheel to zoom, arrow keys to nudge: one module over one
- * small host surface, so the page keeps owning the document and this keeps
- * owning the pointer bookkeeping. It mirrors `attachWindowFileDrop`'s shape
+ * small host surface — the stage's own deck columns — so the page keeps owning
+ * the document and this keeps owning the pointer bookkeeping. It mirrors `attachWindowFileDrop`'s shape
  * (bind, hand back the release) with one difference — the controller outlives a
  * render, because a wheel gesture's debounced commit has to.
  *
@@ -20,7 +20,7 @@
  *   gestures.attach(frames);                     // after every render
  *   gestures.destroy();                          // at unmount
  *
- * A touch drag is not claimed at pointerdown. The frame is `touch-action:
+ * A touch drag is not claimed at pointerdown. The column is `touch-action:
  * pan-y`, so a vertical drag belongs to the page — this waits for the movement
  * to declare a direction (`gestureDirection`, the same helper and the same
  * 8px threshold the tags manager separates swipe from scroll with) and lets go

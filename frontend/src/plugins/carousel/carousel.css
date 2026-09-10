@@ -65,9 +65,9 @@
   height: calc(clamp(12rem, 45vh, 32rem) * var(--carousel-stage-zoom, 1));
   margin-inline: auto;
   border: var(--border-width) dashed var(--border-primary);
-  /* The stage is a scroll surface, not a gesture surface: a one-finger drag
-   * scrolls the strip or the page, in whichever direction it goes. The deck
-   * frames below are where a drag pans a crop. */
+  /* The stage itself is a scroll surface: outside the deck's columns a
+   * one-finger drag scrolls the strip or the page, in whichever direction it
+   * goes. In deck mode the columns on top of it take the gesture. */
   touch-action: pan-x pan-y;
   background-color: var(--surface-card);
   /* Fallback only — used while the source's pixel size is still unknown.
@@ -89,11 +89,22 @@
   background-image: none;
 }
 
+/* A deck column is *the* editing surface: `gestures.js` binds these, so a pan,
+ * a pinch, a wheel zoom, a layer drag and an arrow nudge all happen here, at
+ * the size the user is looking at. The rail below only moves the selection.
+ *
+ * `touch-action: pan-y`, not `none`: a horizontal drag pans the slide, but a
+ * vertical one has to reach the page, or a phone user whose thumb lands on the
+ * stage cannot scroll past the studio at all. `gestures.js` claims a touch drag
+ * only once it has travelled far enough to call the direction, so the two never
+ * fight over the same finger. */
 .carousel-studio__stage-slide {
   position: absolute;
   top: 0;
   bottom: 0;
   overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
   /* A query container, so the fill layer's blur radius can be a fraction of the
    * frame's own width — see .carousel-studio__frame-bg. */
   container-type: inline-size;
@@ -102,6 +113,21 @@
     var(--surface-hover) 0 6px,
     transparent 6px 12px
   );
+}
+
+.carousel-studio__stage-slide.is-dragging {
+  cursor: grabbing;
+}
+
+/* An inset ring rather than a border: the column is positioned by `left`/`width`
+ * percentages, and a border would either shift the seam or eat into the preview. */
+.carousel-studio__stage-slide.is-selected {
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+.carousel-studio__stage-slide:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .carousel-studio__divider {
@@ -176,22 +202,20 @@
   border-radius: var(--border-radius);
 }
 
-/* A deck frame is the pan/zoom surface. Its own fill layer covers the letterbox
+/* A deck rail frame is a selection button showing a thumbnail — nothing is
+ * edited here (that is the stage). Its own fill layer covers the letterbox
  * wherever a contained slide's image element doesn't reach; the hatch below is
  * what shows when there is nothing to fill it with yet. `container-type` is
- * what lets the fill's blur radius be a fraction of the frame width.
- *
- * `touch-action: pan-y`, not `none`: a horizontal drag pans the slide, but a
- * vertical one has to reach the page, or a phone user whose thumb lands on a
- * frame cannot scroll past the studio at all. `gestures.js` claims a touch drag
- * only once it has travelled far enough to call the direction, so the two never
- * fight over the same finger. */
+ * what lets the fill's blur radius be a fraction of the frame width. */
 .carousel-studio__frame--deck {
   position: relative;
   overflow: hidden;
   flex: 0 0 8rem;
-  cursor: grab;
-  touch-action: pan-y;
+  padding: 0;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   container-type: inline-size;
   background-image: repeating-linear-gradient(
     45deg,
@@ -200,8 +224,23 @@
   );
 }
 
-.carousel-studio__frame--deck.is-dragging {
-  cursor: grabbing;
+/* The slide number, bottom-left, over whatever the thumbnail is showing. */
+.carousel-studio__frame-num {
+  position: absolute;
+  left: 0.25rem;
+  bottom: 0.25rem;
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--border-radius);
+  background: color-mix(in srgb, var(--surface-card) 75%, transparent);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.carousel-studio__frame--deck.is-selected .carousel-studio__frame-num {
+  color: var(--color-primary);
 }
 
 .carousel-studio__frame--deck.is-selected {

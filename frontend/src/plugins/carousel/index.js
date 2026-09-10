@@ -249,9 +249,11 @@ export default class CarouselStudioPage extends Component {
     // the previous reference (see studio/history.js). Every write goes through
     // `_setDoc`, which is the only thing that pushes onto it.
     this._history = createHistory();
-    // Deck direct manipulation. Built once and re-attached per render rather
-    // than rebuilt with the frames: a wheel gesture's debounced commit has to
-    // outlive the rebuild a neighbouring control can cause mid-burst.
+    // Deck direct manipulation, over the stage's own columns — the surface the
+    // user is looking at, not the rail's thumbnails. Built once and re-attached
+    // per render rather than rebuilt with the columns: a wheel gesture's
+    // debounced commit has to outlive the rebuild a neighbouring control can
+    // cause mid-burst.
     this._gestures = createDeckGestures({
       dims: () => ({
         srcW: this.state.srcW,
@@ -363,6 +365,9 @@ export default class CarouselStudioPage extends Component {
     },
     "stage-zoom"(_e, el) {
       this._zoomStage(el.dataset.zoom);
+    },
+    "select-slide"(_e, el) {
+      this._select(Number(el.dataset.slice));
     },
   };
 
@@ -1231,7 +1236,7 @@ export default class CarouselStudioPage extends Component {
     }
 
     this._wireControls();
-    this._gestures.attach(deck ? this.$$(".carousel-studio__frame--deck") : []);
+    this._gestures.attach(deck ? this.$$(".carousel-studio__stage-slide") : []);
 
     // The selected layer's chrome (outline + handles) is markup; position it
     // now that the frames exist. Cleared for free when nothing is selected —
@@ -1248,7 +1253,7 @@ export default class CarouselStudioPage extends Component {
     if (this._refocus != null) {
       const i = this._refocus;
       this._refocus = null;
-      this.$(`.carousel-studio__frame--deck[data-slice="${i}"]`)?.focus?.();
+      this.$(`.carousel-studio__stage-slide[data-slice="${i}"]`)?.focus?.();
     }
   }
 

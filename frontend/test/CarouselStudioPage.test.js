@@ -802,6 +802,16 @@ describe('CarouselStudioPage', () => {
     const deckImg = (el, i) =>
       el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"] .carousel-studio__frame-img`);
 
+    /** The stage's own column for slide `i` — the editing surface `gestures.js`
+     *  binds. Everything a pointer or an arrow key does happens here; the rail
+     *  below only moves the selection. */
+    const stageCol = (el, i) =>
+      el.querySelector(`.carousel-studio__stage-slide[data-slice="${i}"]`);
+    const stageImg = (el, i) =>
+      el.querySelector(
+        `.carousel-studio__stage-slide[data-slice="${i}"] .carousel-studio__frame-img`,
+      );
+
     /** linkedom has no layout, and the pan converts pixels to crop units — give
      *  the image element the box a browser would have measured. */
     function withBox(img, width = 216, height = 270) {
@@ -878,22 +888,44 @@ describe('CarouselStudioPage', () => {
       assert.ok(el.querySelector('.carousel-studio__deck'), 'the deck panel is shown');
       assert.ok(el.querySelector('#carousel-aspect'), 'aspect still applies to a deck');
       assert.equal(el.querySelectorAll('.carousel-studio__frame--deck').length, 3);
-      // The stage stays a continuity check — one framed slide per column.
+      // The stage is the editing surface — one framed, focusable slide per column.
       assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 3);
+      assert.equal(stageCol(el, 0).getAttribute('tabindex'), '0');
+
+      // The filmstrip is a rail: a thumbnail, a number, and one job.
+      const rail = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
+      assert.equal(rail.tagName, 'BUTTON');
+      assert.equal(rail.dataset.action, 'select-slide');
+      assert.equal(rail.querySelector('.carousel-studio__frame-num').textContent.trim(), '2');
+      assert.ok(rail.querySelector('.carousel-studio__frame-img'), 'it still shows the slide');
+      assert.ok(!rail.hasAttribute('tabindex'), 'a button is focusable on its own');
     });
 
-    test('dragging a frame pans that slide only, and commits on release', async () => {
+    test('the rail moves the selection', async () => {
+      const el = await toDeck();
+      assert.equal(page.state.selected, 0);
+      click(el.querySelector('.carousel-studio__frame--deck[data-slice="2"]'));
+      await settle();
+      assert.equal(page.state.selected, 2);
+      assert.ok(
+        el.querySelector('.carousel-studio__frame--deck[data-slice="2"]').classList
+          .contains('is-selected'),
+        'and says so',
+      );
+      assert.ok(stageCol(el, 2).classList.contains('is-selected'), 'on the stage too');
+    });
+
+    test('dragging a stage column pans that slide only, and commits on release', async () => {
       const el = await toDeck();
       const before = page.state.doc.slides.map((s) => ({ ...s.crop }));
 
-      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
-      const img = deckImg(el, 1);
-      const release = drag(frame, img, -50, 0);
+      const img = stageImg(el, 1);
+      const release = drag(stageCol(el, 1), img, -50, 0);
 
       // Mid-gesture: the DOM has moved, the document has not.
       assert.ok(
-        pair(img.style.backgroundPosition)[0] !== pair(deckImg(el, 0).style.backgroundPosition)[0],
-        'the dragged frame repainted',
+        pair(img.style.backgroundPosition)[0] !== pair(stageImg(el, 0).style.backgroundPosition)[0],
+        'the dragged column repainted',
       );
       assert.deepEqual(page.state.doc.slides.map((s) => ({ ...s.crop })), before,
         'nothing committed while the pointer is still down');
@@ -915,10 +947,9 @@ describe('CarouselStudioPage', () => {
       await settle();
       const clean = JSON.stringify(page.state.doc);
 
-      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
       // Slide 0 already starts at x=0; dragging its image right would pan past
       // the left edge of the source.
-      drag(frame, deckImg(el, 0), 400, 0)();
+      drag(stageCol(el, 0), stageImg(el, 0), 400, 0)();
       await settle();
 
       assert.equal(page.state.doc.slides[0].crop.x, 0, 'pinned, not negative');
@@ -932,9 +963,9 @@ describe('CarouselStudioPage', () => {
       const el = await toDeck();
       const before = page.state.doc.slides[2].crop.x;
 
-      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="2"]');
-      assert.equal(frame.getAttribute('tabindex'), '0', 'a frame is focusable');
-      fire(frame, 'keydown', { key: 'ArrowLeft' });
+      const col = stageCol(el, 2);
+      assert.equal(col.getAttribute('tabindex'), '0', 'a stage column is focusable');
+      fire(col, 'keydown', { key: 'ArrowLeft' });
       await settle();
 
       assert.ok(page.state.doc.slides[2].crop.x < before, 'the crop moved left');
@@ -943,7 +974,7 @@ describe('CarouselStudioPage', () => {
 
       // `-` zooms out: the crop widens.
       const w = page.state.doc.slides[2].crop.w;
-      fire(el.querySelector('.carousel-studio__frame--deck[data-slice="2"]'), 'keydown', { key: '-' });
+      fire(stageCol(el, 2), 'keydown', { key: '-' });
       await settle();
       assert.ok(page.state.doc.slides[2].crop.w > w, 'the crop widened');
     });
@@ -975,8 +1006,7 @@ describe('CarouselStudioPage', () => {
       assert.ok(parseFloat(img.style.top) > 0, 'and centred, leaving the letterbox to the fill');
       // The letterbox belongs to the fill layer, not to the frame itself: the
       // frame only carries the hatch, and a blur() on it would blur the image.
-      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
-      assert.ok(!frame.style.backgroundImage, 'the frame carries no image of its own');
+      assert.ok(!stageCol(el, 0).style.backgroundImage, 'the column carries no image of its own');
     });
 
     /** The letterbox `.6` made real: the render fills it from `slide.bg`, and
@@ -1116,8 +1146,7 @@ describe('CarouselStudioPage', () => {
 
     test('going back to split discards the per-slide framing — and offers Undo', async () => {
       const el = await toDeck();
-      const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
-      drag(frame, deckImg(el, 1), -60, 0)();
+      drag(stageCol(el, 1), stageImg(el, 1), -60, 0)();
       await settle();
       const panned = page.state.doc.slides[1].crop.x;
 
@@ -1182,7 +1211,7 @@ describe('CarouselStudioPage', () => {
       assert.equal(page.state.error, null);
       assert.deepEqual(uploads, [], 'every slide was reused');
 
-      fire(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'), 'keydown', { key: 'ArrowRight' });
+      fire(stageCol(el, 1), 'keydown', { key: 'ArrowRight' });
       await settle();
       assert.ok(page.state.doc.slides[1].crop.x > doc.slides[1].crop.x, 'slide 1 moved');
       assert.ok(page.container.querySelector('.carousel-studio__dirty-badge'), 'and the studio is dirty');
@@ -1301,7 +1330,7 @@ describe('CarouselStudioPage', () => {
         assert.equal(page.state.doc.slides[0].layers[0].color, '#ff0000');
       });
 
-      test('a layer renders in the stage and the filmstrip as a positioned element', async () => {
+      test('a layer renders on the stage as a positioned element, and not in the rail', async () => {
         const el = await toDeck();
         click(addLayerBtn(el, 'text'));
         await settle();
@@ -1310,12 +1339,13 @@ describe('CarouselStudioPage', () => {
         fire(textInput, 'change');
         await settle();
 
-        for (const node of [stageLayer(el, 0, 0), frameLayer(el, 0, 0)]) {
-          assert.ok(node, 'the layer element exists');
-          assert.equal(node.textContent, 'Hello');
-          assert.ok(node.style.left.endsWith('%'), `positioned in percent: ${node.style.left}`);
-          assert.ok(parseFloat(node.style.width) > 0);
-        }
+        const node = stageLayer(el, 0, 0);
+        assert.ok(node, 'the layer element exists');
+        assert.equal(node.textContent, 'Hello');
+        assert.ok(node.style.left.endsWith('%'), `positioned in percent: ${node.style.left}`);
+        assert.ok(parseFloat(node.style.width) > 0);
+        // The rail is a thumbnail, not a second editing surface — no duplicate.
+        assert.equal(frameLayer(el, 0, 0), null, 'the rail carries no layer nodes');
       });
 
       test('a layer edit flips the dirty badge without a parallel mechanism', async () => {
@@ -1365,12 +1395,9 @@ describe('CarouselStudioPage', () => {
 
       // ── Direct manipulation (S3.7) ────────────────────────────────────────
       describe('direct manipulation', () => {
-        const deckFrame = (el, i) =>
-          el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"]`);
-
-        /** linkedom has no layout — give the frame the box a browser would
+        /** linkedom has no layout — give the column the box a browser would
          *  have measured so pointer pixels convert to canvas fractions. A
-         *  200×250 frame keeps 1px = 0.005 of the canvas on both axes. */
+         *  200×250 column keeps 1px = 0.005 of the canvas on both axes. */
         function withFrameBox(frame, width = 200, height = 250) {
           frame.getBoundingClientRect = () => ({
             width, height, left: 0, top: 0, right: width, bottom: height,
@@ -1403,7 +1430,7 @@ describe('CarouselStudioPage', () => {
 
         test('dragging a selected layer moves its box through updateLayer', async () => {
           const el = await withLayer();
-          const frame = withFrameBox(deckFrame(el, 0));
+          const frame = withFrameBox(stageCol(el, 0));
           const before = page.state.doc;
           // Box centre (0.5, 0.5) → (100, 125)px. +30px right, snap suppressed.
           press(frame, 100, 125, [[130, 125]], { altKey: true });
@@ -1417,7 +1444,7 @@ describe('CarouselStudioPage', () => {
 
         test('a press under the slop selects and moves nothing', async () => {
           const el = await withLayer();
-          const frame = withFrameBox(deckFrame(el, 0));
+          const frame = withFrameBox(stageCol(el, 0));
           const before = page.state.doc;
           press(frame, 100, 125, [[102, 126]]);
           await settle();
@@ -1426,7 +1453,7 @@ describe('CarouselStudioPage', () => {
 
         test('resizing past the frame edge comes back clamped by the mutator', async () => {
           const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
-          const frame = withFrameBox(deckFrame(el, 0));
+          const frame = withFrameBox(stageCol(el, 0));
           // Right edge at x=0.6 → 120px. Drag it 400px past the frame.
           press(frame, 120, 125, [[520, 125]], { altKey: true });
           await settle();
@@ -1439,7 +1466,7 @@ describe('CarouselStudioPage', () => {
           // Box centre at 0.46; a 6px (0.03) drag right lands the centre at 0.49,
           // inside the 7px snap tolerance of the 0.5 centre line.
           const el = await withLayer({ x: 0.36, y: 0.4, w: 0.2, h: 0.2 });
-          let frame = withFrameBox(deckFrame(el, 0));
+          let frame = withFrameBox(stageCol(el, 0));
           press(frame, 0.46 * 200, 125, [[0.46 * 200 + 6, 125]]);
           await settle();
           const snapped = page.state.doc.slides[0].layers[0].box;
@@ -1452,7 +1479,7 @@ describe('CarouselStudioPage', () => {
             doc: updateLayer(page.state.doc, 0, 0, { box: { x: 0.36, y: 0.4, w: 0.2, h: 0.2 } }),
           });
           await settle();
-          frame = withFrameBox(deckFrame(el, 0));
+          frame = withFrameBox(stageCol(el, 0));
           press(frame, 0.46 * 200, 125, [[0.46 * 200 + 6, 125]], { altKey: true });
           await settle();
           const free = page.state.doc.slides[0].layers[0].box;
@@ -1464,8 +1491,8 @@ describe('CarouselStudioPage', () => {
 
         test('with a layer selected, a press off the layer still pans the crop', async () => {
           const el = await withLayer();
-          const frame = withFrameBox(deckFrame(el, 0));
-          withBox(deckImg(el, 0));
+          const frame = withFrameBox(stageCol(el, 0));
+          withBox(stageImg(el, 0));
           const cropBefore = { ...page.state.doc.slides[0].crop };
           const layerBefore = { ...page.state.doc.slides[0].layers[0].box };
 
@@ -1480,8 +1507,8 @@ describe('CarouselStudioPage', () => {
 
         test('with no layer selected the crop gesture is unchanged', async () => {
           const el = await toDeck();
-          const frame = withFrameBox(deckFrame(el, 0));
-          withBox(deckImg(el, 0));
+          const frame = withFrameBox(stageCol(el, 0));
+          withBox(stageImg(el, 0));
           const cropBefore = { ...page.state.doc.slides[0].crop };
           press(frame, 150, 120, [[90, 120]]);
           await settle();
@@ -1492,13 +1519,13 @@ describe('CarouselStudioPage', () => {
           const el = await withLayer();
           const box0 = page.state.doc.slides[0].layers[0].box;
 
-          fire(deckFrame(el, 0), 'keydown', { key: 'ArrowRight', shiftKey: false });
+          fire(stageCol(el, 0), 'keydown', { key: 'ArrowRight', shiftKey: false });
           await settle();
           const box1 = page.state.doc.slides[0].layers[0].box;
           assert.ok(box1.x > box0.x, 'a plain arrow nudged it right');
           assert.ok(Math.abs(box1.w - box0.w) < 1e-9, 'the size held');
 
-          fire(deckFrame(el, 0), 'keydown', { key: 'ArrowRight', shiftKey: true });
+          fire(stageCol(el, 0), 'keydown', { key: 'ArrowRight', shiftKey: true });
           await settle();
           assert.ok(page.state.doc.slides[0].layers[0].box.w > box1.w, 'a shift-arrow widened it');
         });
@@ -1506,17 +1533,22 @@ describe('CarouselStudioPage', () => {
         test('the selection chrome renders on the selected slide only', async () => {
           const el = await withLayer();
           assert.ok(
-            deckFrame(el, 0).querySelector('.carousel-studio__chrome'),
+            stageCol(el, 0).querySelector('.carousel-studio__chrome'),
             'chrome on the selected slide',
           );
           assert.ok(
-            !deckFrame(el, 1).querySelector('.carousel-studio__chrome'),
+            !stageCol(el, 1).querySelector('.carousel-studio__chrome'),
             'no chrome on the others',
           );
           assert.equal(
-            deckFrame(el, 0).querySelectorAll('.carousel-studio__handle').length,
+            stageCol(el, 0).querySelectorAll('.carousel-studio__handle').length,
             8,
             'eight resize handles',
+          );
+          assert.equal(
+            el.querySelector('.carousel-studio__frame--deck[data-slice="0"] .carousel-studio__chrome'),
+            null,
+            'and none of it duplicated into the rail',
           );
         });
       });
@@ -1718,12 +1750,14 @@ describe('CarouselStudioPage', () => {
       test('a wheel burst is one undo step, not one per notch', async () => {
         const el = await toDeck();
         const before = page.state.doc.slides[0].crop.w;
-        const frame = el.querySelector('.carousel-studio__frame--deck[data-slice="0"]');
-        withBox(deckImg(el, 0));
+        const col = el.querySelector('.carousel-studio__stage-slide[data-slice="0"]');
+        withBox(el.querySelector(
+          '.carousel-studio__stage-slide[data-slice="0"] .carousel-studio__frame-img',
+        ));
 
-        fire(frame, 'wheel', { deltaY: 100, deltaMode: 0 });
-        fire(frame, 'wheel', { deltaY: 100, deltaMode: 0 });
-        fire(frame, 'wheel', { deltaY: 100, deltaMode: 0 });
+        fire(col, 'wheel', { deltaY: 100, deltaMode: 0 });
+        fire(col, 'wheel', { deltaY: 100, deltaMode: 0 });
+        fire(col, 'wheel', { deltaY: 100, deltaMode: 0 });
         await new Promise((r) => setTimeout(r, 250));
         await settle();
         assert.notEqual(page.state.doc.slides[0].crop.w, before, 'the burst zoomed');

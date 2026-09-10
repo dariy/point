@@ -223,7 +223,7 @@ function layerNodes(slide) {
 }
 
 /**
- * One empty positioned element per span layer, inside every `[data-slice]` host.
+ * One empty positioned element per span layer, inside every stage column.
  * `preview.js` (`paintSpanLayers`) positions each from `spanLayerRect` — a
  * slide-local rect that starts off-frame and overflows where the layer crosses a
  * seam, which the host's `overflow: hidden` then clips, so the preview shows the
@@ -245,12 +245,12 @@ function spanLayerNodes(doc) {
 const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 /**
- * The selection chrome for a deck host: an outline box carrying the eight resize
- * handles, plus an empty layer for `paintLayerChrome` to draw snap guides into.
- * Emitted only for the selected slide's hosts and only while a layer is
+ * The selection chrome for a stage column: an outline box carrying the eight
+ * resize handles, plus an empty layer for `paintLayerChrome` to draw snap guides
+ * into. Emitted only for the selected slide's column and only while a layer is
  * selected — its absence is how a deselect clears it on the next render.
  *
- * @param {boolean} active  this host shows the selected slide and a layer is selected
+ * @param {boolean} active  this column shows the selected slide and a layer is selected
  */
 function layerChrome(active) {
   if (!active) return "";
@@ -351,14 +351,19 @@ export function builder({
     : "";
 
   // In deck mode the stage is no longer one crop band projected across the
-  // deck — it is n independently framed slides laid side by side, which is
-  // exactly the continuity check the user now needs.
+  // deck — it is n independently framed slides laid side by side, and each
+  // column is the editing surface: `gestures.js` binds these, so a pan, a
+  // zoom, a layer drag and an arrow nudge all happen at the size the user is
+  // actually looking at.
   const stageSlides = deck
     ? doc.slides.map(
         (slide, i) => html`
           <span
-            class="carousel-studio__stage-slide"
+            class="carousel-studio__stage-slide ${i === selected ? "is-selected" : ""}"
             data-slice="${String(i)}"
+            tabindex="0"
+            role="group"
+            aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
             style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
             ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
@@ -368,23 +373,27 @@ export function builder({
       )
     : "";
 
-  const strip = doc.slides.map((slide, i) =>
+  // The deck filmstrip is a rail, not a second editing surface: a thumbnail,
+  // a slide number and the selected state. Its only job is to move the
+  // selection, so it is a button — the layer nodes, span nodes and chrome that
+  // used to be duplicated here live on the stage alone.
+  const strip = doc.slides.map((_slide, i) =>
     deck
       ? html`
-          <div
+          <button
+            type="button"
             class="carousel-studio__frame carousel-studio__frame--deck ${i === selected
               ? "is-selected"
               : ""}"
             data-slice="${String(i)}"
-            tabindex="0"
-            role="group"
-            aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
+            data-action="select-slide"
+            aria-pressed="${i === selected ? "true" : "false"}"
+            aria-label="Select slide ${String(i + 1)}"
             style="aspect-ratio:${String(w)}/${String(h)}"
           >
-            ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
-              i === deckIndex && slideChrome,
-            )}
-          </div>`
+            ${deckLayers()}
+            <span class="carousel-studio__frame-num">${String(i + 1)}</span>
+          </button>`
       : html`
           <div
             class="carousel-studio__frame"
