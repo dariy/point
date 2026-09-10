@@ -22,6 +22,10 @@ import {
   slideCountOptions,
   fitRect,
   safeAreaRect,
+  layerRect,
+  layerCSS,
+  spanLayerRect,
+  spanLayerCoverage,
   clampPan,
   wrapText,
   autoFitText,
@@ -679,6 +683,156 @@ describe('safeAreaRect', () => {
   test('4:5 reserves at least the feed grid-crop band', () => {
     const s = safeAreaRect('4:5');
     assert.ok(s.y >= (1350 - 1080) / 2);
+  });
+});
+
+describe('layerRect / layerCSS', () => {
+  const box = { x: 0.1, y: 0.2, w: 0.5, h: 0.25 };
+
+  test('a normalized box lands on whole canvas pixels', () => {
+    assert.deepStrictEqual(layerRect({ box }, '4:5'), { x: 108, y: 270, w: 540, h: 338 });
+    assert.deepStrictEqual(layerRect({ box }, '1:1'), { x: 108, y: 216, w: 540, h: 270 });
+    assert.deepStrictEqual(layerRect({ box }, '1.91:1'), { x: 108, y: 113, w: 540, h: 142 });
+  });
+
+  // The one that matters: the preview and the render must describe the same
+  // region, or a layer drifts between the filmstrip and the export.
+  test('the CSS percentages and the canvas rect describe the same region', () => {
+    const boxes = [
+      { x: 0, y: 0, w: 1, h: 1 },
+      { x: 0.1, y: 0.2, w: 0.5, h: 0.25 },
+      { x: 0.333, y: 0.667, w: 0.333, h: 0.111 },
+      { x: 0.05, y: 0.9, w: 0.9, h: 0.1 },
+      { x: 0.7, y: 0.02, w: 0.29, h: 0.97 },
+      { x: 0.4999, y: 0.5001, w: 0.0007, h: 0.0003 },
+    ];
+    for (const aspect of Object.keys(ASPECTS)) {
+      const [frameW, frameH] = canvasSize(aspect);
+      for (const b of boxes) {
+        const rect = layerRect({ box: b }, aspect);
+        const css = layerCSS({ box: b }, aspect);
+        // Back to pixels: equal to within the float round-trip, never a
+        // rounding of its own.
+        const where = `${aspect} ${JSON.stringify(b)}`;
+        for (const [axis, frame] of [['x', frameW], ['y', frameH], ['w', frameW], ['h', frameH]]) {
+          assert.ok(
+            Math.abs((css[axis] / 100) * frame - rect[axis]) < 1e-9,
+            `${where}: ${axis} ${css[axis]}% is not ${rect[axis]}px`,
+          );
+        }
+        assert.ok(rect.w >= 1 && rect.h >= 1, 'never a zero-area rect');
+        assert.ok(rect.x >= 0 && rect.x + rect.w <= frameW, 'inside the canvas');
+        assert.ok(rect.y >= 0 && rect.y + rect.h <= frameH, 'inside the canvas');
+      }
+    }
+  });
+
+  test('boxes sharing an edge share a pixel — no hairline between them', () => {
+    const left = layerRect({ box: { x: 0, y: 0, w: 1 / 3, h: 1 } }, '4:5');
+    const right = layerRect({ box: { x: 1 / 3, y: 0, w: 1 / 3, h: 1 } }, '4:5');
+    assert.strictEqual(left.x + left.w, right.x);
+  });
+
+  test('a missing or malformed box resolves to the full frame', () => {
+    const full = { x: 0, y: 0, w: 1080, h: 1080 };
+    assert.deepStrictEqual(layerRect({}, '1:1'), full);
+    assert.deepStrictEqual(layerRect({ box: null }, '1:1'), full);
+    assert.deepStrictEqual(layerRect(undefined, '1:1'), full);
+    assert.deepStrictEqual(layerRect({ box: { x: 'a', y: null, w: NaN } }, '1:1'), full);
+    assert.deepStrictEqual(layerCSS({ box: 'nonsense' }, '1:1'), { x: 0, y: 0, w: 100, h: 100 });
+  });
+
+  test('an unknown aspect falls back to 4:5 rather than NaN', () => {
+    assert.deepStrictEqual(layerRect({ box }, 'golden'), layerRect({ box }, '4:5'));
+  });
+
+  test('a zero-area box clamps to one pixel; an overflowing one is pulled inside', () => {
+    assert.deepStrictEqual(
+      layerRect({ box: { x: 0.5, y: 0.5, w: 0, h: 0 } }, '4:5'),
+      { x: 540, y: 675, w: 1, h: 1 },
+    );
+    assert.deepStrictEqual(
+      layerRect({ box: { x: 0.9, y: 0.9, w: 0.5, h: 0.5 } }, '1:1'),
+      { x: 540, y: 540, w: 540, h: 540 },
+    );
+  });
+});
+
+describe('spanLayerRect', () => {
+  // 3 slides of 4:5 — a 3240 x 1350 deck.
+  const layer = { box: { x: 0.3, y: 0.4, w: 0.4, h: 0.2 } };
+
+  test('slices the deck box into slide-local rects, uncut at the seams', () => {
+    const rects = [0, 1, 2].map((i) => spanLayerRect(layer, i, 3, '4:5'));
+    // 0.3 * 3240 = 972, 0.7 * 3240 = 2268 -> 1296 deck px wide, on every slide.
+    assert.deepStrictEqual(rects[0], { x: 972, y: 540, w: 1296, h: 270 });
+    // A layer crossing a seam keeps its full width and starts off-slide, which
+    // is what makes a headline continue through the gap. 972..2268 reaches
+    // 108px into the third slide, so all three carry it.
+    assert.deepStrictEqual(rects[1], { x: -108, y: 540, w: 1296, h: 270 });
+    assert.deepStrictEqual(rects[2], { x: -1188, y: 540, w: 1296, h: 270 });
+    for (const r of rects) assert.strictEqual(r.w, 1296, 'never clipped to the slide');
+  });
+
+  test('consecutive slides differ by exactly one slide width', () => {
+    const wide = { box: { x: 0.05, y: 0.1, w: 0.9, h: 0.3 } };
+    const [slideW] = canvasSize('1:1');
+    for (let i = 1; i < 4; i++) {
+      const prev = spanLayerRect(wide, i - 1, 4, '1:1');
+      const here = spanLayerRect(wide, i, 4, '1:1');
+      assert.strictEqual(prev.x - here.x, slideW);
+      assert.deepStrictEqual([here.y, here.w, here.h], [prev.y, prev.w, prev.h]);
+    }
+  });
+
+  test('null when the layer does not reach the slide, or the slide does not exist', () => {
+    const head = { box: { x: 0, y: 0, w: 0.2, h: 0.2 } };
+    assert.ok(spanLayerRect(head, 0, 5, '4:5'));
+    assert.strictEqual(spanLayerRect(head, 1, 5, '4:5'), null);
+    assert.strictEqual(spanLayerRect(head, -1, 5, '4:5'), null);
+    assert.strictEqual(spanLayerRect(head, 5, 5, '4:5'), null);
+  });
+
+  test('a one-slide deck is just the slide, so it agrees with layerRect', () => {
+    const box = { x: 0.1, y: 0.2, w: 0.5, h: 0.25 };
+    for (const aspect of Object.keys(ASPECTS)) {
+      assert.deepStrictEqual(spanLayerRect({ box }, 0, 1, aspect), layerRect({ box }, aspect));
+    }
+  });
+
+  test('a degenerate n clamps to one slide rather than throwing', () => {
+    const box = { x: 0.1, y: 0.2, w: 0.5, h: 0.25 };
+    const one = layerRect({ box }, '4:5');
+    for (const n of [0, -3, NaN, undefined]) {
+      assert.deepStrictEqual(spanLayerRect({ box }, 0, n, '4:5'), one);
+      assert.strictEqual(spanLayerRect({ box }, 1, n, '4:5'), null);
+    }
+  });
+});
+
+describe('spanLayerCoverage', () => {
+  test('lists the consecutive slides a span layer reaches', () => {
+    assert.deepStrictEqual(
+      spanLayerCoverage({ box: { x: 0.3, y: 0, w: 0.4, h: 1 } }, 3, '4:5'),
+      [0, 1, 2],
+    );
+    assert.deepStrictEqual(
+      spanLayerCoverage({ box: { x: 0.5, y: 0, w: 0.5, h: 1 } }, 4, '4:5'),
+      [2, 3],
+    );
+  });
+
+  test('a narrow layer at the head reaches only its own slide', () => {
+    assert.deepStrictEqual(
+      spanLayerCoverage({ box: { x: 0, y: 0, w: 0.2, h: 1 } }, 5, '4:5'),
+      [0],
+    );
+  });
+
+  test('a degenerate n clamps to a single slide', () => {
+    for (const n of [0, -2, NaN, undefined]) {
+      assert.deepStrictEqual(spanLayerCoverage({ box: { x: 0.1, y: 0, w: 0.5, h: 1 } }, n, '4:5'), [0]);
+    }
   });
 });
 

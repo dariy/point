@@ -1072,6 +1072,16 @@ textarea.is-maximized,
     pointer-events: none;
 }
 
+/* A horizontal rail's drop line stands up: same bar, turned 90°. Emitted by
+ * `attachPointerReorder` when it is running on the x axis (the carousel
+ * studio's slide rail). */
+.reorder-indicator--x {
+    align-self: stretch;
+    width: var(--ve-drop-indicator-height);
+    height: auto;
+    margin: 0 var(--spacing-xs);
+}
+
 .details-group.is-dragging {
     opacity: 0.4;
 }

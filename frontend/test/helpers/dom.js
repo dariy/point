@@ -110,7 +110,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   win.history = nav.history;
 
   const unpatch = combine(patchFormReflection(win), patchAbortSignal(win), patchTextSelection(win),
-    patchSelectValue(win), patchLayoutGeometry(win));
+    patchSelectValue(win), patchLayoutGeometry(win), patchCanvasContext(win));
 
   return {
     window: win,
@@ -338,6 +338,42 @@ function patchLayoutGeometry(win) {
     undo.push(() => { delete proto[name]; });
   }
   return () => undo.forEach(fn => fn());
+}
+
+/**
+ * A 2D canvas context that can measure text, and does nothing else.
+ *
+ * linkedom's `<canvas>` carries a `getContext` that answers `null`, which is a
+ * `TypeError` one line later. The carousel studio's live preview typesets on an
+ * offscreen context (`plugins/carousel/studio/preview.js`) precisely so the
+ * stage breaks lines where the JPEG will — without this, no `text` layer would
+ * ever appear in a test DOM. Nothing here draws: the studio's own render path
+ * injects `makeSurface`, so this context only ever measures.
+ *
+ * Every glyph is half an em wide — the same deterministic law the carousel
+ * render tests give their recording ctx, so a wrap assertion means the same
+ * thing on both sides.
+ */
+function patchCanvasContext(win) {
+  const doc = win.document;
+  const create = doc.createElement.bind(doc);
+  doc.createElement = (tag, ...rest) => {
+    const el = create(tag, ...rest);
+    if (String(tag).toLowerCase() === 'canvas') {
+      el.getContext = () => {
+        const ctx = {
+          font: '',
+          measureText: (text) => {
+            const px = /(\d+(?:\.\d+)?)px/.exec(ctx.font || '');
+            return { width: String(text).length * 0.5 * (px ? Number(px[1]) : 0) };
+          },
+        };
+        return ctx;
+      };
+    }
+    return el;
+  };
+  return () => { doc.createElement = create; };
 }
 
 /**

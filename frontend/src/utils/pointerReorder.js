@@ -15,6 +15,9 @@
  * @param {string}   opts.handleSelector  drag handle, inside an item
  * @param {string}   opts.itemSelector    a movable item
  * @param {Function} opts.containers      () => Element[] — evaluated per gesture
+ * @param {"x"|"y"} [opts.axis]           which way the list runs; `"x"` is a
+ *   horizontal rail, where the midpoint test, the drop line and the edge
+ *   scroll all turn 90° (a rail scrolls itself, not the page)
  * @param {Function} [opts.isEnabled]     () => boolean — gate the whole gesture
  * @param {Function} opts.onDrop          ({ item, from, to, afterEl }) => void
  * @returns {Function} cleanup
@@ -23,9 +26,11 @@ export function attachPointerReorder({
   handleSelector,
   itemSelector,
   containers,
+  axis = "y",
   isEnabled = () => true,
   onDrop,
 }) {
+  const horizontal = axis === "x";
   let item = null;      // the element being moved
   let from = null;      // container it started in
   let indicator = null; // the drop line
@@ -55,34 +60,56 @@ export function attachPointerReorder({
   };
 
   /**
-   * Scroll speed for a pointer this close to the top/bottom of the viewport.
-   * Without this a list taller than the screen — or a second list below the
-   * fold — simply cannot be reached: the pointer is captured, so the usual
+   * Scroll speed for a pointer this close to either end of the scrollable
+   * range. Without this a list taller than the screen — or a second list below
+   * the fold — simply cannot be reached: the pointer is captured, so the usual
    * touch-scroll and edge-scroll behaviours are gone for the duration.
    */
-  const edgeVelocity = (y) => {
+  const edgeVelocity = (pos, lo, hi) => {
     const EDGE = 64;
     const SPEED = 16;
-    if (y < EDGE) return -SPEED * (1 - y / EDGE);
-    const fromBottom = window.innerHeight - y;
-    if (fromBottom < EDGE) return SPEED * (1 - fromBottom / EDGE);
+    if (pos - lo < EDGE) return -SPEED * (1 - (pos - lo) / EDGE);
+    if (hi - pos < EDGE) return SPEED * (1 - (hi - pos) / EDGE);
     return 0;
+  };
+
+  /**
+   * What the edge scroll moves, and the range the pointer is measured against:
+   * the page between the viewport's top and bottom for a vertical list, and
+   * the rail itself between its own left and right edges for a horizontal one
+   * — a filmstrip overflows sideways inside a page that does not.
+   */
+  const scrollTarget = () => {
+    if (!horizontal) return { el: null, lo: 0, hi: window.innerHeight, pos: lastY };
+    const c = containerAt(lastX, lastY);
+    // A rail short enough to fit has no scroll to drive, and its whole width
+    // is inside the edge band — without this the loop would spin for the
+    // length of every drag over a three-slide strip, scrolling nothing.
+    if (!c || c.scrollWidth <= c.clientWidth) return null;
+    const r = c.getBoundingClientRect?.();
+    return r ? { el: c, lo: r.left, hi: r.right, pos: lastX } : null;
   };
 
   const tickAutoScroll = () => {
     scrollRaf = null;
     if (!item) return;
-    const v = edgeVelocity(lastY);
+    const target = scrollTarget();
+    const v = target ? edgeVelocity(target.pos, target.lo, target.hi) : 0;
     if (!v) return;
-    window.scrollBy(0, v);
-    // The page moved under a stationary pointer, so what sits at that point
+    if (target.el) target.el.scrollLeft += v;
+    else window.scrollBy(0, v);
+    // The list moved under a stationary pointer, so what sits at that point
     // changed — re-place the line from the same client coordinates.
-    showIndicator(containerAt(lastX, lastY), lastY);
+    showIndicator(containerAt(lastX, lastY), lastX, lastY);
     scrollRaf = requestAnimationFrame(tickAutoScroll);
   };
 
   const startAutoScroll = () => {
-    if (scrollRaf === null && edgeVelocity(lastY)) scrollRaf = requestAnimationFrame(tickAutoScroll);
+    if (scrollRaf !== null) return;
+    const target = scrollTarget();
+    if (target && edgeVelocity(target.pos, target.lo, target.hi)) {
+      scrollRaf = requestAnimationFrame(tickAutoScroll);
+    }
   };
 
   /** The container under the pointer, or the one the gesture started in. */
@@ -92,23 +119,32 @@ export function attachPointerReorder({
       const r = c.getBoundingClientRect();
       // Empty containers collapse to nothing; give them a band to aim at so a
       // list can be emptied and refilled.
-      const pad = r.height < 8 ? 12 : 0;
-      if (x >= r.left && x <= r.right && y >= r.top - pad && y <= r.bottom + pad) return c;
+      const padX = r.width < 8 ? 12 : 0;
+      const padY = r.height < 8 ? 12 : 0;
+      if (
+        x >= r.left - padX &&
+        x <= r.right + padX &&
+        y >= r.top - padY &&
+        y <= r.bottom + padY
+      ) {
+        return c;
+      }
     }
     return from;
   };
 
-  /** Place the drop line inside `container` for pointer position `y`. */
-  const showIndicator = (container, y) => {
+  /** Place the drop line inside `container` for pointer position `x`/`y` —
+   *  only the coordinate the list runs along decides where it goes. */
+  const showIndicator = (container, x, y) => {
     if (!indicator) {
       indicator = document.createElement("div");
-      indicator.className = "reorder-indicator";
+      indicator.className = `reorder-indicator${horizontal ? " reorder-indicator--x" : ""}`;
       indicator.setAttribute("aria-hidden", "true");
     }
     const items = [...container.querySelectorAll(itemSelector)].filter((el) => el !== item);
     const before = items.find((el) => {
       const r = el.getBoundingClientRect();
-      return y < r.top + r.height / 2;
+      return horizontal ? x < r.left + r.width / 2 : y < r.top + r.height / 2;
     });
     if (before) container.insertBefore(indicator, before);
     else container.appendChild(indicator);
@@ -134,7 +170,7 @@ export function attachPointerReorder({
     try { handle.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
     e.preventDefault();
     item.classList.add("is-dragging");
-    showIndicator(container, e.clientY);
+    showIndicator(container, e.clientX, e.clientY);
   };
 
   const onPointerMove = (e) => {
@@ -142,7 +178,7 @@ export function attachPointerReorder({
     e.preventDefault();
     lastX = e.clientX;
     lastY = e.clientY;
-    showIndicator(containerAt(lastX, lastY), lastY);
+    showIndicator(containerAt(lastX, lastY), lastX, lastY);
     startAutoScroll();
   };
 

@@ -12,7 +12,11 @@ import assert from 'node:assert';
 
 import {
   DOC_VERSION,
+  addSlide,
+  duplicateSlide,
   emptyDocument,
+  moveSlide,
+  removeSlide,
   normalizeDocument,
   parseDocument,
   serializeDocument,
@@ -34,6 +38,7 @@ import {
   canvasSize,
   sliceRects,
   deckSlideRects,
+  spanLayerCoverage,
 } from '../src/plugins/carousel/geometry.js';
 
 describe('normalizeDocument', () => {
@@ -347,6 +352,26 @@ describe('splitDocument', () => {
     const doc = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5', strategy: 'nope', anchorY: 5 });
     assert.strictEqual(doc.strategy, 'cover');
     assert.strictEqual(doc.anchorY, 1);
+  });
+
+  test('carries span layers through unchanged — a re-slice re-flows the headline, not drops it', () => {
+    const span = [
+      { type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'Across the seam' },
+    ];
+    const four = splitDocument({ source: '/x.jpg', n: 4, aspect: '4:5', spanLayers: span });
+    assert.strictEqual(four.spanLayers.length, 1);
+    assert.strictEqual(four.spanLayers[0].text, 'Across the seam');
+    // The studio passes the current document's span layers back in on every
+    // re-slice; a smaller count keeps them (the box is deck-normalized).
+    const two = splitDocument({ source: '/x.jpg', n: 2, aspect: '4:5', spanLayers: four.spanLayers });
+    assert.deepStrictEqual(two.spanLayers, four.spanLayers);
+  });
+
+  test('no span layers is an empty list, not undefined', () => {
+    assert.deepStrictEqual(
+      splitDocument({ source: '/x.jpg', n: 3, aspect: '4:5' }).spanLayers,
+      [],
+    );
   });
 });
 
@@ -976,6 +1001,182 @@ describe('layer mutators', () => {
     const after = hash(updateLayer(doc, 0, 0, { text: 'changed' }));
     assert.notStrictEqual(after[0], before[0], 'slide 0 must miss');
     assert.strictEqual(after[1], before[1], 'slide 1 must hit');
+  });
+});
+
+describe('slide mutators', () => {
+  const layer = { type: 'text', text: 'one', box: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } };
+  const span = { type: 'text', text: 'across', box: { x: 0.06, y: 0.1, w: 0.88, h: 0.2 } };
+
+  /** A three-slide deck, each slide identifiable by its source. */
+  const deck = () =>
+    normalizeDocument({
+      mode: 'deck',
+      slides: [
+        { source: '/a.jpg', crop: { x: 0, y: 0, w: 0.3, h: 1 }, layers: [layer] },
+        { source: '/b.jpg', rendered: { path: '/r2.jpg', media_id: 2, specHash: 'abc' } },
+        { source: '/c.jpg', fit: 'contain' },
+      ],
+      spanLayers: [span],
+    });
+
+  const sources = (doc) => doc.slides.map((s) => s.source);
+
+  test('addSlide inserts at a position, and slides.length appends', () => {
+    assert.deepStrictEqual(sources(addSlide(deck(), 1)), ['/a.jpg', '/a.jpg', '/b.jpg', '/c.jpg']);
+    assert.deepStrictEqual(sources(addSlide(deck(), 0)), ['/a.jpg', '/a.jpg', '/b.jpg', '/c.jpg']);
+    assert.deepStrictEqual(sources(addSlide(deck(), 3)), ['/a.jpg', '/b.jpg', '/c.jpg', '/c.jpg']);
+  });
+
+  test('a slide added with nothing given shows its neighbour\'s photo, uncropped', () => {
+    const added = addSlide(deck(), 1).slides[1];
+    assert.strictEqual(added.source, '/a.jpg', "the slide it follows, so it is not blank");
+    assert.deepStrictEqual(added.crop, { x: 0, y: 0, w: 1, h: 1 });
+    assert.strictEqual(added.fit, 'cover');
+    assert.deepStrictEqual(added.layers, [], 'its own slide, not a copy of one');
+    assert.strictEqual(added.rendered, null);
+  });
+
+  test('at the head the new slide takes the photo of the slide it precedes', () => {
+    assert.strictEqual(addSlide(deck(), 0).slides[0].source, '/a.jpg');
+  });
+
+  test('an explicit slide is normalized on the way in, and never arrives rendered', () => {
+    const doc = addSlide(deck(), 0, {
+      source: '/new.jpg',
+      fit: 'nonsense',
+      crop: { w: 5 },
+      layers: [layer, { type: 'video' }],
+      rendered: { path: '/stolen.jpg', media_id: 2, specHash: 'abc' },
+    });
+    assert.strictEqual(doc.slides[0].source, '/new.jpg');
+    assert.strictEqual(doc.slides[0].fit, 'cover', 'a rejected value falls back to the schema default');
+    assert.deepStrictEqual(doc.slides[0].crop, { x: 0, y: 0, w: 1, h: 1 });
+    assert.strictEqual(doc.slides[0].layers.length, 1, 'the unrecognized layer is dropped');
+    assert.strictEqual(
+      doc.slides[0].rendered,
+      null,
+      'two slides must never claim one media row — the supersede cleanup cannot unpick it',
+    );
+  });
+
+  test('removeSlide drops exactly one, keeping the order of the rest', () => {
+    assert.deepStrictEqual(sources(removeSlide(deck(), 1)), ['/a.jpg', '/c.jpg']);
+    assert.deepStrictEqual(sources(removeSlide(deck(), 0)), ['/b.jpg', '/c.jpg']);
+    assert.deepStrictEqual(sources(removeSlide(deck(), 2)), ['/a.jpg', '/b.jpg']);
+  });
+
+  test('removeSlide takes the rendered block with it — the media row is the caller\'s to delete', () => {
+    const doc = removeSlide(deck(), 1);
+    assert.ok(!doc.slides.some((s) => s.rendered), 'no slide still points at the removed render');
+  });
+
+  test('duplicateSlide lands a copy directly after its twin, layers and framing included', () => {
+    const doc = duplicateSlide(deck(), 0);
+    assert.deepStrictEqual(sources(doc), ['/a.jpg', '/a.jpg', '/b.jpg', '/c.jpg']);
+    assert.deepStrictEqual(doc.slides[1].crop, doc.slides[0].crop);
+    assert.deepStrictEqual(doc.slides[1].layers, doc.slides[0].layers);
+    assert.strictEqual(doc.slides[1].fit, doc.slides[0].fit);
+  });
+
+  test('a duplicate is unrendered, however rendered its twin was', () => {
+    const doc = duplicateSlide(deck(), 1);
+    assert.ok(doc.slides[1].rendered, 'the original keeps its render');
+    assert.strictEqual(doc.slides[2].rendered, null, 'the copy has none to keep');
+  });
+
+  test('a duplicate is a separate slide — editing one leaves the other alone', () => {
+    const doc = updateSlideFraming(duplicateSlide(deck(), 0), 1, { fit: 'contain' });
+    assert.strictEqual(doc.slides[0].fit, 'cover');
+    assert.strictEqual(doc.slides[1].fit, 'contain');
+  });
+
+  test('moveSlide shifts the rest — it is not a swap', () => {
+    assert.deepStrictEqual(sources(moveSlide(deck(), 0, 2)), ['/b.jpg', '/c.jpg', '/a.jpg']);
+    assert.deepStrictEqual(sources(moveSlide(deck(), 2, 0)), ['/c.jpg', '/a.jpg', '/b.jpg']);
+    assert.deepStrictEqual(sources(moveSlide(deck(), 1, 2)), ['/a.jpg', '/c.jpg', '/b.jpg']);
+  });
+
+  test('a moved slide carries its own layers and its render with it', () => {
+    const doc = moveSlide(deck(), 1, 0);
+    assert.strictEqual(doc.slides[0].rendered.media_id, 2);
+    assert.strictEqual(doc.slides[1].layers[0].text, 'one');
+  });
+
+  test('an out-of-range index returns an equal document rather than throwing', () => {
+    const doc = deck();
+    const same = serializeDocument(doc);
+    const cases = [
+      () => addSlide(doc, 4),
+      () => addSlide(doc, -1),
+      () => addSlide(doc, null),
+      () => addSlide(doc, 1.5),
+      () => removeSlide(doc, 3),
+      () => removeSlide(doc, -1),
+      () => removeSlide(doc, null),
+      () => duplicateSlide(doc, 3),
+      () => duplicateSlide(doc, -1),
+      () => moveSlide(doc, 0, 3),
+      () => moveSlide(doc, -1, 0),
+      () => moveSlide(doc, 0, 0),
+      () => moveSlide(doc, 9, 9),
+    ];
+    cases.forEach((run, i) => assert.strictEqual(serializeDocument(run()), same, `case ${String(i)}`));
+  });
+
+  test('every mutator is pure, and returns an already-normal document', () => {
+    const doc = deck();
+    const before = serializeDocument(doc);
+    for (const next of [
+      addSlide(doc, 1),
+      removeSlide(doc, 1),
+      duplicateSlide(doc, 0),
+      moveSlide(doc, 0, 2),
+    ]) {
+      assert.strictEqual(serializeDocument(doc), before, 'input not mutated');
+      assert.deepStrictEqual(normalizeDocument(next), next);
+      assert.deepStrictEqual(parseDocument(serializeDocument(next)), next);
+    }
+  });
+
+  test('a numeric string names a slide, as it does throughout the module', () => {
+    // `layerIndexIn` and `updateSlideFraming` both coerce; these four agree
+    // with them rather than inventing a second answer for the same input.
+    assert.strictEqual(
+      serializeDocument(addSlide(deck(), '1')),
+      serializeDocument(addSlide(deck(), 1)),
+    );
+  });
+
+  test('a changed slide count re-flows the span layers rather than dropping them', () => {
+    // A span box is a fraction of the whole n-wide deck, so the layer itself
+    // does not move — the seams move under it, which is what `splitDocument`
+    // already relies on when it re-slices. `spanLayerCoverage` is where that
+    // shows: the same headline now crosses a different set of slides.
+    const doc = deck();
+    const added = addSlide(doc, 1);
+    assert.deepStrictEqual(added.spanLayers, doc.spanLayers, 'the layer is untouched');
+    assert.deepStrictEqual(
+      spanLayerCoverage(doc.spanLayers[0], doc.slides.length, doc.aspect),
+      [0, 1, 2],
+    );
+    assert.deepStrictEqual(
+      spanLayerCoverage(added.spanLayers[0], added.slides.length, added.aspect),
+      [0, 1, 2, 3],
+      'four seams instead of three, same layer',
+    );
+  });
+
+  test('changing the slide count re-renders every slide — the span layers moved under them', () => {
+    const doc = deck();
+    const hash = (d) => d.slides.map((s) => specHash(s, d.aspect, d));
+    const before = hash(doc);
+    const after = hash(removeSlide(doc, 2));
+    // `specHash` folds in the doc-level spanLayers, and the layers themselves
+    // are unchanged — so this is a *hit*, and the survivors reuse their render
+    // even though the seams beneath the span layer moved. The renderer redraws
+    // the span from the new count regardless; see `slideSpecHash` in index.js.
+    assert.deepStrictEqual(after, before.slice(0, 2));
   });
 });
 

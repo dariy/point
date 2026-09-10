@@ -14,7 +14,7 @@
 import { Component } from "../Component.js";
 import { html, navigate, raw, setHTML } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
-import { buildTagIndex } from "../../utils/tagLinks.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
 import { getNavTags, getSettings, getUser } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
@@ -226,8 +226,8 @@ export class PostContent extends Component {
       const navTags = getNavTags() || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
       this.registerCleanup(setupTagStrip(tagsContainer, tagIndex, (url) => {
-        const slug = url.replace('/tags/', '');
-        ViewContext.update({ tag: slug, postSlug: null, query: null });
+        const { tag, navPath } = parseTagUrl(url);
+        ViewContext.update({ tag, navPath, postSlug: null, query: null });
       }));
     }
   }
