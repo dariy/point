@@ -343,6 +343,12 @@ export function builder({
     return html`<span class="carousel-studio__divider" style="left:${String(left)}%"></span>`;
   });
 
+  // Panorama's on-stage anchor control. Emitted (and so bound by
+  // `createAnchorGesture`) only when there is slack to drag through — which is
+  // also what decides the stage's `touch-action`, since a stage with nothing to
+  // move must leave a vertical finger to the page.
+  const rail = anchorRail({ doc, srcW, srcH });
+
   const sa = safeAreaRect(doc.aspect);
   const guides = showGuides
     ? Array.from({ length: n }, (_, i) => {
@@ -502,10 +508,13 @@ export function builder({
 
       <div class="carousel-studio__stage-scroll">
         <div
-          class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""}"
+          class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
+            ? "carousel-studio__stage--anchor"
+            : ""}"
           style="aspect-ratio:${String(n * w)}/${String(h)}"
+          ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
         >
-          ${stageSlides}${dividers}${guides}
+          ${stageSlides}${dividers}${guides}${rail}
         </div>
       </div>
 
@@ -1183,11 +1192,54 @@ export function layerForm(layer, logoUrl) {
 }
 
 /**
+ * The panorama stage's vertical-anchor rail: a track down the stage's left edge
+ * with a thumb at `anchorY` and the percentage beside it.
+ *
+ * Drawn only when the crop leaves vertical slack (`report.trimmedH > 1`) — the
+ * same condition the slider in `fitPanel` appears under, because they are two
+ * faces of one control. `aria-hidden`, deliberately: the slider is the labelled
+ * assistive path, and a second announced copy of the same number would only be
+ * noise. `paintAnchorRail` (`studio/preview.js`) moves it during a drag; the
+ * stylesheet fades it in with the stage's `is-anchoring` class.
+ *
+ * @param {{doc: import('../document.js').CarouselDoc, srcW: number|null,
+ *   srcH: number|null}} o
+ */
+export function anchorRail({ doc, srcW, srcH }) {
+  if (!srcW || !srcH || doc.mode === "deck") return "";
+  const report = fitReport(
+    srcW,
+    srcH,
+    doc.slides.length,
+    doc.aspect,
+    /** @type {'cover'|'exact'|'pad'} */ (doc.strategy),
+  );
+  if (!(report.trimmedH > 1)) return "";
+  const pos = Math.min(100, Math.max(0, doc.anchorY * 100));
+  return html`
+    <div
+      class="carousel-studio__anchor-rail"
+      aria-hidden="true"
+      style="--carousel-anchor-pos:${String(pos)}%"
+    >
+      <span class="carousel-studio__anchor-thumb">
+        <output class="carousel-studio__anchor-readout">${String(Math.round(pos))}%</output>
+      </span>
+    </div>`;
+}
+
+/**
  * The fit panel: source dimensions, one-click count/strategy chips, the
  * strategy radio, a live `fitReport` readout for the current selection, an
  * upscale warning, and a vertical-anchor slider that appears only when the
  * crop leaves vertical slack. Hidden entirely until the source pixel size is
  * known (a probe may still be in flight, or have failed).
+ *
+ * The slider is the keyboard and assistive path, not the primary one: a
+ * left-to-right control for an up-and-down quantity is the wrong gesture, so
+ * the band itself is dragged on the stage (`anchorRail` above,
+ * `createAnchorGesture` in `studio/gestures.js`) and the two write the same
+ * field through the same `_setSplit({ anchorY })`.
  *
  * @param {{doc: import('../document.js').CarouselDoc, srcW: number|null,
  *   srcH: number|null, fitMode: string}} o
@@ -1272,7 +1324,7 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
         : ""}
       ${report.trimmedH > 1
         ? html`
-            <label class="carousel-studio__control">
+            <label class="carousel-studio__control carousel-studio__control--anchor">
               <span
                 >Vertical anchor:
                 <output id="carousel-anchor-out"
@@ -1287,6 +1339,9 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
                 step="0.01"
                 value="${String(anchorY)}"
               />
+              <span class="carousel-studio__hint"
+                >Or drag the band up and down on the stage.</span
+              >
             </label>`
         : ""}
     </div>`;

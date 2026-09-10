@@ -76,6 +76,25 @@ export function paintSplit({ stage, frames }, { source, srcW, srcH, aspect, anch
 }
 
 /**
+ * The panorama stage's vertical-anchor rail: move the thumb to where the band
+ * now sits in its slack, and say so in words. One custom property plus one
+ * string, so the drag repaints it at the same cost as the band itself.
+ *
+ * The rail is markup (`anchorRail` in `panels.js`) and the stylesheet decides
+ * whether it is visible; this only ever positions it.
+ *
+ * @param {HTMLElement|null} rail
+ * @param {number} anchorY 0..1
+ */
+export function paintAnchorRail(rail, anchorY) {
+  if (!rail) return;
+  const pct = Math.min(100, Math.max(0, anchorY * 100));
+  rail.style.setProperty("--carousel-anchor-pos", `${pct}%`);
+  const out = rail.querySelector(".carousel-studio__anchor-readout");
+  if (out) out.textContent = `${Math.round(pct)}%`;
+}
+
+/**
  * Write one slide's framing onto every element that shows it — the stage slice
  * and the filmstrip frame carry the same pair of layers, so both are handed in
  * together. The only place deck framing reaches the DOM: a gesture calls this

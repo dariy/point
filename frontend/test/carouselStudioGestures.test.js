@@ -10,19 +10,28 @@
  * this render's frames and releases the previous render's, `commit` fires once
  * when a gesture ends and never for a crop the document already holds, and
  * `destroy` drops both the listeners and the debounced wheel commit.
+ *
+ * `createAnchorGesture` is the panorama controller, checked the same two ways:
+ * the arithmetic that turns CSS pixels into `anchorY` is pinned to an exact
+ * number, and the drag cycle is checked for painting on every move and
+ * committing once — and never for a drag that ended where it started.
  */
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import {
+  anchorSlackPx,
+  createAnchorGesture,
   createDeckGestures,
   deckRect,
   deckSeams,
+  dragAnchor,
   dragBox,
   hitLayer,
   panScale,
   pointerCentroid,
+  sameAnchor,
   sameCrop,
   snapBox,
   snapLines,
@@ -763,6 +772,176 @@ describe('carousel studio gestures', () => {
       assert.ok(host.calls.commitLayer[0].box.x > SPAN_BOX.x, 'moved right');
       assert.strictEqual(host.calls.commit.length, 0, 'the crop nudge did not fire');
       gestures.destroy();
+    });
+  });
+  // ── Panorama: the vertical anchor ────────────────────────────────────────
+
+  describe('anchorSlackPx', () => {
+    test('the band travels the trimmed source height, scaled into the stage', () => {
+      // 500 source px trimmed at scale 1 is 500 of the canvas's 1350, and the
+      // stage shows those 1350 in 270 CSS px — so the band has 100 px to move.
+      assert.strictEqual(anchorSlackPx(270, 1350, 500, 1), 100);
+    });
+
+    test('the strategy\'s resample carries through', () => {
+      assert.strictEqual(anchorSlackPx(270, 1350, 1000, 0.5), 100);
+    });
+
+    test('no slack, no stage or no scale is no travel — there is nothing to drag', () => {
+      assert.strictEqual(anchorSlackPx(270, 1350, 0, 1), 0);
+      assert.strictEqual(anchorSlackPx(0, 1350, 500, 1), 0);
+      assert.strictEqual(anchorSlackPx(270, 1350, 500, 0), 0);
+    });
+  });
+
+  describe('dragAnchor', () => {
+    test('the band follows the pointer, so the anchor runs against it', () => {
+      assert.strictEqual(dragAnchor(0.5, 50, 100), 0);
+      assert.strictEqual(dragAnchor(0.5, -50, 100), 1);
+    });
+
+    test('a drag past either end pins there rather than wrapping', () => {
+      assert.strictEqual(dragAnchor(0.5, 500, 100), 0);
+      assert.strictEqual(dragAnchor(0.5, -500, 100), 1);
+    });
+
+    test('no slack leaves the anchor alone', () => {
+      assert.strictEqual(dragAnchor(0.4, 50, 0), 0.4);
+    });
+  });
+
+  describe('sameAnchor', () => {
+    test('a sub-pixel difference is the same anchor — the render rounds there too', () => {
+      assert.ok(sameAnchor(0.5, 0.5004, 1000));
+    });
+
+    test('a whole-pixel difference is not', () => {
+      assert.ok(!sameAnchor(0.5, 0.502, 1000));
+    });
+  });
+
+  describe('createAnchorGesture', () => {
+    /** A panorama stage stand-in — the controller touches only these members. */
+    function fakeStage(height = 270) {
+      const listeners = [];
+      const classes = new Set();
+      return {
+        listeners,
+        classes,
+        classList: {
+          add: (c) => classes.add(c),
+          remove: (c) => classes.delete(c),
+        },
+        setPointerCapture() {},
+        releasePointerCapture() {},
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: 1080, height }),
+        addEventListener(type, fn) {
+          listeners.push({ type, fn });
+        },
+        removeEventListener(type, fn) {
+          const at = listeners.findIndex((l) => l.type === type && l.fn === fn);
+          if (at >= 0) listeners.splice(at, 1);
+        },
+        emit(type, event = {}) {
+          for (const l of [...listeners]) if (l.type === type) l.fn(event);
+        },
+      };
+    }
+
+    /** A stage with 100 CSS px of slack (500 source px trimmed, scale 1, a
+     *  270px stage over the 1350px canvas). `metrics: null` is a stage with
+     *  nothing to drag. */
+    function setup({ metrics = { anchorY: 0.5, trimmedH: 500, scale: 1, dstH: 1350 } } = {}) {
+      const calls = { paint: [], commit: [], dress: [] };
+      const gesture = createAnchorGesture({
+        metrics: () => metrics,
+        paint: (a) => calls.paint.push(a),
+        commit: (a) => calls.commit.push(a),
+        dress: (on) => calls.dress.push(on),
+      });
+      const stage = fakeStage();
+      gesture.attach(stage);
+      return { calls, gesture, stage };
+    }
+
+    test('a mouse drag paints every move and commits once, on release', () => {
+      const { calls, gesture, stage } = setup();
+      stage.emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 100 });
+      stage.emit('pointermove', { pointerId: 1, clientX: 40, clientY: 120 });
+      stage.emit('pointermove', { pointerId: 1, clientX: 40, clientY: 150 });
+      assert.deepStrictEqual(calls.paint, [0.3, 0.0]);
+      assert.strictEqual(calls.commit.length, 0, 'nothing committed mid-drag');
+      stage.emit('pointerup', { pointerId: 1, clientX: 40, clientY: 150 });
+      assert.deepStrictEqual(calls.commit, [0]);
+      assert.deepStrictEqual(calls.dress, [true, false]);
+      assert.ok(!stage.classes.has('is-anchoring'), 'the rail is put away');
+      gesture.destroy();
+    });
+
+    test('a press on a stage with no slack never takes the pointer', () => {
+      const { calls, gesture, stage } = setup({ metrics: null });
+      stage.emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 100 });
+      stage.emit('pointermove', { pointerId: 1, clientX: 40, clientY: 150 });
+      stage.emit('pointerup', { pointerId: 1, clientX: 40, clientY: 150 });
+      assert.deepStrictEqual(calls.paint, []);
+      assert.deepStrictEqual(calls.commit, []);
+      gesture.destroy();
+    });
+
+    test('a drag that ran into the end and back repaints the document, and does not commit', () => {
+      const { calls, gesture, stage } = setup();
+      stage.emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 100 });
+      stage.emit('pointermove', { pointerId: 1, clientX: 40, clientY: 140 });
+      stage.emit('pointermove', { pointerId: 1, clientX: 40, clientY: 100 });
+      stage.emit('pointerup', { pointerId: 1, clientX: 40, clientY: 100 });
+      assert.deepStrictEqual(calls.commit, [], 'the strip is not re-cut for nothing');
+      assert.strictEqual(calls.paint.at(-1), 0.5, 'repainted from the document');
+      gesture.destroy();
+    });
+
+    test('a press that never travelled leaves the band alone', () => {
+      const { calls, gesture, stage } = setup();
+      stage.emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 100 });
+      stage.emit('pointerup', { pointerId: 1, clientX: 40, clientY: 101 });
+      assert.deepStrictEqual(calls.commit, []);
+      gesture.destroy();
+    });
+
+    test('a sideways finger belongs to the scroller, a vertical one to the band', () => {
+      const across = setup();
+      across.stage.emit('pointerdown', {
+        pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 100,
+      });
+      across.stage.emit('pointermove', { pointerId: 1, clientX: 80, clientY: 102 });
+      across.stage.emit('pointermove', { pointerId: 1, clientX: 120, clientY: 104 });
+      assert.deepStrictEqual(across.calls.paint, [], 'the strip scrolled instead');
+      across.gesture.destroy();
+
+      const down = setup();
+      down.stage.emit('pointerdown', {
+        pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 100,
+      });
+      down.stage.emit('pointermove', { pointerId: 1, clientX: 42, clientY: 120 });
+      assert.deepStrictEqual(down.calls.paint, [0.3]);
+      down.gesture.destroy();
+    });
+
+    test('attach releases the previous stage, and destroy releases the last', () => {
+      const { gesture, stage } = setup();
+      assert.strictEqual(stage.listeners.length, 4);
+      const next = fakeStage();
+      gesture.attach(next);
+      assert.strictEqual(stage.listeners.length, 0, 'the old stage is let go');
+      assert.strictEqual(next.listeners.length, 4);
+      gesture.destroy();
+      assert.strictEqual(next.listeners.length, 0);
+    });
+
+    test('attaching nothing — a deck render — just releases', () => {
+      const { gesture, stage } = setup();
+      gesture.attach(null);
+      assert.strictEqual(stage.listeners.length, 0);
+      gesture.destroy();
     });
   });
 });

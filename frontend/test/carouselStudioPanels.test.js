@@ -13,6 +13,7 @@ import assert from 'node:assert';
 
 import {
   actionsBar,
+  anchorRail,
   bgControl,
   builder,
   colorInputValue,
@@ -298,6 +299,34 @@ describe('carousel studio panels', () => {
       assert.match(out, /Source 3000 × 1000/);
       assert.match(out, /3 slides/);
     });
+
+    test('the anchor slider names the stage as the direct way to the same field', () => {
+      // 3240 × 2000 into a 3-slide 4:5 deck is pixel-exact across and leaves
+      // 650 source px of vertical slack — so the control appears.
+      const out = str(fitPanel({ doc: doc3, srcW: 3240, srcH: 2000, fitMode: 'cover' }));
+      assert.match(out, /id="carousel-anchor"/, 'the assistive path is still there');
+      assert.match(out, /drag the band up and down on the stage/i);
+    });
+  });
+
+  describe('anchorRail', () => {
+    test('a crop with vertical slack gets a rail, placed at the document anchor', () => {
+      const out = str(anchorRail({ doc: doc3, srcW: 3240, srcH: 2000 }));
+      assert.match(out, /carousel-studio__anchor-rail/);
+      assert.match(out, /--carousel-anchor-pos:50%/, 'the default anchor is centred');
+      assert.match(out, /50%<\/output>/);
+      assert.match(out, /aria-hidden="true"/, 'the slider is the announced copy');
+    });
+
+    test('a crop that fills the height leaves nothing to drag, so no rail', () => {
+      assert.strictEqual(anchorRail({ doc: doc3, srcW: 3240, srcH: 1350 }), '');
+    });
+
+    test('no rail before the source pixel size is known, or in deck mode', () => {
+      assert.strictEqual(anchorRail({ doc: doc3, srcW: null, srcH: null }), '');
+      const deck = toDeckDocument(doc3, 3240, 2000);
+      assert.strictEqual(anchorRail({ doc: deck, srcW: 3240, srcH: 2000 }), '');
+    });
   });
 
   describe('builder', () => {
@@ -313,6 +342,24 @@ describe('carousel studio panels', () => {
     hasPad: false,
     renderedPaths: [],
   };
+
+    test('a panorama stage with slack becomes the anchor surface; a deck stage does not', () => {
+      const panorama = str(builder({ ...builderProps, srcW: 3240, srcH: 2000 }));
+      assert.match(panorama, /carousel-studio__stage--anchor/);
+      assert.match(panorama, /carousel-studio__anchor-rail/);
+      assert.match(panorama, /title="Drag up or down to move the crop band"/);
+
+      const deck = str(
+        builder({
+          ...builderProps,
+          doc: toDeckDocument(doc3, 3240, 2000),
+          srcW: 3240,
+          srcH: 2000,
+        }),
+      );
+      assert.doesNotMatch(deck, /carousel-studio__stage--anchor/);
+      assert.doesNotMatch(deck, /carousel-studio__anchor-rail/);
+    });
 
     test('assembles the studio from the state the page hands it, and reads none of its own', () => {
       const out = str(builder(builderProps));

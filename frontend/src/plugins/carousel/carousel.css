@@ -146,6 +146,100 @@
   pointer-events: none;
 }
 
+/* ── Panorama: the vertical anchor ─────────────────────────────────────────
+ * In Panorama mode the whole stage is the editing surface for the one field
+ * the mode has: where the crop band sits in its vertical slack. The class is
+ * emitted only when there *is* slack (see `anchorRail` in studio/panels.js),
+ * so a stage with nothing to move keeps its default scroll behaviour and its
+ * default cursor.
+ *
+ * `touch-action: pan-x`, the mirror of a deck column's `pan-y`: a sideways
+ * finger still pans the strip, and a vertical one is ours. `gestures.js`
+ * claims a touch drag only once it has called the direction, so the two never
+ * fight over the same finger. */
+.carousel-studio__stage--anchor {
+  cursor: ns-resize;
+  touch-action: pan-x;
+}
+
+.carousel-studio__stage--anchor.is-anchoring {
+  cursor: grabbing;
+}
+
+/* The rail: a track down the stage's left edge, filled to where the band sits.
+ * The fill stop is the same `--carousel-anchor-pos` the thumb reads, so a drag
+ * still repaints the whole control with one custom-property write.
+ *
+ * Faint on hover as the affordance, full while dragging as the readout — a
+ * permanently opaque bar would sit over the preview it exists to describe. */
+.carousel-studio__anchor-rail {
+  position: absolute;
+  top: var(--spacing-sm);
+  bottom: var(--spacing-sm);
+  left: var(--spacing-sm);
+  width: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to bottom,
+    var(--color-primary) var(--carousel-anchor-pos, 50%),
+    color-mix(in srgb, var(--surface-card) 80%, transparent) var(--carousel-anchor-pos, 50%)
+  );
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-primary) 35%, transparent);
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms ease);
+  pointer-events: none;
+}
+
+.carousel-studio__stage--anchor:hover .carousel-studio__anchor-rail {
+  opacity: 0.6;
+}
+
+.carousel-studio__stage--anchor.is-anchoring .carousel-studio__anchor-rail {
+  opacity: 1;
+}
+
+/* Positioned by `--carousel-anchor-pos` alone (paintAnchorRail in
+ * studio/preview.js), so a drag repaints it with one custom-property write. */
+.carousel-studio__anchor-thumb {
+  position: absolute;
+  left: 50%;
+  top: var(--carousel-anchor-pos, 50%);
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--surface-card);
+}
+
+.carousel-studio__anchor-readout {
+  position: absolute;
+  left: calc(100% + var(--spacing-xs));
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px var(--spacing-xs);
+  border-radius: var(--border-radius);
+  background: color-mix(in srgb, var(--surface-card) 85%, transparent);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms ease);
+}
+
+.carousel-studio__stage--anchor.is-anchoring .carousel-studio__anchor-readout {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carousel-studio__anchor-rail,
+  .carousel-studio__anchor-readout {
+    transition: none;
+  }
+}
+
 /* ── Stage bar ─────────────────────────────────────────────────────────────
  * Under the stage: the zoom control on the left, the properties toggle on the
  * right. Both drive the layout rather than the document — nothing here can
@@ -376,6 +470,13 @@
 .carousel-studio__control--check {
   flex-direction: row;
   align-items: center;
+}
+
+/* The anchor slider is the keyboard and assistive path to a field the stage
+ * drags directly, so it carries a line saying where the direct one is. */
+.carousel-studio__hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .carousel-studio__subhead {

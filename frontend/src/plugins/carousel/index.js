@@ -53,7 +53,7 @@ import { getSettings, setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
-import { canvasSize, deckSlideRects, padRects, safeAreaRect } from "./geometry.js";
+import { canvasSize, deckSlideRects, fitReport, padRects, safeAreaRect } from "./geometry.js";
 import {
   addLayer,
   addSlide,
@@ -84,6 +84,7 @@ import {
 } from "./studio/layout.js";
 import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
 import {
+  paintAnchorRail,
   paintDeckLayers,
   paintDeckSlide,
   paintLayerChrome,
@@ -91,7 +92,7 @@ import {
   paintSpanLayers,
   paintSplit,
 } from "./studio/preview.js";
-import { createDeckGestures } from "./studio/gestures.js";
+import { createAnchorGesture, createDeckGestures } from "./studio/gestures.js";
 import { createHistory } from "./studio/history.js";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
@@ -306,6 +307,14 @@ export default class CarouselStudioPage extends Component {
       paintLayer: (i, j, box, guides) => this._paintProvisionalLayer(i, j, box, guides),
       commitLayer: (i, j, box) => this._commitLayerBox(i, j, box),
     });
+    // Panorama direct manipulation, over the stage itself — the band is one
+    // projection across the whole strip, so the whole strip is the surface.
+    // Built once and re-attached per render, like the deck's.
+    this._anchorGesture = createAnchorGesture({
+      metrics: () => this._anchorMetrics(),
+      paint: (anchorY) => this._paintAnchor(anchorY),
+      commit: (anchorY) => this._setSplit({ anchorY }),
+    });
   }
 
   actions = {
@@ -416,6 +425,7 @@ export default class CarouselStudioPage extends Component {
     this._layerPicker?.destroy();
     this._layerPicker = null;
     this._gestures.destroy();
+    this._anchorGesture.destroy();
   }
 
   // ── Document accessors ────────────────────────────────────────────────────
@@ -1560,6 +1570,12 @@ export default class CarouselStudioPage extends Component {
 
     this._wireControls();
     this._gestures.attach(deck ? this.$$(".carousel-studio__stage-slide") : []);
+    // The panorama stage takes the pointer only when it is the surface — and
+    // only when `panels.js` emitted a rail, which is its answer to whether the
+    // crop leaves any slack to drag through.
+    this._anchorGesture.attach(
+      deck ? null : this.$(".carousel-studio__stage--anchor"),
+    );
 
     // The selected layer's chrome (outline + handles) is markup; position it
     // now that the columns exist. Cleared for free when nothing is selected —
@@ -1592,10 +1608,21 @@ export default class CarouselStudioPage extends Component {
     }
   }
 
-  /** Split-mode preview: one crop band across the stage, one column per frame. */
-  _paintSplit(source) {
+  /**
+   * Split-mode preview: one crop band across the stage, one column per frame,
+   * and the rail that says where in its slack the band sits.
+   *
+   * `anchorOverride` is the live drag's provisional value — the same argument
+   * `_paintDeckSlide` takes a provisional slide for, and for the same reason:
+   * a gesture and a committed document are painted by identical code.
+   *
+   * @param {string} source
+   * @param {number} [anchorOverride]
+   */
+  _paintSplit(source, anchorOverride) {
     const { srcW, srcH } = this.state;
-    const { aspect, anchorY, slides } = this.state.doc;
+    const { aspect, slides } = this.state.doc;
+    const anchorY = anchorOverride ?? this.state.doc.anchorY;
     paintSplit(
       {
         stage: this.$(".carousel-studio__stage"),
@@ -1611,6 +1638,46 @@ export default class CarouselStudioPage extends Component {
         strategy: /** @type {'cover'|'exact'|'pad'} */ (this.state.doc.strategy),
       },
     );
+    paintAnchorRail(this.$(".carousel-studio__anchor-rail"), anchorY);
+  }
+
+  /**
+   * What the anchor gesture is allowed to know about the document: where the
+   * band sits and how much room the current strategy leaves it. Null whenever
+   * there is nothing to drag — deck mode, no source pixels yet, or a crop that
+   * fills the height exactly — which is the `report.trimmedH > 1` condition
+   * `panels.js` draws the rail and the slider under.
+   */
+  _anchorMetrics() {
+    const doc = this.state.doc;
+    const { srcW, srcH } = this.state;
+    if (doc.mode === "deck" || !srcW || !srcH) return null;
+    const report = fitReport(
+      srcW,
+      srcH,
+      doc.slides.length,
+      doc.aspect,
+      /** @type {'cover'|'exact'|'pad'} */ (doc.strategy),
+    );
+    if (!(report.trimmedH > 1)) return null;
+    const [, dstH] = canvasSize(doc.aspect);
+    return { anchorY: doc.anchorY, trimmedH: report.trimmedH, scale: report.scale, dstH };
+  }
+
+  /**
+   * Paint a provisional anchor: the band, the rail, and the slider — which is
+   * the same control by another face, so it tracks the drag rather than going
+   * stale until the commit rebuilds it.
+   *
+   * @param {number} anchorY
+   */
+  _paintAnchor(anchorY) {
+    const source = this._source();
+    if (source) this._paintSplit(source, anchorY);
+    const slider = /** @type {HTMLInputElement|null} */ (this.$("#carousel-anchor"));
+    if (slider) slider.value = String(anchorY);
+    const out = this.$("#carousel-anchor-out");
+    if (out) out.textContent = `${Math.round(anchorY * 100)}%`;
   }
 
   /** Deck-mode preview: every slide's own crop, on its own image element. */

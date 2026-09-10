@@ -1,5 +1,5 @@
 /**
- * Carousel Studio — deck-mode direct manipulation.
+ * Carousel Studio — direct manipulation on the stage.
  *
  * Drag to pan, pinch or wheel to zoom, arrow keys to nudge: one module over one
  * small host surface — the stage's own deck columns — so the page keeps owning
@@ -40,6 +40,15 @@
  * a live gesture paints through `host.paint` with a provisional slide (no state
  * change, no rebuild, no decode) and lands in the document through
  * `host.commit` exactly once, when the gesture ends.
+ *
+ * `createAnchorGesture` is the panorama half of the same idea over the one
+ * field panorama mode has: `anchorY`, where the crop band sits in whatever
+ * vertical slack the strip leaves. It is a separate small controller rather
+ * than a branch in the one above, because the two never coexist — the stage is
+ * either n framed columns or one projected band — and because the panorama
+ * stage has no crop, no zoom and no layers to route a press between. What it
+ * shares is the cycle: provisional paint on every move, one commit on release,
+ * and the same direction-declaring touch claim, mirrored to the other axis.
  */
 
 import { gestureDirection } from "../../../components/light/tags/tagGestures.js";
@@ -771,6 +780,202 @@ export function createDeckGestures(host) {
       clearTimeout(pendingTimer);
       pendingTimer = null;
       pending = null;
+      drag = null;
+    },
+  };
+}
+
+// ── Panorama: the vertical anchor ───────────────────────────────────────────
+
+/**
+ * CSS pixels of vertical travel the panorama band has on a stage `stageH` px
+ * tall. `trimmedH * scale` is the slack in canvas pixels — the source height the
+ * strip throws away, resampled the way the render will — and the stage shows
+ * `dstH` canvas pixels in `stageH` CSS ones, so the same ratio carries it into
+ * the pixels the pointer moves in.
+ *
+ * Zero when the crop leaves no slack, which is the same condition the rail is
+ * drawn under (`report.trimmedH > 1` in `panels.js`): there is nothing to drag.
+ *
+ * @param {number} stageH  the stage's CSS height
+ * @param {number} dstH    canvas height for the deck's aspect
+ * @param {number} trimmedH source px trimmed off the height
+ * @param {number} scale   canvas px per source px
+ */
+export function anchorSlackPx(stageH, dstH, trimmedH, scale) {
+  if (!(stageH > 0) || !(dstH > 0) || !(trimmedH > 0) || !(scale > 0)) return 0;
+  return (trimmedH * scale * stageH) / dstH;
+}
+
+/**
+ * The `anchorY` a vertical drag of `dy` CSS px from `startAnchor` produces.
+ *
+ * The band follows the pointer, so the anchor runs against it: dragging *down*
+ * pulls the image down, which is to say it shows more of the source's top, and
+ * `anchorY` is measured from that top. Same sign convention as the crop pan,
+ * for the same reason.
+ *
+ * @param {number} startAnchor
+ * @param {number} dy  pointer travel, CSS px, positive downwards
+ * @param {number} slackPx  from {@link anchorSlackPx}
+ */
+export function dragAnchor(startAnchor, dy, slackPx) {
+  if (!(slackPx > 0)) return startAnchor;
+  return Math.min(1, Math.max(0, startAnchor - dy / slackPx));
+}
+
+/** Whether two anchors land the band on the same source pixel — the only
+ *  difference the render can see. The twin of `sameCrop`, in the one dimension
+ *  a panorama anchor has. */
+export function sameAnchor(a, b, trimmedH) {
+  return Math.round(a * trimmedH) === Math.round(b * trimmedH);
+}
+
+/**
+ * @typedef {object} AnchorGestureHost
+ * @property {() => {anchorY:number, trimmedH:number, scale:number, dstH:number}|null} metrics
+ *   The document's anchor and what the current strategy leaves to move it
+ *   through — read per press, never cached, and `null` whenever there is
+ *   nothing to drag (deck mode, no source pixels yet, no vertical slack).
+ * @property {(anchorY: number) => void} paint  Paint a provisional anchor
+ *   straight to the DOM, without committing it.
+ * @property {(anchorY: number) => void} commit  Write a finished anchor into
+ *   the document. Already clamped, and already known to move the band.
+ * @property {(dragging: boolean) => void} [dress]  The gesture started or
+ *   ended — the page's cue to show the rail and the grabbing cursor.
+ */
+
+/**
+ * Build the panorama anchor controller: one vertical drag on the stage, moving
+ * the crop band through its slack.
+ *
+ *   const anchor = createAnchorGesture(host);   // once, at construction
+ *   anchor.attach(stage);                       // after every panorama render
+ *   anchor.detach();                            // when the stage goes to deck
+ *   anchor.destroy();                           // at unmount
+ *
+ * @param {AnchorGestureHost} host
+ */
+export function createAnchorGesture(host) {
+  /** Listener removers for the currently bound stage. */
+  let bound = [];
+  /** The in-flight drag, or null. One at a time. */
+  let drag = null;
+  let destroyed = false;
+
+  const detach = () => {
+    for (const off of bound) off();
+    bound = [];
+  };
+
+  /** Take the pointer: capture it, dress the stage, and stop the browser doing
+   *  anything else with the event. */
+  const claim = (e, stage) => {
+    stage.setPointerCapture?.(e.pointerId);
+    stage.classList?.add("is-anchoring");
+    host.dress?.(true);
+    e.preventDefault?.();
+  };
+
+  const onPointerDown = (e, stage) => {
+    if (drag || (e.button != null && e.button > 0)) return;
+    const m = host.metrics?.();
+    if (!m) return;
+    const rect = stage.getBoundingClientRect?.();
+    const slackPx = anchorSlackPx(rect?.height || 0, m.dstH, m.trimmedH, m.scale);
+    if (!(slackPx > 0)) return;
+
+    drag = {
+      stage,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startAnchor: m.anchorY,
+      anchorY: m.anchorY,
+      trimmedH: m.trimmedH,
+      slackPx,
+      moved: false,
+      // A single finger has not said yet whether it is moving the band or
+      // panning the strip sideways; a mouse or pen has.
+      undecided: e.pointerType === "touch",
+    };
+    if (!drag.undecided) claim(e, stage);
+  };
+
+  const onPointerMove = (e, stage) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+
+    // The undecided finger, resolved — the mirror of the deck column's call.
+    // The stage is `touch-action: pan-x` while there is slack, so a sideways
+    // drag belongs to the scroller and this lets go of it; below the threshold
+    // the movement is still noise.
+    if (drag.undecided) {
+      const dir = gestureDirection(e.clientX - drag.startX, e.clientY - drag.startY);
+      if (!dir) return;
+      if (dir === "horizontal") {
+        drag = null;
+        return;
+      }
+      drag.undecided = false;
+      claim(e, stage);
+    }
+
+    const dy = e.clientY - drag.startY;
+    if (Math.abs(dy) > DRAG_SLOP_PX) drag.moved = true;
+    drag.anchorY = dragAnchor(drag.startAnchor, dy, drag.slackPx);
+    // Straight to the DOM — no state change, so a drag costs no rebuild and no
+    // decode, only the background-position writes the band already lives on.
+    host.paint(drag.anchorY);
+    e.preventDefault?.();
+  };
+
+  const onPointerUp = (e, stage) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const ended = drag;
+    drag = null;
+    stage.releasePointerCapture?.(e.pointerId);
+    stage.classList?.remove("is-anchoring");
+    host.dress?.(false);
+    if (!ended.moved) return;
+    // A drag that ran into the end of the slack lands back where it started;
+    // committing that would mark the studio dirty and re-cut a strip whose
+    // pixels are identical. Repaint from the document instead.
+    if (sameAnchor(ended.anchorY, ended.startAnchor, ended.trimmedH)) {
+      host.paint(ended.startAnchor);
+      return;
+    }
+    host.commit(ended.anchorY);
+  };
+
+  return {
+    /**
+     * Bind to this render's panorama stage, releasing the previous render's.
+     * A falsy stage (deck mode, or no builder on screen) just releases.
+     *
+     * @param {HTMLElement|null} stage
+     */
+    attach(stage) {
+      detach();
+      if (destroyed || !stage) return;
+      /** @type {Array<[string, (e: any) => void]>} */
+      const handlers = [
+        ["pointerdown", (e) => onPointerDown(e, stage)],
+        ["pointermove", (e) => onPointerMove(e, stage)],
+        ["pointerup", (e) => onPointerUp(e, stage)],
+        ["pointercancel", (e) => onPointerUp(e, stage)],
+      ];
+      for (const [type, fn] of handlers) {
+        stage.addEventListener(type, fn);
+        bound.push(() => stage.removeEventListener(type, fn));
+      }
+    },
+
+    detach,
+
+    /** Unmount: drop the listeners and any half-finished drag. */
+    destroy() {
+      destroyed = true;
+      detach();
       drag = null;
     },
   };

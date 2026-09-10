@@ -14,6 +14,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import {
+  paintAnchorRail,
   paintDeckSlide,
   paintSpanChrome,
   paintSplit,
@@ -334,6 +335,37 @@ describe('carousel studio preview', () => {
       const layer = { box: { x: 0.3, y: 0.4, w: 0.6, h: 0.2 } };
       const host = paint(1, layer, { v: [], h: [0.13] });
       assert.strictEqual(host.lines[0].style.top, '13%');
+    });
+  });
+  describe('paintAnchorRail', () => {
+    /** A rail stand-in: one custom-property sink and one readout node. */
+    const rail = () => {
+      const out = { textContent: '' };
+      const props = {};
+      return {
+        out,
+        props,
+        style: { setProperty: (k, v) => (props[k] = v) },
+        querySelector: () => out,
+      };
+    };
+
+    test('the thumb sits where the band does, and says so', () => {
+      const r = rail();
+      paintAnchorRail(r, 0.25);
+      assert.strictEqual(r.props['--carousel-anchor-pos'], '25%');
+      assert.strictEqual(r.out.textContent, '25%');
+    });
+
+    test('an out-of-range anchor is pinned to the track rather than drawn off it', () => {
+      const r = rail();
+      paintAnchorRail(r, 1.4);
+      assert.strictEqual(r.props['--carousel-anchor-pos'], '100%');
+      assert.strictEqual(r.out.textContent, '100%');
+    });
+
+    test('no rail — a panorama with no slack — is not an error', () => {
+      assert.doesNotThrow(() => paintAnchorRail(null, 0.5));
     });
   });
 });
