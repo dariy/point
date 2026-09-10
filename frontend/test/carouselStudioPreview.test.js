@@ -14,11 +14,63 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import {
+  arrowPlan,
   paintAnchorRail,
+  paintDeckLayers,
   paintDeckSlide,
   paintSpanChrome,
   paintSplit,
+  textPlan,
 } from '../src/plugins/carousel/studio/preview.js';
+import { paintLayers } from '../src/plugins/carousel/render.js';
+import { canvasSize, layerRect } from '../src/plugins/carousel/geometry.js';
+import { normalizeLayer } from '../src/plugins/carousel/document.js';
+
+/** Every glyph is half an em wide — the same law `carouselRender.test.js` gives
+ *  its recording ctx, which is what lets the preview's typesetting and the
+ *  render's be compared line for line. */
+const CHAR_EM = 0.5;
+
+/** The px size out of a CSS font shorthand (`600 42px "Inter", sans-serif`). */
+function fontPx(font) {
+  const m = /(\d+(?:\.\d+)?)px/.exec(font || '');
+  return m ? Number(m[1]) : 0;
+}
+
+/** A `measure` in that same law, for driving `textPlan` directly. */
+const measure = (text, size) => ({ width: text.length * CHAR_EM * size });
+
+/** The stand-in face's vertical metrics, as fractions of the font size. The
+ *  central baseline is deliberately NOT `(ascent - descent) / 2`, because in a
+ *  real browser it is not either — that gap is the whole reason `preview.js`
+ *  measures a baseline shift instead of assuming one. */
+const ASCENT = 0.8;
+const DESCENT = 0.2;
+const CENTRAL = 0.25;
+/** What that costs the block's top, per px of font size: `-central - (A-D)/2`. */
+const SHIFT_PER_PX = CENTRAL - (ASCENT - DESCENT) / 2;
+
+/** `preview.js` measures on an offscreen 2D context it takes from `document`
+ *  and memoizes on first use; in node there is none, so it gets this. Assigned
+ *  at module scope so it is in place before any test paints. */
+globalThis.document = {
+  createElement: () => {
+    const ctx = {
+      font: '',
+      textBaseline: 'alphabetic',
+      measureText: (text) => {
+        const size = fontPx(ctx.font);
+        return {
+          width: String(text).length * CHAR_EM * size,
+          fontBoundingBoxAscent: ASCENT * size,
+          fontBoundingBoxDescent: DESCENT * size,
+          alphabeticBaseline: ctx.textBaseline === 'middle' ? -CENTRAL * size : 0,
+        };
+      },
+    };
+    return { getContext: () => ctx };
+  },
+};
 
 const FULL = { x: 0, y: 0, w: 1, h: 1 };
 const el = () => ({ style: {} });
@@ -366,6 +418,346 @@ describe('carousel studio preview', () => {
 
     test('no rail — a panorama with no slack — is not an error', () => {
       assert.doesNotThrow(() => paintAnchorRail(null, 0.5));
+    });
+  });
+
+  /**
+   * The bead this closes ("preview/render parity for text and arrows") turns on
+   * one claim: the stage and the JPEG run the *same* typesetter. These tests
+   * make that falsifiable — they paint the same layer twice, once through
+   * `render.js` onto a recording ctx and once through `textPlan` / `arrowPlan`,
+   * and assert the two agree exactly rather than approximately.
+   */
+  describe('parity with the render', () => {
+    const ASPECT = '4:5';
+    const [FRAME_W, FRAME_H] = canvasSize(ASPECT);
+
+    /** The render's ctx, cut down to what a text or arrow layer touches. */
+    function recordingCtx(log) {
+      const ctx = {
+        font: '',
+        fillText: (text, x, y) => log.push(['fillText', text, x, y, ctx.font]),
+        measureText: (text) => ({ width: text.length * CHAR_EM * fontPx(ctx.font) }),
+        moveTo: (...a) => log.push(['moveTo', ...a]),
+        lineTo: (...a) => log.push(['lineTo', ...a]),
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        stroke: () => {},
+      };
+      return ctx;
+    }
+
+    /** What `render.js` does with one layer on a fresh canvas. */
+    function rendered(layer, env = {}) {
+      const log = [];
+      paintLayers(recordingCtx(log), [layer], ASPECT, env);
+      return log;
+    }
+
+    const textLayer = (patch) =>
+      normalizeLayer({
+        type: 'text',
+        text: 'The quick brown fox jumps over the lazy dog',
+        box: { x: 0.1, y: 0.1, w: 0.8, h: 0.3 },
+        align: 'left',
+        valign: 'top',
+        ...patch,
+      });
+
+    /** Assert the preview's plan reproduces every `fillText` the render issued:
+     *  the same lines, at the same size, on the same baselines. */
+    function assertTypeParity(layer, env = {}) {
+      const rect = layerRect(layer, ASPECT);
+      const text =
+        layer.type === 'counter'
+          ? String(layer.format)
+              .replace(/\{i\}/g, String((env.index || 0) + 1))
+              .replace(/\{n\}/g, String(env.count || 1))
+          : layer.text;
+      const plan = textPlan({ text, layer, box: rect, frameH: FRAME_H, measure });
+      const painted = rendered(layer, env).filter((e) => e[0] === 'fillText');
+
+      assert.deepStrictEqual(
+        painted.map((e) => e[1]),
+        plan.lines,
+        'the preview breaks lines where the render breaks them',
+      );
+      for (const e of painted) {
+        assert.strictEqual(fontPx(e[4]), plan.fontSize, 'same type size');
+      }
+      painted.forEach((e, i) => {
+        assert.strictEqual(
+          e[3],
+          rect.y + plan.top + (i + 0.5) * plan.lineBox,
+          `line ${i} sits on the render's baseline`,
+        );
+      });
+      return plan;
+    }
+
+    test('an auto-fit layer wraps and fits exactly as the render does', () => {
+      const plan = assertTypeParity(textLayer({ size: null }));
+      assert.ok(plan.lines.length >= 3, 'the fixture is long enough to wrap');
+    });
+
+    test('a fixed size wraps to the same lines on the same baselines', () => {
+      assertTypeParity(textLayer({ size: 0.06 }));
+    });
+
+    test('valign moves the block by the render’s slack, not by flexbox', () => {
+      for (const valign of ['top', 'middle', 'bottom']) {
+        assertTypeParity(textLayer({ size: 0.06, valign }));
+      }
+    });
+
+    test('a fixed size too big for its box overflows the way the render does', () => {
+      // Negative slack: `middle` centres the overflow rather than pinning it,
+      // which is the case a flex `align-items: center` used to get wrong.
+      const layer = textLayer({ size: 0.2, valign: 'middle' });
+      const plan = assertTypeParity(layer);
+      assert.ok(plan.top < 0, 'the fixture really does overflow its box');
+    });
+
+    test('a counter is typeset through the same path, format substituted', () => {
+      const layer = normalizeLayer({
+        type: 'counter',
+        format: '{i} / {n}',
+        box: { x: 0.6, y: 0.85, w: 0.3, h: 0.1 },
+        size: 0.05,
+        align: 'right',
+      });
+      assertTypeParity(layer, { index: 2, count: 8 });
+    });
+
+    test('an arrow is the render’s polyline, in the box’s own pixels', () => {
+      const layer = normalizeLayer({
+        type: 'arrow',
+        direction: 'right',
+        box: { x: 0.7, y: 0.4, w: 0.2, h: 0.2 },
+      });
+      const rect = layerRect(layer, ASPECT);
+      const plan = arrowPlan(rect, layer.direction);
+      const path = rendered(layer)
+        .filter((e) => e[0] === 'moveTo' || e[0] === 'lineTo')
+        .map((e) => [e[1], e[2]]);
+
+      assert.deepStrictEqual(
+        plan.points.map(([x, y]) => [x + rect.x, y + rect.y]),
+        path,
+        'the same three points, once the box origin is added back',
+      );
+    });
+
+    test('a left arrow points the other way, in both', () => {
+      const layer = normalizeLayer({
+        type: 'arrow',
+        direction: 'left',
+        box: { x: 0.05, y: 0.4, w: 0.2, h: 0.2 },
+      });
+      const rect = layerRect(layer, ASPECT);
+      const plan = arrowPlan(rect, layer.direction);
+      const path = rendered(layer)
+        .filter((e) => e[0] === 'moveTo' || e[0] === 'lineTo')
+        .map((e) => [e[1], e[2]]);
+      assert.deepStrictEqual(
+        plan.points.map(([x, y]) => [x + rect.x, y + rect.y]),
+        path,
+      );
+      assert.ok(plan.points[1][0] < plan.points[0][0], 'the tip is on the left');
+    });
+
+    test('a box too small to hold its own stroke is skipped in both', () => {
+      const layer = normalizeLayer({
+        type: 'arrow',
+        direction: 'right',
+        box: { x: 0.5, y: 0.5, w: 0.001, h: 0.001 },
+      });
+      const rect = layerRect(layer, ASPECT);
+      assert.strictEqual(arrowPlan(rect, layer.direction), null);
+      assert.deepStrictEqual(
+        rendered(layer).filter((e) => e[0] === 'lineTo'),
+        [],
+      );
+    });
+
+    test('blank text sets nothing, exactly as the render paints nothing', () => {
+      const layer = textLayer({ text: '   ', size: 0.06 });
+      const rect = layerRect(layer, ASPECT);
+      assert.strictEqual(
+        textPlan({ text: layer.text, layer, box: rect, frameH: FRAME_H, measure }),
+        null,
+      );
+      assert.deepStrictEqual(
+        rendered(layer).filter((e) => e[0] === 'fillText'),
+        [],
+      );
+    });
+  });
+
+  /**
+   * The DOM half: what `paintDeckLayers` actually writes. The plan is already
+   * pinned against the render above, so these assert only that the element
+   * carries it — lines the browser cannot re-break, a line box in the painter's
+   * arithmetic rather than CSS `line-height`, and a real polyline where the
+   * preview used to show a `>` glyph.
+   */
+  describe('paintDeckLayers', () => {
+    const ASPECT = '4:5';
+    const [FRAME_W, FRAME_H] = canvasSize(ASPECT);
+    const HEIGHT_CQW = (FRAME_H / FRAME_W) * 100;
+    const cqw = (px) => `${((px / FRAME_H) * HEIGHT_CQW).toFixed(3)}cqw`;
+
+    /** A stand-in document node: enough of one to build a span and an `<svg>`. */
+    const stubDoc = {
+      createElement: (tag) => node(tag, null),
+      createElementNS: (ns, tag) => node(tag, ns),
+    };
+
+    function node(tag, ns) {
+      return {
+        tag,
+        ns,
+        style: {},
+        attrs: {},
+        children: [],
+        textContent: '',
+        setAttribute(k, v) {
+          this.attrs[k] = v;
+        },
+        appendChild(child) {
+          this.children.push(child);
+          return child;
+        },
+      };
+    }
+
+    /** One `.carousel-studio__layer` element and the host that queries for it. */
+    function host(count = 1) {
+      const nodes = Array.from({ length: count }, (_, i) => {
+        const el = node('div', null);
+        el.dataset = { layer: String(i) };
+        el.ownerDocument = stubDoc;
+        Object.defineProperty(el, 'textContent', {
+          get() {
+            return '';
+          },
+          set(v) {
+            if (v === '') this.children.length = 0;
+          },
+        });
+        return el;
+      });
+      return { els: nodes, host: { querySelectorAll: () => nodes } };
+    }
+
+    function paintOne(layer, { index = 0, count = 1 } = {}) {
+      const { els, host: h } = host(1);
+      paintDeckLayers({ hosts: [h] }, { layers: [layer], aspect: ASPECT, index, count });
+      return els[0];
+    }
+
+    test('text is emitted as resolved lines the browser cannot re-wrap', () => {
+      const layer = normalizeLayer({
+        type: 'text',
+        text: 'The quick brown fox jumps over the lazy dog',
+        box: { x: 0.1, y: 0.1, w: 0.8, h: 0.3 },
+        size: null,
+        align: 'center',
+        valign: 'top',
+      });
+      const plan = textPlan({
+        text: layer.text,
+        layer,
+        box: layerRect(layer, ASPECT),
+        frameH: FRAME_H,
+        measure,
+      });
+
+      const el = paintOne(layer);
+      assert.strictEqual(el.children.length, 1);
+      const block = el.children[0];
+      assert.strictEqual(block.textContent, plan.lines.join('\n'));
+      assert.strictEqual(block.style.whiteSpace, 'pre');
+      assert.strictEqual(block.style.fontSize, cqw(plan.fontSize));
+      // The painter's line box, not CSS `line-height: 1.2` — that is what puts
+      // every baseline where `fillText` puts it.
+      assert.strictEqual(block.style.lineHeight, cqw(plan.lineBox));
+      assert.strictEqual(block.style.top, cqw(plan.top + SHIFT_PER_PX * plan.fontSize));
+      assert.strictEqual(block.style.textAlign, 'center');
+    });
+
+    test('the block is positioned, not flex-aligned — bottom moves it down', () => {
+      const base = {
+        type: 'text',
+        text: 'one two three',
+        box: { x: 0.1, y: 0.1, w: 0.8, h: 0.4 },
+        size: 0.05,
+      };
+      const top = paintOne(normalizeLayer({ ...base, valign: 'top' })).children[0];
+      const bottom = paintOne(normalizeLayer({ ...base, valign: 'bottom' })).children[0];
+      // `top` valign is zero slack, so the block sits at the box's own top —
+      // give or take the baseline shift, which is a property of the face.
+      const fontSize = Math.round(0.05 * FRAME_H);
+      assert.strictEqual(top.style.top, cqw(SHIFT_PER_PX * fontSize));
+      assert.ok(parseFloat(bottom.style.top) > parseFloat(top.style.top));
+      for (const block of [top, bottom]) {
+        assert.strictEqual(block.style.justifyContent, undefined);
+        assert.strictEqual(block.style.alignItems, undefined);
+      }
+    });
+
+    test('an arrow is an inline SVG polyline over the layer box, not a glyph', () => {
+      const layer = normalizeLayer({
+        type: 'arrow',
+        direction: 'right',
+        box: { x: 0.7, y: 0.4, w: 0.2, h: 0.2 },
+        color: '#ff0000',
+      });
+      const rect = layerRect(layer, ASPECT);
+      const plan = arrowPlan(rect, layer.direction);
+
+      const el = paintOne(layer);
+      const svg = el.children[0];
+      assert.strictEqual(svg.tag, 'svg');
+      assert.strictEqual(svg.attrs.viewBox, `0 0 ${rect.w} ${rect.h}`);
+      const poly = svg.children[0];
+      assert.strictEqual(poly.tag, 'polyline');
+      assert.strictEqual(
+        poly.attrs.points,
+        plan.points.map(([x, y]) => `${x},${y}`).join(' '),
+      );
+      assert.strictEqual(poly.attrs['stroke-width'], String(plan.stroke));
+      assert.strictEqual(poly.attrs['stroke-linecap'], 'round');
+      assert.strictEqual(poly.attrs['stroke-linejoin'], 'round');
+      assert.strictEqual(poly.attrs.stroke, '#ff0000');
+      assert.strictEqual(poly.attrs.fill, 'none');
+    });
+
+    test('an arrow too small for its stroke draws nothing at all', () => {
+      const el = paintOne(
+        normalizeLayer({
+          type: 'arrow',
+          direction: 'right',
+          box: { x: 0.5, y: 0.5, w: 0.001, h: 0.001 },
+        }),
+      );
+      assert.deepStrictEqual(el.children, []);
+    });
+
+    test('a layer deleted since the last render hides its element', () => {
+      const { els, host: h } = host(2);
+      paintDeckLayers(
+        { hosts: [h] },
+        {
+          layers: [normalizeLayer({ type: 'rect', box: { x: 0, y: 0, w: 1, h: 1 } })],
+          aspect: ASPECT,
+          index: 0,
+          count: 1,
+        },
+      );
+      assert.strictEqual(els[0].style.display, '');
+      assert.strictEqual(els[1].style.display, 'none');
     });
   });
 });

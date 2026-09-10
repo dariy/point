@@ -562,17 +562,54 @@ in `studio/panels.js`; `index.js` owns the state):
   the user's fingers.
 - **The preview is CSS, as ever.** `paintDeckLayers` and `paintSpanLayers`
   (`studio/preview.js`) are the DOM twins of the two canvas functions, resolving
-  every box through `layerCSS` / `spanLayerRect` so the preview cannot round
-  differently from the render. `paintLayerChrome` positions the selection outline,
-  its eight handles and the snap guides.
+  every box through `layerRect` / `spanLayerRect` — the very rects the painters
+  are handed — so the preview cannot round differently from the render.
+  `paintLayerChrome` positions the selection outline, its eight handles and the
+  snap guides.
 
-The preview is honest about position, size, wrap and colour; it does **not**
-promise pixel parity with the canvas' text metrics, and does not need to. Three
-divergences are known and accepted: an auto-fit `text` layer (`size: null`)
-previews at a fixed 9% of canvas height rather than at the fitted size, because
-CSS has no `measureText`; line breaking is the browser's rather than
-`wrapText`'s; and an `arrow` previews as a `❯` glyph while the render strokes a
-path. The render is the contract — `paintSlide` is what produces bytes.
+**The preview runs the render's own typesetter.** CSS has no `measureText`, so
+left to itself the browser would break lines where it likes and the JPEG would
+break them where `wrapText` does. Instead `preview.js` holds one memoized
+offscreen 2D context, reads the same `--font-family` token `browserDeps`
+resolves and awaits `document.fonts.ready` once (`ensurePreviewFont`, which the
+studio calls from `afterRender` and repaints on), then calls `autoFitText` or
+`wrapText` with `measure` bound to that context. There is exactly one
+typesetter; the preview is a second caller of it, not a second copy — which is
+what makes this *not* the "second typesetter in the preview" that was declined
+in S3.
+
+What comes back is emitted verbatim: the resolved lines at the resolved size,
+`white-space: pre` so nothing can re-wrap them, in a block whose `line-height`
+is the painter's own `fontSize · lineHeight` and whose top is `VALIGN_SLACK`'s
+offset rather than a flexbox alignment. Both media then put the baseline at
+`lineBox/2 + k` from the top of the line and differ only in `k`: a CSS line box
+uses half-leading, so `k = (ascent − descent)/2`, while canvas `textBaseline:
+'middle'` uses the font's *central* baseline. Those are **not** the same number
+— measured in Chromium the gap is about 0.06 em, four canvas pixels at 60px
+type — so `baselineShift` reads both off `TextMetrics` (`alphabeticBaseline`
+under `textBaseline: 'middle'`, against `fontBoundingBox*`) and offsets the
+block by the difference rather than assuming it away. Rasterized side by side
+through a `foreignObject`, the two then land on the same rows to the pixel at
+24–60px and within one row at 91px.
+
+The layer element does **not** clip, either: a fixed size too big for its box
+spills out of it on the canvas, and the frame — which does clip — is where the
+JPEG's own edge is.
+
+An `arrow` is an inline SVG `<polyline>` over a `viewBox` that *is* the layer's canvas-pixel box:
+the same three points, the same `stroke-linecap: round`, the same
+`max(1, round(min(w, h) · ARROW_STROKE))` width, and the same refusal to draw a
+box too small to hold its own stroke. The `❯` glyph is gone.
+
+`preview.js` imports those numbers — `MIN_AUTO_PX`, `TEXT_SHADOW`,
+`ARROW_STROKE`, `VALIGN_SLACK`, `ALIGN_ANCHOR`, `fontSpec`, `counterText` —
+from `render.js` rather than restating them, and the dependency runs one way:
+the preview reads the render, never the reverse. `carouselStudioPreview.test.js`
+paints the same layer through both halves and asserts they agree line for line,
+so the claim is falsifiable rather than aspirational. What remains different
+between the stage and the JPEG is glyph **rasterization** — subpixel positioning
+and hinting — and nothing else. The render is still the contract; `paintSlide`
+is what produces bytes.
 
 ## What the studio does not yet offer
 
@@ -637,7 +674,7 @@ Two gaps are S3's own:
 | Layer type dispatch | A table in `document.js` (`LAYER_BUILDERS`) and its twin in `render.js` (`LAYER_PAINTERS`), keyed by `type` | `LAYER_TYPES` is derived from the builders, so the list of what is valid and the code that produces it cannot disagree. On the draw side a type the schema knows and the build cannot paint is a missing key — skipped whole — rather than a half-executed branch, so a future sixth type degrades instead of corrupting a slide |
 | A broken `image` layer | Skipped; the rest of the slide still renders | A source that will not fetch, a decode that fails or a box with no area drops that one layer out of the map `paintImageLayer` reads. One broken logo must never cost a whole carousel — the same reason a bad gradient degrades in `normalizeBg` rather than throwing mid-encode |
 | `arrow` as a shape | A stroked canvas path, not a glyph | The theme font stack is whatever the theme says it is, and nothing guarantees it carries an arrow: a `text` layer holding "→" is one missing face away from a tofu box baked into a JPEG |
-| Layer preview fidelity | Position, size, wrap and colour — but no promise of pixel parity with the canvas' text metrics | CSS has no `measureText`, so an auto-fit layer previews at a fixed fraction of canvas height and the browser does the line breaking. Chasing parity would mean a second typesetter in the preview, which is the drift the Canvas/CSS pair exists to prevent. The render is the contract |
+| Layer preview fidelity | The preview measures on its own offscreen 2D context and runs the render's `wrapText` / `autoFitText`, then emits the resolved lines `white-space: pre` at the painter's own line box; `arrow` is an inline SVG polyline over the same `layerRect` numbers. Only glyph rasterization still differs | The earlier position — fixed 9% auto-fit, browser line breaking, a `❯` glyph — was accepted because chasing parity looked like a second typesetter, "the drift the Canvas/CSS pair exists to prevent". Binding `measure` to a real context is the opposite of that: `wrapText`/`autoFitText` take a `measure` callback precisely so there can be one typesetter with two callers, and the constants come from `render.js` by import rather than by copy. The render is still the contract |
 
 ### The carousel document
 

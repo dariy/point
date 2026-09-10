@@ -681,18 +681,23 @@
  * `paintDeckLayers`, its content painted by type. `pointer-events: none` keeps
  * it from intercepting the deck frame's gesture — a layer press is routed
  * geometrically by `hitLayer` (gestures.js) against the selected layer's box,
- * not by DOM hit-testing. The font stack matches the token the renderer
- * resolves, so preview and JPEG agree on wrap and size within a pixel or two. */
+ * not by DOM hit-testing.
+ *
+ * The font stack is the same token the renderer resolves — and it is the only
+ * type decision left to CSS. Wrap points, fitted size, line box and vertical
+ * origin all arrive as inline styles from `preview.js`, which measures them on
+ * a 2D context through the renderer's own `wrapText` / `autoFitText`; hence no
+ * `white-space` or `line-height` here to override them with.
+ *
+ * No `overflow: hidden` either: a fixed-size `text` layer too big for its box
+ * spills out of it on the canvas, and the frame — which does clip — is where
+ * the JPEG's own edge is. Clipping at the layer box would be the preview
+ * inventing a boundary the render does not have. */
 .carousel-studio__layer,
 .carousel-studio__span-layer {
   position: absolute;
-  overflow: hidden;
-  display: flex;
   pointer-events: none;
   font-family: var(--font-family, sans-serif);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.2;
 }
 
 /* A spanning layer's slice on one frame — positioned by `paintSpanLayers` from

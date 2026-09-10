@@ -84,6 +84,7 @@ import {
 } from "./studio/layout.js";
 import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
 import {
+  ensurePreviewFont,
   paintAnchorRail,
   paintDeckLayers,
   paintDeckSlide,
@@ -1566,6 +1567,18 @@ export default class CarouselStudioPage extends Component {
     if (source) {
       if (deck) this._paintDeck();
       else this._paintSplit(source);
+    }
+
+    // The preview typesets on a real 2D context, and until the theme's face has
+    // loaded that context measures a system fallback — so the first paint of a
+    // cold load wraps against the wrong metrics. One await for the whole
+    // session (preview.js memoizes it), then one repaint; it resolves `false`
+    // on every render after that, so this costs a microtask and nothing else.
+    // Split mode carries no layers, so only the deck has type to re-measure.
+    if (deck && source) {
+      ensurePreviewFont().then((repaint) => {
+        if (repaint && !this._unmounted) this._paintDeck();
+      });
     }
 
     this._wireControls();

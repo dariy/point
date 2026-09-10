@@ -22,6 +22,13 @@
  * render report per-slide progress. An `image` layer holds to the same rule: it
  * is decoded cropped and resized to its own box, and closed with the slide it
  * was painted on. See `docs/features/carousel-studio.md`.
+ *
+ * The typographic constants below (`MIN_AUTO_PX`, `TEXT_SHADOW`, `ARROW_STROKE`,
+ * `VALIGN_SLACK`, `ALIGN_ANCHOR`, the mark colour and the font stack) are
+ * exported rather than private, and so are `fontSpec` and `counterText`: this
+ * module is the contract the studio's live preview has to match, and
+ * `studio/preview.js` binds to these numbers instead of copying them. The
+ * dependency runs one way — the preview reads the render, never the reverse.
  */
 
 import {
@@ -50,21 +57,21 @@ const JPEG_TYPE = 'image/jpeg';
  * built-in stack is worth more than a failed encode, and there is no bundled
  * WOFF2 to fall back to — see `docs/vendors.md` for why there never will be.
  */
-const DEFAULT_FONT_STACK =
+export const DEFAULT_FONT_STACK =
   '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif';
 
 /** Floor for auto-fit, in canvas pixels: below this the type is unreadable at
  *  any size the slide is viewed, so clipping is the more honest failure. */
-const MIN_AUTO_PX = 8;
+export const MIN_AUTO_PX = 8;
 
 /** `shadow: true` is one opinionated preset — legibility over a photograph, not
  *  a typographic control surface. Both numbers are multiples of the font size,
  *  so the shadow survives a resize and an aspect change with the type. */
-const TEXT_SHADOW = { color: 'rgba(0, 0, 0, 0.55)', blur: 0.16, offsetY: 0.05 };
+export const TEXT_SHADOW = { color: 'rgba(0, 0, 0, 0.55)', blur: 0.16, offsetY: 0.05 };
 
 /** White, matching the schema's own default: a layer is a mark over a
  *  photograph, and dark photographs are the common case. */
-const DEFAULT_MARK_COLOR = '#ffffff';
+export const DEFAULT_MARK_COLOR = '#ffffff';
 
 /** Black, matching `document.js`'s `DEFAULT_BG_COLOR` — a `rect` layer with no
  *  usable fill is a scrim, and a scrim darkens. */
@@ -72,10 +79,10 @@ const DEFAULT_RECT_FILL = '#000000';
 
 /** An arrow's stroke, as a fraction of its box's shorter side. Heavy enough to
  *  read at feed size, light enough that the chevron is still a chevron. */
-const ARROW_STROKE = 0.16;
+export const ARROW_STROKE = 0.16;
 
 /** Where the wrapped block sits in the slack its box leaves, per `valign`. */
-const VALIGN_SLACK = {
+export const VALIGN_SLACK = {
   top: () => 0,
   middle: (slack) => slack / 2,
   bottom: (slack) => slack,
@@ -84,7 +91,7 @@ const VALIGN_SLACK = {
 /** Where the text anchor sits in the box, per `align`. The keys double as the
  *  canvas `textAlign` values, which is what keeps the offset and the alignment
  *  it pairs with from drifting apart. */
-const ALIGN_ANCHOR = {
+export const ALIGN_ANCHOR = {
   left: () => 0,
   center: (w) => w / 2,
   right: (w) => w,
@@ -190,7 +197,7 @@ function gradientFill(bg) {
  * @param {number} size canvas pixels
  * @param {string} family the resolved stack
  */
-function fontSpec(weight, size, family) {
+export function fontSpec(weight, size, family) {
   return `${Math.round(weight) || 400} ${size}px ${family}`;
 }
 
@@ -367,7 +374,7 @@ function paintRectLayer(ctx, layer, box) {
  * @param {number} index 0-based slide index; `{i}` is `index + 1`
  * @param {number} count slides in the deck
  */
-function counterText(format, index, count) {
+export function counterText(format, index, count) {
   const f = typeof format === 'string' ? format : '';
   return f.replace(/\{i\}/g, String(index + 1)).replace(/\{n\}/g, String(count));
 }

@@ -11,15 +11,45 @@
  * Source paths are set from JS rather than interpolated into a style
  * attribute: the `html` tag can HTML-escape a value, but not CSS-escape it, and
  * a media path with a quote in it would otherwise break out of the `url()`.
+ *
+ * Type is the one thing CSS cannot be trusted to reproduce on its own, because
+ * CSS has no `measureText`: left to the browser, the preview would break lines
+ * where the browser likes and the JPEG would break them where `wrapText` does.
+ * So the preview measures — on one memoized offscreen 2D context, in the same
+ * face `render.js` resolves — and calls the very functions the renderer calls,
+ * {@link autoFitText} and {@link wrapText}, with `measure` bound to it. There
+ * is exactly one typesetter; this module is a second caller of it, not a second
+ * copy. What remains different between the stage and the JPEG is glyph
+ * rasterization, and nothing else.
+ *
+ * That measuring context, and the resolved font stack behind it, are the only
+ * state here. Everything else still takes the elements to paint and the numbers
+ * to paint them with; the caller (`index.js`) owns both, and calls
+ * {@link ensurePreviewFont} once so the first paint after the web font lands
+ * can be re-measured against the real face.
  */
 
 import {
+  autoFitText,
   backgroundFit,
   canvasSize,
   deckSlideFitCSS,
   layerCSS,
+  layerRect,
   spanLayerRect,
+  wrapText,
 } from "../geometry.js";
+import {
+  ALIGN_ANCHOR,
+  ARROW_STROKE,
+  DEFAULT_FONT_STACK,
+  DEFAULT_MARK_COLOR,
+  MIN_AUTO_PX,
+  TEXT_SHADOW,
+  VALIGN_SLACK,
+  counterText,
+  fontSpec,
+} from "../render.js";
 
 /** Behind the source image on the split stage and every split filmstrip frame —
  *  visible only where the image doesn't reach (the `pad` strategy's trailing gap
@@ -182,29 +212,210 @@ function paintDeckBg(bgs, { slide, fit, url, aspect, hasPad }) {
   });
 }
 
-/** Flex mapping for a text layer's horizontal / vertical alignment. */
-const FLEX_ALIGN = { left: "flex-start", center: "center", right: "flex-end" };
-const FLEX_VALIGN = { top: "flex-start", middle: "center", bottom: "flex-end" };
+const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** `{i}` → 1-based slide number, `{n}` → deck length; the twin of `counterText`
- *  in `render.js`, kept here so this module never imports the canvas layer. */
-function counterFormat(format, index, count) {
-  const f = typeof format === "string" ? format : "";
-  return f.replace(/\{i\}/g, String(index + 1)).replace(/\{n\}/g, String(count));
+/** The resolved font stack, or `null` until {@link ensurePreviewFont} has
+ *  settled. Measuring before then is measuring a system fallback, which is why
+ *  the caller repaints once this lands. */
+let fontStack = null;
+/** The in-flight resolve, so N callers cost one `document.fonts.ready` await. */
+let fontPending = null;
+/** The offscreen 2D context every measurement goes through, memoized; `null`
+ *  once we know this environment cannot give us one. `undefined` = not tried. */
+let measureCtx;
+
+/**
+ * Bind the preview's typesetter to the page's real font, once per session:
+ * await the face, then read the same `--font-family` token `browserDeps`
+ * resolves for the render. Until it settles the preview measures in
+ * {@link DEFAULT_FONT_STACK} — the renderer's own fallback — so a cold load
+ * shows type of roughly the right size rather than nothing.
+ *
+ * Resolves `true` when the caller should repaint (the stack was not known when
+ * it asked) and `false` when it already was, so a re-render that happens after
+ * the font landed does not schedule a redundant second paint.
+ *
+ * @returns {Promise<boolean>} whether the caller should repaint
+ */
+export function ensurePreviewFont() {
+  if (fontStack || typeof document === "undefined") return Promise.resolve(false);
+  if (!fontPending) {
+    fontPending = (async () => {
+      // The face, not just the stack: `measureText` against a font that has not
+      // loaded silently measures a system fallback — the same trap
+      // `browserDeps.resolveFont` documents, and the same fix.
+      await document.fonts?.ready;
+      const stack = getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-family")
+        .trim();
+      fontStack = stack || DEFAULT_FONT_STACK;
+    })();
+  }
+  return fontPending.then(() => true);
+}
+
+/**
+ * A `measure` callback for {@link wrapText} / {@link autoFitText}, bound to one
+ * layer's weight on the shared offscreen context — the exact shape
+ * `paintTextLayer` builds against the slide canvas. `null` where no 2D context
+ * can be had, which is an environment that could not render the JPEG either.
+ *
+ * @param {number} weight
+ * @returns {import('../geometry.js').MeasureText|null}
+ */
+function measurer(weight) {
+  const ctx = measureContext();
+  if (!ctx) return null;
+  return (candidate, size) => {
+    ctx.font = fontSpec(weight, size, fontStack || DEFAULT_FONT_STACK);
+    return ctx.measureText(candidate);
+  };
+}
+
+/** The shared offscreen context, or `null` where none can be had. */
+function measureContext() {
+  if (measureCtx === undefined) {
+    const canvas = typeof document === "undefined" ? null : document.createElement("canvas");
+    // `getContext` itself can answer null — a headless DOM with no canvas.
+    measureCtx = (canvas?.getContext && canvas.getContext("2d")) || null;
+  }
+  return measureCtx;
+}
+
+/**
+ * How far to move a CSS line box so its baseline lands on the canvas baseline —
+ * the one place the DOM twin cannot just restate the painter's arithmetic.
+ *
+ * Both media put the baseline at `lineBox/2 + k` from the top of the line, and
+ * differ only in `k`. Canvas `textBaseline: 'middle'` uses the font's *central*
+ * baseline, which `TextMetrics.alphabeticBaseline` reports directly; a CSS line
+ * box uses half-leading, which puts it at `(ascent - descent)/2`. The two are
+ * not the same number — measured in Chromium it is a ~0.06em discrepancy, which
+ * at 60px type is four canvas pixels of drift between the stage and the JPEG.
+ * So the difference is measured, not assumed, and applied as an offset.
+ *
+ * Zero where the browser reports no baseline metrics (the property is newer
+ * than the rest of `TextMetrics`), which is exactly the old behaviour.
+ *
+ * @param {number} weight
+ * @param {number} fontSize the size the block is actually set at
+ * @returns {number} canvas pixels to add to the block's top
+ */
+function baselineShift(weight, fontSize) {
+  const ctx = measureContext();
+  if (!ctx) return 0;
+  // The scan left whatever size it stopped on behind; the shift belongs to the
+  // size the type is finally set at.
+  ctx.font = fontSpec(weight, fontSize, fontStack || DEFAULT_FONT_STACK);
+  ctx.textBaseline = "alphabetic";
+  const m = ctx.measureText("M");
+  ctx.textBaseline = "middle";
+  const central = ctx.measureText("M").alphabeticBaseline;
+  // Leave it as the rest of the module expects to find it.
+  ctx.textBaseline = "alphabetic";
+  const half = (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+  // `alphabeticBaseline` counts upwards from the anchor, so the baseline below
+  // it is its negation.
+  const shift = -central - half;
+  return Number.isFinite(shift) ? shift : 0;
+}
+
+/**
+ * Where `paintTextLayer` (`render.js`) will put this layer's type, in the box's
+ * own canvas pixels — the same wrap, the same fitted size, the same vertical
+ * origin. Nothing here decides line breaks: `size: null` asks
+ * {@link autoFitText} and a numeric size asks {@link wrapText}, which is what
+ * the renderer asks, with the same arguments.
+ *
+ * `top` is relative to the **box's top edge** rather than the canvas, because
+ * the DOM twin positions inside the layer element; it can be negative, exactly
+ * as the painter's `slack` can, when a fixed size overflows its box.
+ *
+ * @param {{text: string,
+ *   layer: {size?: number|null, lineHeight?: number, valign?: string, align?: string},
+ *   box: {x:number,y:number,w:number,h:number}, frameH: number,
+ *   measure: import('../geometry.js').MeasureText}} o  `layer` is read for its
+ *   four typographic fields only, so a `counter` (which carries no
+ *   `lineHeight`) is the same argument as a `text`
+ * @returns {{fontSize:number, lines:string[], lineBox:number, top:number,
+ *   align:'left'|'center'|'right'}|null} `null` for nothing to set
+ */
+export function textPlan({ text, layer, box, frameH, measure }) {
+  const body = typeof text === "string" ? text : "";
+  if (!body.trim()) return null;
+  const lineHeight = layer.lineHeight > 0 ? layer.lineHeight : 1.2;
+
+  let fontSize;
+  /** @type {string[]} */
+  let lines;
+  if (layer.size == null) {
+    const max = Math.max(MIN_AUTO_PX, Math.floor(Math.min(box.h / lineHeight, box.w)));
+    ({ fontSize, lines } = autoFitText({
+      text: body,
+      maxWidth: box.w,
+      maxHeight: box.h,
+      measure,
+      lineHeight,
+      min: MIN_AUTO_PX,
+      max,
+    }));
+  } else {
+    fontSize = Math.max(1, Math.round(layer.size * frameH));
+    lines = wrapText(body, box.w, fontSize, measure);
+  }
+  if (!lines.length) return null;
+
+  const lineBox = fontSize * lineHeight;
+  const slack = box.h - lines.length * lineBox;
+  return {
+    fontSize,
+    lines,
+    lineBox,
+    top: (VALIGN_SLACK[layer.valign] || VALIGN_SLACK.top)(slack),
+    align: /** @type {'left'|'center'|'right'} */ (
+      ALIGN_ANCHOR[layer.align] ? layer.align : "left"
+    ),
+  };
+}
+
+/**
+ * The chevron `paintArrowLayer` (`render.js`) will stroke, in the box's own
+ * canvas pixels: three points and a width, inset by half the stroke so the
+ * round cap stays inside the box. `null` for a box too small to hold its own
+ * stroke — which the painter skips, so the preview skips it too.
+ *
+ * @param {{w:number, h:number}} box
+ * @param {'left'|'right'} direction
+ * @returns {{stroke:number, points:Array<[number,number]>}|null}
+ */
+export function arrowPlan(box, direction) {
+  const stroke = Math.max(1, Math.round(Math.min(box.w, box.h) * ARROW_STROKE));
+  const inset = stroke / 2;
+  const x0 = inset;
+  const x1 = box.w - inset;
+  const y0 = inset;
+  const y1 = box.h - inset;
+  if (!(x1 > x0) || !(y1 > y0)) return null;
+  const [tipX, tailX] = direction === "left" ? [x0, x1] : [x1, x0];
+  return {
+    stroke,
+    points: [
+      [tailX, y0],
+      [tipX, (y0 + y1) / 2],
+      [tailX, y1],
+    ],
+  };
 }
 
 /**
  * Paint a slide's own layers as positioned DOM elements over its image — the
  * CSS twin of `render.js`'s `paintLayers`. Every `.carousel-studio__layer` the
- * markup placed inside a `[data-slice]` host is resolved through `layerCSS`, so
- * the preview cannot round a box differently from the canvas, then given the
- * type's own paint. A `data-layer` index past the end of the list (the layer
- * was deleted since the last render) hides its element rather than leaving a
- * stale mark.
- *
- * The preview is honest about position, size and wrap; it does not promise
- * pixel-parity with the canvas' text metrics and does not need to — see
- * docs/features/carousel-studio.md, S3.
+ * markup placed inside a `[data-slice]` host is resolved through `layerRect` —
+ * the very rect `paintLayers` hands its painters — and written out as percent
+ * of it, so the preview cannot round a box differently from the canvas. The
+ * pixel rect goes on to the type paint, which needs canvas pixels to typeset
+ * in. A `data-layer` index past the end of the list (the layer was deleted
+ * since the last render) hides its element rather than leaving a stale mark.
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  the slide's `[data-slice]`
  *   elements: the stage slice and the filmstrip frame
@@ -214,7 +425,7 @@ function counterFormat(format, index, count) {
 export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
   const list = Array.isArray(layers) ? layers : [];
   const [w, h] = canvasSize(aspect);
-  // A layer `size` is a fraction of canvas height; the frame is a `cqw` query
+  // A canvas length is a fraction of canvas height; the frame is a `cqw` query
   // container (carousel.css), and the frame's own aspect is the canvas', so one
   // unit of canvas height is `(h / w) · 100` cqw of the frame.
   const heightCqw = w > 0 ? (h / w) * 100 : 100;
@@ -230,12 +441,12 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
         return;
       }
       el.style.display = "";
-      const box = layerCSS(layer, aspect);
-      el.style.left = `${box.x}%`;
-      el.style.top = `${box.y}%`;
-      el.style.width = `${box.w}%`;
-      el.style.height = `${box.h}%`;
-      paintLayerContent(el, layer, index, count, heightCqw);
+      const rect = layerRect(layer, aspect);
+      el.style.left = `${(rect.x / w) * 100}%`;
+      el.style.top = `${(rect.y / h) * 100}%`;
+      el.style.width = `${(rect.w / w) * 100}%`;
+      el.style.height = `${(rect.h / h) * 100}%`;
+      paintLayerContent(el, layer, { index, count, rect, frameH: h, heightCqw });
     });
   });
 }
@@ -277,7 +488,7 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
       el.style.top = `${(rect.y / h) * 100}%`;
       el.style.width = `${(rect.w / w) * 100}%`;
       el.style.height = `${(rect.h / h) * 100}%`;
-      paintLayerContent(el, layer, index, count, heightCqw);
+      paintLayerContent(el, layer, { index, count, rect, frameH: h, heightCqw });
     });
   });
 }
@@ -285,44 +496,27 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
 /**
  * The per-type paint for one layer element. Every property any branch below can
  * set is reset first, so a layer that changed type (delete + re-add) does not
- * inherit the previous mark's styling.
+ * inherit the previous mark's styling; `textContent = ""` drops whatever child
+ * the type paint appended with it.
  *
  * @param {HTMLElement} el
  * @param {import('../document.js').CarouselLayer} layer
- * @param {number} index 0-based slide index (a `counter`'s `{i}`)
- * @param {number} count slides in the deck (a `counter`'s `{n}`)
- * @param {number} heightCqw one unit of canvas height in `cqw` of the frame
+ * @param {{index: number, count: number, frameH: number, heightCqw: number,
+ *   rect: {x:number,y:number,w:number,h:number}}} env  the slide's place in the
+ *   deck (a `counter`'s `{i}` / `{n}`), the canvas height a numeric type size
+ *   is a fraction of, one unit of canvas height in `cqw` of the frame, and this
+ *   layer's box in canvas pixels
  */
-function paintLayerContent(el, layer, index, count, heightCqw) {
+function paintLayerContent(el, layer, env) {
   el.textContent = "";
   el.style.backgroundImage = "none";
   el.style.backgroundColor = "transparent";
   el.style.color = "";
   el.style.opacity = "";
   el.style.borderRadius = "";
-  el.style.textShadow = "";
-  el.style.fontWeight = "";
-  el.style.fontSize = "";
-  el.style.lineHeight = "";
-  el.style.textAlign = "";
-  el.style.justifyContent = "";
-  el.style.alignItems = "";
-
-  const cqw = (frac) => `${(frac * heightCqw).toFixed(2)}cqw`;
 
   if (layer.type === "text" || layer.type === "counter") {
-    el.textContent =
-      layer.type === "counter"
-        ? counterFormat(layer.format, index, count)
-        : layer.text || "";
-    el.style.color = layer.color;
-    el.style.fontWeight = String(layer.weight);
-    el.style.lineHeight = String("lineHeight" in layer ? layer.lineHeight : 1.2);
-    el.style.fontSize = cqw(layer.size == null ? 0.09 : layer.size);
-    el.style.textAlign = layer.align;
-    el.style.justifyContent = FLEX_ALIGN[layer.align] || "flex-start";
-    el.style.alignItems = FLEX_VALIGN[layer.valign] || "flex-start";
-    if (layer.shadow) el.style.textShadow = "0 0.04em 0.12em rgba(0, 0, 0, 0.55)";
+    paintTextContent(el, layer, env);
   } else if (layer.type === "rect") {
     el.style.backgroundColor = layer.fill;
     el.style.opacity = String(layer.opacity);
@@ -334,13 +528,100 @@ function paintLayerContent(el, layer, index, count, heightCqw) {
     el.style.backgroundSize = layer.fit === "cover" ? "cover" : "contain";
     el.style.opacity = String(layer.opacity);
   } else if (layer.type === "arrow") {
-    el.textContent = layer.direction === "left" ? "❮" : "❯";
-    el.style.color = layer.color;
-    el.style.opacity = String(layer.opacity);
-    el.style.fontSize = cqw(0.5);
-    el.style.justifyContent = "center";
-    el.style.alignItems = "center";
+    paintArrowContent(el, layer, env.rect);
   }
+}
+
+/**
+ * One `text` or `counter` layer, set the way `paintTextLayer` will set it.
+ *
+ * The lines are {@link textPlan}'s, emitted `white-space: pre` so the browser
+ * cannot re-break them, in a block whose `line-height` is the painter's own
+ * `fontSize · lineHeight`. With that, both media put line `i`'s baseline at
+ * `top + (i + 0.5) · lineBox + k` and differ only in `k` — half-leading's
+ * `(ascent - descent)/2` for CSS, the font's central baseline for canvas
+ * `textBaseline: 'middle'` — which is what {@link baselineShift} measures and
+ * takes out.
+ *
+ * The block is *positioned*, not aligned: the flex box the stylesheet used to
+ * give the layer element would centre the browser's idea of the text, and the
+ * origin has to be `VALIGN_SLACK`'s — the render's.
+ *
+ * Horizontal placement stays `text-align` over the full box width, which is
+ * exactly what `ALIGN_ANCHOR` plus the canvas `textAlign` come to.
+ *
+ * @param {HTMLElement} el
+ * @param {import('../document.js').CarouselTextLayer
+ *   | import('../document.js').CarouselCounterLayer} layer
+ * @param {{index: number, count: number, frameH: number, heightCqw: number,
+ *   rect: {x:number,y:number,w:number,h:number}}} env
+ */
+function paintTextContent(el, layer, { index, count, rect, frameH, heightCqw }) {
+  const text =
+    layer.type === "counter" ? counterText(layer.format, index, count) : layer.text || "";
+  const measure = measurer(layer.weight);
+  if (!measure) return;
+  const plan = textPlan({ text, layer, box: rect, frameH, measure });
+  if (!plan) return;
+
+  const cqw = (px) => `${((px / frameH) * heightCqw).toFixed(3)}cqw`;
+  const block = el.ownerDocument.createElement("span");
+  block.className = "carousel-studio__layer-text";
+  block.textContent = plan.lines.join("\n");
+  const s = block.style;
+  s.position = "absolute";
+  s.left = "0";
+  s.right = "0";
+  s.top = cqw(plan.top + baselineShift(layer.weight, plan.fontSize));
+  s.whiteSpace = "pre";
+  s.overflowWrap = "normal";
+  s.fontSize = cqw(plan.fontSize);
+  s.lineHeight = cqw(plan.lineBox);
+  s.textAlign = plan.align;
+  s.fontWeight = String(layer.weight);
+  s.color = layer.color || DEFAULT_MARK_COLOR;
+  if (layer.shadow) {
+    // Both numbers are multiples of the font size in the painter too, and a
+    // CSS blur radius and a canvas `shadowBlur` are the same 2σ convention.
+    s.textShadow = `0 ${TEXT_SHADOW.offsetY}em ${TEXT_SHADOW.blur}em ${TEXT_SHADOW.color}`;
+  }
+  el.appendChild(block);
+}
+
+/**
+ * One `arrow` layer, as the SVG twin of `paintArrowLayer`'s path: the same
+ * three points, the same stroke width, the same round cap and join, over a
+ * `viewBox` that *is* the layer's canvas-pixel box — so the chevron is the
+ * render's geometry scaled, not an approximation of it. The element's own
+ * aspect is the box's (both are percentages of a frame that carries the canvas
+ * aspect), so the uniform `viewBox` scale is exact.
+ *
+ * @param {HTMLElement} el
+ * @param {import('../document.js').CarouselArrowLayer} layer
+ * @param {{w:number, h:number}} rect the layer's box in canvas pixels
+ */
+function paintArrowContent(el, layer, rect) {
+  el.style.opacity = String(layer.opacity);
+  const plan = arrowPlan(rect, layer.direction);
+  if (!plan) return;
+
+  const doc = el.ownerDocument;
+  const svg = doc.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${rect.w} ${rect.h}`);
+  svg.style.position = "absolute";
+  svg.style.left = "0";
+  svg.style.top = "0";
+  svg.style.width = "100%";
+  svg.style.height = "100%";
+  const poly = doc.createElementNS(SVG_NS, "polyline");
+  poly.setAttribute("points", plan.points.map(([x, y]) => `${x},${y}`).join(" "));
+  poly.setAttribute("fill", "none");
+  poly.setAttribute("stroke", layer.color || DEFAULT_MARK_COLOR);
+  poly.setAttribute("stroke-width", String(plan.stroke));
+  poly.setAttribute("stroke-linecap", "round");
+  poly.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(poly);
+  el.appendChild(svg);
 }
 
 /**
