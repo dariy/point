@@ -520,7 +520,8 @@ function paintLayerContent(el, layer, env) {
   } else if (layer.type === "rect") {
     el.style.backgroundColor = layer.fill;
     el.style.opacity = String(layer.opacity);
-    el.style.borderRadius = `${(layer.radius * 100).toFixed(1)}%`;
+    const radius = layer.radius * Math.min(env.rect.w, env.rect.h);
+    el.style.borderRadius = `${(radius * (env.heightCqw / env.frameH)).toFixed(2)}cqw`;
   } else if (layer.type === "image") {
     el.style.backgroundImage = layer.source ? `url("${encodeURI(layer.source)}")` : "none";
     el.style.backgroundRepeat = "no-repeat";
