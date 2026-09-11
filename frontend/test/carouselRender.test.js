@@ -1237,7 +1237,7 @@ describe('layers through the sequencers', () => {
       ]);
     });
 
-    test('a span layer paints after the slide’s own layers', async () => {
+    test('a span layer paints before the slide’s own layers', async () => {
       const f = fakeDeps({ srcW: 3000, srcH: 1000 });
       const doc = { ...deckOf('/x.jpg', 2, '4:5', 3000, 1000), spanLayers: [spanRect] };
       doc.slides[0].layers = [textLayer({ text: 'own' })];
@@ -1245,8 +1245,8 @@ describe('layers through the sequencers', () => {
 
       const [first] = surfaces(f.log);
       assert.ok(
-        first.findIndex((e) => e[0] === 'fillText') < first.findIndex((e) => e[0] === 'fillRect'),
-        'the span mark composites over the slide’s own type',
+        first.findIndex((e) => e[0] === 'fillRect') < first.findIndex((e) => e[0] === 'fillText'),
+        'the span mark composites under the slide’s own type',
       );
     });
 

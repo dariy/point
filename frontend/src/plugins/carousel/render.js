@@ -629,8 +629,8 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
     }
   }
   ctx.drawImage(bitmap, rect.dx, rect.dy, rect.dw, rect.dh);
-  paintLayers(ctx, layers, opts.aspect, opts);
   paintSpanLayers(ctx, opts.spanLayers, opts.aspect, opts);
+  paintLayers(ctx, layers, opts.aspect, opts);
 }
 
 /**

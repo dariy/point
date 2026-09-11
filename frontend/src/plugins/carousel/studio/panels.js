@@ -398,7 +398,7 @@ export function builder({
             role="group"
             aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
           >
-            ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
+            ${deckLayers()}${spanNodes}${layerNodes(slide)}${layerChrome(
               (i === deckIndex && slideChrome) || spanChrome,
             )}
             <span class="carousel-studio__frame-num">${String(i + 1)}</span>
