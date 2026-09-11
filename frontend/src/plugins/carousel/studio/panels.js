@@ -560,33 +560,35 @@ export function builder({
       class="carousel-studio__builder ${propsOpen ? "is-details-open" : ""}"
       style="--carousel-stage-zoom:${String(stageZoom)}"
     >
-      ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+      <div class="carousel-studio__main">
+        ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
 
-      ${stageBar({ propsOpen, stageZoom })}
+        ${stageBar({ propsOpen, stageZoom })}
 
-      <div class="carousel-studio__stage-scroll">
-        <div
-          class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
-            ? "carousel-studio__stage--anchor"
-            : ""}"
-          style="aspect-ratio:${String(n * w)}/${String(h)}"
-          ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
-        >
-          ${stageSlides}${dividers}${guides}${rail}
+        <div class="carousel-studio__stage-scroll">
+          <div
+            class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
+              ? "carousel-studio__stage--anchor"
+              : ""}"
+            style="aspect-ratio:${String(n * w)}/${String(h)}"
+            ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
+          >
+            ${stageSlides}${dividers}${guides}${rail}
+          </div>
         </div>
-      </div>
 
-      <div class="carousel-studio__filmstrip-row">
-        <div
-          class="carousel-studio__filmstrip"
-          aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
-        >
-          ${strip}
+        <div class="carousel-studio__filmstrip-row">
+          <div
+            class="carousel-studio__filmstrip"
+            aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
+          >
+            ${strip}
+          </div>
+          ${railTools}
         </div>
-        ${railTools}
-      </div>
 
-      ${renderedStrip}
+        ${renderedStrip}
+      </div>
 
       <div class="carousel-studio__props-backdrop" data-action="close-props"></div>
       <aside

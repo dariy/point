@@ -31,6 +31,18 @@
   gap: var(--spacing-md);
 }
 
+/* Everything but the properties panel: mode toggle, stage, filmstrip,
+ * rendered strip. Its own class so `.carousel-studio__builder` can become a
+ * row at 64em+ with this as the flexible column and the panel as a fixed
+ * sidebar beside it, the same split `.editor-layout`/`.editor-main` draw in
+ * `frontend/css/light/editor.css`. */
+.carousel-studio__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
 /* The stage scrolls sideways rather than shrinking. A stage sized to the
  * container's width is a sliver as soon as the deck is long — at the 20-slide
  * maximum it is a 16:1 strip — so the stage takes a height budget instead and
@@ -867,14 +879,15 @@
 }
 
 /* ── Properties panel ──────────────────────────────────────────────────────
- * The mode's own panel — deck panel plus layers, or the split fit panel. Wide,
- * it is a block in the builder column the toggle can collapse. Below 64em it
- * becomes a bottom sheet over the stage, which is the pattern the post editor
- * already ships (`.editor-details-panel`, `frontend/css/light/editor.css`):
- * state class on the layout root, sibling backdrop, `85dvh`, translated off the
- * bottom when closed. Copied rather than extracted — `components/shared/` has
- * no sheet primitive, and inventing one for the second user is how a primitive
- * ends up fitting neither. */
+ * The mode's own panel — deck panel plus layers, or the split fit panel. At
+ * 64em+ it is a sticky third column beside the stage, the toggle showing and
+ * hiding it. Below 64em it becomes a bottom sheet over the stage instead —
+ * both are the pattern the post editor already ships (`.editor-details-panel`,
+ * `frontend/css/light/editor.css`): state class on the layout root, sibling
+ * backdrop below 64em, `85dvh`, translated off the bottom when closed. Copied
+ * rather than extracted — `components/shared/` has no rail/sheet primitive,
+ * and inventing one for the second user is how a primitive ends up fitting
+ * neither. */
 .carousel-studio__props {
   display: flex;
   flex-direction: column;
@@ -888,8 +901,34 @@
 }
 
 @media (min-width: 64em) {
-  .carousel-studio__builder:not(.is-details-open) .carousel-studio__props {
+  .carousel-studio__builder {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--spacing-lg);
+  }
+
+  .carousel-studio__builder .carousel-studio__main {
+    flex: 1 1 auto;
+  }
+
+  .carousel-studio__builder .carousel-studio__props {
+    flex-shrink: 0;
+    width: 20rem;
     display: none;
+    padding: var(--spacing-md);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+    position: sticky;
+    top: var(--spacing-md);
+    max-height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
+    max-height: calc(100dvh - var(--header-height) - var(--spacing-xl) * 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .carousel-studio__builder.is-details-open .carousel-studio__props {
+    display: flex;
   }
 }
 
