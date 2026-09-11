@@ -22,6 +22,7 @@ import {
   slideCountOptions,
   spanLayerCoverage,
 } from "../geometry.js";
+import { IMPORT_ACCEPT, IMPORTERS } from "../import/index.js";
 import { MAX_SLIDES, MIN_SLIDES } from "./bounds.js";
 
 /** Fit-panel radio: the two `cover` variants (free count vs. width-filling
@@ -182,11 +183,14 @@ export function actionsBar({
 }
 
 /** Nothing picked yet — the studio needs one image before it has anything to
- *  slice. */
+ *  slice. The other way in is a template, which brings its own slides; the
+ *  gallery sits below this prompt and is reachable from here (see
+ *  `_renderStudio` in `index.js`), so it is named rather than left to be
+ *  found. */
 export function pickPrompt() {
   return html`
     <div class="carousel-studio__pick">
-      <p>Pick one image to slice into slides.</p>
+      <p>Pick one image to slice into slides — or start from a template below.</p>
       <button class="btn btn-primary" data-action="pick-source">Choose image</button>
     </div>`;
 }
@@ -1345,4 +1349,344 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
             </label>`
         : ""}
     </div>`;
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+// The gallery, the two dialogs it opens, and the report an import owes. All
+// four sit *outside* `builder` — a studio with no photo yet renders `pickPrompt`
+// instead of a builder, and "import a deck to start" is exactly the state where
+// a person needs them most.
+
+/** Megabytes, one decimal — `import/adapter.js`'s spelling, so a size in the
+ *  report reads the same as the refusal that quoted one. */
+const mbLabel = (n) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
+
+/** "Slide 4" / "the deck" — a report entry's `slide` is null for the whole file. */
+const dropScope = (slide) => (slide == null ? "The deck" : `Slide ${slide + 1}`);
+
+/**
+ * The template gallery.
+ *
+ * Names only: the listing endpoint carries no envelopes on purpose (a gallery
+ * of names must not pull every inlined asset of every template), so there are
+ * no thumbnails to show and inventing one would mean fetching what the listing
+ * exists to avoid.
+ *
+ * Empty is the normal first state — v1 ships no built-ins — so it says what to
+ * do rather than showing an empty box.
+ *
+ * @param {{templates: Array<{slug: string, name: string}>, loading: boolean,
+ *   error: string, busy: boolean, canSave: boolean}} o
+ */
+export function templateGallery({ templates, loading, error, busy, canSave }) {
+  const rows = templates.map(
+    (t) => html`
+      <li class="carousel-studio__template">
+        <button
+          type="button"
+          class="carousel-studio__template-name"
+          data-action="apply-template"
+          data-slug="${t.slug}"
+          ${busy ? "disabled" : ""}
+        >
+          ${t.name}
+        </button>
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="delete-template"
+          data-slug="${t.slug}"
+          data-name="${t.name}"
+          aria-label="Delete template ${t.name}"
+          ${busy ? "disabled" : ""}
+        >
+          ✕
+        </button>
+      </li>`,
+  );
+
+  return html`
+    <section class="carousel-studio__templates" aria-labelledby="carousel-templates-label">
+      <div class="carousel-studio__templates-head">
+        <h2 class="carousel-studio__subhead" id="carousel-templates-label">Templates</h2>
+        <div class="carousel-studio__fit-chips" role="group" aria-label="Template actions">
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="open-import"
+            ${busy ? "disabled" : ""}
+          >
+            Import…
+          </button>
+          <button
+            type="button"
+            class="carousel-studio__chip"
+            data-action="open-save-template"
+            title="${canSave
+              ? "Store this carousel so another post can start from it"
+              : "Build a carousel first — there is nothing to save yet"}"
+            ${canSave && !busy ? "" : "disabled"}
+          >
+            Save as template
+          </button>
+        </div>
+      </div>
+
+      ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
+      ${loading
+        ? html`<p class="carousel-studio__fit-dims">Loading templates…</p>`
+        : templates.length
+          ? html`<ul class="carousel-studio__template-list">
+              ${rows}
+            </ul>`
+          : html`<p class="carousel-studio__fit-dims">
+              No templates yet — import a .pptx or a set of .svg files to start.
+            </p>`}
+    </section>`;
+}
+
+/**
+ * A modal built from the admin `.modal-overlay` / `.modal` chrome rather than
+ * from `components/shared/Modal.js`: that one mounts a child component into a
+ * body slot, and every other control in the studio is markup this module
+ * returns and `index.js` wires by `data-action`. Two dialogs is not enough to
+ * pay for a second pattern.
+ *
+ * The overlay carries `close`, but the handler compares `event.target` against
+ * it — a click on the panel bubbles to the overlay, and closing on that would
+ * throw away what the user just typed.
+ *
+ * @param {{action: string, title: string, id: string, body: *, footer: *}} o
+ */
+function studioDialog({ action, title, id, body, footer }) {
+  return html`
+    <div class="modal-overlay active carousel-studio__dialog" data-action="${action}">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="${id}">
+        <header class="modal-header">
+          <h3 id="${id}">${title}</h3>
+          <button
+            type="button"
+            class="modal-close"
+            data-action="${action}"
+            data-close="1"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </header>
+        <div class="modal-body">${body}</div>
+        <footer class="modal-footer">${footer}</footer>
+      </div>
+    </div>`;
+}
+
+/**
+ * The import dialog: one `.pptx`, or a multi-select of `.svg` files.
+ *
+ * The accepted formats are listed from `IMPORTERS` rather than written out, so
+ * adding an adapter adds a line here — which is the reason that registry
+ * exists (`import/index.js`).
+ *
+ * @param {{busy: boolean, error: string}} o
+ */
+export function importDialog({ busy, error }) {
+  return studioDialog({
+    action: "close-import",
+    title: "Import a template",
+    id: "carousel-import-title",
+    body: html`
+      <p class="carousel-studio__fit-dims">Point reads:</p>
+      <ul class="carousel-studio__report-list">
+        ${IMPORTERS.map((a) => html`<li>${a.label}</li>`)}
+      </ul>
+      <label class="carousel-studio__control">
+        <span>File</span>
+        <input
+          type="file"
+          id="carousel-import-file"
+          accept="${IMPORT_ACCEPT}"
+          multiple
+          ${busy ? "disabled" : ""}
+        />
+      </label>
+      <p class="carousel-studio__hint">
+        One .pptx holds a whole deck. SVGs are one file per slide — select them
+        together, and they become slides in filename order.
+      </p>
+      ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}`,
+    footer: html`
+      <button type="button" class="btn btn-secondary" data-action="close-import" data-close="1">
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-action="run-import"
+        ${busy ? "disabled" : ""}
+      >
+        ${busy ? "Importing…" : "Import"}
+      </button>`,
+  });
+}
+
+/**
+ * "Save as template": a name, and the slug it is stored under.
+ *
+ * The slug is shown and editable rather than derived silently, because it is
+ * the store's key — saving twice under one slug replaces, which is what makes
+ * re-saving an adapted deck work, and a person cannot decide whether that is
+ * what they want without seeing the key.
+ *
+ * Both fields are wired by id in `index.js` (`_wireTemplateDialog`) and read on
+ * submit; neither drives a re-render, so typing is not interrupted.
+ *
+ * @param {{name: string, slug: string, busy: boolean, error: string}} o
+ */
+export function saveTemplateDialog({ name, slug, busy, error }) {
+  return studioDialog({
+    action: "close-save-template",
+    title: "Save as template",
+    id: "carousel-save-template-title",
+    body: html`
+      <label class="carousel-studio__control">
+        <span>Name</span>
+        <input
+          type="text"
+          id="carousel-template-name"
+          value="${name}"
+          maxlength="200"
+          autocomplete="off"
+          ${busy ? "disabled" : ""}
+        />
+      </label>
+      <label class="carousel-studio__control">
+        <span>Slug</span>
+        <input
+          type="text"
+          id="carousel-template-slug"
+          value="${slug}"
+          maxlength="100"
+          autocomplete="off"
+          ${busy ? "disabled" : ""}
+        />
+      </label>
+      <p class="carousel-studio__hint">
+        Lowercase letters, digits, hyphen or underscore. Saving under a slug
+        that already exists replaces that template.
+      </p>
+      ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}`,
+    footer: html`
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-action="close-save-template"
+        data-close="1"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-action="submit-save-template"
+        ${busy ? "disabled" : ""}
+      >
+        ${busy ? "Saving…" : "Save template"}
+      </button>`,
+  });
+}
+
+/**
+ * What an import kept and what it cost.
+ *
+ * This panel is the reason the importers count their drops instead of ignoring
+ * them: an import that silently lost half a design is worse than one that says
+ * it kept 14 of 22 shapes. Every line here is a fact the adapter recorded —
+ * the prose is written here, which is the split `createReport` documents.
+ *
+ * The fonts line is not decoration. A template names typefaces the site does
+ * not have, and Point renders type in the active theme's family; saying so
+ * once, plainly, is what stops the author hunting for a font picker.
+ *
+ * @param {import('../import/adapter.js').ImportReport} report
+ */
+export function importReportPanel(report) {
+  if (!report) return "";
+  const { shapes, aspect, assets, dropped, failed, warnings, fonts, order } = report;
+  const unread = Math.max(0, report.sourceSlides - report.slides);
+
+  return html`
+    <section class="carousel-studio__report" aria-labelledby="carousel-report-label">
+      <div class="carousel-studio__templates-head">
+        <h2 class="carousel-studio__subhead" id="carousel-report-label">
+          Imported ${report.file || `a ${report.format.toUpperCase()} file`}
+        </h2>
+        <button
+          type="button"
+          class="carousel-studio__chip"
+          data-action="dismiss-report"
+          aria-label="Dismiss import report"
+        >
+          ✕
+        </button>
+      </div>
+
+      <ul class="carousel-studio__report-list">
+        <li>
+          ${String(report.slides)} slides of ${String(report.sourceSlides)}${unread
+            ? ` — ${unread} could not be read`
+            : ""}
+        </li>
+        <li>${String(shapes.kept)} of ${String(shapes.total)} shapes kept</li>
+        <li>${aspect.note}</li>
+        ${assets.count
+          ? html`<li>
+              ${String(assets.count)} ${assets.count === 1 ? "image" : "images"} carried in the
+              template (${mbLabel(assets.bytes)})
+            </li>`
+          : ""}
+        ${fonts.length
+          ? html`<li>
+              Fonts in the file: ${fonts.join(", ")}. Point renders type in the
+              site's theme font, not the template's.
+            </li>`
+          : ""}
+        ${order.length ? html`<li>Slide order: ${order.join(", ")}</li>` : ""}
+      </ul>
+
+      ${warnings.map(
+        (text) => html`<p class="carousel-studio__report-warn" role="alert">${text}</p>`,
+      )}
+
+      ${dropped.length
+        ? html`
+            <details class="carousel-studio__report-drops">
+              <summary>
+                ${String(dropped.length)} ${dropped.length === 1 ? "kind" : "kinds"} of thing
+                dropped
+              </summary>
+              <ul class="carousel-studio__report-list">
+                ${dropped.map(
+                  (d) => html`<li>
+                    ${dropScope(d.slide)}: ${d.n > 1 ? `${String(d.n)} × ` : ""}${d.what}
+                  </li>`,
+                )}
+              </ul>
+            </details>`
+        : ""}
+
+      ${failed.length
+        ? html`
+            <details class="carousel-studio__report-drops">
+              <summary>
+                ${String(failed.length)} ${failed.length === 1 ? "part" : "parts"} could not be
+                read
+              </summary>
+              <ul class="carousel-studio__report-list">
+                ${failed.map(
+                  (f) => html`<li>${dropScope(f.slide)}: ${f.part} — ${f.reason}</li>`,
+                )}
+              </ul>
+            </details>`
+        : ""}
+    </section>`;
 }

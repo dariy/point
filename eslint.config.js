@@ -117,6 +117,16 @@ const rules = {
       message: "Do not build a method name from pieces — write the method out, so the HTML-sink rules can see it."
     },
     {
+      // DOMParser.parseFromString is a Trusted Types sink too, and — the part
+      // that costs an afternoon to discover — for *every* mime type, not only
+      // text/html: under enforcement a plain string throws there even when the
+      // result is an inert XML document that never reaches the page. The
+      // carousel importers parse exactly such documents, so the parse goes
+      // through parseMarkup() in utils/helpers.js, where the policy is.
+      selector: "CallExpression[callee.property.name='parseFromString']",
+      message: "Use parseMarkup(text, mime) from utils/helpers.js — a bare parseFromString bypasses the Trusted Types policy and throws under enforcement."
+    },
+    {
       // raw() is the one way past the html`` tag's escaping, so what may go
       // through it is deliberately narrow: a module-level constant (the SVG
       // blobs), a string literal, or a choice between those. A template literal

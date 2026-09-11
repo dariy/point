@@ -914,3 +914,117 @@
     flex: 1 1 100%;
   }
 }
+
+/* ── Templates ─────────────────────────────────────────────────────────────
+ * The gallery, and the report an import owes. Both sit below the builder as
+ * siblings of it — a studio with no photo yet shows the pick prompt instead of
+ * a builder, and that is the state a template is most wanted in, so neither can
+ * live inside the builder's markup. */
+.carousel-studio__templates,
+.carousel-studio__report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-card);
+}
+
+.carousel-studio__templates-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* The head's subhead already carries the block's bottom margin; inside a flex
+   row it would read as a misalignment instead. */
+.carousel-studio__templates-head .carousel-studio__subhead {
+  margin: 0;
+}
+
+.carousel-studio__template-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One template reads as a single control with a delete on the end, so the pair
+   share a border rather than carrying one each. */
+.carousel-studio__template {
+  display: flex;
+  align-items: stretch;
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.carousel-studio__template-name {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.carousel-studio__template-name:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.carousel-studio__template-name:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.carousel-studio__template .carousel-studio__chip {
+  border: 0;
+  border-left: var(--border-width) solid var(--border-primary);
+  border-radius: 0;
+}
+
+/* ── Import report ─────────────────────────────────────────────────────────
+ * What an import kept and what it cost. Deliberately a panel and not a toast:
+ * "kept 14 of 22 shapes" is a fact the author has to act on, and a toast is
+ * gone before they can. */
+.carousel-studio__report-list {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.carousel-studio__report-warn {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+}
+
+.carousel-studio__report-drops > summary {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* ── Template dialogs ──────────────────────────────────────────────────────
+ * Import and "save as template" reuse the admin modal chrome. The studio's
+ * properties sheet sits at z-index 1001 below 64em, so a dialog opened over it
+ * has to clear that or the sheet would cover the thing it opened. */
+.carousel-studio__dialog {
+  z-index: 1100;
+}
+
+.carousel-studio__dialog .carousel-studio__control {
+  width: 100%;
+}
+
+.carousel-studio__dialog input[type="text"],
+.carousel-studio__dialog input[type="file"] {
+  width: 100%;
+}

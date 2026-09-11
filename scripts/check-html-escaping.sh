@@ -54,9 +54,10 @@ fi
 # ── 2. The suppression budget ────────────────────────────────────────────────
 # Every line here is a place a human asserted the value is already safe. Adding
 # one means editing this list, which is the point. helpers.js is the odd one:
-# its two are not raw() exceptions but the sinks themselves — the single
-# innerHTML write (setHTML) and the single insertAdjacentHTML (insertHTML) that
-# every other write in the frontend goes through.
+# its three are not raw() exceptions but the sinks themselves — the single
+# innerHTML write (setHTML), the single insertAdjacentHTML (insertHTML), and
+# the single DOMParser.parseFromString (parseMarkup) that every other write and
+# parse in the frontend goes through.
 expected=$(cat <<'LIST'
 frontend/src/components/light/CssEditor.js 1
 frontend/src/components/light/MarkdownEditor.js 1
@@ -66,7 +67,7 @@ frontend/src/components/public/PostContent.js 1
 frontend/src/pages/light/PluginsPage.js 1
 frontend/src/plugins/tags-map/index.js 2
 frontend/src/utils/copyright.js 1
-frontend/src/utils/helpers.js 2
+frontend/src/utils/helpers.js 3
 LIST
 )
 actual=$(grep -rl 'eslint-disable-next-line no-restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do

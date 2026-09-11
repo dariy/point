@@ -24,7 +24,7 @@ import {
   setOfflineStatus,
   setToast,
 } from "../../store.js";
-import { html, setHTML, navigate, raw, debounce } from "../../utils/helpers.js";
+import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG, MEDIA_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
@@ -601,7 +601,7 @@ export default class PostEditPage extends Component {
     featuredToggle?.addEventListener("click", () => {
       const newVal = !featuredCheck.checked;
       featuredCheck.checked = newVal;
-      featuredToggle.replaceChildren(new DOMParser().parseFromString(newVal ? STAR_SVG : STAR_OUTLINE_SVG, "image/svg+xml").documentElement);
+      featuredToggle.replaceChildren(parseMarkup(newVal ? STAR_SVG : STAR_OUTLINE_SVG, "image/svg+xml").documentElement);
       featuredToggle.classList.toggle("is-featured", newVal);
       featuredToggle.title = newVal ? "Unmark as featured" : "Mark as featured";
       this._onInput();

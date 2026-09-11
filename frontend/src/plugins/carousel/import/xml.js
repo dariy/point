@@ -23,6 +23,8 @@
  * imported file is untrusted input from the internet and is only ever read.
  */
 
+import { parseMarkup } from '../../../utils/helpers.js';
+
 /**
  * An element's name with any namespace prefix removed. Reads `nodeName` for
  * the reason in the header — `localName` disagrees between DOMs.
@@ -184,6 +186,13 @@ export function attrBool(el, name, fallback = false) {
  * slide. The caller turns `null` into whichever failure is theirs — a dead
  * import for `presentation.xml`, one lost slide for `slide7.xml`.
  *
+ * The parse goes through `parseMarkup` rather than calling the parser directly:
+ * `parseFromString` is a Trusted Types sink for every mime type, so under the
+ * enforcing CSP (`api/cmd/api/csp.go`) a plain string there throws — which is a
+ * whole-import failure for a file the user just picked. `Parser` is still
+ * threaded through, since that is the seam a runtime with no global `DOMParser`
+ * (`node --test`) supplies its own by.
+ *
  * @param {string} text
  * @param {string} root expected local name of the document element
  * @param {typeof DOMParser} [Parser] the seam a test uses to supply linkedom's
@@ -196,7 +205,7 @@ export function parseXml(text, root, Parser = globalThis.DOMParser, mime = 'appl
   if (typeof Parser !== 'function') return null;
   let doc;
   try {
-    doc = new Parser().parseFromString(text, mime);
+    doc = parseMarkup(text, mime, Parser);
   } catch {
     return null;
   }

@@ -48,16 +48,26 @@ import {
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
 import { getPost, updatePost } from "../../api/posts.js";
 import { deleteMedia } from "../../api/media.js";
-import { deleteCarousel, getCarousel, saveCarousel } from "../../api/carousel.js";
+import {
+  deleteCarousel,
+  deleteCarouselTemplate,
+  getCarousel,
+  getCarouselTemplate,
+  listCarouselTemplates,
+  saveCarousel,
+  saveCarouselTemplate,
+} from "../../api/carousel.js";
 import { getSettings, setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
+import { parseNodes } from "../../utils/postNodes.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
 import { canvasSize, deckSlideRects, fitReport, padRects, safeAreaRect } from "./geometry.js";
 import {
   addLayer,
   addSlide,
   applyCarouselBlock,
+  applyTemplate,
   duplicateSlide,
   emptyDocument,
   moveSlide,
@@ -71,9 +81,11 @@ import {
   specHash,
   splitDocument,
   toDeckDocument,
+  toTemplate,
   updateLayer,
   updateSlideFraming,
 } from "./document.js";
+import { adapterFor, IMPORTERS } from "./import/index.js";
 import { browserDeps, renderAndUpload } from "./render.js";
 import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
 import {
@@ -82,7 +94,23 @@ import {
   clampZoom,
   readPropsPref,
 } from "./studio/layout.js";
-import { actionsBar, builder, pickPrompt } from "./studio/panels.js";
+import {
+  actionsBar,
+  builder,
+  importDialog,
+  importReportPanel,
+  pickPrompt,
+  saveTemplateDialog,
+  templateGallery,
+} from "./studio/panels.js";
+import {
+  dataAssets,
+  decodeAsset,
+  freeSlug,
+  replaceAssets,
+  templateLimitError,
+  templateSlug,
+} from "./studio/templates.js";
 import {
   ensurePreviewFont,
   paintAnchorRail,
@@ -196,6 +224,63 @@ function documentWithRenders(doc, media) {
   });
 }
 
+/**
+ * Why this file selection cannot be imported, or `''` when it can.
+ *
+ * Extension, never MIME: a `.pptx` arrives as three different types depending
+ * on where it was dragged from (see `adapterFor`). The refusals are by name —
+ * "Point cannot read notes.txt" beats "unsupported file" when four files were
+ * selected and one of them is wrong.
+ *
+ * @param {File[]} files
+ * @returns {string}
+ */
+function importRefusal(files) {
+  if (!files.length) return "Choose a file to import.";
+  const adapter = adapterFor(files[0].name);
+  if (!adapter) {
+    return `Point cannot read ${files[0].name}. It reads ${IMPORTERS.map((a) => a.label).join(
+      ", and ",
+    )}.`;
+  }
+  const stray = files.find((f) => adapterFor(f.name) !== adapter);
+  if (stray) return `${stray.name} is a different format — import one format at a time.`;
+  if (!adapter.takesList && files.length > 1) {
+    return `A ${adapter.extensions[0]} holds a whole deck — import one at a time.`;
+  }
+  return "";
+}
+
+/**
+ * What an apply is owed in one sentence: the template's name, plus whatever
+ * could not be filled.
+ *
+ * `applyTemplate` reports counts and lists, deliberately, so that the prose is
+ * written where the user is — here. An unresolved placeholder stays visible on
+ * the slide as well; this is what tells the author to go looking.
+ *
+ * @param {string} name
+ * @param {import('./document.js').CarouselTemplateReport} report
+ * @returns {string}
+ */
+function applyMessage(name, report) {
+  const parts = [`Applied “${name}”.`];
+  if (report.unresolved.length) {
+    parts.push(`Still to fill: ${report.unresolved.join(" ")}.`);
+  }
+  if (report.slidesWithoutSource.length) {
+    const n = report.slidesWithoutSource.length;
+    parts.push(n === 1 ? "1 slide still needs a photo." : `${n} slides still need a photo.`);
+  }
+  if (report.droppedLogoLayers) {
+    parts.push(`${report.droppedLogoLayers} logo layers dropped — no site logo is set.`);
+  }
+  if (report.clampedSlides) {
+    parts.push(`Trimmed from ${report.clampedSlides.from} to ${report.clampedSlides.to} slides.`);
+  }
+  return parts.join(" ");
+}
+
 export default class CarouselStudioPage extends Component {
   /**
    * @param {HTMLElement} container
@@ -237,6 +322,27 @@ export default class CarouselStudioPage extends Component {
       // Rail wide, bottom sheet below 64em. Remembered only on a wide viewport
       // — a sheet sitting over the stage always opens closed (see layout.js).
       propsOpen: readPropsPref(),
+      // ── Templates (S4) ──────────────────────────────────────────────────
+      // The gallery listing: name and slug only, never envelopes — the store
+      // holds a template's inlined assets and a gallery must not pull them.
+      templates: [],
+      templatesLoading: true,
+      // Whatever the gallery itself has to say — a failed listing, a failed
+      // apply, a failed delete. The dialogs keep their own, so a message about
+      // the file you are importing stays beside the file input.
+      templatesError: "",
+      // Any template operation in flight. Separate from `busy`, which is the
+      // render's: the two never overlap, but conflating them would mean an
+      // import disabling the render button for the wrong reason.
+      templateBusy: false,
+      importOpen: false,
+      importError: "",
+      saveOpen: false,
+      saveError: "",
+      // The last import's accounting, until dismissed. Kept in state rather
+      // than toasted: a toast that says "kept 14 of 22 shapes" is gone before
+      // anyone can act on it, and this is the panel the importers count for.
+      importReport: null,
     };
     // The stage's zoom multiplier. A field, not state: it is applied by writing
     // one custom property on the builder root, so changing it costs no rebuild
@@ -246,6 +352,15 @@ export default class CarouselStudioPage extends Component {
     // A second media picker, for an `image` layer's source. Kept apart from
     // `_picker` (the slide source) so confirming one cannot swap the other.
     this._layerPicker = null;
+    // The save-as-template dialog's two fields. Fields rather than state: they
+    // are written on every keystroke, and a keystroke that rebuilt the studio
+    // would take the caret with it. The inputs are re-emitted from these, so a
+    // rebuild caused by anything else keeps what has been typed.
+    this._saveName = "";
+    this._saveSlug = "";
+    // Has the author edited the slug by hand? Until they do, it follows the
+    // name — after, it is theirs and the name stops overwriting it.
+    this._slugTouched = false;
     // The `rendered` block of every slide the *saved* document points at — the
     // slides really in the post right now. Two readers: the "Rendered slides"
     // strip, and the cleanup a re-render owes (see _render), which takes only
@@ -410,6 +525,39 @@ export default class CarouselStudioPage extends Component {
     "delete-slide"(_e, el) {
       this._removeSlide(Number(el.dataset.slide));
     },
+    "open-import"() {
+      this.setState({ importOpen: true, importError: "" });
+    },
+    // Both dialogs put their action on the overlay as well as on their Cancel
+    // and ✕ buttons, so a click on the backdrop closes them. A click inside the
+    // panel bubbles to that overlay too — `closest` finds it and this handler
+    // would run — so only the backdrop *itself* and the two buttons that say
+    // `data-close` count. Without the guard, clicking a label would throw away
+    // whatever had been typed.
+    "close-import"(e, el) {
+      if (this._dialogDismissed(e, el)) this.setState({ importOpen: false, importError: "" });
+    },
+    "run-import"() {
+      this._runImport();
+    },
+    "open-save-template"() {
+      this._openSaveTemplate();
+    },
+    "close-save-template"(e, el) {
+      if (this._dialogDismissed(e, el)) this.setState({ saveOpen: false, saveError: "" });
+    },
+    "submit-save-template"() {
+      this._saveAsTemplate();
+    },
+    "apply-template"(_e, el) {
+      this._applyTemplate(el.dataset.slug);
+    },
+    "delete-template"(_e, el) {
+      this._confirmDeleteTemplate(el.dataset.slug, el.dataset.name);
+    },
+    "dismiss-report"() {
+      this.setState({ importReport: null });
+    },
   };
 
   mount() {
@@ -487,6 +635,9 @@ export default class CarouselStudioPage extends Component {
       this.setState({ loading: false });
       return;
     }
+    // Alongside, not awaited: the gallery is a sibling of the builder, and a
+    // slow template listing must not hold up the post the studio is for.
+    this._loadTemplates();
     try {
       const [post, carousel] = await Promise.all([
         getPost(postId),
@@ -725,6 +876,9 @@ export default class CarouselStudioPage extends Component {
    */
   _onHistoryKey(e) {
     const combo = (e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === "z";
+    // A dialog is modal: undo there would step the document behind it, which is
+    // not the thing the user is looking at.
+    if (this._dialogOpen()) return;
     if (!combo || isTextEntry(/** @type {HTMLElement|null} */ (e.target))) return;
     e.preventDefault();
     if (e.shiftKey) this._redo();
@@ -1414,6 +1568,311 @@ export default class CarouselStudioPage extends Component {
     }
   }
 
+  // ── Templates ─────────────────────────────────────────────────────────────
+  // A template is an envelope (`toTemplate` in document.js) with its images
+  // inlined as `data:` URLs, stored under a slug. Two things move between that
+  // world and the studio's:
+  //
+  // - **Applying** resolves the placeholders against this post (`applyTemplate`)
+  //   and then *materializes* the inlined assets as real post-owned media, so
+  //   the document that lands in `carousels.doc` names `/YYYY/MM/…` paths and
+  //   nothing on the render path ever meets a `data:` URL.
+  // - **Saving** wraps the current document back up. It does not re-introduce
+  //   placeholders — see `toTemplate` — so what comes back out is what an
+  //   author adapted, ready to be applied to the next post.
+  //
+  // Everything here goes through `_setDoc` like every other write, so applying
+  // a template is one undo step.
+
+  /** Refresh the gallery listing. Never rejects: a store that cannot be listed
+   *  leaves a message in the gallery and the studio otherwise working. */
+  async _loadTemplates() {
+    try {
+      const templates = await listCarouselTemplates();
+      if (this._unmounted) return;
+      this.setState({
+        // The listing is an array or it is nothing the gallery can draw: an
+        // endpoint that answered with an object would otherwise take the whole
+        // studio down with it, and the gallery is the least of what is on screen.
+        templates: Array.isArray(templates) ? templates : [],
+        templatesLoading: false,
+        templatesError: "",
+      });
+    } catch (err) {
+      if (this._unmounted) return;
+      this.setState({
+        templatesLoading: false,
+        templatesError: err?.message || "Could not load templates.",
+      });
+    }
+  }
+
+  /** Is this click one that should close a dialog? See the `close-import`
+   *  action for why the question is not simply "was there a click". */
+  _dialogDismissed(e, el) {
+    return e.target === el || el.dataset.close === "1";
+  }
+
+  /** Is either template dialog on screen? */
+  _dialogOpen() {
+    return this.state.importOpen || this.state.saveOpen;
+  }
+
+  /**
+   * Escape closes whichever dialog is open — the third way out, beside the
+   * backdrop and the Cancel button, and the one a keyboard user reaches for.
+   *
+   * Unlike the history shortcut this does not step aside for a text entry: the
+   * caret is *inside* the dialog being dismissed, which is exactly where
+   * Escape is pressed from.
+   */
+  _onDialogKey(e) {
+    if (e.key !== "Escape" || !this._dialogOpen() || this.state.templateBusy) return;
+    e.preventDefault();
+    if (this.state.importOpen) this.setState({ importOpen: false, importError: "" });
+    else this.setState({ saveOpen: false, saveError: "" });
+  }
+
+  /** The post's own photos, in the order the post shows them — what a
+   *  template's sourceless slides fill from.
+   *
+   *  `parseNodes` already lifts a `:::{.carousel-block}` out as its own node, so
+   *  a previous generation's slides are not offered back as source material;
+   *  `_priorRendered` covers a fence written by hand that it did not catch. */
+  _postMedia() {
+    const rendered = new Set(this._renderedPaths());
+    return parseNodes(this.state.post?.content || "")
+      .filter((n) => n.type === "image" && n.path && !rendered.has(n.path))
+      .map((n) => n.path);
+  }
+
+  /**
+   * Turn every `data:` asset of a freshly applied document into a real,
+   * post-owned media file, and answer with the url → path map that rewrites it.
+   *
+   * Both halves are load-bearing. `deps.fetchBlob` (`render.js`) is a
+   * same-origin GET of a content path and the CSS preview points a
+   * `background-image` at the same string, so neither can be handed a `data:`
+   * URL. And the upload carries `post_id`, because a media row without one is
+   * what `ListOrphanedMedia` sweeps — an asset uploaded loose would be swept
+   * out from under the carousel that needs it.
+   *
+   * `uploaded` accumulates the rows created here so the caller can unwind
+   * exactly those on a failure part way through, the way `renderAndUpload`
+   * unwinds its own.
+   *
+   * @param {import('./document.js').CarouselDoc} doc
+   * @param {import('./render.js').RenderDeps} deps
+   * @param {Array<{id: number, path: string}>} uploaded  appended to
+   * @returns {Promise<Map<string, string>>}
+   */
+  async _materializeAssets(doc, deps, uploaded) {
+    const assets = dataAssets(doc);
+    /** @type {Map<string, string>} */
+    const paths = new Map();
+    for (let i = 0; i < assets.length; i++) {
+      const asset = assets[i];
+      const decoded = decodeAsset(asset.url, `carousel-template-${this.state.postId}-${i + 1}`);
+      if (!decoded) {
+        throw new Error(`The image on ${asset.where} is not in a format Point can store.`);
+      }
+      // The cast is for the checker only: `Uint8Array` is a `BlobPart` at
+      // runtime, but its `buffer` widens to `ArrayBufferLike` in the lib types.
+      const part = /** @type {BlobPart} */ (/** @type {unknown} */ (decoded.bytes));
+      const file = new File([part], decoded.name, { type: decoded.mime });
+      const media = await deps.upload(file, { post_id: this.state.postId });
+      uploaded.push(media);
+      paths.set(asset.url, media.path);
+    }
+    return paths;
+  }
+
+  /**
+   * Apply a stored template to this post.
+   *
+   * The result is an ordinary document: there is no template mode, nothing is
+   * locked and there is nothing to exit. `applyTemplate` substitutes once and
+   * what it produces is thereafter the author's to edit — which is why the
+   * placeholders it could not fill are reported rather than hidden.
+   *
+   * The document is saved as soon as it is built, before any render. The
+   * materialized assets are media rows that carry this post's id, so nothing
+   * would ever collect them again; saving is what makes the document name them.
+   *
+   * @param {string} slug
+   */
+  async _applyTemplate(slug) {
+    const { postId, post } = this.state;
+    if (!slug || !postId || !post || this.state.busy || this.state.templateBusy) return;
+
+    const deps = this.props.renderDeps || browserDeps();
+    /** @type {Array<{id: number, path: string}>} */
+    const uploaded = [];
+    this.setState({ templateBusy: true, templatesError: "" });
+    try {
+      const stored = await getCarouselTemplate(slug);
+      const { doc, report } = applyTemplate(stored.doc, {
+        post,
+        settings: getSettings() || {},
+        media: this._postMedia(),
+      });
+      const next = normalizeDocument(
+        replaceAssets(doc, await this._materializeAssets(doc, deps, uploaded)),
+      );
+      await saveCarousel(postId, next);
+      if (this._unmounted) return;
+
+      // A template brings its own aspect, mode and slides, so the selection and
+      // the source dimensions start over — `_probeSources` measures the photos
+      // the apply just put in place.
+      this._setDoc(next, {
+        templateBusy: false,
+        hasCarousel: true,
+        selected: 0,
+        selectedLayer: null,
+        layerScope: "slide",
+        srcW: null,
+        srcH: null,
+      });
+      this._probeSources(next);
+      setToast({ message: applyMessage(stored.name || slug, report), type: "success" });
+    } catch (err) {
+      // Every row this attempt created, and only those: a template applied
+      // halfway is not applied, and its uploads must not outlive it.
+      if (uploaded.length) {
+        await Promise.allSettled(uploaded.map((m) => deps.deleteMedia(m.id)));
+      }
+      if (this._unmounted) return;
+      const message = err?.message || "Could not apply the template.";
+      this.setState({ templateBusy: false, templatesError: message });
+      setToast({ message: `Could not apply the template: ${message}`, type: "error" });
+    }
+  }
+
+  /**
+   * Read the chosen file(s) into a template and store it.
+   *
+   * The adapter is chosen by extension through the registry (`import/index.js`)
+   * — one place that knows what Point reads, so this method has no switch to
+   * keep in step with it. A `takesList` adapter is handed the files; the others
+   * take one archive's bytes.
+   */
+  async _runImport() {
+    const input = /** @type {HTMLInputElement} */ (this.$("#carousel-import-file"));
+    const files = [...(input?.files || [])];
+    const problem = importRefusal(files);
+    if (problem) {
+      this.setState({ importError: problem });
+      return;
+    }
+
+    const adapter = adapterFor(files[0].name);
+    this.setState({ templateBusy: true, importError: "" });
+    try {
+      const source = adapter.takesList ? files : new Uint8Array(await files[0].arrayBuffer());
+      const { template, report } = await adapter.read(source, { filename: files[0].name });
+      // The store upserts by slug, which is what makes re-saving an adapted
+      // deck work — and what would make importing a second export of one file
+      // silently replace the first. An import is not a re-save, so it takes a
+      // slug nobody is using.
+      const name = (template.name || "Imported template").slice(0, 200);
+      const slug = freeSlug(
+        templateSlug(template.id || name),
+        this.state.templates.map((t) => t.slug),
+      );
+      const envelope = { ...template, id: slug, name };
+      const tooBig = templateLimitError(envelope);
+      if (tooBig) throw new Error(tooBig);
+
+      await saveCarouselTemplate(slug, name, envelope);
+      if (this._unmounted) return;
+      await this._loadTemplates();
+      if (this._unmounted) return;
+      this.setState({ templateBusy: false, importOpen: false, importReport: report });
+      setToast({ message: `Imported “${name}”.`, type: "success" });
+    } catch (err) {
+      if (this._unmounted) return;
+      this.setState({ templateBusy: false, importError: err?.message || "Import failed." });
+    }
+  }
+
+  /** Open "save as template" with a name to argue with, and the slug that name
+   *  suggests. */
+  _openSaveTemplate() {
+    this._saveName = this.state.post?.title || "Carousel template";
+    this._saveSlug = templateSlug(this._saveName);
+    this._slugTouched = false;
+    this.setState({ saveOpen: true, saveError: "" });
+  }
+
+  /**
+   * Store the current carousel as a template.
+   *
+   * The slug is normalized rather than validated: `templateSlug` emits exactly
+   * the character set the store accepts, so a typed slug is corrected here
+   * instead of coming back as a 400 the author has to decode. The size caps are
+   * checked before the request for the same reason — a 413 cannot say which
+   * image to shrink, and that is the only fact they can act on.
+   */
+  async _saveAsTemplate() {
+    const name = (this._saveName || "").trim().slice(0, 200);
+    const slug = templateSlug(this._saveSlug || name);
+    if (!name) {
+      this.setState({ saveError: "A template needs a name." });
+      return;
+    }
+
+    const envelope = toTemplate(this.state.doc, { id: slug, name, origin: { format: "studio" } });
+    const tooBig = templateLimitError(envelope);
+    if (tooBig) {
+      this.setState({ saveError: tooBig });
+      return;
+    }
+
+    this.setState({ templateBusy: true, saveError: "" });
+    try {
+      await saveCarouselTemplate(slug, name, envelope);
+      if (this._unmounted) return;
+      await this._loadTemplates();
+      if (this._unmounted) return;
+      this.setState({ templateBusy: false, saveOpen: false });
+      setToast({ message: `Saved “${name}” as a template.`, type: "success" });
+    } catch (err) {
+      if (this._unmounted) return;
+      this.setState({ templateBusy: false, saveError: err?.message || "Could not save." });
+    }
+  }
+
+  /** Deleting a template is not undoable and there is no rename in v1 — a
+   *  mistyped name is re-saved under a new one — so this asks first. */
+  _confirmDeleteTemplate(slug, name) {
+    this._showConfirm(
+      "Delete template",
+      `Delete “${name || slug}”? Carousels already built from it are unaffected.`,
+      "Delete",
+      "danger",
+      () => this._deleteTemplate(slug),
+    );
+  }
+
+  async _deleteTemplate(slug) {
+    this.setState({ templateBusy: true, templatesError: "" });
+    try {
+      await deleteCarouselTemplate(slug);
+      if (this._unmounted) return;
+      await this._loadTemplates();
+      if (this._unmounted) return;
+      this.setState({ templateBusy: false });
+      setToast({ message: "Template deleted.", type: "success" });
+    } catch (err) {
+      if (this._unmounted) return;
+      this.setState({
+        templateBusy: false,
+        templatesError: err?.message || "Could not delete the template.",
+      });
+    }
+  }
+
   // ── Markup ────────────────────────────────────────────────────────────────
 
   render() {
@@ -1467,10 +1926,33 @@ export default class CarouselStudioPage extends Component {
         </section>`;
     }
 
+    // The gallery is a sibling of the builder, not a panel inside it: a studio
+    // with no photo yet renders `pickPrompt` instead of a builder, and "import
+    // a deck to start" is exactly the state where it has to be reachable.
+    const busy = this.state.busy || this.state.templateBusy;
     return html`
       <section class="carousel-studio" data-post-id="${String(postId)}">
         ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
         ${this._source() ? this._renderBuilder() : pickPrompt()}
+        ${templateGallery({
+          templates: this.state.templates,
+          loading: this.state.templatesLoading,
+          error: this.state.templatesError,
+          busy,
+          canSave: this.state.doc.slides.length > 0,
+        })}
+        ${importReportPanel(this.state.importReport)}
+        ${this.state.importOpen
+          ? importDialog({ busy: this.state.templateBusy, error: this.state.importError })
+          : ""}
+        ${this.state.saveOpen
+          ? saveTemplateDialog({
+              name: this._saveName,
+              slug: this._saveSlug,
+              busy: this.state.templateBusy,
+              error: this.state.saveError,
+            })
+          : ""}
       </section>`;
   }
 
@@ -1560,7 +2042,10 @@ export default class CarouselStudioPage extends Component {
 
     // Re-taken every render, released with it (see Component's resource
     // contract) — so navigating off the studio takes the shortcut with it.
-    this.on(document, "keydown", (e) => this._onHistoryKey(/** @type {KeyboardEvent} */ (e)));
+    this.on(document, "keydown", (e) => {
+      this._onDialogKey(/** @type {KeyboardEvent} */ (e));
+      this._onHistoryKey(/** @type {KeyboardEvent} */ (e));
+    });
 
     const deck = this.state.doc.mode === "deck";
     const source = this._source();
@@ -1582,6 +2067,7 @@ export default class CarouselStudioPage extends Component {
     }
 
     this._wireControls();
+    this._wireTemplateDialog();
     this._gestures.attach(deck ? this.$$(".carousel-studio__stage-slide") : []);
     // The panorama stage takes the pointer only when it is the surface — and
     // only when `panels.js` emitted a rail, which is its answer to whether the
@@ -1875,6 +2361,39 @@ export default class CarouselStudioPage extends Component {
 
     this._wireBgFields();
     this._wireLayerFields();
+  }
+
+  /**
+   * The save-as-template dialog's two fields.
+   *
+   * Neither commits to state on a keystroke — they write the two fields the
+   * dialog is re-emitted from, so a rebuild caused by anything else keeps what
+   * has been typed and the caret stays where it is. The slug follows the name
+   * until the author edits it, and never again after: a slug that kept
+   * re-deriving would undo their edit on the next keystroke.
+   *
+   * Focus lands on the name only when it is not already inside the dialog —
+   * every render runs this, and stealing focus back would fight the typing it
+   * is here to support.
+   */
+  _wireTemplateDialog() {
+    const name = /** @type {HTMLInputElement|null} */ (this.$("#carousel-template-name"));
+    const slug = /** @type {HTMLInputElement|null} */ (this.$("#carousel-template-slug"));
+    if (!name || !slug) return;
+
+    this.on(name, "input", () => {
+      this._saveName = name.value;
+      if (this._slugTouched) return;
+      this._saveSlug = templateSlug(name.value);
+      slug.value = this._saveSlug;
+    });
+    this.on(slug, "input", () => {
+      this._slugTouched = true;
+      this._saveSlug = slug.value;
+    });
+
+    const active = name.ownerDocument?.activeElement;
+    if (active !== name && active !== slug) name.focus?.();
   }
 
   /**

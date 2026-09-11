@@ -18,7 +18,9 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire } from './helpers/dom.js';
+import { DOMParser } from 'linkedom';
+
+import { setupDOM, click, fire, type } from './helpers/dom.js';
 import { getToast, setSettings, setUser } from '../src/store.js';
 import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
 import {
@@ -30,6 +32,11 @@ import {
   updateLayer,
 } from '../src/plugins/carousel/document.js';
 import { MAX_SLIDES, MIN_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
+
+// `node --test` has no DOMParser, and the SVG importer needs one — the import
+// dialog's test drives a real import rather than a stub, so the page's routing
+// (extension → adapter → store) is what is being asserted.
+globalThis.DOMParser = DOMParser;
 
 /** Route `fetch` by URL; unmatched paths 404. */
 function installFetch(routes) {
@@ -767,6 +774,360 @@ describe('CarouselStudioPage', () => {
       assert.deepEqual(page.state.doc.slides, [], 'the document is empty again');
       assert.equal(page.state.hasCarousel, false);
       assert.ok(!el.querySelector('[data-action="remove-carousel"]'), 'action hidden after removal');
+    });
+  });
+
+  describe('templates', () => {
+    /** A 1x1 PNG and a 1x1 GIF — the two smallest real images there are, and
+     *  what an importer inlines into an envelope. */
+    const PNG =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    /** A post with two loose photos — what a template's sourceless slides fill
+     *  from, in the order the post shows them. */
+    const TEMPLATE_POST = {
+      ...POST,
+      content: '/2026/08/a.jpg\n\n/2026/08/b.jpg\n\nA caption.',
+    };
+
+    /** A stored envelope: a headline placeholder, and two inlined images. */
+    const TEMPLATE = {
+      templateVersion: 1,
+      id: 'bold-quote',
+      name: 'Bold Quote',
+      origin: { format: 'pptx', file: 'Bold Quote.pptx', fonts: ['Poppins'], srcSize: null, dropped: [] },
+      doc: {
+        version: 1,
+        aspect: '4:5',
+        mode: 'deck',
+        slides: [
+          { source: '', layers: [{ type: 'text', text: '{title}' }] },
+          { source: '', layers: [{ type: 'image', source: PNG }, { type: 'image', source: GIF }] },
+        ],
+        spanLayers: [],
+      },
+    };
+
+    const LISTING = [{ slug: 'bold-quote', name: 'Bold Quote', created_at: '2026-09-01T00:00:00Z' }];
+
+    function routes({ listing = LISTING, doc = null } = {}) {
+      return [
+        [/\/api\/carousel\/templates\/bold-quote/, (url, opts) =>
+          opts.method === 'DELETE'
+            ? { status: 204, body: null }
+            : { body: { slug: 'bold-quote', name: 'Bold Quote', doc: TEMPLATE } }],
+        [/\/api\/carousel\/templates/, (url, opts) =>
+          opts.method === 'POST' ? { body: {} } : { body: listing }],
+        [/\/api\/posts\/42/, (url, opts) =>
+          opts.method === 'PUT' ? { body: {} } : { body: TEMPLATE_POST }],
+        [/\/api\/carousel/, (url, opts) =>
+          opts.method === 'PUT' || opts.method === 'DELETE'
+            ? { body: {} }
+            : doc
+              ? { body: { post_id: 42, doc } }
+              : { status: 404, body: { message: 'no carousel' } }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+    }
+
+    /** An `<input type="file">`'s `files` is read-only; this is the only way to
+     *  hand the page a selection without a browser. The importers take a
+     *  `{name, text}` pair as readily as a `File`, which is what makes an SVG
+     *  import testable here at all. */
+    function setFiles(input, files) {
+      Object.defineProperty(input, 'files', { value: files, configurable: true });
+    }
+
+    const svgFile = (name, words) => ({
+      name,
+      text:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350">' +
+        `<text x="540" y="1080" font-family="Poppins" font-size="72">${words}</text></svg>`,
+    });
+
+    test('the gallery lists what the store has', async () => {
+      const el = await mount({ post: '42' }, routes(), { renderDeps: fakeRenderDeps(async () => ({})) });
+      const chip = el.querySelector('[data-action="apply-template"][data-slug="bold-quote"]');
+      assert.ok(chip, 'the stored template is offered');
+      assert.match(chip.textContent, /Bold Quote/);
+    });
+
+    test('an empty store says how to fill it rather than showing an empty box', async () => {
+      const el = await mount({ post: '42' }, routes({ listing: [] }), {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+      assert.match(
+        el.querySelector('.carousel-studio__templates').textContent,
+        /import a \.pptx or a set of \.svg files to start/,
+      );
+    });
+
+    test('applying fills the post in, materializes the inlined assets, and saves', async () => {
+      const uploads = [];
+      const el = await mount({ post: '42' }, routes(), {
+        renderDeps: fakeRenderDeps(async (file, meta) => {
+          uploads.push({ name: file.name, type: file.type, meta });
+          return { id: 500 + uploads.length, path: `/2026/09/asset${uploads.length}.png` };
+        }),
+      });
+
+      click(el.querySelector('[data-action="apply-template"]'));
+      await settle();
+      await settle();
+      await settle();
+
+      const doc = page.state.doc;
+      assert.equal(doc.slides[0].layers[0].text, 'A post', '{title} took the post title');
+      assert.deepEqual(
+        doc.slides.map((s) => s.source),
+        ['/2026/08/a.jpg', '/2026/08/b.jpg'],
+        "sourceless slides filled from the post's photos, in order",
+      );
+      assert.deepEqual(
+        doc.slides[1].layers.map((l) => l.source),
+        ['/2026/09/asset1.png', '/2026/09/asset2.png'],
+        'both inlined images became real media paths',
+      );
+      assert.ok(
+        !JSON.stringify(doc).includes('data:'),
+        'nothing on the render path is left holding a data: URL',
+      );
+      assert.deepEqual(
+        uploads.map((u) => u.meta),
+        [{ post_id: 42 }, { post_id: 42 }],
+        'every asset carries the post id, or ListOrphanedMedia would sweep it',
+      );
+      assert.ok(
+        calls.some((c) => c.method === 'PUT' && /\/api\/carousel\?post=42/.test(c.url)),
+        'the document is saved, so it names the rows the apply just created',
+      );
+      assert.match(getToast().message, /Applied “Bold Quote”/);
+    });
+
+    test('the apply report names what it could not fill', async () => {
+      const el = await mount({ post: '42' }, routes({}), {
+        renderDeps: fakeRenderDeps(async () => ({ id: 1, path: '/2026/09/a.png' })),
+      });
+      // One photo in the post, two slides wanting one.
+      page.state.post = { ...TEMPLATE_POST, content: '/2026/08/a.jpg', excerpt: '' };
+
+      click(el.querySelector('[data-action="apply-template"]'));
+      await settle();
+      await settle();
+      await settle();
+
+      assert.match(getToast().message, /1 slide still needs a photo/);
+    });
+
+    test('applying is one undo step, not a new document to argue with', async () => {
+      const el = await mount({ post: '42' }, routes(), {
+        renderDeps: fakeRenderDeps(async () => ({ id: 1, path: '/2026/09/a.png' })),
+      });
+      click(el.querySelector('[data-action="apply-template"]'));
+      await settle();
+      await settle();
+      await settle();
+
+      assert.equal(page.state.doc.slides.length, 2);
+      page._undo();
+      assert.equal(page.state.doc.slides.length, 0, 'Ctrl+Z goes back to the empty document');
+    });
+
+    test('an upload that fails part way deletes the rows it had already made', async () => {
+      const deleted = [];
+      let n = 0;
+      const el = await mount({ post: '42' }, routes(), {
+        renderDeps: fakeRenderDeps(
+          async () => {
+            n += 1;
+            if (n === 2) throw new Error('disk full');
+            return { id: 700, path: '/2026/09/first.png' };
+          },
+          async (id) => {
+            deleted.push(id);
+          },
+        ),
+      });
+
+      click(el.querySelector('[data-action="apply-template"]'));
+      await settle();
+      await settle();
+      await settle();
+
+      assert.deepEqual(deleted, [700], 'exactly the rows this attempt created');
+      assert.equal(page.state.doc.slides.length, 0, 'the document is untouched');
+      assert.match(page.state.templatesError, /disk full/);
+      assert.ok(
+        !calls.some((c) => c.method === 'PUT' && /\/api\/carousel\?/.test(c.url)),
+        'a half-applied template is not saved',
+      );
+    });
+
+    test('importing SVGs routes by extension, stores the template and shows the report', async () => {
+      const el = await mount({ post: '42' }, routes({ listing: [] }), {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+
+      click(el.querySelector('[data-action="open-import"]'));
+      await settle();
+      setFiles(el.querySelector('#carousel-import-file'), [
+        svgFile('slide-1.svg', 'One'),
+        svgFile('slide-2.svg', 'Two'),
+      ]);
+      click(el.querySelector('[data-action="run-import"]'));
+      await settle();
+      await settle();
+      await settle();
+
+      const stored = calls.find(
+        (c) => c.method === 'POST' && /\/api\/carousel\/templates/.test(c.url),
+      );
+      assert.ok(stored, 'the template was stored');
+      const body = JSON.parse(stored.body);
+      assert.match(body.slug, /^[a-z0-9][a-z0-9_-]*$/, 'a slug the store accepts');
+      assert.equal(body.doc.templateVersion, 1);
+      assert.equal(body.doc.doc.slides.length, 2);
+
+      assert.equal(page.state.importOpen, false, 'the dialog closed on success');
+      const report = el.querySelector('.carousel-studio__report');
+      assert.ok(report, 'the report is shown, not swallowed');
+      assert.match(report.textContent, /2 slides of 2/);
+      assert.match(report.textContent, /shapes kept/);
+      assert.match(report.textContent, /theme font/, 'the fonts it found are named');
+    });
+
+    test('an import refuses a file it cannot read, by name, without a request', async () => {
+      const el = await mount({ post: '42' }, routes({ listing: [] }), {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+      click(el.querySelector('[data-action="open-import"]'));
+      await settle();
+      setFiles(el.querySelector('#carousel-import-file'), [{ name: 'notes.txt', text: 'hi' }]);
+      click(el.querySelector('[data-action="run-import"]'));
+      await settle();
+
+      assert.match(page.state.importError, /Point cannot read notes\.txt/);
+      assert.ok(
+        !calls.some((c) => c.method === 'POST' && /\/api\/carousel\/templates/.test(c.url)),
+        'nothing was sent',
+      );
+    });
+
+    test('an import will not silently replace a template already under that slug', async () => {
+      const el = await mount(
+        { post: '42' },
+        routes({ listing: [{ slug: 'slide', name: 'Slide', created_at: '' }] }),
+        { renderDeps: fakeRenderDeps(async () => ({})) },
+      );
+      click(el.querySelector('[data-action="open-import"]'));
+      await settle();
+      setFiles(el.querySelector('#carousel-import-file'), [svgFile('slide.svg', 'One')]);
+      click(el.querySelector('[data-action="run-import"]'));
+      await settle();
+      await settle();
+      await settle();
+
+      const body = JSON.parse(
+        calls.find((c) => c.method === 'POST' && /\/api\/carousel\/templates/.test(c.url)).body,
+      );
+      assert.equal(body.slug, 'slide-2');
+    });
+
+    test('save as template offers a name, derives the slug, and stops deriving once it is edited', async () => {
+      const el = await mount({ post: '42' }, routes({ doc: { version: 1, aspect: '4:5', mode: 'deck', slides: [{ source: '/2026/08/a.jpg' }, { source: '/2026/08/b.jpg' }] } }), {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+
+      click(el.querySelector('[data-action="open-save-template"]'));
+      await settle();
+      assert.equal(el.querySelector('#carousel-template-name').value, 'A post');
+      assert.equal(el.querySelector('#carousel-template-slug').value, 'a-post');
+
+      type(el.querySelector('#carousel-template-name'), 'Bold Quote Deck');
+      assert.equal(
+        el.querySelector('#carousel-template-slug').value,
+        'bold-quote-deck',
+        'the slug follows the name until it is touched',
+      );
+      type(el.querySelector('#carousel-template-slug'), 'my-deck');
+      type(el.querySelector('#carousel-template-name'), 'Bold Quote Deck 2');
+      assert.equal(
+        el.querySelector('#carousel-template-slug').value,
+        'my-deck',
+        'an edited slug is not overwritten by the next keystroke in the name',
+      );
+
+      click(el.querySelector('[data-action="submit-save-template"]'));
+      await settle();
+      await settle();
+
+      const body = JSON.parse(
+        calls.find((c) => c.method === 'POST' && /\/api\/carousel\/templates/.test(c.url)).body,
+      );
+      assert.equal(body.slug, 'my-deck');
+      assert.equal(body.name, 'Bold Quote Deck 2');
+      assert.equal(body.doc.name, 'Bold Quote Deck 2');
+      assert.equal(body.doc.origin.format, 'studio');
+      assert.equal(body.doc.doc.slides.length, 2);
+      assert.equal(page.state.saveOpen, false);
+    });
+
+    test('Escape closes a dialog, and undo does not reach the document behind it', async () => {
+      const el = await mount({ post: '42' }, routes(), { renderDeps: fakeRenderDeps(async () => ({})) });
+      click(el.querySelector('[data-action="open-import"]'));
+      await settle();
+      assert.ok(el.querySelector('#carousel-import-file'), 'the dialog is up');
+
+      fire(dom.document, 'keydown', { key: 'z', ctrlKey: true });
+      assert.equal(page.state.importOpen, true, 'the shortcut stepped aside for the dialog');
+
+      fire(dom.document, 'keydown', { key: 'Escape' });
+      await settle();
+      assert.equal(page.state.importOpen, false);
+      assert.ok(!el.querySelector('#carousel-import-file'), 'and it is gone');
+    });
+
+    test('saving is offered only once there is a carousel to save', async () => {
+      const el = await mount({ post: '42' }, routes(), { renderDeps: fakeRenderDeps(async () => ({})) });
+      assert.ok(
+        el.querySelector('[data-action="open-save-template"]').hasAttribute('disabled'),
+        'nothing to save yet',
+      );
+    });
+
+    test('deleting a template asks first, then deletes it and refreshes the gallery', async () => {
+      const el = await mount({ post: '42' }, routes(), { renderDeps: fakeRenderDeps(async () => ({})) });
+      let confirmed = null;
+      page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+        confirmed = { title, variant, message };
+        onConfirm();
+      };
+
+      click(el.querySelector('[data-action="delete-template"]'));
+      await settle();
+      await settle();
+
+      assert.equal(confirmed.variant, 'danger');
+      assert.match(confirmed.message, /Bold Quote/);
+      assert.ok(
+        calls.some((c) => c.method === 'DELETE' && /\/api\/carousel\/templates\/bold-quote/.test(c.url)),
+      );
+      assert.equal(
+        calls.filter((c) => c.method === 'GET' && /\/api\/carousel\/templates$/.test(c.url)).length,
+        2,
+        'the gallery is refreshed from the store, not patched locally',
+      );
+    });
+
+    test('a store that cannot be listed leaves the studio working', async () => {
+      const el = await mount({ post: '42' }, [
+        [/\/api\/carousel\/templates/, { status: 500, body: { message: 'boom' } }],
+        [/\/api\/posts\/42/, { body: TEMPLATE_POST }],
+        [/\/api\/carousel/, { status: 404, body: { message: 'no carousel' } }],
+      ]);
+      assert.match(el.querySelector('.carousel-studio__templates').textContent, /boom/);
+      assert.ok(el.querySelector('[data-action="pick-source"]'), 'the studio itself is unharmed');
     });
   });
 
