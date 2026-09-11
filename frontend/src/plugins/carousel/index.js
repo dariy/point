@@ -46,6 +46,7 @@ import {
   setupAdminLayout,
 } from "../../components/light/AdminLayout.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
+import { MediaViewer } from "../../components/shared/MediaViewer.js";
 import { getPost, updatePost } from "../../api/posts.js";
 import { deleteMedia } from "../../api/media.js";
 import {
@@ -352,6 +353,15 @@ export default class CarouselStudioPage extends Component {
     // A second media picker, for an `image` layer's source. Kept apart from
     // `_picker` (the slide source) so confirming one cannot swap the other.
     this._layerPicker = null;
+    // The rendered-carousel preview a click on a rendered slide opens — a
+    // thin admin-local wrapper around `MediaViewer`, built lazily like the
+    // pickers above. Not the public `MediaLightbox`: that toggles the site's
+    // own chrome (`body.ui-hidden`) and offers sharing, neither of which
+    // belongs to a logged-in preview of media that may not even be published
+    // yet.
+    this._previewEl = null;
+    this._previewMount = null;
+    this._previewViewer = null;
     // The save-as-template dialog's two fields. Fields rather than state: they
     // are written on every keystroke, and a keystroke that rebuilt the studio
     // would take the caret with it. The inputs are re-emitted from these, so a
@@ -401,6 +411,13 @@ export default class CarouselStudioPage extends Component {
       select: (i) => this._select(i),
       refocus: (i) => {
         this._refocus = i;
+      },
+      // The plain-drag/plain-wheel default (`studio/gestures.js`): unlike a
+      // finger, which `touch-action` already lets pan the strip natively, a
+      // mouse or wheel has to be driven by hand.
+      scrollPaneBy: (px) => {
+        const scroll = this.$(".carousel-studio__stage-scroll");
+        if (scroll) scroll.scrollLeft += px;
       },
       // Layer direct manipulation reuses the same machine over the box field —
       // see studio/gestures.js. `activeLayer` is what routes a press between the
@@ -555,6 +572,9 @@ export default class CarouselStudioPage extends Component {
     "dismiss-report"() {
       this.setState({ importReport: null });
     },
+    "preview-rendered"(_e, el) {
+      this._openRenderedPreview(Number(el.dataset.index));
+    },
   };
 
   mount() {
@@ -570,6 +590,10 @@ export default class CarouselStudioPage extends Component {
     this._picker = null;
     this._layerPicker?.destroy();
     this._layerPicker = null;
+    this._previewViewer?.unmount();
+    this._previewViewer = null;
+    this._previewEl?.remove();
+    this._previewEl = null;
     this._gestures.destroy();
     this._anchorGesture.destroy();
   }
@@ -1130,8 +1154,14 @@ export default class CarouselStudioPage extends Component {
     this._detachReorder?.();
     this._detachReorder = attachPointerReorder({
       handleSelector: ".carousel-studio__rail-handle",
-      itemSelector: ".carousel-studio__stage-slide",
-      containers: () => [this.$(".carousel-studio__stage")],
+      // The top management pane, not the stage: the handle moved out of the
+      // image column into its own pane segment (`studio/panels.js`), so that
+      // segment — not the photo underneath it — is what `attachPointerReorder`
+      // measures and drags. It never moves the image itself mid-drag (only an
+      // indicator line), so this costs nothing visually; `onDrop` below still
+      // reorders the one document every row is rendered from.
+      itemSelector: ".carousel-studio__pane--top",
+      containers: () => [this.$(".carousel-studio__pane-row--top")],
       axis: "x",
       isEnabled: () => this.state.doc.mode === "deck" && !this.state.busy,
       onDrop: ({ item, afterEl }) => {
@@ -1337,6 +1367,51 @@ export default class CarouselStudioPage extends Component {
       this._layerPicker.mount();
     }
     this._layerPicker.open();
+  }
+
+  /**
+   * Full-size, swipeable preview of the rendered carousel — opened by a click
+   * on a rendered slide, starting on the one clicked. Appended to
+   * `document.body` rather than mounted in the studio's own tree, the same
+   * way the two `MediaPickerDialog`s above are: an overlay has to sit above
+   * everything, including the properties sheet, not just above the builder.
+   *
+   * @param {number} index
+   */
+  _openRenderedPreview(index) {
+    const paths = this._renderedPaths();
+    if (!paths.length) return;
+    if (!this._previewEl) {
+      const overlay = document.createElement("div");
+      overlay.className = "carousel-studio__preview-overlay";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "Rendered carousel preview");
+      const mount = document.createElement("div");
+      mount.className = "carousel-studio__preview-mount";
+      overlay.appendChild(mount);
+      document.body.appendChild(overlay);
+      this._previewEl = overlay;
+      this._previewMount = mount;
+    }
+    this._previewEl.classList.add("is-open");
+    this._previewViewer?.unmount();
+    this._previewViewer = new MediaViewer(this._previewMount, {
+      items: paths.map((path) => ({ type: "image", url: path, alt: "" })),
+      startIndex: Math.max(0, Math.min(index, paths.length - 1)),
+      showClose: true,
+      // No post behind these paths for a share link to point at — sharing is
+      // a public-post feature, not an admin preview one.
+      showShare: false,
+      onClose: () => this._closeRenderedPreview(),
+    });
+    this._previewViewer.mount();
+  }
+
+  _closeRenderedPreview() {
+    this._previewEl?.classList.remove("is-open");
+    this._previewViewer?.unmount();
+    this._previewViewer = null;
   }
 
   /**
@@ -2345,8 +2420,10 @@ export default class CarouselStudioPage extends Component {
     // arrows are free, and left/right is the axis the stage runs on (see
     // `_setupSlideReorder`). Without this the reorder would be pointer-only,
     // which is the failure the arrange mode in `PostEditPage` avoids the same
-    // way. Delegated on the stage, so it survives the rebuild a move causes.
-    this.on(this.$(".carousel-studio__stage"), "keydown", (e) => {
+    // way. Delegated on the stage column — the handle now lives in the top
+    // management pane, a sibling of the stage rather than a descendant of it —
+    // so it survives the rebuild a move causes.
+    this.on(this.$(".carousel-studio__stage-col"), "keydown", (e) => {
       const ev = /** @type {KeyboardEvent} */ (e);
       if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
       const handle = /** @type {HTMLElement|null} */ (

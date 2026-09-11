@@ -14,7 +14,7 @@
  */
 
 import { html, raw } from "../../../utils/helpers.js";
-import { GRIP_SVG, REFRESH_SVG } from "../../../utils/icons.js";
+import { COPY_SVG, GRIP_SVG, MENU_SVG, PLUS_SVG, REFRESH_SVG, TRASH_SVG } from "../../../utils/icons.js";
 import {
   canvasSize,
   fitReport,
@@ -371,21 +371,16 @@ export function builder({
   // editing surface: `gestures.js` binds these, so a pan, a zoom, a layer drag
   // and an arrow nudge all happen at the size the user is actually looking
   // at. Selection lives here too, already — a tap or a focus on a column
-  // calls `select` (see `createDeckGestures` in `studio/gestures.js`), so the
-  // slide number and the drag handle are the only things a column needs
-  // beyond what direct manipulation already gave it.
+  // calls `select` (see `createDeckGestures` in `studio/gestures.js`).
   //
-  // The handle is a separate control on purpose: `attachPointerReorder`
-  // claims the pointer on press, so a handle that *was* the column would eat
-  // the drag that pans it. It carries `data-slide`, the column `data-slice` —
-  // the column is a paint host and the handle is not (see the note on
-  // `pick-source` in `index.js`) — and a press or an arrow key on it is
-  // guarded out of the pan/zoom gesture (`onHandle` in `studio/gestures.js`),
-  // so the two never claim the same pointerdown or keypress.
+  // The slide number, the drag handle and the duplicate/delete actions used
+  // to live layered over the column itself; they moved out to the management
+  // panes below so a control can never sit on top of the photo it edits, and
+  // a tap meant for one can never land on the pan gesture instead.
   //
   // In Slides mode a column carries none of that: no tabindex, no layer
-  // markup, no handle, just `paintSplit`'s per-slice crop preview — the whole
-  // stage is the editing surface there instead (`_anchorGesture`, bound to
+  // markup, just `paintSplit`'s per-slice crop preview — the whole stage is
+  // the editing surface there instead (`_anchorGesture`, bound to
   // `.carousel-studio__stage` itself in `index.js`), and reordering isn't a
   // thing a panorama slice does.
   const stageSlides = doc.slides.map((slide, i) =>
@@ -401,57 +396,116 @@ export function builder({
             ${deckLayers()}${spanNodes}${layerNodes(slide)}${layerChrome(
               (i === deckIndex && slideChrome) || spanChrome,
             )}
-            <span class="carousel-studio__frame-num">${String(i + 1)}</span>
-            <button
-              type="button"
-              class="carousel-studio__rail-handle"
-              data-slide="${String(i)}"
-              aria-label="Reorder slide ${String(i + 1)} — drag, or press the left and right arrow keys"
-            >
-              ${raw(GRIP_SVG)}
-            </button>
           </span>`
       : html`<div class="carousel-studio__stage-slide" data-slice="${String(i)}"></div>`,
   );
 
-  // Add / duplicate / delete act on the selected slide, so they are one row
-  // under the stage rather than three chips on every column. Slides mode
-  // only: a panorama's count is derived from the fit panel, and a control
-  // that added a column there would be offering to break the derivation.
-  const railTools = deck
+  // The "+ Slide" seams — the same idea as the post editor's insert zone
+  // (`.ve-insert-zone`, `editor.css`), turned 90° for a stage that runs
+  // sideways. One at every gap *and* at both ends — n + 1 for n slides — so a
+  // slide can land anywhere, not just between two existing ones. `g` is the
+  // insertion point itself (0 = before the first slide, n = after the last);
+  // `data-slide` is `g - 1`, the slide *before* that point, which is exactly
+  // `_addSlide`'s "after this index" — `-1` for the head, same as the old
+  // rail chip's `data-slide` did for `_slideArg`. Slides mode only, like every
+  // other per-slide control here.
+  //
+  // The two end zones sit flush against their edge rather than centred on it:
+  // centring at 0% or 100% the way an interior seam is would put half the
+  // button outside the stage, where its own `overflow: hidden` clips it.
+  const insertZones = deck
+    ? Array.from({ length: n + 1 }, (_, g) => {
+        const pct = (g / n) * 100;
+        const style =
+          g === 0
+            ? "left:0;transform:translateX(0)"
+            : g === n
+              ? "left:100%;transform:translateX(-100%)"
+              : `left:${String(pct)}%`;
+        return html`
+          <span class="carousel-studio__insert-zone" style="${style}">
+            <button
+              type="button"
+              class="carousel-studio__insert-btn"
+              data-action="add-slide"
+              data-slide="${String(g - 1)}"
+              aria-label="Add a slide here"
+              title="Add a slide here"
+              ${n >= MAX_SLIDES ? "disabled" : ""}
+            >
+              ${raw(PLUS_SVG)}
+            </button>
+          </span>`;
+      })
+    : [];
+
+  // The top management pane: reorder handle, slide number, duplicate — one
+  // segment per slide, the same n-equal-width division as the stage itself so
+  // a pane always sits directly over its own column regardless of scroll or
+  // zoom. `is-selected` rides along so the number can pick up the same
+  // highlight the column below it carries.
+  const topPane = deck
     ? html`
-        <div class="carousel-studio__rail-tools" role="group" aria-label="Slides">
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="add-slide"
-            data-slide="${String(deckIndex)}"
-            ${n >= MAX_SLIDES ? "disabled" : ""}
-          >
-            + Slide
-          </button>
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="duplicate-slide"
-            data-slide="${String(deckIndex)}"
-            ${n >= MAX_SLIDES ? "disabled" : ""}
-          >
-            Duplicate
-          </button>
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="delete-slide"
-            data-slide="${String(deckIndex)}"
-            ${n <= MIN_SLIDES ? "disabled" : ""}
-          >
-            Delete
-          </button>
-          <span class="carousel-studio__fit-dims">
-            ${String(n)} of ${String(MAX_SLIDES)} slides · acting on slide
-            ${String(deckIndex + 1)}
-          </span>
+        <div class="carousel-studio__pane-row carousel-studio__pane-row--top">
+          ${doc.slides.map(
+            (_slide, i) => html`
+              <div
+                class="carousel-studio__pane carousel-studio__pane--top ${i === selected
+                  ? "is-selected"
+                  : ""}"
+                data-slice="${String(i)}"
+              >
+                <button
+                  type="button"
+                  class="carousel-studio__rail-handle"
+                  data-slide="${String(i)}"
+                  aria-label="Reorder slide ${String(i + 1)} — drag, or press the left and right arrow keys"
+                >
+                  ${raw(GRIP_SVG)}
+                </button>
+                <span class="carousel-studio__frame-num">${String(i + 1)}</span>
+                <button
+                  type="button"
+                  class="carousel-studio__pane-action"
+                  data-action="duplicate-slide"
+                  data-slide="${String(i)}"
+                  aria-label="Duplicate slide ${String(i + 1)}"
+                  title="Duplicate slide ${String(i + 1)}"
+                  ${n >= MAX_SLIDES ? "disabled" : ""}
+                >
+                  ${raw(COPY_SVG)}
+                </button>
+              </div>`,
+          )}
+        </div>`
+    : "";
+
+  // The bottom management pane: delete, one segment per slide, same division
+  // as the top pane and the stage.
+  const bottomPane = deck
+    ? html`
+        <div class="carousel-studio__pane-row carousel-studio__pane-row--bottom">
+          ${doc.slides.map(
+            (_slide, i) => html`
+              <div
+                class="carousel-studio__pane carousel-studio__pane--bottom ${i === selected
+                  ? "is-selected"
+                  : ""}"
+                data-slice="${String(i)}"
+              >
+                <button
+                  type="button"
+                  class="carousel-studio__pane-action carousel-studio__pane-action--danger"
+                  data-action="delete-slide"
+                  data-slide="${String(i)}"
+                  aria-label="Delete slide ${String(i + 1)}"
+                  title="Delete slide ${String(i + 1)}"
+                  ${n <= MIN_SLIDES ? "disabled" : ""}
+                >
+                  ${raw(TRASH_SVG)}
+                </button>
+              </div>`,
+          )}
         </div>`
     : "";
 
@@ -484,7 +538,15 @@ export function builder({
             ${renderedPaths.map(
               (p, i) => html`
                 <figure class="carousel-studio__rendered-item">
-                  <img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />
+                  <button
+                    type="button"
+                    class="carousel-studio__rendered-trigger"
+                    data-action="preview-rendered"
+                    data-index="${String(i)}"
+                    aria-label="Preview the rendered carousel, starting at slide ${String(i + 1)}"
+                  >
+                    <img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />
+                  </button>
                   <figcaption class="carousel-studio__rendered-caption">
                     <span class="carousel-studio__rendered-badge">${String(i + 1)}</span>
                     <span>${String(i + 1)} / ${String(renderedPaths.length)}</span>
@@ -542,24 +604,28 @@ export function builder({
       <div class="carousel-studio__main">
         ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
 
-        ${stageBar({ propsOpen, stageZoom })}
+        ${stageBar({ stageZoom })}
 
         <div class="carousel-studio__stage-scroll">
-          <div
-            class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
-              ? "carousel-studio__stage--anchor"
-              : ""}"
-            style="aspect-ratio:${String(n * w)}/${String(h)}"
-            ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
-          >
-            ${stageSlides}${dividers}${guides}${rail}
+          <div class="carousel-studio__stage-col">
+            ${topPane}
+            <div
+              class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
+                ? "carousel-studio__stage--anchor"
+                : ""}"
+              style="aspect-ratio:${String(n * w)}/${String(h)}"
+              ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
+            >
+              ${stageSlides}${dividers}${insertZones}${guides}${rail}
+            </div>
+            ${bottomPane}
           </div>
         </div>
 
-        ${railTools}
-
         ${renderedStrip}
       </div>
+
+      ${propsToggle({ propsOpen })}
 
       <div class="carousel-studio__props-backdrop" data-action="close-props"></div>
       <aside
@@ -576,32 +642,27 @@ export function builder({
         >
           &times;
         </button>
-        ${deck
-          ? html`${deckPanel({ doc, index: deckIndex, hasPad })}${layerPanel({
-              doc,
-              index: deckIndex,
-              selectedLayer,
-              layerScope,
-              logoUrl,
-            })}`
-          : fitPanel({ doc, srcW, srcH, fitMode })}
+        ${deck ? deckPanel({ doc, index: deckIndex, hasPad }) : fitPanel({ doc, srcW, srcH, fitMode })}
         ${docControls}
+        ${deck
+          ? layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
+          : ""}
       </aside>
     </div>`;
 }
 
 /**
- * The bar under the stage: stage zoom on the left, the properties toggle on the
- * right. Neither touches the document — zoom writes one CSS custom property on
- * the builder root and the toggle flips one state class, so both are applied
- * without a rebuild (see `_setStageZoom` / `_toggleProps` in `index.js`).
+ * The bar under the stage: stage zoom, the studio's only control that is
+ * neither the document nor the properties panel. Writes one CSS custom
+ * property on the builder root, applied without a rebuild (see
+ * `_setStageZoom` in `index.js`).
  *
  * "100%" here means the stage's own height budget, not 1:1 with the 1350px
  * canvas — the canvas is taller than any laptop.
  *
- * @param {{propsOpen: boolean, stageZoom: number}} o
+ * @param {{stageZoom: number}} o
  */
-export function stageBar({ propsOpen, stageZoom }) {
+export function stageBar({ stageZoom }) {
   return html`
     <div class="carousel-studio__stage-bar">
       <div class="carousel-studio__zoom" role="group" aria-label="Stage zoom">
@@ -645,18 +706,36 @@ export function stageBar({ propsOpen, stageZoom }) {
           100%
         </button>
       </div>
-
-      <button
-        type="button"
-        id="carousel-props-toggle"
-        class="btn btn-secondary"
-        data-action="toggle-props"
-        aria-controls="carousel-props"
-        aria-expanded="${propsOpen ? "true" : "false"}"
-      >
-        ${propsOpen ? "Hide properties" : "Properties"}
-      </button>
     </div>`;
+}
+
+/**
+ * The properties panel's own open/close control — a burger tab rather than a
+ * chip lost among the zoom buttons. It is a sibling of the `<aside>`, not a
+ * child of it: the aside itself is what `display: none`s away at 64em+ when
+ * the panel is closed, or slides fully off-screen below it, so a button that
+ * lived only inside it could never reopen it — but `carousel.css` docks it to
+ * the panel's own edge (sticky beside the rail, floating beside the sheet),
+ * so it reads as part of the panel rather than of the stage bar it used to
+ * share with the zoom controls.
+ *
+ * @param {{propsOpen: boolean}} o
+ */
+export function propsToggle({ propsOpen }) {
+  return html`
+    <button
+      type="button"
+      id="carousel-props-toggle"
+      class="carousel-studio__props-toggle ${propsOpen ? "is-active" : ""}"
+      data-action="toggle-props"
+      aria-controls="carousel-props"
+      aria-expanded="${propsOpen ? "true" : "false"}"
+    >
+      ${raw(MENU_SVG)}
+      <span class="carousel-studio__props-toggle-label"
+        >${propsOpen ? "Hide properties" : "Properties"}</span
+      >
+    </button>`;
 }
 
 /**
