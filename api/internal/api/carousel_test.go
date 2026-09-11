@@ -336,6 +336,7 @@ func TestCarouselTemplates_BadRequests(t *testing.T) {
 		{"doc is array", `{"slug":"zine","name":"N","doc":[1,2]}`, http.StatusBadRequest},
 		{"doc is string", `{"slug":"zine","name":"N","doc":"x"}`, http.StatusBadRequest},
 		{"doc malformed", `{"slug":"zine","name":"N","doc":{`, http.StatusBadRequest},
+		{"name over 200 chars", `{"slug":"zine","name":"` + strings.Repeat("n", 201) + `","doc":{"version":1}}`, http.StatusBadRequest},
 		{"slug with underscore is fine", `{"slug":"my_zine-2","name":"N","doc":{"version":1}}`, http.StatusOK},
 	}
 	for _, tc := range cases {
@@ -343,6 +344,39 @@ func TestCarouselTemplates_BadRequests(t *testing.T) {
 			rec := driveTemplate(t, h.SaveCarouselTemplate, http.MethodPost, "", tc.body)
 			if rec.Code != tc.want {
 				t.Fatalf("want %d, got %d (%s)", tc.want, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+// Every template route propagates a repository failure rather than swallowing
+// it into an empty 200. Dropping the table is the same trick
+// TestGetTagsPage_DBError uses, and it reaches all four handlers at once —
+// including the non-ErrNoRows arm of GetCarouselTemplate, which a missing row
+// alone does not exercise.
+func TestCarouselTemplates_DBError(t *testing.T) {
+	h, repo := newCarouselHandler(t)
+	if _, err := repo.DB().Exec(`DROP TABLE carousel_templates`); err != nil {
+		t.Fatalf("drop carousel_templates: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		fn     func(echo.Context) error
+		method string
+		slug   string
+		body   string
+	}{
+		{"list", h.ListCarouselTemplates, http.MethodGet, "", ""},
+		{"get", h.GetCarouselTemplate, http.MethodGet, "zine", ""},
+		{"save", h.SaveCarouselTemplate, http.MethodPost, "", `{"slug":"zine","name":"Zine","doc":{"version":1}}`},
+		{"delete", h.DeleteCarouselTemplate, http.MethodDelete, "zine", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := driveTemplate(t, tc.fn, tc.method, tc.slug, tc.body)
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("want 500, got %d (%s)", rec.Code, rec.Body.String())
 			}
 		})
 	}
