@@ -386,6 +386,12 @@ export default class CarouselStudioPage extends Component {
     // The same, for the rail's drag handle after a keyboard reorder — a
     // different element, and only one of the two is ever pending.
     this._refocusRail = null;
+    // The stage scroller's horizontal offset, carried across a rebuild the
+    // same way `_stageZoom` is: every setState() (a slide select, a crop
+    // drag's commit, a zoom change) replaces the scroller node outright, and
+    // a fresh node starts at 0 — so without this, scrolling right and then
+    // picking a slide snapped the strip back to the start.
+    this._stageScrollLeft = 0;
     // `attachPointerReorder`'s teardown for the rail. Bound once in `mount`,
     // since the util re-queries its containers per gesture and so survives a
     // rebuild; released in `beforeUnmount`.
@@ -1397,7 +1403,11 @@ export default class CarouselStudioPage extends Component {
     this._previewEl.classList.add("is-open");
     this._previewViewer?.unmount();
     this._previewViewer = new MediaViewer(this._previewMount, {
-      items: paths.map((path) => ({ type: "image", url: path, alt: "" })),
+      // carousel:true marks every slide as belonging to the same deck, so
+      // MediaViewer pans them edge-to-edge (_seamlessPair/_seamlessStep) the
+      // same way a published carousel-block post does, rather than treating
+      // consecutive slides as unrelated photos and fade-cutting between them.
+      items: paths.map((path) => ({ type: "image", url: path, alt: "", carousel: true })),
       startIndex: Math.max(0, Math.min(index, paths.length - 1)),
       showClose: true,
       // No post behind these paths for a share link to point at — sharing is
@@ -2110,8 +2120,20 @@ export default class CarouselStudioPage extends Component {
 
   // ── Preview painting ──────────────────────────────────────────────────────
 
+  /** Snapshot the stage scroller's offset before its node is torn down —
+   *  see `_stageScrollLeft`. Runs before every render including the first,
+   *  when there is nothing to read yet. */
+  beforeRender() {
+    const scroll = this.$(".carousel-studio__stage-scroll");
+    if (scroll) this._stageScrollLeft = scroll.scrollLeft;
+  }
+
   afterRender() {
     setupAdminLayout(this, { currentPath: "/light/carousel" });
+
+    // Put the stage scroller back where the user left it — see `beforeRender`.
+    const stageScroll = this.$(".carousel-studio__stage-scroll");
+    if (stageScroll) stageScroll.scrollLeft = this._stageScrollLeft;
 
     // Re-taken every render, released with it (see Component's resource
     // contract) — so navigating off the studio takes the shortcut with it.
