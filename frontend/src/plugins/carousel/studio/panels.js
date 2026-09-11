@@ -491,17 +491,69 @@ export function builder({
       ${deck ? "Use one photo for all slides" : "Change photo"}
     </button>`;
 
+  // The aspect select's current label doubles as the caption's "active export
+  // format" — it names the canvas the rendered strip was cut for, without a
+  // second source of truth for what "active" means.
+  const aspectLabel = ASPECT_OPTIONS.find(([val]) => val === doc.aspect)?.[1] ?? doc.aspect;
   const renderedStrip = renderedPaths.length
     ? html`
         <div class="carousel-studio__rendered">
-          <h2 class="carousel-studio__subhead">Rendered slides</h2>
+          <h2 class="carousel-studio__subhead">
+            Rendered slides — ${aspectLabel} · ${String(w)}&times;${String(h)}
+          </h2>
           <div class="carousel-studio__slides">
             ${renderedPaths.map(
-              (p) => html`<img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />`,
+              (p, i) => html`
+                <figure class="carousel-studio__rendered-item">
+                  <img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />
+                  <figcaption class="carousel-studio__rendered-caption">
+                    <span class="carousel-studio__rendered-badge">${String(i + 1)}</span>
+                    <span>${String(i + 1)} / ${String(renderedPaths.length)}</span>
+                    <span>${String(w)}&times;${String(h)}</span>
+                  </figcaption>
+                </figure>`,
             )}
           </div>
         </div>`
     : "";
+
+  // Aspect + safe-area guides + the "one photo for all slides" swap act on the
+  // whole document, not the selected slide, but they read as document-level
+  // properties all the same, so they live in the sidebar under whatever the
+  // mode's own panel is, rather than as a stray block outside it.
+  const docControls = html`
+    <div class="carousel-studio__controls">
+      ${deck
+        ? ""
+        : html`
+            <label class="carousel-studio__control">
+              <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
+              <input
+                type="range"
+                id="carousel-n"
+                min="${String(MIN_SLIDES)}"
+                max="${String(MAX_SLIDES)}"
+                value="${String(n)}"
+              />
+            </label>`}
+
+      <label class="carousel-studio__control">
+        <span>Aspect</span>
+        <select id="carousel-aspect">
+          ${ASPECT_OPTIONS.map(
+            ([val, text]) => html`
+              <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
+          )}
+        </select>
+      </label>
+
+      <label class="carousel-studio__control carousel-studio__control--check">
+        <input type="checkbox" id="carousel-guides" ${showGuides ? "checked" : ""} />
+        <span>Safe-area guides</span>
+      </label>
+
+      ${sourceButton}
+    </div>`;
 
   return html`
     <div
@@ -509,6 +561,8 @@ export function builder({
       style="--carousel-stage-zoom:${String(stageZoom)}"
     >
       ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+
+      ${stageBar({ propsOpen, stageZoom })}
 
       <div class="carousel-studio__stage-scroll">
         <div
@@ -522,15 +576,17 @@ export function builder({
         </div>
       </div>
 
-      ${stageBar({ propsOpen, stageZoom })}
-
-      <div
-        class="carousel-studio__filmstrip"
-        aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
-      >
-        ${strip}
+      <div class="carousel-studio__filmstrip-row">
+        <div
+          class="carousel-studio__filmstrip"
+          aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
+        >
+          ${strip}
+        </div>
+        ${railTools}
       </div>
-      ${railTools}
+
+      ${renderedStrip}
 
       <div class="carousel-studio__props-backdrop" data-action="close-props"></div>
       <aside
@@ -556,42 +612,8 @@ export function builder({
               logoUrl,
             })}`
           : fitPanel({ doc, srcW, srcH, fitMode })}
+        ${docControls}
       </aside>
-
-      <div class="carousel-studio__controls">
-        ${deck
-          ? ""
-          : html`
-              <label class="carousel-studio__control">
-                <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
-                <input
-                  type="range"
-                  id="carousel-n"
-                  min="${String(MIN_SLIDES)}"
-                  max="${String(MAX_SLIDES)}"
-                  value="${String(n)}"
-                />
-              </label>`}
-
-        <label class="carousel-studio__control">
-          <span>Aspect</span>
-          <select id="carousel-aspect">
-            ${ASPECT_OPTIONS.map(
-              ([val, text]) => html`
-                <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
-            )}
-          </select>
-        </label>
-
-        <label class="carousel-studio__control carousel-studio__control--check">
-          <input type="checkbox" id="carousel-guides" ${showGuides ? "checked" : ""} />
-          <span>Safe-area guides</span>
-        </label>
-
-        ${sourceButton}
-      </div>
-
-      ${renderedStrip}
     </div>`;
 }
 

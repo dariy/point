@@ -279,12 +279,41 @@
  * flex basis, so the strip is exactly as tall as one frame. A height on the
  * container would stretch every frame to it (`align-items: stretch` beats
  * `aspect-ratio`) and the filmstrip would stop previewing the real slide shape. */
-.carousel-studio__filmstrip,
-.carousel-studio__slides {
+.carousel-studio__filmstrip {
   display: flex;
   gap: var(--spacing-xs);
   overflow-x: auto;
   max-width: 100%;
+}
+
+/* The filmstrip and its slide-management row read as one bar: thumbnails
+ * scroll on the left, the +/duplicate/delete tools sit past a rule on the
+ * right. In Panorama mode `railTools` is empty, so the row collapses to the
+ * filmstrip alone with no dangling rule. */
+.carousel-studio__filmstrip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.carousel-studio__filmstrip-row .carousel-studio__filmstrip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.carousel-studio__filmstrip-row .carousel-studio__rail-tools {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding-left: var(--spacing-sm);
+  border-left: var(--border-width) solid var(--border-primary);
+}
+
+/* The rendered strip is a labelled grid of cards, not a single scrolling row —
+ * it wraps instead of clipping so every slide's caption stays reachable. */
+.carousel-studio__slides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
 }
 
 
@@ -426,17 +455,50 @@
   pointer-events: none;
 }
 
-/* `min-width: 0` is load-bearing. These are the only *replaced* elements in
+/* `min-width: 0` is load-bearing. This is the only *replaced* element in
  * either strip — the filmstrip frames are divs with a background — and a flex
  * item's automatic minimum size is its content's, which for an <img> is the
- * natural width. Without the override each 1080px slide ignored the 8rem basis
- * and rendered at full size, so "Rendered slides" was one giant image with the
- * rest of the deck off the right edge. */
+ * natural width. Without the override each 1080px slide ignored the card's
+ * basis and rendered at full size, so "Rendered slides" was one giant image
+ * with the rest of the deck off the right edge. */
 .carousel-studio__slide {
-  /* flex: 0 0 8rem; */
+  display: block;
+  width: 100%;
   min-width: 0;
   height: auto;
   border-radius: var(--border-radius);
+}
+
+/* One rendered-slide card: the image plus its index/position/pixel caption.
+ * The card itself carries the flex basis the image used to. */
+.carousel-studio__rendered-item {
+  flex: 0 0 8rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-0-125);
+}
+
+.carousel-studio__rendered-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.carousel-studio__rendered-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--border-radius);
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 /* ── Mode toggle ───────────────────────────────────────────────────────────── */
@@ -912,6 +974,19 @@
   .carousel-studio__bg-field,
   .carousel-studio__control {
     flex: 1 1 100%;
+  }
+
+  /* The rule between the filmstrip and its tools only makes sense on one line;
+   * once the row wraps, the tools read as their own line instead. */
+  .carousel-studio__filmstrip-row {
+    flex-wrap: wrap;
+  }
+
+  .carousel-studio__filmstrip-row .carousel-studio__rail-tools {
+    flex-basis: 100%;
+    padding-left: 0;
+    border-left: 0;
+    margin-top: var(--spacing-xs);
   }
 }
 
