@@ -31,8 +31,8 @@
   gap: var(--spacing-md);
 }
 
-/* Everything but the properties panel: mode toggle, stage, filmstrip,
- * rendered strip. Its own class so `.carousel-studio__builder` can become a
+/* Everything but the properties panel: mode toggle, stage, rendered strip.
+ * Its own class so `.carousel-studio__builder` can become a
  * row at 64em+ with this as the flexible column and the panel as a fixed
  * sidebar beside it, the same split `.editor-layout`/`.editor-main` draw in
  * `frontend/css/light/editor.css`. */
@@ -59,16 +59,27 @@
 
 /* The 1080·n × 1350 strip: source shown centre-cropped to the combined deck
  * aspect (background-image is set from JS), column dividers and per-slide
- * safe-area boxes drawn on top.
+ * safe-area boxes drawn on top. Its own children are the slide tiles
+ * themselves — selection, drag-to-reorder and the per-slice crop preview all
+ * live on them directly, so this is the one stripe, not a pair.
  *
  * `height` is the budget the zoom control multiplies (`--carousel-stage-zoom`,
  * written by the page as one custom property); `width: fit-content` is what
  * makes the inline `aspect-ratio` transfer that definite height into a width
  * rather than stretching the stage to the scroller. The auto margins centre a
  * short deck and collapse to zero once the strip overflows, so nothing is ever
- * stranded off the scroller's left edge. */
+ * stranded off the scroller's left edge.
+ *
+ * `display: flex` (rather than positioning each `.stage-slide` by `left`/
+ * `width` percentages) is what lets `attachPointerReorder` show its drop line
+ * as a plain inserted sibling — the util assumes a normal-flow container, the
+ * same assumption `.carousel-studio__layer-list` and `PostEditPage`'s arrange
+ * list satisfy for it elsewhere. Equal-width flex items divide the stage's own
+ * fixed width exactly as the old `100/n%` math did, so dividers/guides/the
+ * anchor rail — still absolutely-positioned overlays on top — need no change. */
 .carousel-studio__stage {
   position: relative;
+  display: flex;
   /* Fallback aspect only — the builder always sets `n·w / h` inline. */
   aspect-ratio: 4 / 5;
   /* No `max-width` here, deliberately: a cap would win over the ratio and
@@ -103,7 +114,15 @@
 
 /* A deck column is *the* editing surface: `gestures.js` binds these, so a pan,
  * a pinch, a wheel zoom, a layer drag and an arrow nudge all happen here, at
- * the size the user is looking at. The rail below only moves the selection.
+ * the size the user is looking at. Its own drag handle (`.rail-handle`,
+ * floated into the corner) moves the selection's order instead; a press there
+ * is guarded out of the pan gesture in `studio/gestures.js`'s `onPointerDown`
+ * so the two never claim the same pointerdown.
+ *
+ * In split mode a tile carries none of the above — no tabindex, no layer
+ * markup, no handle — it is purely `paintSplit`'s per-slice crop-preview
+ * paint target; the whole stage is the editing surface there instead
+ * (`.stage--anchor`, below).
  *
  * `touch-action: pan-y`, not `none`: a horizontal drag pans the slide, but a
  * vertical one has to reach the page, or a phone user whose thumb lands on the
@@ -111,9 +130,9 @@
  * only once it has travelled far enough to call the direction, so the two never
  * fight over the same finger. */
 .carousel-studio__stage-slide {
-  position: absolute;
-  top: 0;
-  bottom: 0;
+  position: relative;
+  flex: 1 1 0%;
+  min-width: 0;
   overflow: hidden;
   cursor: grab;
   touch-action: pan-y;
@@ -131,8 +150,8 @@
   cursor: grabbing;
 }
 
-/* An inset ring rather than a border: the column is positioned by `left`/`width`
- * percentages, and a border would either shift the seam or eat into the preview. */
+/* An inset ring rather than a border: an equal-width flex item's border would
+ * throw off the even division the dividers' `left %` math assumes. */
 .carousel-studio__stage-slide.is-selected {
   box-shadow: inset 0 0 0 2px var(--color-primary);
 }
@@ -287,39 +306,6 @@
   max-width: none;
 }
 
-/* No height here: each frame carries its own inline `aspect-ratio` and a fixed
- * flex basis, so the strip is exactly as tall as one frame. A height on the
- * container would stretch every frame to it (`align-items: stretch` beats
- * `aspect-ratio`) and the filmstrip would stop previewing the real slide shape. */
-.carousel-studio__filmstrip {
-  display: flex;
-  gap: var(--spacing-xs);
-  overflow-x: auto;
-  max-width: 100%;
-}
-
-/* The filmstrip and its slide-management row read as one bar: thumbnails
- * scroll on the left, the +/duplicate/delete tools sit past a rule on the
- * right. In Panorama mode `railTools` is empty, so the row collapses to the
- * filmstrip alone with no dangling rule. */
-.carousel-studio__filmstrip-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.carousel-studio__filmstrip-row .carousel-studio__filmstrip {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.carousel-studio__filmstrip-row .carousel-studio__rail-tools {
-  flex: 0 0 auto;
-  margin-top: 0;
-  padding-left: var(--spacing-sm);
-  border-left: var(--border-width) solid var(--border-primary);
-}
-
 /* The rendered strip is a labelled grid of cards, not a single scrolling row —
  * it wraps instead of clipping so every slide's caption stays reachable. */
 .carousel-studio__slides {
@@ -328,40 +314,35 @@
   gap: var(--spacing-sm);
 }
 
+/* The slide-management row: add/duplicate/delete, acting on the selected
+ * slide. Its own bar directly under the stage rather than a row of chips on
+ * every tile — deck mode only, `railTools` is empty string in split mode. */
+.carousel-studio__rail-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin-top: var(--spacing-xs);
+}
 
-.carousel-studio__frame {
-  flex: 0 0 6rem;
-  background-color: var(--surface-card);
-  background-repeat: no-repeat;
-  border: var(--border-width) solid var(--border-primary);
+/* The reorder handle: a small grip floated into a stage-slide tile's corner,
+ * on top of whatever the tile is showing. A separate control on purpose —
+ * `attachPointerReorder` claims the pointer on press, and it is guarded out of
+ * the tile's own pan/zoom gesture in `studio/gestures.js`'s `onPointerDown`,
+ * so the two never fight over the same press.
+ *
+ * `touch-action: none` is what lets a finger drag the handle at all: without
+ * it the browser claims the gesture as a scroll of the stage before the
+ * pointer capture can take effect. */
+.carousel-studio__stage-slide > .carousel-studio__rail-handle {
+  position: absolute;
+  z-index: 2;
+  top: var(--spacing-xs);
+  left: var(--spacing-xs);
+  background: color-mix(in srgb, var(--surface-card) 75%, transparent);
   border-radius: var(--border-radius);
 }
 
-/* ── Rail item ─────────────────────────────────────────────────────────────
- * Slides mode wraps each rail frame with its own drag handle, so the flex
- * basis that used to size the frame sizes the pair and the frame fills it.
- * The handle is a separate control on purpose: `attachPointerReorder` claims
- * the pointer on press, so a handle that *was* the frame would eat the click
- * that selects the slide. */
-.carousel-studio__rail-item {
-  display: flex;
-  flex: 0 0 8rem;
-  flex-direction: column;
-  gap: var(--size-0-125);
-}
-
-.carousel-studio__rail-item .carousel-studio__frame--deck {
-  flex: 1 1 auto;
-  width: 100%;
-}
-
-.carousel-studio__rail-item.is-dragging {
-  opacity: 0.4;
-}
-
-/* `touch-action: none` is what lets a finger drag the handle at all: without
- * it the browser claims the gesture as a scroll of the strip before the
- * pointer capture can take effect. */
 .carousel-studio__rail-handle {
   display: flex;
   align-items: center;
@@ -385,39 +366,7 @@
   cursor: default;
 }
 
-/* Add / duplicate / delete act on the selected slide, so they sit under the
- * rail as one row rather than repeating on every frame. */
-.carousel-studio__rail-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  align-items: center;
-  margin-top: var(--spacing-xs);
-}
-
-/* A deck rail frame is a selection button showing a thumbnail — nothing is
- * edited here (that is the stage). Its own fill layer covers the letterbox
- * wherever a contained slide's image element doesn't reach; the hatch below is
- * what shows when there is nothing to fill it with yet. `container-type` is
- * what lets the fill's blur radius be a fraction of the frame width. */
-.carousel-studio__frame--deck {
-  position: relative;
-  overflow: hidden;
-  flex: 0 0 8rem;
-  padding: 0;
-  appearance: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  container-type: inline-size;
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--surface-hover) 0 6px,
-    transparent 6px 12px
-  );
-}
-
-/* The slide number, bottom-left, over whatever the thumbnail is showing. */
+/* The slide number, bottom-left, over whatever the tile is showing. */
 .carousel-studio__frame-num {
   position: absolute;
   left: 0.25rem;
@@ -432,24 +381,14 @@
   pointer-events: none;
 }
 
-.carousel-studio__frame--deck.is-selected .carousel-studio__frame-num {
+.carousel-studio__stage-slide.is-selected .carousel-studio__frame-num {
   color: var(--color-primary);
 }
 
-.carousel-studio__frame--deck.is-selected {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
-}
-
-.carousel-studio__frame--deck:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
 /* The fill layer of a deck slide: the CSS twin of the render's pad fill, spanning
- * the whole frame with the image layer painted over it. Separate from the frame
- * so a `blur()` on a bleed fill cannot blur the image or the frame's border with
- * it; the radius arrives in `cqw` against the frame's inline size, which keeps
+ * the whole tile with the image layer painted over it. Separate from the tile
+ * so a `blur()` on a bleed fill cannot blur the image or the tile's border with
+ * it; the radius arrives in `cqw` against the tile's inline size, which keeps
  * it proportional to the canvas radius at any preview scale. */
 .carousel-studio__frame-bg {
   position: absolute;
@@ -459,7 +398,7 @@
 }
 
 /* The image layer of a deck slide. Its own element because a contained slide's
- * box is smaller than the frame — the background is clipped to the element, so
+ * box is smaller than the tile — the background is clipped to the element, so
  * only a cut-down one keeps the source out of the letterbox. */
 .carousel-studio__frame-img {
   position: absolute;
@@ -467,12 +406,11 @@
   pointer-events: none;
 }
 
-/* `min-width: 0` is load-bearing. This is the only *replaced* element in
- * either strip — the filmstrip frames are divs with a background — and a flex
- * item's automatic minimum size is its content's, which for an <img> is the
- * natural width. Without the override each 1080px slide ignored the card's
- * basis and rendered at full size, so "Rendered slides" was one giant image
- * with the rest of the deck off the right edge. */
+/* `min-width: 0` is load-bearing. This is the only *replaced* element among
+ * the rendered cards — a flex item's automatic minimum size is its content's,
+ * which for an <img> is the natural width. Without the override each 1080px
+ * slide ignored the card's basis and rendered at full size, so "Rendered
+ * slides" was one giant image with the rest of the deck off the right edge. */
 .carousel-studio__slide {
   display: block;
   width: 100%;
@@ -995,14 +933,6 @@
     height: calc(clamp(9rem, 38vh, 20rem) * var(--carousel-stage-zoom, 1));
   }
 
-  .carousel-studio__frame {
-    flex-basis: 4.5rem;
-  }
-
-  .carousel-studio__frame--deck {
-    flex-basis: 6rem;
-  }
-
   .carousel-studio__stage-bar,
   .carousel-studio__controls {
     gap: var(--spacing-xs);
@@ -1013,19 +943,6 @@
   .carousel-studio__bg-field,
   .carousel-studio__control {
     flex: 1 1 100%;
-  }
-
-  /* The rule between the filmstrip and its tools only makes sense on one line;
-   * once the row wraps, the tools read as their own line instead. */
-  .carousel-studio__filmstrip-row {
-    flex-wrap: wrap;
-  }
-
-  .carousel-studio__filmstrip-row .carousel-studio__rail-tools {
-    flex-basis: 100%;
-    padding-left: 0;
-    border-left: 0;
-    margin-top: var(--spacing-xs);
   }
 }
 

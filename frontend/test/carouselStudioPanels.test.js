@@ -371,7 +371,7 @@ describe('carousel studio panels', () => {
       assert.match(out, /id="carousel-guides"/);
       assert.match(out, /data-action="pick-source"/);
       assert.match(out, /carousel-studio__stage/);
-      assert.match(out, /carousel-studio__filmstrip/);
+      assert.match(out, /carousel-studio__stage-slide/);
     });
 
     test('split mode offers the count slider over the studio range', () => {

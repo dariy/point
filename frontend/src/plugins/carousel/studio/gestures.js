@@ -494,8 +494,17 @@ export function createDeckGestures(host) {
     e.preventDefault?.();
   };
 
+  // A press or a key on the reorder handle nested in the column belongs to
+  // `attachPointerReorder` / the arrow-key reorder in `index.js`, not to this
+  // gesture — without the guard both would claim the same pointerdown or
+  // ArrowLeft/ArrowRight, since the handle's own listeners don't (and, being a
+  // capture-phase document listener for the pointer case, can't) stop the
+  // column's bubble-phase ones from also running.
+  const onHandle = (e) => Boolean(e.target?.closest?.(".carousel-studio__rail-handle"));
+
   const onPointerDown = (e, frame, i) => {
     if (e.button != null && e.button > 0) return;
+    if (onHandle(e)) return;
     const slide = host.slideAt(i);
     if (!slide) return;
 
@@ -662,6 +671,7 @@ export function createDeckGestures(host) {
   };
 
   const onFrameKey = (e, i) => {
+    if (onHandle(e)) return;
     const slide = host.slideAt(i);
     if (!slide) return;
 

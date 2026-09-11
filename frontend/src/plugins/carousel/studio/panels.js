@@ -290,7 +290,7 @@ function layerLabel(layer) {
 }
 
 /**
- * The builder: mode toggle, stage, filmstrip, the mode's own panel, the
+ * The builder: mode toggle, stage, the mode's own panel, the
  * doc-level controls, and the strip of slides really in the post.
  *
  * @param {object} o
@@ -366,58 +366,42 @@ export function builder({
       })
     : "";
 
-  // In deck mode the stage is no longer one crop band projected across the
-  // deck — it is n independently framed slides laid side by side, and each
-  // column is the editing surface: `gestures.js` binds these, so a pan, a
-  // zoom, a layer drag and an arrow nudge all happen at the size the user is
-  // actually looking at.
-  const stageSlides = deck
-    ? doc.slides.map(
-        (slide, i) => html`
+  // The stage is the one stripe, in either mode. In deck mode it is n
+  // independently framed slides laid side by side, and each column is the
+  // editing surface: `gestures.js` binds these, so a pan, a zoom, a layer drag
+  // and an arrow nudge all happen at the size the user is actually looking
+  // at. Selection lives here too, already — a tap or a focus on a column
+  // calls `select` (see `createDeckGestures` in `studio/gestures.js`), so the
+  // slide number and the drag handle are the only things a column needs
+  // beyond what direct manipulation already gave it.
+  //
+  // The handle is a separate control on purpose: `attachPointerReorder`
+  // claims the pointer on press, so a handle that *was* the column would eat
+  // the drag that pans it. It carries `data-slide`, the column `data-slice` —
+  // the column is a paint host and the handle is not (see the note on
+  // `pick-source` in `index.js`) — and a press or an arrow key on it is
+  // guarded out of the pan/zoom gesture (`onHandle` in `studio/gestures.js`),
+  // so the two never claim the same pointerdown or keypress.
+  //
+  // In Slides mode a column carries none of that: no tabindex, no layer
+  // markup, no handle, just `paintSplit`'s per-slice crop preview — the whole
+  // stage is the editing surface there instead (`_anchorGesture`, bound to
+  // `.carousel-studio__stage` itself in `index.js`), and reordering isn't a
+  // thing a panorama slice does.
+  const stageSlides = doc.slides.map((slide, i) =>
+    deck
+      ? html`
           <span
             class="carousel-studio__stage-slide ${i === selected ? "is-selected" : ""}"
             data-slice="${String(i)}"
             tabindex="0"
             role="group"
             aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
-            style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
             ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
               (i === deckIndex && slideChrome) || spanChrome,
             )}
-          </span>`,
-      )
-    : "";
-
-  // The deck filmstrip is a rail, not a second editing surface: a thumbnail,
-  // a slide number and the selected state. Its only job is to move the
-  // selection, so it is a button — the layer nodes, span nodes and chrome that
-  // used to be duplicated here live on the stage alone.
-  //
-  // In Slides mode each frame is wrapped with its own drag handle, because
-  // `attachPointerReorder` claims the pointer on press: a handle *is* the
-  // frame would mean a press that never becomes the click that selects it.
-  // The handle carries `data-slide`, the frame `data-slice` — the frame is a
-  // paint host and the handle is not (see the note on `pick-source` in
-  // `index.js`).
-  const strip = doc.slides.map((_slide, i) =>
-    deck
-      ? html`
-          <div class="carousel-studio__rail-item" data-slide="${String(i)}">
-            <button
-              type="button"
-              class="carousel-studio__frame carousel-studio__frame--deck ${i === selected
-                ? "is-selected"
-                : ""}"
-              data-slice="${String(i)}"
-              data-action="select-slide"
-              aria-pressed="${i === selected ? "true" : "false"}"
-              aria-label="Select slide ${String(i + 1)}"
-              style="aspect-ratio:${String(w)}/${String(h)}"
-            >
-              ${deckLayers()}
-              <span class="carousel-studio__frame-num">${String(i + 1)}</span>
-            </button>
+            <span class="carousel-studio__frame-num">${String(i + 1)}</span>
             <button
               type="button"
               class="carousel-studio__rail-handle"
@@ -426,19 +410,14 @@ export function builder({
             >
               ${raw(GRIP_SVG)}
             </button>
-          </div>`
-      : html`
-          <div
-            class="carousel-studio__frame"
-            data-slice="${String(i)}"
-            style="aspect-ratio:${String(w)}/${String(h)}"
-          ></div>`,
+          </span>`
+      : html`<div class="carousel-studio__stage-slide" data-slice="${String(i)}"></div>`,
   );
 
   // Add / duplicate / delete act on the selected slide, so they are one row
-  // under the rail rather than three chips on every frame. Slides mode only:
-  // a panorama's count is derived from the fit panel, and a control that added
-  // a column there would be offering to break the derivation.
+  // under the stage rather than three chips on every column. Slides mode
+  // only: a panorama's count is derived from the fit panel, and a control
+  // that added a column there would be offering to break the derivation.
   const railTools = deck
     ? html`
         <div class="carousel-studio__rail-tools" role="group" aria-label="Slides">
@@ -577,15 +556,7 @@ export function builder({
           </div>
         </div>
 
-        <div class="carousel-studio__filmstrip-row">
-          <div
-            class="carousel-studio__filmstrip"
-            aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
-          >
-            ${strip}
-          </div>
-          ${railTools}
-        </div>
+        ${railTools}
 
         ${renderedStrip}
       </div>

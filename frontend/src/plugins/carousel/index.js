@@ -36,8 +36,8 @@
  * the frame's image element and commits to the document only when the gesture
  * ends, so dragging costs no decode and no re-render. A slide's background fill
  * is CSS too — a layer behind that image element, mirroring the pad fill
- * `paintSlide` paints — so the filmstrip shows the letterbox the JPEG will
- * carry rather than a placeholder.
+ * `paintSlide` paints — so the stage shows the letterbox the JPEG will carry
+ * rather than a placeholder.
  */
 
 import { Component } from "../../components/Component.js";
@@ -512,9 +512,6 @@ export default class CarouselStudioPage extends Component {
     },
     "stage-zoom"(_e, el) {
       this._zoomStage(el.dataset.zoom);
-    },
-    "select-slide"(_e, el) {
-      this._select(Number(el.dataset.slice));
     },
     "add-slide"(_e, el) {
       this._addSlide(Number(el.dataset.slide));
@@ -1119,11 +1116,12 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Slide reordering on the rail: a pointer drag over the filmstrip, and the
-   * arrow keys on the same handle (`_wireControls`). Pointer events rather than
-   * HTML5 drag-and-drop — `attachPointerReorder` says why — and the util owns
-   * the gesture and nothing else: the drop arrives here as an element and the
-   * item it landed after, and becomes a `moveSlide` write like any other.
+   * Slide reordering directly on the stage: a pointer drag on a column's own
+   * handle, and the arrow keys on the same handle (`_wireControls`). Pointer
+   * events rather than HTML5 drag-and-drop — `attachPointerReorder` says why —
+   * and the util owns the gesture and nothing else: the drop arrives here as
+   * an element and the item it landed after, and becomes a `moveSlide` write
+   * like any other.
    *
    * Bound once, for the life of the page. The util re-queries its containers
    * per gesture, so the rebuild every write causes costs it nothing.
@@ -1132,18 +1130,18 @@ export default class CarouselStudioPage extends Component {
     this._detachReorder?.();
     this._detachReorder = attachPointerReorder({
       handleSelector: ".carousel-studio__rail-handle",
-      itemSelector: ".carousel-studio__rail-item",
-      containers: () => [this.$(".carousel-studio__filmstrip")],
+      itemSelector: ".carousel-studio__stage-slide",
+      containers: () => [this.$(".carousel-studio__stage")],
       axis: "x",
       isEnabled: () => this.state.doc.mode === "deck" && !this.state.busy,
       onDrop: ({ item, afterEl }) => {
-        // The rail is in document order, so an item's `data-slide` *is* its
+        // The stage is in document order, so an item's `data-slice` *is* its
         // index. Landing after a slide further along means taking its place
         // once the drag has vacated its own — hence the +1 on that side only.
-        const from = Number(item?.dataset?.slide);
+        const from = Number(item?.dataset?.slice);
         if (!Number.isInteger(from)) return;
         if (afterEl === item) return;
-        const after = afterEl ? Number(afterEl.dataset.slide) : null;
+        const after = afterEl ? Number(afterEl.dataset.slice) : null;
         this._moveSlide(from, after == null ? 0 : after > from ? after : after + 1);
       },
     });
@@ -1172,7 +1170,7 @@ export default class CarouselStudioPage extends Component {
    * (`geometry.js`) rather than at the origin — a layer outside the frame's
    * honest bounds is one the user has to move before it is any use. A `"span"`
    * layer keeps the type's vertical placement but stretches across the deck,
-   * since its box is normalized to the whole filmstrip and running across the
+   * since its box is normalized to the whole stage and running across the
    * seams is the use. Only the `box` (and an `image` layer's default source) is
    * set here; every other field is `normalizeLayer`'s to fill, because the
    * studio never authors a layer literal — see `addLayer` in `document.js`.
@@ -2108,8 +2106,10 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Split-mode preview: one crop band across the stage, one column per frame,
-   * and the rail that says where in its slack the band sits.
+   * Split-mode preview: one crop band across the stage as a fallback, each
+   * column tile painted with its own independently-fitted slice on top of it
+   * (they can differ from the combined band under `pad`), and the rail that
+   * says where in its slack the band sits.
    *
    * `anchorOverride` is the live drag's provisional value — the same argument
    * `_paintDeckSlide` takes a provisional slide for, and for the same reason:
@@ -2125,7 +2125,7 @@ export default class CarouselStudioPage extends Component {
     paintSplit(
       {
         stage: this.$(".carousel-studio__stage"),
-        frames: this.$$(".carousel-studio__frame"),
+        frames: this.$$(".carousel-studio__stage-slide"),
       },
       {
         source,
@@ -2209,10 +2209,9 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Paint one deck slide — the stage slice and the filmstrip frame both carry
-   * `data-slice`, so one query finds every element showing it. Called with a
-   * provisional slide mid-gesture and with the document's own slide otherwise,
-   * which is what keeps a drag and a commit painting identically.
+   * Paint one deck slide onto its stage tile (`[data-slice="${i}"]`). Called
+   * with a provisional slide mid-gesture and with the document's own slide
+   * otherwise, which is what keeps a drag and a commit painting identically.
    *
    * @param {number} i
    * @param {import('./document.js').CarouselSlide} slide
@@ -2342,12 +2341,12 @@ export default class CarouselStudioPage extends Component {
       });
     }
 
-    // The keyboard half of the rail reorder: the handle is a button, so the
-    // arrows are free, and left/right is the axis the rail runs on (see
+    // The keyboard half of the stage reorder: the handle is a button, so the
+    // arrows are free, and left/right is the axis the stage runs on (see
     // `_setupSlideReorder`). Without this the reorder would be pointer-only,
     // which is the failure the arrange mode in `PostEditPage` avoids the same
-    // way. Delegated on the strip, so it survives the rebuild a move causes.
-    this.on(this.$(".carousel-studio__filmstrip"), "keydown", (e) => {
+    // way. Delegated on the stage, so it survives the rebuild a move causes.
+    this.on(this.$(".carousel-studio__stage"), "keydown", (e) => {
       const ev = /** @type {KeyboardEvent} */ (e);
       if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
       const handle = /** @type {HTMLElement|null} */ (
