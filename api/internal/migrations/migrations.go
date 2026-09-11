@@ -432,6 +432,20 @@ var schema = []struct{ name, sql string }{
 				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 			)`,
 	},
+	{
+		// Reusable carousel envelopes, keyed slug UNIQUE; doc is the same
+		// opaque JSON as carousels.doc. Same statement as in sql/schema.sql,
+		// which is where a fresh database gets it.
+		"create_carousel_templates_table",
+		`CREATE TABLE IF NOT EXISTS carousel_templates (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				slug       TEXT NOT NULL UNIQUE,
+				name       TEXT NOT NULL,
+				doc        TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

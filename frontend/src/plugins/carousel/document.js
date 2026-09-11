@@ -8,11 +8,16 @@
  * normalize the stored JSON, build the content block, and hash a slide's
  * inputs so an unchanged slide can skip re-rendering.
  *
+ * A *template* is this same document with placeholder values, so the last
+ * section here resolves one against a post rather than defining a second
+ * format — see "Templates" below.
+ *
  * No DOM, no canvas, no network. Schema: `docs/features/carousel-studio.md`.
  */
 
 import { carouselFence, CAROUSEL_BLOCK_CLASS } from '../../utils/postNodes.js';
 import { sliceRects, clampPan } from './geometry.js';
+import { MIN_SLIDES, MAX_SLIDES } from './studio/bounds.js';
 
 /** Bumped only on a breaking schema change; present since the first commit. */
 export const DOC_VERSION = 1;
@@ -893,6 +898,10 @@ export function reorderLayer(doc, slideIndex, from, to) {
 // No slide-count bounds here. `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
 // belong to the state owner, which can refuse in a toast; a model that refused
 // silently would leave its caller unable to tell a refusal from a no-op.
+// `applyTemplate` is the one place in this module that does clamp, and for the
+// opposite reason: it builds a whole document out of a file nobody in this
+// session authored, so there is no gesture to refuse — only a count to bring
+// into range and name in its report.
 //
 // Span layers need no work either way: their boxes are fractions of the whole
 // n-wide deck, so a changed slide count re-flows them across the new seams —
@@ -1012,6 +1021,488 @@ export function moveSlide(doc, from, to) {
   const slides = base.slides.slice();
   slides.splice(b, 0, slides.splice(a, 1)[0]);
   return normalizeDocument({ ...base, slides });
+}
+
+// ── Templates ───────────────────────────────────────────────────────────────
+// A template *is* a `CarouselDoc` with placeholder values — not a second
+// format, which is why `DOC_VERSION` does not move for S4 and no layer gains a
+// field. The two functions below are the whole seam: {@link applyTemplate}
+// resolves the placeholders against one post, {@link toTemplate} wraps a
+// document in the envelope that carries identity and provenance (the document
+// itself says nothing about either).
+//
+// Placeholders resolve **on apply, not at paint time**, unlike a `counter`
+// layer's `{i}`/`{n}` — which `render.js` still owns and which this module
+// deliberately leaves alone. The author has to be able to edit the headline the
+// template produced, so the substitution happens once and the result is
+// thereafter an ordinary document with no template machinery left in it.
+
+/** Bumped only on a breaking change to the *envelope*. The document inside it
+ *  carries its own {@link DOC_VERSION}, which is a separate number. */
+export const TEMPLATE_VERSION = 1;
+
+/** Where a template came from: the two importers, or "save this carousel as a
+ *  template". Display-only — nothing on the apply path branches on it. */
+export const TEMPLATE_ORIGINS = ['pptx', 'svg', 'studio'];
+const DEFAULT_ORIGIN = 'studio';
+
+/** A trimmed string, or `''` for anything that is not one. Trimmed because a
+ *  whitespace-only title is a placeholder with no value, not a value. */
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * @typedef {object} CarouselTemplateContext
+ * @property {{title?:string, excerpt?:string, slug?:string, url?:string,
+ *   tags?:Array<string|{name?:string}>}} [post] the post being filled from
+ * @property {{logo_url?:string, app_url?:string}} [settings] blog settings
+ * @property {Array<string|{path?:string, original_path?:string}>} [media] the
+ *   post's images, in the order the slides should show them
+ */
+
+/**
+ * @typedef {object} CarouselTemplateOrigin
+ * @property {'pptx'|'svg'|'studio'} format
+ * @property {string} file
+ * @property {string[]} fonts  recorded, never rendered (type stays the theme's)
+ * @property {{w:number,h:number}|null} srcSize
+ * @property {Array<{slide:number|null, what:string, n:number}>} dropped
+ */
+
+/**
+ * @typedef {object} CarouselTemplate
+ * @property {number} templateVersion
+ * @property {string} id  matches the applied document's `template.id`
+ * @property {string} name
+ * @property {CarouselTemplateOrigin} origin
+ * @property {CarouselDoc} doc
+ */
+
+/**
+ * What {@link applyTemplate} could not fill. Every field is a count or a list
+ * rather than a message: the studio writes the sentence, this module supplies
+ * the facts.
+ *
+ * @typedef {object} CarouselTemplateReport
+ * @property {string[]} unresolved  the text placeholders left literal, deduped
+ *   and in {@link PLACEHOLDERS} order. `{logo}` is never here — a logo with no
+ *   value drops its layer instead, and `droppedLogoLayers` counts that
+ * @property {number} droppedLogoLayers
+ * @property {number[]} slidesWithoutSource  indexes into the returned document
+ * @property {{from:number,to:number}|null} clampedSlides
+ */
+
+/**
+ * The post's tags, `#hashtagged` and space-joined — the same string
+ * `expandCaptionTemplate` builds for an Instagram caption
+ * (`api/internal/services/post_publish.go`), so a template's `{tags}` and that
+ * post's caption read alike. Accepts the API's `[{name}]` and a plain
+ * `[string]`, because the studio holds one and a hand-written context the other.
+ *
+ * @param {*} tags
+ * @returns {string}
+ */
+function hashtags(tags) {
+  if (!Array.isArray(tags)) return '';
+  const names = [];
+  for (const t of tags) {
+    const name = typeof t === 'string' ? t.trim() : isObj(t) ? str(/** @type {*} */ (t).name) : '';
+    if (name) names.push(name.startsWith('#') ? name : `#${name}`);
+  }
+  return names.join(' ');
+}
+
+/**
+ * The post's public URL: whatever the caller handed over, else `app_url` plus
+ * the slug — the path `expandCaptionTemplate` builds, for the same reason it
+ * builds one. Empty when neither is available, which makes `{link}` an
+ * unresolved placeholder rather than a link to nowhere.
+ *
+ * @param {{post: *, settings: *}} ctx
+ * @returns {string}
+ */
+function postLink({ post, settings }) {
+  const given = str(post.url);
+  if (given) return given;
+  const base = str(settings.app_url).replace(/\/+$/, '');
+  const slug = str(post.slug);
+  return base && slug ? `${base}/posts/${slug}` : '';
+}
+
+/**
+ * One resolver per placeholder: where it substitutes, the help text the studio
+ * shows for it, and the function that reads its value out of the context. A
+ * table rather than a chain of replacements so that {@link PLACEHOLDERS} can be
+ * derived from it — the list of what is valid and the code that resolves it
+ * cannot disagree, the same discipline {@link LAYER_TYPES} keeps against
+ * {@link LAYER_BUILDERS}.
+ *
+ * `{i}` and `{n}` are deliberately absent. They are a `counter` layer's, they
+ * resolve per slide at paint time (`render.js`'s `counterText`), and a template
+ * that carried them through this table would freeze slide 3's number into
+ * slide 3 forever.
+ *
+ * @type {Record<string, {field:'text'|'source', label:string,
+ *   resolve:(ctx:{post:*, settings:*}) => string}>}
+ */
+const PLACEHOLDER_TABLE = {
+  '{title}': {
+    field: 'text',
+    label: "the post's title",
+    resolve: ({ post }) => str(post.title),
+  },
+  '{excerpt}': {
+    field: 'text',
+    label: "the post's excerpt",
+    resolve: ({ post }) => str(post.excerpt),
+  },
+  '{tags}': {
+    field: 'text',
+    label: "the post's tags, #hashtagged and space-joined",
+    resolve: ({ post }) => hashtags(post.tags),
+  },
+  '{link}': {
+    field: 'text',
+    label: 'a link to the published post',
+    resolve: postLink,
+  },
+  '{logo}': {
+    field: 'source',
+    label: 'the site logo — the `logo_url` setting',
+    resolve: ({ settings }) => str(settings.logo_url),
+  },
+};
+
+/**
+ * Every placeholder a template may use: its `token`, the layer `field` it
+ * substitutes into (`text` covers a `text` layer's `text` and a `counter`'s
+ * `format`; `source` is an `image` layer's), and a `label` for help text.
+ * Frozen, and derived from {@link PLACEHOLDER_TABLE}, so the studio's list and
+ * the resolver are the same list.
+ *
+ * @type {ReadonlyArray<{token:string, field:'text'|'source', label:string}>}
+ */
+export const PLACEHOLDERS = Object.freeze(
+  Object.entries(PLACEHOLDER_TABLE).map(([token, e]) =>
+    Object.freeze({ token, field: e.field, label: e.label }),
+  ),
+);
+
+/** The `{logo}` token, spelled once. */
+const LOGO_TOKEN = '{logo}';
+
+/** The tokens that substitute into a string, in table order — which is the
+ *  order the report lists them in, so two reports of one failure read alike. */
+const TEXT_TOKENS = PLACEHOLDERS.filter((p) => p.field === 'text').map((p) => p.token);
+
+/**
+ * Substitute the text placeholders in one string. A token whose value is empty
+ * is **left literal** and recorded in `unresolved`: a visible `{excerpt}` on a
+ * slide is a bug the author can see and fix before publishing, where a silently
+ * blank headline is one they ship.
+ *
+ * `split`/`join` rather than `replaceAll`, whose string replacement interprets
+ * `$&` and friends — a post title is user text and may contain them.
+ *
+ * @param {string} value
+ * @param {{post:*, settings:*}} ctx
+ * @param {Set<string>} unresolved
+ * @returns {string}
+ */
+function substituteText(value, ctx, unresolved) {
+  let out = value;
+  for (const token of TEXT_TOKENS) {
+    if (!out.includes(token)) continue;
+    const filled = PLACEHOLDER_TABLE[token].resolve(ctx);
+    if (filled) out = out.split(token).join(filled);
+    else unresolved.add(token);
+  }
+  return out;
+}
+
+/**
+ * One layer with its placeholders resolved, or `null` when the layer should not
+ * survive the apply. Only a `{logo}` image layer with no logo returns `null`:
+ * an image layer with no source paints nothing, and a template must not leave a
+ * dead layer behind for the author to discover and delete.
+ *
+ * @param {CarouselLayer} layer
+ * @param {{post:*, settings:*}} ctx
+ * @param {{unresolved:Set<string>, droppedLogoLayers:number}} acc
+ * @returns {CarouselLayer|null}
+ */
+function applyToLayer(layer, ctx, acc) {
+  if (layer.type === 'text') {
+    return { ...layer, text: substituteText(layer.text, ctx, acc.unresolved) };
+  }
+  if (layer.type === 'counter') {
+    // `{i}`/`{n}` pass straight through — they are not in the table.
+    return { ...layer, format: substituteText(layer.format, ctx, acc.unresolved) };
+  }
+  if (layer.type === 'image' && layer.source.trim() === LOGO_TOKEN) {
+    const logo = PLACEHOLDER_TABLE[LOGO_TOKEN].resolve(ctx);
+    if (!logo) {
+      acc.droppedLogoLayers += 1;
+      return null;
+    }
+    return { ...layer, source: logo };
+  }
+  return layer;
+}
+
+/**
+ * {@link applyToLayer} across a list, dropping what it refuses.
+ *
+ * @param {CarouselLayer[]} layers
+ * @param {{post:*, settings:*}} ctx
+ * @param {{unresolved:Set<string>, droppedLogoLayers:number}} acc
+ * @returns {CarouselLayer[]}
+ */
+function applyToLayers(layers, ctx, acc) {
+  const out = [];
+  for (const layer of layers) {
+    const next = applyToLayer(layer, ctx, acc);
+    if (next) out.push(next);
+  }
+  return out;
+}
+
+/**
+ * One media entry's path. Accepts a bare path and the `{path}` shape the photo
+ * picker hands the studio, plus the API row's `original_path`, so a caller can
+ * pass whichever list it already holds.
+ *
+ * @param {*} m
+ * @returns {string}
+ */
+function mediaPath(m) {
+  if (typeof m === 'string') return m.trim();
+  if (!isObj(m)) return '';
+  return str(m.path) || str(m.original_path);
+}
+
+/**
+ * The document with its slide count brought inside the studio's bounds, and the
+ * clamp recorded. Growing appends through {@link addSlide} — the studio's own
+ * writer, so a padded slide is exactly the slide the "add" control would have
+ * made — and shrinking keeps the head, because a template's later slides are
+ * its outro and its earlier ones carry the design.
+ *
+ * @param {CarouselDoc} doc
+ * @param {{clampedSlides:{from:number,to:number}|null}} acc
+ * @returns {CarouselDoc}
+ */
+function clampSlideCount(doc, acc) {
+  const from = doc.slides.length;
+  let out = doc;
+  if (from > MAX_SLIDES) {
+    out = normalizeDocument({ ...doc, slides: doc.slides.slice(0, MAX_SLIDES) });
+  } else {
+    while (out.slides.length < MIN_SLIDES) out = addSlide(out, out.slides.length);
+  }
+  if (out.slides.length !== from) acc.clampedSlides = { from, to: out.slides.length };
+  return out;
+}
+
+/**
+ * The apply context with every field present and the media list flattened to
+ * paths, so the resolvers and {@link fillSources} below can read it without
+ * each re-asking whether the caller supplied anything.
+ *
+ * @param {*} ctx
+ * @returns {{post:*, settings:*, media:string[]}}
+ */
+function templateContext(ctx) {
+  const c = isObj(ctx) ? ctx : {};
+  return {
+    post: isObj(c.post) ? c.post : {},
+    settings: isObj(c.settings) ? c.settings : {},
+    media: (Array.isArray(c.media) ? c.media : []).map(mediaPath).filter(Boolean),
+  };
+}
+
+/**
+ * The slides with every empty `source` filled from `sources`, in order — one
+ * cursor across the whole deck, so a slide that already names its own image
+ * does not consume one. `crop` and `fit` are untouched: both are fractions of
+ * whatever source they are given, which is exactly why the schema stores a
+ * normalized crop rather than a pixel rect.
+ *
+ * A slide the media runs out for keeps its empty `source` and is named in the
+ * report. Inventing one would be worse: the render refuses a sourceless slide,
+ * and the author has to know which one to fill.
+ *
+ * @param {CarouselSlide[]} slides
+ * @param {string[]} sources
+ * @param {{slidesWithoutSource:number[]}} acc
+ * @returns {CarouselSlide[]}
+ */
+function fillSources(slides, sources, acc) {
+  let cursor = 0;
+  return slides.map((slide, i) => {
+    if (slide.source) return slide;
+    if (cursor >= sources.length) {
+      acc.slidesWithoutSource.push(i);
+      return slide;
+    }
+    return { ...slide, source: sources[cursor++] };
+  });
+}
+
+/**
+ * The applied document's `template` block: the envelope's id, else the one the
+ * document already carried (a built-in canvas names itself), and `null` when
+ * neither says anything.
+ *
+ * `custom` is the document's own when it has one and `true` otherwise —
+ * everything reaching {@link applyTemplate} in v1 arrived by import or by "save
+ * as template", and only a shipped canvas says otherwise.
+ *
+ * @param {*} envelopeId
+ * @param {{id:string,custom:boolean}|null} own the document's existing block
+ * @returns {{id:string,custom:boolean}|null}
+ */
+function appliedTemplate(envelopeId, own) {
+  const id = str(envelopeId) || (own ? own.id : '');
+  if (!id) return null;
+  return { id, custom: own ? own.custom : true };
+}
+
+/**
+ * Resolve a template against one post: `{ doc, report }`.
+ *
+ * Accepts the {@link CarouselTemplate} envelope or a bare `CarouselDoc` (a
+ * built-in canvas is repo JSON and needs no envelope). What it does:
+ *
+ * - the slide count is clamped to `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
+ *   **first**, so a slide the clamp appended is filled like any other;
+ * - `{title}` `{excerpt}` `{tags}` `{link}` are substituted into every `text`
+ *   layer's `text` and every `counter`'s `format`. `{i}`/`{n}` are **not** —
+ *   they stay `render.js`'s, resolved per slide at paint time;
+ * - an `image` layer whose `source` is `{logo}` takes the `logo_url` setting,
+ *   and is dropped when that setting is empty;
+ * - a slide with no `source` takes the next of `media`, keeping its `crop` and
+ *   `fit` — both are fractions of whatever source they are given, which is
+ *   exactly why the schema stores a normalized crop and not a pixel rect;
+ * - `rendered` is cleared on every slide. It names the media rows of the post
+ *   the template was saved from, and two documents claiming one row is the
+ *   state `_deleteSuperseded` (`index.js`) cannot reason about — the same
+ *   reason {@link addSlide} refuses to carry one;
+ * - the result goes through {@link normalizeDocument}, so this cannot emit a
+ *   document the schema would reject.
+ *
+ * **An unresolvable placeholder keeps its literal text** and is named in the
+ * report. A visible `{excerpt}` is a bug the author can see and fix; a silently
+ * blank headline is one they ship.
+ *
+ * Pure: no DOM, no network, no clock. The input is not mutated.
+ *
+ * @param {CarouselTemplate|CarouselDoc|*} template
+ * @param {CarouselTemplateContext} [ctx]
+ * @returns {{doc: CarouselDoc, report: CarouselTemplateReport}}
+ */
+export function applyTemplate(template, ctx = {}) {
+  const t = /** @type {*} */ (template);
+  // A `CarouselDoc` has no `doc` field, so this discriminates the envelope from
+  // a bare document without either of them carrying a marker.
+  const env = isObj(t) && isObj(t.doc) ? t : { id: '', doc: t };
+  const c = templateContext(ctx);
+  const acc = {
+    unresolved: /** @type {Set<string>} */ (new Set()),
+    droppedLogoLayers: 0,
+    slidesWithoutSource: /** @type {number[]} */ ([]),
+    clampedSlides: /** @type {{from:number,to:number}|null} */ (null),
+  };
+
+  const base = clampSlideCount(normalizeDocument(env.doc), acc);
+  const doc = normalizeDocument({
+    ...base,
+    slides: fillSources(base.slides, c.media, acc).map((slide) => ({
+      ...slide,
+      layers: applyToLayers(slide.layers, c, acc),
+      rendered: null,
+    })),
+    spanLayers: applyToLayers(base.spanLayers, c, acc),
+    template: appliedTemplate(env.id, base.template),
+  });
+
+  return {
+    doc,
+    report: {
+      unresolved: TEXT_TOKENS.filter((token) => acc.unresolved.has(token)),
+      droppedLogoLayers: acc.droppedLogoLayers,
+      slidesWithoutSource: acc.slidesWithoutSource,
+      clampedSlides: acc.clampedSlides,
+    },
+  };
+}
+
+/** @param {*} entry @returns {{slide:number|null, what:string, n:number}|null} */
+function normalizeDropped(entry) {
+  if (!isObj(entry)) return null;
+  const what = str(entry.what);
+  if (!what) return null;
+  const slide = Math.floor(num(entry.slide, -1));
+  return { slide: slide >= 0 ? slide : null, what, n: Math.max(1, Math.floor(num(entry.n, 1))) };
+}
+
+/**
+ * A template's provenance, normalized like everything else here — unknown
+ * fields dropped, an unrecognized `format` defaulted. Display-only: the studio
+ * shows it so an import that lost shapes says so, and the fonts it names are
+ * recorded rather than rendered (type stays in the active theme's family).
+ *
+ * @param {*} origin
+ * @returns {CarouselTemplateOrigin}
+ */
+function normalizeOrigin(origin) {
+  const o = isObj(origin) ? origin : {};
+  const size = isObj(o.srcSize) ? /** @type {*} */ (o.srcSize) : {};
+  const w = Math.floor(num(size.w, 0));
+  const h = Math.floor(num(size.h, 0));
+  return {
+    format: TEMPLATE_ORIGINS.includes(o.format) ? o.format : DEFAULT_ORIGIN,
+    file: str(o.file),
+    fonts: Array.isArray(o.fonts) ? o.fonts.map(str).filter(Boolean) : [],
+    srcSize: w > 0 && h > 0 ? { w, h } : null,
+    dropped: Array.isArray(o.dropped)
+      ? /** @type {Array<{slide:number|null,what:string,n:number}>} */ (
+          o.dropped.map(normalizeDropped).filter(Boolean)
+        )
+      : [],
+  };
+}
+
+/**
+ * Wrap a document in the storable envelope — the inverse of
+ * {@link applyTemplate}, used by "save this carousel as a template" and by both
+ * importers. The document says nothing about identity or provenance, so those
+ * live here.
+ *
+ * It does **not** re-introduce placeholders. A deck saved as a template keeps
+ * its literal text, because guessing which headline was meant to be `{title}`
+ * would be wrong exactly when it mattered; a template with placeholders comes
+ * from an importer or a hand edit.
+ *
+ * `rendered` is cleared, for {@link applyTemplate}'s reason: a stored template
+ * must not name another post's media rows.
+ *
+ * Round trip: for a document with no placeholders and no `rendered` blocks,
+ * `applyTemplate(toTemplate(doc, meta)).doc` equals `normalizeDocument(doc)`.
+ *
+ * @param {*} doc
+ * @param {{id?:string, name?:string, origin?:*}} [meta]
+ * @returns {CarouselTemplate}
+ */
+export function toTemplate(doc, meta = {}) {
+  const m = isObj(meta) ? meta : {};
+  const base = normalizeDocument(doc);
+  return {
+    templateVersion: TEMPLATE_VERSION,
+    id: str(m.id) || (base.template ? base.template.id : ''),
+    name: str(m.name),
+    origin: normalizeOrigin(m.origin),
+    doc: { ...base, slides: base.slides.map((s) => ({ ...s, rendered: null })) },
+  };
 }
 
 /** Deterministic JSON: object keys sorted recursively. */

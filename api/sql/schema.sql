@@ -233,6 +233,20 @@ CREATE TABLE IF NOT EXISTS carousels (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Carousel templates
+-- A reusable carousel envelope, keyed by slug rather than by post: the same
+-- opaque JSON as carousels.doc, owned by the frontend, stored and returned
+-- verbatim. A template carries its assets inlined as data: URLs, so a row can
+-- run to megabytes -- which is why the list query never selects doc.
+CREATE TABLE IF NOT EXISTS carousel_templates (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug       TEXT NOT NULL UNIQUE,
+    name       TEXT NOT NULL,
+    doc        TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- API Keys
 CREATE TABLE IF NOT EXISTS api_keys (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

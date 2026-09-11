@@ -496,6 +496,36 @@ export function insertHTML(el, position, markup) {
 }
 
 /**
+ * Parse markup into an inert document, through the policy.
+ *
+ * `DOMParser.parseFromString` is a Trusted Types sink like the two above — and,
+ * in Chromium, for **every** mime type, not only `text/html`. A plain string
+ * there throws "This document requires 'TrustedHTML' assignment" even when what
+ * comes back is an XML document that never touches the page, which is how the
+ * carousel's PPTX and SVG importers found this: both parse files a user picked
+ * off their disk, and both died at the first file under the enforcing CSP.
+ *
+ * The parse happens here rather than at the call site so that the TrustedHTML
+ * is minted and consumed inside one function — no caller is left holding a
+ * value it could route to a real sink. Nothing parsed here is adopted into the
+ * live DOM; the importers read the tree attribute by named attribute (see
+ * `plugins/carousel/import/xml.js`).
+ *
+ * @param {string} text
+ * @param {string} mime  'image/svg+xml', 'application/xml', …
+ * @param {typeof DOMParser} [Parser]  the seam a runtime with no global
+ *   `DOMParser` supplies its own through — `node --test`, in particular
+ * @returns {Document}
+ */
+export function parseMarkup(text, mime, Parser = globalThis.DOMParser) {
+  const p = trustedTypesPolicy();
+  const str = String(text);
+  const value = /** @type {string} */ (/** @type {unknown} */ (p ? p.createHTML(str) : str));
+  // eslint-disable-next-line no-restricted-syntax -- the one parseFromString.
+  return new Parser().parseFromString(value, /** @type {DOMParserSupportedType} */ (mime));
+}
+
+/**
  * Point a <script> at a URL, through the policy.
  *
  * `script.src` is a Trusted Types sink in its own right — under

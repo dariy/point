@@ -51,8 +51,12 @@ stage stopped being a read-only picture and became the thing every gesture acts
 on, the filmstrip demoted to a slide rail, the studio gained undo/redo and the
 ability to add, remove, duplicate and reorder slides, the vertical anchor became
 a drag, and the preview now runs the render's own typesetter; see "The stage is
-the editor" below. Templates and production (S4–S5) are not built
-yet. See "Delivery stages".
+the editor" below. Templates (S4) have landed — a template is this same
+document with placeholder values, stored in a `carousel_templates` table and
+applied to a post by `applyTemplate`, plus dependency-free `.pptx` and `.svg`
+importers over `DecompressionStream` and `DOMParser`, and a gallery, import
+dialog and drop report in the studio; see "Templates" below. Production (S5) is
+not built yet. See "Delivery stages".
 
 Ahead of S2, `geometry.js` gained the inverse of the split question — `fitReport`
 and `slideCountOptions` say how many slides a source makes and at what scale
@@ -877,6 +881,338 @@ a toast tells them after and carries the way back. The deck→split switch and a
 deleted layer are both of those. The remove-carousel confirm stays: it deletes
 media rows server-side, outside the document, where undo cannot reach.
 
+## Templates
+
+S4 answers the other way to start a deck: not from a photograph, but from a
+design somebody else made — a bought Instagram template, a Canva layout, a set
+of Figma frames. A template is imported once, stored, and then *applied* to a
+post, after which it is an ordinary carousel document with nothing
+template-shaped left in it: no template mode, no locked layers, nothing to exit.
+
+**A template is a carousel document with placeholder values.** Not a second
+format — which is why `DOC_VERSION` stayed **1** through S4 as it did through
+S2, S3 and S6, and why no layer gained a field. A template's `text` layer
+carries `{title}` in its `text`, an `image` layer carries `"{logo}"` in its
+`source`, and a slide with `source: ""` means "fill from this post's media, in
+order". `doc.template` — `{id, custom}`, reserved since C5 and read by nothing
+until now — is the provenance the applied document keeps.
+
+### Placeholders
+
+`PLACEHOLDERS` (`document.js`) is derived from the resolver's own table, the
+same discipline `LAYER_TYPES` keeps against `LAYER_BUILDERS`: the list of what
+is valid and the code that fills it cannot disagree.
+
+| Token | Substitutes into | Value |
+|---|---|---|
+| `{title}` | a `text` layer's `text`, a `counter`'s `format` | the post's title |
+| `{excerpt}` | the same | the post's excerpt |
+| `{tags}` | the same | the tags, `#hashtagged` and space-joined — the string `expandCaptionTemplate` (`post_publish.go`) builds for an Instagram caption, so a slide and the caption under it read alike |
+| `{link}` | the same | the post's `url`, else the `app_url` setting + `/posts/<slug>` |
+| `{logo}` | an `image` layer's `source` | the `logo_url` setting — the same setting a hand-added `image` layer already defaults to (S3) |
+
+**Placeholders resolve on apply, not at paint time.** That is the whole split
+against a `counter` layer's `{i}`/`{n}`, which are deliberately *absent* from
+the table and stay `render.js`'s, resolved per slide from the slide's own
+position. The author has to be able to edit the headline the template produced,
+so `applyTemplate` writes real strings once and the document is thereafter
+ordinary; a template that resolved `{i}` through this table would freeze slide
+3's number into slide 3 forever.
+
+**An unresolvable placeholder keeps its literal text** and is named in the
+report. A visible `{excerpt}` on a slide is a bug the author can see and fix
+before publishing; a silently blank headline is one they ship. `{logo}` is the
+one exception, and for the opposite reason: an `image` layer with no source
+paints nothing, so an empty `logo_url` drops that layer rather than leaving a
+dead one behind, and the report counts it.
+
+`applyTemplate(template, { post, settings, media })` → `{ doc, report }`, pure
+like the rest of `document.js` — no DOM, no network, no clock. In order:
+
+- the slide count is clamped to `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
+  **first**, so a slide the clamp appended is filled like any other. This is the
+  one place in `document.js` that clamps a count, and it is the exception that
+  proves the "Slide-count bounds" decision below: a template is built out of a
+  file nobody in this session authored, so there is no gesture to refuse — only
+  a count to bring into range and name in the report;
+- empty `source`s are filled from `media` by **one cursor across the whole
+  deck**, so a slide that already names its own image does not consume one, and
+  a slide the media runs out for keeps its empty source and is reported.
+  `crop` and `fit` are untouched: both are fractions of whatever source they are
+  given, which is exactly why the schema stores a normalized crop and not a
+  pixel rect;
+- every slide's `rendered` block is cleared. It names the media rows of the post
+  the template was saved from, and two documents claiming one row is the state
+  `_deleteSuperseded` (`index.js`) cannot reason about — the same reason
+  `addSlide` refuses to carry one;
+- the result goes through `normalizeDocument`, so an apply cannot emit a
+  document the schema would reject.
+
+`report` carries counts and lists, never sentences: `applyMessage` (`index.js`)
+writes the prose beside the user, the same split the import report keeps.
+`applyTemplate` accepts the envelope **or** a bare document — a `CarouselDoc`
+has no `doc` field, which discriminates the two without either carrying a
+marker.
+
+### The envelope
+
+The document says nothing about identity or provenance, so those live around it.
+`toTemplate(doc, meta)` builds the envelope, and both importers return one:
+
+```jsonc
+{
+  "templateVersion": 1,             // the envelope's own number, not DOC_VERSION
+  "id":   "bold-quote-deck",        // the slug the store is keyed by
+  "name": "Bold Quote Deck",
+  "origin": {                       // display-only; nothing on the apply path branches on it
+    "format":  "pptx",              // pptx | svg | studio
+    "file":    "bold-quote-deck.pptx",
+    "fonts":   ["Playfair Display", "Inter"],    // recorded, never rendered
+    "srcSize": { "w": 1920, "h": 1080 },
+    "dropped": [ { "slide": 2, "what": "ellipse shape", "n": 3 } ]
+  },
+  "doc": { /* a CarouselDoc, version 1, with placeholders */ }
+}
+```
+
+`toTemplate` does **not** re-introduce placeholders. A deck saved as a template
+keeps its literal text, because guessing which headline was meant to be
+`{title}` would be wrong exactly when it mattered; a template with placeholders
+comes from an importer or a hand edit. `rendered` is cleared here too, for
+`applyTemplate`'s reason. Round trip, pinned: for a document with no
+placeholders and no `rendered` blocks, `applyTemplate(toTemplate(doc, meta)).doc`
+is `normalizeDocument(doc)`.
+
+### Where templates live
+
+`carousel_templates(slug UNIQUE, name, doc)` — the `carousels` table repeated,
+including the decision that **`doc` is opaque to Go**: the schema is the
+frontend's, and that is what has let the document evolve through S2, S3 and S6
+without a single Go change. `slug` and `name` are columns rather than fields
+read out of the envelope, because the handler does not parse what it stores.
+
+| Route | Notes |
+|---|---|
+| `GET /api/carousel/templates` | `ListCarouselTemplates` selects `slug`, `name`, `created_at` and **never `doc`** — a template inlines its images, so a gallery that listed the envelopes would pull every asset of every template to draw a list of names. The same reasoning that kept the carousel document off the `posts` table |
+| `POST /api/carousel/templates` | upsert by slug, which is what makes "save as template" idempotent |
+| `GET /api/carousel/templates/:slug` | the envelope, byte for byte, unknown fields included |
+| `DELETE /api/carousel/templates/:slug` | idempotent, like `DeleteCarousel` |
+
+All four hang off the existing `CarouselHandler` and inherit its
+`RequirePlugin("carousel")` gate, so all four 404 with the plugin off — the
+gating test C6 established now drives all seven routes the carousel group
+declares. `slug` must match `^[a-z0-9](?:[a-z0-9_-]{0,98}[a-z0-9])?$`, and one
+envelope is capped at 8 MB (`maxTemplateDocBytes`, measured on the raw body
+before the JSON is parsed, 413 past it). The browser checks the same number
+(`TEMPLATE_MAX_BYTES`, `api/carousel.js`) so a refusal can name the photograph
+that broke it, but the handler is the one that has to hold — a cap only the
+client enforces is not a cap.
+
+**v1 ships no built-in templates.** The table is filled by import and by "save
+this carousel as a template". Beyond the work of authoring them, it is a
+licensing question: a bought template may generally be adapted for your own
+posts but not redistributed, so anything bundled later has to be originally
+authored or explicitly permissively licensed.
+
+### The two importers
+
+Two adapters behind one registry (`import/index.js`), which is the only place
+that knows what Point reads — the dialog builds its file input, its `accept`
+string and its refusal message from that list rather than from a switch that has
+to be kept in step with it. Every adapter returns `{ template, report }` and
+throws `ImportError`, so the dialog has one thing to catch.
+
+| | `.pptx` | `.svg` |
+|---|---|---|
+| Reaches | PowerPoint — **and Canva**, whose manual download and Connect API both export PPTX, so "Instagram templates from Canva" and "PowerPoint templates" turn out to be one importer | Figma, Illustrator, Sketch and XD, all proprietary on disk and all exporting SVG; Canva exports it too |
+| Input | one archive | an **ordered list**, one file per slide, because an SVG has no concept of a deck. Order is a natural filename sort (`slide-2` before `slide-10`, which a plain string sort gets backwards) and the report states the order it chose, so a person can see it guessed wrong and rename |
+| Reads with | `import/zip.js` + `import/xml.js` | `import/xml.js` |
+| Source canvas | `<p:sldSz cx cy>` in EMU (914400/inch) | the root `<svg viewBox>` |
+
+**Zero new dependencies**, which is what keeps the whole stage inside
+[vendors.md](../vendors.md). A `.pptx` is a ZIP of XML and
+`DecompressionStream('deflate-raw')` has shipped in every browser Point targets
+since May 2023, so `import/zip.js` is Point's own read-only reader over it:
+sizes and offsets from the **central directory only** (an entry written with a
+data descriptor has zeroed sizes in its local header, which is exactly what
+streaming exporters emit), stored entries passed through rather than inflated,
+Zip64 *detected* and refused by name rather than misparsed from a truncated
+32-bit field, and a typed `ZipError` carrying `{code, entry}` so the importer
+can say "could not read `ppt/slides/slide3.xml`". It is pointed at a file a
+person downloaded from the internet, so a path escaping the archive root rejects
+the whole archive and four caps — per entry, total, entry count, and bytes
+counted *mid-stream* against the declared size — make a decompression bomb a
+rejection instead of an allocation. CRC32 is not verified: the inflated-length
+check catches truncation and the bomb, and a table-driven CRC over parts about
+to be handed to an XML parser buys little for its ~40 lines.
+
+`import/xml.js` is the other shared half, and it matches on the **local name**
+— the part after the colon — never on a qualified name. `getElementsByTagNameNS`
+is unimplemented in linkedom, which is the DOM the frontend tests run against,
+and `localName` disagrees between DOMs (linkedom returns `p:cSld` where a
+browser parsing the same bytes as XML returns `cSld`); `nodeName` agrees in
+both, so the prefix comes off that.
+
+#### What maps
+
+Every layer is built by **`normalizeLayer`, never by hand**. An importer that
+assembles its own layer objects is a second way to author a layer, and that is
+how a schema grows two dialects — so a shape the schema rejects is counted, not
+repaired.
+
+| OOXML | SVG | Point |
+|---|---|---|
+| `<p:sp>` with a non-empty `<a:txBody>` | `<text>` / `<tspan>` | `text` layer — runs joined, `<a:xfrm>` or the element's own geometry → `box`, `sz` (hundredths of a point) or `font-size` → `size` as a fraction of canvas height, `b="1"` / `font-weight` → `weight`, `srgbClr` / `fill` → `color`, `algn` / `text-anchor` → `align`, `<a:bodyPr anchor>` → `valign` |
+| `<p:sp>` with `prstGeom` `rect`/`roundRect`, a fill and no text | `<rect>` | `rect` layer — `roundRect`'s `<a:avLst>` adjust, or `rx`, → `radius` as a fraction of the shorter side, which is the convention both the preset and the schema already use |
+| `<p:pic>` → `<a:blip r:embed>` → rels → `ppt/media/*` | `<image href="data:…">` | `image` layer, `fit: "contain"`, source inlined |
+| a `<p:pic>` covering 95% of the slide, or `<p:bg>` carrying an image | an `<image>` covering the canvas | the **slide's own** `source` + `crop`, `fit: "cover"` — and this is the mapping that makes an imported template useful at all, because the slide's source is what `applyTemplate` replaces with the post's photograph. Only the first one: a second full-frame picture is a layer over it, which is what it looks like on the slide too |
+| `<a:gradFill>` on `<p:bg>` or on a shape covering the slide | — | the slide's `bg.gradient`: `<a:lin ang>` → `angle` (60000ths of a degree), `<a:gs pos>` → stops |
+| `<a:solidFill>` on `<p:bg>` | — | the slide's `bg.solid` |
+
+Text wins when a shape has any: a filled box with a headline in it is a `text`
+layer, and its fill is the design's business rather than the schema's. A
+gradient on a shape that does *not* cover the slide is dropped, because the
+`rect` layer is a flat fill and inventing a middle colour would be a guess at
+the design rather than a reading of it.
+
+**Aspect is centre-fit, never squashed.** The source canvas picks the nearest of
+the three `ASPECTS` by log-ratio distance, and every box is normalized against a
+*uniform* centre-fit of the source into it, so a circle that arrives round stays
+round and the mismatch shows as margin. 16:9 is the common PowerPoint case
+against Point's widest 1.91:1; the report names the delta ("16:9 fitted into
+1.91:1 — 3% margin each side"), and under half a percent it says "matches"
+rather than inviting a hunt for a rounding difference in somebody's export.
+
+**Fonts are recorded, not applied.** `<a:latin typeface>` and `font-family`
+values go into `origin.fonts` and nowhere else; the layer schema gains no `font`
+field and paint time is unchanged. Type is still set in the active theme's
+`--font-family` — see "Fonts" above, and the vendoring decision behind it. The
+import report says so in a sentence, which is what stops the author hunting for
+a font picker.
+
+**Placeholders are not guessed.** Text arrives literal; the author turns a
+headline into `{title}` in the studio, where they can see it. Deciding that the
+biggest text box on slide 1 "is" the title would be wrong often enough to be
+worse than nothing, and the resolver does not need it.
+
+#### Drop and count
+
+`normalizeLayer`'s discipline promoted to a user-visible report: an import that
+silently lost half a design is worse than one that says it kept 14 of 22 shapes.
+Identical drops collapse into one entry with a count — "3 groups" on slide 4,
+not three lines saying "group" — which is what makes a 20-slide deck's report
+readable.
+
+Dropped and counted: groups (their children carry their own coordinate space
+through `<a:chOff>`/`<a:chExt>`, and that is a second transform stack for a case
+a template rarely needs), SmartArt, charts, tables, connectors, other `prstGeom`
+presets and custom geometry, outline-only shapes (the schema has no stroke),
+shape effects, rotation (imported **unrotated** — `box` has no angle),
+backgrounds inherited from the slide master or theme, and on the SVG side
+`<path>`, `<circle>`, `<ellipse>`, `<polygon>`, `<line>`, `<use>`, filters, clip
+paths, masks, hidden elements and any transform that will not flatten into a
+box. A `<script>` is dropped as a thing the importer refuses to carry, not
+counted as a piece of the design that did not fit.
+
+A malformed part costs **that slide**, not the import: the deck comes back short
+with the failure named in `report.failed` — the same reasoning as a broken
+`image` layer in S3.
+
+#### The outlined-text warning
+
+Canva and Figma both offer "outline text on export", which turns every headline
+into a `<path>`. The file still looks right in a browser and imports without an
+error, and what comes out is a template with no editable words in it. A slide
+that yields **zero `text` layers and more than eight paths** gets a named
+warning in the report: re-export with outlining off. This is the failure users
+will actually hit and it is otherwise invisible, so it is pinned by a test.
+
+#### Untrusted input
+
+An imported file is a file from the internet. Nothing is ever inserted into the
+document: both importers parse and then *read* the tree attribute by named
+attribute. A PPTX picture is resolved through the rels to a part inside the
+archive; an SVG `<image>` is kept only when its `href` is already an inline
+`data:` one. Either way an external reference is a fetch this import does not
+make — a template whose logo lives on someone else's server is a template that
+breaks when they tidy up.
+
+The parse goes through **`parseMarkup` (`utils/helpers.js`)**, not through a
+bare `DOMParser`. `parseFromString` is a Trusted Types sink for *every* mime
+type, not only `text/html`: under the enforcing CSP a plain string throws
+"This document requires 'TrustedHTML' assignment" even when what comes back is
+an inert XML document that never touches the page, and both importers died at
+the first file until the parse moved behind the policy. The TrustedHTML is
+minted and consumed inside that one function, so no caller is left holding a
+value it could route to a real sink, and an eslint rule now refuses a bare
+`parseFromString` anywhere in the frontend.
+
+### Assets: inlined in the row, materialized on apply
+
+A template stores its images as `data:` URLs inside its envelope, capped at
+**2 MB per asset and 8 MB per template** (`ASSET_LIMITS`, `import/adapter.js`) —
+counted on the *encoded* URLs, because that is what the envelope costs and what
+the store's cap measures, so base64's 4-bytes-per-3 makes ~5.8 MB of
+photographs the real ceiling. An import that cannot fit refuses by the name of
+the image that broke it. Identical sources inline once: a logo on eight slides
+costs the budget once.
+
+On apply, every inlined asset is uploaded as **post-owned media** and the
+document that lands in `carousels.doc` names real `/YYYY/MM/…` paths. Two
+load-bearing reasons: `render.js`'s `deps.fetchBlob` is a same-origin GET of a
+content path and nothing on the render path should learn about `data:`; and an
+asset uploaded with no `post_id` would be swept by `ListOrphanedMedia`, whose
+orphan test is `post_id IS NULL`. A failure mid-upload deletes every row *that
+attempt* created and only those, as U5 established — a template applied halfway
+is not applied.
+
+The arithmetic is `studio/templates.js` and is pure: `dataAssets` walks a
+document for inlined sources in paint order, deduplicated, each labelled for a
+message a person reads ("slide 3, layer 2"); `replaceAssets` rewrites the
+document against a `url → path` map, leaving a URL with no entry alone rather
+than blanking it, so a miss fails loudly at render instead of quietly losing an
+image; `templateLimitError` is the pre-flight check. The uploading, the unwind
+and the toast are `index.js`'s, which is the only half that can fail halfway.
+
+### The studio surface
+
+The gallery, its two dialogs and the import report are siblings of `builder`,
+not panels inside it — a studio with no photo yet renders `pickPrompt` instead
+of a builder, and "import a deck to start" is exactly the state where a person
+needs them most.
+
+- **The gallery** lists templates by name. There are no thumbnails and inventing
+  one would mean fetching exactly what the listing endpoint exists to avoid.
+  Empty is the normal first state, so it says what to do rather than showing an
+  empty box.
+- **Import** takes one `.pptx` or a multi-select of `.svg`, routed to an adapter
+  by extension. A stored template takes a slug nobody is using (`freeSlug`):
+  the store upserts, which is what makes re-saving an adapted deck work — and
+  what would otherwise make importing a second export of one file silently
+  replace the first. An import is not a re-save.
+- **The report panel** is the whole reason the importers count their drops:
+  slides read of slides found, shapes kept of shapes seen, the aspect note, the
+  images carried and their size, the fonts with the sentence about the theme
+  font, the chosen slide order, the outlined-text warning, and two
+  `<details>` lists for the drops and the unreadable parts.
+- **Apply** resolves the template against the current post, materializes its
+  assets, saves, and leaves the studio in its ordinary editing state with the
+  selection and the probed source size started over. The `media` it fills empty
+  slide sources from is the post's *content* images (`_postMedia`, `index.js`)
+  minus the slides a previous render already wrote, so applying a template to a
+  post that already has a carousel does not feed that carousel back into itself.
+  What could not be filled arrives as a toast — "Still to fill: {excerpt}.
+  2 slides still need a photo."
+- **Save as template** wraps the current deck through `toTemplate` with
+  `origin.format: "studio"`, a name to argue with and a slug derived from it and
+  then editable. This is what makes an adapted purchased template reusable
+  across posts, which is the point of the whole stage.
+- **Delete**, confirmed. No rename in v1 — re-save under a new name.
+
+Everything is a delegated `data-action` handler, matching the rest of the
+studio, and a `templateBusy` flag disables the gallery while an apply, an import
+or a save is in flight.
+
 ## What the studio does not yet offer
 
 The background control is shown only for a slide that actually has a letterbox
@@ -898,6 +1234,28 @@ S3's other gap — a span layer being form-only, drivable through the property
 form but not by pointer — closed in S6 when the gesture moved to the stage; see
 "Two coordinate spaces". So did the per-slide source picker S2 left open, and
 the three preview divergences S3 accepted for text and arrows.
+
+S4's are all in the gallery rather than in the format:
+
+- **Nothing in the studio tells you a placeholder exists.** `PLACEHOLDERS`
+  (`document.js`) is exported for exactly this — the resolver's own table, so
+  help text and substitution cannot disagree — and no panel reads it yet. A
+  template written by hand or adapted from an import gets its `{title}` typed
+  into a text layer from memory.
+- **A template's `origin` is stored and never shown again.** The importers
+  record the drops in the shape `normalizeDropped` accepts precisely so a
+  template opened next month can still say what it lost, but the report panel is
+  built from the transient state of the import that just ran; dismiss it, or
+  reload, and the only way back to those counts is the database.
+- **The gallery has no thumbnails and no rename.** Both follow from
+  `ListCarouselTemplates` never selecting `doc` — a preview would mean fetching
+  the envelopes the listing exists to avoid — and rename is a re-save under a
+  new name, which the upsert makes cheap enough for v1.
+- **`ASPECTS` still has three entries.** A 16:9 deck, the common PowerPoint
+  case, arrives centre-fit into 1.91:1 with a reported margin rather than at its
+  own ratio. Adding a literal `16:9` is a separate follow-up — two entries, in
+  `document.js`'s `ASPECTS` and `geometry.js`'s, plus the aspect chips — and not
+  something the importer should decide on its own.
 
 ## Decisions
 
@@ -945,6 +1303,19 @@ the three preview divergences S3 accepted for text and arrows.
 | Per-slide sources in the picker | One `MediaPickerDialog`; the scope rides on the button — the properties panel's *Change this slide's photo* carries `data-slide`, the controls bar's *Use one photo for all slides* carries none | The renderer and schema have supported a multi-source deck since S2 (`renderDeck` dedups per path). What was missing was only the intent, and a per-call handler (`open(onConfirmOverride)`) already existed to carry it — a second dialog, or a mode flag on the studio, would be two code paths for one question. `specHash` includes `source`, so a swap re-encodes exactly the slide it touched, and framing survives either swap because a `crop` is fractions of its own source |
 | A removed slide's media row | Left for the *next* render's supersede cleanup, not deleted at removal | The row carries a `post_id`, so `ListOrphanedMedia` never flags it and only the supersede cleanup can collect it — and that cleanup reads the *saved* generation, so it collects the row on the next render without any new code. Deleting at removal would put the file beyond the reach of the Ctrl+Z that is otherwise sitting right there, for a row that costs nothing to keep until then |
 | Slide-count bounds | Enforced by the state owner (a disabled chip, a toast), not by the four slide writers | The writers keep the layer family's contract — an index that names nothing returns an equal document and nothing throws, because they run from pointer handlers. A silent refusal inside the model would leave the caller unable to tell a refusal from a no-op, which is the one thing a document writer must never do |
+| Template format | A `CarouselDoc` with placeholder values, in band — `{title}` inside a `text` layer's `text`, `"{logo}"` as an `image` layer's `source`, `""` as a slide's source | Point already had the vocabulary twice over: `expandCaptionTemplate` (`post_publish.go`) resolves `{title}` `{excerpt}` `{tags}` `{link}` for an Instagram caption, and a `counter` layer's `{i}`/`{n}` is already an in-band placeholder inside a layer. Reusing both means `DOC_VERSION` does not move for S4, no layer gains a field, and a template is readable by every tool that already reads a document — the renderer included |
+| When a placeholder resolves | On **apply**, once, by `applyTemplate` — unlike `{i}`/`{n}`, which stay `render.js`'s and resolve per slide at paint time | The author must be able to edit the headline the template produced; a value that re-resolved on every render would be a field they could not touch. The split also falls out of what the two kinds *are*: `{title}` is a fact about the post, known once, while `{i}` is a fact about a slide's position, which a re-slice or a reorder changes |
+| An unresolvable placeholder | Left literal, and named in the report | A visible `{excerpt}` on a slide is a bug the author can see and fix before publishing; a silently blank headline is one they ship. `{logo}` is the deliberate exception — an `image` layer with no source paints nothing at all, so the layer is dropped and counted rather than left dead |
+| Import formats | PPTX and SVG. **No raster or PDF-page fallback** | These are the two openly-specified formats that keep *editable* structure — a headline that is still text, a rect that is still a rect. Importing page images as slide backgrounds is indistinguishable from dropping photos into a post, which the studio already does, and PDF needs a real parser the vendoring policy refuses |
+| Import dependencies | None. `DecompressionStream('deflate-raw')` + `DOMParser`, with Point's own ~200-line read-only ZIP reader | A `.pptx` is a ZIP of XML and both halves are browser built-ins, so the whole importer stays inside [vendors.md](../vendors.md)'s "no JS runtime dependency". The reader is read-only by design: Point reads OOXML, it does not write it |
+| Where an imported file is parsed | `parseMarkup` (`utils/helpers.js`), never a bare `DOMParser`, with an eslint rule enforcing it | `parseFromString` is a Trusted Types sink for **every** mime type, not only `text/html` — under the enforcing CSP a plain string throws even when the result is an inert XML document that never reaches the page, and both importers died at the first file. Minting and consuming the TrustedHTML inside one function leaves no caller holding a value it could route to a real sink |
+| Fonts in an imported template | Recorded in `origin.fonts`, never applied; the report says so in a sentence | The layer schema gains no `font` field, so paint time is unchanged and type stays in the active theme's `--font-family` — the S3 decision, reaffirmed. Rendering the template's face would mean bundling a webfont, settled the other way twice now. Saying it once, plainly, is what stops the author hunting for a font picker |
+| Unmappable shapes | Dropped and **counted**, with a slide index and a name, never approximated | `normalizeLayer`'s discipline promoted to something a user sees: an import that silently lost half a design is worse than one that says it kept 14 of 22 shapes. Identical drops collapse into one entry with a count, which is what keeps a 20-slide deck's report readable |
+| Aspect on import | Nearest of `ASPECTS` by log-ratio distance, with every box normalized against a **uniform centre-fit** | A squash is a silent lie about the design — a circle that arrives an ellipse. Centre-fit leaves the mismatch visible as margin, which the report then names, and 16:9 into 1.91:1 (the common PowerPoint case) costs 3% each side rather than a distorted logo |
+| Where a template's images live | Inlined as `data:` in the stored envelope; uploaded as post-owned media on apply | Both halves are load-bearing. `render.js`'s `deps.fetchBlob` is a same-origin GET of a content path and nothing on the render path should learn about `data:`; and an asset uploaded with no `post_id` would be swept by `ListOrphanedMedia`, whose orphan test is `post_id IS NULL`. Inlining is what lets a template be one row a person can export, delete or move |
+| The templates listing | `ListCarouselTemplates` selects `slug`, `name`, `created_at` and never `doc` | A template carries its images inline, so a gallery that listed envelopes would pull every asset of every template to draw a list of names — the same reasoning that kept the carousel document off the `posts` table. It is also why the gallery has no thumbnails |
+| Built-in templates | None in v1; the table is filled by import and by "save as template" | Authoring a set worth shipping is its own project, and there is a licensing edge: a bought template may generally be adapted for your own posts but not redistributed, so anything bundled later has to be originally authored or explicitly permissively licensed |
+| An imported deck's slug | Derived from the filename, then made unique against what is already stored (`freeSlug`) | The store's upsert is deliberate — it is what makes "save as template" idempotent — which means the caller that must *not* replace is the one that has to say so. Two exports of one deck carry one filename, and importing a revision must not silently overwrite the template the author already adapted |
 
 ### The carousel document
 
@@ -974,7 +1345,8 @@ render.
   }],
   "spanLayers": [ /* the same five shapes, box normalized to the deck:
                      n slides wide by one tall — see "Spanning layers" */ ],
-  "template":   { "id": "cover-3-cta", "custom": false }
+  "template":   { "id": "bold-quote-deck", "custom": true }   // provenance; `custom: false` is reserved
+                                                             // for a built-in canvas, and v1 ships none
 }
 ```
 
@@ -996,15 +1368,17 @@ except for the last slide's `bg`, which fills the `pad` strategy's tail gap.
 Every field is normalized on the way in by `document.js` — unknown fields
 dropped, out-of-range numbers clamped, an unusable gradient degraded to the
 default rather than thrown — and `normalizeDocument` is idempotent, which is
-what makes parse/serialize a round trip. `DOC_VERSION` is still `1` through S3:
-everything S2 and S3 added was already reserved in the schema or is additive.
+what makes parse/serialize a round trip. `DOC_VERSION` is still `1` through S4:
+everything S2, S3, S6 and S4 added was already reserved in the schema, additive,
+or — in S4's case — not a schema change at all.
 The one exception to "degrade, never drop" is a layer whose `type` is not one of
 the five — `normalizeLayer` drops it, because a layer's fields mean nothing
 without its type. That is the only way this schema loses user data; the "Layers"
 section says so at length.
 
-The predefined-canvas (S4) template format is this same schema with placeholder
-values — stated up front so S4 cannot rewrite S2/S3. `rendered[].media_id` lets the
+S4's template format is this same schema with placeholder values — stated up
+front before S4 was built, and it held: the stage added a second *table* and
+changed nothing here. See "Templates". `rendered[].media_id` lets the
 document delete its own superseded slide rows: orphan detection is `post_id IS NULL`
 (`queries_media.go`), so slides uploaded with a `post_id` are never flagged, and
 `ListOrphanedMedia` is deliberately **not** widened into a content scan.
@@ -1024,6 +1398,13 @@ document delete its own superseded slide rows: orphan detection is `post_id IS N
 | **Bundling a WOFF2 with the plugin** so slide type is identical everywhere | Point ships no npm runtime dependency and vendors only what it must, unminified and reviewable ([vendors.md](../vendors.md)); a binary font asset is the opposite of that, and it would set a blog's carousel in a face the blog does not use. The active theme's `--font-family` is both the honest choice and the free one — `loadThemeCss()` has already put it on the document. |
 | **A second mutator family and a second property form for `spanLayers`** | They are the same five types over the same `box`; only what `1` means (the deck, not a slide) differs, and that is the renderer's business. One `SPAN_SLIDE` index through the existing `addLayer`/`updateLayer`/`removeLayer`/`reorderLayer` and one `layerForm` keeps a slide layer and a span layer from drifting into two subtly different editors. |
 | **Duplicating a span layer onto each slide it crosses** at edit time | The editor would then own keeping N copies in sync, and the copies would still break at the seam — each would re-wrap and re-fit inside its own frame. One deck-space rect sliced per slide is continuous by construction. |
+| **A `slot` enum on the layer schema** (`slot: "title"`, resolved against the post on apply) | A schema change, a migration question and a second vocabulary, for something the in-band `{title}` already does with neither. A placeholder inside the text is also *visible* — in the studio, in the preview and on the slide if it never resolves — where a `slot` field is invisible until it either works or silently blanks a headline. And the vocabulary already exists twice: `expandCaptionTemplate` for captions, `{i}`/`{n}` for counters |
+| **A raster or PDF-page fallback for formats neither importer reads** | Page images as slide backgrounds is exactly "drop photos into a post", which the studio already does better and without an importer. What makes PPTX and SVG worth parsing is that a headline arrives as *text* and a rect as a *rect*; an import that cannot offer that is offering nothing. PDF additionally needs a real parser, a heavy dependency [vendors.md](../vendors.md) refuses |
+| **PSD and Figma-native (`.fig`) parsing** | Both are proprietary container formats with no browser-side parser short of a heavy dependency, and both tools export the two formats already supported. The Canva Connect and Figma REST APIs reduce to "fetch a PPTX or an SVG and hand it to an existing adapter" once OAuth exists, which is a credentials problem rather than a format one |
+| **Bundling the template's webfont** so an imported deck sets in the face it was designed in | Settled the other way in S3 and unchanged by S4: Point ships no npm runtime dependency and vendors only what it must ([vendors.md](../vendors.md)), and a carousel set in a face the blog does not use is wrong in a second way besides. The names go into `origin.fonts`, the report says type renders in the theme font, and that is the whole of it |
+| **PPTX export, or a round trip** | Point reads OOXML; it does not write it. Writing a valid deck means content types, rels, a theme and a slide master — a generator whose only consumer would be the importer that just read one. LinkedIn-style PDF export (wrapping the rendered JPEGs one per page, genuinely small and dependency-free) is separate work once Instagram is proven |
+| **Guessing which text box is the title** on import — the biggest one on slide 1, say | Wrong often enough to be worse than nothing, and wrong *invisibly*: a mis-guessed `{title}` overwrites a headline the author wrote, where a literal headline the author converts by hand is a thirty-second edit they can see. The resolver does not need the guess, and the importer has no business having an opinion about the design |
+| **Resolving a template lazily, at render time** | Would make every placeholder a field the author cannot edit and would re-resolve a headline on every re-encode, so a title change would silently rewrite slides already published. Applying once makes the result an ordinary document — which is also what keeps the studio, the preview, undo/redo and the render path free of any template concept at all |
 
 ## Delivery stages
 
@@ -1033,9 +1414,13 @@ placement) landed there rather than in S2, so S2 narrowed to per-slide pan/zoom 
 **both** axes plus cover/contain, background fill and `deck` mode. S6 is an
 editing-surface pass that landed after S3, out of numeric order with S4–S5,
 because five of its eight complaints collapsed into one rearrangement of the
-stage. S2, S3 and S6 are done; S4–S5 remain, and C5/C6's schema held for all
-three without a version bump, which is the evidence that they are extensions
-rather than rewrites — S6 went further and added no stored field at all.
+stage. S4 then landed after S6 rather than before it, and depended on it: a
+template defines N slides each with its own content, which needs the slide
+writers S6.5 added and the per-slide source S6.4 added, so `applyTemplate`
+builds on both instead of duplicating them. S2, S3, S4 and S6 are done; S5
+remains, and C5/C6's schema held for all four without a version bump, which is
+the evidence that they are extensions rather than rewrites — S6 added no stored
+field at all, and S4 added a second *table* without touching the document.
 
 | Stage | Scope |
 |---|---|
@@ -1056,7 +1441,7 @@ rather than rewrites — S6 went further and added no stored field at all.
 | **U6** | Open Carousel Studio from the Visual editor's read-only carousel card (today: post-editor overflow menu only), and a clearer way back to the post. Navigation only — no render-contract, schema, or editing-surface change. |
 | **S2** | Framing — per-slide pan/zoom, cover/contain, background fill, `deck` mode. **Done** — `geometry.js` gains the `deckSlideRects`/`deckSlideFitCSS` Canvas/CSS pair plus `padRects`/`gradientLine`; `document.js` gains `toDeckDocument` (one-way freeze) and `updateSlideFraming` (the single framing writer); `render.js` gains the `renderCarousel` facade and `renderDeck` with per-source fetch dedup; `index.js` becomes doc-as-state with CSS-only pan/zoom preview and a per-slide fill picker. Tests in `frontend/test/carousel{Geometry,Document,Render,StudioPage}.test.js`. Multi-source decks are supported by the schema and renderer but not yet by the picker UI — see "What the studio does not yet offer". |
 | **S3** | Layers — per-slide and canvas-space spanning layers, text with wrap/auto-fit, logo, counters. Uses the active theme's font stack, **not** bundled WOFF2 (`docs/vendors.md`). **Done** — see "Layers" above. `document.js` gains the five-type schema (`normalizeLayer` over `LAYER_BUILDERS`, `LAYER_TYPES`) and the `addLayer`/`updateLayer`/`removeLayer`/`reorderLayer` family addressing a slide or `SPAN_SLIDE`, with `spanLayers` folded into `specHash` by the caller; `geometry.js` gains the `layerRect`/`layerCSS` pair plus `spanLayerRect`/`spanLayerCoverage` over one `layerFrame` helper; `render.js` gains `paintLayers`/`paintSpanLayers` inside `paintSlide`, the `LAYER_PAINTERS` table, `loadLayerImages` and the lazy `fontResolver`; `index.js` was split into `studio/{bounds,panels,preview,gestures}.js` first (no behaviour change) and then grew the layer panel, the per-type property form and stage drag/resize/snap. Tests in `frontend/test/carousel{Document,Geometry,Render,StudioPage}.test.js` and `carouselStudio{Bounds,Panels,Preview,Gestures}.test.js`. **Two things it does not do:** layers are authored in deck mode only (the renderer paints them in both), and a span layer is form-only on the stage — direct manipulation for it is filed as a follow-up. Both are recorded under "What the studio does not yet offer". |
-| **S4** | Predefined canvases as JSON in the repo: this same document schema with placeholder values, so a canvas is a document, not a new format. Placeholders reuse the caption-template vocabulary (`{title}`, `{excerpt}`, `{tags}`, `{link}`) — a *different* substitution from a `counter` layer's `{i}`/`{n}`, which S3 resolves at paint time from the slide's position and which no template file supplies. S4 reads `doc.template`, which S3 deliberately left untouched. |
+| **S4** | Templates — a template is this same document with placeholder values, plus PPTX and SVG import. **Done** — see "Templates" above. `document.js` gains `PLACEHOLDERS`, `applyTemplate` and `toTemplate` over the envelope (`TEMPLATE_VERSION`, separate from `DOC_VERSION`, which stays 1); `carousel_templates(slug UNIQUE, name, doc)` with four routes on the existing `CarouselHandler`, `doc` opaque to Go and capped at 8 MB; `import/{zip,xml,adapter,index,pptx,svg}.js` read a `.pptx` or a list of `.svg` with no dependency at all, every layer through `normalizeLayer` and everything unmappable dropped **and counted**; `studio/templates.js` plus gallery, import dialog, save-as-template and drop report in `panels.js`/`index.js`, with a template's inlined `data:` assets materialized as post-owned media on apply. Outside the plugin, `utils/helpers.js` gains `parseMarkup` — `DOMParser.parseFromString` turns out to be a Trusted Types sink for every mime type, and an eslint rule now says so. Tests in `frontend/test/carousel{Document,Api,ImportZip,ImportPptx,ImportSvg}.test.js`, `carouselStudio{Templates,Panels}.test.js`, `CarouselStudioPage.test.js` and the Go `internal/api`/`internal/repository` carousel tests, over six generated OOXML fixtures (`frontend/test/fixtures/make-pptx.sh`). **What it does not do:** no built-in templates, no placeholder help in the studio, no thumbnails and no rename — see "What the studio does not yet offer". |
 | **S5** | Production — caption composer, one-click push, brand kit scoped to 2–3 settings rows. The brand kit widens something that already exists rather than introducing it: an `image` layer added in the studio already defaults to the site's `logo_url` setting (S3), and S3 added no settings row of its own (see "Out of scope"). |
 | **S6** | The studio becomes one canvas: the stage is the editing surface, at a size worth editing on and with a bottom-sheet panel on a narrow viewport; undo/redo; slide add / remove / duplicate / reorder; Panorama/Slides chips and a per-slide source; the vertical anchor by direct drag; and preview/render parity for text and arrows. **Done** — see "The stage is the editor" above. Nothing stored changed: `document.js` gains only `addSlide`/`removeSlide`/`duplicateSlide`/`moveSlide`, `DOC_VERSION` stays 1, `geometry.js` is untouched, and `render.js`'s painting is unchanged (it only exports the constants `studio/preview.js` now imports instead of restating). New modules `studio/{history,layout}.js`; `gestures.js` gains `layerSpace`/`deckRect`/`snapLines`/`deckSeams` and `createAnchorGesture`; `preview.js` gains `ensurePreviewFont`, `textPlan`, `arrowPlan` and `paintSpanChrome`; outside the plugin, `utils/pointerReorder.js` gains an `axis` option and `Toast` an optional `action`. Tests in `frontend/test/carouselStudio{History,Layout,Gestures,Panels,Preview}.test.js`, `CarouselStudioPage.test.js`, `carouselDocument.test.js` and `toastAction.test.js`. |
 
@@ -1069,16 +1454,23 @@ rather than rewrites — S6 went further and added no stored field at all.
 - A Plugins-page settings affordance for `carousel`: it appears in neither `PLUGIN_SETTINGS` nor `SETTINGS_PAGE_PATHS` (`frontend/src/pages/light/PluginsPage.js`), so today the plugin toggle has no settings drawer/link. S5's brand kit is what will need one.
 - Bundled webfonts for slide type. Layers set in the active theme's `--font-family` (see "Fonts"); a self-hosted WOFF2 is a vendoring decision this repo has already made the other way ([vendors.md](../vendors.md)).
 - Typographic controls beyond the schema's six fields — no letter-spacing, no per-run styling, no rich text. A layer is a mark, not a text editor.
+- PDF, in either direction. Import needs a real PDF parser — a heavy dependency [vendors.md](../vendors.md) refuses; LinkedIn-style export (the rendered JPEGs, one per page) is separate work once Instagram is proven.
+- PPTX export or round-trip. Point reads OOXML; it does not write it.
+- The Canva Connect and Figma REST APIs. Both reduce to "fetch a PPTX or an SVG and hand it to an existing adapter" once OAuth exists — a credentials problem, not a format one.
+- Built-in templates shipped in the repo. v1 ships none; see the Decisions row for the licensing edge behind that.
 
 ## Prove it
 
 ```bash
 (cd api && go test ./internal/services/ -run Render)
+(cd api && go test ./internal/api/ -run Carousel)
 npm run test:frontend
 ```
 
-The first pins the fence render contract; the second covers `geometry.js`,
-`document.js`, `render.js` and the studio modules. `./scripts/check.sh` is the
-full gate (lint, both test suites, and `check-docs.sh` over the commands this
-repo documents) — it is not listed in the block above because running it from
-inside `check-docs.sh` would recurse.
+The first pins the fence render contract; the second the template store's CRUD,
+its opaque-JSON contract, its size cap and the plugin gate on all seven carousel
+routes; the third covers `geometry.js`, `document.js`, `render.js`, the
+importers and the studio modules. `./scripts/check.sh` is the full gate (lint,
+both test suites, and `check-docs.sh` over the commands this repo documents) —
+it is not listed in the block above because running it from inside
+`check-docs.sh` would recurse.

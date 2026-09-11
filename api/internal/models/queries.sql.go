@@ -566,6 +566,16 @@ func (q *Queries) DeleteCarouselByPostID(ctx context.Context, postID int64) erro
 	return err
 }
 
+const deleteCarouselTemplate = `-- name: DeleteCarouselTemplate :exec
+DELETE FROM carousel_templates
+WHERE slug = ?
+`
+
+func (q *Queries) DeleteCarouselTemplate(ctx context.Context, slug string) error {
+	_, err := q.db.ExecContext(ctx, deleteCarouselTemplate, slug)
+	return err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM sessions
 WHERE expires_at < CURRENT_TIMESTAMP
@@ -700,6 +710,25 @@ func (q *Queries) GetCarouselByPostID(ctx context.Context, postID int64) (Carous
 	err := row.Scan(
 		&i.ID,
 		&i.PostID,
+		&i.Doc,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCarouselTemplateBySlug = `-- name: GetCarouselTemplateBySlug :one
+SELECT id, slug, name, doc, created_at, updated_at FROM carousel_templates
+WHERE slug = ? LIMIT 1
+`
+
+func (q *Queries) GetCarouselTemplateBySlug(ctx context.Context, slug string) (CarouselTemplate, error) {
+	row := q.db.QueryRowContext(ctx, getCarouselTemplateBySlug, slug)
+	var i CarouselTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
 		&i.Doc,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1459,6 +1488,46 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey
 			&i.ExpiresAt,
 			&i.RevokedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCarouselTemplates = `-- name: ListCarouselTemplates :many
+
+SELECT slug, name, created_at FROM carousel_templates
+ORDER BY name
+`
+
+type ListCarouselTemplatesRow struct {
+	Slug      string    `json:"slug"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// CAROUSEL TEMPLATES
+// A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as
+// carousels.doc. ListCarouselTemplates deliberately names its columns and
+// omits doc: a template inlines its assets as data: URLs, so SELECT * here
+// would pull every asset of every template to draw a list of names.
+func (q *Queries) ListCarouselTemplates(ctx context.Context) ([]ListCarouselTemplatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCarouselTemplates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCarouselTemplatesRow
+	for rows.Next() {
+		var i ListCarouselTemplatesRow
+		if err := rows.Scan(&i.Slug, &i.Name, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2309,6 +2378,36 @@ func (q *Queries) UpsertCarousel(ctx context.Context, arg UpsertCarouselParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.PostID,
+		&i.Doc,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertCarouselTemplate = `-- name: UpsertCarouselTemplate :one
+INSERT INTO carousel_templates (slug, name, doc, created_at, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(slug) DO UPDATE SET
+    name = excluded.name,
+    doc = excluded.doc,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, slug, name, doc, created_at, updated_at
+`
+
+type UpsertCarouselTemplateParams struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+	Doc  string `json:"doc"`
+}
+
+func (q *Queries) UpsertCarouselTemplate(ctx context.Context, arg UpsertCarouselTemplateParams) (CarouselTemplate, error) {
+	row := q.db.QueryRowContext(ctx, upsertCarouselTemplate, arg.Slug, arg.Name, arg.Doc)
+	var i CarouselTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
 		&i.Doc,
 		&i.CreatedAt,
 		&i.UpdatedAt,

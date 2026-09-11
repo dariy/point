@@ -10,7 +10,7 @@ import {
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { api } from "../../api/client.js";
 import { setToast } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
+import { html, parseMarkup, raw } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import {
   MINUS_SVG,
@@ -22,9 +22,7 @@ import {
 } from "../../utils/icons.js";
 
 function textOf(html) {
-  return new DOMParser()
-    .parseFromString(html || "", "text/html")
-    .body.textContent.trim();
+  return parseMarkup(html || "", "text/html").body.textContent.trim();
 }
 
 export default class CommentsAdminPage extends Component {

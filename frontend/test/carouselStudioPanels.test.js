@@ -19,9 +19,13 @@ import {
   colorInputValue,
   deckPanel,
   fitPanel,
+  importDialog,
+  importReportPanel,
   layerPanel,
   modeToggle,
   pickPrompt,
+  saveTemplateDialog,
+  templateGallery,
 } from '../src/plugins/carousel/studio/panels.js';
 import {
   emptyDocument,
@@ -478,6 +482,181 @@ describe('carousel studio panels', () => {
       const out = str(layerPanel({ doc: deck, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
       assert.match(out, /data-action="add-layer"[\s\S]*?data-scope="span"/);
       assert.match(out, /runs across the seams/);
+    });
+  });
+
+  // ── Templates ─────────────────────────────────────────────────────────────
+
+  describe('templateGallery', () => {
+    const gallery = (o = {}) =>
+      str(
+        templateGallery({
+          templates: [],
+          loading: false,
+          error: '',
+          busy: false,
+          canSave: true,
+          ...o,
+        }),
+      );
+
+    test('empty says what to do — v1 ships no built-ins, so empty is normal', () => {
+      const out = gallery();
+      assert.match(out, /No templates yet — import a \.pptx or a set of \.svg files to start\./);
+      assert.doesNotMatch(out, /carousel-studio__template-list/);
+    });
+
+    test('a loading listing says so rather than claiming there are none', () => {
+      const out = gallery({ loading: true });
+      assert.match(out, /Loading templates…/);
+      assert.doesNotMatch(out, /No templates yet/);
+    });
+
+    test('each template is choosable and deletable, by slug', () => {
+      const out = gallery({ templates: [{ slug: 'bold-quote', name: 'Bold Quote' }] });
+      assert.match(out, /data-action="apply-template"[\s\S]*?data-slug="bold-quote"/);
+      assert.match(out, /data-action="delete-template"[\s\S]*?data-slug="bold-quote"/);
+      assert.match(out, /Bold Quote/);
+    });
+
+    test('import is always offered; saving needs something to save', () => {
+      assert.match(gallery(), /data-action="open-import"/);
+      assert.doesNotMatch(
+        gallery(),
+        /data-action="open-save-template"[^>]*disabled/,
+      );
+      assert.match(
+        gallery({ canSave: false }),
+        /data-action="open-save-template"[\s\S]*?disabled/,
+      );
+    });
+
+    test('busy disables every control that would start a second operation', () => {
+      const out = gallery({ busy: true, templates: [{ slug: 'a', name: 'A' }] });
+      assert.match(out, /data-action="open-import"[\s\S]*?disabled/);
+      assert.match(out, /data-action="apply-template"[\s\S]*?disabled/);
+    });
+
+    test('a listing that failed says so in the gallery', () => {
+      assert.match(gallery({ error: 'nope' }), /error-state[\s\S]*?nope/);
+    });
+  });
+
+  describe('importDialog', () => {
+    test('offers a file input that accepts every format the registry knows', () => {
+      const out = str(importDialog({ busy: false, error: '' }));
+      assert.match(out, /id="carousel-import-file"/);
+      assert.match(out, /accept="[^"]*\.pptx[^"]*"/);
+      assert.match(out, /accept="[^"]*\.svg[^"]*"/);
+      assert.match(out, /multiple/);
+      assert.match(out, /data-action="run-import"/);
+    });
+
+    test('the backdrop closes, and so do the two buttons that say so', () => {
+      const out = str(importDialog({ busy: false, error: '' }));
+      assert.match(out, /class="modal-overlay active carousel-studio__dialog" data-action="close-import"/);
+      assert.match(out, /data-action="close-import" data-close="1"/);
+    });
+
+    test('an import in flight disables the button and says what it is doing', () => {
+      const out = str(importDialog({ busy: true, error: '' }));
+      assert.match(out, /Importing…/);
+      assert.match(out, /data-action="run-import"[\s\S]*?disabled/);
+    });
+
+    test('a refusal is shown beside the file it is about', () => {
+      assert.match(
+        str(importDialog({ busy: false, error: 'Point cannot read notes.txt.' })),
+        /error-state[\s\S]*?Point cannot read notes\.txt\./,
+      );
+    });
+  });
+
+  describe('saveTemplateDialog', () => {
+    test('shows the name and the slug it will be stored under, both editable', () => {
+      const out = str(saveTemplateDialog({ name: 'Bold Quote', slug: 'bold-quote', busy: false, error: '' }));
+      assert.match(out, /id="carousel-template-name"[\s\S]*?value="Bold Quote"/);
+      assert.match(out, /id="carousel-template-slug"[\s\S]*?value="bold-quote"/);
+      assert.match(out, /data-action="submit-save-template"/);
+    });
+
+    test('says that a slug already in use replaces — the store upserts', () => {
+      const out = str(saveTemplateDialog({ name: '', slug: '', busy: false, error: '' }));
+      assert.match(out, /replaces that template/);
+    });
+  });
+
+  describe('importReportPanel', () => {
+    const report = (o = {}) => ({
+      format: 'pptx',
+      file: 'Deck.pptx',
+      slides: 4,
+      sourceSlides: 5,
+      shapes: { kept: 14, total: 22 },
+      aspect: { from: '16:9', to: '4:5', axis: 'x', margin: 0.2, note: '16:9 fitted into 4:5 — 20% margin each side' },
+      fonts: [],
+      assets: { count: 0, bytes: 0 },
+      dropped: [],
+      failed: [],
+      warnings: [],
+      order: [],
+      ...o,
+    });
+
+    test('nothing to report renders nothing', () => {
+      assert.strictEqual(importReportPanel(null), '');
+    });
+
+    test('leads with what was kept and what it cost', () => {
+      const out = str(importReportPanel(report()));
+      assert.match(out, /Imported Deck\.pptx/);
+      assert.match(out, /4 slides of 5 — 1 could not be read/);
+      assert.match(out, /14 of 22 shapes kept/);
+      assert.match(out, /16:9 fitted into 4:5 — 20% margin each side/);
+    });
+
+    test('the fonts line says plainly that type renders in the theme font', () => {
+      const out = str(importReportPanel(report({ fonts: ['Poppins', 'Inter'] })));
+      assert.match(out, /Fonts in the file: Poppins, Inter/);
+      assert.match(out, /site's theme font, not the template's/);
+    });
+
+    test("a warning — .5's outlined text, say — is shown, not swallowed", () => {
+      const out = str(
+        importReportPanel(report({ warnings: ['This SVG has its text outlined.'] })),
+      );
+      assert.match(out, /carousel-studio__report-warn[\s\S]*?This SVG has its text outlined\./);
+    });
+
+    test('drops are counted per kind and per slide', () => {
+      const out = str(
+        importReportPanel(
+          report({
+            dropped: [
+              { slide: 3, what: 'groups', n: 3 },
+              { slide: null, what: 'the slide master', n: 1 },
+            ],
+          }),
+        ),
+      );
+      assert.match(out, /Slide 4: 3 × groups/);
+      assert.match(out, /The deck: the slide master/);
+      assert.doesNotMatch(out, /1 × the slide master/);
+    });
+
+    test('unreadable parts are named with their reason', () => {
+      const out = str(
+        importReportPanel(report({ failed: [{ slide: 1, part: 'slide2.xml', reason: 'malformed' }] })),
+      );
+      assert.match(out, /Slide 2: slide2\.xml — malformed/);
+    });
+
+    test('inlined images are reported in megabytes, and the file order when the format has none', () => {
+      const out = str(
+        importReportPanel(report({ assets: { count: 3, bytes: 2 * 1024 * 1024 }, order: ['a.svg', 'b.svg'] })),
+      );
+      assert.match(out, /3 images carried in the\s+template \(2\.0 MB\)/);
+      assert.match(out, /Slide order: a\.svg, b\.svg/);
     });
   });
 });
