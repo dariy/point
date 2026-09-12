@@ -464,6 +464,35 @@ const LAYER_PAINTERS = {
 };
 
 /**
+ * Dispatch one layer to its painter, rotated about its own box center when
+ * `layer.box.rotate` is non-zero. The one point both {@link paintLayers} and
+ * {@link paintSpanLayers} route through, so a rotated layer looks the same
+ * whichever list it painted from and a painter never has to know rotation
+ * exists.
+ *
+ * `rotate === 0` (the common case) skips `ctx.save`/`restore` entirely rather
+ * than issuing a rotate by zero radians, so an unrotated layer's draw calls —
+ * and the byte-identical JPEG they encode to — are untouched.
+ */
+function paintDispatch(ctx, layer, box, env) {
+  const paint = layer && LAYER_PAINTERS[layer.type];
+  if (!paint || !box) return;
+  const rotate = num(layer.box?.rotate, 0);
+  if (!rotate) {
+    paint(ctx, layer, box, env);
+    return;
+  }
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((rotate * Math.PI) / 180);
+  ctx.translate(-cx, -cy);
+  paint(ctx, layer, box, env);
+  ctx.restore();
+}
+
+/**
  * Paint a slide's layers over the image, back to front — list order is meaning
  * and `normalizeLayers` (`document.js`) preserves it, so this does not sort. A
  * `rect` scrim under a headline is exactly a rect earlier in the list.
@@ -488,8 +517,7 @@ export function paintLayers(ctx, layers, aspect, env = {}) {
   if (!Array.isArray(layers) || !layers.length) return;
   const resolved = resolveLayerEnv(aspect, env);
   for (const layer of layers) {
-    const paint = layer && LAYER_PAINTERS[layer.type];
-    if (paint) paint(ctx, layer, layerRect(layer, aspect), resolved);
+    paintDispatch(ctx, layer, layerRect(layer, aspect), resolved);
   }
 }
 
@@ -530,8 +558,7 @@ export function paintSpanLayers(ctx, entries, aspect, env = {}) {
   if (!Array.isArray(entries) || !entries.length) return;
   const resolved = resolveLayerEnv(aspect, env);
   for (const { layer, box } of entries) {
-    const paint = layer && LAYER_PAINTERS[layer.type];
-    if (paint && box) paint(ctx, layer, box, resolved);
+    paintDispatch(ctx, layer, box, resolved);
   }
 }
 

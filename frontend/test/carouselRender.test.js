@@ -80,6 +80,8 @@ function recordingCtx(log) {
     measureText: (text) => ({ width: text.length * CHAR_EM * fontPx(ctx.font) }),
     save: () => log.push(['save']),
     restore: () => log.push(['restore']),
+    translate: (...a) => log.push(['translate', ...a]),
+    rotate: (...a) => log.push(['rotate', ...a]),
     beginPath: () => log.push(['beginPath']),
     moveTo: (...a) => log.push(['moveTo', ...a]),
     lineTo: (...a) => log.push(['lineTo', ...a]),
@@ -564,6 +566,66 @@ describe('paintSlide — rect layers', () => {
       aspect: '4:5',
     });
     assert.deepStrictEqual(log.filter((e) => e[0] === 'fillRect'), []);
+  });
+});
+
+describe('paintSlide — rotated layers', () => {
+  test('wraps the paint in save/translate/rotate/translate/restore about the box center', () => {
+    const layer = rectLayer({ box: { x: 0, y: 0.8, w: 1, h: 0.2, rotate: 45 } });
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+
+    const box = layerRect(layer, '4:5');
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const rad = (45 * Math.PI) / 180;
+
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['translate', cx, cy],
+      ['rotate', rad],
+      ['translate', -cx, -cy],
+      ['save'],
+      ['fillStyle', '#000000'],
+      ['fillRect', box.x, box.y, box.w, box.h],
+      ['restore'],
+      ['restore'],
+    ]);
+  });
+
+  test('rotate: 0 is byte-identical to no rotate field at all — the regression bar', () => {
+    const zero = rectLayer({ box: { x: 0, y: 0.8, w: 1, h: 0.2, rotate: 0 } });
+    const none = rectLayer();
+    const logZero = [];
+    const logNone = [];
+    paintSlide(recordingCtx(logZero), 'BMP', FULL_RECT, 1080, 1350, null, [zero], { aspect: '4:5' });
+    paintSlide(recordingCtx(logNone), 'BMP', FULL_RECT, 1080, 1350, null, [none], { aspect: '4:5' });
+    assert.deepStrictEqual(logZero, logNone);
+    assert.ok(!logZero.some((e) => e[0] === 'translate' || e[0] === 'rotate'));
+  });
+
+  test('a rotated layer with its own opacity nests the alpha save inside the rotate save', () => {
+    const layer = rectLayer({ opacity: 0.5, box: { x: 0, y: 0.8, w: 1, h: 0.2, rotate: 90 } });
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+
+    assert.deepStrictEqual(
+      log.map((e) => e[0]),
+      ['clearRect', 'drawImage', 'save', 'translate', 'rotate', 'translate', 'save', 'globalAlpha', 'fillStyle', 'fillRect', 'restore', 'restore'],
+    );
+  });
+
+  test('a text layer also rotates — the wrap is around dispatch, not per painter', () => {
+    const layer = textLayer({
+      text: 'Rotated',
+      box: { x: 0.1, y: 0.1, w: 0.8, h: 0.3, rotate: 30 },
+    });
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+    assert.ok(log.some((e) => e[0] === 'rotate' && Math.abs(e[1] - (30 * Math.PI) / 180) < 1e-9));
+    assert.ok(log.some((e) => e[0] === 'fillText'));
   });
 });
 
