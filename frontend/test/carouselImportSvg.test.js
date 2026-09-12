@@ -429,7 +429,7 @@ describe('importSvg — images', () => {
     assert.match(image.source, /^data:image\/gif;base64,/);
     assert.strictEqual(image.fit, 'contain');
     assert.strictEqual(image.opacity, 0.6);
-    assert.deepStrictEqual(image.box, { x: 0.8, y: 0.8, w: 0.1, h: 0.1 });
+    assert.deepStrictEqual(image.box, { x: 0.8, y: 0.8, w: 0.1, h: 0.1, rotate: 0 });
   });
 
   test('an image on someone else’s server is refused, not fetched', async () => {
@@ -645,7 +645,7 @@ describe('importSvg — the canvas', () => {
         'viewBox="-1000 -1250 1080 1350"',
       ),
     ]);
-    assert.deepStrictEqual(typed(template.doc, 0, 'rect').box, { x: 0, y: 0, w: 1, h: 1 });
+    assert.deepStrictEqual(typed(template.doc, 0, 'rect').box, { x: 0, y: 0, w: 1, h: 1, rotate: 0 });
   });
 
   test('width and height stand in for a missing viewBox, units and all', async () => {

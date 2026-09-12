@@ -800,7 +800,8 @@ function addLayer(ctx, page, layer) {
  *
  * @param {SvgPage} page
  * @param {{x: number, y: number, w: number, h: number}} rect
- * @returns {import('../document.js').CarouselBox}
+ * @returns {{x: number, y: number, w: number, h: number}} pre-normalization —
+ *   no `rotate` yet; {@link normalizeLayer} fills it in
  */
 function boxOf(page, rect) {
   return page.fit.box(rect.x - page.canvas.x, rect.y - page.canvas.y, rect.w, rect.h);

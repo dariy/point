@@ -66,13 +66,18 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  */
 
 /**
- * A layer's placement box: `{x, y, w, h}` in 0..1 of the canvas it sits on.
+ * A layer's placement box: `{x, y, w, h}` in 0..1 of the canvas it sits on,
+ * plus `rotate` in degrees — presentational only, wrapped into -180..180 and
+ * folded into `specHash` alongside the rest of the box, but never read by
+ * {@link layerFrame} or its callers (`geometry.js`), which stay rotation-blind
+ * on purpose.
  *
  * @typedef {object} CarouselBox
  * @property {number} x
  * @property {number} y
  * @property {number} w
  * @property {number} h
+ * @property {number} rotate
  */
 
 /**
@@ -249,6 +254,21 @@ export const SPAN_SLIDE = -1;
  */
 const MIN_BOX = 1 / 1080;
 
+/** A box with no explicit rotation sits at its natural orientation. */
+const DEFAULT_ROTATE = 0;
+
+/**
+ * Wrap degrees into -180..180 — a full turn has no preferred zero, so a value
+ * outside the range means the same angle, not an invalid one. `180` wraps to
+ * `-180`, the same seam a compass bearing picks.
+ *
+ * @param {number} deg
+ * @returns {number}
+ */
+function wrapRotate(deg) {
+  return ((deg + 180) % 360 + 360) % 360 - 180;
+}
+
 const DEFAULT_ALIGN = 'left';
 const DEFAULT_VALIGN = 'top';
 /** White: a layer is a mark over a photograph, and dark photographs are the
@@ -288,7 +308,7 @@ const DEFAULT_DIRECTION = 'right';
  */
 function normalizeBox(box, base) {
   const b = isObj(box) ? box : {};
-  const d = isObj(base) ? base : { x: 0, y: 0, w: 1, h: 1 };
+  const d = isObj(base) ? base : { x: 0, y: 0, w: 1, h: 1, rotate: DEFAULT_ROTATE };
   const w = clamp(num(b.w, d.w), MIN_BOX, 1);
   const h = clamp(num(b.h, d.h), MIN_BOX, 1);
   return {
@@ -296,6 +316,7 @@ function normalizeBox(box, base) {
     y: clamp(num(b.y, d.y), 0, 1 - h),
     w,
     h,
+    rotate: wrapRotate(num(b.rotate, num(d.rotate, DEFAULT_ROTATE))),
   };
 }
 
@@ -672,11 +693,15 @@ export function toDeckDocument(doc, srcW, srcH) {
   });
 }
 
-/** Merge a partial crop over an existing one, ignoring anything not a number. */
+/**
+ * Merge a partial crop or box over an existing one, ignoring anything not a
+ * number. `rotate` only ever appears on a box — a crop patch that carried one
+ * would be dropped by {@link normalizeCrop}, which does not read it.
+ */
 function mergeCrop(current, patch) {
   const p = isObj(patch) ? patch : {};
   const out = { ...current };
-  for (const k of ['x', 'y', 'w', 'h']) {
+  for (const k of ['x', 'y', 'w', 'h', 'rotate']) {
     if (Number.isFinite(p[k])) out[k] = p[k];
   }
   return out;

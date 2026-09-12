@@ -2292,7 +2292,7 @@ describe('CarouselStudioPage', () => {
           await settle();
           assert.deepEqual(
             page.state.doc.spanLayers[0].box,
-            { x: 0.3, y: 0.4, w: 0.6, h: 0.2 },
+            { x: 0.3, y: 0.4, w: 0.6, h: 0.2, rotate: 0 },
             'the layer did not move',
           );
           assert.notDeepEqual(page.state.doc.slides[0].crop, cropBefore, 'the crop panned');
