@@ -1173,13 +1173,11 @@ describe('CarouselStudioPage', () => {
       el.querySelector(
         `.carousel-studio__stage-slide[data-slice="${i}"] .carousel-studio__frame-img`,
       );
-    /** The top and bottom management panes for slide `i` — the reorder
-     *  handle, the slide number and the duplicate action above; delete below.
-     *  Off the photo itself, unlike the stage column. */
+    /** The top management pane for slide `i` — the reorder handle, the slide
+     *  number and the delete action. Off the photo itself, unlike the stage
+     *  column. */
     const paneTop = (el, i) =>
       el.querySelector(`.carousel-studio__pane--top[data-slice="${i}"]`);
-    const paneBottom = (el, i) =>
-      el.querySelector(`.carousel-studio__pane--bottom[data-slice="${i}"]`);
 
     /** linkedom has no layout, and the pan converts pixels to crop units — give
      *  the image element the box a browser would have measured. */
@@ -2529,7 +2527,7 @@ describe('CarouselStudioPage', () => {
         fire(h, 'pointerup', { pointerId: 3, clientX: x, clientY: 20 });
       }
 
-      test('each slide carries a handle, number and duplicate above, and delete below', async () => {
+      test('each slide carries a handle, number and delete above, and duplicate in its seam', async () => {
         const el = await toDeck();
         assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 3);
         assert.ok(handle(el, 0), 'slide 0 has a drag handle');
@@ -2539,14 +2537,34 @@ describe('CarouselStudioPage', () => {
         // it — or hide behind whatever crop the slide is framed to.
         assert.equal(handle(el, 0).closest('.carousel-studio__pane--top'), paneTop(el, 0));
         assert.equal(handle(el, 0).closest('.carousel-studio__stage-slide'), null);
-        assert.ok(duplicateBtn(el, 0), 'duplicate is offered per slide, in the top pane');
-        assert.equal(duplicateBtn(el, 0).closest('.carousel-studio__pane--top'), paneTop(el, 0));
-        assert.ok(deleteBtn(el, 0), 'delete is offered per slide, in the bottom pane');
-        assert.equal(deleteBtn(el, 0).closest('.carousel-studio__pane--bottom'), paneBottom(el, 0));
+        // Delete sits at the slide's top-right corner, in the top pane.
+        assert.ok(deleteBtn(el, 0), 'delete is offered per slide, in the top pane');
+        assert.equal(deleteBtn(el, 0).closest('.carousel-studio__pane--top'), paneTop(el, 0));
+        // Duplicate rides right after Add in the seam after the slide — the
+        // same `data-slide` index as the add button there.
+        assert.ok(duplicateBtn(el, 0), 'duplicate is offered per slide, in its add-slide seam');
+        assert.equal(
+          duplicateBtn(el, 0).closest('.carousel-studio__insert-zone'),
+          addBtn(el, 0).closest('.carousel-studio__insert-zone'),
+        );
+        assert.equal(
+          duplicateBtn(el, 0).previousElementSibling,
+          addBtn(el, 0),
+          'right after the add button',
+        );
         // n + 1 insertion points for n slides — one at every gap, plus one
-        // before the first and one after the last.
-        assert.equal(el.querySelectorAll('.carousel-studio__insert-btn').length, 4);
+        // before the first and one after the last — and n duplicates, one per
+        // seam but the head one (there is no slide before it to copy).
+        assert.equal(el.querySelectorAll('[data-action="add-slide"]').length, 4);
+        assert.equal(el.querySelectorAll('[data-action="duplicate-slide"]').length, 3);
         assert.ok(addBtn(el, -1), 'and one to add before the first slide');
+        assert.equal(
+          addBtn(el, -1).closest('.carousel-studio__insert-zone').querySelector(
+            '[data-action="duplicate-slide"]',
+          ),
+          null,
+          'the head seam has nothing to duplicate',
+        );
         assert.ok(addBtn(el, 2), 'and one to add after the last slide');
       });
 
@@ -2555,7 +2573,6 @@ describe('CarouselStudioPage', () => {
         const el = await mount({ post: '42' }, routes, { renderDeps: deps });
         assert.equal(page.state.doc.mode, 'split');
         assert.equal(el.querySelector('.carousel-studio__pane-row--top'), null);
-        assert.equal(el.querySelector('.carousel-studio__pane-row--bottom'), null);
         assert.equal(el.querySelector('.carousel-studio__rail-handle'), null);
         assert.equal(el.querySelector('.carousel-studio__insert-zone'), null);
         assert.ok(el.querySelector('#carousel-n'), 'the count slider is the control there');

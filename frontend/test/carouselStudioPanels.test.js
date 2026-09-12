@@ -404,28 +404,20 @@ describe('carousel studio panels', () => {
       assert.match(out, /data-action="stage-zoom"[\s\S]*?data-zoom="reset"/);
     });
 
-    test('the mode’s panel is the properties panel, with the toggle reporting its state', () => {
+    test('the mode’s panel is a collapsible properties card, header reporting its state', () => {
       const open = str(builder({ ...builderProps, propsOpen: true }));
-      assert.match(open, /class="carousel-studio__builder is-details-open"/);
-      assert.match(open, /id="carousel-props"[\s\S]*?aria-hidden="false"/);
-      assert.match(open, /aria-expanded="true"[\s\S]*?Hide properties/);
-      // The fit panel — split mode's own panel — is inside the aside, not loose
-      // in the column: the sheet is what has to carry it on a phone.
+      assert.match(open, /class="carousel-studio__props card"[\s\S]*?id="carousel-props"/);
+      assert.match(open, /data-action="toggle-props"[\s\S]*?aria-expanded="true"/);
+      assert.match(open, /carousel-studio__props-title">Properties/);
+      // The fit panel — split mode's own panel — is inside the card's body.
       assert.match(open, /<aside[\s\S]*?carousel-studio__fit[\s\S]*?<\/aside>/);
 
       const shut = str(builder({ ...builderProps, propsOpen: false }));
-      assert.doesNotMatch(shut, /is-details-open/);
-      assert.match(shut, /id="carousel-props"[\s\S]*?aria-hidden="true"/);
-      assert.match(shut, /aria-expanded="false"[\s\S]*?>\s*Properties/);
+      assert.match(shut, /class="carousel-studio__props card collapsed"[\s\S]*?id="carousel-props"/);
+      assert.match(shut, /data-action="toggle-props"[\s\S]*?aria-expanded="false"/);
     });
 
-    test('the sheet ships its own backdrop and close, the way the post editor’s does', () => {
-      const out = str(builder(builderProps));
-      assert.match(out, /carousel-studio__props-backdrop"[\s\S]*?data-action="close-props"/);
-      assert.match(out, /carousel-studio__props-close[\s\S]*?data-action="close-props"/);
-    });
-
-    test('deck mode puts the layer panel in the sheet too', () => {
+    test('deck mode puts the layer panel in the card body too', () => {
       const deck = toDeckDocument(doc3, 3000, 1000);
       const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
       assert.match(out, /<aside[\s\S]*?carousel-studio__layers[\s\S]*?<\/aside>/);

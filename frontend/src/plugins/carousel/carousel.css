@@ -118,9 +118,15 @@
 
 /* Deck mode: the stage is n independently framed slides side by side, each one
  * clipping its own image element, rather than one crop band projected across
- * the whole strip. */
+ * the whole strip. Each tile clips its own content (`.carousel-studio__stage-
+ * slide`, below), so the outer `overflow: hidden` — there for split mode's
+ * background-image and rounded corner — is not needed here, and turning it
+ * off is what lets the two end `.carousel-studio__insert-zone` buttons ride
+ * half outside the stage, the same as an interior one rides half into the
+ * slide beside it, and stay clickable rather than clipped away. */
 .carousel-studio__stage--deck {
   background-image: none;
+  overflow: visible;
 }
 
 /* A deck column is *the* editing surface: `gestures.js` binds these, so a
@@ -284,9 +290,10 @@
 
 /* ── Stage bar ─────────────────────────────────────────────────────────────
  * Under the stage: the zoom control. Drives the layout rather than the
- * document — nothing here can make the deck dirty. The properties toggle used
- * to share this row; it now docks to the panel itself (`.props-toggle`,
- * below `.carousel-studio__props`). */
+ * document — nothing here can make the deck dirty. The properties panel is a
+ * card of its own now (below, `.carousel-studio__props`), collapsed and
+ * expanded from its own header rather than a control that used to share this
+ * row. */
 .carousel-studio__stage-bar {
   display: flex;
   flex-wrap: wrap;
@@ -326,13 +333,14 @@
 }
 
 /* ── Management panes ─────────────────────────────────────────────────────
- * The top pane carries the reorder handle, the slide number and the
- * duplicate action; the bottom carries delete. Each row divides the same
- * width as the stage into the same n equal segments, so a pane always sits
- * directly over its own slide (`.carousel-studio__stage-col` groups the
- * three into one centred, one-width column). Deck mode only — a panorama's
- * slide count is the fit panel's, so `topPane`/`bottomPane` are empty strings
- * in split mode and neither row renders. */
+ * The top pane carries the reorder handle, the slide number and the delete
+ * action, right-aligned into the slide's top-right corner. It divides the
+ * same width as the stage into the same n equal segments, so a pane always
+ * sits directly over its own slide (`.carousel-studio__stage-col` groups the
+ * two into one centred, one-width column). Duplicate lives in the stage's own
+ * add-slide seams instead of a pane (`.carousel-studio__insert-zone`, below).
+ * Deck mode only — a panorama's slide count is the fit panel's, so `topPane`
+ * is an empty string in split mode and the row does not render. */
 .carousel-studio__pane-row {
   display: flex;
 }
@@ -387,7 +395,7 @@
   cursor: default;
 }
 
-/* The slide number, between the handle and the duplicate action. */
+/* The slide number, between the handle and the delete action. */
 .carousel-studio__frame-num {
   flex: 1 1 auto;
   text-align: center;
@@ -397,8 +405,8 @@
   line-height: 1.4;
 }
 
-/* Duplicate (top pane) and delete (bottom pane) — small icon buttons, the
- * pane's twin of `.carousel-studio__rail-handle`. */
+/* Delete — a small icon button, the pane's twin of
+ * `.carousel-studio__rail-handle`. */
 .carousel-studio__pane-action {
   display: flex;
   align-items: center;
@@ -432,21 +440,30 @@
  * `editor.css`) turned 90°, since this stage runs sideways rather than down
  * the page. One at every gap between slides *and* one at each end, so a slide
  * can be added anywhere. Layered on the stage itself, at the same `left: %` a
- * divider sits at (the two end zones override `left`/`transform` inline —
- * `studio/panels.js` — so they sit flush inside the stage's own
- * `overflow: hidden` rather than centred on the edge and half clipped by it),
- * so it survives zoom and scroll without its own math. Faint until hovered or
- * focused — a full-opacity button on every seam would compete with the dashed
- * dividers they share a line with — but never `display: none` outside
- * interaction, so a touch user without a hover state can still find it. */
+ * divider sits at, every zone including the two at the ends centred the same
+ * way (`transform: translateX(-50%)`, below) — an end button rides half
+ * outside the stage exactly as an interior one rides half into the slide
+ * beside it; `.carousel-studio__stage--deck`'s `overflow: visible` (above) is
+ * what keeps that half from being clipped away and unclickable. Faint until
+ * hovered or focused — a full-opacity button on every seam would compete with
+ * the dashed dividers they share a line with — but never `display: none`
+ * outside interaction, so a touch user without a hover state can still find
+ * it.
+ *
+ * Duplicate rides along beneath Add in every zone but the head one
+ * (`studio/panels.js` skips it there — there is no slide before the head to
+ * copy), so the two stack in one column rather than compete for the same
+ * centre. */
 .carousel-studio__insert-zone {
   position: absolute;
   top: 0;
   bottom: 0;
   z-index: 3;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-xs);
   width: 2rem;
   transform: translateX(-50%);
   pointer-events: none;
@@ -457,6 +474,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 999px;
@@ -758,6 +776,84 @@
   min-height: 2.5rem;
 }
 
+.carousel-studio__bg-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+
+.carousel-studio__bg-row > .carousel-studio__bg-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.carousel-studio__field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.carousel-studio__field-hint {
+  color: var(--text-muted);
+}
+
+.carousel-studio__field-badge {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 2px 6px;
+  border-radius: var(--border-radius);
+  font-variant-numeric: tabular-nums;
+  border: var(--border-width) solid var(--border-primary);
+}
+
+.carousel-studio__range-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+
+.carousel-studio__range-row input[type="range"] {
+  flex: 1;
+}
+
+.carousel-studio__color-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  background: var(--surface-default);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  padding: 2px 6px 2px 2px;
+  height: 2rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.carousel-studio__color-picker input[type="color"] {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.carousel-studio__color-picker span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-mono, monospace);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
 /* ── Layers ────────────────────────────────────────────────────────────────
  * Deck mode only: a per-slide list plus the selected layer's property form.
  * The live preview of each layer is a positioned DOM element inside every
@@ -951,50 +1047,32 @@
 }
 
 /* ── Properties panel ──────────────────────────────────────────────────────
- * The mode's own panel — deck panel plus layers, or the split fit panel. At
- * 64em+ it is a sticky third column beside the stage, the toggle showing and
- * hiding it. Below 64em it becomes a bottom sheet over the stage instead —
- * both are the pattern the post editor already ships (`.editor-details-panel`,
- * `frontend/css/light/editor.css`): state class on the layout root, sibling
- * backdrop below 64em, `85dvh`, translated off the bottom when closed. Copied
- * rather than extracted — `components/shared/` has no rail/sheet primitive,
- * and inventing one for the second user is how a primitive ends up fitting
- * neither. */
-.carousel-studio__props {
+ * The mode's own panel — deck panel plus layers, or the split fit panel — is
+ * a `.card` using the same collapsible header/body pattern the plugins
+ * page's group cards use (`frontend/css/light/plugins.css`,
+ * `frontend/css/light/cards.css`): the shared `.card`/`.card-header`/
+ * `.card-body`/`.collapsed` rules do the chrome and the collapse itself; this
+ * file only adds the header's own layout and the 64em+ sticky-rail
+ * placement. Below 64em there is no special panel behaviour left to give it —
+ * it is just another card, stacked under the stage in the column
+ * `.carousel-studio__builder` already is there. */
+.carousel-studio__props-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-md);
 }
 
-/* Chrome the sheet needs and the rail does not. */
-.carousel-studio__props-close,
-.carousel-studio__props-backdrop {
-  display: none;
+.carousel-studio__props-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0;
 }
 
-/* The panel's own open/close control (`propsToggle`, `studio/panels.js`) — a
- * sibling of the `<aside>` rather than a child of it, since the aside itself
- * is what disappears when the panel is closed (below), so a button that lived
- * only inside it could never reopen it. Positioned instead to read as docked
- * to the panel's own edge: sticky beside the rail at 64em+, so it lines up
- * with the panel's own `top`; a floating corner button once the panel becomes
- * a sheet, since the sheet itself is off-screen when closed. */
-.carousel-studio__props-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: var(--border-width) solid var(--border-primary);
-  border-radius: var(--border-radius-xl);
-  background: var(--surface-card);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.carousel-studio__props-toggle.is-active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--color-white);
+.carousel-studio__props-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
 @media (min-width: 64em) {
@@ -1008,19 +1086,9 @@
     flex: 1 1 auto;
   }
 
-  .carousel-studio__props-toggle {
-    position: sticky;
-    top: var(--spacing-md);
-  }
-
   .carousel-studio__builder .carousel-studio__props {
     flex-shrink: 0;
     width: 20rem;
-    display: none;
-    padding: var(--spacing-md);
-    border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--border-radius);
-    background: var(--surface-card);
     position: sticky;
     top: var(--spacing-md);
     max-height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
@@ -1029,76 +1097,14 @@
     overscroll-behavior: contain;
   }
 
-  .carousel-studio__builder.is-details-open .carousel-studio__props {
-    display: flex;
-  }
-}
-
-@media (max-width: 64em) {
-  .carousel-studio__props-toggle {
-    position: fixed;
-    right: var(--spacing-md);
-    bottom: var(--spacing-md);
-    z-index: 1002;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .carousel-studio__props-toggle-label {
-    display: none;
-  }
-}
-
-@media (max-width: 64em) {
-  .carousel-studio__props {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    top: auto;
-    /* Laid out even when closed: the transform is what hides it, and a sheet
-     * that starts at `display: none` pops instead of sliding. The wide-side
-     * collapse above cannot reach here — that rule is in its own query. */
-    display: flex;
-    overflow-y: auto;
-    /* dvh keeps the cap on the visible viewport rather than the one behind a
-     * hidden browser toolbar. */
-    max-height: 85vh;
-    max-height: 85dvh;
-    padding: var(--spacing-md);
-    padding-bottom: max(var(--spacing-md), env(safe-area-inset-bottom, 0px));
-    background: var(--surface-card);
-    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-    box-shadow: var(--shadow-lg);
-    transform: translateY(100%);
-    transition: transform 0.25s ease;
-    z-index: 1001;
-  }
-
-  .carousel-studio__builder.is-details-open .carousel-studio__props {
-    transform: translateY(0);
-  }
-
-  .carousel-studio__props-close {
-    display: flex;
-    align-self: flex-end;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .carousel-studio__props-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: var(--color-black-alpha-50, rgba(0, 0, 0, 0.5));
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s ease;
-    z-index: 1000;
-  }
-
-  .carousel-studio__builder.is-details-open .carousel-studio__props-backdrop {
-    opacity: 1;
-    pointer-events: auto;
+  /* Collapsed, the card is its header and nothing else — shrink the column to
+   * that instead of holding the full 20rem open under it, so `.main` (and the
+   * stage centred inside it, `.carousel-studio__stage-col`) actually gets the
+   * freed width rather than sitting next to a mostly empty rail. */
+  .carousel-studio__builder .carousel-studio__props.collapsed {
+    width: auto;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 

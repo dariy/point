@@ -530,9 +530,6 @@ export default class CarouselStudioPage extends Component {
     "toggle-props"() {
       this._toggleProps();
     },
-    "close-props"() {
-      this._toggleProps(false);
-    },
     "stage-zoom"(_e, el) {
       this._zoomStage(el.dataset.zoom);
     },
@@ -2046,17 +2043,15 @@ export default class CarouselStudioPage extends Component {
   // a stage control must not cause). Every render re-emits them from the two
   // fields below, so a rebuild from anywhere else keeps them.
 
-  /** Open, close, or flip the properties panel, and remember the choice. */
+  /** Expand, collapse, or flip the properties card's body, and remember the
+   *  choice — the same `.collapsed` toggle the plugins page's group cards use. */
   _toggleProps(force) {
     const open = typeof force === "boolean" ? force : !this.state.propsOpen;
     this.state.propsOpen = open;
-    this.$(".carousel-studio__builder")?.classList.toggle("is-details-open", open);
-    const toggle = this.$("#carousel-props-toggle");
-    if (toggle) {
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Hide properties" : "Properties";
-    }
-    this.$("#carousel-props")?.setAttribute("aria-hidden", String(!open));
+    const card = this.$("#carousel-props");
+    card?.classList.toggle("collapsed", !open);
+    card?.querySelector(".carousel-studio__props-header")
+      ?.setAttribute("aria-expanded", String(open));
     try {
       localStorage.setItem(PROPS_PREF_KEY, open ? "1" : "0");
     } catch {
@@ -2455,6 +2450,17 @@ export default class CarouselStudioPage extends Component {
       ev.preventDefault();
       const from = Number(handle.dataset.slide);
       this._moveSlide(from, from + (ev.key === "ArrowLeft" ? -1 : 1), { refocus: true });
+    });
+
+    // The properties card's header is a div (`role="button"`, for the chevron
+    // and title to share one clickable row), so Enter/Space need wiring by
+    // hand the way a real `<button>` would not — same as the plugins page's
+    // group headers.
+    this.on(this.$(".carousel-studio__props-header"), "keydown", (e) => {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      this._toggleProps();
     });
 
     this._wireBgFields();
