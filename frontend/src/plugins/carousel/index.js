@@ -63,7 +63,14 @@ import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
 import { parseNodes } from "../../utils/postNodes.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
-import { canvasSize, deckSlideRects, fitReport, padRects, safeAreaRect } from "./geometry.js";
+import {
+  canvasSize,
+  deckSlideRects,
+  fitReport,
+  padRects,
+  safeAreaRect,
+  spanLayerCoverage,
+} from "./geometry.js";
 import {
   addLayer,
   addSlide,
@@ -445,6 +452,12 @@ export default class CarouselStudioPage extends Component {
       safeArea: (scope) => this._safeAreaFor(scope),
       paintLayer: (i, j, box, guides) => this._paintProvisionalLayer(i, j, box, guides),
       commitLayer: (i, j, box) => this._commitLayerBox(i, j, box),
+      // Click-to-select on the stage: every layer painted on column `i`,
+      // topmost first, for a press that misses the active layer to hit-test
+      // against; and the selector it calls on a hit. Both converge on the
+      // same `selectedLayer`/`layerScope` the side-panel list already writes.
+      layersOnColumn: (i) => this._layersOnColumn(i),
+      selectLayer: (i, j, scope) => this._selectLayerOnStage(i, j, scope),
     });
     // Panorama direct manipulation, over the stage itself — the band is one
     // projection across the whole strip, so the whole strip is the surface.
@@ -1261,6 +1274,63 @@ export default class CarouselStudioPage extends Component {
     const s = scope === "span" ? "span" : "slide";
     if (this.state.layerScope === s && this.state.selectedLayer === j) return;
     this.setState({ layerScope: s, selectedLayer: j });
+  }
+
+  /**
+   * Every layer painted on column `i`, topmost (last-painted) first — the
+   * slide's own `layers`, reversed, then any `spanLayers` whose coverage
+   * reaches this column, also reversed. Matches the DOM stacking order
+   * `layerNodes`/`spanNodes` (`studio/panels.js`) paint in: a span layer
+   * paints before the slide's own layers there, so it sits underneath.
+   *
+   * Read by `studio/gestures.js`'s click-to-select, for a press that misses
+   * the active layer (or there is none) to hit-test against.
+   *
+   * @param {number} i
+   * @returns {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>}
+   */
+  _layersOnColumn(i) {
+    const { doc } = this.state;
+    const slideLayers = doc.slides[i]?.layers || [];
+    const spanLayers = doc.spanLayers || [];
+    const n = doc.slides.length;
+    /** @type {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>} */
+    const out = [];
+    for (let j = slideLayers.length - 1; j >= 0; j--) {
+      out.push({ scope: "slide", j, box: slideLayers[j].box });
+    }
+    for (let j = spanLayers.length - 1; j >= 0; j--) {
+      if (spanLayerCoverage(spanLayers[j], n, doc.aspect).includes(i)) {
+        out.push({ scope: "span", j, box: spanLayers[j].box });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Select a layer hit directly on the stage. Unlike the side-panel list
+   * (`_selectLayer`), a stage press can land on a slide other than the one
+   * currently selected, so this carries the slide switch in the same patch
+   * — two `setState` calls would flash the panel with the old slide's list
+   * against the new index. `i` is ignored for a span layer, whose selection
+   * is not slide-bound.
+   *
+   * @param {number} i
+   * @param {number} j
+   * @param {"slide"|"span"} scope
+   */
+  _selectLayerOnStage(i, j, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    if (
+      this.state.layerScope === s &&
+      this.state.selectedLayer === j &&
+      (s === "span" || this.state.selected === i)
+    ) {
+      return;
+    }
+    const patch = { layerScope: s, selectedLayer: j };
+    if (s === "slide" && this.state.selected !== i) patch.selected = i;
+    this.setState(patch);
   }
 
   /**

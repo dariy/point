@@ -198,6 +198,26 @@ export function hitLayer(rect, box, cx, cy) {
   return { mode: "move", h: 0, v: 0 };
 }
 
+/**
+ * Whether `(cx, cy)` lands inside `box` (fractions of `rect`) — the
+ * containment half of {@link hitLayer}, with no handle tolerance. A layer
+ * that is not the current selection shows no resize handles, so the stage's
+ * click-to-select only needs to know the press is inside it, not which edge
+ * it's near.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number}} box  0..1 of the canvas
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {boolean}
+ */
+export function layerContains(rect, box, cx, cy) {
+  if (!rect.width || !rect.height) return false;
+  const fx = (cx - rect.left) / rect.width;
+  const fy = (cy - rect.top) / rect.height;
+  return fx >= box.x && fx <= box.x + box.w && fy >= box.y && fy <= box.y + box.h;
+}
+
 /** Clamp a box to the canvas the way `normalizeBox` (`document.js`) does — a
  *  preview-smoothness clamp only; the commit re-clamps through the mutator. */
 function clampBox(box) {
@@ -408,6 +428,18 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}) => void} [commitLayer]
  *   Write a finished box into the document, through the layer mutator (which
  *   re-clamps) — the layer twin of `commit`.
+ * @property {(i: number) => Array<{scope:'slide'|'span', j: number, box:{x:number,y:number,w:number,h:number}}>} [layersOnColumn]
+ *   Every layer painted on column `i`, topmost (last-painted) first — the
+ *   column's own slide layers, then any span layer whose coverage reaches it
+ *   — matching the DOM stacking order `layerNodes`/`spanNodes`
+ *   (`studio/panels.js`) paint in. Read on a press that misses the active
+ *   layer, to hit-test the stage's click-to-select against every *other*
+ *   layer there.
+ * @property {(i: number, j: number, scope: 'slide'|'span') => void} [selectLayer]
+ *   Select layer `j` of `scope` directly from the stage — `i` is the pressed
+ *   column, for `scope: "slide"` only (a span layer's selection isn't
+ *   slide-bound). The click-to-select twin of `select`; both converge on the
+ *   same `selectedLayer`/`layerScope` the side-panel list already writes.
  */
 
 /**
@@ -565,6 +597,24 @@ export function createDeckGestures(host) {
           moved: false,
         };
         e.preventDefault?.();
+        return;
+      }
+
+      // The press missed the active layer (or nothing is active): it may
+      // still land on some *other* layer painted on this column — the
+      // stage's click-to-select. Topmost first, and a plain containment
+      // test — an unselected layer shows no handles to grab.
+      const picked = (host.layersOnColumn?.(i) || []).find((cand) =>
+        layerContains(
+          cand.scope === "span" ? deckRect(frameRect(frame), i, count) : frameRect(frame),
+          cand.box,
+          e.clientX,
+          e.clientY,
+        ),
+      );
+      if (picked) {
+        e.preventDefault?.();
+        host.selectLayer?.(i, picked.j, picked.scope);
         return;
       }
     }

@@ -2100,6 +2100,67 @@ describe('CarouselStudioPage', () => {
             'eight resize handles',
           );
         });
+
+        // ── Click-to-select (S7.3) ────────────────────────────────────────
+        describe('click-to-select on the stage', () => {
+          test('clicking directly on an unselected layer selects it — chrome appears', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            // Deselect, the way an outside click or Escape would leave it.
+            page.setState({ selectedLayer: null });
+            await settle();
+            assert.ok(
+              !stageCol(el, 0).querySelector('.carousel-studio__chrome'),
+              'no chrome while nothing is selected',
+            );
+
+            const frame = withFrameBox(stageCol(el, 0));
+            // Box centre (0.5, 0.5) → (100, 125)px on the 200×250 frame.
+            press(frame, 100, 125, []);
+            await settle();
+
+            assert.equal(page.state.selectedLayer, 0);
+            assert.equal(page.state.layerScope, 'slide');
+            assert.ok(
+              stageCol(el, 0).querySelector('.carousel-studio__chrome'),
+              'chrome appears once selected',
+            );
+          });
+
+          test('clicking a layer on a different slide switches both the slide and the layer selection', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            assert.equal(page.state.selected, 0, 'slide 0 is selected from adding the layer');
+
+            // Give slide 1 its own layer directly on the document, rather than
+            // through the add-layer button, which would land on slide 0.
+            page.setState({
+              doc: {
+                ...page.state.doc,
+                slides: page.state.doc.slides.map((s, i) =>
+                  i === 1
+                    ? { ...s, layers: [{ type: 'rect', box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 } }] }
+                    : s,
+                ),
+              },
+            });
+            await settle();
+
+            const frame1 = withFrameBox(stageCol(el, 1), 200, 250, 200);
+            press(frame1, 300, 125, []);
+            await settle();
+
+            assert.equal(page.state.selected, 1, 'the slide selection followed the click');
+            assert.equal(page.state.selectedLayer, 0);
+            assert.equal(page.state.layerScope, 'slide');
+            assert.ok(
+              stageCol(el, 1).querySelector('.carousel-studio__chrome'),
+              'chrome now shows on slide 1',
+            );
+            assert.ok(
+              !stageCol(el, 0).querySelector('.carousel-studio__chrome'),
+              'and not on slide 0 any more',
+            );
+          });
+        });
       });
 
       // ── Span layers (S3.8) ───────────────────────────────────────────────

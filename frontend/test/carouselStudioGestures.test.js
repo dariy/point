@@ -29,6 +29,7 @@ import {
   dragAnchor,
   dragBox,
   hitLayer,
+  layerContains,
   panScale,
   pointerCentroid,
   sameAnchor,
@@ -70,7 +71,7 @@ function fakeFrame(i, box = { width: 500, height: 500 }) {
 /** A host stand-in that records every callback the module makes. `layer`, when
  *  given, is `{ i, j, box }` (plus a `scope` for a span layer) and becomes the
  *  value `activeLayer()` returns. */
-function fakeHost(slides, layer = null) {
+function fakeHost(slides, layer = null, spanLayers = []) {
   const calls = {
     paint: [],
     commit: [],
@@ -79,6 +80,7 @@ function fakeHost(slides, layer = null) {
     paintLayer: [],
     commitLayer: [],
     scrollPaneBy: [],
+    selectLayer: [],
   };
   return {
     calls,
@@ -101,6 +103,23 @@ function fakeHost(slides, layer = null) {
         : { x: 0.05, y: 0.13, w: 0.9, h: 0.74 },
     paintLayer: (i, j, box, guides) => calls.paintLayer.push({ i, j, box, guides }),
     commitLayer: (i, j, box) => calls.commitLayer.push({ i, j, box }),
+    /** Topmost first, the same order `_layersOnColumn` (`carousel/index.js`)
+     *  resolves: the column's own slide layers, reversed, then every span
+     *  layer (the test supplies these already filtered to the columns they
+     *  reach, since `spanLayerCoverage` is the page's concern, not this
+     *  stand-in's). */
+    layersOnColumn: (i) => {
+      const slideLayers = slides[i]?.layers || [];
+      const out = [];
+      for (let j = slideLayers.length - 1; j >= 0; j--) {
+        out.push({ scope: 'slide', j, box: slideLayers[j].box });
+      }
+      for (let j = spanLayers.length - 1; j >= 0; j--) {
+        out.push({ scope: 'span', j, box: spanLayers[j].box });
+      }
+      return out;
+    },
+    selectLayer: (i, j, scope) => calls.selectLayer.push({ i, j, scope }),
   };
 }
 
@@ -518,6 +537,28 @@ describe('carousel studio gestures', () => {
     });
   });
 
+  describe('layerContains', () => {
+    const box = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    const rect = { left: 0, top: 0, width: 200, height: 200 };
+
+    test('a press inside the box hits, with no handle tolerance', () => {
+      assert.strictEqual(layerContains(rect, box, 100, 100), true);
+    });
+
+    test('a press right on the edge hits — the box is inclusive', () => {
+      assert.strictEqual(layerContains(rect, box, 50, 100), true);
+    });
+
+    test('a press just outside the edge misses, unlike hitLayer\'s handle tolerance', () => {
+      assert.strictEqual(layerContains(rect, box, 45, 100), false);
+      assert.notStrictEqual(hitLayer(rect, box, 45, 100), null, 'hitLayer still grabs the handle there');
+    });
+
+    test('an unmeasured frame misses rather than dividing by zero', () => {
+      assert.strictEqual(layerContains({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), false);
+    });
+  });
+
   describe('dragBox', () => {
     const start = { x: 0.2, y: 0.2, w: 0.4, h: 0.4 };
 
@@ -686,15 +727,17 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
 
-    test('with no layer selected a press inside the old box pans the crop', () => {
+    test('with no layer selected a press inside a layer\'s box selects it, not the crop — see "click-to-select"', () => {
       const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
       const gestures = createDeckGestures(host);
       const frame = fakeFrame(0, { width: 200, height: 200 });
       gestures.attach([frame]);
+      // Even with the crop-pan modifier held: layer hit beats slide/crop hit.
       frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100, ctrlKey: true });
       frame.emit('pointermove', { pointerId: 1, clientX: 150, clientY: 100, ctrlKey: true });
-      assert.ok(host.calls.paint.length >= 1);
-      assert.strictEqual(host.calls.paintLayer.length, 0);
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'slide' }]);
+      assert.strictEqual(host.calls.paint.length, 0, 'the crop did not pan');
+      assert.strictEqual(host.calls.paintLayer.length, 0, 'no drag was started for it');
       gestures.destroy();
     });
 
@@ -830,6 +873,110 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
   });
+
+  /**
+   * Click-to-select (S7.3). A press with no active layer, or one that misses
+   * the active layer and its handles, falls through to `layersOnColumn` —
+   * every other layer painted on the pressed column — before giving up to the
+   * crop/slide-select path.
+   */
+  describe('click-to-select on the stage', () => {
+    const LAYER_BOX = { x: 0.3, y: 0.3, w: 0.4, h: 0.4 };
+
+    test('a press on an unselected layer selects it, and starts no drag', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'slide' }]);
+      assert.strictEqual(host.calls.select.length, 0, 'did not fall through to slide-select');
+      assert.strictEqual(host.calls.paint.length, 0, 'did not fall through to a crop pan');
+
+      // No drag was started: a move goes nowhere, and a release commits nothing.
+      frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 140, clientY: 100 });
+      assert.strictEqual(host.calls.commitLayer.length, 0);
+      assert.strictEqual(host.calls.paintLayer.length, 0);
+      gestures.destroy();
+    });
+
+    test('a press on a different slide\'s layer selects that column\'s own list, not the active one\'s', () => {
+      const layerA = { box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } };
+      const layerB = { box: LAYER_BOX };
+      const host = fakeHost(
+        [
+          { crop: FULL, fit: 'cover', layers: [layerA] },
+          { crop: FULL, fit: 'cover', layers: [layerB] },
+        ],
+        { i: 0, j: 0, box: layerA.box },
+      );
+      const gestures = createDeckGestures(host);
+      const frames = [0, 1].map((i) => fakeFrame(i, { width: 200, height: 200, left: i * 200 }));
+      gestures.attach(frames);
+
+      // Column 1's own layer, at a press the active (column 0) layer cannot reach.
+      frames[1].emit('pointerdown', { pointerId: 1, button: 0, clientX: 300, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 1, j: 0, scope: 'slide' }]);
+      gestures.destroy();
+    });
+
+    test('a press on a span layer selects it with scope "span"', () => {
+      const spanLayer = { box: { x: 0.4, y: 0.3, w: 0.2, h: 0.4 } };
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [spanLayer]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'span' }]);
+      gestures.destroy();
+    });
+
+    test('a slide layer wins over an overlapping span layer — topmost first', () => {
+      const spanLayer = { box: { x: 0, y: 0, w: 1, h: 1 } };
+      const host = fakeHost(
+        [{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }],
+        null,
+        [spanLayer],
+      );
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'slide' }]);
+      gestures.destroy();
+    });
+
+    test('a press that lands on no layer keeps today\'s behavior: pan the crop', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 10, ctrlKey: true });
+      assert.strictEqual(host.calls.selectLayer.length, 0);
+      assert.ok(host.calls.paint.length >= 1, 'the crop repainted');
+      gestures.destroy();
+    });
+
+    test('a press that lands on no layer, and does not move, selects the slide', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10, ctrlKey: true });
+      frame.emit('pointerup', { pointerId: 1, clientX: 10, clientY: 10, ctrlKey: true });
+      assert.strictEqual(host.calls.selectLayer.length, 0);
+      assert.deepStrictEqual(host.calls.select, [0]);
+      gestures.destroy();
+    });
+  });
+
   // ── Panorama: the vertical anchor ────────────────────────────────────────
 
   describe('anchorSlackPx', () => {
