@@ -215,7 +215,7 @@ describe('importPptx — images', () => {
     assert.match(image.source, /^data:image\/gif;base64,/);
     assert.strictEqual(image.fit, 'contain');
     assert.strictEqual(image.opacity, 0.6);
-    assert.deepStrictEqual(image.box, { x: 0.8, y: 0.8, w: 0.1, h: 0.1 });
+    assert.deepStrictEqual(image.box, { x: 0.8, y: 0.8, w: 0.1, h: 0.1, rotate: 0 });
   });
 
   test('assets are counted by what the envelope costs', async () => {

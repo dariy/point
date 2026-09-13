@@ -1,20 +1,39 @@
 /**
  * Carousel Studio — direct manipulation on the stage.
  *
- * Drag to pan, pinch or wheel to zoom, arrow keys to nudge: one module over one
- * small host surface — the stage's own deck columns — so the page keeps owning
- * the document and this keeps owning the pointer bookkeeping. It mirrors `attachWindowFileDrop`'s shape
- * (bind, hand back the release) with one difference — the controller outlives a
- * render, because a wheel gesture's debounced commit has to.
+ * Ctrl/Shift-drag to pan, pinch or Ctrl/Shift-wheel to zoom, arrow keys to
+ * nudge: one module over one small host surface — the stage's own deck
+ * columns — so the page keeps owning the document and this keeps owning the
+ * pointer bookkeeping. It mirrors `attachWindowFileDrop`'s shape (bind, hand
+ * back the release) with one difference — the controller outlives a render,
+ * because a wheel gesture's debounced commit has to.
  *
- * The same machine drives two fields. With no layer selected a column's pointer
- * pans and zooms the slide's `crop` (S2). With a layer selected and the press
- * landing on that layer or one of its eight resize handles, the identical
- * provisional-write-then-commit cycle moves and resizes the layer's `box`
- * instead — through `host.commitLayer` rather than `host.commit`, snapping to
- * the safe area and canvas guides on the way. A press that misses the selected
+ * A plain drag or wheel is the strip's own horizontal scroll, not the crop —
+ * `.carousel-studio__stage-slide` fills the whole tile, so with no modifier
+ * gesture at all a deck column would leave nothing else to scroll the strip
+ * with, on a touchscreen most of all. Ctrl or Shift held at the press (mouse
+ * or pen; a finger has neither, short of an attached keyboard) is what asks
+ * for the crop instead. Pinch never needs it: a second finger is never a
+ * scroll and is always the zoom, whatever the first finger was doing.
+ *
+ * The same machine drives two fields. With no layer selected a column's
+ * Ctrl/Shift-pointer pans and zooms the slide's `crop` (S2); a plain pointer
+ * pans the strip. With a layer selected and the press landing on that layer
+ * or one of its eight resize handles, the identical provisional-write-then-
+ * commit cycle moves and resizes the layer's `box` instead — through
+ * `host.commitLayer` rather than `host.commit`, snapping to the safe area and
+ * canvas guides on the way, and unconditionally: a selected layer's own
+ * handles are a deliberate, visually scoped target, not the tile's ambient
+ * default, so they carry no modifier gate. A press that misses the selected
  * layer still falls through to the crop gesture, so pan/zoom is unchanged
  * wherever a layer is not in the way.
+ *
+ * A ninth handle, above the box's own top edge and not one of the eight
+ * `hitLayer` derives, drives `box.rotate` the same way: press, provisional
+ * paint, one commit on release. It carries no snap — an angle has no safe-area
+ * or seam to land on — but does carry its own modifier, Shift, to round to
+ * 15° increments; Shift is free here because it only gates the wheel zoom
+ * (S2.1), never a pointer drag.
  *
  * It drives that field in either of two coordinate spaces, because a layer's
  * `box` is normalized to whatever it belongs to. A slide layer's is fractions
@@ -29,12 +48,14 @@
  *   gestures.attach(frames);                     // after every render
  *   gestures.destroy();                          // at unmount
  *
- * A touch drag is not claimed at pointerdown. The column is `touch-action:
- * pan-y`, so a vertical drag belongs to the page — this waits for the movement
- * to declare a direction (`gestureDirection`, the same helper and the same
- * 8px threshold the tags manager separates swipe from scroll with) and lets go
- * of a vertical one. A mouse or pen has no such ambiguity and still claims the
- * press immediately, as does a second finger: a pinch is never a scroll.
+ * A touch drag is not claimed at pointerdown either way. Without the modifier
+ * the column is `touch-action: pan-x pan-y`, so the finger is left to the
+ * browser's own panning of the strip (and, on the other axis, the page) — no
+ * JS gesture is ever started for it, only a slop-threshold watch so a release
+ * that turned out to be a scroll still doesn't select the tile it ended over
+ * (`drag = null` once past `DRAG_SLOP_PX`, same as a `null`-returning abandon
+ * anywhere else in this module). A second finger arriving before that happens
+ * still claims the pinch, exactly as it does with the modifier held.
  *
  * Nothing here writes to the DOM by itself and nothing here holds a document:
  * a live gesture paints through `host.paint` with a provisional slide (no state
@@ -70,6 +91,14 @@ const DRAG_SLOP_PX = 3;
 /** A press within this many CSS px of a selected layer's edge grabs the resize
  *  handle there rather than moving the layer. */
 const HANDLE_GRAB_PX = 12;
+/** How far above the box's own top edge the rotate handle sits, in CSS px —
+ *  matches its `top` in carousel.css. Clear of `HANDLE_GRAB_PX` so the two
+ *  handles' grab zones never overlap. */
+const ROTATE_HANDLE_OFFSET_PX = 24;
+/** A press within this many CSS px of the rotate handle grabs it. */
+const ROTATE_HANDLE_HIT_PX = 8;
+/** One Shift-held rotate drag snaps to this many degrees. */
+const ROTATE_SNAP_DEG = 15;
 /** A dragged layer edge within this many CSS px of a guide clicks onto it. */
 const SNAP_PX = 7;
 /** The smallest a layer box may be on either axis — one pixel of the 1080px
@@ -184,6 +213,67 @@ export function hitLayer(rect, box, cx, cy) {
   return { mode: "move", h: 0, v: 0 };
 }
 
+/**
+ * Whether `(cx, cy)` lands inside `box` (fractions of `rect`) — the
+ * containment half of {@link hitLayer}, with no handle tolerance. A layer
+ * that is not the current selection shows no resize handles, so the stage's
+ * click-to-select only needs to know the press is inside it, not which edge
+ * it's near.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number}} box  0..1 of the canvas
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {boolean}
+ */
+export function layerContains(rect, box, cx, cy) {
+  if (!rect.width || !rect.height) return false;
+  const fx = (cx - rect.left) / rect.width;
+  const fy = (cy - rect.top) / rect.height;
+  return fx >= box.x && fx <= box.x + box.w && fy >= box.y && fy <= box.y + box.h;
+}
+
+/** The rotate handle's centre in client coordinates: `ROTATE_HANDLE_OFFSET_PX`
+ *  above the box's own unrotated top-centre, then rotated about the box
+ *  centre by `box.rotate` — the same transform the CSS handle rides on its
+ *  rotated parent (`.carousel-studio__chrome-box`, `carousel.css`), worked out
+ *  by hand because this module has no DOM to measure it from. The rotation
+ *  runs in client pixels, not `rect`'s fractions, so it stays a true angle
+ *  whatever the frame's aspect ratio is.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box  0..1 of rect
+ */
+export function rotateHandlePoint(rect, box) {
+  const cx = rect.left + (box.x + box.w / 2) * rect.width;
+  const cy = rect.top + (box.y + box.h / 2) * rect.height;
+  const hx = cx;
+  const hy = rect.top + box.y * rect.height - ROTATE_HANDLE_OFFSET_PX;
+  const rad = ((box.rotate || 0) * Math.PI) / 180;
+  const dx = hx - cx;
+  const dy = hy - cy;
+  return {
+    x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+    y: cy + dx * Math.sin(rad) + dy * Math.cos(rad),
+  };
+}
+
+/**
+ * Whether `(cx, cy)` lands within `ROTATE_HANDLE_HIT_PX` of the rotate
+ * handle. Checked before {@link hitLayer} — the handle sits well clear of the
+ * box's own edges, so the two never contend for the same press.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box
+ * @param {number} cx
+ * @param {number} cy
+ */
+export function hitRotateHandle(rect, box, cx, cy) {
+  if (!rect.width || !rect.height) return false;
+  const p = rotateHandlePoint(rect, box);
+  return Math.hypot(cx - p.x, cy - p.y) <= ROTATE_HANDLE_HIT_PX;
+}
+
 /** Clamp a box to the canvas the way `normalizeBox` (`document.js`) does — a
  *  preview-smoothness clamp only; the commit re-clamps through the mutator. */
 function clampBox(box) {
@@ -199,7 +289,11 @@ function clampBox(box) {
 
 /** The box a move or resize of `startBox` by `(dfx, dfy)` canvas fractions
  *  produces, before snapping and clamping. A resize keeps the anchored edge put
- *  and never crosses it — a width dragged past zero pins to `MIN_BOX`. */
+ *  and never crosses it — a width dragged past zero pins to `MIN_BOX`. Spreads
+ *  `startBox` in both branches (rather than rebuilding `{x,y,w,h}` by hand) so
+ *  a rotated layer's `rotate` rides through a move or resize untouched — drop
+ *  it and the provisional paint would flash the layer back to unrotated for
+ *  the length of the drag. */
 export function dragBox(startBox, mode, anchor, dfx, dfy) {
   if (mode === "move") {
     return { ...startBox, x: startBox.x + dfx, y: startBox.y + dfy };
@@ -217,7 +311,7 @@ export function dragBox(startBox, mode, anchor, dfx, dfy) {
   } else if (anchor.v > 0) {
     h = Math.max(MIN_BOX, startBox.h + dfy);
   }
-  return { x, y, w, h };
+  return { ...startBox, x, y, w, h };
 }
 
 /**
@@ -370,7 +464,13 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  * @property {(i: number) => void} select  Make slide `i` the selection.
  * @property {(i: number) => void} refocus  Slide `i` is about to lose focus to
  *   a rebuild; put it back afterwards.
- * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number},
+ * @property {(px: number) => void} scrollPaneBy  Scroll the strip sideways by
+ *   `px` CSS pixels (positive moves it the way a positive `deltaX`/`deltaY`
+ *   would). The un-modified default of a drag or a wheel over a column —
+ *   `touch-action` already gives a finger this for free, so only the mouse
+ *   drag and the wheel path call it. The host owns the scroller; this module
+ *   never touches it directly, the same as every other DOM write.
+ * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number},
  *   scope?: 'slide'|'span'}|null} [activeLayer]
  *   The selected layer — the slide index to commit it to, its index in that
  *   slide's list, its current box, and the space that box is fractions of
@@ -382,12 +482,35 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   The safe-area rect of `scope`'s space, in that space's fractions, for
  *   snapping. Null disables safe-area snap (centre, edge and seam guides still
  *   apply).
- * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}, guides: {v:number[],h:number[]}) => void} [paintLayer]
+ * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number}, guides: {v:number[],h:number[]}) => void} [paintLayer]
  *   Paint layer `j` of slide `i` at a provisional box, plus the snap guides that
- *   engaged — the layer twin of `paint`.
- * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}) => void} [commitLayer]
+ *   engaged — the layer twin of `paint`. A rotate drag calls this with empty
+ *   guides — an angle has nothing in `lines` to snap to.
+ * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number}) => void} [commitLayer]
  *   Write a finished box into the document, through the layer mutator (which
  *   re-clamps) — the layer twin of `commit`.
+ * @property {(i: number) => Array<{scope:'slide'|'span', j: number, box:{x:number,y:number,w:number,h:number}}>} [layersOnColumn]
+ *   Every layer painted on column `i`, topmost (last-painted) first — the
+ *   column's own slide layers, then any span layer whose coverage reaches it
+ *   — matching the DOM stacking order `layerNodes`/`spanNodes`
+ *   (`studio/panels.js`) paint in. Read on a press that misses the active
+ *   layer, to hit-test the stage's click-to-select against every *other*
+ *   layer there.
+ * @property {(i: number, j: number, scope: 'slide'|'span') => void} [selectLayer]
+ *   Select layer `j` of `scope` directly from the stage — `i` is the pressed
+ *   column, for `scope: "slide"` only (a span layer's selection isn't
+ *   slide-bound). The click-to-select twin of `select`; both converge on the
+ *   same `selectedLayer`/`layerScope` the side-panel list already writes.
+ * @property {(i: number, j: number, scope: 'slide'|'span') => void} [editLayer]
+ *   Enter on-canvas editing for the already-selected layer `j` of `scope` —
+ *   `i` is the column the double-click landed on. A no-op where the layer
+ *   isn't a `text` layer; that check needs the layer's own `type`, which this
+ *   module never reads, so it is the host's to make.
+ * @property {() => boolean} [isEditing]
+ *   Whether an on-canvas text edit is in progress anywhere on the stage. True
+ *   for the whole gesture surface, not just the column being edited: every
+ *   `onPointerDown`/`onDoubleClick` bails out while it holds, so the only way
+ *   out of an edit is the blur (or Escape) that ends it.
  */
 
 /**
@@ -404,12 +527,15 @@ export function createDeckGestures(host) {
    *  is what turns one column's rect into the whole deck's. */
   let count = 0;
   /** The in-flight gesture, tagged by `kind`: a `"crop"` pan/pinch
-   *  ({ i, frame, pointers, crop, startCrop, start, moved }) or a `"layer"`
-   *  move/resize ({ i, slide, j, frame, mode, anchor, space, startX, startY,
-   *  startBox, box, moved }) — where `i` is the column holding the pointer and
-   *  `slide` the index the box commits to, the two being the same thing for
-   *  everything but a span layer. One at a time — a press mid-gesture is
-   *  ignored. */
+   *  ({ i, frame, pointers, crop, startCrop, start, moved, undecided }), a
+   *  `"layer"` move/resize ({ i, slide, j, frame, mode, anchor, space,
+   *  startX, startY, startBox, box, moved }), a `"rotate"` drag ({ i, slide,
+   *  j, frame, centerX, centerY, startX, startY, startAngle, startRotate,
+   *  startBox, box, moved }), or a `"pane"` scroll-by-hand
+   *  ({ i, frame, startX, lastX, moved }) — where `i` is
+   *  the column holding the pointer and `slide` the index the box commits to,
+   *  the two being the same thing for everything but a span layer. One at a
+   *  time — a press mid-gesture is ignored. */
   let drag = null;
   /** A crop written to the DOM but not yet committed to the document (a wheel
    *  gesture, which has no release event to commit on). */
@@ -486,6 +612,36 @@ export function createDeckGestures(host) {
     host.commitLayer?.(ended.slide, ended.j, ended.box);
   };
 
+  /** The angle from the box's own (fixed) centre to `(x, y)`, in degrees —
+   *  `atan2` in client-pixel space, so it reads the true angle whatever the
+   *  frame's aspect ratio is. */
+  const pointerAngle = (drag, x, y) =>
+    (Math.atan2(y - drag.centerY, x - drag.centerX) * 180) / Math.PI;
+
+  const onRotateMove = (e) => {
+    if (!drag || drag.kind !== "rotate") return;
+    if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
+    // Wrapped into (-180, 180] so a press near the ±180° seam doesn't jump.
+    const delta = (((pointerAngle(drag, e.clientX, e.clientY) - drag.startAngle + 180) % 360) + 360) % 360 - 180;
+    let rotate = drag.startRotate + delta;
+    if (e.shiftKey) rotate = Math.round(rotate / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG;
+    drag.box = { ...drag.startBox, rotate };
+    host.paintLayer?.(drag.slide, drag.j, drag.box, { v: [], h: [] });
+    e.preventDefault?.();
+  };
+
+  const onRotateUp = (e, frame) => {
+    const ended = drag;
+    drag = null;
+    frame.releasePointerCapture?.(e.pointerId);
+    frame.classList.remove("is-dragging");
+    if (!ended.moved) {
+      host.select(ended.i);
+      return;
+    }
+    host.commitLayer?.(ended.slide, ended.j, ended.box);
+  };
+
   /** Take the pointer for the crop gesture: capture it, dress the frame, and
    *  stop the browser doing anything else with the event. */
   const claimCrop = (e, frame) => {
@@ -494,8 +650,28 @@ export function createDeckGestures(host) {
     e.preventDefault?.();
   };
 
+  // A press or a key on the reorder handle nested in the column belongs to
+  // `attachPointerReorder` / the arrow-key reorder in `index.js`, not to this
+  // gesture — without the guard both would claim the same pointerdown or
+  // ArrowLeft/ArrowRight, since the handle's own listeners don't (and, being a
+  // capture-phase document listener for the pointer case, can't) stop the
+  // column's bubble-phase ones from also running.
+  const onHandle = (e) => Boolean(e.target?.closest?.(".carousel-studio__rail-handle"));
+
+  // Mid on-canvas edit, no press claims a gesture — one on the
+  // `contenteditable` block itself belongs to it (caret placement,
+  // selection, the works; `carousel.css` re-enables `pointer-events` there
+  // for exactly this, over an ancestor chain that is otherwise `pointer-
+  // events: none` so the stage can hit-test box coordinates instead of DOM
+  // targets everywhere else), and one anywhere else on the column is what a
+  // click outside a focused textarea always is — a plain blur, which commits
+  // the edit (`index.js`'s `_exitTextEdit`) — not a layer grab. Without this,
+  // the active layer's own move zone (`hitLayer`, below) would claim it and
+  // `preventDefault` the very focus change that blur depends on.
   const onPointerDown = (e, frame, i) => {
     if (e.button != null && e.button > 0) return;
+    if (onHandle(e)) return;
+    if (host.isEditing?.()) return;
     const slide = host.slideAt(i);
     if (!slide) return;
 
@@ -508,10 +684,32 @@ export function createDeckGestures(host) {
       const active = host.activeLayer?.();
       const span = active?.scope === "span";
       const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
-      const hit =
-        active && (span || active.i === i)
-          ? hitLayer(rect, active.box, e.clientX, e.clientY)
-          : null;
+      const grabbable = active && (span || active.i === i);
+      if (grabbable && hitRotateHandle(rect, active.box, e.clientX, e.clientY)) {
+        frame.setPointerCapture?.(e.pointerId);
+        frame.classList.add("is-dragging");
+        const cx = rect.left + (active.box.x + active.box.w / 2) * rect.width;
+        const cy = rect.top + (active.box.y + active.box.h / 2) * rect.height;
+        drag = {
+          kind: "rotate",
+          i,
+          slide: active.i,
+          j: active.j,
+          frame,
+          centerX: cx,
+          centerY: cy,
+          startX: e.clientX,
+          startY: e.clientY,
+          startAngle: (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI,
+          startRotate: active.box.rotate || 0,
+          startBox: { ...active.box },
+          box: { ...active.box },
+          moved: false,
+        };
+        e.preventDefault?.();
+        return;
+      }
+      const hit = grabbable ? hitLayer(rect, active.box, e.clientX, e.clientY) : null;
       if (hit) {
         frame.setPointerCapture?.(e.pointerId);
         frame.classList.add("is-dragging");
@@ -537,10 +735,39 @@ export function createDeckGestures(host) {
         e.preventDefault?.();
         return;
       }
+
+      // The press missed the active layer (or nothing is active): it may
+      // still land on some *other* layer painted on this column — the
+      // stage's click-to-select. Topmost first, and a plain containment
+      // test — an unselected layer shows no handles to grab.
+      const picked = (host.layersOnColumn?.(i) || []).find((cand) =>
+        layerContains(
+          cand.scope === "span" ? deckRect(frameRect(frame), i, count) : frameRect(frame),
+          cand.box,
+          e.clientX,
+          e.clientY,
+        ),
+      );
+      if (picked) {
+        e.preventDefault?.();
+        host.selectLayer?.(i, picked.j, picked.scope);
+        return;
+      }
     }
     if (drag && drag.kind === "layer") return;
 
     if (!drag || drag.i !== i) {
+      const modified = e.ctrlKey || e.shiftKey;
+      if (e.pointerType !== "touch" && !modified) {
+        // A mouse or pen with no modifier: drag the strip itself. A finger
+        // gets this for free from `touch-action`; a mouse has no native
+        // drag-to-scroll of its own, so this drives it through the host —
+        // which owns the scroller, the same way it owns every other write.
+        drag = { kind: "pane", i, frame, lastX: e.clientX, startX: e.clientX, moved: false };
+        frame.setPointerCapture?.(e.pointerId);
+        frame.classList.add("is-dragging");
+        return;
+      }
       drag = {
         kind: "crop",
         i,
@@ -548,9 +775,11 @@ export function createDeckGestures(host) {
         pointers: new Map(),
         crop: { ...slide.crop },
         moved: false,
-        // A single finger has not said yet whether it is panning the crop or
-        // scrolling the page; every other input has.
-        undecided: e.pointerType === "touch",
+        // A touch with no modifier has not said yet whether it is a pinch or
+        // just the finger `touch-action` is already panning the strip (and
+        // the page) with; every other case — Ctrl/Shift held, or a mouse/pen
+        // that already asked for the crop above — is decided immediately.
+        undecided: e.pointerType === "touch" && !modified,
       };
     }
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -565,26 +794,40 @@ export function createDeckGestures(host) {
   };
 
   const onPointerMove = (e, frame, i) => {
+    if (drag && drag.kind === "rotate") {
+      if (drag.i === i) onRotateMove(e);
+      return;
+    }
     if (drag && drag.kind === "layer") {
       if (drag.i === i) onLayerMove(e);
+      return;
+    }
+    if (drag && drag.kind === "pane") {
+      if (drag.i !== i) return;
+      const dx = e.clientX - drag.lastX;
+      drag.lastX = e.clientX;
+      if (Math.abs(e.clientX - drag.startX) > DRAG_SLOP_PX) drag.moved = true;
+      // The content follows the pointer, the same convention a touch's own
+      // native pan already uses: a leftward drag moves the strip left,
+      // revealing what is to its right.
+      host.scrollPaneBy(-dx);
+      e.preventDefault?.();
       return;
     }
     const slide = host.slideAt(i);
     if (!drag || drag.i !== i || !drag.pointers.has(e.pointerId) || !slide) return;
 
-    // The undecided single finger, resolved. Below the threshold the movement
-    // is still noise, so nothing moves and nothing is claimed; a vertical call
-    // drops the gesture entirely and the page scrolls with the finger it was
-    // always meant for.
+    // The undecided single finger: no modifier and not yet a pinch, so
+    // `touch-action` is already panning the strip (and, off-axis, the page)
+    // with it — nothing here claims the pointer or paints a crop. Only
+    // whether it passed the slop threshold matters, so a release that turns
+    // out to have been a scroll doesn't also select the tile (`onPointerUp`
+    // reads `!drag` the same way an abandoned gesture always has).
     if (drag.undecided) {
-      const dir = gestureDirection(e.clientX - drag.start.cx, e.clientY - drag.start.cy);
-      if (!dir) return;
-      if (dir === "vertical") {
-        drag = null;
-        return;
-      }
-      drag.undecided = false;
-      claimCrop(e, frame);
+      const dx = e.clientX - drag.start.cx;
+      const dy = e.clientY - drag.start.cy;
+      if (Math.abs(dx) > DRAG_SLOP_PX || Math.abs(dy) > DRAG_SLOP_PX) drag = null;
+      return;
     }
 
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -617,8 +860,24 @@ export function createDeckGestures(host) {
   };
 
   const onPointerUp = (e, frame, i) => {
+    if (drag && drag.kind === "rotate") {
+      if (drag.i === i) onRotateUp(e, frame);
+      return;
+    }
     if (drag && drag.kind === "layer") {
       if (drag.i === i) onLayerUp(e, frame);
+      return;
+    }
+    if (drag && drag.kind === "pane") {
+      if (drag.i !== i) return;
+      const ended = drag;
+      drag = null;
+      frame.releasePointerCapture?.(e.pointerId);
+      frame.classList.remove("is-dragging");
+      if (!ended.moved) {
+        // A click, not a drag: select the slide, same as a tap always has.
+        host.select(i);
+      }
       return;
     }
     if (!drag || drag.i !== i) return;
@@ -642,9 +901,40 @@ export function createDeckGestures(host) {
     commitCrop(i, ended.crop);
   };
 
+  /** Double-click-to-edit: only for the layer already selected (`.3`'s
+   *  single click is what gets it there), and only for a press that lands on
+   *  its own box — a double-click elsewhere on the column is the crop
+   *  gesture's own `onPointerDown`/`onPointerUp` pair, twice, and needs no
+   *  help from here. `host.editLayer` itself no-ops for anything but a
+   *  `text` layer, since the type is not this module's to know. */
+  const onDoubleClick = (e, frame, i) => {
+    if (host.isEditing?.()) return;
+    const active = host.activeLayer?.();
+    if (!active) return;
+    const span = active.scope === "span";
+    if (!span && active.i !== i) return;
+    const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
+    if (!layerContains(rect, active.box, e.clientX, e.clientY)) return;
+    e.preventDefault?.();
+    host.editLayer?.(i, active.j, active.scope || "slide");
+  };
+
   const onWheel = (e, i) => {
     const slide = host.slideAt(i);
-    if (!slide || !e.deltaY) return;
+    if (!slide) return;
+
+    if (!e.ctrlKey && !e.shiftKey) {
+      // Plain wheel: scroll the strip sideways — the axis a trackpad swipe or
+      // a plain drag already moves it on — not the crop. Ctrl+wheel is what a
+      // trackpad's own pinch-to-zoom already sends on every browser that
+      // supports it, which is what makes Ctrl (or Shift, for a plain wheel
+      // with no trackpad) the zoom's natural gate rather than an arbitrary one.
+      if (!e.deltaX && !e.deltaY) return;
+      e.preventDefault?.();
+      host.scrollPaneBy(e.deltaX || e.deltaY);
+      return;
+    }
+    if (!e.deltaY) return;
     e.preventDefault?.();
     // deltaMode: 0 pixels, 1 lines, 2 pages — normalize to pixels so a Firefox
     // notch and a Chrome notch zoom by the same amount.
@@ -662,6 +952,7 @@ export function createDeckGestures(host) {
   };
 
   const onFrameKey = (e, i) => {
+    if (onHandle(e)) return;
     const slide = host.slideAt(i);
     if (!slide) return;
 
@@ -759,6 +1050,7 @@ export function createDeckGestures(host) {
           ["pointermove", (e) => onPointerMove(e, frame, i), undefined],
           ["pointerup", (e) => onPointerUp(e, frame, i), undefined],
           ["pointercancel", (e) => onPointerUp(e, frame, i), undefined],
+          ["dblclick", (e) => onDoubleClick(e, frame, i), undefined],
           // Not passive: a zoom over the strip must not also scroll the page.
           ["wheel", (e) => onWheel(e, i), { passive: false }],
           ["keydown", (e) => onFrameKey(e, i), undefined],

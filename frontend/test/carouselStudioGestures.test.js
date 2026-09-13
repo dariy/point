@@ -29,8 +29,11 @@ import {
   dragAnchor,
   dragBox,
   hitLayer,
+  hitRotateHandle,
+  layerContains,
   panScale,
   pointerCentroid,
+  rotateHandlePoint,
   sameAnchor,
   sameCrop,
   snapBox,
@@ -70,7 +73,7 @@ function fakeFrame(i, box = { width: 500, height: 500 }) {
 /** A host stand-in that records every callback the module makes. `layer`, when
  *  given, is `{ i, j, box }` (plus a `scope` for a span layer) and becomes the
  *  value `activeLayer()` returns. */
-function fakeHost(slides, layer = null) {
+function fakeHost(slides, layer = null, spanLayers = []) {
   const calls = {
     paint: [],
     commit: [],
@@ -78,6 +81,8 @@ function fakeHost(slides, layer = null) {
     refocus: [],
     paintLayer: [],
     commitLayer: [],
+    scrollPaneBy: [],
+    selectLayer: [],
   };
   return {
     calls,
@@ -88,6 +93,7 @@ function fakeHost(slides, layer = null) {
     commit: (i, crop) => calls.commit.push({ i, crop }),
     select: (i) => calls.select.push(i),
     refocus: (i) => calls.refocus.push(i),
+    scrollPaneBy: (px) => calls.scrollPaneBy.push(px),
     activeLayer() {
       return this.active;
     },
@@ -99,6 +105,23 @@ function fakeHost(slides, layer = null) {
         : { x: 0.05, y: 0.13, w: 0.9, h: 0.74 },
     paintLayer: (i, j, box, guides) => calls.paintLayer.push({ i, j, box, guides }),
     commitLayer: (i, j, box) => calls.commitLayer.push({ i, j, box }),
+    /** Topmost first, the same order `_layersOnColumn` (`carousel/index.js`)
+     *  resolves: the column's own slide layers, reversed, then every span
+     *  layer (the test supplies these already filtered to the columns they
+     *  reach, since `spanLayerCoverage` is the page's concern, not this
+     *  stand-in's). */
+    layersOnColumn: (i) => {
+      const slideLayers = slides[i]?.layers || [];
+      const out = [];
+      for (let j = slideLayers.length - 1; j >= 0; j--) {
+        out.push({ scope: 'slide', j, box: slideLayers[j].box });
+      }
+      for (let j = spanLayers.length - 1; j >= 0; j--) {
+        out.push({ scope: 'span', j, box: spanLayers[j].box });
+      }
+      return out;
+    },
+    selectLayer: (i, j, scope) => calls.selectLayer.push({ i, j, scope }),
   };
 }
 
@@ -220,14 +243,15 @@ describe('carousel studio gestures', () => {
 
     test('a drag paints while it moves and commits once when it ends', () => {
       // Start away from the edges, or the clamp pins the crop and the commit is
-      // skipped by design (covered below).
+      // skipped by design (covered below). Ctrl is what asks for the crop
+      // gesture rather than a plain pane-scroll drag.
       const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
       const gestures = createDeckGestures(host);
       const frame = fakeFrame(0);
       gestures.attach([frame]);
 
-      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
-      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 0 });
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 0, ctrlKey: true });
       assert.strictEqual(host.calls.paint.length, 1, 'the move paints, without committing');
       assert.strictEqual(host.calls.commit.length, 0);
 
@@ -237,6 +261,25 @@ describe('carousel studio gestures', () => {
       // The image follows the pointer, so a rightward drag moves the crop left:
       // 100px at 0.001 source units per pixel.
       assert.ok(Math.abs(host.calls.commit[0].crop.x - 0.15) < 1e-9);
+      gestures.destroy();
+    });
+
+    test('a plain mouse drag scrolls the strip instead of panning the crop', () => {
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 200, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 150, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 120, clientY: 0 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 120, clientY: 0 });
+
+      assert.strictEqual(host.calls.paint.length, 0, 'no crop gesture ran');
+      assert.strictEqual(host.calls.commit.length, 0);
+      assert.deepStrictEqual(host.calls.select, [], 'a drag that moved is not a click');
+      // The content follows the pointer: two leftward moves, -50px then -30px.
+      assert.deepStrictEqual(host.calls.scrollPaneBy, [50, 30]);
       gestures.destroy();
     });
 
@@ -262,9 +305,9 @@ describe('carousel studio gestures', () => {
       const frame = fakeFrame(0);
       gestures.attach([frame]);
 
-      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
-      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 100 });
-      frame.emit('pointerup', { pointerId: 1 });
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 100, ctrlKey: true });
+      frame.emit('pointerup', { pointerId: 1, ctrlKey: true });
 
       assert.strictEqual(host.calls.commit.length, 0);
       assert.deepStrictEqual(host.calls.select, [0]);
@@ -303,7 +346,10 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
 
-    test('a horizontal touch drag past the threshold still pans the crop', () => {
+    test('a single-finger touch drag past the threshold is left to touch-action, not claimed', () => {
+      // The tile is `touch-action: pan-x pan-y`: the finger is left to the
+      // browser's own panning of the strip and the page either way now, so
+      // neither axis claims the pointer without the Ctrl/Shift modifier.
       const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
       const gestures = createDeckGestures(host);
       const frame = fakeFrame(0);
@@ -311,25 +357,29 @@ describe('carousel studio gestures', () => {
 
       frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 0, clientY: 0 });
       frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 3 });
-      frame.emit('pointerup', { pointerId: 1 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 100, clientY: 3 });
 
-      assert.strictEqual(host.calls.paint.length, 1);
-      assert.strictEqual(host.calls.commit.length, 1);
+      assert.strictEqual(host.calls.paint.length, 0, 'nothing was painted — touch-action panned it');
+      assert.strictEqual(host.calls.commit.length, 0);
+      assert.strictEqual(host.calls.scrollPaneBy.length, 0, 'native, not driven by hand');
+      assert.deepStrictEqual(host.calls.select, [], 'a scroll that ended over the tile does not select it');
       gestures.destroy();
     });
 
-    test('a touch below the movement threshold has not chosen yet', () => {
+    test('a touch below the movement threshold has not chosen yet — a second finger can still claim it', () => {
       const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
       const gestures = createDeckGestures(host);
       const frame = fakeFrame(0);
       gestures.attach([frame]);
 
       frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 0, clientY: 0 });
-      frame.emit('pointermove', { pointerId: 1, clientX: 4, clientY: 4 });
-      assert.strictEqual(host.calls.paint.length, 0, 'noise moves nothing');
+      frame.emit('pointermove', { pointerId: 1, clientX: 2, clientY: 2 });
+      assert.strictEqual(host.calls.paint.length, 0, 'noise moves nothing, and claims nothing');
 
-      // …and the gesture is still available once the finger commits to an axis.
-      frame.emit('pointermove', { pointerId: 1, clientX: 100, clientY: 4 });
+      // A second finger arriving before the first passed the slop still starts
+      // a pinch — undecided is not the same as abandoned.
+      frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 200, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 2, clientY: 6 });
       assert.strictEqual(host.calls.paint.length, 1);
       gestures.destroy();
     });
@@ -389,14 +439,41 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
 
-    test('a wheel burst paints per notch but commits once, after the debounce', async () => {
+    test('a plain wheel scrolls the strip, not the crop', () => {
       const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
       const gestures = createDeckGestures(host);
       const frame = fakeFrame(0);
       gestures.attach([frame]);
 
       frame.emit('wheel', { deltaY: 100, deltaMode: 0 });
-      frame.emit('wheel', { deltaY: 100, deltaMode: 0 });
+
+      assert.deepStrictEqual(host.calls.scrollPaneBy, [100]);
+      assert.strictEqual(host.calls.paint.length, 0);
+      assert.strictEqual(host.calls.commit.length, 0);
+      gestures.destroy();
+    });
+
+    test('Ctrl+wheel zooms instead — the modifier a trackpad pinch already sends', () => {
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
+
+      assert.strictEqual(host.calls.scrollPaneBy.length, 0);
+      assert.strictEqual(host.calls.paint.length, 1);
+      gestures.destroy();
+    });
+
+    test('a wheel burst paints per notch but commits once, after the debounce', async () => {
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
+      frame.emit('wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
       assert.strictEqual(host.calls.paint.length, 2);
       assert.strictEqual(host.calls.commit.length, 0, 'the commit is debounced');
 
@@ -413,7 +490,7 @@ describe('carousel studio gestures', () => {
       const frame = fakeFrame(0);
       gestures.attach([frame]);
 
-      frame.emit('wheel', { deltaY: 100, deltaMode: 0 });
+      frame.emit('wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
       gestures.destroy();
 
       await new Promise((r) => setTimeout(r, 250));
@@ -427,7 +504,7 @@ describe('carousel studio gestures', () => {
 
       const first = fakeFrame(0);
       gestures.attach([first]);
-      first.emit('wheel', { deltaY: 100, deltaMode: 0 });
+      first.emit('wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
       // The rebuild lands mid-burst; detach must not cancel the commit.
       gestures.attach([fakeFrame(0)]);
 
@@ -459,6 +536,61 @@ describe('carousel studio gestures', () => {
 
     test('an unmeasured frame misses rather than dividing by zero', () => {
       assert.strictEqual(hitLayer({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), null);
+    });
+  });
+
+  describe('layerContains', () => {
+    const box = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    const rect = { left: 0, top: 0, width: 200, height: 200 };
+
+    test('a press inside the box hits, with no handle tolerance', () => {
+      assert.strictEqual(layerContains(rect, box, 100, 100), true);
+    });
+
+    test('a press right on the edge hits — the box is inclusive', () => {
+      assert.strictEqual(layerContains(rect, box, 50, 100), true);
+    });
+
+    test('a press just outside the edge misses, unlike hitLayer\'s handle tolerance', () => {
+      assert.strictEqual(layerContains(rect, box, 45, 100), false);
+      assert.notStrictEqual(hitLayer(rect, box, 45, 100), null, 'hitLayer still grabs the handle there');
+    });
+
+    test('an unmeasured frame misses rather than dividing by zero', () => {
+      assert.strictEqual(layerContains({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), false);
+    });
+  });
+
+  describe('rotateHandlePoint / hitRotateHandle', () => {
+    const box = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    const rect = { left: 0, top: 0, width: 200, height: 200 };
+
+    test('an unrotated box puts the handle above the centre, offset from the top edge', () => {
+      // Centre at (100, 100); top edge at y=50; handle 24px above it.
+      const p = rotateHandlePoint(rect, box);
+      assert.ok(Math.abs(p.x - 100) < 1e-9, `${p.x}`);
+      assert.ok(Math.abs(p.y - 26) < 1e-9, `${p.y}`);
+    });
+
+    test('a 90° box swings the handle from above the centre to its right — clockwise, matching CSS', () => {
+      const p = rotateHandlePoint(rect, { ...box, rotate: 90 });
+      assert.ok(Math.abs(p.x - 174) < 1e-9, `${p.x}`);
+      assert.ok(Math.abs(p.y - 100) < 1e-9, `${p.y}`);
+    });
+
+    test('a press on the handle hits; a press a few px off misses', () => {
+      assert.strictEqual(hitRotateHandle(rect, box, 100, 26), true);
+      assert.strictEqual(hitRotateHandle(rect, box, 100, 100), false, 'the box centre is not the handle');
+    });
+
+    test('the hit test follows the handle around a rotated box', () => {
+      const rotated = { ...box, rotate: 90 };
+      assert.strictEqual(hitRotateHandle(rect, rotated, 174, 100), true);
+      assert.strictEqual(hitRotateHandle(rect, rotated, 100, 26), false, 'the unrotated position no longer hits');
+    });
+
+    test('an unmeasured frame misses rather than dividing by zero', () => {
+      assert.strictEqual(hitRotateHandle({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), false);
     });
   });
 
@@ -623,22 +755,24 @@ describe('carousel studio gestures', () => {
 
     test('a press outside the selected layer still pans the crop', () => {
       const { host, gestures, frame } = setup();
-      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
-      frame.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 10 });
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 10, ctrlKey: true });
       assert.ok(host.calls.paint.length >= 1, 'the crop repainted');
       assert.strictEqual(host.calls.paintLayer.length, 0);
       gestures.destroy();
     });
 
-    test('with no layer selected a press inside the old box pans the crop', () => {
+    test('with no layer selected a press inside a layer\'s box selects it, not the crop — see "click-to-select"', () => {
       const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
       const gestures = createDeckGestures(host);
       const frame = fakeFrame(0, { width: 200, height: 200 });
       gestures.attach([frame]);
-      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
-      frame.emit('pointermove', { pointerId: 1, clientX: 150, clientY: 100 });
-      assert.ok(host.calls.paint.length >= 1);
-      assert.strictEqual(host.calls.paintLayer.length, 0);
+      // Even with the crop-pan modifier held: layer hit beats slide/crop hit.
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 150, clientY: 100, ctrlKey: true });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'slide' }]);
+      assert.strictEqual(host.calls.paint.length, 0, 'the crop did not pan');
+      assert.strictEqual(host.calls.paintLayer.length, 0, 'no drag was started for it');
       gestures.destroy();
     });
 
@@ -668,6 +802,70 @@ describe('carousel studio gestures', () => {
       frame.emit('pointermove', { pointerId: 1, clientX: 120, clientY: 80, altKey: true });
       assert.deepStrictEqual(host.calls.paintLayer.at(-1).guides, { v: [], h: [] });
       gestures.destroy();
+    });
+
+    describe('rotate drag', () => {
+      // LAYER_BOX is 0.3..0.7 square in a 200×200 frame: centre (100, 100),
+      // handle 24px above the top edge at (100, 36) — see rotateHandlePoint.
+      const HANDLE = { x: 100, y: 36 };
+
+      test('a press on the rotate handle spins the box and commits an angle, not a move', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: HANDLE.x, clientY: HANDLE.y });
+        // Straight right of centre: a quarter-turn clockwise from "up".
+        frame.emit('pointermove', { pointerId: 1, clientX: 200, clientY: 100 });
+        const last = host.calls.paintLayer.at(-1);
+        assert.ok(Math.abs(last.box.rotate - 90) < 1e-9, `${last.box.rotate}`);
+        // Position and size are untouched — only rotate moved.
+        assert.strictEqual(last.box.x, 0.3);
+        assert.strictEqual(last.box.w, 0.4);
+
+        frame.emit('pointerup', { pointerId: 1, clientX: 200, clientY: 100 });
+        assert.strictEqual(host.calls.commitLayer.length, 1);
+        assert.strictEqual(host.calls.commit.length, 0, 'no crop commit');
+        const { box } = host.calls.commitLayer[0];
+        assert.ok(Math.abs(box.rotate - 90) < 1e-9, `${box.rotate}`);
+        gestures.destroy();
+      });
+
+      test('a press that stays under the slop selects and rotates nothing', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: HANDLE.x, clientY: HANDLE.y });
+        frame.emit('pointermove', { pointerId: 1, clientX: HANDLE.x + 1, clientY: HANDLE.y });
+        frame.emit('pointerup', { pointerId: 1, clientX: HANDLE.x + 1, clientY: HANDLE.y });
+        assert.strictEqual(host.calls.commitLayer.length, 0);
+        assert.deepStrictEqual(host.calls.select, [0]);
+        gestures.destroy();
+      });
+
+      test('Shift snaps the drag to 15° increments', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: HANDLE.x, clientY: HANDLE.y });
+        // ~100° clockwise from "up" — snaps to 105.
+        frame.emit('pointermove', {
+          pointerId: 1,
+          clientX: 100 + 64 * Math.cos((10 * Math.PI) / 180),
+          clientY: 100 + 64 * Math.sin((10 * Math.PI) / 180),
+          shiftKey: true,
+        });
+        frame.emit('pointerup', {
+          pointerId: 1,
+          clientX: 100 + 64 * Math.cos((10 * Math.PI) / 180),
+          clientY: 100 + 64 * Math.sin((10 * Math.PI) / 180),
+          shiftKey: true,
+        });
+        assert.strictEqual(host.calls.commitLayer[0].box.rotate, 105);
+        gestures.destroy();
+      });
+
+      test('a press off the handle but on the box still moves it, not rotates', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 100 });
+        assert.strictEqual(host.calls.paintLayer.at(-1).box.rotate, undefined);
+        assert.ok(host.calls.paintLayer.at(-1).box.x > 0.3, 'it moved instead');
+        gestures.destroy();
+      });
     });
   });
 
@@ -736,8 +934,8 @@ describe('carousel studio gestures', () => {
       const { host, gestures, frames } = setup();
       // Column 0 is 0..1/3 of the deck; the layer starts at 0.32·600 = 192px,
       // and y=20 is well above its band either way.
-      frames[0].emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 20 });
-      frames[0].emit('pointermove', { pointerId: 1, clientX: 100, clientY: 20 });
+      frames[0].emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 20, ctrlKey: true });
+      frames[0].emit('pointermove', { pointerId: 1, clientX: 100, clientY: 20, ctrlKey: true });
       assert.ok(host.calls.paint.length >= 1, 'the crop repainted');
       assert.strictEqual(host.calls.paintLayer.length, 0);
       gestures.destroy();
@@ -774,6 +972,110 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
   });
+
+  /**
+   * Click-to-select (S7.3). A press with no active layer, or one that misses
+   * the active layer and its handles, falls through to `layersOnColumn` —
+   * every other layer painted on the pressed column — before giving up to the
+   * crop/slide-select path.
+   */
+  describe('click-to-select on the stage', () => {
+    const LAYER_BOX = { x: 0.3, y: 0.3, w: 0.4, h: 0.4 };
+
+    test('a press on an unselected layer selects it, and starts no drag', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'slide' }]);
+      assert.strictEqual(host.calls.select.length, 0, 'did not fall through to slide-select');
+      assert.strictEqual(host.calls.paint.length, 0, 'did not fall through to a crop pan');
+
+      // No drag was started: a move goes nowhere, and a release commits nothing.
+      frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 140, clientY: 100 });
+      assert.strictEqual(host.calls.commitLayer.length, 0);
+      assert.strictEqual(host.calls.paintLayer.length, 0);
+      gestures.destroy();
+    });
+
+    test('a press on a different slide\'s layer selects that column\'s own list, not the active one\'s', () => {
+      const layerA = { box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } };
+      const layerB = { box: LAYER_BOX };
+      const host = fakeHost(
+        [
+          { crop: FULL, fit: 'cover', layers: [layerA] },
+          { crop: FULL, fit: 'cover', layers: [layerB] },
+        ],
+        { i: 0, j: 0, box: layerA.box },
+      );
+      const gestures = createDeckGestures(host);
+      const frames = [0, 1].map((i) => fakeFrame(i, { width: 200, height: 200, left: i * 200 }));
+      gestures.attach(frames);
+
+      // Column 1's own layer, at a press the active (column 0) layer cannot reach.
+      frames[1].emit('pointerdown', { pointerId: 1, button: 0, clientX: 300, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 1, j: 0, scope: 'slide' }]);
+      gestures.destroy();
+    });
+
+    test('a press on a span layer selects it with scope "span"', () => {
+      const spanLayer = { box: { x: 0.4, y: 0.3, w: 0.2, h: 0.4 } };
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [spanLayer]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'span' }]);
+      gestures.destroy();
+    });
+
+    test('a slide layer wins over an overlapping span layer — topmost first', () => {
+      const spanLayer = { box: { x: 0, y: 0, w: 1, h: 1 } };
+      const host = fakeHost(
+        [{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }],
+        null,
+        [spanLayer],
+      );
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+      assert.deepStrictEqual(host.calls.selectLayer, [{ i: 0, j: 0, scope: 'slide' }]);
+      gestures.destroy();
+    });
+
+    test('a press that lands on no layer keeps today\'s behavior: pan the crop', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 10, ctrlKey: true });
+      assert.strictEqual(host.calls.selectLayer.length, 0);
+      assert.ok(host.calls.paint.length >= 1, 'the crop repainted');
+      gestures.destroy();
+    });
+
+    test('a press that lands on no layer, and does not move, selects the slide', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [{ box: LAYER_BOX }] }], null);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10, ctrlKey: true });
+      frame.emit('pointerup', { pointerId: 1, clientX: 10, clientY: 10, ctrlKey: true });
+      assert.strictEqual(host.calls.selectLayer.length, 0);
+      assert.deepStrictEqual(host.calls.select, [0]);
+      gestures.destroy();
+    });
+  });
+
   // ── Panorama: the vertical anchor ────────────────────────────────────────
 
   describe('anchorSlackPx', () => {

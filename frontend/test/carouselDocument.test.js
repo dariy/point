@@ -672,7 +672,7 @@ describe('layer schema', () => {
   const layersOf = (layers) => normalizeDocument({ slides: [{ layers }] }).slides[0].layers;
   /** One normalized layer, or null. */
   const one = (layer) => layersOf([layer])[0] ?? null;
-  const FULL_BOX = { x: 0, y: 0, w: 1, h: 1 };
+  const FULL_BOX = { x: 0, y: 0, w: 1, h: 1, rotate: 0 };
 
   test('every type normalizes to its full shape, from nothing but a type', () => {
     assert.deepStrictEqual(one({ type: 'text' }), {
@@ -777,22 +777,41 @@ describe('layer schema', () => {
       y: 0.5,
       w: 0.5,
       h: 0.5,
+      rotate: 0,
     });
     assert.deepStrictEqual(one({ type: 'rect', box: { x: -1, y: 2, w: 0, h: 99 } }).box, {
       x: 0,
       y: 0,
       w: 1 / 1080, // one canvas pixel: below that a layer cannot be seen or grabbed
       h: 1,
+      rotate: 0,
     });
     assert.deepStrictEqual(one({ type: 'rect', box: 'nope' }).box, FULL_BOX);
-    assert.deepStrictEqual(one({ type: 'rect', box: { w: 0.4 } }).box, { x: 0, y: 0, w: 0.4, h: 1 });
+    assert.deepStrictEqual(one({ type: 'rect', box: { w: 0.4 } }).box, {
+      x: 0,
+      y: 0,
+      w: 0.4,
+      h: 1,
+      rotate: 0,
+    });
   });
 
   test('a span layer box clamps against the same 0..1 range', () => {
     // A span box means "the whole deck" rather than "one slide" — the
     // renderer's business; the schema clamps it to the same 0..1 either way.
     const doc = normalizeDocument({ spanLayers: [{ type: 'text', box: { x: 0.8, y: 0, w: 0.75, h: 1 } }] });
-    assert.deepStrictEqual(doc.spanLayers[0].box, { x: 0.25, y: 0, w: 0.75, h: 1 });
+    assert.deepStrictEqual(doc.spanLayers[0].box, { x: 0.25, y: 0, w: 0.75, h: 1, rotate: 0 });
+  });
+
+  test('box.rotate: degrees, defaults to 0, wraps into -180..180', () => {
+    assert.strictEqual(one({ type: 'rect' }).box.rotate, 0);
+    assert.strictEqual(one({ type: 'rect', box: { rotate: 45 } }).box.rotate, 45);
+    assert.strictEqual(one({ type: 'rect', box: { rotate: -45 } }).box.rotate, -45);
+    // Out of range wraps rather than clamps — a full turn has no invalid angle.
+    assert.strictEqual(one({ type: 'rect', box: { rotate: 270 } }).box.rotate, -90);
+    assert.strictEqual(one({ type: 'rect', box: { rotate: -270 } }).box.rotate, 90);
+    assert.strictEqual(one({ type: 'rect', box: { rotate: 360 } }).box.rotate, 0);
+    assert.strictEqual(one({ type: 'rect', box: { rotate: 'sideways' } }).box.rotate, 0);
   });
 
   test('colours go through the one hex validator normalizeBg already uses', () => {
@@ -894,7 +913,30 @@ describe('layer mutators', () => {
   test('updateLayer merges a patch, and box merges field by field', () => {
     const doc = updateLayer(docOf(text), 0, 0, { text: 'two', box: { x: 0.4 } });
     assert.strictEqual(doc.slides[0].layers[0].text, 'two');
-    assert.deepStrictEqual(doc.slides[0].layers[0].box, { x: 0.4, y: 0.1, w: 0.5, h: 0.5 });
+    assert.deepStrictEqual(doc.slides[0].layers[0].box, { x: 0.4, y: 0.1, w: 0.5, h: 0.5, rotate: 0 });
+  });
+
+  test('updateLayer patches box.rotate without resetting the rest of the box', () => {
+    const rotated = updateLayer(docOf(text), 0, 0, { box: { rotate: 200 } });
+    assert.deepStrictEqual(rotated.slides[0].layers[0].box, {
+      x: 0.1,
+      y: 0.1,
+      w: 0.5,
+      h: 0.5,
+      rotate: -160, // 200 wraps into -180..180
+    });
+  });
+
+  test('a non-zero box.rotate round-trips through parse(serialize(doc))', () => {
+    const doc = docOf({ ...text, box: { ...text.box, rotate: 30 } });
+    assert.strictEqual(doc.slides[0].layers[0].box.rotate, 30);
+    assert.deepStrictEqual(parseDocument(serializeDocument(doc)), doc);
+  });
+
+  test('specHash changes when only box.rotate changes', () => {
+    const plain = docOf(text).slides[0];
+    const rotated = docOf({ ...text, box: { ...text.box, rotate: 15 } }).slides[0];
+    assert.notStrictEqual(specHash(plain), specHash(rotated));
   });
 
   test('a patch value the schema rejects leaves the layer its own', () => {

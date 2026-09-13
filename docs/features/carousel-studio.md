@@ -55,8 +55,14 @@ the editor" below. Templates (S4) have landed — a template is this same
 document with placeholder values, stored in a `carousel_templates` table and
 applied to a post by `applyTemplate`, plus dependency-free `.pptx` and `.svg`
 importers over `DecompressionStream` and `DOMParser`, and a gallery, import
-dialog and drop report in the studio; see "Templates" below. Production (S5) is
-not built yet. See "Delivery stages".
+dialog and drop report in the studio; see "Templates" below. Direct
+manipulation (S7) has landed — pan and zoom on the stage now need Ctrl or Shift
+held, a plain drag or wheel scrolls the strip instead; a layer can be selected
+by clicking it directly, wherever it sits on the stage; a `box.rotate` field
+lets a layer tilt, presentational only, driven by a ninth handle above the
+box's own edge; and a `text` layer is editable in place through a double-click
+into a `contenteditable` block. See "The stage is the editor" below. Production
+(S5) is not built yet. See "Delivery stages".
 
 Ahead of S2, `geometry.js` gained the inverse of the split question — `fitReport`
 and `slideCountOptions` say how many slides a source makes and at what scale
@@ -254,9 +260,11 @@ fills with `bg`.
 **Live preview is CSS, never canvas.** A pan or a zoom writes two CSS properties
 and nothing else; no `drawImage` and no `createImageBitmap` runs on pointermove.
 That is what lets a gesture repaint at 60fps. Gestures are pointer-events based
-(drag to pan, wheel or two-finger pinch to zoom, arrow keys to nudge, `+`/`-` to
-zoom), and a wheel burst is committed to the document once, `WHEEL_COMMIT_MS`
-after the last tick, because a wheel gesture has no release event.
+(Ctrl/Shift-drag to pan, pinch or Ctrl/Shift-wheel to zoom, arrow keys to nudge,
+`+`/`-` to zoom — a plain drag or wheel scrolls the stage strip instead, S7.1;
+see "Pan and zoom need a modifier" below), and a wheel burst is committed to the
+document once, `WHEEL_COMMIT_MS` after the last tick, because a wheel gesture
+has no release event.
 
 **The document is the single source of truth.** `index.js` holds a `CarouselDoc`
 and mutates it only through `document.js`. `updateSlideFraming(doc, i, update,
@@ -356,6 +364,14 @@ That is the same discipline `clampPan` keeps for a crop against its source, done
 arithmetically here: a box has no source to measure against, which is what keeps
 `document.js` independent of `geometry.js`. Because the box is normalized, an
 `aspect` change moves a layer with the frame instead of throwing it off.
+
+S7 adds a fifth field, `rotate` — degrees, wrapped into -180..180 by
+`wrapRotate` and folded into `specHash` alongside the rest of the box, but
+presentational only: `layerFrame` and everything built on it (`layerRect`,
+`layerCSS`, `spanLayerRect`) stay rotation-blind, so a rotated layer's *box* is
+still the unrotated rectangle those functions have always returned. See
+"Rotation" under "The stage is the editor" for how the render and the preview
+turn that stored angle into a rotated mark.
 
 `text` and `counter` share one typography block (`normalizeTextStyle`, so the two
 cannot drift into subtly different typesetters):
@@ -575,14 +591,19 @@ in `studio/panels.js`; `index.js` owns the state):
   the same `KEY_PAN` scale the crop nudge uses; focus is restored to the element
   afterwards, because the nudge rebuilds it under the user's fingers. S3 attached
   all of this to the filmstrip's 128px thumbnail and S6 moved it to the stage,
-  where a span layer became grabbable too — see "The stage is the editor".
+  where a span layer became grabbable too — see "The stage is the editor". S7
+  adds a ninth handle, above the box's own top edge, driving `box.rotate`
+  through the identical cycle, and lets a plain click pick a layer straight off
+  the stage rather than only through the layer panel — see "Rotation" and
+  "Click-to-select" below.
 - **The preview is CSS, as ever.** `paintDeckLayers` and `paintSpanLayers`
   (`studio/preview.js`) are the DOM twins of the two canvas functions, resolving
   every box through `layerRect` / `spanLayerRect` — the very rects the painters
   are handed — so the preview cannot round differently from the render.
-  `paintLayerChrome` positions the selection outline, its eight handles and the
-  snap guides; `paintSpanChrome` (S6) does the same for a span layer, sliced per
-  column from `spanLayerRect`, and the two share one writer.
+  `paintLayerChrome` positions the selection outline, its eight resize handles
+  and the snap guides — plus, since S7, a ninth rotate handle and the outline's
+  own CSS `rotate()`; `paintSpanChrome` (S6) does the same for a span layer,
+  sliced per column from `spanLayerRect`, and the two share one writer.
 
 **The preview runs the render's own typesetter.** CSS has no `measureText`, so
 left to itself the browser would break lines where it likes and the JPEG would
@@ -698,11 +719,12 @@ always opens closed, exactly how `PostEditPage` treats the editor's Details
 rail.
 
 A deck frame was `touch-action: none`, so a thumb landing on one could not
-scroll the page. It is `pan-y` now, and `gestures.js` no longer claims a touch
-drag at pointerdown: it waits for the movement to declare an axis through
-`gestureDirection` — the tags manager's helper, at the same 8px threshold — and
-lets a vertical one go. A mouse, a pen and a second finger still claim the press
-immediately; a pinch is never a scroll.
+scroll the page. It is `pan-x pan-y` now (widened again in S7.1, see below), and
+`gestures.js` no longer claims a touch drag at pointerdown: it waits for the
+movement to pass a slop threshold and then abandons the gesture, leaving the
+finger to the scroller `touch-action` already promised it. A second finger
+still claims the press immediately, whatever the first was doing — a pinch is
+never a scroll.
 
 ### The filmstrip is a rail
 
@@ -711,6 +733,116 @@ It keeps one job: moving the selection. Each item is a
 the pressed state. The layer nodes, span nodes and chrome it used to duplicate
 are gone, so a selected layer's outline is drawn once — on the stage, where it
 can be grabbed.
+
+### Pan and zoom need a modifier
+
+S7.1. Once the stage became the editing surface, its columns had nothing left
+over to scroll a wide strip *with* — `.carousel-studio__stage-slide` fills the
+whole tile, so a plain drag or a plain wheel notch used to pan or zoom the crop
+directly, and a deck past a handful of slides (16:1 at `n = 20`) had no way for
+a pointer to move the strip sideways at all. Ctrl or Shift held at the press
+(mouse or pen; a finger has neither, short of an attached keyboard) is now what
+asks for the crop instead — plain input scrolls the strip:
+
+- **A plain mouse/pen drag** drives `host.scrollPaneBy` frame by frame, the
+  scroller's own convention (content follows the pointer). **Ctrl/Shift-drag**
+  starts the crop gesture unchanged from S2/S6.
+- **A plain wheel** (no `deltaX`/`deltaY`, nothing happens) scrolls the strip
+  the same way, taking whichever axis the event reports so a trackpad's
+  horizontal swipe and a mouse wheel's vertical notch both move it. **Ctrl or
+  Shift held** zooms the crop, exactly as before. Ctrl is what a trackpad's own
+  pinch-to-zoom already sends as a wheel event on every browser that supports
+  it, which is what makes it the zoom's natural gate rather than an arbitrary
+  one; Shift covers a plain wheel with no trackpad.
+- **A touch drag** is untouched by the modifier — a finger has none — and is
+  claimed only once a second one arrives (a pinch); the first is left to
+  `touch-action: pan-x pan-y`, widened from `pan-y` to cover the strip's own
+  new horizontal scroll. A single finger below the slop threshold that turns
+  out not to become a pinch is abandoned (`drag = null`), the same
+  no-op-on-release convention as everywhere else in this module — see "Giving
+  the stage room" above.
+- **A press or notch with a layer already selected** is unaffected by any of
+  this: the layer's own hit-test runs first, and only a press that misses the
+  selected layer's box and handles falls through to the crop/pane gesture
+  above.
+
+### Click-to-select a layer directly
+
+S7.3. Before, the only way to select a layer was the layer panel's list — a
+column with three unselected layers on it gave no way to point at the one you
+meant. A press that misses the *active* layer's own box and handles no longer
+falls straight through to the crop/pane gesture: it is first checked against
+every other layer painted on that column (`host.layersOnColumn`), topmost
+first, with a plain containment test — an unselected layer shows no handles to
+grab, so there is nothing finer to hit-test. The first one the press lands
+inside is selected (`host.selectLayer`) and nothing else happens on that press;
+a second press is what starts moving or resizing it, the ordinary two-step a
+mouse already uses everywhere a handle needs revealing before it can be
+grabbed. A press that lands on no layer at all still falls through to the
+crop/pane gesture, so an empty patch of a column keeps panning or scrolling as
+it always did.
+
+### Rotation
+
+S7.2, S7.4, S7.5. A layer's `box` gained a fifth field, `rotate` (degrees,
+wrapped into -180..180 by `document.js`'s `wrapRotate`), and it is
+**presentational only** — the stored box is never rotated, and `layerFrame`
+(`geometry.js`) and everything built on it stay exactly as rotation-blind as
+before. That is deliberate: `layerRect`, `layerCSS` and `spanLayerRect` answer
+"where is this box," and a caller that wants to draw it tilted rotates the
+*drawing*, not the arithmetic that already has to agree between the canvas and
+the DOM. It is also what keeps an unrotated layer's render byte-identical —
+`render.js`'s `paintDispatch` is the one place both `paintLayers` and
+`paintSpanLayers` route a layer through, and it skips `ctx.save`/`rotate`/
+`restore` entirely when `rotate` is `0`, translating to the box's own centre,
+rotating, translating back, and only then calling the type's ordinary painter
+when it isn't. `studio/preview.js` reaches the same pixels the opposite way — a
+CSS `rotate()` on the layer element, about its default transform-origin (the
+element's own centre), which is the same point `paintDispatch` pivots on.
+
+The handle is a ninth one, sitting `ROTATE_HANDLE_OFFSET_PX` above the box's
+own top edge — clear of `HANDLE_GRAB_PX` so the two never overlap — rather than
+one of `hitLayer`'s eight, and it carries its own hit test
+(`ROTATE_HANDLE_HIT_PX`, a simple radius rather than an edge-fraction test,
+since it has no box of its own to be near an edge of). Dragging it computes the
+pointer's angle from the box's *fixed* centre in client-pixel space
+(`atan2`, wrapped so a press near the ±180° seam does not jump), which is why
+the gesture needs no `layerSpace` of its own: an angle reads the same whether
+the box is a slide's own or a span layer's deck-wide one. Shift held rounds the
+result to `ROTATE_SNAP_DEG` (15°) — free to use here, unlike Ctrl/Shift on a
+plain drag, because a layer is already selected and past the gate above. The
+cycle is the one every other layer edit uses: provisional paint on every move
+(`host.paintLayer`), one commit on release (`host.commitLayer`); a press with
+no movement re-selects rather than rotating, the same not-moved-is-a-click rule
+`onLayerUp` already keeps.
+
+### On-canvas text editing
+
+S7.6. A `text` layer (never a `counter` — its DOM text is a computed preview,
+not a value of its own) can be typed into directly once selected: a
+double-click that lands inside its own box, checked the same way
+click-to-select's containment test is, turns the exact DOM node
+`paintDeckLayers`/`paintSpanLayers` already painted for it into a
+`contenteditable` block, rather than opening a second, shadow editor — a
+doc-driven repaint elsewhere during the edit still finds the layer it expects,
+because `studio/preview.js`'s `paintLayerContent` skips the block currently
+being edited (`dataset.editing`). One edit at a time; a double-click anywhere
+else, or with no layer selected, or before the click that selects it, does
+nothing here — a plain click outside the block is what an unfocused text field
+has always been, a blur.
+
+Typing repaints live: every *other* DOM copy of the layer (the remaining
+columns of a span layer) is repainted from a patched-in-memory layer on every
+keystroke, and the block being typed into is restyled — font size, leading,
+vertical origin — without touching its own markup or disturbing the caret.
+`Enter` inserts a line break rather than doing anything a `contenteditable`
+would do on its own (submit, blur, or its own `<div>`/`<br>` markup) — textarea
+semantics, matching `#carousel-layer-text`'s own behaviour, so a layer's stored
+`text` is a plain string either editor can produce. `Escape` discards and
+restores the block's pre-edit text without touching the document; a blur
+commits through `_setLayer` when the text actually changed — the exact call the
+side-panel textarea's own `change` handler makes, so there is one writer for a
+layer's `text` regardless of which control set it.
 
 ### Two coordinate spaces
 
@@ -1233,7 +1365,11 @@ One gap is S3's own:
 S3's other gap — a span layer being form-only, drivable through the property
 form but not by pointer — closed in S6 when the gesture moved to the stage; see
 "Two coordinate spaces". So did the per-slide source picker S2 left open, and
-the three preview divergences S3 accepted for text and arrows.
+the three preview divergences S3 accepted for text and arrows. Panorama-mode
+layer authoring is the one that has not: S7 rewrote how a deck-mode layer is
+selected, rotated and edited in place, but touched none of the mode gating in
+`builder`, so it remains the sole open gap above — explicitly out of scope for
+this epic, not merely unaddressed by it.
 
 S4's are all in the gallery rather than in the format:
 
@@ -1285,6 +1421,7 @@ S4's are all in the gallery rather than in the format:
 | Byte-identical slides | Refused in the studio with a clear message | They dedup to one media row (SHA256) and one path, which the blog's `extractMedia` renders twice while Go's `ExtractMediaPaths` dedups to one Instagram child — the two would disagree. Rejecting the render is simpler than de-duping at two display sites, and a carousel with two identical slides has no purpose |
 | Layer placement | A normalized `{x, y, w, h}` box in 0..1 of the canvas, never pixels | `aspect` is a document-level switch, so a 4:5 → 1:1 change has to move a layer *with* the frame rather than throw it off. Same discipline `crop` follows against its source, and it keeps `document.js`'s clamp arithmetic — no source to measure against, so no dependency on `geometry.js` |
 | Where layer geometry lives | `geometry.js`, as a Canvas/CSS pair (`layerRect` + `layerCSS`) plus `spanLayerRect`, all three over one private rounding helper (`layerFrame`) | Exactly the relationship `deckSlideRects`/`deckSlideFitCSS` already have, for the same reason: the studio's preview is DOM and the export is canvas, and two formulas rounding independently is how a filmstrip starts lying about the render. One rounding site is the only way to guarantee they agree |
+| Layer rotation | `box.rotate`, presentational only — the stored box never rotates, and `layerFrame` (and `layerRect`/`layerCSS`/`spanLayerRect` over it) stay rotation-blind; `render.js`'s `paintDispatch` and `preview.js`'s CSS `rotate()` each rotate the *drawing* about the unrotated box's own centre instead | Keeps a rotated layer inside the Canvas/CSS pair's existing guarantee rather than growing a second one: `layerFrame` answers "where is this box" for every caller, rotated or not, and only the two paint sites need to agree on the pivot. It is also what keeps an unrotated layer's render byte-identical — `paintDispatch` skips `ctx.save`/`rotate`/`restore` entirely when `rotate` is `0` |
 | Text measurement | A real 2D context's `measureText`, bound to the size being tried — never a metric guessed from character count | `wrapText`/`autoFitText` took a `measure` callback and were fully unit-tested from #450 with no production caller; S3 wires them to the slide canvas on the render path. A guessed metric makes auto-fit wrong in exactly the fonts a theme is most likely to set |
 | Fonts | The active theme's `--font-family`, resolved at paint time, with `document.fonts.ready` awaited before the first paint. **No bundled WOFF2** | `loadThemeCss()` runs unconditionally (`app.js`), so the admin document already carries the token; a slide should be set in the blog's own type, not in a face the studio shipped. Bundling one would add a binary asset to a repo whose vendoring policy is "short, vendored, unminified and reviewable" ([vendors.md](../vendors.md)). Awaiting the face matters because `measureText` on an unloaded font silently measures a system fallback, so the JPEG would disagree with the preview beside it |
 | Waiting on the font | Lazily, once per render, and only when a slide carries a `text` or `counter` layer | A deck of rects and arrows, or of no layers at all, must issue exactly the calls it issued before layers existed — that is what keeps the S1/S2 render paths provably unchanged. `fontResolver` memoizes the promise, so slide 9 pays nothing for slide 1's wait |
@@ -1336,7 +1473,8 @@ render.
     "fit":    "cover",                                   // deck: cover | contain
     "bg":     null,                                      // deck: null = blur (the default) — see below
     "layers": [                                          // both modes; back to front
-      { "type": "text", "box": { "x": 0.05, "y": 0.62, "w": 0.9, "h": 0.22 },
+      { "type": "text",
+        "box": { "x": 0.05, "y": 0.62, "w": 0.9, "h": 0.22, "rotate": 0 }, // rotate: degrees, presentational only
         "text": "Headline", "lineHeight": 1.2, "align": "left", "valign": "top",
         "color": "#ffffff", "weight": 700, "size": null, "shadow": true }
       // + image | rect | counter | arrow — every type, field and default under "Layers"
@@ -1417,10 +1555,14 @@ because five of its eight complaints collapsed into one rearrangement of the
 stage. S4 then landed after S6 rather than before it, and depended on it: a
 template defines N slides each with its own content, which needs the slide
 writers S6.5 added and the per-slide source S6.4 added, so `applyTemplate`
-builds on both instead of duplicating them. S2, S3, S4 and S6 are done; S5
-remains, and C5/C6's schema held for all four without a version bump, which is
+builds on both instead of duplicating them. S7 landed after S4, out of numeric
+order for the same reason S6 did — it is a direct-manipulation pass over the
+stage S6 built, not a dependency of S5. S2, S3, S4, S6 and S7 are done; S5
+remains, and C5/C6's schema held for all five without a version bump, which is
 the evidence that they are extensions rather than rewrites — S6 added no stored
-field at all, and S4 added a second *table* without touching the document.
+field at all, S4 added a second *table* without touching the document, and S7's
+one addition (`box.rotate`) is additive and defaults to `0` on anything written
+before it existed.
 
 | Stage | Scope |
 |---|---|
@@ -1444,6 +1586,7 @@ field at all, and S4 added a second *table* without touching the document.
 | **S4** | Templates — a template is this same document with placeholder values, plus PPTX and SVG import. **Done** — see "Templates" above. `document.js` gains `PLACEHOLDERS`, `applyTemplate` and `toTemplate` over the envelope (`TEMPLATE_VERSION`, separate from `DOC_VERSION`, which stays 1); `carousel_templates(slug UNIQUE, name, doc)` with four routes on the existing `CarouselHandler`, `doc` opaque to Go and capped at 8 MB; `import/{zip,xml,adapter,index,pptx,svg}.js` read a `.pptx` or a list of `.svg` with no dependency at all, every layer through `normalizeLayer` and everything unmappable dropped **and counted**; `studio/templates.js` plus gallery, import dialog, save-as-template and drop report in `panels.js`/`index.js`, with a template's inlined `data:` assets materialized as post-owned media on apply. Outside the plugin, `utils/helpers.js` gains `parseMarkup` — `DOMParser.parseFromString` turns out to be a Trusted Types sink for every mime type, and an eslint rule now says so. Tests in `frontend/test/carousel{Document,Api,ImportZip,ImportPptx,ImportSvg}.test.js`, `carouselStudio{Templates,Panels}.test.js`, `CarouselStudioPage.test.js` and the Go `internal/api`/`internal/repository` carousel tests, over six generated OOXML fixtures (`frontend/test/fixtures/make-pptx.sh`). **What it does not do:** no built-in templates, no placeholder help in the studio, no thumbnails and no rename — see "What the studio does not yet offer". |
 | **S5** | Production — caption composer, one-click push, brand kit scoped to 2–3 settings rows. The brand kit widens something that already exists rather than introducing it: an `image` layer added in the studio already defaults to the site's `logo_url` setting (S3), and S3 added no settings row of its own (see "Out of scope"). |
 | **S6** | The studio becomes one canvas: the stage is the editing surface, at a size worth editing on and with a bottom-sheet panel on a narrow viewport; undo/redo; slide add / remove / duplicate / reorder; Panorama/Slides chips and a per-slide source; the vertical anchor by direct drag; and preview/render parity for text and arrows. **Done** — see "The stage is the editor" above. Nothing stored changed: `document.js` gains only `addSlide`/`removeSlide`/`duplicateSlide`/`moveSlide`, `DOC_VERSION` stays 1, `geometry.js` is untouched, and `render.js`'s painting is unchanged (it only exports the constants `studio/preview.js` now imports instead of restating). New modules `studio/{history,layout}.js`; `gestures.js` gains `layerSpace`/`deckRect`/`snapLines`/`deckSeams` and `createAnchorGesture`; `preview.js` gains `ensurePreviewFont`, `textPlan`, `arrowPlan` and `paintSpanChrome`; outside the plugin, `utils/pointerReorder.js` gains an `axis` option and `Toast` an optional `action`. Tests in `frontend/test/carouselStudio{History,Layout,Gestures,Panels,Preview}.test.js`, `CarouselStudioPage.test.js`, `carouselDocument.test.js` and `toastAction.test.js`. |
+| **S7** | Direct manipulation on the stage: guard the wheel/drag pan-and-zoom behind Ctrl/Shift so a plain pointer can scroll the strip instead; a `box.rotate` field and a ninth handle to drive it; click-to-select a layer straight off the stage; and on-canvas text editing through a double-click into `contenteditable`. **Done** — see "Pan and zoom need a modifier", "Click-to-select a layer directly", "Rotation" and "On-canvas text editing" above. `document.js`'s `CarouselBox` gains `rotate`, wrapped by `wrapRotate` and folded into `specHash` with the rest of the box; `DOC_VERSION` stays 1. `geometry.js` is untouched — `layerFrame` and everything over it stay rotation-blind by design. `render.js` gains `paintDispatch`, the one point both `paintLayers` and `paintSpanLayers` now route a layer through, rotating the canvas about the box's own centre when `rotate` is non-zero and skipping `ctx.save`/`restore` entirely otherwise. `studio/gestures.js` gains the pane-scroll drag/wheel branch, the rotate-handle drag and hit test, and the stage's own click-to-select fallback; `index.js` gains `_enterTextEdit`/`_liveEditText`/`_exitTextEdit`; `preview.js`'s `paintDeckLayers`/`paintSpanLayers`/`paintChrome` gain the CSS `rotate()` twin and the ninth chrome handle, and `paintLayerContent` gains the `dataset.editing` guard. Panorama-mode layer authoring remains out of scope — see "What the studio does not yet offer". |
 
 ## Out of scope
 

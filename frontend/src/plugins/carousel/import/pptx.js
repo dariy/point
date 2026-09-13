@@ -813,8 +813,9 @@ function importSp(ctx, sp, page) {
  * @param {PptxContext} ctx
  * @param {Element|null} spPr
  * @param {{rect: {x: number, y: number, w: number, h: number},
- *   box: import('../document.js').CarouselBox}} geom the shape's rectangle in
- *   source EMU, and the same rectangle fitted to the target canvas
+ *   box: {x: number, y: number, w: number, h: number}}} geom the shape's
+ *   rectangle in source EMU, and the same rectangle fitted to the target
+ *   canvas — pre-normalization, so `box` has no `rotate` yet
  * @param {PptxPage} page
  * @returns {boolean}
  */

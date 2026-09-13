@@ -36,8 +36,8 @@
  * the frame's image element and commits to the document only when the gesture
  * ends, so dragging costs no decode and no re-render. A slide's background fill
  * is CSS too — a layer behind that image element, mirroring the pad fill
- * `paintSlide` paints — so the filmstrip shows the letterbox the JPEG will
- * carry rather than a placeholder.
+ * `paintSlide` paints — so the stage shows the letterbox the JPEG will carry
+ * rather than a placeholder.
  */
 
 import { Component } from "../../components/Component.js";
@@ -46,6 +46,7 @@ import {
   setupAdminLayout,
 } from "../../components/light/AdminLayout.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
+import { MediaViewer } from "../../components/shared/MediaViewer.js";
 import { getPost, updatePost } from "../../api/posts.js";
 import { deleteMedia } from "../../api/media.js";
 import {
@@ -62,7 +63,16 @@ import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
 import { parseNodes } from "../../utils/postNodes.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
-import { canvasSize, deckSlideRects, fitReport, padRects, safeAreaRect } from "./geometry.js";
+import {
+  canvasSize,
+  deckSlideRects,
+  fitReport,
+  layerRect,
+  padRects,
+  safeAreaRect,
+  spanLayerCoverage,
+  spanLayerRect,
+} from "./geometry.js";
 import {
   addLayer,
   addSlide,
@@ -120,6 +130,7 @@ import {
   paintSpanChrome,
   paintSpanLayers,
   paintSplit,
+  restyleEditingText,
 } from "./studio/preview.js";
 import { createAnchorGesture, createDeckGestures } from "./studio/gestures.js";
 import { createHistory } from "./studio/history.js";
@@ -152,6 +163,26 @@ function readPostId(query) {
 function isTextEntry(el) {
   const tag = el?.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || Boolean(el?.isContentEditable);
+}
+
+/** Insert `text` at the caret inside `el`, replacing any current selection —
+ *  `Enter`'s handler in `_enterTextEdit`, so a multi-line `text` layer gets a
+ *  literal `\n` (which `white-space: pre` renders as a break) instead of the
+ *  `<div>`/`<br>` a contenteditable inserts on its own, which `textContent`
+ *  would then read back without the break at all. A selection outside `el`
+ *  (the caret was never inside it) is a no-op. */
+function insertPlainText(el, text) {
+  const sel = el.ownerDocument.getSelection?.();
+  if (!sel?.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.commonAncestorContainer)) return;
+  range.deleteContents();
+  const node = el.ownerDocument.createTextNode(text);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
 
 /** A picked media item is usable as a split source only if it is an image. */
@@ -352,6 +383,15 @@ export default class CarouselStudioPage extends Component {
     // A second media picker, for an `image` layer's source. Kept apart from
     // `_picker` (the slide source) so confirming one cannot swap the other.
     this._layerPicker = null;
+    // The rendered-carousel preview a click on a rendered slide opens — a
+    // thin admin-local wrapper around `MediaViewer`, built lazily like the
+    // pickers above. Not the public `MediaLightbox`: that toggles the site's
+    // own chrome (`body.ui-hidden`) and offers sharing, neither of which
+    // belongs to a logged-in preview of media that may not even be published
+    // yet.
+    this._previewEl = null;
+    this._previewMount = null;
+    this._previewViewer = null;
     // The save-as-template dialog's two fields. Fields rather than state: they
     // are written on every keystroke, and a keystroke that rebuilt the studio
     // would take the caret with it. The inputs are re-emitted from these, so a
@@ -376,10 +416,23 @@ export default class CarouselStudioPage extends Component {
     // The same, for the rail's drag handle after a keyboard reorder — a
     // different element, and only one of the two is ever pending.
     this._refocusRail = null;
+    // The stage scroller's horizontal offset, carried across a rebuild the
+    // same way `_stageZoom` is: every setState() (a slide select, a crop
+    // drag's commit, a zoom change) replaces the scroller node outright, and
+    // a fresh node starts at 0 — so without this, scrolling right and then
+    // picking a slide snapped the strip back to the start.
+    this._stageScrollLeft = 0;
     // `attachPointerReorder`'s teardown for the rail. Bound once in `mount`,
     // since the util re-queries its containers per gesture and so survives a
     // rebuild; released in `beforeUnmount`.
     this._detachReorder = null;
+    // The in-flight on-canvas text edit, or null — `{ i, j, scope, layerEl,
+    // block, original, teardown }`. Lives outside `state`: every keystroke
+    // restyles the block directly (see `_liveEditText`), and a `setState`
+    // rebuild would tear that block out from under the caret. Set by
+    // `_enterTextEdit`, cleared by `_exitTextEdit` — see studio/gestures.js's
+    // `editLayer` and its `onPointerDown`/`onDoubleClick` guards.
+    this._editing = null;
     // Undo/redo. A ring of `doc` references, not a log of operations — the
     // document is immutable by construction, so the previous state is simply
     // the previous reference (see studio/history.js). Every write goes through
@@ -402,6 +455,13 @@ export default class CarouselStudioPage extends Component {
       refocus: (i) => {
         this._refocus = i;
       },
+      // The plain-drag/plain-wheel default (`studio/gestures.js`): unlike a
+      // finger, which `touch-action` already lets pan the strip natively, a
+      // mouse or wheel has to be driven by hand.
+      scrollPaneBy: (px) => {
+        const scroll = this.$(".carousel-studio__stage-scroll");
+        if (scroll) scroll.scrollLeft += px;
+      },
       // Layer direct manipulation reuses the same machine over the box field —
       // see studio/gestures.js. `activeLayer` is what routes a press between the
       // two: a layer only takes the pointer when its own layer is selected.
@@ -422,6 +482,17 @@ export default class CarouselStudioPage extends Component {
       safeArea: (scope) => this._safeAreaFor(scope),
       paintLayer: (i, j, box, guides) => this._paintProvisionalLayer(i, j, box, guides),
       commitLayer: (i, j, box) => this._commitLayerBox(i, j, box),
+      // Click-to-select on the stage: every layer painted on column `i`,
+      // topmost first, for a press that misses the active layer to hit-test
+      // against; and the selector it calls on a hit. Both converge on the
+      // same `selectedLayer`/`layerScope` the side-panel list already writes.
+      layersOnColumn: (i) => this._layersOnColumn(i),
+      selectLayer: (i, j, scope) => this._selectLayerOnStage(i, j, scope),
+      // Double-click-to-edit: the layer is already selected by the time this
+      // fires (gestures.js's own guard), so this only ever starts an edit,
+      // never a selection change.
+      editLayer: (i, j, scope) => this._enterTextEdit(i, j, scope),
+      isEditing: () => Boolean(this._editing),
     });
     // Panorama direct manipulation, over the stage itself — the band is one
     // projection across the whole strip, so the whole strip is the surface.
@@ -507,14 +578,8 @@ export default class CarouselStudioPage extends Component {
     "toggle-props"() {
       this._toggleProps();
     },
-    "close-props"() {
-      this._toggleProps(false);
-    },
     "stage-zoom"(_e, el) {
       this._zoomStage(el.dataset.zoom);
-    },
-    "select-slide"(_e, el) {
-      this._select(Number(el.dataset.slice));
     },
     "add-slide"(_e, el) {
       this._addSlide(Number(el.dataset.slide));
@@ -558,6 +623,9 @@ export default class CarouselStudioPage extends Component {
     "dismiss-report"() {
       this.setState({ importReport: null });
     },
+    "preview-rendered"(_e, el) {
+      this._openRenderedPreview(Number(el.dataset.index));
+    },
   };
 
   mount() {
@@ -573,6 +641,10 @@ export default class CarouselStudioPage extends Component {
     this._picker = null;
     this._layerPicker?.destroy();
     this._layerPicker = null;
+    this._previewViewer?.unmount();
+    this._previewViewer = null;
+    this._previewEl?.remove();
+    this._previewEl = null;
     this._gestures.destroy();
     this._anchorGesture.destroy();
   }
@@ -1119,11 +1191,12 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Slide reordering on the rail: a pointer drag over the filmstrip, and the
-   * arrow keys on the same handle (`_wireControls`). Pointer events rather than
-   * HTML5 drag-and-drop — `attachPointerReorder` says why — and the util owns
-   * the gesture and nothing else: the drop arrives here as an element and the
-   * item it landed after, and becomes a `moveSlide` write like any other.
+   * Slide reordering directly on the stage: a pointer drag on a column's own
+   * handle, and the arrow keys on the same handle (`_wireControls`). Pointer
+   * events rather than HTML5 drag-and-drop — `attachPointerReorder` says why —
+   * and the util owns the gesture and nothing else: the drop arrives here as
+   * an element and the item it landed after, and becomes a `moveSlide` write
+   * like any other.
    *
    * Bound once, for the life of the page. The util re-queries its containers
    * per gesture, so the rebuild every write causes costs it nothing.
@@ -1132,18 +1205,24 @@ export default class CarouselStudioPage extends Component {
     this._detachReorder?.();
     this._detachReorder = attachPointerReorder({
       handleSelector: ".carousel-studio__rail-handle",
-      itemSelector: ".carousel-studio__rail-item",
-      containers: () => [this.$(".carousel-studio__filmstrip")],
+      // The top management pane, not the stage: the handle moved out of the
+      // image column into its own pane segment (`studio/panels.js`), so that
+      // segment — not the photo underneath it — is what `attachPointerReorder`
+      // measures and drags. It never moves the image itself mid-drag (only an
+      // indicator line), so this costs nothing visually; `onDrop` below still
+      // reorders the one document every row is rendered from.
+      itemSelector: ".carousel-studio__pane--top",
+      containers: () => [this.$(".carousel-studio__pane-row--top")],
       axis: "x",
       isEnabled: () => this.state.doc.mode === "deck" && !this.state.busy,
       onDrop: ({ item, afterEl }) => {
-        // The rail is in document order, so an item's `data-slide` *is* its
+        // The stage is in document order, so an item's `data-slice` *is* its
         // index. Landing after a slide further along means taking its place
         // once the drag has vacated its own — hence the +1 on that side only.
-        const from = Number(item?.dataset?.slide);
+        const from = Number(item?.dataset?.slice);
         if (!Number.isInteger(from)) return;
         if (afterEl === item) return;
-        const after = afterEl ? Number(afterEl.dataset.slide) : null;
+        const after = afterEl ? Number(afterEl.dataset.slice) : null;
         this._moveSlide(from, after == null ? 0 : after > from ? after : after + 1);
       },
     });
@@ -1172,7 +1251,7 @@ export default class CarouselStudioPage extends Component {
    * (`geometry.js`) rather than at the origin — a layer outside the frame's
    * honest bounds is one the user has to move before it is any use. A `"span"`
    * layer keeps the type's vertical placement but stretches across the deck,
-   * since its box is normalized to the whole filmstrip and running across the
+   * since its box is normalized to the whole stage and running across the
    * seams is the use. Only the `box` (and an `image` layer's default source) is
    * set here; every other field is `normalizeLayer`'s to fill, because the
    * studio never authors a layer literal — see `addLayer` in `document.js`.
@@ -1230,6 +1309,194 @@ export default class CarouselStudioPage extends Component {
     const s = scope === "span" ? "span" : "slide";
     if (this.state.layerScope === s && this.state.selectedLayer === j) return;
     this.setState({ layerScope: s, selectedLayer: j });
+  }
+
+  /**
+   * Every layer painted on column `i`, topmost (last-painted) first — the
+   * slide's own `layers`, reversed, then any `spanLayers` whose coverage
+   * reaches this column, also reversed. Matches the DOM stacking order
+   * `layerNodes`/`spanNodes` (`studio/panels.js`) paint in: a span layer
+   * paints before the slide's own layers there, so it sits underneath.
+   *
+   * Read by `studio/gestures.js`'s click-to-select, for a press that misses
+   * the active layer (or there is none) to hit-test against.
+   *
+   * @param {number} i
+   * @returns {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>}
+   */
+  _layersOnColumn(i) {
+    const { doc } = this.state;
+    const slideLayers = doc.slides[i]?.layers || [];
+    const spanLayers = doc.spanLayers || [];
+    const n = doc.slides.length;
+    /** @type {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>} */
+    const out = [];
+    for (let j = slideLayers.length - 1; j >= 0; j--) {
+      out.push({ scope: "slide", j, box: slideLayers[j].box });
+    }
+    for (let j = spanLayers.length - 1; j >= 0; j--) {
+      if (spanLayerCoverage(spanLayers[j], n, doc.aspect).includes(i)) {
+        out.push({ scope: "span", j, box: spanLayers[j].box });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Select a layer hit directly on the stage. Unlike the side-panel list
+   * (`_selectLayer`), a stage press can land on a slide other than the one
+   * currently selected, so this carries the slide switch in the same patch
+   * — two `setState` calls would flash the panel with the old slide's list
+   * against the new index. `i` is ignored for a span layer, whose selection
+   * is not slide-bound.
+   *
+   * @param {number} i
+   * @param {number} j
+   * @param {"slide"|"span"} scope
+   */
+  _selectLayerOnStage(i, j, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    if (
+      this.state.layerScope === s &&
+      this.state.selectedLayer === j &&
+      (s === "span" || this.state.selected === i)
+    ) {
+      return;
+    }
+    const patch = { layerScope: s, selectedLayer: j };
+    if (s === "slide" && this.state.selected !== i) patch.selected = i;
+    this.setState(patch);
+  }
+
+  /**
+   * Enter on-canvas editing for layer `j` of `scope`, double-clicked on
+   * column `i` — `studio/gestures.js`'s `editLayer`. One edit at a time, and
+   * `text` layers only: a `counter`'s DOM text is a computed preview
+   * (`counterText`), not a value of its own to type into. The block itself
+   * is the DOM `paintDeckLayers`/`paintSpanLayers` already painted for it;
+   * this only ever adds `contenteditable` and a caret to that node, so a
+   * doc-driven repaint elsewhere still finds the layer it expects — see the
+   * `dataset.editing` guard in `studio/preview.js`'s `paintLayerContent`.
+   */
+  _enterTextEdit(i, j, scope) {
+    if (this._editing) return;
+    const s = scope === "span" ? "span" : "slide";
+    const { list } = this._layerTarget(s);
+    const layer = list[j];
+    if (!layer || layer.type !== "text") return;
+
+    const host = this.$(`.carousel-studio__stage-slide[data-slice="${i}"]`);
+    const layerSel =
+      s === "span" ? `.carousel-studio__span-layer[data-span-layer="${j}"]` : `.carousel-studio__layer[data-layer="${j}"]`;
+    const layerEl = /** @type {HTMLElement|null} */ (host?.querySelector(layerSel));
+    const block = /** @type {HTMLElement|null} */ (layerEl?.querySelector(".carousel-studio__layer-text"));
+    if (!layerEl || !block) return;
+
+    layerEl.dataset.editing = "true";
+    block.contentEditable = "true";
+    block.spellcheck = false;
+    block.classList.add("is-editing");
+
+    const onInput = () => this._liveEditText();
+    const onKeydown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this._exitTextEdit(false);
+      } else if (e.key === "Enter") {
+        // Textarea semantics: `Enter` always inserts a line break, never
+        // submits or blurs — matches `#carousel-layer-text`'s own behavior.
+        e.preventDefault();
+        insertPlainText(block, "\n");
+        this._liveEditText();
+      }
+    };
+    const onBlur = () => this._exitTextEdit(true);
+    block.addEventListener("input", onInput);
+    block.addEventListener("keydown", onKeydown);
+    block.addEventListener("blur", onBlur);
+
+    this._editing = {
+      i,
+      j,
+      scope: s,
+      layerEl,
+      block,
+      original: layer.text || "",
+      teardown() {
+        block.removeEventListener("input", onInput);
+        block.removeEventListener("keydown", onKeydown);
+        block.removeEventListener("blur", onBlur);
+      },
+    };
+
+    block.focus();
+    const sel = block.ownerDocument.getSelection?.();
+    if (sel) {
+      const range = block.ownerDocument.createRange();
+      range.selectNodeContents(block);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+
+  /** Live-update the canvas preview from the block's own `textContent` on
+   *  every keystroke — the on-canvas twin of `_wireLayerFields`'s `input`
+   *  handler. Repaints every *other* DOM copy of the layer (the other
+   *  columns of a span layer; never the block being edited, which
+   *  `dataset.editing` skips) and, separately, restyles the fit — font size,
+   *  leading, vertical origin — of the block itself, since that alone is
+   *  safe to touch without disturbing the caret it holds. */
+  _liveEditText() {
+    const ed = this._editing;
+    if (!ed) return;
+    const { i, j, scope, block } = ed;
+    const s = scope === "span" ? "span" : "slide";
+    const { list } = this._layerTarget(s);
+    const layer = list[j];
+    if (!layer || layer.type !== "text") return;
+    const text = block.textContent || "";
+    const patched = { ...layer, text };
+
+    if (scope === "span") {
+      const nextList = (this.state.doc.spanLayers || []).map((l, k) => (k === j ? patched : l));
+      this._paintSpanLayers(nextList);
+    } else {
+      const nextList = (this.state.doc.slides[i]?.layers || []).map((l, k) => (k === j ? patched : l));
+      this._paintDeckSlideLayers(i, nextList);
+    }
+
+    const { aspect } = this.state.doc;
+    const [w, h] = canvasSize(aspect);
+    const heightCqw = w > 0 ? (h / w) * 100 : 100;
+    const count = this.state.doc.slides.length;
+    const rect = scope === "span" ? spanLayerRect(patched, i, count, aspect) : layerRect(patched, aspect);
+    if (rect) restyleEditingText(ed.layerEl, patched, { frameH: h, heightCqw, rect });
+  }
+
+  /**
+   * Leave on-canvas editing, committing through `_setLayer` — the exact call
+   * the side-panel textarea's own `change` handler makes, so there is one
+   * writer for a layer's `text` regardless of which control set it. `commit:
+   * false` (Escape) discards the live text and repaints the layer from the
+   * document as it stood before the edit, since the doc never changed.
+   */
+  _exitTextEdit(commit) {
+    const ed = this._editing;
+    if (!ed) return;
+    this._editing = null;
+    ed.teardown();
+    ed.block.contentEditable = "false";
+    ed.block.classList.remove("is-editing");
+    delete ed.layerEl.dataset.editing;
+
+    const text = ed.block.textContent || "";
+    if (commit && text !== ed.original) {
+      this._setLayer({ text });
+      return;
+    }
+    if (ed.scope === "span") this._paintSpanLayers(this.state.doc.spanLayers);
+    else this._paintDeckSlideLayers(ed.i, this.state.doc.slides[ed.i]?.layers);
+    if (!commit) ed.block.blur();
   }
 
   /**
@@ -1339,6 +1606,55 @@ export default class CarouselStudioPage extends Component {
       this._layerPicker.mount();
     }
     this._layerPicker.open();
+  }
+
+  /**
+   * Full-size, swipeable preview of the rendered carousel — opened by a click
+   * on a rendered slide, starting on the one clicked. Appended to
+   * `document.body` rather than mounted in the studio's own tree, the same
+   * way the two `MediaPickerDialog`s above are: an overlay has to sit above
+   * everything, including the properties sheet, not just above the builder.
+   *
+   * @param {number} index
+   */
+  _openRenderedPreview(index) {
+    const paths = this._renderedPaths();
+    if (!paths.length) return;
+    if (!this._previewEl) {
+      const overlay = document.createElement("div");
+      overlay.className = "carousel-studio__preview-overlay";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "Rendered carousel preview");
+      const mount = document.createElement("div");
+      mount.className = "carousel-studio__preview-mount";
+      overlay.appendChild(mount);
+      document.body.appendChild(overlay);
+      this._previewEl = overlay;
+      this._previewMount = mount;
+    }
+    this._previewEl.classList.add("is-open");
+    this._previewViewer?.unmount();
+    this._previewViewer = new MediaViewer(this._previewMount, {
+      // carousel:true marks every slide as belonging to the same deck, so
+      // MediaViewer pans them edge-to-edge (_seamlessPair/_seamlessStep) the
+      // same way a published carousel-block post does, rather than treating
+      // consecutive slides as unrelated photos and fade-cutting between them.
+      items: paths.map((path) => ({ type: "image", url: path, alt: "", carousel: true })),
+      startIndex: Math.max(0, Math.min(index, paths.length - 1)),
+      showClose: true,
+      // No post behind these paths for a share link to point at — sharing is
+      // a public-post feature, not an admin preview one.
+      showShare: false,
+      onClose: () => this._closeRenderedPreview(),
+    });
+    this._previewViewer.mount();
+  }
+
+  _closeRenderedPreview() {
+    this._previewEl?.classList.remove("is-open");
+    this._previewViewer?.unmount();
+    this._previewViewer = null;
   }
 
   /**
@@ -1963,17 +2279,15 @@ export default class CarouselStudioPage extends Component {
   // a stage control must not cause). Every render re-emits them from the two
   // fields below, so a rebuild from anywhere else keeps them.
 
-  /** Open, close, or flip the properties panel, and remember the choice. */
+  /** Expand, collapse, or flip the properties card's body, and remember the
+   *  choice — the same `.collapsed` toggle the plugins page's group cards use. */
   _toggleProps(force) {
     const open = typeof force === "boolean" ? force : !this.state.propsOpen;
     this.state.propsOpen = open;
-    this.$(".carousel-studio__builder")?.classList.toggle("is-details-open", open);
-    const toggle = this.$("#carousel-props-toggle");
-    if (toggle) {
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Hide properties" : "Properties";
-    }
-    this.$("#carousel-props")?.setAttribute("aria-hidden", String(!open));
+    const card = this.$("#carousel-props");
+    card?.classList.toggle("collapsed", !open);
+    card?.querySelector(".carousel-studio__props-header")
+      ?.setAttribute("aria-expanded", String(open));
     try {
       localStorage.setItem(PROPS_PREF_KEY, open ? "1" : "0");
     } catch {
@@ -2037,8 +2351,20 @@ export default class CarouselStudioPage extends Component {
 
   // ── Preview painting ──────────────────────────────────────────────────────
 
+  /** Snapshot the stage scroller's offset before its node is torn down —
+   *  see `_stageScrollLeft`. Runs before every render including the first,
+   *  when there is nothing to read yet. */
+  beforeRender() {
+    const scroll = this.$(".carousel-studio__stage-scroll");
+    if (scroll) this._stageScrollLeft = scroll.scrollLeft;
+  }
+
   afterRender() {
     setupAdminLayout(this, { currentPath: "/light/carousel" });
+
+    // Put the stage scroller back where the user left it — see `beforeRender`.
+    const stageScroll = this.$(".carousel-studio__stage-scroll");
+    if (stageScroll) stageScroll.scrollLeft = this._stageScrollLeft;
 
     // Re-taken every render, released with it (see Component's resource
     // contract) — so navigating off the studio takes the shortcut with it.
@@ -2108,8 +2434,10 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Split-mode preview: one crop band across the stage, one column per frame,
-   * and the rail that says where in its slack the band sits.
+   * Split-mode preview: one crop band across the stage as a fallback, each
+   * column tile painted with its own independently-fitted slice on top of it
+   * (they can differ from the combined band under `pad`), and the rail that
+   * says where in its slack the band sits.
    *
    * `anchorOverride` is the live drag's provisional value — the same argument
    * `_paintDeckSlide` takes a provisional slide for, and for the same reason:
@@ -2125,7 +2453,7 @@ export default class CarouselStudioPage extends Component {
     paintSplit(
       {
         stage: this.$(".carousel-studio__stage"),
-        frames: this.$$(".carousel-studio__frame"),
+        frames: this.$$(".carousel-studio__stage-slide"),
       },
       {
         source,
@@ -2209,10 +2537,9 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Paint one deck slide — the stage slice and the filmstrip frame both carry
-   * `data-slice`, so one query finds every element showing it. Called with a
-   * provisional slide mid-gesture and with the document's own slide otherwise,
-   * which is what keeps a drag and a commit painting identically.
+   * Paint one deck slide onto its stage tile (`[data-slice="${i}"]`). Called
+   * with a provisional slide mid-gesture and with the document's own slide
+   * otherwise, which is what keeps a drag and a commit painting identically.
    *
    * @param {number} i
    * @param {import('./document.js').CarouselSlide} slide
@@ -2342,12 +2669,14 @@ export default class CarouselStudioPage extends Component {
       });
     }
 
-    // The keyboard half of the rail reorder: the handle is a button, so the
-    // arrows are free, and left/right is the axis the rail runs on (see
+    // The keyboard half of the stage reorder: the handle is a button, so the
+    // arrows are free, and left/right is the axis the stage runs on (see
     // `_setupSlideReorder`). Without this the reorder would be pointer-only,
     // which is the failure the arrange mode in `PostEditPage` avoids the same
-    // way. Delegated on the strip, so it survives the rebuild a move causes.
-    this.on(this.$(".carousel-studio__filmstrip"), "keydown", (e) => {
+    // way. Delegated on the stage column — the handle now lives in the top
+    // management pane, a sibling of the stage rather than a descendant of it —
+    // so it survives the rebuild a move causes.
+    this.on(this.$(".carousel-studio__stage-col"), "keydown", (e) => {
       const ev = /** @type {KeyboardEvent} */ (e);
       if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
       const handle = /** @type {HTMLElement|null} */ (
@@ -2357,6 +2686,17 @@ export default class CarouselStudioPage extends Component {
       ev.preventDefault();
       const from = Number(handle.dataset.slide);
       this._moveSlide(from, from + (ev.key === "ArrowLeft" ? -1 : 1), { refocus: true });
+    });
+
+    // The properties card's header is a div (`role="button"`, for the chevron
+    // and title to share one clickable row), so Enter/Space need wiring by
+    // hand the way a real `<button>` would not — same as the plugins page's
+    // group headers.
+    this.on(this.$(".carousel-studio__props-header"), "keydown", (e) => {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      this._toggleProps();
     });
 
     this._wireBgFields();

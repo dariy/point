@@ -14,7 +14,7 @@
  */
 
 import { html, raw } from "../../../utils/helpers.js";
-import { GRIP_SVG, REFRESH_SVG } from "../../../utils/icons.js";
+import { CHEVRON_SVG, COPY_SVG, GRIP_SVG, PLUS_SVG, REFRESH_SVG, TRASH_SVG } from "../../../utils/icons.js";
 import {
   canvasSize,
   fitReport,
@@ -250,10 +250,16 @@ const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 /**
  * The selection chrome for a stage column: an outline box carrying the eight
- * resize handles, plus an empty layer for `paintLayerChrome` to draw snap guides
- * into. Emitted while a layer is selected — for the selected slide's column
- * alone when that layer is a slide layer, for every column when it spans them.
- * Its absence is how a deselect clears it on the next render.
+ * resize handles plus a ninth, `--rotate`, above the box's `n` edge, plus an
+ * empty layer for `paintLayerChrome` to draw snap guides into. Emitted while a
+ * layer is selected — for the selected slide's column alone when that layer is
+ * a slide layer, for every column when it spans them. Its absence is how a
+ * deselect clears it on the next render.
+ *
+ * The rotate handle is a child of the outline box, not `HANDLE_ANCHORS` — it
+ * isn't one of `hitLayer`'s eight geometric anchors, and being a child means
+ * `paintChrome`'s `rotate()` on the outline box carries the handle around with
+ * it for free, the same way a layer's own rotation carries its node.
  *
  * @param {boolean} active  this column can show the selected layer
  */
@@ -269,6 +275,7 @@ function layerChrome(active) {
               data-anchor="${a}"
             ></span>`,
         )}
+        <span class="carousel-studio__handle carousel-studio__handle--rotate"></span>
       </span>
       <span class="carousel-studio__snap"></span>
     </span>`;
@@ -290,7 +297,7 @@ function layerLabel(layer) {
 }
 
 /**
- * The builder: mode toggle, stage, filmstrip, the mode's own panel, the
+ * The builder: mode toggle, stage, the mode's own panel, the
  * doc-level controls, and the strip of slides really in the post.
  *
  * @param {object} o
@@ -308,9 +315,9 @@ function layerLabel(layer) {
  * @param {"slide"|"span"} o.layerScope  which list `selectedLayer` indexes
  * @param {string} o.logoUrl       the `logo_url` setting, the image layer default
  * @param {string[]} o.renderedPaths
- * @param {boolean} [o.propsOpen]  is the properties panel showing? A rail wide,
- *   a bottom sheet below 64em — the same class name and the same state-class
- *   placement the post editor's Details panel uses.
+ * @param {boolean} [o.propsOpen]  is the properties card's body expanded? The
+ *   same collapsible `.card`/`.card-header`/`.card-body` pattern the plugins
+ *   page's group cards use, rather than a separate open/close control.
  * @param {number} [o.stageZoom]   multiplier on the stage's CSS height budget,
  *   emitted as the one custom property the stylesheet reads.
  */
@@ -366,113 +373,139 @@ export function builder({
       })
     : "";
 
-  // In deck mode the stage is no longer one crop band projected across the
-  // deck — it is n independently framed slides laid side by side, and each
-  // column is the editing surface: `gestures.js` binds these, so a pan, a
-  // zoom, a layer drag and an arrow nudge all happen at the size the user is
-  // actually looking at.
-  const stageSlides = deck
-    ? doc.slides.map(
-        (slide, i) => html`
+  // The stage is the one stripe, in either mode. In deck mode it is n
+  // independently framed slides laid side by side, and each column is the
+  // editing surface: `gestures.js` binds these, so a pan, a zoom, a layer drag
+  // and an arrow nudge all happen at the size the user is actually looking
+  // at. Selection lives here too, already — a tap or a focus on a column
+  // calls `select` (see `createDeckGestures` in `studio/gestures.js`).
+  //
+  // The slide number, the drag handle and the duplicate/delete actions used
+  // to live layered over the column itself; they moved out to the management
+  // panes below so a control can never sit on top of the photo it edits, and
+  // a tap meant for one can never land on the pan gesture instead.
+  //
+  // In Slides mode a column carries none of that: no tabindex, no layer
+  // markup, just `paintSplit`'s per-slice crop preview — the whole stage is
+  // the editing surface there instead (`_anchorGesture`, bound to
+  // `.carousel-studio__stage` itself in `index.js`), and reordering isn't a
+  // thing a panorama slice does.
+  const stageSlides = doc.slides.map((slide, i) =>
+    deck
+      ? html`
           <span
             class="carousel-studio__stage-slide ${i === selected ? "is-selected" : ""}"
             data-slice="${String(i)}"
             tabindex="0"
             role="group"
             aria-label="Slide ${String(i + 1)} framing — drag to pan, wheel to zoom, arrow keys to nudge"
-            style="left:${String((i / n) * 100)}%;width:${String(100 / n)}%"
           >
-            ${deckLayers()}${layerNodes(slide)}${spanNodes}${layerChrome(
+            ${deckLayers()}${spanNodes}${layerNodes(slide)}${layerChrome(
               (i === deckIndex && slideChrome) || spanChrome,
             )}
-          </span>`,
-      )
-    : "";
-
-  // The deck filmstrip is a rail, not a second editing surface: a thumbnail,
-  // a slide number and the selected state. Its only job is to move the
-  // selection, so it is a button — the layer nodes, span nodes and chrome that
-  // used to be duplicated here live on the stage alone.
-  //
-  // In Slides mode each frame is wrapped with its own drag handle, because
-  // `attachPointerReorder` claims the pointer on press: a handle *is* the
-  // frame would mean a press that never becomes the click that selects it.
-  // The handle carries `data-slide`, the frame `data-slice` — the frame is a
-  // paint host and the handle is not (see the note on `pick-source` in
-  // `index.js`).
-  const strip = doc.slides.map((_slide, i) =>
-    deck
-      ? html`
-          <div class="carousel-studio__rail-item" data-slide="${String(i)}">
-            <button
-              type="button"
-              class="carousel-studio__frame carousel-studio__frame--deck ${i === selected
-                ? "is-selected"
-                : ""}"
-              data-slice="${String(i)}"
-              data-action="select-slide"
-              aria-pressed="${i === selected ? "true" : "false"}"
-              aria-label="Select slide ${String(i + 1)}"
-              style="aspect-ratio:${String(w)}/${String(h)}"
-            >
-              ${deckLayers()}
-              <span class="carousel-studio__frame-num">${String(i + 1)}</span>
-            </button>
-            <button
-              type="button"
-              class="carousel-studio__rail-handle"
-              data-slide="${String(i)}"
-              aria-label="Reorder slide ${String(i + 1)} — drag, or press the left and right arrow keys"
-            >
-              ${raw(GRIP_SVG)}
-            </button>
-          </div>`
-      : html`
-          <div
-            class="carousel-studio__frame"
-            data-slice="${String(i)}"
-            style="aspect-ratio:${String(w)}/${String(h)}"
-          ></div>`,
+          </span>`
+      : html`<div class="carousel-studio__stage-slide" data-slice="${String(i)}"></div>`,
   );
 
-  // Add / duplicate / delete act on the selected slide, so they are one row
-  // under the rail rather than three chips on every frame. Slides mode only:
-  // a panorama's count is derived from the fit panel, and a control that added
-  // a column there would be offering to break the derivation.
-  const railTools = deck
+  // The "+ Slide" seams — the same idea as the post editor's insert zone
+  // (`.ve-insert-zone`, `editor.css`), turned 90° for a stage that runs
+  // sideways. One at every gap *and* at both ends — n + 1 for n slides — so a
+  // slide can land anywhere, not just between two existing ones. `g` is the
+  // insertion point itself (0 = before the first slide, n = after the last);
+  // `data-slide` is `g - 1`, the slide *before* that point, which is exactly
+  // `_addSlide`'s "after this index" — `-1` for the head, same as the old
+  // rail chip's `data-slide` did for `_slideArg`. Slides mode only, like every
+  // other per-slide control here.
+  //
+  // Every zone, including the two at the ends, centres on its seam the same
+  // way — half the button riding outside the stage at 0%/100% exactly as an
+  // interior one rides half into the slide on either side of it. `overflow:
+  // visible` on `.carousel-studio__stage--deck` (`carousel.css`) is what lets
+  // the end buttons show and stay clickable rather than being clipped by the
+  // stage's own rounded corner.
+  //
+  // Duplicate rides along right after Add in every zone but the head one —
+  // there is no slide before the head to copy — since a seam after slide `i`
+  // is exactly where a copy of slide `i` would land anyway: the two "more
+  // slides" actions read as neighbours because they are, functionally, the
+  // same seam.
+  const insertZones = deck
+    ? Array.from({ length: n + 1 }, (_, g) => {
+        const pct = (g / n) * 100;
+        const style = `left:${String(pct)}%`;
+        const slideBefore = g - 1;
+        return html`
+          <span class="carousel-studio__insert-zone" style="${style}">
+            <button
+              type="button"
+              class="carousel-studio__insert-btn"
+              data-action="add-slide"
+              data-slide="${String(slideBefore)}"
+              aria-label="Add a slide here"
+              title="Add a slide here"
+              ${n >= MAX_SLIDES ? "disabled" : ""}
+            >
+              ${raw(PLUS_SVG)}
+            </button>
+            ${slideBefore >= 0
+              ? html`
+                  <button
+                    type="button"
+                    class="carousel-studio__insert-btn"
+                    data-action="duplicate-slide"
+                    data-slide="${String(slideBefore)}"
+                    aria-label="Duplicate slide ${String(slideBefore + 1)}"
+                    title="Duplicate slide ${String(slideBefore + 1)}"
+                    ${n >= MAX_SLIDES ? "disabled" : ""}
+                  >
+                    ${raw(COPY_SVG)}
+                  </button>`
+              : ""}
+          </span>`;
+      })
+    : [];
+
+  // The top management pane: reorder handle, slide number, delete — one
+  // segment per slide, the same n-equal-width division as the stage itself so
+  // a pane always sits directly over its own column regardless of scroll or
+  // zoom. `is-selected` rides along so the number can pick up the same
+  // highlight the column below it carries. Delete sits at the segment's own
+  // right edge, the slide's top-right corner. Duplicate lives in the seam
+  // itself (`insertZones`, above) rather than a pane of its own now, so there
+  // is no bottom pane any more.
+  const topPane = deck
     ? html`
-        <div class="carousel-studio__rail-tools" role="group" aria-label="Slides">
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="add-slide"
-            data-slide="${String(deckIndex)}"
-            ${n >= MAX_SLIDES ? "disabled" : ""}
-          >
-            + Slide
-          </button>
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="duplicate-slide"
-            data-slide="${String(deckIndex)}"
-            ${n >= MAX_SLIDES ? "disabled" : ""}
-          >
-            Duplicate
-          </button>
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="delete-slide"
-            data-slide="${String(deckIndex)}"
-            ${n <= MIN_SLIDES ? "disabled" : ""}
-          >
-            Delete
-          </button>
-          <span class="carousel-studio__fit-dims">
-            ${String(n)} of ${String(MAX_SLIDES)} slides · acting on slide
-            ${String(deckIndex + 1)}
-          </span>
+        <div class="carousel-studio__pane-row carousel-studio__pane-row--top">
+          ${doc.slides.map(
+            (_slide, i) => html`
+              <div
+                class="carousel-studio__pane carousel-studio__pane--top ${i === selected
+                  ? "is-selected"
+                  : ""}"
+                data-slice="${String(i)}"
+              >
+                <button
+                  type="button"
+                  class="carousel-studio__rail-handle"
+                  data-slide="${String(i)}"
+                  aria-label="Reorder slide ${String(i + 1)} — drag, or press the left and right arrow keys"
+                >
+                  ${raw(GRIP_SVG)}
+                </button>
+                <span class="carousel-studio__frame-num">${String(i + 1)}</span>
+                <button
+                  type="button"
+                  class="carousel-studio__pane-action carousel-studio__pane-action--danger"
+                  data-action="delete-slide"
+                  data-slide="${String(i)}"
+                  aria-label="Delete slide ${String(i + 1)}"
+                  title="Delete slide ${String(i + 1)}"
+                  ${n <= MIN_SLIDES ? "disabled" : ""}
+                >
+                  ${raw(TRASH_SVG)}
+                </button>
+              </div>`,
+          )}
         </div>`
     : "";
 
@@ -491,122 +524,145 @@ export function builder({
       ${deck ? "Use one photo for all slides" : "Change photo"}
     </button>`;
 
+  // The aspect select's current label doubles as the caption's "active export
+  // format" — it names the canvas the rendered strip was cut for, without a
+  // second source of truth for what "active" means.
+  const aspectLabel = ASPECT_OPTIONS.find(([val]) => val === doc.aspect)?.[1] ?? doc.aspect;
   const renderedStrip = renderedPaths.length
     ? html`
         <div class="carousel-studio__rendered">
-          <h2 class="carousel-studio__subhead">Rendered slides</h2>
+          <h2 class="carousel-studio__subhead">
+            Rendered slides — ${aspectLabel} · ${String(w)}&times;${String(h)}
+          </h2>
           <div class="carousel-studio__slides">
             ${renderedPaths.map(
-              (p) => html`<img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />`,
+              (p, i) => html`
+                <figure class="carousel-studio__rendered-item">
+                  <button
+                    type="button"
+                    class="carousel-studio__rendered-trigger"
+                    data-action="preview-rendered"
+                    data-index="${String(i)}"
+                    aria-label="Preview the rendered carousel, starting at slide ${String(i + 1)}"
+                  >
+                    <img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />
+                  </button>
+                  <figcaption class="carousel-studio__rendered-caption">
+                    <span class="carousel-studio__rendered-badge">${String(i + 1)}</span>
+                    <span>${String(i + 1)} / ${String(renderedPaths.length)}</span>
+                    <span>${String(w)}&times;${String(h)}</span>
+                  </figcaption>
+                </figure>`,
             )}
           </div>
         </div>`
     : "";
 
+  // Aspect + safe-area guides + the "one photo for all slides" swap act on the
+  // whole document, not the selected slide, but they read as document-level
+  // properties all the same, so they live in the sidebar under whatever the
+  // mode's own panel is, rather than as a stray block outside it.
+  const docControls = html`
+    <div class="carousel-studio__controls">
+      ${deck
+        ? ""
+        : html`
+            <label class="carousel-studio__control">
+              <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
+              <input
+                type="range"
+                id="carousel-n"
+                min="${String(MIN_SLIDES)}"
+                max="${String(MAX_SLIDES)}"
+                value="${String(n)}"
+              />
+            </label>`}
+
+      <label class="carousel-studio__control">
+        <span>Aspect</span>
+        <select id="carousel-aspect">
+          ${ASPECT_OPTIONS.map(
+            ([val, text]) => html`
+              <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
+          )}
+        </select>
+      </label>
+
+      <label class="carousel-studio__control carousel-studio__control--check">
+        <input type="checkbox" id="carousel-guides" ${showGuides ? "checked" : ""} />
+        <span>Safe-area guides</span>
+      </label>
+
+      ${sourceButton}
+    </div>`;
+
   return html`
     <div
-      class="carousel-studio__builder ${propsOpen ? "is-details-open" : ""}"
+      class="carousel-studio__builder"
       style="--carousel-stage-zoom:${String(stageZoom)}"
     >
-      ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+      <div class="carousel-studio__main">
+        ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
 
-      <div class="carousel-studio__stage-scroll">
-        <div
-          class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
-            ? "carousel-studio__stage--anchor"
-            : ""}"
-          style="aspect-ratio:${String(n * w)}/${String(h)}"
-          ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
-        >
-          ${stageSlides}${dividers}${guides}${rail}
+        ${stageBar({ stageZoom })}
+
+        <div class="carousel-studio__stage-scroll">
+          <div class="carousel-studio__stage-col">
+            ${topPane}
+            <div
+              class="carousel-studio__stage ${deck ? "carousel-studio__stage--deck" : ""} ${rail
+                ? "carousel-studio__stage--anchor"
+                : ""}"
+              style="aspect-ratio:${String(n * w)}/${String(h)}"
+              ${rail ? raw('title="Drag up or down to move the crop band"') : ""}
+            >
+              ${stageSlides}${dividers}${insertZones}${guides}${rail}
+            </div>
+          </div>
         </div>
+
+        ${renderedStrip}
       </div>
 
-      ${stageBar({ propsOpen, stageZoom })}
-
-      <div
-        class="carousel-studio__filmstrip"
-        aria-label="${deck ? "Slides — drag a handle to reorder" : "Slide preview"}"
-      >
-        ${strip}
-      </div>
-      ${railTools}
-
-      <div class="carousel-studio__props-backdrop" data-action="close-props"></div>
       <aside
-        class="carousel-studio__props"
+        class="carousel-studio__props card${propsOpen ? "" : " collapsed"}"
         id="carousel-props"
         aria-label="Slide properties"
-        aria-hidden="${propsOpen ? "false" : "true"}"
       >
-        <button
-          type="button"
-          class="carousel-studio__props-close btn btn-secondary"
-          data-action="close-props"
-          aria-label="Close properties"
+        <div
+          class="card-header carousel-studio__props-header"
+          data-action="toggle-props"
+          role="button"
+          tabindex="0"
+          aria-expanded="${propsOpen ? "true" : "false"}"
+          aria-controls="carousel-props-body"
         >
-          &times;
-        </button>
-        ${deck
-          ? html`${deckPanel({ doc, index: deckIndex, hasPad })}${layerPanel({
-              doc,
-              index: deckIndex,
-              selectedLayer,
-              layerScope,
-              logoUrl,
-            })}`
-          : fitPanel({ doc, srcW, srcH, fitMode })}
+          <h2 class="carousel-studio__props-title">Properties</h2>
+          <span class="toggle-icon">${raw(CHEVRON_SVG)}</span>
+        </div>
+        <div class="card-body carousel-studio__props-body" id="carousel-props-body">
+          ${deck ? deckPanel({ doc, index: deckIndex, hasPad }) : fitPanel({ doc, srcW, srcH, fitMode })}
+          ${docControls}
+          ${deck
+            ? layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
+            : ""}
+        </div>
       </aside>
-
-      <div class="carousel-studio__controls">
-        ${deck
-          ? ""
-          : html`
-              <label class="carousel-studio__control">
-                <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
-                <input
-                  type="range"
-                  id="carousel-n"
-                  min="${String(MIN_SLIDES)}"
-                  max="${String(MAX_SLIDES)}"
-                  value="${String(n)}"
-                />
-              </label>`}
-
-        <label class="carousel-studio__control">
-          <span>Aspect</span>
-          <select id="carousel-aspect">
-            ${ASPECT_OPTIONS.map(
-              ([val, text]) => html`
-                <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
-            )}
-          </select>
-        </label>
-
-        <label class="carousel-studio__control carousel-studio__control--check">
-          <input type="checkbox" id="carousel-guides" ${showGuides ? "checked" : ""} />
-          <span>Safe-area guides</span>
-        </label>
-
-        ${sourceButton}
-      </div>
-
-      ${renderedStrip}
     </div>`;
 }
 
 /**
- * The bar under the stage: stage zoom on the left, the properties toggle on the
- * right. Neither touches the document — zoom writes one CSS custom property on
- * the builder root and the toggle flips one state class, so both are applied
- * without a rebuild (see `_setStageZoom` / `_toggleProps` in `index.js`).
+ * The bar under the stage: stage zoom, the studio's only control that is
+ * neither the document nor the properties panel. Writes one CSS custom
+ * property on the builder root, applied without a rebuild (see
+ * `_setStageZoom` in `index.js`).
  *
  * "100%" here means the stage's own height budget, not 1:1 with the 1350px
  * canvas — the canvas is taller than any laptop.
  *
- * @param {{propsOpen: boolean, stageZoom: number}} o
+ * @param {{stageZoom: number}} o
  */
-export function stageBar({ propsOpen, stageZoom }) {
+export function stageBar({ stageZoom }) {
   return html`
     <div class="carousel-studio__stage-bar">
       <div class="carousel-studio__zoom" role="group" aria-label="Stage zoom">
@@ -650,17 +706,6 @@ export function stageBar({ propsOpen, stageZoom }) {
           100%
         </button>
       </div>
-
-      <button
-        type="button"
-        id="carousel-props-toggle"
-        class="btn btn-secondary"
-        data-action="toggle-props"
-        aria-controls="carousel-props"
-        aria-expanded="${propsOpen ? "true" : "false"}"
-      >
-        ${propsOpen ? "Hide properties" : "Properties"}
-      </button>
     </div>`;
 }
 
@@ -1054,66 +1099,80 @@ export function layerForm(layer, logoUrl) {
   const counter = layer.type === "counter" ? layer : null;
 
   const opacityField = (value) => html`
-    <label class="carousel-studio__bg-field">
-      <span
-        >Opacity:
-        <output id="carousel-layer-opacity-out"
-          >${String(Math.round(value * 100))}%</output
-        ></span
-      >
-      <input
-        type="range"
-        id="carousel-layer-opacity"
-        min="0"
-        max="1"
-        step="0.01"
-        value="${String(value)}"
-      />
+    <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
+      <div class="carousel-studio__field-header">
+        <span>Opacity</span>
+        <output class="carousel-studio__field-badge" id="carousel-layer-opacity-out">${String(Math.round(value * 100))}%</output>
+      </div>
+      <div class="carousel-studio__range-row">
+        <span>0%</span>
+        <input
+          type="range"
+          id="carousel-layer-opacity"
+          min="0"
+          max="1"
+          step="0.01"
+          value="${String(value)}"
+        />
+        <span>100%</span>
+      </div>
     </label>`;
 
   const colorField = (id, value) => html`
     <label class="carousel-studio__bg-field">
       <span>Colour</span>
-      <input type="color" id="${id}" value="${colorInputValue(value)}" />
+      <div class="carousel-studio__color-picker">
+        <input type="color" id="${id}" value="${colorInputValue(value)}" />
+        <span aria-hidden="true">${colorInputValue(value).toUpperCase()}</span>
+      </div>
     </label>`;
 
   const typeStyleFields = (l) => html`
-    ${colorField("carousel-layer-color", l.color)}
-    <label class="carousel-studio__bg-field">
-      <span>Align</span>
-      <select id="carousel-layer-align">
-        ${LAYER_ALIGNS.map(
-          ([v, label]) => html`
-            <option value="${v}" ${v === l.align ? "selected" : ""}>${label}</option>`,
-        )}
-      </select>
+    <div class="carousel-studio__bg-row">
+      ${colorField("carousel-layer-color", l.color)}
+      <label class="carousel-studio__bg-field">
+        <span>Align</span>
+        <select id="carousel-layer-align">
+          ${LAYER_ALIGNS.map(
+            ([v, label]) => html`
+              <option value="${v}" ${v === l.align ? "selected" : ""}>${label}</option>`,
+          )}
+        </select>
+      </label>
+      <label class="carousel-studio__bg-field">
+        <span>Vertical</span>
+        <select id="carousel-layer-valign">
+          ${LAYER_VALIGNS.map(
+            ([v, label]) => html`
+              <option value="${v}" ${v === l.valign ? "selected" : ""}>${label}</option>`,
+          )}
+        </select>
+      </label>
+    </div>
+    <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
+      <div class="carousel-studio__field-header">
+        <span>Weight</span>
+        <output class="carousel-studio__field-badge" id="carousel-layer-weight-out">${String(l.weight)}</output>
+      </div>
+      <div class="carousel-studio__range-row">
+        <span>100</span>
+        <input
+          type="range"
+          id="carousel-layer-weight"
+          min="100"
+          max="900"
+          step="50"
+          value="${String(l.weight)}"
+        />
+        <span>900</span>
+      </div>
     </label>
-    <label class="carousel-studio__bg-field">
-      <span>Vertical</span>
-      <select id="carousel-layer-valign">
-        ${LAYER_VALIGNS.map(
-          ([v, label]) => html`
-            <option value="${v}" ${v === l.valign ? "selected" : ""}>${label}</option>`,
-        )}
-      </select>
-    </label>
-    <label class="carousel-studio__bg-field">
-      <span
-        >Weight:
-        <output id="carousel-layer-weight-out">${String(l.weight)}</output></span
-      >
-      <input
-        type="range"
-        id="carousel-layer-weight"
-        min="100"
-        max="900"
-        step="50"
-        value="${String(l.weight)}"
-      />
-    </label>
-    <label class="carousel-studio__bg-field carousel-studio__bg-field--check">
-      <input type="checkbox" id="carousel-layer-shadow" ${l.shadow ? "checked" : ""} />
-      <span>Drop shadow</span>
+    <label class="carousel-studio__bg-field carousel-studio__bg-field--check carousel-studio__bg-field--wide">
+      <div style="display: flex; align-items: center; gap: var(--spacing-xs);">
+        <input type="checkbox" id="carousel-layer-shadow" ${l.shadow ? "checked" : ""} />
+        <span>Drop shadow</span>
+      </div>
+      <span class="carousel-studio__field-hint">blur: 4px</span>
     </label>`;
 
   const imageName = image
@@ -1129,7 +1188,10 @@ export function layerForm(layer, logoUrl) {
   if (text) {
     body = html`
       <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
-        <span>Text</span>
+        <div class="carousel-studio__field-header">
+          <span>Text Content</span>
+          <span class="carousel-studio__field-hint">${text.text ? text.text.length : 0} char${text.text && text.text.length === 1 ? "" : "s"}</span>
+        </div>
         <textarea id="carousel-layer-text" rows="2">${text.text || ""}</textarea>
       </label>
       ${typeStyleFields(text)}`;
@@ -1161,35 +1223,43 @@ export function layerForm(layer, logoUrl) {
     body = html`
       <label class="carousel-studio__bg-field">
         <span>Fill</span>
-        <input type="color" id="carousel-layer-fill" value="${colorInputValue(rect.fill)}" />
+        <div class="carousel-studio__color-picker">
+          <input type="color" id="carousel-layer-fill" value="${colorInputValue(rect.fill)}" />
+          <span aria-hidden="true">${colorInputValue(rect.fill).toUpperCase()}</span>
+        </div>
       </label>
-      <label class="carousel-studio__bg-field">
-        <span
-          >Corner:
-          <output id="carousel-layer-radius-out"
-            >${String(Math.round(rect.radius * 100))}%</output
-          ></span
-        >
-        <input
-          type="range"
-          id="carousel-layer-radius"
-          min="0"
-          max="0.5"
-          step="0.01"
-          value="${String(rect.radius)}"
-        />
+      <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
+        <div class="carousel-studio__field-header">
+          <span>Corner</span>
+          <output class="carousel-studio__field-badge" id="carousel-layer-radius-out">${String(Math.round(rect.radius * 100))}%</output>
+        </div>
+        <div class="carousel-studio__range-row">
+          <span>0%</span>
+          <input
+            type="range"
+            id="carousel-layer-radius"
+            min="0"
+            max="0.5"
+            step="0.01"
+            value="${String(rect.radius)}"
+          />
+          <span>50%</span>
+        </div>
       </label>
       ${opacityField(rect.opacity)}`;
   } else if (arrow) {
     body = html`
-      <label class="carousel-studio__bg-field">
-        <span>Direction</span>
-        <select id="carousel-layer-direction">
-          <option value="right" ${arrow.direction === "right" ? "selected" : ""}>Right</option>
-          <option value="left" ${arrow.direction === "left" ? "selected" : ""}>Left</option>
-        </select>
-      </label>
-      ${colorField("carousel-layer-color", arrow.color)} ${opacityField(arrow.opacity)}`;
+      <div class="carousel-studio__bg-row">
+        <label class="carousel-studio__bg-field">
+          <span>Direction</span>
+          <select id="carousel-layer-direction">
+            <option value="right" ${arrow.direction === "right" ? "selected" : ""}>Right</option>
+            <option value="left" ${arrow.direction === "left" ? "selected" : ""}>Left</option>
+          </select>
+        </label>
+        ${colorField("carousel-layer-color", arrow.color)}
+      </div>
+      ${opacityField(arrow.opacity)}`;
   }
 
   return html`<div class="carousel-studio__layer-form" data-layer-type="${t}">${body}</div>`;

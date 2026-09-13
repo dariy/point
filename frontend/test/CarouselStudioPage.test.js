@@ -189,7 +189,7 @@ describe('CarouselStudioPage', () => {
       [/\/api\/posts\/42/, { body: POST }],
       [/\/api\/carousel/, { body: { post_id: 42, doc: { slides: [{ source: '/2026/08/w.jpg' }, { source: '/2026/08/w.jpg' }] } } }],
     ]);
-    assert.equal(el.querySelectorAll('.carousel-studio__frame').length, 2);
+    assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 2);
 
     const range = el.querySelector('#carousel-n');
     range.value = '5';
@@ -197,7 +197,7 @@ describe('CarouselStudioPage', () => {
     await settle();
 
     assert.equal(page.state.doc.slides.length, 5);
-    assert.equal(el.querySelectorAll('.carousel-studio__frame').length, 5);
+    assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 5);
   });
 
   test('no ?post= renders the empty state', async () => {
@@ -319,7 +319,7 @@ describe('CarouselStudioPage', () => {
 
       assert.equal(page.state.doc.strategy, 'exact');
       assert.equal(page.state.doc.slides.length, 3);
-      assert.equal(el.querySelectorAll('.carousel-studio__frame').length, 3, 'preview follows');
+      assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 3, 'preview follows');
     });
 
     test('the Pad radio snaps the count to what pad makes and stores the strategy', async () => {
@@ -396,7 +396,7 @@ describe('CarouselStudioPage', () => {
     });
   });
 
-  describe('filmstrip/stage background crop', () => {
+  describe('stage background crop', () => {
     /** A doc of `n` split slides from one source, plus render deps whose
      *  probe reports a fixed source size — mirrors `sized()` above. */
     function sized(n, w, h, strategy) {
@@ -429,7 +429,7 @@ describe('CarouselStudioPage', () => {
       assert.deepEqual(firstLayer(stage.style.backgroundSize), expectedStage.size);
       assert.deepEqual(firstLayer(stage.style.backgroundPosition), expectedStage.position);
 
-      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      const frames = [...el.querySelectorAll('.carousel-studio__stage-slide')];
       assert.equal(frames.length, 3);
       frames.forEach((frame, i) => {
         const expected = backgroundFit(4096, 2000, '4:5', 3, 'cover', 0.5, 1, i);
@@ -453,7 +453,7 @@ describe('CarouselStudioPage', () => {
       assert.equal(firstLayer(stage.style.backgroundPosition)[0], 50);
       assert.equal(stagePosY, 50); // default anchorY
 
-      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      const frames = [...el.querySelectorAll('.carousel-studio__stage-slide')];
       const first = frames[0];
       const last = frames[frames.length - 1];
       const [firstX] = firstLayer(first.style.backgroundPosition);
@@ -468,7 +468,7 @@ describe('CarouselStudioPage', () => {
       const stage = el.querySelector('.carousel-studio__stage');
       assert.equal(firstLayer(stage.style.backgroundPosition)[0], 0, 'flush-left, not centred');
 
-      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      const frames = [...el.querySelectorAll('.carousel-studio__stage-slide')];
       const last = frames[frames.length - 1];
       const [sizeX] = firstLayer(last.style.backgroundSize);
       const [posX] = firstLayer(last.style.backgroundPosition);
@@ -492,7 +492,7 @@ describe('CarouselStudioPage', () => {
 
       const stage = el.querySelector('.carousel-studio__stage');
       assert.ok(stage.style.backgroundImage, 'stage still gets an image');
-      const frames = [...el.querySelectorAll('.carousel-studio__frame')];
+      const frames = [...el.querySelectorAll('.carousel-studio__stage-slide')];
       assert.equal(frames.length, 2);
       assert.equal(firstLayer(frames[0].style.backgroundPosition)[0], 0);
       assert.equal(firstLayer(frames[1].style.backgroundPosition)[0], 100);
@@ -1163,18 +1163,21 @@ describe('CarouselStudioPage', () => {
      *  hatch is the parent frame's, so the letterbox shows through it. */
     const pair = (css) => css.trim().split(/\s+/).map((v) => Number(v.replace('%', '')));
 
-    const deckImg = (el, i) =>
-      el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"] .carousel-studio__frame-img`);
-
     /** The stage's own column for slide `i` — the editing surface `gestures.js`
-     *  binds. Everything a pointer or an arrow key does happens here; the rail
-     *  below only moves the selection. */
+     *  binds, and the sole paint host now that the filmstrip is merged into it.
+     *  Everything a pointer or an arrow key does happens here, including the
+     *  handle that moves the selection's order. */
     const stageCol = (el, i) =>
       el.querySelector(`.carousel-studio__stage-slide[data-slice="${i}"]`);
     const stageImg = (el, i) =>
       el.querySelector(
         `.carousel-studio__stage-slide[data-slice="${i}"] .carousel-studio__frame-img`,
       );
+    /** The top management pane for slide `i` — the reorder handle, the slide
+     *  number and the delete action. Off the photo itself, unlike the stage
+     *  column. */
+    const paneTop = (el, i) =>
+      el.querySelector(`.carousel-studio__pane--top[data-slice="${i}"]`);
 
     /** linkedom has no layout, and the pan converts pixels to crop units — give
      *  the image element the box a browser would have measured. */
@@ -1185,11 +1188,24 @@ describe('CarouselStudioPage', () => {
       return img;
     }
 
+    /** Pan the crop — `ctrlKey` is what asks `onPointerDown` for the crop
+     *  gesture rather than a plain pane-scroll drag (`studio/gestures.js`). */
     function drag(frame, img, dx, dy) {
       withBox(img);
-      fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: 200, clientY: 200 });
-      fire(frame, 'pointermove', { pointerId: 1, clientX: 200 + dx, clientY: 200 + dy });
-      return () => fire(frame, 'pointerup', { pointerId: 1, clientX: 200 + dx, clientY: 200 + dy });
+      fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: 200, clientY: 200, ctrlKey: true });
+      fire(frame, 'pointermove', { pointerId: 1, clientX: 200 + dx, clientY: 200 + dy, ctrlKey: true });
+      return () =>
+        fire(frame, 'pointerup', { pointerId: 1, clientX: 200 + dx, clientY: 200 + dy, ctrlKey: true });
+    }
+
+    /** Selection is a tap on the stage column now — a pointerdown/pointerup
+     *  pair with no movement in between (`onPointerUp` in `studio/gestures.js`
+     *  only selects when `!moved`), not a native click on a button. */
+    function tapSlide(el, i) {
+      const col = stageCol(el, i);
+      fire(col, 'pointerdown', { pointerId: 2, button: 0, clientX: 0, clientY: 0 });
+      fire(col, 'pointerup', { pointerId: 2, clientX: 0, clientY: 0 });
+      return col;
     }
 
     async function toDeck(query = { post: '42' }, n = 3) {
@@ -1229,7 +1245,7 @@ describe('CarouselStudioPage', () => {
       // from the rounded crop, which can shift the source rect by a pixel (see
       // toDeckDocument) — hence a tolerance rather than deepEqual.
       for (let i = 0; i < 3; i++) {
-        const img = deckImg(el, i);
+        const img = stageImg(el, i);
         assert.ok(img, `slide ${i} has an image layer`);
         const wanted = backgroundFit(SRC_W, SRC_H, '4:5', 3, 'cover', 0.5, 1, i);
         const size = pair(img.style.backgroundSize);
@@ -1251,32 +1267,28 @@ describe('CarouselStudioPage', () => {
       assert.ok(!el.querySelector('#carousel-anchor'), 'the anchor slider is gone');
       assert.ok(el.querySelector('.carousel-studio__deck'), 'the deck panel is shown');
       assert.ok(el.querySelector('#carousel-aspect'), 'aspect still applies to a deck');
-      assert.equal(el.querySelectorAll('.carousel-studio__frame--deck').length, 3);
-      // The stage is the editing surface — one framed, focusable slide per column.
+      // The stage is the editing surface — one framed, focusable column per
+      // slide. Its number, reorder handle and duplicate/delete actions live
+      // in the management panes above and below it, off the photo itself.
       assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 3);
       assert.equal(stageCol(el, 0).getAttribute('tabindex'), '0');
 
-      // The filmstrip is a rail: a thumbnail, a number, and one job.
-      const rail = el.querySelector('.carousel-studio__frame--deck[data-slice="1"]');
-      assert.equal(rail.tagName, 'BUTTON');
-      assert.equal(rail.dataset.action, 'select-slide');
-      assert.equal(rail.querySelector('.carousel-studio__frame-num').textContent.trim(), '2');
-      assert.ok(rail.querySelector('.carousel-studio__frame-img'), 'it still shows the slide');
-      assert.ok(!rail.hasAttribute('tabindex'), 'a button is focusable on its own');
+      const col = stageCol(el, 1);
+      assert.ok(col.querySelector('.carousel-studio__frame-img'), 'it shows the slide');
+      assert.equal(col.querySelector('.carousel-studio__frame-num'), null, 'not layered on the photo');
+
+      const pane = paneTop(el, 1);
+      assert.equal(pane.querySelector('.carousel-studio__frame-num').textContent.trim(), '2');
+      assert.ok(pane.querySelector('.carousel-studio__rail-handle'), 'and carries a reorder handle');
     });
 
-    test('the rail moves the selection', async () => {
+    test('a tap on the stage moves the selection', async () => {
       const el = await toDeck();
       assert.equal(page.state.selected, 0);
-      click(el.querySelector('.carousel-studio__frame--deck[data-slice="2"]'));
+      tapSlide(el, 2);
       await settle();
       assert.equal(page.state.selected, 2);
-      assert.ok(
-        el.querySelector('.carousel-studio__frame--deck[data-slice="2"]').classList
-          .contains('is-selected'),
-        'and says so',
-      );
-      assert.ok(stageCol(el, 2).classList.contains('is-selected'), 'on the stage too');
+      assert.ok(stageCol(el, 2).classList.contains('is-selected'), 'and says so');
     });
 
     test('dragging a stage column pans that slide only, and commits on release', async () => {
@@ -1363,7 +1375,7 @@ describe('CarouselStudioPage', () => {
       assert.deepEqual(page.state.doc.slides[0].crop, { x: 0, y: 0, w: 1, h: 1 });
 
       assert.equal(page.state.doc.slides[0].fit, 'contain');
-      const img = deckImg(el, 0);
+      const img = stageImg(el, 0);
       const wanted = deckSlideFitCSS(SRC_W, SRC_H, '4:5', page.state.doc.slides[0].crop, 'contain');
       assert.ok(wanted.box.h < 50, `the content rect is letterboxed: ${wanted.box.h}%`);
       assert.equal(img.style.height, `${wanted.box.h}%`);
@@ -1374,11 +1386,11 @@ describe('CarouselStudioPage', () => {
     });
 
     /** The letterbox `.6` made real: the render fills it from `slide.bg`, and
-     *  the filmstrip has to show the same fill or the WYSIWYG promise breaks. */
+     *  the stage has to show the same fill or the WYSIWYG promise breaks. */
     describe('background fill', () => {
       const deckBg = (el, i) =>
         el.querySelector(
-          `.carousel-studio__frame--deck[data-slice="${i}"] .carousel-studio__frame-bg`,
+          `.carousel-studio__stage-slide[data-slice="${i}"] .carousel-studio__frame-bg`,
         );
       const bgChip = (type) =>
         page.container.querySelector(`[data-action="slide-bg"][data-bg="${type}"]`);
@@ -1400,7 +1412,7 @@ describe('CarouselStudioPage', () => {
         await containSlide0(el);
 
         const bg = deckBg(el, 0);
-        const img = deckImg(el, 0);
+        const img = stageImg(el, 0);
         assert.match(bg.style.backgroundImage, /pano\.jpg/, "the slide's own pixels");
         // paintSlide stretches the content rect over the whole frame; in
         // percentages that is the same pair on a full-frame element.
@@ -1610,11 +1622,11 @@ describe('CarouselStudioPage', () => {
           path === ALT ? { w: ALT_W, h: ALT_H } : { w: SRC_W, h: SRC_H },
       });
 
-      /** Select slide `i` on the rail, then hand back its photo button — the
+      /** Select slide `i` on the stage, then hand back its photo button — the
        *  properties panel only ever shows the selected slide, so that is the
        *  only slide whose button exists. */
       async function photoButton(el, i) {
-        click(el.querySelector(`.carousel-studio__frame--deck[data-slice="${i}"]`));
+        tapSlide(el, i);
         await settle();
         return el.querySelector(`[data-action="pick-source"][data-slide="${i}"]`);
       }
@@ -1781,10 +1793,6 @@ describe('CarouselStudioPage', () => {
         el.querySelector(
           `.carousel-studio__stage-slide[data-slice="${slice}"] .carousel-studio__layer[data-layer="${j}"]`,
         );
-      const frameLayer = (el, slice, j) =>
-        el.querySelector(
-          `.carousel-studio__frame--deck[data-slice="${slice}"] .carousel-studio__layer[data-layer="${j}"]`,
-        );
 
       /** A deck that has already been rendered — every slide carries a specHash,
        *  so `_renderedDoc` is set and the studio starts clean. */
@@ -1898,7 +1906,7 @@ describe('CarouselStudioPage', () => {
         assert.equal(page.state.doc.slides[0].layers[0].color, '#ff0000');
       });
 
-      test('a layer renders on the stage as a positioned element, and not in the rail', async () => {
+      test('a layer renders on the stage as a positioned element', async () => {
         const el = await toDeck();
         click(addLayerBtn(el, 'text'));
         await settle();
@@ -1912,8 +1920,6 @@ describe('CarouselStudioPage', () => {
         assert.equal(node.textContent, 'Hello');
         assert.ok(node.style.left.endsWith('%'), `positioned in percent: ${node.style.left}`);
         assert.ok(parseFloat(node.style.width) > 0);
-        // The rail is a thumbnail, not a second editing surface — no duplicate.
-        assert.equal(frameLayer(el, 0, 0), null, 'the rail carries no layer nodes');
       });
 
       test('a layer edit flips the dirty badge without a parallel mechanism', async () => {
@@ -2044,8 +2050,9 @@ describe('CarouselStudioPage', () => {
           const layerBefore = { ...page.state.doc.slides[0].layers[0].box };
 
           // fx = 0.75 — well right of the box's 0.6 edge. Drag the image left so
-          // the crop pans right, which slide 0 has source room for.
-          press(frame, 150, 20, [[90, 20]]);
+          // the crop pans right, which slide 0 has source room for. Ctrl is what
+          // asks for the crop gesture rather than a plain pane-scroll drag.
+          press(frame, 150, 20, [[90, 20]], { ctrlKey: true });
           await settle();
 
           assert.deepEqual(page.state.doc.slides[0].layers[0].box, layerBefore, 'the layer did not move');
@@ -2057,7 +2064,7 @@ describe('CarouselStudioPage', () => {
           const frame = withFrameBox(stageCol(el, 0));
           withBox(stageImg(el, 0));
           const cropBefore = { ...page.state.doc.slides[0].crop };
-          press(frame, 150, 120, [[90, 120]]);
+          press(frame, 150, 120, [[90, 120]], { ctrlKey: true });
           await settle();
           assert.notDeepEqual(page.state.doc.slides[0].crop, cropBefore);
         });
@@ -2089,14 +2096,224 @@ describe('CarouselStudioPage', () => {
           );
           assert.equal(
             stageCol(el, 0).querySelectorAll('.carousel-studio__handle').length,
-            8,
-            'eight resize handles',
+            9,
+            'eight resize handles plus the rotate handle',
           );
-          assert.equal(
-            el.querySelector('.carousel-studio__frame--deck[data-slice="0"] .carousel-studio__chrome'),
-            null,
-            'and none of it duplicated into the rail',
-          );
+        });
+
+        // ── Click-to-select (S7.3) ────────────────────────────────────────
+        describe('click-to-select on the stage', () => {
+          test('clicking directly on an unselected layer selects it — chrome appears', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            // Deselect, the way an outside click or Escape would leave it.
+            page.setState({ selectedLayer: null });
+            await settle();
+            assert.ok(
+              !stageCol(el, 0).querySelector('.carousel-studio__chrome'),
+              'no chrome while nothing is selected',
+            );
+
+            const frame = withFrameBox(stageCol(el, 0));
+            // Box centre (0.5, 0.5) → (100, 125)px on the 200×250 frame.
+            press(frame, 100, 125, []);
+            await settle();
+
+            assert.equal(page.state.selectedLayer, 0);
+            assert.equal(page.state.layerScope, 'slide');
+            assert.ok(
+              stageCol(el, 0).querySelector('.carousel-studio__chrome'),
+              'chrome appears once selected',
+            );
+          });
+
+          test('clicking a layer on a different slide switches both the slide and the layer selection', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            assert.equal(page.state.selected, 0, 'slide 0 is selected from adding the layer');
+
+            // Give slide 1 its own layer directly on the document, rather than
+            // through the add-layer button, which would land on slide 0.
+            page.setState({
+              doc: {
+                ...page.state.doc,
+                slides: page.state.doc.slides.map((s, i) =>
+                  i === 1
+                    ? { ...s, layers: [{ type: 'rect', box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 } }] }
+                    : s,
+                ),
+              },
+            });
+            await settle();
+
+            const frame1 = withFrameBox(stageCol(el, 1), 200, 250, 200);
+            press(frame1, 300, 125, []);
+            await settle();
+
+            assert.equal(page.state.selected, 1, 'the slide selection followed the click');
+            assert.equal(page.state.selectedLayer, 0);
+            assert.equal(page.state.layerScope, 'slide');
+            assert.ok(
+              stageCol(el, 1).querySelector('.carousel-studio__chrome'),
+              'chrome now shows on slide 1',
+            );
+            assert.ok(
+              !stageCol(el, 0).querySelector('.carousel-studio__chrome'),
+              'and not on slide 0 any more',
+            );
+          });
+        });
+
+        // ── Double-click-to-edit (S7.6) ────────────────────────────────────
+        describe('double-click-to-edit on the stage', () => {
+          const textBlock = (el, slice, j) =>
+            stageLayer(el, slice, j)?.querySelector('.carousel-studio__layer-text');
+          const spanTextBlock = (el, slice, j) =>
+            el.querySelector(
+              `.carousel-studio__stage-slide[data-slice="${slice}"] .carousel-studio__span-layer[data-span-layer="${j}"] .carousel-studio__layer-text`,
+            );
+          // A `text` layer with no text renders no `.carousel-studio__layer-text`
+          // node at all (`textPlan` returns `null` for empty text) — there is
+          // nothing on the stage yet to double-click.
+          const setText = (el, value) => {
+            const input = el.querySelector('#carousel-layer-text');
+            input.value = value;
+            fire(input, 'change');
+          };
+
+          test('double-clicking the selected text layer enters edit mode', async () => {
+            const el = await withLayer();
+            setText(el, 'Swipe →');
+            await settle();
+
+            const frame = withFrameBox(stageCol(el, 0));
+            // Box centre (0.5, 0.5) → (100, 125)px on the 200×250 frame — the
+            // same point `click-to-select` above presses.
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            assert.equal(stageLayer(el, 0, 0).dataset.editing, 'true', 'the paint guard is set');
+            assert.ok(block.classList.contains('is-editing'));
+          });
+
+          test('a rect layer never enters edit mode — only `text` is editable in place', async () => {
+            const el = await toDeck();
+            click(addLayerBtn(el, 'rect'));
+            await settle();
+            page.setState({ doc: updateLayer(page.state.doc, 0, 0, { box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 } }) });
+            await settle();
+
+            fire(withFrameBox(stageCol(el, 0)), 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            assert.equal(stageLayer(el, 0, 0).dataset.editing, undefined, 'a rect layer is never editable');
+          });
+
+          test('typing live-updates a deck-wide layer on every other column, never the one being edited', async () => {
+            const el = await toDeck();
+            click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+            await settle();
+            page.setState({
+              doc: updateLayer(page.state.doc, SPAN_SLIDE, 0, {
+                box: { x: 0.06, y: 0.4, w: 0.88, h: 0.2 },
+                text: 'Hi',
+              }),
+            });
+            await settle();
+            for (let i = 0; i < 3; i++) withFrameBox(stageCol(el, i), 200, 250, i * 200);
+
+            fire(stageCol(el, 0), 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+            const block0 = spanTextBlock(el, 0, 0);
+            assert.ok(block0.classList.contains('is-editing'), 'editing started on column 0');
+
+            block0.textContent = 'Swipe now';
+            fire(block0, 'input');
+            await settle();
+
+            const block1 = spanTextBlock(el, 1, 0);
+            assert.equal(block1.textContent, 'Swipe now', 'column 1 picked up the live text');
+            assert.equal(block0.textContent, 'Swipe now', 'the edited block itself was never rebuilt');
+            assert.notEqual(page.state.doc.spanLayers[0].text, 'Swipe now', 'nothing committed yet');
+          });
+
+          test('blur commits the edit through the same call the side-panel textarea uses', async () => {
+            const el = await withLayer();
+            setText(el, 'Placeholder');
+            await settle();
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            block.textContent = 'Committed text';
+            fire(block, 'input');
+            const before = page.state.doc;
+            fire(block, 'blur');
+            await settle();
+
+            assert.notStrictEqual(page.state.doc, before, 'one new document');
+            assert.equal(page.state.doc.slides[0].layers[0].text, 'Committed text');
+            assert.ok(!block.classList.contains('is-editing'));
+            assert.equal(stageLayer(el, 0, 0).dataset.editing, undefined);
+            assert.equal(
+              el.querySelector('#carousel-layer-text').value,
+              'Committed text',
+              'the side panel reflects the same value — one writer, not two',
+            );
+          });
+
+          test('Escape cancels — nothing commits, and the original text repaints', async () => {
+            const el = await withLayer();
+            setText(el, 'Original');
+            await settle();
+
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            block.textContent = 'Discarded';
+            fire(block, 'input');
+            const before = page.state.doc;
+            fire(block, 'keydown', { key: 'Escape' });
+            await settle();
+
+            assert.strictEqual(page.state.doc, before, 'the document never changed');
+            assert.equal(page.state.doc.slides[0].layers[0].text, 'Original');
+            assert.ok(!block.classList.contains('is-editing'));
+          });
+
+          test('Enter inserts a line break rather than committing or blurring', async () => {
+            const el = await withLayer();
+            setText(el, 'Placeholder');
+            await settle();
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            const evt = fire(block, 'keydown', { key: 'Enter' });
+            assert.equal(evt.defaultPrevented, true, 'the default (blur/submit) was prevented');
+            assert.ok(block.classList.contains('is-editing'), 'still editing — Enter did not commit');
+          });
+
+          test('a press elsewhere on the column while editing moves nothing — the base gesture is suppressed', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            setText(el, 'Placeholder');
+            await settle();
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const boxBefore = { ...page.state.doc.slides[0].layers[0].box };
+            press(frame, 100, 125, [[140, 125]]);
+            await settle();
+            assert.deepEqual(
+              page.state.doc.slides[0].layers[0].box,
+              boxBefore,
+              'no move gesture claimed the press while editing',
+            );
+          });
         });
       });
 
@@ -2225,7 +2442,7 @@ describe('CarouselStudioPage', () => {
           assert.ok(Math.abs(lefts[1] - lefts[2] - 100) < 0.5, `${lefts}`);
           assert.equal(
             stageCol(el, 2).querySelectorAll('.carousel-studio__handle').length,
-            8,
+            9,
             'the handles come with it, and overflow does the clipping',
           );
         });
@@ -2286,11 +2503,11 @@ describe('CarouselStudioPage', () => {
           withBox(stageImg(el, 0));
           const cropBefore = { ...page.state.doc.slides[0].crop };
           // y = 20 is well above the layer's 0.4..0.6 band.
-          press(stageCol(el, 0), 150, 20, [[90, 20]]);
+          press(stageCol(el, 0), 150, 20, [[90, 20]], { ctrlKey: true });
           await settle();
           assert.deepEqual(
             page.state.doc.spanLayers[0].box,
-            { x: 0.3, y: 0.4, w: 0.6, h: 0.2 },
+            { x: 0.3, y: 0.4, w: 0.6, h: 0.2, rotate: 0 },
             'the layer did not move',
           );
           assert.notDeepEqual(page.state.doc.slides[0].crop, cropBefore, 'the crop panned');
@@ -2413,9 +2630,9 @@ describe('CarouselStudioPage', () => {
           '.carousel-studio__stage-slide[data-slice="0"] .carousel-studio__frame-img',
         ));
 
-        fire(col, 'wheel', { deltaY: 100, deltaMode: 0 });
-        fire(col, 'wheel', { deltaY: 100, deltaMode: 0 });
-        fire(col, 'wheel', { deltaY: 100, deltaMode: 0 });
+        fire(col, 'wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
+        fire(col, 'wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
+        fire(col, 'wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
         await new Promise((r) => setTimeout(r, 250));
         await settle();
         assert.notEqual(page.state.doc.slides[0].crop.w, before, 'the burst zoomed');
@@ -2488,65 +2705,97 @@ describe('CarouselStudioPage', () => {
     });
 
     /**
-     * The rail's slide controls — Slides mode only, since a panorama's count
+     * The stage's slide controls — Slides mode only, since a panorama's count
      * is the fit panel's. Add / duplicate / delete act on the selection;
-     * reorder is a pointer drag on the handle or the arrow keys on it, both
-     * landing in `moveSlide`.
+     * reorder is a pointer drag on a column's handle or the arrow keys on it,
+     * both landing in `moveSlide`.
      */
-    describe('slide rail', () => {
+    describe('slide controls', () => {
       const handle = (el, i) => el.querySelector(`.carousel-studio__rail-handle[data-slide="${i}"]`);
-      const railItem = (el, i) => el.querySelector(`.carousel-studio__rail-item[data-slide="${i}"]`);
-      const tool = (el, action) =>
-        el.querySelector(`.carousel-studio__rail-tools [data-action="${action}"]`);
+      /** The insert-zone "+ Slide" seam after slide `i` — `i` is the slide
+       *  *before* the gap, the same "after this index" `_addSlide` reads. */
+      const addBtn = (el, i) => el.querySelector(`[data-action="add-slide"][data-slide="${i}"]`);
+      const duplicateBtn = (el, i) => el.querySelector(`[data-action="duplicate-slide"][data-slide="${i}"]`);
+      const deleteBtn = (el, i) => el.querySelector(`[data-action="delete-slide"][data-slide="${i}"]`);
       const cropXs = () => page.state.doc.slides.map((s) => s.crop.x);
 
       /** Drag the handle of slide `from` and release it over the right half of
-       *  slide `over` (`-1` for the head of the rail). linkedom has no layout,
-       *  so the boxes the reorder measures are supplied here. */
+       *  slide `over` (`-1` for the head of the stage). linkedom has no layout,
+       *  so the boxes the reorder measures are supplied here — on the top pane
+       *  segments now, since that is what `attachPointerReorder` drags
+       *  (`_setupSlideReorder`, `index.js`). */
       function dragSlide(el, from, over) {
         const n = page.state.doc.slides.length;
         for (let i = 0; i < n; i++) {
           const left = i * 100;
-          railItem(el, i).getBoundingClientRect = () => ({
-            left, right: left + 100, width: 100, top: 0, bottom: 120, height: 120,
+          paneTop(el, i).getBoundingClientRect = () => ({
+            left, right: left + 100, width: 100, top: 0, bottom: 40, height: 40,
           });
         }
-        el.querySelector('.carousel-studio__filmstrip').getBoundingClientRect = () => ({
-          left: 0, right: n * 100, width: n * 100, top: 0, bottom: 120, height: 120,
+        el.querySelector('.carousel-studio__pane-row--top').getBoundingClientRect = () => ({
+          left: 0, right: n * 100, width: n * 100, top: 0, bottom: 40, height: 40,
         });
         const h = handle(el, from);
         const x = over * 100 + 75;
-        fire(h, 'pointerdown', { pointerId: 3, button: 0, clientX: from * 100 + 50, clientY: 60 });
-        fire(h, 'pointermove', { pointerId: 3, clientX: x, clientY: 60 });
-        fire(h, 'pointerup', { pointerId: 3, clientX: x, clientY: 60 });
+        fire(h, 'pointerdown', { pointerId: 3, button: 0, clientX: from * 100 + 50, clientY: 20 });
+        fire(h, 'pointermove', { pointerId: 3, clientX: x, clientY: 20 });
+        fire(h, 'pointerup', { pointerId: 3, clientX: x, clientY: 20 });
       }
 
-      test('the rail carries a handle per slide and one row of slide controls', async () => {
+      test('each slide carries a handle, number and delete above, and duplicate in its seam', async () => {
         const el = await toDeck();
-        assert.equal(el.querySelectorAll('.carousel-studio__rail-item').length, 3);
+        assert.equal(el.querySelectorAll('.carousel-studio__stage-slide').length, 3);
         assert.ok(handle(el, 0), 'slide 0 has a drag handle');
-        // The handle is its own control: `attachPointerReorder` preventDefaults
-        // the press, so a handle that was the frame would eat the select click.
-        assert.notEqual(handle(el, 0), el.querySelector('.carousel-studio__frame--deck'));
-        for (const action of ['add-slide', 'duplicate-slide', 'delete-slide']) {
-          assert.ok(tool(el, action), `${action} is offered`);
-        }
+        // The handle lives in the top management pane, not layered over the
+        // photo: `attachPointerReorder` preventDefaults the press, and a
+        // control sitting on the column itself would eat the tap that selects
+        // it — or hide behind whatever crop the slide is framed to.
+        assert.equal(handle(el, 0).closest('.carousel-studio__pane--top'), paneTop(el, 0));
+        assert.equal(handle(el, 0).closest('.carousel-studio__stage-slide'), null);
+        // Delete sits at the slide's top-right corner, in the top pane.
+        assert.ok(deleteBtn(el, 0), 'delete is offered per slide, in the top pane');
+        assert.equal(deleteBtn(el, 0).closest('.carousel-studio__pane--top'), paneTop(el, 0));
+        // Duplicate rides right after Add in the seam after the slide — the
+        // same `data-slide` index as the add button there.
+        assert.ok(duplicateBtn(el, 0), 'duplicate is offered per slide, in its add-slide seam');
+        assert.equal(
+          duplicateBtn(el, 0).closest('.carousel-studio__insert-zone'),
+          addBtn(el, 0).closest('.carousel-studio__insert-zone'),
+        );
+        assert.equal(
+          duplicateBtn(el, 0).previousElementSibling,
+          addBtn(el, 0),
+          'right after the add button',
+        );
+        // n + 1 insertion points for n slides — one at every gap, plus one
+        // before the first and one after the last — and n duplicates, one per
+        // seam but the head one (there is no slide before it to copy).
+        assert.equal(el.querySelectorAll('[data-action="add-slide"]').length, 4);
+        assert.equal(el.querySelectorAll('[data-action="duplicate-slide"]').length, 3);
+        assert.ok(addBtn(el, -1), 'and one to add before the first slide');
+        assert.equal(
+          addBtn(el, -1).closest('.carousel-studio__insert-zone').querySelector(
+            '[data-action="duplicate-slide"]',
+          ),
+          null,
+          'the head seam has nothing to duplicate',
+        );
+        assert.ok(addBtn(el, 2), 'and one to add after the last slide');
       });
 
       test('Panorama mode offers none of it — the count is the fit panel there', async () => {
         const { routes, deps } = split(3);
         const el = await mount({ post: '42' }, routes, { renderDeps: deps });
         assert.equal(page.state.doc.mode, 'split');
-        assert.equal(el.querySelector('.carousel-studio__rail-tools'), null);
+        assert.equal(el.querySelector('.carousel-studio__pane-row--top'), null);
         assert.equal(el.querySelector('.carousel-studio__rail-handle'), null);
+        assert.equal(el.querySelector('.carousel-studio__insert-zone'), null);
         assert.ok(el.querySelector('#carousel-n'), 'the count slider is the control there');
       });
 
-      test('add lands a slide after the selection, on the same photo, and selects it', async () => {
+      test('add lands a slide after the seam clicked, on the same photo, and selects it', async () => {
         const el = await toDeck();
-        click(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'));
-        await settle();
-        click(tool(el, 'add-slide'));
+        click(addBtn(el, 1));
         await settle();
 
         assert.equal(page.state.doc.slides.length, 4);
@@ -2555,7 +2804,6 @@ describe('CarouselStudioPage', () => {
         assert.equal(added.source, SRC, 'it shows something rather than nothing');
         assert.deepEqual(added.crop, { x: 0, y: 0, w: 1, h: 1 });
         assert.equal(added.rendered, null);
-        assert.equal(page.container.querySelectorAll('.carousel-studio__rail-item').length, 4);
         assert.equal(page.container.querySelectorAll('.carousel-studio__stage-slide').length, 4);
       });
 
@@ -2577,7 +2825,7 @@ describe('CarouselStudioPage', () => {
         await settle();
         assert.ok(!page._isDirty(), 'a freshly rendered document is clean');
 
-        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="add-slide"]'));
+        click(addBtn(page.container, 0));
         await settle();
         assert.ok(page._isDirty(), 'the new slide has no render to be clean against');
         assert.equal(page.state.doc.slides[1].rendered, null, 'because it has none');
@@ -2589,7 +2837,7 @@ describe('CarouselStudioPage', () => {
         await settle();
         const panned = { ...page.state.doc.slides[0].crop };
 
-        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="duplicate-slide"]'));
+        click(duplicateBtn(page.container, 0));
         await settle();
 
         assert.equal(page.state.doc.slides.length, 4);
@@ -2600,11 +2848,11 @@ describe('CarouselStudioPage', () => {
 
       test('delete drops the selected slide and offers the way back', async () => {
         const el = await toDeck();
-        click(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'));
+        tapSlide(el, 1);
         await settle();
         const kept = page.state.doc.slides.filter((_s, i) => i !== 1).map((s) => s.crop.x);
 
-        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="delete-slide"]'));
+        click(deleteBtn(page.container, 1));
         await settle();
 
         assert.equal(page.state.doc.slides.length, 2);
@@ -2622,7 +2870,7 @@ describe('CarouselStudioPage', () => {
       test('the bounds are a disabled control and a toast, never an exception', async () => {
         const el = await toDeck(undefined, MIN_SLIDES);
         assert.equal(page.state.doc.slides.length, MIN_SLIDES);
-        assert.ok(tool(el, 'delete-slide').hasAttribute('disabled'), 'the end is disabled');
+        assert.ok(deleteBtn(el, 0).hasAttribute('disabled'), 'the end is disabled');
         // …and the method behind it still refuses rather than writing a deck of
         // one: these run from buttons, where a throw strands the studio.
         page._removeSlide(0);
@@ -2635,10 +2883,9 @@ describe('CarouselStudioPage', () => {
         }
         await settle();
         assert.equal(page.state.doc.slides.length, MAX_SLIDES);
+        assert.ok(duplicateBtn(page.container, 0).hasAttribute('disabled'));
         assert.ok(
-          page.container
-            .querySelector('.carousel-studio__rail-tools [data-action="add-slide"]')
-            .hasAttribute('disabled'),
+          page.container.querySelector('.carousel-studio__insert-btn').hasAttribute('disabled'),
         );
         page._addSlide(0);
         await settle();
@@ -2707,7 +2954,7 @@ describe('CarouselStudioPage', () => {
 
       test('every rail write is one undo step', async () => {
         const el = await toDeck();
-        click(tool(el, 'add-slide'));
+        click(addBtn(el, 0));
         await settle();
         assert.equal(page.state.doc.slides.length, 4);
         page._undo();
@@ -2785,9 +3032,9 @@ describe('CarouselStudioPage', () => {
         assert.equal(page.state.doc.slides.length, 3);
         assert.ok(!page._isDirty(), 'the loaded document is fully rendered');
 
-        click(el.querySelector('.carousel-studio__frame--deck[data-slice="1"]'));
+        tapSlide(el, 1);
         await settle();
-        click(page.container.querySelector('.carousel-studio__rail-tools [data-action="delete-slide"]'));
+        click(page.container.querySelector('[data-action="delete-slide"][data-slide="1"]'));
         await settle();
 
         assert.deepEqual(deletes(), [], 'nothing is deleted while it is still one undo away');
