@@ -513,6 +513,11 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
  *   layer's box in canvas pixels
  */
 function paintLayerContent(el, layer, env) {
+  // The block a live on-canvas edit owns (`index.js`'s `_enterTextEdit`) holds
+  // the caret; rebuilding it here — every repaint's own first move — would
+  // yank the caret out from under whoever is typing. `restyleEditingText` is
+  // this function's read-only twin for exactly that block.
+  if (el.dataset.editing === "true") return;
   el.textContent = "";
   el.style.backgroundImage = "none";
   el.style.backgroundColor = "transparent";
@@ -570,7 +575,6 @@ function paintTextContent(el, layer, { index, count, rect, frameH, heightCqw }) 
   const plan = textPlan({ text, layer, box: rect, frameH, measure });
   if (!plan) return;
 
-  const cqw = (px) => `${((px / frameH) * heightCqw).toFixed(3)}cqw`;
   const block = el.ownerDocument.createElement("span");
   block.className = "carousel-studio__layer-text";
   block.textContent = plan.lines.join("\n");
@@ -578,12 +582,8 @@ function paintTextContent(el, layer, { index, count, rect, frameH, heightCqw }) 
   s.position = "absolute";
   s.left = "0";
   s.right = "0";
-  s.top = cqw(plan.top + baselineShift(layer.weight, plan.fontSize));
   s.whiteSpace = "pre";
   s.overflowWrap = "normal";
-  s.fontSize = cqw(plan.fontSize);
-  s.lineHeight = cqw(plan.lineBox);
-  s.textAlign = plan.align;
   s.fontWeight = String(layer.weight);
   s.color = layer.color || DEFAULT_MARK_COLOR;
   if (layer.shadow) {
@@ -591,7 +591,44 @@ function paintTextContent(el, layer, { index, count, rect, frameH, heightCqw }) 
     // CSS blur radius and a canvas `shadowBlur` are the same 2σ convention.
     s.textShadow = `0 ${TEXT_SHADOW.offsetY}em ${TEXT_SHADOW.blur}em ${TEXT_SHADOW.color}`;
   }
+  applyTextFit(block, plan, layer, frameH, heightCqw);
   el.appendChild(block);
+}
+
+/** The four fit properties `textPlan` decides — position, size, leading,
+ *  alignment — written as style, and nothing else: no node is touched, so
+ *  this is safe to call on a block a live edit is holding the caret in.
+ *  Split out of `paintTextContent` for exactly that reuse — see
+ *  {@link restyleEditingText}. */
+function applyTextFit(block, plan, layer, frameH, heightCqw) {
+  const cqw = (px) => `${((px / frameH) * heightCqw).toFixed(3)}cqw`;
+  const s = block.style;
+  s.top = cqw(plan.top + baselineShift(layer.weight, plan.fontSize));
+  s.fontSize = cqw(plan.fontSize);
+  s.lineHeight = cqw(plan.lineBox);
+  s.textAlign = plan.align;
+}
+
+/**
+ * Restyle a `text` layer's block while it is being edited in place, from its
+ * own live `textContent` rather than `layer.text` — the DOM is the caret
+ * owner's, not the document's, until the edit commits. Same fit math as
+ * {@link paintTextContent} (autofit or fixed size, wrap, valign), applied as
+ * style only: the block, and the caret in it, are never touched.
+ *
+ * @param {HTMLElement} el the `.carousel-studio__layer`/`.carousel-studio__span-layer`
+ *   host whose `.carousel-studio__layer-text` child is being edited
+ * @param {import('../document.js').CarouselTextLayer} layer
+ * @param {{frameH: number, heightCqw: number, rect: {x:number,y:number,w:number,h:number}}} env
+ */
+export function restyleEditingText(el, layer, { frameH, heightCqw, rect }) {
+  const block = el.querySelector(".carousel-studio__layer-text");
+  if (!block) return;
+  const measure = measurer(layer.weight);
+  if (!measure) return;
+  const plan = textPlan({ text: block.textContent || "", layer, box: rect, frameH, measure });
+  if (!plan) return;
+  applyTextFit(block, plan, layer, frameH, heightCqw);
 }
 
 /**

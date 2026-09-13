@@ -67,9 +67,11 @@ import {
   canvasSize,
   deckSlideRects,
   fitReport,
+  layerRect,
   padRects,
   safeAreaRect,
   spanLayerCoverage,
+  spanLayerRect,
 } from "./geometry.js";
 import {
   addLayer,
@@ -128,6 +130,7 @@ import {
   paintSpanChrome,
   paintSpanLayers,
   paintSplit,
+  restyleEditingText,
 } from "./studio/preview.js";
 import { createAnchorGesture, createDeckGestures } from "./studio/gestures.js";
 import { createHistory } from "./studio/history.js";
@@ -160,6 +163,26 @@ function readPostId(query) {
 function isTextEntry(el) {
   const tag = el?.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || Boolean(el?.isContentEditable);
+}
+
+/** Insert `text` at the caret inside `el`, replacing any current selection —
+ *  `Enter`'s handler in `_enterTextEdit`, so a multi-line `text` layer gets a
+ *  literal `\n` (which `white-space: pre` renders as a break) instead of the
+ *  `<div>`/`<br>` a contenteditable inserts on its own, which `textContent`
+ *  would then read back without the break at all. A selection outside `el`
+ *  (the caret was never inside it) is a no-op. */
+function insertPlainText(el, text) {
+  const sel = el.ownerDocument.getSelection?.();
+  if (!sel?.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.commonAncestorContainer)) return;
+  range.deleteContents();
+  const node = el.ownerDocument.createTextNode(text);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
 
 /** A picked media item is usable as a split source only if it is an image. */
@@ -403,6 +426,13 @@ export default class CarouselStudioPage extends Component {
     // since the util re-queries its containers per gesture and so survives a
     // rebuild; released in `beforeUnmount`.
     this._detachReorder = null;
+    // The in-flight on-canvas text edit, or null — `{ i, j, scope, layerEl,
+    // block, original, teardown }`. Lives outside `state`: every keystroke
+    // restyles the block directly (see `_liveEditText`), and a `setState`
+    // rebuild would tear that block out from under the caret. Set by
+    // `_enterTextEdit`, cleared by `_exitTextEdit` — see studio/gestures.js's
+    // `editLayer` and its `onPointerDown`/`onDoubleClick` guards.
+    this._editing = null;
     // Undo/redo. A ring of `doc` references, not a log of operations — the
     // document is immutable by construction, so the previous state is simply
     // the previous reference (see studio/history.js). Every write goes through
@@ -458,6 +488,11 @@ export default class CarouselStudioPage extends Component {
       // same `selectedLayer`/`layerScope` the side-panel list already writes.
       layersOnColumn: (i) => this._layersOnColumn(i),
       selectLayer: (i, j, scope) => this._selectLayerOnStage(i, j, scope),
+      // Double-click-to-edit: the layer is already selected by the time this
+      // fires (gestures.js's own guard), so this only ever starts an edit,
+      // never a selection change.
+      editLayer: (i, j, scope) => this._enterTextEdit(i, j, scope),
+      isEditing: () => Boolean(this._editing),
     });
     // Panorama direct manipulation, over the stage itself — the band is one
     // projection across the whole strip, so the whole strip is the surface.
@@ -1331,6 +1366,137 @@ export default class CarouselStudioPage extends Component {
     const patch = { layerScope: s, selectedLayer: j };
     if (s === "slide" && this.state.selected !== i) patch.selected = i;
     this.setState(patch);
+  }
+
+  /**
+   * Enter on-canvas editing for layer `j` of `scope`, double-clicked on
+   * column `i` — `studio/gestures.js`'s `editLayer`. One edit at a time, and
+   * `text` layers only: a `counter`'s DOM text is a computed preview
+   * (`counterText`), not a value of its own to type into. The block itself
+   * is the DOM `paintDeckLayers`/`paintSpanLayers` already painted for it;
+   * this only ever adds `contenteditable` and a caret to that node, so a
+   * doc-driven repaint elsewhere still finds the layer it expects — see the
+   * `dataset.editing` guard in `studio/preview.js`'s `paintLayerContent`.
+   */
+  _enterTextEdit(i, j, scope) {
+    if (this._editing) return;
+    const s = scope === "span" ? "span" : "slide";
+    const { list } = this._layerTarget(s);
+    const layer = list[j];
+    if (!layer || layer.type !== "text") return;
+
+    const host = this.$(`.carousel-studio__stage-slide[data-slice="${i}"]`);
+    const layerSel =
+      s === "span" ? `.carousel-studio__span-layer[data-span-layer="${j}"]` : `.carousel-studio__layer[data-layer="${j}"]`;
+    const layerEl = /** @type {HTMLElement|null} */ (host?.querySelector(layerSel));
+    const block = /** @type {HTMLElement|null} */ (layerEl?.querySelector(".carousel-studio__layer-text"));
+    if (!layerEl || !block) return;
+
+    layerEl.dataset.editing = "true";
+    block.contentEditable = "true";
+    block.spellcheck = false;
+    block.classList.add("is-editing");
+
+    const onInput = () => this._liveEditText();
+    const onKeydown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this._exitTextEdit(false);
+      } else if (e.key === "Enter") {
+        // Textarea semantics: `Enter` always inserts a line break, never
+        // submits or blurs — matches `#carousel-layer-text`'s own behavior.
+        e.preventDefault();
+        insertPlainText(block, "\n");
+        this._liveEditText();
+      }
+    };
+    const onBlur = () => this._exitTextEdit(true);
+    block.addEventListener("input", onInput);
+    block.addEventListener("keydown", onKeydown);
+    block.addEventListener("blur", onBlur);
+
+    this._editing = {
+      i,
+      j,
+      scope: s,
+      layerEl,
+      block,
+      original: layer.text || "",
+      teardown() {
+        block.removeEventListener("input", onInput);
+        block.removeEventListener("keydown", onKeydown);
+        block.removeEventListener("blur", onBlur);
+      },
+    };
+
+    block.focus();
+    const sel = block.ownerDocument.getSelection?.();
+    if (sel) {
+      const range = block.ownerDocument.createRange();
+      range.selectNodeContents(block);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+
+  /** Live-update the canvas preview from the block's own `textContent` on
+   *  every keystroke — the on-canvas twin of `_wireLayerFields`'s `input`
+   *  handler. Repaints every *other* DOM copy of the layer (the other
+   *  columns of a span layer; never the block being edited, which
+   *  `dataset.editing` skips) and, separately, restyles the fit — font size,
+   *  leading, vertical origin — of the block itself, since that alone is
+   *  safe to touch without disturbing the caret it holds. */
+  _liveEditText() {
+    const ed = this._editing;
+    if (!ed) return;
+    const { i, j, scope, block } = ed;
+    const s = scope === "span" ? "span" : "slide";
+    const { list } = this._layerTarget(s);
+    const layer = list[j];
+    if (!layer || layer.type !== "text") return;
+    const text = block.textContent || "";
+    const patched = { ...layer, text };
+
+    if (scope === "span") {
+      const nextList = (this.state.doc.spanLayers || []).map((l, k) => (k === j ? patched : l));
+      this._paintSpanLayers(nextList);
+    } else {
+      const nextList = (this.state.doc.slides[i]?.layers || []).map((l, k) => (k === j ? patched : l));
+      this._paintDeckSlideLayers(i, nextList);
+    }
+
+    const { aspect } = this.state.doc;
+    const [w, h] = canvasSize(aspect);
+    const heightCqw = w > 0 ? (h / w) * 100 : 100;
+    const count = this.state.doc.slides.length;
+    const rect = scope === "span" ? spanLayerRect(patched, i, count, aspect) : layerRect(patched, aspect);
+    if (rect) restyleEditingText(ed.layerEl, patched, { frameH: h, heightCqw, rect });
+  }
+
+  /**
+   * Leave on-canvas editing, committing through `_setLayer` — the exact call
+   * the side-panel textarea's own `change` handler makes, so there is one
+   * writer for a layer's `text` regardless of which control set it. `commit:
+   * false` (Escape) discards the live text and repaints the layer from the
+   * document as it stood before the edit, since the doc never changed.
+   */
+  _exitTextEdit(commit) {
+    const ed = this._editing;
+    if (!ed) return;
+    this._editing = null;
+    ed.teardown();
+    ed.block.contentEditable = "false";
+    ed.block.classList.remove("is-editing");
+    delete ed.layerEl.dataset.editing;
+
+    const text = ed.block.textContent || "";
+    if (commit && text !== ed.original) {
+      this._setLayer({ text });
+      return;
+    }
+    if (ed.scope === "span") this._paintSpanLayers(this.state.doc.spanLayers);
+    else this._paintDeckSlideLayers(ed.i, this.state.doc.slides[ed.i]?.layers);
+    if (!commit) ed.block.blur();
   }
 
   /**

@@ -953,6 +953,21 @@
   outline-offset: -1px;
 }
 
+/* The text block mid on-canvas edit (`index.js`'s `_enterTextEdit`) — its
+ * ancestor `.carousel-studio__layer`/`__span-layer` is `pointer-events: none`
+ * so the stage's own gestures can hit-test box coordinates instead of DOM
+ * targets; re-enabling it here on just the editable block is what lets a
+ * click inside it place a caret rather than being read as a stage press
+ * (`studio/gestures.js`'s `onPointerDown` also skips claiming one that lands
+ * here, for the same reason). The dashed outline is the only chrome an edit
+ * gets — the selection box/handles stay put underneath it. */
+.carousel-studio__layer-text.is-editing {
+  pointer-events: auto;
+  cursor: text;
+  outline: 1px dashed var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* The trailing "· slides 2–3" / "(across all slides)" note on a layer row and
  * the span-list header — dimmer than the layer name it follows. */
 .carousel-studio__layer-meta {

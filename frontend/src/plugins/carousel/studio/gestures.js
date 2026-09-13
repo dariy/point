@@ -501,6 +501,16 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   column, for `scope: "slide"` only (a span layer's selection isn't
  *   slide-bound). The click-to-select twin of `select`; both converge on the
  *   same `selectedLayer`/`layerScope` the side-panel list already writes.
+ * @property {(i: number, j: number, scope: 'slide'|'span') => void} [editLayer]
+ *   Enter on-canvas editing for the already-selected layer `j` of `scope` —
+ *   `i` is the column the double-click landed on. A no-op where the layer
+ *   isn't a `text` layer; that check needs the layer's own `type`, which this
+ *   module never reads, so it is the host's to make.
+ * @property {() => boolean} [isEditing]
+ *   Whether an on-canvas text edit is in progress anywhere on the stage. True
+ *   for the whole gesture surface, not just the column being edited: every
+ *   `onPointerDown`/`onDoubleClick` bails out while it holds, so the only way
+ *   out of an edit is the blur (or Escape) that ends it.
  */
 
 /**
@@ -648,9 +658,20 @@ export function createDeckGestures(host) {
   // column's bubble-phase ones from also running.
   const onHandle = (e) => Boolean(e.target?.closest?.(".carousel-studio__rail-handle"));
 
+  // Mid on-canvas edit, no press claims a gesture — one on the
+  // `contenteditable` block itself belongs to it (caret placement,
+  // selection, the works; `carousel.css` re-enables `pointer-events` there
+  // for exactly this, over an ancestor chain that is otherwise `pointer-
+  // events: none` so the stage can hit-test box coordinates instead of DOM
+  // targets everywhere else), and one anywhere else on the column is what a
+  // click outside a focused textarea always is — a plain blur, which commits
+  // the edit (`index.js`'s `_exitTextEdit`) — not a layer grab. Without this,
+  // the active layer's own move zone (`hitLayer`, below) would claim it and
+  // `preventDefault` the very focus change that blur depends on.
   const onPointerDown = (e, frame, i) => {
     if (e.button != null && e.button > 0) return;
     if (onHandle(e)) return;
+    if (host.isEditing?.()) return;
     const slide = host.slideAt(i);
     if (!slide) return;
 
@@ -880,6 +901,24 @@ export function createDeckGestures(host) {
     commitCrop(i, ended.crop);
   };
 
+  /** Double-click-to-edit: only for the layer already selected (`.3`'s
+   *  single click is what gets it there), and only for a press that lands on
+   *  its own box — a double-click elsewhere on the column is the crop
+   *  gesture's own `onPointerDown`/`onPointerUp` pair, twice, and needs no
+   *  help from here. `host.editLayer` itself no-ops for anything but a
+   *  `text` layer, since the type is not this module's to know. */
+  const onDoubleClick = (e, frame, i) => {
+    if (host.isEditing?.()) return;
+    const active = host.activeLayer?.();
+    if (!active) return;
+    const span = active.scope === "span";
+    if (!span && active.i !== i) return;
+    const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
+    if (!layerContains(rect, active.box, e.clientX, e.clientY)) return;
+    e.preventDefault?.();
+    host.editLayer?.(i, active.j, active.scope || "slide");
+  };
+
   const onWheel = (e, i) => {
     const slide = host.slideAt(i);
     if (!slide) return;
@@ -1011,6 +1050,7 @@ export function createDeckGestures(host) {
           ["pointermove", (e) => onPointerMove(e, frame, i), undefined],
           ["pointerup", (e) => onPointerUp(e, frame, i), undefined],
           ["pointercancel", (e) => onPointerUp(e, frame, i), undefined],
+          ["dblclick", (e) => onDoubleClick(e, frame, i), undefined],
           // Not passive: a zoom over the strip must not also scroll the page.
           ["wheel", (e) => onWheel(e, i), { passive: false }],
           ["keydown", (e) => onFrameKey(e, i), undefined],

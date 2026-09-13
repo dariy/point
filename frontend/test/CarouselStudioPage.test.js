@@ -2161,6 +2161,160 @@ describe('CarouselStudioPage', () => {
             );
           });
         });
+
+        // ── Double-click-to-edit (S7.6) ────────────────────────────────────
+        describe('double-click-to-edit on the stage', () => {
+          const textBlock = (el, slice, j) =>
+            stageLayer(el, slice, j)?.querySelector('.carousel-studio__layer-text');
+          const spanTextBlock = (el, slice, j) =>
+            el.querySelector(
+              `.carousel-studio__stage-slide[data-slice="${slice}"] .carousel-studio__span-layer[data-span-layer="${j}"] .carousel-studio__layer-text`,
+            );
+          // A `text` layer with no text renders no `.carousel-studio__layer-text`
+          // node at all (`textPlan` returns `null` for empty text) — there is
+          // nothing on the stage yet to double-click.
+          const setText = (el, value) => {
+            const input = el.querySelector('#carousel-layer-text');
+            input.value = value;
+            fire(input, 'change');
+          };
+
+          test('double-clicking the selected text layer enters edit mode', async () => {
+            const el = await withLayer();
+            setText(el, 'Swipe →');
+            await settle();
+
+            const frame = withFrameBox(stageCol(el, 0));
+            // Box centre (0.5, 0.5) → (100, 125)px on the 200×250 frame — the
+            // same point `click-to-select` above presses.
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            assert.equal(stageLayer(el, 0, 0).dataset.editing, 'true', 'the paint guard is set');
+            assert.ok(block.classList.contains('is-editing'));
+          });
+
+          test('a rect layer never enters edit mode — only `text` is editable in place', async () => {
+            const el = await toDeck();
+            click(addLayerBtn(el, 'rect'));
+            await settle();
+            page.setState({ doc: updateLayer(page.state.doc, 0, 0, { box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 } }) });
+            await settle();
+
+            fire(withFrameBox(stageCol(el, 0)), 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            assert.equal(stageLayer(el, 0, 0).dataset.editing, undefined, 'a rect layer is never editable');
+          });
+
+          test('typing live-updates a deck-wide layer on every other column, never the one being edited', async () => {
+            const el = await toDeck();
+            click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+            await settle();
+            page.setState({
+              doc: updateLayer(page.state.doc, SPAN_SLIDE, 0, {
+                box: { x: 0.06, y: 0.4, w: 0.88, h: 0.2 },
+                text: 'Hi',
+              }),
+            });
+            await settle();
+            for (let i = 0; i < 3; i++) withFrameBox(stageCol(el, i), 200, 250, i * 200);
+
+            fire(stageCol(el, 0), 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+            const block0 = spanTextBlock(el, 0, 0);
+            assert.ok(block0.classList.contains('is-editing'), 'editing started on column 0');
+
+            block0.textContent = 'Swipe now';
+            fire(block0, 'input');
+            await settle();
+
+            const block1 = spanTextBlock(el, 1, 0);
+            assert.equal(block1.textContent, 'Swipe now', 'column 1 picked up the live text');
+            assert.equal(block0.textContent, 'Swipe now', 'the edited block itself was never rebuilt');
+            assert.notEqual(page.state.doc.spanLayers[0].text, 'Swipe now', 'nothing committed yet');
+          });
+
+          test('blur commits the edit through the same call the side-panel textarea uses', async () => {
+            const el = await withLayer();
+            setText(el, 'Placeholder');
+            await settle();
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            block.textContent = 'Committed text';
+            fire(block, 'input');
+            const before = page.state.doc;
+            fire(block, 'blur');
+            await settle();
+
+            assert.notStrictEqual(page.state.doc, before, 'one new document');
+            assert.equal(page.state.doc.slides[0].layers[0].text, 'Committed text');
+            assert.ok(!block.classList.contains('is-editing'));
+            assert.equal(stageLayer(el, 0, 0).dataset.editing, undefined);
+            assert.equal(
+              el.querySelector('#carousel-layer-text').value,
+              'Committed text',
+              'the side panel reflects the same value — one writer, not two',
+            );
+          });
+
+          test('Escape cancels — nothing commits, and the original text repaints', async () => {
+            const el = await withLayer();
+            setText(el, 'Original');
+            await settle();
+
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            block.textContent = 'Discarded';
+            fire(block, 'input');
+            const before = page.state.doc;
+            fire(block, 'keydown', { key: 'Escape' });
+            await settle();
+
+            assert.strictEqual(page.state.doc, before, 'the document never changed');
+            assert.equal(page.state.doc.slides[0].layers[0].text, 'Original');
+            assert.ok(!block.classList.contains('is-editing'));
+          });
+
+          test('Enter inserts a line break rather than committing or blurring', async () => {
+            const el = await withLayer();
+            setText(el, 'Placeholder');
+            await settle();
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const block = textBlock(el, 0, 0);
+            const evt = fire(block, 'keydown', { key: 'Enter' });
+            assert.equal(evt.defaultPrevented, true, 'the default (blur/submit) was prevented');
+            assert.ok(block.classList.contains('is-editing'), 'still editing — Enter did not commit');
+          });
+
+          test('a press elsewhere on the column while editing moves nothing — the base gesture is suppressed', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            setText(el, 'Placeholder');
+            await settle();
+            const frame = withFrameBox(stageCol(el, 0));
+            fire(frame, 'dblclick', { clientX: 100, clientY: 125 });
+            await settle();
+
+            const boxBefore = { ...page.state.doc.slides[0].layers[0].box };
+            press(frame, 100, 125, [[140, 125]]);
+            await settle();
+            assert.deepEqual(
+              page.state.doc.slides[0].layers[0].box,
+              boxBefore,
+              'no move gesture claimed the press while editing',
+            );
+          });
+        });
       });
 
       // ── Span layers (S3.8) ───────────────────────────────────────────────
