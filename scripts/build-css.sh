@@ -14,18 +14,23 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CSS_DIR="$ROOT_DIR/frontend/css"
 
-# Prefer the lockfile-pinned esbuild; fall back to npx for a fresh checkout.
+# Use the lockfile-pinned esbuild from node_modules, installing it first if
+# missing — same as build-js.sh. NOT `npx --yes esbuild`: that ignores
+# package.json, downloads whatever is latest on the registry, and re-resolves it
+# on every bundle below, so a slow registry stalled a fresh-checkout run.sh
+# here with no output. On a fresh checkout build-js.sh would run this same
+# `npm ci` a moment later anyway.
 ESBUILD="$ROOT_DIR/node_modules/.bin/esbuild"
 if [ ! -x "$ESBUILD" ]; then
-  ESBUILD="npx --yes esbuild"
+  echo "esbuild not installed — running npm ci..."
+  (cd "$ROOT_DIR" && npm ci --no-audit --no-fund)
 fi
 
 # bundle <outfile> <partial>...  — concatenate partials in order, minify to out.
 bundle() {
   out="$1"
   shift
-  # shellcheck disable=SC2086  # $ESBUILD may be "npx --yes esbuild" (intended split)
-  cat "$@" | $ESBUILD --loader=css --minify > "$out"
+  cat "$@" | "$ESBUILD" --loader=css --minify > "$out"
   echo "Built $(basename "$out") ($(wc -c < "$out") bytes, minified)"
 }
 
