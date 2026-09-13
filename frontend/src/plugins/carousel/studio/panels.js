@@ -250,10 +250,16 @@ const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 /**
  * The selection chrome for a stage column: an outline box carrying the eight
- * resize handles, plus an empty layer for `paintLayerChrome` to draw snap guides
- * into. Emitted while a layer is selected — for the selected slide's column
- * alone when that layer is a slide layer, for every column when it spans them.
- * Its absence is how a deselect clears it on the next render.
+ * resize handles plus a ninth, `--rotate`, above the box's `n` edge, plus an
+ * empty layer for `paintLayerChrome` to draw snap guides into. Emitted while a
+ * layer is selected — for the selected slide's column alone when that layer is
+ * a slide layer, for every column when it spans them. Its absence is how a
+ * deselect clears it on the next render.
+ *
+ * The rotate handle is a child of the outline box, not `HANDLE_ANCHORS` — it
+ * isn't one of `hitLayer`'s eight geometric anchors, and being a child means
+ * `paintChrome`'s `rotate()` on the outline box carries the handle around with
+ * it for free, the same way a layer's own rotation carries its node.
  *
  * @param {boolean} active  this column can show the selected layer
  */
@@ -269,6 +275,7 @@ function layerChrome(active) {
               data-anchor="${a}"
             ></span>`,
         )}
+        <span class="carousel-studio__handle carousel-studio__handle--rotate"></span>
       </span>
       <span class="carousel-studio__snap"></span>
     </span>`;

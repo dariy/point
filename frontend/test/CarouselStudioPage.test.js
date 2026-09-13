@@ -2096,8 +2096,8 @@ describe('CarouselStudioPage', () => {
           );
           assert.equal(
             stageCol(el, 0).querySelectorAll('.carousel-studio__handle').length,
-            8,
-            'eight resize handles',
+            9,
+            'eight resize handles plus the rotate handle',
           );
         });
 
@@ -2288,7 +2288,7 @@ describe('CarouselStudioPage', () => {
           assert.ok(Math.abs(lefts[1] - lefts[2] - 100) < 0.5, `${lefts}`);
           assert.equal(
             stageCol(el, 2).querySelectorAll('.carousel-studio__handle').length,
-            8,
+            9,
             'the handles come with it, and overflow does the clipping',
           );
         });

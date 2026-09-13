@@ -416,6 +416,9 @@ export function arrowPlan(box, direction) {
  * pixel rect goes on to the type paint, which needs canvas pixels to typeset
  * in. A `data-layer` index past the end of the list (the layer was deleted
  * since the last render) hides its element rather than leaving a stale mark.
+ * A non-zero `box.rotate` becomes a CSS `rotate()` about the element's own
+ * centre — its default transform-origin — the same point `paintDispatch`
+ * (`render.js`) rotates the canvas draw about.
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  the slide's `[data-slice]`
  *   elements: the stage slice and the filmstrip frame
@@ -446,6 +449,7 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
       el.style.top = `${(rect.y / h) * 100}%`;
       el.style.width = `${(rect.w / w) * 100}%`;
       el.style.height = `${(rect.h / h) * 100}%`;
+      el.style.transform = layer.box?.rotate ? `rotate(${layer.box.rotate}deg)` : "";
       paintLayerContent(el, layer, { index, count, rect, frameH: h, heightCqw });
     });
   });
@@ -488,6 +492,7 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
       el.style.top = `${(rect.y / h) * 100}%`;
       el.style.width = `${(rect.w / w) * 100}%`;
       el.style.height = `${(rect.h / h) * 100}%`;
+      el.style.transform = layer.box?.rotate ? `rotate(${layer.box.rotate}deg)` : "";
       paintLayerContent(el, layer, { index, count, rect, frameH: h, heightCqw });
     });
   });
@@ -627,16 +632,20 @@ function paintArrowContent(el, layer, rect) {
 
 /**
  * Write one chrome node per host: the outline box (which carries the eight
- * resize handles) at `rect`, in percent of the host, and one element per snap
- * guide, in host fractions. A `null` rect hides the chrome — that is how a
- * spanning layer's chrome disappears from a column it does not reach, without
- * the markup having to be re-emitted mid-drag.
+ * resize handles and the ninth, rotate, handle) at `rect`, in percent of the
+ * host, and one element per snap guide, in host fractions. A `null` rect hides
+ * the chrome — that is how a spanning layer's chrome disappears from a column
+ * it does not reach, without the markup having to be re-emitted mid-drag.
+ * `rotate` turns into the same CSS `rotate()` the layer's own node gets
+ * (`paintDeckLayers`); the rotate handle is a child of the outline box in the
+ * markup (`panels.js`), so it swings with it for free.
  *
  * @param {ArrayLike<HTMLElement>} hosts
  * @param {{x:number,y:number,w:number,h:number}|null} rect
  * @param {{v:number[], h:number[]}} guides
+ * @param {number} [rotate] degrees; 0 except mid-drag or on a rotated layer
  */
-function paintChrome(hosts, rect, guides) {
+function paintChrome(hosts, rect, guides, rotate = 0) {
   Array.from(hosts).forEach((host) => {
     const chrome = /** @type {HTMLElement|null} */ (
       host.querySelector(".carousel-studio__chrome")
@@ -652,6 +661,7 @@ function paintChrome(hosts, rect, guides) {
       outline.style.top = `${rect.y}%`;
       outline.style.width = `${rect.w}%`;
       outline.style.height = `${rect.h}%`;
+      outline.style.transform = rotate ? `rotate(${rotate}deg)` : "";
     }
     const snap = chrome.querySelector(".carousel-studio__snap");
     if (!snap) return;
@@ -681,12 +691,17 @@ function paintChrome(hosts, rect, guides) {
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  the selected slide's `[data-slice]`
  *   elements
- * @param {{box: {x:number,y:number,w:number,h:number}, aspect: string,
+ * @param {{box: {x:number,y:number,w:number,h:number,rotate?:number}, aspect: string,
  *   guides: {v: number[], h: number[]}}} o  `guides` in canvas fractions, empty
  *   except mid-drag
  */
 export function paintLayerChrome({ hosts }, { box, aspect, guides }) {
-  paintChrome(hosts, box ? layerCSS({ box }, aspect) : null, guides || { v: [], h: [] });
+  paintChrome(
+    hosts,
+    box ? layerCSS({ box }, aspect) : null,
+    guides || { v: [], h: [] },
+    box?.rotate || 0,
+  );
 }
 
 /**
@@ -719,5 +734,6 @@ export function paintSpanChrome({ hosts }, { layer, aspect, index, count, guides
       h: (rect.h / h) * 100,
     },
     { v: (g.v || []).map((v) => v * n - index), h: g.h || [] },
+    layer?.box?.rotate || 0,
   );
 }

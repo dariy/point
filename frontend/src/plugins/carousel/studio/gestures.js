@@ -28,6 +28,13 @@
  * layer still falls through to the crop gesture, so pan/zoom is unchanged
  * wherever a layer is not in the way.
  *
+ * A ninth handle, above the box's own top edge and not one of the eight
+ * `hitLayer` derives, drives `box.rotate` the same way: press, provisional
+ * paint, one commit on release. It carries no snap — an angle has no safe-area
+ * or seam to land on — but does carry its own modifier, Shift, to round to
+ * 15° increments; Shift is free here because it only gates the wheel zoom
+ * (S2.1), never a pointer drag.
+ *
  * It drives that field in either of two coordinate spaces, because a layer's
  * `box` is normalized to whatever it belongs to. A slide layer's is fractions
  * of one slide, so the pressed column is the space. A spanning layer's is
@@ -84,6 +91,14 @@ const DRAG_SLOP_PX = 3;
 /** A press within this many CSS px of a selected layer's edge grabs the resize
  *  handle there rather than moving the layer. */
 const HANDLE_GRAB_PX = 12;
+/** How far above the box's own top edge the rotate handle sits, in CSS px —
+ *  matches its `top` in carousel.css. Clear of `HANDLE_GRAB_PX` so the two
+ *  handles' grab zones never overlap. */
+const ROTATE_HANDLE_OFFSET_PX = 24;
+/** A press within this many CSS px of the rotate handle grabs it. */
+const ROTATE_HANDLE_HIT_PX = 8;
+/** One Shift-held rotate drag snaps to this many degrees. */
+const ROTATE_SNAP_DEG = 15;
 /** A dragged layer edge within this many CSS px of a guide clicks onto it. */
 const SNAP_PX = 7;
 /** The smallest a layer box may be on either axis — one pixel of the 1080px
@@ -218,6 +233,47 @@ export function layerContains(rect, box, cx, cy) {
   return fx >= box.x && fx <= box.x + box.w && fy >= box.y && fy <= box.y + box.h;
 }
 
+/** The rotate handle's centre in client coordinates: `ROTATE_HANDLE_OFFSET_PX`
+ *  above the box's own unrotated top-centre, then rotated about the box
+ *  centre by `box.rotate` — the same transform the CSS handle rides on its
+ *  rotated parent (`.carousel-studio__chrome-box`, `carousel.css`), worked out
+ *  by hand because this module has no DOM to measure it from. The rotation
+ *  runs in client pixels, not `rect`'s fractions, so it stays a true angle
+ *  whatever the frame's aspect ratio is.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box  0..1 of rect
+ */
+export function rotateHandlePoint(rect, box) {
+  const cx = rect.left + (box.x + box.w / 2) * rect.width;
+  const cy = rect.top + (box.y + box.h / 2) * rect.height;
+  const hx = cx;
+  const hy = rect.top + box.y * rect.height - ROTATE_HANDLE_OFFSET_PX;
+  const rad = ((box.rotate || 0) * Math.PI) / 180;
+  const dx = hx - cx;
+  const dy = hy - cy;
+  return {
+    x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+    y: cy + dx * Math.sin(rad) + dy * Math.cos(rad),
+  };
+}
+
+/**
+ * Whether `(cx, cy)` lands within `ROTATE_HANDLE_HIT_PX` of the rotate
+ * handle. Checked before {@link hitLayer} — the handle sits well clear of the
+ * box's own edges, so the two never contend for the same press.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box
+ * @param {number} cx
+ * @param {number} cy
+ */
+export function hitRotateHandle(rect, box, cx, cy) {
+  if (!rect.width || !rect.height) return false;
+  const p = rotateHandlePoint(rect, box);
+  return Math.hypot(cx - p.x, cy - p.y) <= ROTATE_HANDLE_HIT_PX;
+}
+
 /** Clamp a box to the canvas the way `normalizeBox` (`document.js`) does — a
  *  preview-smoothness clamp only; the commit re-clamps through the mutator. */
 function clampBox(box) {
@@ -233,7 +289,11 @@ function clampBox(box) {
 
 /** The box a move or resize of `startBox` by `(dfx, dfy)` canvas fractions
  *  produces, before snapping and clamping. A resize keeps the anchored edge put
- *  and never crosses it — a width dragged past zero pins to `MIN_BOX`. */
+ *  and never crosses it — a width dragged past zero pins to `MIN_BOX`. Spreads
+ *  `startBox` in both branches (rather than rebuilding `{x,y,w,h}` by hand) so
+ *  a rotated layer's `rotate` rides through a move or resize untouched — drop
+ *  it and the provisional paint would flash the layer back to unrotated for
+ *  the length of the drag. */
 export function dragBox(startBox, mode, anchor, dfx, dfy) {
   if (mode === "move") {
     return { ...startBox, x: startBox.x + dfx, y: startBox.y + dfy };
@@ -251,7 +311,7 @@ export function dragBox(startBox, mode, anchor, dfx, dfy) {
   } else if (anchor.v > 0) {
     h = Math.max(MIN_BOX, startBox.h + dfy);
   }
-  return { x, y, w, h };
+  return { ...startBox, x, y, w, h };
 }
 
 /**
@@ -410,7 +470,7 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   `touch-action` already gives a finger this for free, so only the mouse
  *   drag and the wheel path call it. The host owns the scroller; this module
  *   never touches it directly, the same as every other DOM write.
- * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number},
+ * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number},
  *   scope?: 'slide'|'span'}|null} [activeLayer]
  *   The selected layer — the slide index to commit it to, its index in that
  *   slide's list, its current box, and the space that box is fractions of
@@ -422,10 +482,11 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   The safe-area rect of `scope`'s space, in that space's fractions, for
  *   snapping. Null disables safe-area snap (centre, edge and seam guides still
  *   apply).
- * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}, guides: {v:number[],h:number[]}) => void} [paintLayer]
+ * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number}, guides: {v:number[],h:number[]}) => void} [paintLayer]
  *   Paint layer `j` of slide `i` at a provisional box, plus the snap guides that
- *   engaged — the layer twin of `paint`.
- * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number}) => void} [commitLayer]
+ *   engaged — the layer twin of `paint`. A rotate drag calls this with empty
+ *   guides — an angle has nothing in `lines` to snap to.
+ * @property {(i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number}) => void} [commitLayer]
  *   Write a finished box into the document, through the layer mutator (which
  *   re-clamps) — the layer twin of `commit`.
  * @property {(i: number) => Array<{scope:'slide'|'span', j: number, box:{x:number,y:number,w:number,h:number}}>} [layersOnColumn]
@@ -458,7 +519,9 @@ export function createDeckGestures(host) {
   /** The in-flight gesture, tagged by `kind`: a `"crop"` pan/pinch
    *  ({ i, frame, pointers, crop, startCrop, start, moved, undecided }), a
    *  `"layer"` move/resize ({ i, slide, j, frame, mode, anchor, space,
-   *  startX, startY, startBox, box, moved }), or a `"pane"` scroll-by-hand
+   *  startX, startY, startBox, box, moved }), a `"rotate"` drag ({ i, slide,
+   *  j, frame, centerX, centerY, startX, startY, startAngle, startRotate,
+   *  startBox, box, moved }), or a `"pane"` scroll-by-hand
    *  ({ i, frame, startX, lastX, moved }) — where `i` is
    *  the column holding the pointer and `slide` the index the box commits to,
    *  the two being the same thing for everything but a span layer. One at a
@@ -539,6 +602,36 @@ export function createDeckGestures(host) {
     host.commitLayer?.(ended.slide, ended.j, ended.box);
   };
 
+  /** The angle from the box's own (fixed) centre to `(x, y)`, in degrees —
+   *  `atan2` in client-pixel space, so it reads the true angle whatever the
+   *  frame's aspect ratio is. */
+  const pointerAngle = (drag, x, y) =>
+    (Math.atan2(y - drag.centerY, x - drag.centerX) * 180) / Math.PI;
+
+  const onRotateMove = (e) => {
+    if (!drag || drag.kind !== "rotate") return;
+    if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
+    // Wrapped into (-180, 180] so a press near the ±180° seam doesn't jump.
+    const delta = (((pointerAngle(drag, e.clientX, e.clientY) - drag.startAngle + 180) % 360) + 360) % 360 - 180;
+    let rotate = drag.startRotate + delta;
+    if (e.shiftKey) rotate = Math.round(rotate / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG;
+    drag.box = { ...drag.startBox, rotate };
+    host.paintLayer?.(drag.slide, drag.j, drag.box, { v: [], h: [] });
+    e.preventDefault?.();
+  };
+
+  const onRotateUp = (e, frame) => {
+    const ended = drag;
+    drag = null;
+    frame.releasePointerCapture?.(e.pointerId);
+    frame.classList.remove("is-dragging");
+    if (!ended.moved) {
+      host.select(ended.i);
+      return;
+    }
+    host.commitLayer?.(ended.slide, ended.j, ended.box);
+  };
+
   /** Take the pointer for the crop gesture: capture it, dress the frame, and
    *  stop the browser doing anything else with the event. */
   const claimCrop = (e, frame) => {
@@ -570,10 +663,32 @@ export function createDeckGestures(host) {
       const active = host.activeLayer?.();
       const span = active?.scope === "span";
       const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
-      const hit =
-        active && (span || active.i === i)
-          ? hitLayer(rect, active.box, e.clientX, e.clientY)
-          : null;
+      const grabbable = active && (span || active.i === i);
+      if (grabbable && hitRotateHandle(rect, active.box, e.clientX, e.clientY)) {
+        frame.setPointerCapture?.(e.pointerId);
+        frame.classList.add("is-dragging");
+        const cx = rect.left + (active.box.x + active.box.w / 2) * rect.width;
+        const cy = rect.top + (active.box.y + active.box.h / 2) * rect.height;
+        drag = {
+          kind: "rotate",
+          i,
+          slide: active.i,
+          j: active.j,
+          frame,
+          centerX: cx,
+          centerY: cy,
+          startX: e.clientX,
+          startY: e.clientY,
+          startAngle: (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI,
+          startRotate: active.box.rotate || 0,
+          startBox: { ...active.box },
+          box: { ...active.box },
+          moved: false,
+        };
+        e.preventDefault?.();
+        return;
+      }
+      const hit = grabbable ? hitLayer(rect, active.box, e.clientX, e.clientY) : null;
       if (hit) {
         frame.setPointerCapture?.(e.pointerId);
         frame.classList.add("is-dragging");
@@ -658,6 +773,10 @@ export function createDeckGestures(host) {
   };
 
   const onPointerMove = (e, frame, i) => {
+    if (drag && drag.kind === "rotate") {
+      if (drag.i === i) onRotateMove(e);
+      return;
+    }
     if (drag && drag.kind === "layer") {
       if (drag.i === i) onLayerMove(e);
       return;
@@ -720,6 +839,10 @@ export function createDeckGestures(host) {
   };
 
   const onPointerUp = (e, frame, i) => {
+    if (drag && drag.kind === "rotate") {
+      if (drag.i === i) onRotateUp(e, frame);
+      return;
+    }
     if (drag && drag.kind === "layer") {
       if (drag.i === i) onLayerUp(e, frame);
       return;

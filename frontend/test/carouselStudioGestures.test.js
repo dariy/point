@@ -29,9 +29,11 @@ import {
   dragAnchor,
   dragBox,
   hitLayer,
+  hitRotateHandle,
   layerContains,
   panScale,
   pointerCentroid,
+  rotateHandlePoint,
   sameAnchor,
   sameCrop,
   snapBox,
@@ -559,6 +561,39 @@ describe('carousel studio gestures', () => {
     });
   });
 
+  describe('rotateHandlePoint / hitRotateHandle', () => {
+    const box = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    const rect = { left: 0, top: 0, width: 200, height: 200 };
+
+    test('an unrotated box puts the handle above the centre, offset from the top edge', () => {
+      // Centre at (100, 100); top edge at y=50; handle 24px above it.
+      const p = rotateHandlePoint(rect, box);
+      assert.ok(Math.abs(p.x - 100) < 1e-9, `${p.x}`);
+      assert.ok(Math.abs(p.y - 26) < 1e-9, `${p.y}`);
+    });
+
+    test('a 90° box swings the handle from above the centre to its right — clockwise, matching CSS', () => {
+      const p = rotateHandlePoint(rect, { ...box, rotate: 90 });
+      assert.ok(Math.abs(p.x - 174) < 1e-9, `${p.x}`);
+      assert.ok(Math.abs(p.y - 100) < 1e-9, `${p.y}`);
+    });
+
+    test('a press on the handle hits; a press a few px off misses', () => {
+      assert.strictEqual(hitRotateHandle(rect, box, 100, 26), true);
+      assert.strictEqual(hitRotateHandle(rect, box, 100, 100), false, 'the box centre is not the handle');
+    });
+
+    test('the hit test follows the handle around a rotated box', () => {
+      const rotated = { ...box, rotate: 90 };
+      assert.strictEqual(hitRotateHandle(rect, rotated, 174, 100), true);
+      assert.strictEqual(hitRotateHandle(rect, rotated, 100, 26), false, 'the unrotated position no longer hits');
+    });
+
+    test('an unmeasured frame misses rather than dividing by zero', () => {
+      assert.strictEqual(hitRotateHandle({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), false);
+    });
+  });
+
   describe('dragBox', () => {
     const start = { x: 0.2, y: 0.2, w: 0.4, h: 0.4 };
 
@@ -767,6 +802,70 @@ describe('carousel studio gestures', () => {
       frame.emit('pointermove', { pointerId: 1, clientX: 120, clientY: 80, altKey: true });
       assert.deepStrictEqual(host.calls.paintLayer.at(-1).guides, { v: [], h: [] });
       gestures.destroy();
+    });
+
+    describe('rotate drag', () => {
+      // LAYER_BOX is 0.3..0.7 square in a 200×200 frame: centre (100, 100),
+      // handle 24px above the top edge at (100, 36) — see rotateHandlePoint.
+      const HANDLE = { x: 100, y: 36 };
+
+      test('a press on the rotate handle spins the box and commits an angle, not a move', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: HANDLE.x, clientY: HANDLE.y });
+        // Straight right of centre: a quarter-turn clockwise from "up".
+        frame.emit('pointermove', { pointerId: 1, clientX: 200, clientY: 100 });
+        const last = host.calls.paintLayer.at(-1);
+        assert.ok(Math.abs(last.box.rotate - 90) < 1e-9, `${last.box.rotate}`);
+        // Position and size are untouched — only rotate moved.
+        assert.strictEqual(last.box.x, 0.3);
+        assert.strictEqual(last.box.w, 0.4);
+
+        frame.emit('pointerup', { pointerId: 1, clientX: 200, clientY: 100 });
+        assert.strictEqual(host.calls.commitLayer.length, 1);
+        assert.strictEqual(host.calls.commit.length, 0, 'no crop commit');
+        const { box } = host.calls.commitLayer[0];
+        assert.ok(Math.abs(box.rotate - 90) < 1e-9, `${box.rotate}`);
+        gestures.destroy();
+      });
+
+      test('a press that stays under the slop selects and rotates nothing', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: HANDLE.x, clientY: HANDLE.y });
+        frame.emit('pointermove', { pointerId: 1, clientX: HANDLE.x + 1, clientY: HANDLE.y });
+        frame.emit('pointerup', { pointerId: 1, clientX: HANDLE.x + 1, clientY: HANDLE.y });
+        assert.strictEqual(host.calls.commitLayer.length, 0);
+        assert.deepStrictEqual(host.calls.select, [0]);
+        gestures.destroy();
+      });
+
+      test('Shift snaps the drag to 15° increments', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: HANDLE.x, clientY: HANDLE.y });
+        // ~100° clockwise from "up" — snaps to 105.
+        frame.emit('pointermove', {
+          pointerId: 1,
+          clientX: 100 + 64 * Math.cos((10 * Math.PI) / 180),
+          clientY: 100 + 64 * Math.sin((10 * Math.PI) / 180),
+          shiftKey: true,
+        });
+        frame.emit('pointerup', {
+          pointerId: 1,
+          clientX: 100 + 64 * Math.cos((10 * Math.PI) / 180),
+          clientY: 100 + 64 * Math.sin((10 * Math.PI) / 180),
+          shiftKey: true,
+        });
+        assert.strictEqual(host.calls.commitLayer[0].box.rotate, 105);
+        gestures.destroy();
+      });
+
+      test('a press off the handle but on the box still moves it, not rotates', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 100 });
+        assert.strictEqual(host.calls.paintLayer.at(-1).box.rotate, undefined);
+        assert.ok(host.calls.paintLayer.at(-1).box.x > 0.3, 'it moved instead');
+        gestures.destroy();
+      });
     });
   });
 

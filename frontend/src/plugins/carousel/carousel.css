@@ -1006,6 +1006,23 @@
 .carousel-studio__handle--sw { left: 0; top: 100%; cursor: nesw-resize; }
 .carousel-studio__handle--w { left: 0; top: 50%; cursor: ew-resize; }
 
+/* The ninth handle: round rather than square so it reads as a different kind
+ * of drag, sitting above the box's own top edge — `ROTATE_HANDLE_OFFSET_PX`
+ * in gestures.js hit-tests against this same offset, worked out by hand since
+ * that module has no DOM to measure the handle's rotated position from. As a
+ * child of `.carousel-studio__chrome-box` it inherits that box's own
+ * `rotate()` transform (`paintChrome`, preview.js), so it swings around the
+ * box as it turns rather than needing a second write. */
+.carousel-studio__handle--rotate {
+  left: 50%;
+  top: -24px;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  cursor: grab;
+}
+
 .carousel-studio__snap {
   position: absolute;
   inset: 0;
