@@ -6,7 +6,42 @@
 
 import { api } from './client.js';
 
-/** @returns {Promise<object>} SystemStats */
+/**
+ * The admin dashboard's counters — GetStats in api/internal/api/system.go.
+ *
+ * @typedef {object} SystemStats
+ * @property {number} published_posts
+ * @property {number} total_posts
+ * @property {number} total_tags
+ * @property {number} total_media
+ * @property {number} storage_used_mb
+ * @property {number} [storage_quota_mb]  Absent when no quota is configured.
+ * @property {number} uptime_seconds
+ * @property {boolean} import_configured  A photo library path is set.
+ */
+
+/**
+ * One archive in the backups folder (ListBackups). A backup still being
+ * written is listed first, with `in_progress` set, no `sha256`, and the size
+ * written so far.
+ *
+ * @typedef {object} Backup
+ * @property {string} filename
+ * @property {number} size  Bytes.
+ * @property {string} created_at
+ * @property {string} [sha256]
+ * @property {boolean} [in_progress]
+ */
+
+/**
+ * One applied schema migration (repository.MigrationRecord).
+ *
+ * @typedef {{ id: number, name: string, applied_at: string }} Migration
+ */
+
+/** @typedef {{ status: string, message: string }} StatusMessage */
+
+/** @returns {Promise<SystemStats>} */
 export function getStats() {
   return api.get('/api/system/stats');
 }
@@ -28,10 +63,6 @@ export function getStats() {
  */
 
 /**
- * @param {{ log_type?: string, lines?: number }} [params]
- * @returns {Promise<string[]>}
- */
-/**
  * Background-job health: last run / last success / last error per job.
  * Per process — a restart clears it.
  * @returns {Promise<{tasks: TaskHealth[], degraded: number, uptime: number}>}
@@ -40,14 +71,20 @@ export function getHealth() {
   return api.get('/api/system/health');
 }
 
+/**
+ * The last `lines` lines of the server log (100 by default, at most 1000).
+ * @param {{ lines?: number }} [params]
+ * @returns {Promise<string[]>}
+ */
 export function getLogs(params = {}) {
   return api.get('/api/system/logs', params);
 }
 
 /**
- * Clear the server-side file cache.
+ * Clear the server-side file cache, and recalculate media visibility while at
+ * it. `updated_media` counts the media whose visibility changed.
  * @param {string} [pattern]
- * @returns {Promise<object>}
+ * @returns {Promise<{ status: string, cleared_count: number, updated_media: number }>}
  */
 export function clearCache(pattern = 'all') {
   return api.request(`/api/system/cache/clear?pattern=${encodeURIComponent(pattern)}`, {
@@ -55,12 +92,15 @@ export function clearCache(pattern = 'all') {
   });
 }
 
-/** @returns {Promise<object>} */
+/**
+ * Start a backup in the background; listBackups shows its progress.
+ * @returns {Promise<{ status: string }>}
+ */
 export function createBackup() {
   return api.post('/api/system/backup');
 }
 
-/** @returns {Promise<object[]>} */
+/** @returns {Promise<Backup[]>} */
 export function listBackups() {
   return api.get('/api/system/backups');
 }
@@ -70,7 +110,7 @@ export function listBackups() {
  * password — replacing all data, including the login password, is destructive.
  * @param {string} filename
  * @param {string} sha256pw - sha256-hex of the account password
- * @returns {Promise<object>}
+ * @returns {Promise<StatusMessage>}
  */
 export function restoreBackup(filename, sha256pw) {
   return api.post(`/api/system/backups/${encodeURIComponent(filename)}/restore`, {
@@ -80,7 +120,7 @@ export function restoreBackup(filename, sha256pw) {
 
 /**
  * @param {string} filename
- * @returns {Promise<object>}
+ * @returns {Promise<StatusMessage>}
  */
 export function deleteBackup(filename) {
   return api.delete(`/api/system/backups/${encodeURIComponent(filename)}`);
@@ -148,7 +188,7 @@ export function uploadBackupArchive(file, onProgress, expectedChecksum) {
   });
 }
 
-/** @returns {Promise<object[]>} */
+/** @returns {Promise<Migration[]>}  Newest first. */
 export function getMigrations() {
   return api.get('/api/system/migrations');
 }
@@ -156,7 +196,7 @@ export function getMigrations() {
 /**
  * Restart the server process in place (re-exec). Used to apply a scheduled
  * restore, and for general restarts. The server is briefly unavailable.
- * @returns {Promise<object>}
+ * @returns {Promise<StatusMessage>}
  */
 export function restartServer() {
   return api.post('/api/system/restart');

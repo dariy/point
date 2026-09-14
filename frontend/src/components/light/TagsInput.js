@@ -12,8 +12,6 @@ let _tagInputCounter = 0;
  * @property {string[]} [tags]  Initial tag names.
  * @property {(tags: string[]) => void} [onChange]  Called with the updated
  *   names whenever they change.
- * @property {string} [placeholder]  Passed by the posts list's tag filter but
- *   not read — the input's placeholder is fixed.
  */
 
 /** @extends {Component<TagsInputProps>} */

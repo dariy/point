@@ -86,7 +86,7 @@ export default class TagPage extends Component {
       },
       // The ghost's cards must carry the same tag context as the live grid, so a
       // card tapped mid-swipe opens inside this tag rather than standalone.
-      cardProps: (_post, page) => ({ tagSlug: this.props.params?.slug || "", tagPage: page }),
+      cardProps: () => ({ tagSlug: this.props.params?.slug || "" }),
       gotoPage: (p) => ViewContext.update({ page: p }),
       onZoomCommit: () => {
         this._fitLatch.reset(); // a new column count is a new question to fit
@@ -455,8 +455,6 @@ export default class TagPage extends Component {
 
       this.mountChild(PostContent, "#content-mount", {
         post,
-        showViewCount: !!settings.show_view_counts,
-        showImmersiveExcerpt: settings.show_immersive_excerpt !== "false",
         prevPost,
         nextPost,
         tagSlug: slug,
@@ -500,7 +498,6 @@ export default class TagPage extends Component {
   async _mountPostContent() {
     const settings = getSettings() || {};
     const slug = this.props.params?.slug || "";
-    const page = parseInt(this.props.query?.page || "1", 10);
     const { posts = [], pagination = {} } = this.state.data || {};
 
     this._postChildren = [];
@@ -520,7 +517,6 @@ export default class TagPage extends Component {
       posts,
       showViewCount: !!settings.show_view_counts,
       tagSlug: slug,
-      tagPage: page,
       reversed: !!pagination.scheduled,
       emptyMessage: "No posts in this tag yet.",
     };

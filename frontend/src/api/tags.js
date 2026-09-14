@@ -48,6 +48,37 @@ import { api } from './client.js';
  */
 
 /**
+ * A tag's own fields as a write sends them — the keys tagPatchParams reads in
+ * api/internal/api. On an update only the keys present change.
+ *
+ * @typedef {object} TagFields
+ * @property {string} [name]
+ * @property {string} [slug]
+ * @property {string} [description]
+ * @property {string} [kind]
+ * @property {boolean} [hidden]
+ * @property {boolean} [hides_posts]
+ * @property {number|null} [nav_order]
+ * @property {boolean} [in_breadcrumbs]
+ * @property {boolean} [show_related]
+ * @property {boolean} [in_ancestor_flyout]
+ * @property {number|null} [latitude]
+ * @property {number|null} [longitude]
+ */
+
+/**
+ * A tag create or PUT body: its own fields plus its relationships
+ * (CreateTagRequest). On a PUT an explicit empty `parent_ids` or `child_ids`
+ * removes them all, and an omitted key leaves them as they are.
+ *
+ * @typedef {TagFields & {
+ *   parent_ids?: number[],
+ *   child_ids?: number[],
+ *   locations?: Array<{ latitude: number, longitude: number }>,
+ * }} TagInput
+ */
+
+/**
  * @param {{ include_empty?: boolean, important_only?: boolean, q?: string }} [params]
  * @returns {Promise<{ tags: Tag[], total: number }>}
  */
@@ -57,7 +88,7 @@ export function listTags(params = {}) {
 
 /**
  * @param {number} limit
- * @returns {Promise<{ tags: object[] }>}
+ * @returns {Promise<{ tags: import('./pages.js').TagCloudItem[] }>}
  */
 export function getTagCloud(limit = 20) {
   return api.get('/api/tags/cloud', { limit });
@@ -80,7 +111,7 @@ export function getTagBySlug(slug) {
 }
 
 /**
- * @param {object} data  TagCreate payload
+ * @param {TagInput} data
  * @returns {Promise<Tag>}
  */
 export function createTag(data) {
@@ -89,7 +120,7 @@ export function createTag(data) {
 
 /**
  * @param {number} id
- * @param {object} data  TagUpdate payload (all optional)
+ * @param {TagInput} data
  * @returns {Promise<Tag>}
  */
 export function updateTag(id, data) {
@@ -99,7 +130,8 @@ export function updateTag(id, data) {
 /**
  * Patch a tag — only the provided fields are updated (merge semantics).
  * @param {number} id
- * @param {object} fields  Partial tag fields to update
+ * @param {TagFields} fields  Relationship keys are ignored here;
+ *   setTagParents and setTagChildren own those.
  * @returns {Promise<Tag>}
  */
 export function patchTag(id, fields) {

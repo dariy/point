@@ -725,7 +725,7 @@ function mergeCrop(current, patch) {
  *
  * @param {*} doc
  * @param {number} slideIndex
- * @param {{crop?: Partial<CarouselCrop>, fit?: string, bg?: object|null}} update
+ * @param {{crop?: Partial<CarouselCrop>, fit?: string, bg?: CarouselBg|null}} update
  * @param {{srcW?: number, srcH?: number}} [opts] source pixel dimensions, used
  *   to clamp the crop; omitting them still clamps to the 0..1 normalized box
  * @returns {CarouselDoc} a new document; the input is not mutated

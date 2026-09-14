@@ -32,7 +32,7 @@ export function monthLabel(month) {
  * Group the flat folder list from the API into years, newest year first.
  *
  * @param {Array<{year: string, month: string, path: string}>} folders
- * @returns {{years: string[], byYear: Object<string, Array>}}
+ * @returns {{years: string[], byYear: Record<string, Array<{year: string, month: string, path: string}>>}}
  */
 export function groupFoldersByYear(folders = []) {
   /** @type {Record<string, Array<{year: string, month: string, path: string}>>} */

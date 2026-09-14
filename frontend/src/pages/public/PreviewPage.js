@@ -88,7 +88,6 @@ export default class PreviewPage extends Component {
 
       this.mountChild(PostContent, '#content-mount', {
         post: this.state.post,
-        showViewCount: false,
         prevPost: null,
         nextPost: null,
         forceImmersive: immersive,

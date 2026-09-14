@@ -11,7 +11,6 @@ import { ShortcutHelp } from "./ShortcutHelp.js";
 import {
   getAutosaveStatus,
   getOfflineStatus,
-  getUser,
   onAutosaveStatus,
   onOfflineStatus,
   setUser,
@@ -124,8 +123,6 @@ export function setupAdminLayout(component, {
   };
   component.mountChild(LightSidebar, "#sidebar-mount", {
     currentPath,
-    publicUrl,
-    user: getUser() || {},
     onLogout
   });
   component.mountChild(AdminBottomBar, "#bottom-bar-mount", {

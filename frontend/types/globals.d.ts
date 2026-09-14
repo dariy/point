@@ -43,16 +43,23 @@ interface Remark42 {
   destroy?(): void;
 }
 
-/** One entry of the `window.__PLUGINS__` manifest — see core/pluginHost.js. */
+/** plugins.Type (api/internal/plugins/registry.go). */
+type PluginType = "route" | "slot" | "enhancer" | "service";
+
+/**
+ * One entry of the `window.__PLUGINS__` manifest — plugins.ManifestEntry
+ * (api/internal/plugins/registry.go), read by core/pluginHost.js. The manifest
+ * lists enabled plugins only, so an entry carries no enabled state.
+ */
 interface PluginManifestEntry {
   id: string;
-  type: string;
+  type: PluginType;
   slot?: string;
-  slot_rule?: string;
   routes?: string[];
-  enabled: boolean;
-  default_enabled: boolean;
-  locked?: boolean;
+  /** Hashed chunk URL; absent while the plugin has no built chunk. */
+  entry?: string;
+  /** The plugin's stylesheet URL, when it ships one. */
+  css?: string;
 }
 
 interface Window {

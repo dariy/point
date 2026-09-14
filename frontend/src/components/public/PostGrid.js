@@ -18,7 +18,6 @@ import { reconcileList, setKey } from '../../utils/reconcileList.js';
  *   post about to go live sits top-right, next to where the newest published
  *   post would be, and the queue runs leftwards and down from there.
  * @property {string} [tagSlug]  Passed through to PostCard.
- * @property {number} [tagPage]  Passed through to PostCard, which does not read it.
  */
 
 /** @extends {Component<PostGridProps>} */
@@ -82,11 +81,11 @@ export class PostGrid extends Component {
   }
 
   _cardProps(post, isHero = false) {
-    const { showViewCount = false, tagSlug, tagPage } = this.props;
+    const { showViewCount = false, tagSlug } = this.props;
     // isHero is not decoration: the hero slot spans the whole row, so its card
     // paints an image several times the width of a regular one and has to ask
     // for a different rung (PostCard → gridFit).
-    return { post, showViewCount, tagSlug, tagPage, isHero };
+    return { post, showViewCount, tagSlug, isHero };
   }
 
   /**

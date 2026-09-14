@@ -67,6 +67,7 @@ export class MediaBrowser extends Component {
     // own dismiss gestures, and its host page has arrow keys of its own.
     this._pager = this.props.pickerMode ? null : this._makePager();
     // Picker mode: persists selected media objects across page/folder changes
+    /** @type {Record<number, import('../../api/media.js').Media>} */
     this._selectedItemsById = {};
   }
 
@@ -1081,7 +1082,7 @@ export class MediaBrowser extends Component {
   /**
    * Returns the currently selected media objects (picker mode only).
    * Persists across page and folder changes.
-   * @returns {object[]}
+   * @returns {import('../../api/media.js').Media[]}
    */
   getSelectedItems() {
     return Object.values(this._selectedItemsById);

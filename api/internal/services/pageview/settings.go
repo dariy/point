@@ -10,16 +10,15 @@ import (
 // to a browser. Everything not listed here is owner-only by default, which is
 // what keeps a new setting from leaking by being forgotten.
 var publicSettingKeys = map[string]bool{
-	"blog_title":             true,
-	"blog_subtitle":          true,
-	"author_name":            true,
-	"posts_per_page":         true,
-	"default_theme":          true,
-	"show_view_counts":       true,
-	"about_post_id":          true,
-	"home_page_post_id":      true,
-	"show_immersive_excerpt": true,
-	"min_tag_posts_to_show":  true,
+	"blog_title":            true,
+	"blog_subtitle":         true,
+	"author_name":           true,
+	"posts_per_page":        true,
+	"default_theme":         true,
+	"show_view_counts":      true,
+	"about_post_id":         true,
+	"home_page_post_id":     true,
+	"min_tag_posts_to_show": true,
 
 	"tags_visibility": true,
 	"timeline_mode":   true,

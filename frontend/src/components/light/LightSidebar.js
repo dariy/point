@@ -30,15 +30,9 @@ const MANAGE_ITEMS = [
 ];
 
 /**
- * setupAdminLayout hands the sidebar and the bottom bar the same bag, so this
- * carries two props the sidebar does not read: it has no user block and no
- * public-site link.
- *
  * @typedef {object} LightSidebarProps
  * @property {string} [currentPath]  Active route path.
  * @property {() => void} [onLogout]
- * @property {object} [user]  Not read.
- * @property {string} [publicUrl]  Not read.
  */
 
 /** @extends {Component<LightSidebarProps>} */

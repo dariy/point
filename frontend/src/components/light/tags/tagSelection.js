@@ -186,8 +186,9 @@ function bindRowGestures(container, { state, enterWith, toggleSelected }) {
  *
  * @param {Element} container
  * @param {object}  opts
- * @param {() => {selectMode:boolean, selectedIds:Set<number>, tags:object[],
- *                view:string, listView:object}} opts.state
+ * @param {() => {selectMode:boolean, selectedIds:Set<number>,
+ *                tags:import('../../../api/tags.js').Tag[], view:string,
+ *                listView:{search?:string, filterParents?:Array<{id:number}>}}} opts.state
  *   Read fresh on every event, never captured — see the file header.
  * @param {(selectMode:boolean, selectedIds:Set<number>) => void} opts.onModeChange
  *   Entering or leaving select mode; the page turns this into a re-render.

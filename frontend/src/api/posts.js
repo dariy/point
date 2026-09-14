@@ -89,6 +89,30 @@ import { clearPageCache } from './pages.js';
  */
 
 /**
+ * The body of a post create or update — CreatePostRequest / UpdatePostRequest
+ * in api/internal/api/posts.go, which share their fields. Every field may be
+ * left out; an update keeps the stored title, content, slug, formatter, status
+ * and type when those come back empty.
+ *
+ * @typedef {object} PostInput
+ * @property {string} [title]
+ * @property {string} [content]
+ * @property {string} [css]
+ * @property {string} [immersive_mode]
+ * @property {boolean} [instagram_share]
+ * @property {string} [excerpt]
+ * @property {string} [slug]
+ * @property {string} [formatter]
+ * @property {string} [status]
+ * @property {string} [type]
+ * @property {boolean} [is_featured]
+ * @property {string} [thumbnail_path]
+ * @property {string} [meta_description]
+ * @property {string[]} [tags]  Tag names.
+ * @property {string|null} [scheduled_at]
+ */
+
+/**
  * Short-lived read cache for post reads + navigation, so the immersive viewer
  * can prefetch an adjacent post and then navigate to it without a visible
  * reload (the route swap resolves from cache within a microtask, before paint).
@@ -141,7 +165,7 @@ export function getPostBySlug(slug) {
 
 /**
  * Create a new post.
- * @param {object} data  PostCreate payload
+ * @param {PostInput} data
  * @returns {Promise<Post>}
  */
 export function createPost(data) {
@@ -152,7 +176,7 @@ export function createPost(data) {
 /**
  * Update a post.
  * @param {number} id
- * @param {object} data  PostUpdate payload
+ * @param {PostInput} data
  * @returns {Promise<Post>}
  */
 export function updatePost(id, data) {
@@ -243,7 +267,7 @@ export function getPostNavigation(id, tag = '') {
 /**
  * Find which home-feed (or tag-feed) page contains the given post.
  * @param {string} slug
- * @param {Object} [params] e.g. { tag: 'travel' }
+ * @param {{ tag?: string, per_page?: number }} [params]
  * @returns {Promise<{ page: number, per_page: number }>}
  */
 export function getPostPageLocation(slug, params = {}) {

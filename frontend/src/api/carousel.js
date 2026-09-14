@@ -31,7 +31,7 @@ export function getCarousel(postId) {
  * Create or replace a post's carousel document. The post must already exist.
  *
  * @param {number} postId
- * @param {object} doc  The carousel document (a JSON object).
+ * @param {import('../plugins/carousel/document.js').CarouselDoc} doc
  * @returns {Promise<{ post_id: number, doc: object, created_at: string, updated_at: string }>}
  */
 export function saveCarousel(postId, doc) {
@@ -116,7 +116,7 @@ export function getCarouselTemplate(slug) {
  *
  * @param {string} slug
  * @param {string} name
- * @param {object} doc  The template envelope (a JSON object).
+ * @param {import('../plugins/carousel/document.js').CarouselTemplate} doc
  * @returns {Promise<CarouselTemplate>}
  */
 export function saveCarouselTemplate(slug, name, doc) {
