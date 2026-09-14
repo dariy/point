@@ -200,10 +200,12 @@ jobs:
 
       - name: Run Go tests
         # The integration suite runs by default and requires a functioning
-        # SQLite environment (which ubuntu-latest provides).
+        # SQLite environment (which ubuntu-latest provides). -count=1 because
+        # the Go cache restored above also holds test results: without it an
+        # unchanged package reports "(cached)" and its tests never run.
         run: |
           cd api
-          go test ./... -coverprofile=coverage.txt -covermode=atomic
+          go test -count=1 ./... -coverprofile=coverage.txt -covermode=atomic
 
       # The build-failing half of the coverage gate. codecov's status checks
       # only report; this is what actually turns the job red.
@@ -391,5 +393,9 @@ jobs:
       # Extracts the fenced bash blocks and the AGENTS.md command table from the
       # documented set and runs them. Anything that cannot run unattended
       # carries a `<!-- verify:skip … -->` marker in the doc itself.
+      # GOFLAGS=-count=1: the Go cache restored above also holds test results,
+      # and a documented `go test` answered from it has not run anything.
       - name: Run every documented command
+        env:
+          GOFLAGS: -count=1
         run: ./scripts/check-docs.sh
