@@ -33,12 +33,20 @@ import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNode
 import { attachWindowFileDrop } from "../../utils/windowFileDrop.js";
 import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.js";
 import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.js";
+
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
+/** @extends {Component<PageProps>} */
 export default class PostEditPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
-    const id = props.params?.id ? parseInt(props.params.id, 10) : null;
+    const id = this.props.params?.id ? parseInt(this.props.params.id, 10) : null;
     this.state = {
       loading: !!id,
       saving: false,
@@ -696,7 +704,7 @@ export default class PostEditPage extends Component {
   async _viewOnSite() {
     if (this.state.hasPendingEdits) await this._autosave();
     const slug = this.state.post?.slug;
-    navigate(slug ? `/posts/${slug}` : this.props.publicUrl || "/");
+    navigate(slug ? `/posts/${slug}` : "/");
   }
 
   /**

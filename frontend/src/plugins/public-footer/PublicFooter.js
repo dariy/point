@@ -1,9 +1,5 @@
 /**
  * Public site footer — copyright, pagination slot (normal), or post tags (immersive).
- *
- * Props:
- *   settings      {object}    Public blog settings (blog_title, author_name)
- *   immersiveTags {object[]}  When non-empty, renders as immersive tag bar instead of pagination slot
  */
 
 import { Component } from "../../components/Component.js";
@@ -57,6 +53,16 @@ import {
  */
 let drawerOpen = false;
 
+/**
+ * @typedef {object} PublicFooterProps
+ * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
+ *   settings; reads blog_title and author_name.
+ * @property {import('../../api/posts.js').PostTag[]} [immersiveTags]  When
+ *   non-empty, the footer renders them as the immersive tag bar in place of
+ *   the pagination slot.
+ */
+
+/** @extends {Component<PublicFooterProps>} */
 export class PublicFooter extends Component {
   render() {
     const { settings = {}, immersiveTags = [] } = this.props;

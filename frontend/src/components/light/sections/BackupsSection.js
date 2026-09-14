@@ -18,6 +18,9 @@ import { formatFileSize } from "../../../utils/formatters.js";
 import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 import { GestureController } from "../../../core/gestures.js";
+
+/** @typedef {import('../../../api/settings.js').Settings} Settings */
+
 export class BackupsSection extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -321,7 +324,7 @@ export class BackupsSection extends Component {
   }
   async _load() {
     try {
-      const [backups, settings] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => ({}))]);
+      const [backups, settings] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => /** @type {Settings} */ ({}))]);
       this.setState({
         loading: false,
         backups: Array.isArray(backups) ? backups : [],
@@ -484,6 +487,7 @@ export class BackupsSection extends Component {
   // Resolve once the server has gone down and come back up (a resolved fetch —
   // even a 401 after a restore invalidates the session — means it's serving).
   // Falls back to resolving on a timeout so we never hang forever.
+  /** @returns {Promise<void>} */
   _awaitServerBack() {
     return new Promise(resolve => {
       const start = Date.now();

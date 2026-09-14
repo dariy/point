@@ -49,8 +49,15 @@ import {
   refitPage,
 } from "../../utils/gridFit.js";
 
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
+/** @extends {Component<PageProps>} */
 export default class TagPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = {
       loading: true,

@@ -8,6 +8,29 @@ import { api } from './client.js';
 import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.js';
 
 /**
+ * A media library record — mediaToResponse in api/internal/api/mappers.go.
+ *
+ * @typedef {object} Media
+ * @property {number} id
+ * @property {string} filename
+ * @property {string} path  Public path, e.g. "/2026/03/ts_file.jpg".
+ * @property {string|null} thumbnail_path  Null on a video with no poster yet,
+ *   which MediaBrowser reads as "offer to capture one".
+ * @property {string} file_type  Lower-cased: 'image' | 'video' | 'audio' | …
+ * @property {string} mime_type
+ * @property {number} file_size  Bytes.
+ * @property {number|null} width
+ * @property {number|null} height
+ * @property {number|null} post_id
+ * @property {string} uploaded_at
+ * @property {string|null} alt_text
+ * @property {string|null} caption
+ * @property {Record<string, any>|null} metadata  The EXIF map, as edited.
+ * @property {Record<string, any>|null} original_metadata  As captured at upload.
+ * @property {boolean} is_public
+ */
+
+/**
  * List media items.
  *
  * `paths` switches the endpoint out of listing mode: it resolves exactly the
@@ -20,7 +43,7 @@ import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.js';
  * dropped.
  *
  * @param {{ page?: number, per_page?: number, file_type?: string, folder?: string, paths?: string[] }} [params]
- * @returns {Promise<{ media: object[], total, page, per_page, pages }>}
+ * @returns {Promise<{ media: Media[], total: number, page: number, per_page: number, pages: number }>}
  */
 export function listMedia(params = {}) {
   return api.get('/api/media', params);
@@ -38,7 +61,7 @@ const MEDIA_PATH_BATCH = 100;
  * page of the library happens to contain.
  *
  * @param {string[]} paths  Content paths, e.g. "/2026/03/1712345678_shot.jpg"
- * @returns {Promise<Record<string, object>>}
+ * @returns {Promise<Record<string, Media>>}
  */
 export async function getMediaByPaths(paths) {
   const unique = [...new Set(paths.filter(Boolean))];
@@ -46,7 +69,7 @@ export async function getMediaByPaths(paths) {
   for (let i = 0; i < unique.length; i += MEDIA_PATH_BATCH) {
     batches.push(listMedia({ paths: unique.slice(i, i + MEDIA_PATH_BATCH) }));
   }
-  /** @type {Record<string, object>} */
+  /** @type {Record<string, Media>} */
   const byPath = {};
   for (const result of await Promise.all(batches)) {
     for (const m of result.media || []) if (m.path) byPath[m.path] = m;
@@ -66,7 +89,7 @@ export function getMediaFolders(params = {}) {
 /**
  * Get a single media item by ID.
  * @param {number} id
- * @returns {Promise<object>}
+ * @returns {Promise<Media>}
  */
 export function getMedia(id) {
   return api.get(`/api/media/${id}`);
@@ -81,7 +104,7 @@ export function getMedia(id) {
  *
  * @param {File}    file
  * @param {{ alt_text?, caption?, post_id? }} [meta]
- * @returns {Promise<object>}
+ * @returns {Promise<Media>}
  */
 export async function uploadMedia(file, meta = {}) {
   const form = new FormData();
@@ -103,7 +126,7 @@ export async function uploadMedia(file, meta = {}) {
  * uploaded before posters existed or ingested outside the admin UI.
  * @param {number} id
  * @param {Blob}   poster  JPEG frame
- * @returns {Promise<object>} Updated media object
+ * @returns {Promise<Media>} Updated media object
  */
 export function setVideoPoster(id, poster) {
   const form = new FormData();
@@ -134,7 +157,7 @@ export function uploadMultiple(files, postId) {
  * @param {number} id
  * @param {{ alt_text?: string, caption?: string, post_id?: number,
  *           metadata?: Record<string, any> }} data
- * @returns {Promise<object>}
+ * @returns {Promise<Media>}
  */
 export function updateMedia(id, data) {
   return api.patch(`/api/media/${id}`, data);
@@ -144,7 +167,7 @@ export function updateMedia(id, data) {
  * Rename a media item.
  * @param {number} id
  * @param {string} newFilename
- * @returns {Promise<object>}
+ * @returns {Promise<Media>}
  */
 export function renameMedia(id, newFilename) {
   return api.post(`/api/media/${id}/rename`, { new_filename: newFilename });
@@ -153,7 +176,7 @@ export function renameMedia(id, newFilename) {
 /**
  * Delete a media item.
  * @param {number} id
- * @returns {Promise<object>}
+ * @returns {Promise<null>}
  */
 export function deleteMedia(id) {
   return api.delete(`/api/media/${id}`);
@@ -169,7 +192,7 @@ export function getMediaStats() {
 
 /**
  * List orphaned media files.
- * @returns {Promise<{ media: object[], total, total_size_bytes }>}
+ * @returns {Promise<{ media: Media[], total: number, total_size_bytes: number }>}
  */
 export function getOrphanedMedia() {
   return api.get('/api/media/orphaned');
@@ -205,7 +228,7 @@ export function analyzeMediaByPath(path) {
  * Re-extract EXIF data from the original file on disk.
  * Overwrites any manually edited EXIF with camera-extracted values.
  * @param {number} id
- * @returns {Promise<object>} Updated media object
+ * @returns {Promise<Media>} Updated media object
  */
 export function reextractMediaEXIF(id) {
   return api.post(`/api/media/${id}/reextract`, {});
@@ -216,7 +239,7 @@ export function reextractMediaEXIF(id) {
  * Only alphanumeric and space characters are accepted.
  * @param {number} id
  * @param {Record<string, string>} fields  e.g. { Make: "Canon", Model: "EOS R5" }
- * @returns {Promise<object>} Updated media object
+ * @returns {Promise<Media>} Updated media object
  */
 export function updateMediaEXIF(id, fields) {
   return api.put(`/api/media/${id}/exif`, fields);
@@ -225,7 +248,7 @@ export function updateMediaEXIF(id, fields) {
 /**
  * Revert media EXIF metadata to the original values captured at upload.
  * @param {number} id
- * @returns {Promise<object>} Updated media object
+ * @returns {Promise<Media>} Updated media object
  */
 export function revertMediaEXIF(id) {
   return api.post(`/api/media/${id}/revert-exif`, {});

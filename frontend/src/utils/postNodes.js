@@ -18,6 +18,19 @@
  * without a canonical form on either side.
  */
 
+/**
+ * One node of the visual editor's document. Which fields are present follows
+ * `type`: a text node has `text` (and `blockClass` when it was wrapped in a
+ * `:::{.class}` fence), an image node a `path`, a carousel node its `paths`.
+ *
+ * @typedef {object} EditorNode
+ * @property {'text'|'image'|'carousel'} type
+ * @property {string} [text]
+ * @property {string} [blockClass]
+ * @property {string} [path]
+ * @property {string[]} [paths]
+ */
+
 /** A bare media path on its own line — how the visual editor stores an image. */
 export const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
@@ -61,6 +74,10 @@ function serializeCarousel(paths) {
   return carouselFence(paths);
 }
 
+/**
+ * @param {string} content  Post markdown.
+ * @returns {EditorNode[]}
+ */
 export function parseNodes(content) {
   const lines = (content || "").split("\n");
   const nodes = [];
@@ -117,6 +134,10 @@ export function parseNodes(content) {
   return nodes;
 }
 
+/**
+ * @param {EditorNode[]} nodes
+ * @returns {string}
+ */
 export function serializeNodes(nodes) {
   return nodes
     .map((n) => {

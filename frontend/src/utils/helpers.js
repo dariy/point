@@ -228,6 +228,16 @@ export function removeCanonical() {
 }
 
 /**
+ * Settings as the store holds them — what normalizeSettings() returns. A value's
+ * type follows its key's name: `*per_page` and `*posts_to_show` are numbers,
+ * anything containing `enable` or `show` is a boolean, the rest stay strings.
+ * The key decides, which a plain index signature cannot say, so the value
+ * type is left to the reader; the wire form is api/settings.js's Settings.
+ *
+ * @typedef {Record<string, any>} StoreSettings
+ */
+
+/**
  * Normalize raw string settings from the backend into proper types.
  *
  * The values are strings off the wire, but a caller may also hand over what a
@@ -235,7 +245,7 @@ export function removeCanonical() {
  * hence the `=== true` / `=== 1` arms below.
  *
  * @param {Record<string, any>} raw
- * @returns {Record<string, any>}
+ * @returns {StoreSettings}
  */
 export function normalizeSettings(raw) {
   if (!raw) return {};
@@ -281,9 +291,9 @@ export async function sharePost(data) {
  * Setup a long-press listener on an element.
  *
  * @param {HTMLElement} el
- * @param {function(Event): void} callback
+ * @param {(e: Event) => void} callback
  * @param {number} [duration=400]
- * @returns {function(): void} cleanup
+ * @returns {() => void} cleanup
  */
 export function setupLongPress(el, callback, duration = 400) {
   let timer = null;

@@ -2,6 +2,12 @@ import { Component } from '../Component.js';
 import { getTag } from '../../api/tags.js';
 import { html, navigate } from '../../utils/helpers.js';
 
+/**
+ * @typedef {object} TagFamilyPopoverProps
+ * @property {number} [tagId]  The tag whose parents, siblings and children to show.
+ */
+
+/** @extends {Component<TagFamilyPopoverProps>} */
 export class TagFamilyPopover extends Component {
   constructor(container, props = {}) {
     super(container, props);

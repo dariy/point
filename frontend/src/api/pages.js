@@ -7,6 +7,53 @@
 import { api } from './client.js';
 
 /**
+ * A feed paginator — paginationResponse in api/internal/api/pages.go. A pinned
+ * home page carries only the first four fields.
+ *
+ * @typedef {object} Pagination
+ * @property {number} page
+ * @property {number} per_page
+ * @property {number} total
+ * @property {number} pages
+ * @property {number} [min_page]  How far left the feed extends: 1, or 0 and
+ *   below for an owner with scheduled posts queued.
+ * @property {boolean} [scheduled]  This page came from the scheduled half.
+ */
+
+/**
+ * @typedef {object} TagCloudItem
+ * @property {number} id
+ * @property {string} name
+ * @property {string} slug
+ * @property {number} count
+ * @property {number} weight
+ */
+
+/**
+ * The tag a tag archive is about — tagToFullResponse, which is the single-tag
+ * payload without the graph annotations, plus two visibility flags for admins.
+ *
+ * @typedef {Omit<import('./tags.js').Tag, 'effective_hidden'|'effective_hides_posts'|'hidden_via'>
+ *   & { is_hidden?: boolean, is_hidden_posts?: boolean }} ArchiveTag
+ */
+
+/**
+ * One step of a tag archive's breadcrumb trail. `href` is set only when the
+ * request carried an explicit path; without it the crumb links to the tag.
+ *
+ * @typedef {object} Crumb
+ * @property {number} id
+ * @property {string} name
+ * @property {string} name_path
+ * @property {string} slug
+ * @property {number|null} nav_order
+ * @property {number} post_count
+ * @property {string} [href]
+ * @property {boolean} [is_hidden]  Admin only.
+ * @property {boolean} [is_hidden_posts]  Admin only.
+ */
+
+/**
  * Short-lived read cache for the paginated list pages, so the public grid can
  * preload the previous/next page and then navigate to it without a visible
  * reload (the swipe-committed route swap resolves from cache within a
@@ -33,7 +80,13 @@ export function clearPageCache() {
  * Home page data: recent posts, tag cloud, public settings.
  *
  * @param {{ page?: number, per_page?: number }} [params]
- * @returns {Promise<{ posts: object, tag_cloud: object[], settings: object }>}
+ * @returns {Promise<{
+ *   posts: import('./posts.js').Post[],
+ *   pagination: Pagination,
+ *   settings: import('./settings.js').Settings,
+ *   tag_cloud?: TagCloudItem[],
+ *   menu?: import('./nav.js').NavTagNode[],
+ * }>}  tag_cloud and menu ride on the first, unfiltered page only.
  */
 export function getHomePage(params = {}) {
   return _cachedPage(`home:${JSON.stringify(params)}`, () => api.get('/api/pages/home', params));
@@ -44,7 +97,14 @@ export function getHomePage(params = {}) {
  *
  * @param {string} slug
  * @param {{ page?: number, per_page?: number }} [params]
- * @returns {Promise<{ tag: object, breadcrumbs: object[], posts: object }>}
+ * @returns {Promise<{
+ *   tag: ArchiveTag,
+ *   breadcrumbs: Crumb[],
+ *   posts: import('./posts.js').Post[],
+ *   pagination: Pagination,
+ *   menu: import('./nav.js').NavTagNode[],
+ *   nav_children: import('./nav.js').NavTagNode[],
+ * }>}
  */
 export function getTagPage(slug, params = {}) {
   return _cachedPage(
@@ -56,7 +116,7 @@ export function getTagPage(slug, params = {}) {
 /**
  * Tags index page data: full tag list with hierarchy + total.
  *
- * @returns {Promise<{ tags: object[], total: number }>}
+ * @returns {Promise<{ tags: Array<import('./tags.js').Tag & { is_hidden?: boolean }>, total: number }>}
  */
 export function getTagsPage() {
   return api.get('/api/pages/tags');

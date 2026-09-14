@@ -16,8 +16,15 @@ import { html } from '../../utils/helpers.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
+/** @extends {Component<PageProps>} */
 export default class PreviewPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = { loading: true, post: null, error: null, forceImmersive: false, startIndex: 0 };
   }

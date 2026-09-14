@@ -1,11 +1,5 @@
 /**
  * VisualEditor — visual image-sequence editor for immersive posts.
- *
- * Props:
- *   images    {string[]}  Ordered list of bare image paths.
- *   onChange  {fn}        Called with new string[] on any mutation.
- *   onAdd     {fn}        Called when user clicks "Add images" — opens picker.
- *   onRename  {fn}        Async (oldPath, newFilename) => Promise. Called on inline rename.
  */
 
 import { Component } from "../Component.js";
@@ -21,6 +15,23 @@ import { thumbAttrs } from "../../utils/mediaUrl.js";
 // full image, not the rung the card painted.
 const VE_THUMB_SIZES = "80px";
 
+/**
+ * @typedef {object} VisualEditorProps
+ * @property {import('../../utils/postNodes.js').EditorNode[]} [nodes]  The
+ *   document, in order. Text edits are written into these nodes in place.
+ * @property {Record<string, import('../../api/media.js').Media>} [mediaByPath]
+ *   Media records keyed by path, for each image card's EXIF panel.
+ * @property {(nodes: import('../../utils/postNodes.js').EditorNode[]) => void} [onChange]
+ *   Called with the new list on any structural change.
+ * @property {() => void} [onInput]  Called after an in-place text edit.
+ * @property {(index: number) => void} [onAddMedia]  Open the picker to insert at `index`.
+ * @property {(() => void)|null} [onEditCarousel]  Open the carousel studio;
+ *   null hides the entry point.
+ * @property {(oldPath: string, newFilename: string) => Promise<void>} [onRename]
+ *   Inline rename of an image card's file.
+ */
+
+/** @extends {Component<VisualEditorProps>} */
 export class VisualEditor extends Component {
   render() {
     const { nodes = [] } = this.props;
@@ -247,7 +258,7 @@ export class VisualEditor extends Component {
           title: "Re-extract EXIF",
           message: "Re-extract will overwrite manual EXIF edits. Continue?",
           confirmText: "Re-extract",
-          variant: "warning",
+          variant: "danger",
           onConfirm: async () => {
             dialog.unmount();
             mountEl.remove();

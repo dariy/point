@@ -1,19 +1,6 @@
 /**
  * Public site header — blog logo, unified breadcrumb (tag path + active
  * facets), and nav buttons.
- *
- * Props:
- *   settings        {object}    Public blog settings (blog_title, blog_subtitle)
- *   currentPath     {string}    Current pathname for active nav highlighting
- *   navTags         {object[]}  Nav tag tree with children (crumb child dropdowns)
- *   currentTagSlug  {string}    Active tag slug (for flyout highlight)
- *   breadcrumb      {object[]}  Tag-ancestry crumbs: { name, slug?, href?, is_hidden?, tooltip? }.
- *                               Last item = current tag (may have a slug for a self-link).
- *   total           {number}    Post / result count shown as trailing count crumb.
- *   timelineVisible {boolean}   When true, suppress the year facet crumb (timeline shows it).
- *   slot            {string}    Optional HTML inserted as a middle header item
- *                               (between breadcrumb and action buttons; wraps to its
- *                               own full-width row on mobile), e.g. a page control.
  */
 
 import { Component } from '../../components/Component.js';
@@ -32,6 +19,45 @@ import { HeaderFold } from '../../utils/headerFold.js';
 const TYPEAHEAD_POSTS = 3;
 const TYPEAHEAD_TAGS = 5;
 
+/**
+ * One tag-ancestry crumb. The last is the current tag, which may carry a slug
+ * for a self-link.
+ *
+ * @typedef {object} HeaderCrumb
+ * @property {string} name
+ * @property {string} [slug]
+ * @property {string} [href]
+ * @property {boolean} [is_hidden]
+ * @property {string} [tooltip]
+ */
+
+/**
+ * What a page hands the header slot. The header passes all of it on to the
+ * breadcrumbs and nav-menu plugins it fills, which is why some of it is only
+ * read there.
+ *
+ * @typedef {object} PublicHeaderProps
+ * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
+ *   settings; reads blog_title, blog_subtitle and logo_url.
+ * @property {string} [currentPath]  Current pathname, for active nav highlighting.
+ * @property {import('../../api/nav.js').NavTagNode[]} [navTags]  Nav tag tree,
+ *   for the crumbs' child dropdowns.
+ * @property {string} [currentTagSlug]  Active tag, for the flyout highlight.
+ * @property {HeaderCrumb[]} [breadcrumb]  Tag-ancestry crumbs.
+ * @property {number} [total]  Post / result count, shown as a trailing crumb.
+ * @property {boolean} [timelineVisible]  Suppress the year facet crumb — the
+ *   timeline shows it.
+ * @property {string|null} [editUrl]  Admin edit link for the page's post or tag.
+ * @property {boolean} [showShare]  Offer the share button.
+ * @property {(() => void)|null} [onToggleImmersive]  Offer the immersive toggle.
+ * @property {boolean} [distractionToggle]  Mount the post list's
+ *   distraction-free toggle among the nav actions.
+ * @property {import('../../utils/helpers.js').Slot} [slot]  Markup inserted as
+ *   a middle header item (between breadcrumb and action buttons; wraps to its
+ *   own full-width row on mobile), e.g. a page control. No caller passes one today.
+ */
+
+/** @extends {Component<PublicHeaderProps>} */
 export class PublicHeader extends Component {
   render() {
     const {

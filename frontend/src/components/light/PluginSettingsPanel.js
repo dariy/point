@@ -11,15 +11,6 @@
  *
  * Mounted into a throwaway node appended to <body>; `onClose` is responsible for
  * unmounting this component and removing that node.
- *
- * Props:
- *   pluginId  {string}     Plugin id (drives the Instagram connection block)
- *   title     {string}     Heading shown in the drawer header
- *   keys      {string[]?}  Setting keys to render and collect (optional)
- *   sections  {string[]?}  Section keys to mount (optional; see SECTIONS)
- *   settings  {object}     Current settings map (for `keys`)
- *   igStatus  {object?}    Instagram connection status (instagram only)
- *   onClose   {Function}   Tear-down callback
  */
 
 import { Component } from "../Component.js";
@@ -51,6 +42,20 @@ const SECTIONS = {
   "rebuild-thumbnails": RebuildThumbnailsSection,
 };
 
+/**
+ * @typedef {object} PluginSettingsPanelProps
+ * @property {string} [pluginId]  Drives the Instagram connection block.
+ * @property {string} [title]  Heading shown in the drawer header.
+ * @property {string[]|null} [keys]  Setting keys to render and collect.
+ * @property {string[]|null} [sections]  Section keys to mount; see SECTIONS.
+ * @property {import('../../api/settings.js').Settings} [settings]  Current
+ *   settings map, for `keys`.
+ * @property {Awaited<ReturnType<typeof import('../../api/instagram.js').getInstagramStatus>>|null} [igStatus]
+ *   Instagram connection status (instagram only).
+ * @property {() => void} [onClose]  Tear-down callback.
+ */
+
+/** @extends {Component<PluginSettingsPanelProps>} */
 export class PluginSettingsPanel extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -112,11 +117,10 @@ export class PluginSettingsPanel extends Component {
   /** Connect/disconnect block for the Instagram plugin (ported from SettingsPage). */
   _renderInstagramConnection() {
     const { settings, igStatus } = this.props;
+    // The wire map, so the flag is a string (see api/settings.js).
     const isEnabled =
       settings.enable_instagram === "true" ||
-      settings.enable_instagram === "1" ||
-      settings.enable_instagram === true ||
-      settings.enable_instagram === 1;
+      settings.enable_instagram === "1";
     if (!isEnabled || !igStatus) return "";
 
     if (igStatus.connected) {

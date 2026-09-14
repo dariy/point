@@ -17,8 +17,16 @@ import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.js';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
 import { X_SVG } from '../../utils/icons.js';
+
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
+/** @extends {Component<PageProps>} */
 export default class PostPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = {
       loading: true,
@@ -412,8 +420,8 @@ export default class PostPage extends Component {
       updateMeta('og:title', post.title);
       updateMeta('og:description', descText);
       let ogImageObj = null;
-      if (post.media && post.media.length > 0 && (post.media[0].path || post.media[0].url)) {
-        ogImageObj = post.media[0].path || post.media[0].url;
+      if (post.media && post.media.length > 0 && post.media[0].path) {
+        ogImageObj = post.media[0].path;
       } else if (post.content_html) {
         const match = post.content_html.match(/<img[^>]*\ssrc=["']([^"']+)["']/i);
         if (match && match[1]) ogImageObj = match[1];

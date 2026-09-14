@@ -24,8 +24,15 @@ import { TagGraph } from "./tagGraph.js";
 import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
 
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
+/** @extends {Component<PageProps>} */
 export default class TagsPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = { loading: true, data: null, total: 0, error: null, filter: '' };
     this._graph = null;
@@ -255,7 +262,7 @@ export default class TagsPage extends Component {
   }
 
   _initGraph() {
-    const canvas = this.$('#tag-graph-canvas');
+    const canvas = /** @type {HTMLCanvasElement|null} */ (this.$('#tag-graph-canvas'));
     if (!canvas) return;
 
     this._graph = new TagGraph(canvas, this.state.data, {

@@ -3,11 +3,6 @@
  *
  * The entire card is clickable (navigates to the post) except tag links,
  * which navigate to their respective tag pages.
- *
- * Props:
- *   post           {object}   Post list item from the API
- *   showViewCount  {boolean}  Show view count if true (from settings.show_view_counts)
- *   isHero         {boolean}  True for the first featured post (hero slot)
  */
 
 import { Component } from "../Component.js";
@@ -29,6 +24,16 @@ const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
 // running preview is tracked here rather than on any one of them.
 let touchPreview = null;
 
+/**
+ * @typedef {object} PostCardProps
+ * @property {import('../../api/posts.js').Post} [post]  A post list item.
+ * @property {boolean} [showViewCount]  From settings.show_view_counts.
+ * @property {boolean} [isHero]  The first featured post, in the hero slot.
+ * @property {string} [tagSlug]  The tag archive the card sits in, if any —
+ *   opening the post then keeps that tag as the navigation context.
+ */
+
+/** @extends {Component<PostCardProps>} */
 export class PostCard extends Component {
   render() {
     const { post, showViewCount = false, isHero = false } = this.props;

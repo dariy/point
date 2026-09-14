@@ -16,8 +16,21 @@ import { getUser, setUser } from '../../store.js';
 import { html, navigate } from '../../utils/helpers.js';
 import { usernameHintField } from '../../utils/passwordForm.js';
 
+/**
+ * @typedef {import('../../router.js').PageProps & {
+ *   next?: string,
+ *   onSuccess?: (user: import('../../api/auth.js').User) => unknown,
+ *   onCancel?: () => unknown,
+ * }} LoginPageProps
+ */
+
+/** @extends {Component<LoginPageProps>} */
 export default class LoginPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {LoginPageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = {
       loading: false,

@@ -1,16 +1,21 @@
 /**
  * Modal — generic overlay dialog.
- *
- * Props:
- *   title        {string}    Modal header title
- *   onClose      {Function}  Called when close button or backdrop is clicked
- *   footer       {RawHtml}   Optional footer buttons, built with html``
- *   maxWidth     {string}    Optional max-width (e.g. '500px')
  */
 
 import { Component } from '../Component.js';
 import { html } from '../../utils/helpers.js';
 
+/**
+ * @typedef {object} ModalProps
+ * @property {import('../../utils/helpers.js').Slot} [title]  Header title.
+ * @property {() => void} [onClose]  Called when the close button, the backdrop
+ *   or Escape dismisses the modal.
+ * @property {import('../../utils/helpers.js').Slot} [footer]  Footer buttons,
+ *   built with html``.
+ * @property {string} [maxWidth]  e.g. '500px' (the default).
+ */
+
+/** @extends {Component<ModalProps>} */
 export class Modal extends Component {
   render() {
     const { title = '', footer = '', maxWidth = '500px' } = this.props;

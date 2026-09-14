@@ -4,11 +4,6 @@
  * Renders the folder tree, type filter, media grid, upload, and pagination.
  * Used by MediaPage (standalone) and MediaPickerDialog (picker mode).
  *
- * Props:
- *   pickerMode  {boolean}  When true: shows checkboxes on items, hides
- *                          delete/copy actions, and scopes drag-drop to the
- *                          component container. Defaults to false.
- *
  * Public methods:
  *   openFilePicker()    Opens the file chooser (used by the Upload buttons of
  *                       MediaPage's admin header and MediaPickerDialog's modal
@@ -38,6 +33,13 @@ import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../
 // the previews are object-fit: cover, so the browser rounding a rung up is the
 // forgiving direction.
 const GRID_THUMB_SIZES = "(max-width: 48em) 50vw, 220px";
+/**
+ * @typedef {object} MediaBrowserProps
+ * @property {boolean} [pickerMode]  Show checkboxes on items, hide the
+ *   delete/copy actions, and scope drag-drop to the component container.
+ */
+
+/** @extends {Component<MediaBrowserProps>} */
 export class MediaBrowser extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -555,7 +557,7 @@ export class MediaBrowser extends Component {
           title: "Revert EXIF",
           message: "Revert to the original EXIF captured at upload? This will overwrite your edits.",
           confirmText: "Revert",
-          variant: "warning",
+          variant: "danger",
           onConfirm: async () => {
             dialog.unmount();
             mountEl.remove();
@@ -624,7 +626,7 @@ export class MediaBrowser extends Component {
           title: "Re-extract from file",
           message: "Re-extract will overwrite manual EXIF edits with data from the original file. Continue?",
           confirmText: "Re-extract",
-          variant: "warning",
+          variant: "danger",
           onConfirm: async () => {
             dialog.unmount();
             mountEl.remove();

@@ -19,7 +19,15 @@ import { setToast } from '../../store.js';
 import { UPLOAD_SVG } from '../../utils/icons.js';
 import { html, raw } from "../../utils/helpers.js";
 
+/**
+ * @typedef {object} MediaPickerDialogProps
+ * @property {(items: import('../../api/media.js').Media[]) => void} [onConfirm]
+ *   Called with the chosen media; open() can override it per opening.
+ */
+
+/** @extends {Component<MediaPickerDialogProps>} */
 export class MediaPickerDialog extends Component {
+  /** @param {MediaPickerDialogProps} props */
   constructor({ onConfirm }) {
     const container = document.createElement('div');
     container.className = 'modal-overlay media-picker-overlay';

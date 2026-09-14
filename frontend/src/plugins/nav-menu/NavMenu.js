@@ -39,7 +39,7 @@ const VIZ_SLOTS = [{
 /**
  * The settings this menu actually renders from, as one comparable string.
  * A primitive, because subscribeSelector compares with Object.is.
- * @param {object} [settings]
+ * @param {import('../../utils/helpers.js').StoreSettings} [settings]
  */
 const navSlice = (settings = {}) => [
   settings?.nav_menu_mode,

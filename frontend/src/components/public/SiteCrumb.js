@@ -11,12 +11,6 @@
  * The dropdown lists root tags whatever the menu is made of, so on a site with
  * an authored menu it is the one surface still exposing the tag tree. Admins
  * can drop it with the `show_title_dropdown` setting (Plugins → Public Header).
- *
- * Props:
- *   settings {object}      Public settings (blog_title, show_title_dropdown)
- *   hasTrail {boolean}     Crumbs follow → render as a link with a separator
- *   group    {Element}     Header group; clicks inside it don't dismiss the panel
- *   fold     {HeaderFold}  Re-measured when late data changes our width
  */
 
 import { Component } from '../Component.js';
@@ -26,6 +20,17 @@ import { loadNav } from '../../api/nav.js';
 import { tagHref } from '../../utils/tagLinks.js';
 import { attachFlyoutTrigger, hideFlyoutWithin } from '../../utils/tagFlyout.js';
 
+/**
+ * @typedef {object} SiteCrumbProps
+ * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
+ *   settings; reads blog_title and show_title_dropdown.
+ * @property {boolean} [hasTrail]  Crumbs follow: render as a link with a separator.
+ * @property {HTMLElement} [group]  Header group; clicks inside it don't dismiss the panel.
+ * @property {import('../../utils/headerFold.js').HeaderFold} [fold]  Re-measured
+ *   when late data changes our width.
+ */
+
+/** @extends {Component<SiteCrumbProps>} */
 export class SiteCrumb extends Component {
   render() {
     const { settings = {}, hasTrail = false } = this.props;

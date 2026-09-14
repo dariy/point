@@ -134,7 +134,7 @@ export default class SystemPage extends Component {
   /**
    * Background-job health. Answers "is anything quietly broken" — before this
    * a failing scheduled task was only visible by reading the server log.
-   * @param {{tasks: object[], degraded: number, uptime: number}|null} health
+   * @param {Awaited<ReturnType<typeof getHealth>>|null} health
    */
   _renderHealthSection(health) {
     if (!health) return '';

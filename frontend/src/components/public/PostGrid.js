@@ -1,16 +1,5 @@
 /**
  * PostGrid — renders a responsive grid of PostCard components.
- *
- * Props:
- *   posts          {object[]}  Array of post list items
- *   showViewCount  {boolean}   Passed through to PostCard
- *   emptyMessage   {string}    Optional text when posts is empty
- *   reversed       {boolean}   Fill right-to-left instead of left-to-right.
- *                              The home feed's scheduled ("future") pages read
- *                              outward from page 1: the post about to go live
- *                              sits top-right, next to where the newest
- *                              published post would be, and the queue runs
- *                              leftwards and down from there.
  */
 
 import { Component } from '../Component.js';
@@ -19,6 +8,20 @@ import { html } from '../../utils/helpers.js';
 import { measureCardImageSizes } from '../../utils/gridFit.js';
 import { reconcileList, setKey } from '../../utils/reconcileList.js';
 
+/**
+ * @typedef {object} PostGridProps
+ * @property {import('../../api/posts.js').Post[]} [posts]  Post list items.
+ * @property {boolean} [showViewCount]  Passed through to PostCard.
+ * @property {string} [emptyMessage]  Text shown when `posts` is empty.
+ * @property {boolean} [reversed]  Fill right-to-left instead of left-to-right.
+ *   The home feed's scheduled ("future") pages read outward from page 1: the
+ *   post about to go live sits top-right, next to where the newest published
+ *   post would be, and the queue runs leftwards and down from there.
+ * @property {string} [tagSlug]  Passed through to PostCard.
+ * @property {number} [tagPage]  Passed through to PostCard, which does not read it.
+ */
+
+/** @extends {Component<PostGridProps>} */
 export class PostGrid extends Component {
   render() {
     const { posts = [], emptyMessage = 'No posts yet.', reversed = false } = this.props;
@@ -93,7 +96,7 @@ export class PostGrid extends Component {
    * with, so a change to `showViewCount` or `tagSlug` has to go through the
    * rebuild or half the grid would still be showing the old answer.
    *
-   * @param {object} prevProps
+   * @param {PostGridProps} prevProps
    * @returns {boolean} true when the grid was updated in place.
    */
   update(prevProps) {
@@ -118,7 +121,7 @@ export class PostGrid extends Component {
    * region when the grid cannot take the list, and setProps() would give them
    * a grid that had already rebuilt itself on the way to saying no.
    *
-   * @param {object[]} posts  the refit list.
+   * @param {import('../../api/posts.js').Post[]} posts  the refit list.
    * @returns {boolean} false when the lists diverge — caller re-renders instead.
    */
   reconcile(posts = []) {
@@ -128,8 +131,8 @@ export class PostGrid extends Component {
   }
 
   /**
-   * @param {object[]} posts    the list to end up showing
-   * @param {object[]} current  the list currently on screen
+   * @param {import('../../api/posts.js').Post[]} posts    the list to end up showing
+   * @param {import('../../api/posts.js').Post[]} current  the list currently on screen
    * @returns {boolean}
    */
   _reconcileTo(posts, current) {

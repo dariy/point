@@ -9,10 +9,25 @@
 import { api } from './client.js';
 
 /**
- * List the full plugin catalog with each plugin's enabled state.
+ * One plugin of the admin catalog — pluginView in api/internal/api/plugins.go.
  * `slot_rule` is the cardinality of the plugin's slot ("0+", "0-1", "1", "1+"),
  * and `locked` marks a plugin its slot may not be left without.
- * @returns {Promise<Array<{id:string,type:string,slot?:string,slot_rule?:string,routes?:string[],enabled:boolean,default_enabled:boolean,locked?:boolean}>>}
+ *
+ * @typedef {object} PluginView
+ * @property {string} id
+ * @property {string} [title]
+ * @property {string} type
+ * @property {string} [slot]
+ * @property {string} [slot_rule]
+ * @property {string[]} [routes]
+ * @property {boolean} enabled
+ * @property {boolean} default_enabled
+ * @property {boolean} [locked]
+ */
+
+/**
+ * List the full plugin catalog with each plugin's enabled state.
+ * @returns {Promise<PluginView[]>}
  */
 export function getPlugins() {
   return api.get('/api/plugins');
@@ -22,7 +37,7 @@ export function getPlugins() {
  * Enable or disable a plugin.
  * @param {string} id Plugin id
  * @param {boolean} enabled Desired enabled state
- * @returns {Promise<object>} The updated plugin view
+ * @returns {Promise<PluginView>} The updated plugin view
  */
 export function setPluginEnabled(id, enabled) {
   return api.patch(`/api/plugins/${encodeURIComponent(id)}`, { enabled });
@@ -50,7 +65,7 @@ export function updatePreset(id, pluginIds) {
  * Apply a preset: set every plugin's enabled state from it (corrected to satisfy
  * the slot rules) and mark it active. Returns the full plugin catalog post-apply.
  * @param {string} id Preset id
- * @returns {Promise<Array<object>>}
+ * @returns {Promise<PluginView[]>}
  */
 export function applyPreset(id) {
   return api.post(`/api/plugins/presets/${encodeURIComponent(id)}/apply`);
