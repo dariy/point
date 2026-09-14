@@ -9,6 +9,12 @@ permissions:
   contents: read
   pull-requests: write
 
+# A new push supersedes the run for the previous one; finishing it only delays
+# the run that matters.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -21,18 +27,21 @@ jobs:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
 
-      - name: Install golangci-lint
-        # Pinned for reproducible CI; note the /v2 module path — the bare path
-        # installs the abandoned v1 line. Keep in sync with local tooling.
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
-
       - name: golangci-lint
         # No build tags, matching scripts/check.sh. Integration test files are
         # constrained with `//go:build !unit`, so the default build already
         # includes them — it is `-tags=unit` that excludes them, and no file in
         # this repo declares an `integration` tag.
-        run: golangci-lint run --timeout=5m
-        working-directory: api
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Pinned for reproducible CI; the action downloads the release binary
+          # rather than compiling it. Keep in sync with local tooling.
+          version: v2.12.2
+          working-directory: api
+          args: --timeout=5m
+          # The action's default schema check of .golangci.yml is a check this
+          # job never ran (and the config does not pass it); linting is the job.
+          verify: false
 
   js:
     runs-on: ubuntu-latest
@@ -43,6 +52,41 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
+          cache: npm
+
+      # The E2E step builds the Go backend; without a warm build cache that
+      # compile is most of the step.
+      - name: Set up Go
+        id: go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          # Cached per job in the next step. setup-go keys its cache on go.sum
+          # alone, so every job shares one entry and the first to finish saves
+          # it — lint or govulncheck, which compile nothing, leaving the jobs
+          # that do build to start from a cold build cache.
+          cache: false
+
+      - name: Go cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('api/go.sum') }}
+          restore-keys: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-
+
+      # run-e2e.sh runs `playwright install chromium`, a no-op when the browser
+      # for this playwright-core version is already on disk.
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
 
       # Uses the lockfile-pinned eslint (flat config). Keep the file list in
       # sync with scripts/check.sh — the 614-line service worker and the
@@ -114,16 +158,29 @@ jobs:
         working-directory: api
 
   test:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - name: Set up Go
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
+          # Cached per job in the next step. setup-go keys its cache on go.sum
+          # alone, so every job shares one entry and the first to finish saves
+          # it — lint or govulncheck, which compile nothing, leaving the jobs
+          # that do build to start from a cold build cache.
+          cache: false
+
+      - name: Go cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('api/go.sum') }}
+          restore-keys: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-
 
       - name: Build CSS bundles
         run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
@@ -131,9 +188,12 @@ jobs:
       # sqlc is optional for contributors (the generated code is committed), so
       # the script skips its regeneration check when the binary is absent. CI is
       # where that skip must not happen — installing it here is what makes the
-      # committed models a checked fact rather than a convention.
+      # committed models a checked fact rather than a convention. The release
+      # binary, not `go install`, which compiled sqlc from source on every run.
       - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+        uses: sqlc-dev/setup-sqlc@v5
+        with:
+          sqlc-version: "1.31.1"
 
       - name: SQL layer
         run: ./scripts/check-sql-layer.sh
@@ -159,23 +219,42 @@ jobs:
           flags: unittests
           name: codecov-go
 
+  # One image build serves both smoke checks: the bare container and the
+  # quickstart wizard. The job keeps the docker-smoke name because the develop
+  # ruleset requires that check.
+  #
+  # The quickstart wizard is the largest bespoke-shell surface in the repo and
+  # has to keep working against every release, but nothing exercised it — a
+  # broken installer would only show up as a user report. The second half of
+  # this job drives its non-interactive Docker path end to end against the
+  # locally built image.
   docker-smoke:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
+      - name: Shellcheck the wizard
+        run: shellcheck quickstart/install.sh quickstart/uninstall.sh quickstart/update.sh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image
+      # --test rewrites the compose file to localhost/point:dev, so the wizard
+      # runs against the code in this checkout rather than the published
+      # release. Its own cache scope: dev-image.yml builds two platforms and
+      # would otherwise overwrite this one's cache index.
+      - name: Build image as point:smoke and localhost/point:dev
         uses: docker/build-push-action@v6
         with:
           context: .
           file: build/Dockerfile
           push: false
           load: true
-          tags: point:smoke
+          tags: |
+            point:smoke
+            localhost/point:dev
+          cache-from: type=gha,scope=smoke
+          cache-to: type=gha,scope=smoke,mode=max
 
       - name: Start container and verify /health
         run: |
@@ -200,33 +279,6 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f point-smoke || true
-
-  # The quickstart wizard is the largest bespoke-shell surface in the repo and
-  # has to keep working against every release, but nothing exercised it — a
-  # broken installer would only show up as a user report. This drives its
-  # non-interactive Docker path end to end against a locally built image.
-  quickstart-smoke:
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Shellcheck the wizard
-        run: shellcheck quickstart/install.sh quickstart/uninstall.sh quickstart/update.sh
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # --test rewrites the compose file to this exact tag, so the wizard runs
-      # against the code in this checkout rather than the published release.
-      - name: Build image as localhost/point:dev
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: build/Dockerfile
-          push: false
-          load: true
-          tags: localhost/point:dev
 
       - name: Run the installer non-interactively
         working-directory: quickstart
@@ -272,7 +324,6 @@ jobs:
   # them — both false for as long as the `//go:build !unit` convention has been
   # in place, and nothing caught it. This job runs what the docs say to run.
   docs-commands:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       # Full history: ai-declaration.md's block counts commits and co-author
@@ -282,15 +333,30 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
+          # Cached per job in the next step. setup-go keys its cache on go.sum
+          # alone, so every job shares one entry and the first to finish saves
+          # it — lint or govulncheck, which compile nothing, leaving the jobs
+          # that do build to start from a cold build cache.
+          cache: false
+
+      - name: Go cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('api/go.sum') }}
+          restore-keys: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-
 
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
           node-version: "22"
+          cache: npm
 
       # ./scripts/run.sh is the first command AGENTS.md and CONTRIBUTING.md give
       # a newcomer, and the one command the runner below cannot execute: it
