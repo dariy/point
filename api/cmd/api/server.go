@@ -7,8 +7,6 @@ package main
 // router needs; nothing here decides a URL or a header.
 
 import (
-	"path/filepath"
-
 	"point-api/internal/config"
 	"point-api/internal/repository"
 
@@ -22,15 +20,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// Handlers wrapping the wired services (see initHandlers in wiring.go).
 	h := initHandlers(cfg, repo, svcs)
 
-	// Echo config + the global middleware chain (see middleware_stack.go). The
-	// CSS manifest is loaded once here: the cache-control Pre filter needs it,
-	// and so does the HTML shell rewrite below.
-	cssManifest := loadCSSManifest(filepath.Join(cfg.FrontendDir, "css"))
-	installMiddleware(e, cfg, svcs, cssManifest)
+	// The built frontend: the two HTML shells (public + admin), the CSS bundle
+	// manifest they are rewritten with, and the plugin maps — read at startup,
+	// and again on a rebuild under DEV_ASSET_RELOAD (see liveAssets).
+	fe := newFrontendAssets(cfg)
 
-	// The two HTML shells (public + admin), stamped and CSS-rewritten once at
-	// startup (see loadHTMLShells).
-	shell, adminShell := loadHTMLShells(cfg, cssManifest)
+	// Echo config + the global middleware chain (see middleware_stack.go). The
+	// cache-control Pre filter reads the CSS manifest through a getter, so it
+	// follows a reload.
+	installMiddleware(e, cfg, svcs, fe.Assets.cssManifest)
 
 	// ── Routes ────────────────────────────────────────────────────────────────
 	// Every route this server answers is registered in routes.go. The calls below
@@ -83,7 +81,6 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// ── Frontend: media bytes, static assets, PWA, SPA fallback ───────────────
 	// These match paths outside /api, so they are registered last.
-	fe := newFrontendAssets(cfg, shell, adminShell)
 	registerMediaFileRoutes(e, cfg, repo, svcs, fe)
 	registerStaticRoutes(e, svcs, fe)
 	registerPWARoutes(e, cfg)

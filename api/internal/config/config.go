@@ -64,7 +64,12 @@ type Config struct {
 	// FrontendDebug serves the debug frontend bundle (frontend/js-debug, with
 	// plugin/console debug logging) instead of the minified release bundle when
 	// that bundle exists. Off by default so production serves the release build.
-	FrontendDebug    bool   `mapstructure:"FRONTEND_DEBUG"`
+	FrontendDebug bool `mapstructure:"FRONTEND_DEBUG"`
+	// DevAssetReload makes the server notice a frontend rebuild without a
+	// restart: each HTML shell serve stats the build manifests and re-reads
+	// them when they changed. Set only by `scripts/run.sh --watch`; off, the
+	// build outputs are read once at startup.
+	DevAssetReload   bool   `mapstructure:"DEV_ASSET_RELOAD"`
 	ThemesPath       string `mapstructure:"THEMES_PATH"`
 	UserThemesPath   string `mapstructure:"USER_THEMES_PATH"`
 	GeminiAPIKey     string `mapstructure:"GEMINI_API_KEY"`
@@ -190,6 +195,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("MIGRATION_BACKUP_KEEP", 3)
 	v.SetDefault("FRONTEND_DIR", "../frontend")
 	v.SetDefault("FRONTEND_DEBUG", false)
+	v.SetDefault("DEV_ASSET_RELOAD", false)
 	v.SetDefault("THEMES_PATH", "")
 	v.SetDefault("USER_THEMES_PATH", "")
 	v.SetDefault("APP_VERSION", "")

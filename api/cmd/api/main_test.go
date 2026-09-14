@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1071,6 +1072,110 @@ func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(rec.Body.String(), "/assets/css/light.css?v="+cfg.AppVersion) {
 		t.Errorf("shell lost its stylesheet link without a manifest:\n%s", rec.Body.String())
+	}
+}
+
+// reloadFixture builds a frontend with a hashed CSS manifest and a JS bundle
+// dir, returning the echo instance and a function that rewrites a build output
+// the way a rebuild would: new bytes, and an mtime that has visibly moved.
+func reloadFixture(t *testing.T, reload bool) (*echo.Echo, func(rel, body string)) {
+	t.Helper()
+	repo, cfg := newEchoWithRepo(t)
+	cfg.DevAssetReload = reload
+	seedOwner(t, repo)
+	bump := time.Now()
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(cfg.FrontendDir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		bump = bump.Add(time.Second)
+		if err := os.Chtimes(p, bump, bump); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("index.html", `<html><head><link href="/assets/css/light.css?v=__BUILD_VERSION__"></head>`+
+		`<body><script type="module" src="/assets/js/app.js?v=__BUILD_VERSION__"></script></body></html>`)
+	write("css/light.css", "body{}")
+	write("css/asset-manifest.json", `{"light.css":"81e2e81c"}`)
+	write("js/app.js", "")
+	write("js/plugin-manifest.json", `{}`)
+	return setupEcho(cfg, repo, initServices(&cfg, repo)), write
+}
+
+var appJSVersionRe = regexp.MustCompile(`/assets/js/app\.js\?v=([^"]+)`)
+
+// Under DEV_ASSET_RELOAD (run.sh --watch) a rebuild must reach the browser on
+// the next page load, with no restart: the shell links the new CSS hash, the
+// Pre filter treats that hash as current, and app.js gets a new ?v= so the
+// service worker's cached copy is not served first.
+func TestSetupEcho_DevAssetReload(t *testing.T) {
+	e, write := reloadFixture(t, true)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	first := get("/").Body.String()
+	if !strings.Contains(first, "/assets/css/light.81e2e81c.css") {
+		t.Fatalf("shell does not link the startup hash:\n%s", first)
+	}
+	m := appJSVersionRe.FindStringSubmatch(first)
+	if m == nil {
+		t.Fatalf("shell has no app.js ?v=:\n%s", first)
+	}
+	if again := get("/").Body.String(); again != first {
+		t.Errorf("shell changed with nothing rebuilt:\n%s\nthen\n%s", first, again)
+	}
+
+	write("css/asset-manifest.json", `{"light.css":"0badc0de"}`)
+	second := get("/").Body.String()
+	if !strings.Contains(second, "/assets/css/light.0badc0de.css") {
+		t.Fatalf("shell did not pick up the rebuilt CSS hash:\n%s", second)
+	}
+	if cc := get("/assets/css/light.0badc0de.css").Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("new hash Cache-Control = %q, want %q", cc, immutableCacheControl)
+	}
+	if cc := get("/assets/css/light.81e2e81c.css").Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("superseded hash Cache-Control = %q, want no-cache", cc)
+	}
+
+	// A JS rebuild rewrites plugin-manifest.json; app.js keeps its name, so the
+	// ?v= is what tells the browser (and the service worker) it is new.
+	write("js/plugin-manifest.json", `{ }`)
+	third := get("/").Body.String()
+	m3 := appJSVersionRe.FindStringSubmatch(third)
+	if m3 == nil || m3[1] == m[1] {
+		t.Errorf("app.js ?v= did not change after a JS rebuild: %v then %v", m, m3)
+	}
+
+	// The shell a /YYYY/<non-numeric>/x SPA route serves reloads too.
+	if body := get("/2024/drafts/x").Body.String(); !strings.Contains(body, "/assets/css/light.0badc0de.css") {
+		t.Errorf("media-route shell is stale:\n%s", body)
+	}
+}
+
+// Without DEV_ASSET_RELOAD the build outputs are read once: production never
+// stats them per request, and a rewritten manifest changes nothing.
+func TestSetupEcho_NoDevAssetReloadWithoutEnv(t *testing.T) {
+	e, write := reloadFixture(t, false)
+	get := func(path string) string {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec.Body.String()
+	}
+	before := get("/")
+	if !strings.Contains(before, "/assets/js/app.js?v=1.0.0\"") {
+		t.Errorf("app.js ?v= is not the plain build version:\n%s", before)
+	}
+	write("css/asset-manifest.json", `{"light.css":"0badc0de"}`)
+	if after := get("/"); after != before {
+		t.Errorf("shell changed without DEV_ASSET_RELOAD:\n%s\nthen\n%s", before, after)
 	}
 }
 

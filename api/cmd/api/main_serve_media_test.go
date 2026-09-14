@@ -83,9 +83,15 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 	return p
 }
 
+// fixedShell stands in for liveAssets.forShell: the same shell on every call.
+func fixedShell(html string) func() *assetSnapshot {
+	s := &assetSnapshot{Shell: html}
+	return func() *assetSnapshot { return s }
+}
+
 func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, fixedShell(indexHTMLContent), repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo))
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
@@ -268,7 +274,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 // arbitrary query string (no leading "?").
 func serveQueryRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, query string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, fixedShell(""), repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo))
 	e := echo.New()
 	url := "/" + year + "/" + month + "/" + filename
 	if query != "" {
@@ -808,7 +814,7 @@ func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
 	// Setup Presigner
 	s3p, _ := services.NewS3Presigner("http://localhost:9000", "us-east-1", "test", "test", "mybucket")
 
-	handler := serveSimplifiedMedia(storage, "", repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storage, fixedShell(""), repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo))
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
