@@ -568,14 +568,36 @@ describe('CarouselStudioPage', () => {
       assert.deepEqual(deletes, ['101'], 'only the unreferenced slide is deleted');
     });
 
-    test('refuses byte-identical slides and saves nothing', async () => {
-      const deps = fakeRenderDeps(async () => ({ id: 500, path: '/2026/08/dup.jpg' }));
-      await mount({ post: '42' }, routes(), { renderDeps: deps });
+    test('refuses byte-identical slides and saves nothing, deleting only what it uploaded', async () => {
+      // Start with a post that already has a rendered carousel (2 slides)
+      const post = { ...CAROUSEL_POST };
+      let n = 0;
+      const deleted = [];
+      const deps = fakeRenderDeps(
+        async () => {
+          n += 1;
+          return { id: 500, path: '/2026/08/dup.jpg' };
+        },
+        async (id) => { deleted.push(id); }
+      );
+      await mount({ post: '42' }, routes(post), { renderDeps: deps });
+
+      // Change a slide so it is dirty and will be uploaded, while the other is kept (reused)
+      page._setSlideFraming(0, { panX: 10 });
+      await settle();
 
       await page._render();
       await settle();
 
       assert.match(page.state.error, /identical/i);
+      // Since mock hashes differ from the post's saved hashes, both slides are considered dirty and uploaded.
+      // Both return id 500, triggering the duplicate check.
+      // We expect EXACTLY these two to be unwound, and no other api.deleteMedia calls.
+      assert.deepEqual(deleted, [500, 500], 'all slides uploaded in this failed run are deleted');
+      assert.ok(
+        !calls.some((c) => c.method === 'DELETE'),
+        'no superseded slides are deleted since the render failed',
+      );
       assert.ok(
         !calls.some((c) => c.method === 'PUT' && /\/api\/carousel/.test(c.url)),
         'carousel document was not saved',

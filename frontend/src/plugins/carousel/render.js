@@ -115,7 +115,7 @@ export const ALIGN_ANCHOR = {
  * @property {(url: string) => Promise<{ w: number, h: number }>} probeSize  natural source pixel size
  * @property {(w: number, h: number) => { canvas: any, ctx: any }} makeSurface  a fresh canvas + 2D ctx
  * @property {(canvas: any, type: string, quality: number) => Promise<Blob|null>} encode  canvas.toBlob
- * @property {(file: File, meta: object) => Promise<{ id: number, path: string }>} upload
+ * @property {(file: File, meta: { post_id?: number }) => Promise<{ id: number, path: string }>} upload
  * @property {(id: number) => Promise<any>} deleteMedia  used only to unwind a partial upload failure
  * @property {() => Promise<string>} [resolveFont]  the active theme's font
  *   stack, awaited once per render before the first layer is painted. Optional:
@@ -1086,6 +1086,12 @@ export async function renderAndUpload(spec, deps, onProgress, keep) {
       const media = await deps.upload(file, { post_id: spec.postId });
       uploaded.push(media);
       uploadedThisRun.push(media);
+    }
+
+    if (new Set(uploaded.map((m) => m.id)).size !== uploaded.length) {
+      throw new Error(
+        "Two slides came out byte-identical — change the slide count, the aspect or one slide's framing so every slide is distinct.",
+      );
     }
   } catch (err) {
     if (uploadedThisRun.length) {

@@ -193,20 +193,6 @@ function reusableMedia(doc) {
   });
 }
 
-/**
- * Byte-identical slides dedup to one media row server-side (SHA256), so two
- * slides would share a path — which the blog renders twice but Instagram
- * (ExtractMediaPaths dedups) renders once. Rather than let the two disagree,
- * forbid it here. See docs/features/carousel-studio.md.
- */
-function assertDistinctMedia(media) {
-  if (new Set(media.map((m) => m.id)).size !== media.length) {
-    throw new Error(
-      "Two slides came out byte-identical — change the slide count, the aspect or one slide's framing so every slide is distinct.",
-    );
-  }
-}
-
 /** The document as it stands once `media` has been uploaded for it: every slide
  *  carries the row it rendered to, plus the hash that lets the next render skip
  *  it. */
@@ -828,7 +814,8 @@ export default class CarouselStudioPage extends Component {
    * entry itself (see below).
    *
    * @param {*} doc  the next document
-   * @param {object} [patch]  state to set alongside it
+   * @param {import('../../components/Component.js').ComponentState} [patch]  state
+   *   to set alongside it
    * @param {{history?: boolean}} [options]
    */
   _setDoc(doc, patch = {}, { history = true } = {}) {
@@ -1417,7 +1404,6 @@ export default class CarouselStudioPage extends Component {
     this.setState({ busy: true, error: null, renderProgress: { done: 0, total } });
     try {
       const media = await this._uploadSlides(doc, postId);
-      assertDistinctMedia(media);
 
       const next = documentWithRenders(doc, media);
       const finalContent = await this._saveRendered(postId, post, next);
@@ -2460,7 +2446,7 @@ export default class CarouselStudioPage extends Component {
    * `updateLayer` to drop back to the layer's own — its `base` argument.
    *
    * @param {import('./document.js').CarouselLayer} layer
-   * @returns {object}
+   * @returns {Record<string, unknown>}  The fields' raw values, not yet validated.
    */
   _layerFromFields(layer) {
     const val = (sel) => {
