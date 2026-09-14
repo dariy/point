@@ -405,26 +405,18 @@ func registerTimelineRoutes(e *echo.Echo, h *api.TimelineHandler, svcs *AppServi
 // registered after every /api route (see registerMediaFileRoutes) and the `/*`
 // fallback must be registered last of all.
 
-// frontendAssets is the startup-computed frontend state these routes close
-// over: the two index.html shells, the resolved JS bundle directory, and the
-// plugin chunk/CSS maps. setupEcho builds it once; nothing here changes at
-// runtime.
+// frontendAssets is the frontend state these routes close over: the resolved
+// JS bundle directory, fixed at startup, and the index.html shells and plugin
+// chunk/CSS maps, which Assets re-reads on a rebuild under DEV_ASSET_RELOAD.
 type frontendAssets struct {
 	// Dir is cfg.FrontendDir — the root the static trees hang off.
 	Dir string
 	// JSDir is the bundle actually being served: frontend/js, or frontend/js-debug
 	// under FRONTEND_DEBUG. Empty when the frontend was never built.
 	JSDir string
-	// Shell is the public index.html, version-stamped and with the CSS bundle
-	// links rewritten to their content-addressed URLs. Empty when unbuilt, which
-	// is what makes the SPA fallback answer 503.
-	Shell string
-	// AdminShell is the same shell minus the deployment-injected <head> markup.
-	AdminShell string
-	// ChunkMap maps a plugin id to its hashed chunk filename; CSSMap is the set
-	// of plugin ids with a CSS partial on disk.
-	ChunkMap map[string]string
-	CSSMap   map[string]bool
+	// Assets holds the shells and plugin maps (see assetSnapshot). A route
+	// rendering a shell takes Assets.forShell(); anything else Assets.current().
+	Assets *liveAssets
 }
 
 // registerMediaFileRoutes serves the stored originals and thumbnails at
@@ -432,7 +424,7 @@ type frontendAssets struct {
 // non-public media. Registered after the /api routes to avoid collisions
 // (e.g. /api/settings/public would otherwise match /:year/:month/:filename).
 func registerMediaFileRoutes(e *echo.Echo, cfg config.Config, repo repository.Repository, svcs *AppServices, fe frontendAssets) {
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, fe.Shell, repo, svcs.Media, svcs.S3Presigner, svcs.Settings, fe.ChunkMap, fe.CSSMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, fe.Assets.forShell, repo, svcs.Media, svcs.S3Presigner, svcs.Settings), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 }
 
 // registerStaticRoutes mounts the built frontend's asset trees. Each is guarded
@@ -470,7 +462,7 @@ func registerStaticRoutes(e *echo.Echo, svcs *AppServices, fe frontendAssets) {
 			// guessed. Shared code-split chunks (chunk-*.js) are not entries —
 			// they carry common code imported by multiple plugin entries and
 			// must be served so enabled plugins can resolve their imports.
-			if id, ok := plugins.PluginForChunk(fe.ChunkMap, name); ok {
+			if id, ok := plugins.PluginForChunk(fe.Assets.current().ChunkMap, name); ok {
 				all, err := svcs.Settings.GetAllSettings(c.Request().Context())
 				if err != nil {
 					return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
@@ -542,7 +534,8 @@ func registerPWARoutes(e *echo.Echo, cfg config.Config) {
 // above claimed. MUST be registered last — it matches everything.
 func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, setupComplete func(context.Context) bool) {
 	e.GET("/*", func(c echo.Context) error {
-		if fe.Shell != "" {
+		assets := fe.Assets.forShell()
+		if assets.Shell != "" {
 			path := c.Request().URL.Path
 
 			// Fresh install: every document lands on the first-run wizard, not
@@ -563,9 +556,9 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 			// on public pages too, so the injected script must not run there
 			// either; keeping it out of every authenticated DOM shrinks the blast
 			// radius if that origin is compromised (it can't ride the session).
-			shell := fe.Shell
+			shell := assets.Shell
 			if isAdminPath(path) || hasSession(c) {
-				shell = fe.AdminShell
+				shell = assets.AdminShell
 			}
 			// What this URL is about, resolved server side and spliced into
 			// the head: a crawler, an unfurler and the tab strip all read the
@@ -578,7 +571,7 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 			// and the CSP names exactly one inline script hash.
 			meta := shellMeta(c, svcs)
 			htmlStr := meta.rewriteShell(shell)
-			script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
+			script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, assets.ChunkMap, assets.CSSMap)
 			htmlStr = strings.Replace(htmlStr, "</head>", meta.head()+script+"\n</head>", 1)
 
 			csp := c.Response().Header().Get("Content-Security-Policy")

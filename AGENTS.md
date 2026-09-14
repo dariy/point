@@ -75,7 +75,7 @@ The rules that keep this honest:
 | Task | Command |
 |---|---|
 | Environment check | `./scripts/doctor.sh` — PASS/WARN/FAIL per tool, `--json` for machine use; exits non-zero only when a build is impossible |
-| Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
+| Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle; `-w`/`--watch` rebuilds on save, no restart for CSS/JS <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
 | Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 <!-- verify:skip needs Docker; the image is built by the docker-smoke job --> |
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
@@ -259,9 +259,12 @@ sending, and both endpoints expect what the browser would send. For the admin UI
 that session instead of driving the login form:
 `npx playwright-cli cookie-set session "$(awk '/session/{print $7}' cookies.txt)" --domain=localhost`.
 
-**After editing CSS or JS, re-run `./scripts/run.sh` before reloading.** Assets are served at
-content-hashed URLs read from `asset-manifest.json` at startup, so a rebuild alone leaves the page
-pointing at the old hash it has already cached, and your change appears to have done nothing.
+**Start the server with `./scripts/run.sh --watch` when you will be editing CSS or JS.** It rebuilds
+on every save and the running server picks the new bundles up, so reloading the page is enough; a Go
+edit rebuilds and restarts only the Go binary. Without `--watch`, re-run `./scripts/run.sh` after
+each CSS or JS edit: assets are served at content-hashed URLs read from `asset-manifest.json` at
+startup, so a rebuild alone leaves the page pointing at the old hash it has already cached, and your
+change appears to have done nothing.
 
 The full recipe — seeding media, which console errors are normal, and how to tell "my CSS did not
 apply" from "that text comes from a different element" — is in

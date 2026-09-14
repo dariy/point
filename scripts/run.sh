@@ -12,10 +12,19 @@ cd "$PROJECT_ROOT"
 # Debug switch: -d/--debug (or DEBUG=1) builds and serves only the debug
 # frontend; otherwise build and serve only the release frontend. Either way we
 # build a single set instead of both.
+#
+# Watch switch: -w/--watch keeps rebuilding after startup (scripts/watch.mjs).
+# A CSS or JS edit is rebuilt and shows on the next page reload, with the server
+# left running; a Go edit rebuilds and restarts only the Go binary.
 DEBUG=${DEBUG:-0}
-case "${1:-}" in
-    -d|--debug) DEBUG=1 ;;
-esac
+WATCH=0
+for arg in "$@"; do
+    case "$arg" in
+        -d|--debug) DEBUG=1 ;;
+        -w|--watch) WATCH=1 ;;
+        *) echo "usage: $0 [-d|--debug] [-w|--watch]" >&2; exit 2 ;;
+    esac
+done
 
 # Cleanup function to be called on EXIT
 cleanup() {
@@ -114,5 +123,11 @@ echo "STORAGE_PATH: ", $STORAGE_PATH
 echo "==> Starting Point on http://localhost:$PORT"
 echo "Press Ctrl+C to stop"
 
-# Run the application
-./point
+if [ "$WATCH" = "1" ]; then
+    # The server re-reads the build manifests when a rebuild changes them (see
+    # liveAssets in api/cmd/api/assets.go); watch.mjs runs ./point itself.
+    export DEV_ASSET_RELOAD=1
+    DEV_VERSION=$DEV_VERSION node scripts/watch.mjs
+else
+    ./point
+fi

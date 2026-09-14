@@ -48,7 +48,7 @@ func skipGzip(c echo.Context) bool {
 	return precompressedExt[strings.ToLower(filepath.Ext(c.Request().URL.Path))]
 }
 
-func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssManifest map[string]string) {
+func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssManifest func() map[string]string) {
 	// Derive the client IP by walking X-Forwarded-For from the right and
 	// skipping only trusted hops (loopback + private networks — i.e. our own
 	// reverse proxy — plus whatever TRUSTED_PROXIES adds for a deployment whose
@@ -246,7 +246,7 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 					break
 				}
 				if base, hashed := stripCSSBundleHash(path.Base(p)); hashed {
-					if cssManifest[base] == path.Base(p) {
+					if cssManifest()[base] == path.Base(p) {
 						c.Response().Header().Set("Cache-Control", immutableCacheControl)
 					}
 					r.URL.Path = "/assets/css/" + base

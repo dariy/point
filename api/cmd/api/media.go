@@ -167,8 +167,9 @@ const notFoundCacheControl = "public, max-age=30, s-maxage=60"
 //   - No size serves the original (media/originals/…), as does a size at or
 //     above the source's longest side.
 //
-// Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
+// Non-numeric year/month segments are SPA routes — the public shell from
+// assets() is served instead.
+func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -178,9 +179,9 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		yearInt, yearErr := strconv.Atoi(year)
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
-			if indexHTMLContent != "" {
-				script, hash := bootstrapScript(c.Request().Context(), settings, chunks, cssMap)
-				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
+			if a := assets(); a.Shell != "" {
+				script, hash := bootstrapScript(c.Request().Context(), settings, a.ChunkMap, a.CSSMap)
+				htmlStr := strings.Replace(a.Shell, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")
 				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)

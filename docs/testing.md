@@ -111,7 +111,7 @@ npx playwright-cli find "Dashboard"    # confirms it is the dashboard, not the l
 npx playwright-cli open http://localhost:8001
 npx playwright-cli screenshot --filename=before.png
 # …edit frontend/src/ or frontend/css/…
-./scripts/run.sh &                     # rebuild AND restart — see below
+./scripts/run.sh &                     # rebuild AND restart — see below (not needed under --watch)
 npx playwright-cli reload
 npx playwright-cli screenshot --filename=after.png
 npx playwright-cli close
@@ -125,7 +125,10 @@ Four things that will otherwise cost you an hour:
     `./scripts/build-css.sh` the HTML still points at the old hash, the browser has that
     URL cached as immutable, and the page looks exactly as it did. Re-running
     `./scripts/run.sh` rebuilds and restarts in one step, which is why the recipe uses it
-    rather than the individual build scripts.
+    rather than the individual build scripts. Or start the server with
+    `./scripts/run.sh --watch` and skip that step: it rebuilds on every save, and the server
+    re-reads the manifest on the next page load (`DEV_ASSET_RELOAD`, see `liveAssets` in
+    `api/cmd/api/assets.go`).
 *   **`reload` after a data change; not `goto` to the same URL,** which can restore the
     page from cache and show you the archive as it was before your `POST`.
 *   **Confirm you are looking at the element you changed.** `playwright-cli find "text"`
