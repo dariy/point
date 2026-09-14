@@ -142,7 +142,7 @@ export function throttle(fn, ms) {
  * Create and append a DOM element with optional attributes and text content.
  *
  * @param {string} tag
- * @param {object} [attrs]  Key-value attribute pairs
+ * @param {Record<string, string>} [attrs]  Attribute name → value
  * @param {string} [text]   textContent
  * @returns {HTMLElement}
  */

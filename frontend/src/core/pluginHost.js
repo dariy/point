@@ -3,7 +3,7 @@
  *
  * The server is the source of truth: it injects an ENABLED-ONLY manifest into
  * the served HTML as `window.__PLUGINS__` (see api/cmd/api/assets.go). Each entry
- * is `{ id, type, slot?, routes?, entry? }`, where `entry` is the hashed chunk
+ * is `{ id, type, slot?, routes?, entry?, css? }`, where `entry` is the hashed chunk
  * URL (`/assets/js/p/<hash>.js`) of the plugin's built bundle — or empty while a
  * plugin has no built chunk yet (the Phase 2 foundation state: the wiring is in
  * place, but extraction of features into chunks happens in Phase 4).
@@ -42,18 +42,13 @@ const log = debugLog("PluginHost");
 // table — see routes() below.
 const CLAIM_ROUTE_SLOTS = new Set(["tags-route", "map-route"]);
 
-/**
- * One plugin of the injected manifest — plugins.ManifestEntry. `entry` is the
- * hashed chunk to import, absent for a plugin with no built chunk.
- *
- * @typedef {{id:string,type:string,slot?:string,routes?:string[],entry?:string}} ManifestEntry
- */
+/** @typedef {PluginManifestEntry} ManifestEntry  See types/globals.d.ts. */
 
 class PluginHost {
   constructor() {
     /** @type {ManifestEntry[]} */
     this._manifest = [];
-    /** @type {Map<string, Array>} slot name -> entries */
+    /** @type {Map<string, ManifestEntry[]>} slot name -> entries */
     this._bySlot = new Map();
     /** @type {Map<string, ManifestEntry>} id -> entry */
     this._byId = new Map();

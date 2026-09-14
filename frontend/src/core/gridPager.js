@@ -39,16 +39,20 @@ import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gr
 import { thumbSrcset } from '../utils/mediaUrl.js';
 import { dropBrokenImages } from '../utils/helpers.js';
 import { flipGrid } from '../utils/gridFlip.js';
+
+/** @typedef {import('../api/posts.js').Post} Post */
+/** @typedef {import('../components/public/PostCard.js').PostCardProps} PostCardProps */
 export class GridPager {
   /**
    * @param {object} opts
    * @param {() => HTMLElement|null} opts.gridMount    the live #grid-mount
    * @param {() => HTMLElement|null} opts.gestureRoot  element listeners bind to (.site-main)
-   * @param {(page:number) => Promise<object[]>} opts.fetchPosts  neighbour page's posts
+   * @param {(page:number) => Promise<Post[]>} opts.fetchPosts  neighbour page's posts
    * @param {(page:number) => void} opts.gotoPage      navigate to a page
    * @param {() => void} opts.onZoomCommit             refit per_page after a zoom step
    * @param {() => boolean} opts.isAlive               false once the host unmounted
-   * @param {(post:object, page:number) => object} [opts.cardProps]  extra PostCard props
+   * @param {(post:Post, page:number) => Partial<PostCardProps>} [opts.cardProps]  extra
+   *   PostCard props
    * @param {import('../utils/helpers.js').RawHtml} [opts.emptyHtml]  ghost
    *   markup for an empty page, built with html``
    * @param {boolean} [opts.zoom=true]                 offer pinch/slider zoom

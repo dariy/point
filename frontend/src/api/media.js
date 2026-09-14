@@ -103,7 +103,7 @@ export function getMedia(id) {
  * thumbnail. Capture failures are silent and leave the video poster-less.
  *
  * @param {File}    file
- * @param {{ alt_text?, caption?, post_id? }} [meta]
+ * @param {{ alt_text?: string, caption?: string, post_id?: number }} [meta]
  * @returns {Promise<Media>}
  */
 export async function uploadMedia(file, meta = {}) {
@@ -138,7 +138,8 @@ export function setVideoPoster(id, poster) {
  * Upload multiple files.
  * @param {File[]} files
  * @param {number} [postId]
- * @returns {Promise<{ uploaded: object[], failed: object[], total_uploaded, total_failed }>}
+ * @returns {Promise<{ uploaded: Media[], failed: Array<{ filename: string, error: string }>,
+ *   total_uploaded: number, total_failed: number }>}
  */
 export function uploadMultiple(files, postId) {
   const form = new FormData();
@@ -183,8 +184,9 @@ export function deleteMedia(id) {
 }
 
 /**
- * Get storage statistics.
- * @returns {Promise<object>}
+ * Get storage statistics — services.StorageStats.
+ * @returns {Promise<{ total_bytes: number, total_files: number, image_count: number,
+ *   video_count: number, audio_count: number, other_count: number }>}
  */
 export function getMediaStats() {
   return api.get('/api/media/stats');
@@ -200,7 +202,8 @@ export function getOrphanedMedia() {
 
 /**
  * Delete all orphaned media files.
- * @returns {Promise<object>}
+ * @returns {Promise<{ message: string, deleted_count: number, freed_bytes: number,
+ *   failed_count: number }>}
  */
 export function deleteOrphanedMedia() {
   return api.delete('/api/media/orphaned');

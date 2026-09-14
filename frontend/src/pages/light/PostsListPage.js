@@ -399,7 +399,6 @@ export default class PostsListPage extends Component {
     if (!isTrash && !this.state.loading) {
       this.mountChild(TagsInput, "#tag-filter-mount", {
         tags: this.state.tagFilter ? [this.state.tagFilter] : [],
-        placeholder: "Filter by tag…",
         onChange: tags => {
           const val = tags[0] || "";
           this.setState({

@@ -23,6 +23,36 @@ import { api } from './client.js';
  */
 
 /**
+ * One signed-in session — ListSessions in api/internal/api/auth.go.
+ * `ua_browser` and `ua_os` are parsed from `user_agent` server-side.
+ *
+ * @typedef {object} Session
+ * @property {number} id
+ * @property {string} ip_address
+ * @property {string} user_agent
+ * @property {string} ua_browser
+ * @property {string} ua_os
+ * @property {string} created_at
+ * @property {string} last_active_at
+ * @property {string} expires_at
+ * @property {boolean} is_current  The session making this request.
+ */
+
+/**
+ * An API key without its secret — apiKeyToResponse in api/internal/api/mappers.go.
+ *
+ * @typedef {object} ApiKey
+ * @property {number} id
+ * @property {number} user_id
+ * @property {string} name
+ * @property {string} prefix  The key's visible start, to tell keys apart.
+ * @property {string} created_at
+ * @property {string|null} last_used_at
+ * @property {string|null} expires_at
+ * @property {string|null} revoked_at
+ */
+
+/**
  * SHA-256 hash a string. Uses Web Crypto API when available (secure context),
  * falls back to a pure-JS implementation for plain-HTTP dev environments.
  *
@@ -139,7 +169,7 @@ export async function changeEmail(currentPassword, email) {
 
 /**
  * List active sessions.
- * @returns {Promise<{ sessions: object[], total: number }>}
+ * @returns {Promise<{ sessions: Session[], total: number }>}
  */
 export function getSessions() {
   return api.get('/api/auth/sessions');
@@ -259,7 +289,7 @@ export function deletePasskey() {
 
 /**
  * List API keys for the current user.
- * @returns {Promise<{ api_keys: object[], total: number }>}
+ * @returns {Promise<{ api_keys: ApiKey[], total: number }>}
  */
 export function getApiKeys() {
   return api.get('/api/auth/api-keys');
@@ -269,7 +299,8 @@ export function getApiKeys() {
  * Create a new API key.
  * @param {string} name
  * @param {string|null} [expiresAt] ISO string
- * @returns {Promise<{ api_key: object, raw_key: string }>}
+ * @returns {Promise<{ api_key: ApiKey, raw_key: string }>}  `raw_key` is
+ *   the secret, returned this once.
  */
 export function createApiKey(name, expiresAt = null) {
   return api.post('/api/auth/api-keys', { name, expires_at: expiresAt });

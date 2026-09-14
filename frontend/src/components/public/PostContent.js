@@ -118,9 +118,6 @@ export function shouldUseImmersive(post) {
  * @property {string} [tagSlug]  The tag archive the post was opened from.
  * @property {() => void} [onExitImmersive]  Unwind a forced viewer to the article.
  * @property {(index?: number) => void} [onEnterImmersive]  Open the viewer at a slide.
- * @property {boolean} [showViewCount]  Passed by every host; not read here.
- * @property {boolean} [showImmersiveExcerpt]  Passed by every host; not read
- *   here since the viewer stopped rendering the excerpt (#222).
  */
 
 /** @extends {Component<PostContentProps>} */

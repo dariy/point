@@ -32,7 +32,7 @@ const STATE = {
 export class GestureController {
   /**
    * @param {HTMLElement} element
-   * @param {Object} opts
+   * @param {object} opts
    * @param {Function} [opts.onSwipeMove]    (dx, dy) — real-time drag feedback
    * @param {Function} [opts.onSwipeCommit]  (dir: 'left'|'right'|'up'|'down')
    * @param {Function} [opts.onSwipeCancel]  () — drag ended without commit
@@ -334,7 +334,7 @@ export class GestureController {
 export class TrackpadDetector {
   /**
    * @param {HTMLElement} element
-   * @param {Object} opts
+   * @param {object} opts
    * @param {Function} opts.onHorizontal     Called with 'left' | 'right'
    * @param {number}   [opts.thresholdDeltaX=60]
    * @param {number}   [opts.maxDeltaY=30]

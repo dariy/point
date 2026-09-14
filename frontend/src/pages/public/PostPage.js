@@ -151,8 +151,6 @@ export default class PostPage extends Component {
     if (!post) return;
     this._contentChild = this.mountChild(PostContent, '#content-mount', {
       post,
-      showViewCount: !!settings.show_view_counts,
-      showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
       prevPost: nav?.prev || null,
       nextPost: nav?.next || null,
       forceImmersive: immersive,
@@ -311,8 +309,6 @@ export default class PostPage extends Component {
     if (contentEl) {
       this._contentChild = new PostContent(contentEl, {
         post,
-        showViewCount: !!settings.show_view_counts,
-        showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
         prevPost: nav?.prev || null,
         nextPost: nav?.next || null,
         forceImmersive: immersive,

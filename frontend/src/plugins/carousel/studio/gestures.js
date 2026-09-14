@@ -1044,7 +1044,7 @@ export function createDeckGestures(host) {
       count = Array.from(frames).length;
       for (const frame of Array.from(frames)) {
         const i = Number(frame.dataset.slice);
-        /** @type {Array<[string, (e: any) => void, object|undefined]>} */
+        /** @type {Array<[string, (e: any) => void, AddEventListenerOptions|undefined]>} */
         const handlers = [
           ["pointerdown", (e) => onPointerDown(e, frame, i), undefined],
           ["pointermove", (e) => onPointerMove(e, frame, i), undefined],

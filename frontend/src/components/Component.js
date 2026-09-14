@@ -96,19 +96,26 @@ import { setHTML, isRawHtml } from '../utils/helpers.js';
  */
 
 /**
+ * A component's state. Untyped: unlike props, which cross a boundary and are
+ * checked there, state is private to the component that keeps it.
+ *
+ * @typedef {Record<string, any>} ComponentState
+ */
+
+/**
  * The optional hooks a subclass may declare. None of them exist on the base
  * class — every call site tests for one before calling it — so reading them off
  * a Component needs the checker told that the absence is the point.
  *
  * @typedef {object} SubclassHooks
- * @property {(prevProps: object, prevState: object) => unknown} [update]
+ * @property {(prevProps: object, prevState: ComponentState) => unknown} [update]
  *   In-place update. Exactly `true` means handled; see _rerender().
  * @property {() => void} [beforeRender]
  *   Release what the previous render acquired, before the container is replaced.
  * @property {Record<string, (event: Event, el: Element) => unknown>} [actions]
  *   Delegated handlers, keyed by `data-action` name or `'<type>:<name>'`, called
  *   with the component as `this` — see _dispatchAction().
- * @property {(params: object, query: object) => void} [onRouteUpdate]
+ * @property {(params: Record<string, string>, query: Record<string, string>) => void} [onRouteUpdate]
  *   Same-route navigation: refresh in place instead of remounting (router.js).
  */
 
@@ -139,6 +146,7 @@ export class Component {
     this.container = container;
     /** @type {P} */
     this.props = props;
+    /** @type {ComponentState} */
     this.state = {};
     /** @type {Component[]} */
     this._children = [];
@@ -203,7 +211,7 @@ export class Component {
 
   /**
    * Merge delta into state and re-render.
-   * @param {object} delta
+   * @param {ComponentState} delta
    */
   setState(delta) {
     if (this._unmounted) return;
@@ -438,7 +446,7 @@ export class Component {
 
   /**
    * @param {P} [prevProps]  props as they were before this change
-   * @param {object} [prevState]  state as it was before this change
+   * @param {ComponentState} [prevState]  state as it was before this change
    */
   _rerender(prevProps, prevState) {
     // The in-place path. Offered only from the second render onwards — before

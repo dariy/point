@@ -148,10 +148,10 @@ class Store {
    * primitives after normalizeSettings(), which is what makes this enough.
    *
    * @param {string} key
-   * @param {object} patch
+   * @param {Record<string, unknown>} patch
    */
   merge(key, patch) {
-    const current = /** @type {object|undefined} */ (this._state[key]);
+    const current = /** @type {Record<string, unknown>|undefined} */ (this._state[key]);
     const next = { ...current, ...patch };
     if (current && typeof current === 'object' && shallowEqual(current, next)) return;
     this.set(key, next);
@@ -160,8 +160,8 @@ class Store {
 
 /**
  * Same keys, and every value Object.is-equal.
- * @param {object} a
- * @param {object} b
+ * @param {Record<string, unknown>} a
+ * @param {Record<string, unknown>} b
  */
 function shallowEqual(a, b) {
   const keys = Object.keys(a);
@@ -198,6 +198,21 @@ export const store = new Store();
 // keeps the raw string form from coming back.
 
 /**
+ * One store key's operations. `on` and `onSelector` return the unsubscribe
+ * function, as store.subscribe() does. keyed() cannot know what a key holds, so
+ * an export that does know says so with a cast to `Keyed<ItsType>`.
+ *
+ * @template T
+ * @typedef {{
+ *   get: () => T,
+ *   set: (value: T) => void,
+ *   on: (callback: (value: T) => void) => Function,
+ *   merge: (patch: Partial<T>) => void,
+ *   onSelector: (select: (value: T) => unknown, callback: Function) => Function,
+ * }} Keyed
+ */
+
+/**
  * Bind one store key to its operations.
  *
  * `merge` and `onSelector` are the two cheap-write helpers: they exist for the
@@ -206,14 +221,7 @@ export const store = new Store();
  * asked for. A key that holds a primitive simply never destructures them.
  *
  * @param {string} key
- * @returns {{
- *   get: () => any,
- *   set: (value: any) => void,
- *   on: (callback: Function) => Function,
- *   merge: (patch: object) => void,
- *   onSelector: (select: Function, callback: Function) => Function,
- * }}  `on` and `onSelector` return the unsubscribe function, as
- *     store.subscribe() does.
+ * @returns {Keyed<any>}
  */
 function keyed(key) {
   return {
@@ -225,11 +233,12 @@ function keyed(key) {
   };
 }
 
-/** {object|null} The authenticated user, or null when signed out. */
-export const { get: getUser, set: setUser, on: onUser } = keyed('user');
+/** The authenticated user, or null when signed out. */
+export const { get: getUser, set: setUser, on: onUser } =
+  /** @type {Keyed<import('./api/auth.js').User|null>} */ (keyed('user'));
 
 /**
- * {object} Public blog settings from /api/settings/public.
+ * Public blog settings from /api/settings/public, normalized.
  *
  * Prefer `mergeSettings(patch)` over `setSettings({ ...getSettings(), ...patch })`:
  * the spread hands set() a fresh reference whatever the patch contains, so the
@@ -243,7 +252,7 @@ export const {
   on: onSettings,
   merge: mergeSettings,
   onSelector: onSettingsSelector,
-} = keyed('settings');
+} = /** @type {Keyed<import('./utils/helpers.js').StoreSettings>} */ (keyed('settings'));
 
 /** {'dark'|'light'|'auto'} Active UI theme. */
 export const { get: getTheme, set: setTheme, on: onTheme } = keyed('theme');
@@ -268,14 +277,17 @@ export const { get: getOfflineStatus, set: setOfflineStatus, on: onOfflineStatus
 export const { get: getAutosaveStatus, set: setAutosaveStatus, on: onAutosaveStatus } =
   keyed('autosave_status');
 
-/** {object[]} Tags shown in the public nav, from /api/nav. */
-export const { get: getNavTags, set: setNavTags, on: onNavTags } = keyed('navTags');
+/** Tags shown in the public nav, from /api/nav. */
+export const { get: getNavTags, set: setNavTags, on: onNavTags } =
+  /** @type {Keyed<import('./api/nav.js').NavTagNode[]>} */ (keyed('navTags'));
 
-/** {object[]} Root tags, used by the breadcrumb to name the top level. */
-export const { get: getRootTags, set: setRootTags, on: onRootTags } = keyed('rootTags');
+/** Root tags, used by the breadcrumb to name the top level. */
+export const { get: getRootTags, set: setRootTags, on: onRootTags } =
+  /** @type {Keyed<import('./api/nav.js').NavTagNode[]>} */ (keyed('rootTags'));
 
-/** {object[]|null} Home page tag cloud, cached so a return visit renders at once. */
-export const { get: getTagCloudCache, set: setTagCloudCache } = keyed('tagCloud');
+/** Home page tag cloud, cached so a return visit renders at once. */
+export const { get: getTagCloudCache, set: setTagCloudCache } =
+  /** @type {Keyed<import('./api/pages.js').TagCloudItem[]|null>} */ (keyed('tagCloud'));
 
 /** {string} Latest known app version, for the sidebar's update hint. */
 export const { get: getAppVersion, set: setAppVersion, on: onAppVersion } = keyed('version');

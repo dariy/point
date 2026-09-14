@@ -346,8 +346,6 @@ export default class HomePage extends Component {
     if (isStaticHomePage) {
       this.mountChild(PostContent, '#grid-mount', {
         post: data.posts[0],
-        showViewCount: !!settings.show_view_counts,
-        showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
         forceImmersive: immersive,
         startIndex: startIndex,
         onExitImmersive: () => exitImmersive(this),

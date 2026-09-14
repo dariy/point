@@ -908,7 +908,8 @@ export default class CarouselStudioPage extends Component {
    * entry itself (see below).
    *
    * @param {*} doc  the next document
-   * @param {object} [patch]  state to set alongside it
+   * @param {import('../../components/Component.js').ComponentState} [patch]  state
+   *   to set alongside it
    * @param {{history?: boolean}} [options]
    */
   _setDoc(doc, patch = {}, { history = true } = {}) {
@@ -2808,7 +2809,7 @@ export default class CarouselStudioPage extends Component {
    * `updateLayer` to drop back to the layer's own — its `base` argument.
    *
    * @param {import('./document.js').CarouselLayer} layer
-   * @returns {object}
+   * @returns {Record<string, unknown>}  The fields' raw values, not yet validated.
    */
   _layerFromFields(layer) {
     const val = (sel) => {

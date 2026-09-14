@@ -16,7 +16,7 @@ import { api } from './client.js';
  * @typedef {object} PluginView
  * @property {string} id
  * @property {string} [title]
- * @property {string} type
+ * @property {PluginType} type
  * @property {string} [slot]
  * @property {string} [slot_rule]
  * @property {string[]} [routes]
