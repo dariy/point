@@ -46,6 +46,8 @@ credentials.json
 deployment-*.log
 api/coverage.html
 coverage-frontend.lcov
+# scripts/check.sh step logs
+/tmp/check/
 api/api*
 # Binaries a bare `go build` drops in api/ (run.sh builds to ./point instead)
 api/point

@@ -77,7 +77,11 @@ version_ge() {
 # ── What the repo asks for ───────────────────────────────────────────────────
 GO_WANT="$(awk '$1 == "go" { print $2; exit }' "$ROOT_DIR/api/go.mod" 2>/dev/null)"
 NODE_WANT="$(sed -n 's/.*node-version: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' "$WORKFLOW" 2>/dev/null | head -1)"
-LINT_WANT="$(sed -n 's|.*golangci-lint@v\([0-9][0-9.]*\).*|\1|p' "$WORKFLOW" 2>/dev/null | head -1)"
+# CI installs golangci-lint with golangci-lint-action, pinned by the first
+# `version:` input after the `uses:` line.
+LINT_WANT="$(awk '/golangci-lint-action@/ { f = 1 }
+    f && /version:/ { sub(/.*version:[ \t]*v?/, ""); sub(/[^0-9.].*/, ""); print; exit }' \
+    "$WORKFLOW" 2>/dev/null)"
 VULN_WANT="$(sed -n 's|.*govulncheck@v\([0-9][0-9.]*\).*|\1|p' "$WORKFLOW" 2>/dev/null | head -1)"
 
 # ── Go ───────────────────────────────────────────────────────────────────────

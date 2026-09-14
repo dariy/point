@@ -27,21 +27,27 @@ jobs:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
 
-      - name: golangci-lint
-        # No build tags, matching scripts/check.sh. Integration test files are
-        # constrained with `//go:build !unit`, so the default build already
-        # includes them — it is `-tags=unit` that excludes them, and no file in
-        # this repo declares an `integration` tag.
+      # Every check below is a `scripts/check.sh --only <step>` call, so CI and
+      # the local gate run the same commands and cannot drift. Under GitHub
+      # Actions check.sh streams each step's output instead of only logging it.
+      - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           # Pinned for reproducible CI; the action downloads the release binary
-          # rather than compiling it. Keep in sync with local tooling.
+          # rather than compiling it. Keep in sync with local tooling —
+          # scripts/doctor.sh reads this line.
           version: v2.12.2
-          working-directory: api
-          args: --timeout=5m
-          # The action's default schema check of .golangci.yml is a check this
-          # job never ran (and the config does not pass it); linting is the job.
+          install-only: true
+          # The action's schema check of .golangci.yml is not part of the gate
+          # (and the config does not pass it).
           verify: false
+
+      # No build tags. Integration test files are constrained with
+      # `//go:build !unit`, so the default build already includes them — it is
+      # `-tags=unit` that excludes them, and no file in this repo declares an
+      # `integration` tag.
+      - name: Go lint
+        run: ./scripts/check.sh --only go-lint
 
   js:
     runs-on: ubuntu-latest
@@ -88,42 +94,31 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ steps.playwright.outputs.version }}
 
-      # Uses the lockfile-pinned eslint (flat config). Keep the file list in
-      # sync with scripts/check.sh — the 614-line service worker and the
-      # build scripts are lintable code too.
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Each step is `scripts/check.sh --only <step>`; what the step runs, and
+      # why, is documented on its function there.
       - name: JS lint
-        run: |
-          npm ci --no-audit --no-fund
-          node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
+        run: ./scripts/check.sh --only js-lint
 
-      # The JSDoc annotations in frontend/src are checked, not decorative:
-      # jsconfig.json sets checkJs, and the files not yet clean carry
-      # `// @ts-nocheck` on line 1. Same command as scripts/check.sh.
       - name: JS typecheck
-        run: npm run typecheck
+        run: ./scripts/check.sh --only js-typecheck
 
-      # The enforcing Trusted Types policy waives two vendored libraries by
-      # name, and both waivers live in files a dependency bump overwrites. This
-      # is the step that turns "re-apply the patch" from a note into a gate.
+      - name: html escaping
+        run: ./scripts/check.sh --only html-escaping
+
       - name: Vendored TT sinks
-        run: ./scripts/check-vendor-sinks.sh
+        run: ./scripts/check.sh --only vendor-sinks
 
-      # Coverage rides along on the same run (V8 instrumentation via the
-      # built-in runner — no c8, no extra devDependency).
       - name: E2E tests
-        run: ./scripts/run-e2e.sh
-
+        run: ./scripts/check.sh --only e2e
 
       - name: JS tests
-        run: |
-          node --test --experimental-test-coverage \
-            --test-coverage-include='frontend/src/**' \
-            --test-reporter=spec --test-reporter-destination=stdout \
-            --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
-            frontend/test/*.test.js
+        run: ./scripts/check.sh --only js-test
 
       - name: Frontend coverage floor
-        run: node scripts/js-coverage-report.mjs coverage-frontend.lcov
+        run: ./scripts/check.sh --only js-coverage
 
       - name: Upload frontend coverage
         uses: codecov/codecov-action@v7
@@ -151,11 +146,11 @@ jobs:
           check-latest: true
           cache-dependency-path: api/go.sum
 
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
       - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck ./...
-        working-directory: api
+        run: ./scripts/check.sh --only govulncheck
 
   test:
     runs-on: ubuntu-latest
@@ -196,26 +191,28 @@ jobs:
           sqlc-version: "1.31.1"
 
       - name: SQL layer
-        run: ./scripts/check-sql-layer.sh
+        run: ./scripts/check.sh --only sql-layer
 
+      # check.sh's go-vet step is not repeated here: golangci-lint in the lint
+      # job runs govet (api/.golangci.yml, `default: standard`).
       - name: Run Go tests
         # The integration suite runs by default and requires a functioning
         # SQLite environment (which ubuntu-latest provides). -count=1 because
         # the Go cache restored above also holds test results: without it an
         # unchanged package reports "(cached)" and its tests never run.
-        run: |
-          cd api
-          go test -count=1 ./... -coverprofile=coverage.txt -covermode=atomic
+        env:
+          GOFLAGS: -count=1
+        run: ./scripts/check.sh --only go-test
 
       # The build-failing half of the coverage gate. codecov's status checks
       # only report; this is what actually turns the job red.
       - name: Coverage floor
-        run: ./scripts/coverage-gate.sh api/coverage.txt
+        run: ./scripts/check.sh --only go-coverage
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v7
         with:
-          file: api/coverage.txt
+          file: api/coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           flags: unittests
@@ -383,12 +380,13 @@ jobs:
         if: failure()
         run: cat /tmp/run-sh.log || true
 
-      # The runner and doctor.sh — both are pure shell with no test suite of
-      # their own — plus the two release-path scripts, which only execute on a
-      # tag, so a syntax error in them would otherwise surface as a broken
-      # release rather than a failed PR.
+      # The runner, doctor.sh and check.sh — pure shell with no test suite of
+      # their own, and check.sh drives every check in this workflow — plus the
+      # two release-path scripts, which only execute on a tag, so a syntax
+      # error in them would otherwise surface as a broken release rather than
+      # a failed PR.
       - name: Shellcheck the runner
-        run: shellcheck scripts/check-docs.sh scripts/doctor.sh scripts/build-tarball.sh scripts/release-notes.sh
+        run: shellcheck scripts/check-docs.sh scripts/doctor.sh scripts/check.sh scripts/build-tarball.sh scripts/release-notes.sh
 
       # Extracts the fenced bash blocks and the AGENTS.md command table from the
       # documented set and runs them. Anything that cannot run unattended
