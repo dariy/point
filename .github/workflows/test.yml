@@ -3,6 +3,12 @@ name: Tests
 on:
   pull_request:
     branches: [main, develop]
+  # A squash merge produces a tree no PR run tested: the PR ran against the
+  # develop it was opened on, not the develop it landed on. Testing develop
+  # after each merge catches that, and keeps codecov's base-branch coverage
+  # current, so a PR's patch coverage is compared against a fresh baseline.
+  push:
+    branches: [develop]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +16,8 @@ permissions:
   pull-requests: write
 
 # A new push supersedes the run for the previous one; finishing it only delays
-# the run that matters.
+# the run that matters. On develop that means back-to-back merges test only the
+# newest tree, which contains the earlier ones.
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
