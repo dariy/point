@@ -24,8 +24,16 @@ import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/
 import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.js';
 import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../components/light/tags/tagFlows.js';
 import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.js';
+
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
+/** @extends {Component<PageProps>} */
 export default class TagsManagerPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = {
       loading: true,

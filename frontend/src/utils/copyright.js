@@ -15,8 +15,8 @@ const DEFAULT_NO_AUTHOR = "© powered by {{engine}}";
 /**
  * Build the copyright line's inner markup from public settings.
  *
- * @param {object} settings Public blog settings (author_name, blog_title,
- *                          about_post_id, footer_copyright)
+ * @param {import('./helpers.js').StoreSettings} [settings] Public blog
+ *   settings; reads author_name, blog_title, about_post_id, footer_copyright
  * @returns {import("./helpers.js").RawHtml} markup — safe to inject, every
  *   untrusted part is escaped by the html`` tag that built it
  */

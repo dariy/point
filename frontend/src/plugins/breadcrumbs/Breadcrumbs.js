@@ -15,6 +15,15 @@ import {
   showCrumbDropdown, hideFlyout, attachFlyoutTrigger, HOVER_OPEN_MS,
 } from '../../utils/tagFlyout.js';
 
+/**
+ * The header's own props, passed on whole, plus the header group — clicks
+ * inside it do not dismiss an open crumb dropdown.
+ *
+ * @typedef {import('../public-header/PublicHeader.js').PublicHeaderProps
+ *   & { group?: HTMLElement }} BreadcrumbsProps
+ */
+
+/** @extends {Component<BreadcrumbsProps>} */
 export class Breadcrumbs extends Component {
   render() {
     const {

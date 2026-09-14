@@ -17,10 +17,25 @@ import { api } from './client.js';
 import { getNavTags, setNavTags, setRootTags } from '../store.js';
 
 /**
+ * One node of a nav tree — services.NavTagNode. `url` is set on an authored
+ * custom link and absent on a tag.
+ *
+ * @typedef {object} NavTagNode
+ * @property {number} id
+ * @property {string} name
+ * @property {string} slug
+ * @property {string} [url]
+ * @property {number} post_count
+ * @property {boolean} is_related  A co-occurring tag under a show_related parent.
+ * @property {boolean} show_in_ancestors
+ * @property {NavTagNode[]} children
+ */
+
+/**
  * Navigation menu: hierarchical tag tree scoped to the current user's auth
  * level. Guests receive only public/visible tags; admins receive all tags.
  *
- * @returns {Promise<{ menu: object[], tags?: object[] }>}
+ * @returns {Promise<{ menu: NavTagNode[], tags?: NavTagNode[] }>}
  */
 export function getNavMenu() {
   return api.get('/api/pages/nav');

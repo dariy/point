@@ -1,21 +1,24 @@
 /**
  * PromptDialog — specialized Modal for inputs.
- *
- * Props:
- *   title        {string}    Heading
- *   message      {string}    Body text
- *   defaultValue {string}    Initial value for input
- *   inputType    {string}    Input type, e.g. 'text' (default) or 'password'
- *   variant      {string}    Confirm button style: 'primary' (default) or 'danger'
- *   confirmText  {string}    Label for primary button
- *   onConfirm    {Function}  Called when confirmed with value
- *   onCancel     {Function}  Called when cancelled
  */
 
 import { Component } from '../Component.js';
 import { Modal } from './Modal.js';
 import { html } from '../../utils/helpers.js';
 
+/**
+ * @typedef {object} PromptDialogProps
+ * @property {import('../../utils/helpers.js').Slot} [title]
+ * @property {string} [message]  Body text; each line becomes a paragraph.
+ * @property {string} [defaultValue]  Initial value of the input.
+ * @property {string} [inputType]  'text' (the default) or 'password'.
+ * @property {'primary'|'danger'} [variant]  Confirm button style.
+ * @property {string} [confirmText]  Primary button label.
+ * @property {(value: string) => void} [onConfirm]  Called with the value.
+ * @property {() => void} [onCancel]
+ */
+
+/** @extends {Component<PromptDialogProps>} */
 export class PromptDialog extends Component {
   render() {
     return html`

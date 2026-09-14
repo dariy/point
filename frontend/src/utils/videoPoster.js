@@ -28,7 +28,10 @@ export function isVideoFile(file) {
   return !!file && typeof file.type === "string" && file.type.startsWith("video/");
 }
 
-/** Resolve on the first of the named events, or reject on <video> error/timeout. */
+/**
+ * Resolve on the first of the named events, or reject on <video> error/timeout.
+ * @returns {Promise<void>}
+ */
 function once(video, events, timeoutMs) {
   return new Promise((resolve, reject) => {
     let done = false;

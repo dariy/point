@@ -280,7 +280,7 @@ export function openMergeDialog({
  * parentsWith), and moveTag then orders it within that parent's children.
  * moveTag alone would order a tag into a group it does not belong to.
  *
- * @param {{ tags: object[], tagId: number, contextParentId: number|null,
+ * @param {{ tags: import('../../../api/tags.js').Tag[], tagId: number, contextParentId: number|null,
  *           onDone: () => void }} options  `contextParentId` is the parent
  *   whose branch the user clicked Move… under; preselected, and the group
  *   whose positions are offered first.

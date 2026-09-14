@@ -22,7 +22,15 @@ import { setToast } from '../../store.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.js';
+/**
+ * @typedef {object} PhotoLibraryPickerDialogProps
+ * @property {(result: Awaited<ReturnType<typeof import('../../api/system.js').importSelectedPhotos>>) => void} [onImport]
+ *   Called with the import summary.
+ */
+
+/** @extends {Component<PhotoLibraryPickerDialogProps>} */
 export class PhotoLibraryPickerDialog extends Component {
+  /** @param {PhotoLibraryPickerDialogProps} props */
   constructor({
     onImport
   }) {

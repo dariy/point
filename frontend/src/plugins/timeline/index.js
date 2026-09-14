@@ -11,12 +11,29 @@ const EDGE_PAD = 48;
 let restoreView = null;
 
 /**
+ * A year range the timeline reports in filter mode. `source` says what moved
+ * it; `isFullExtent` is set when the range covers every year there is, which
+ * the host reads as "no year filter".
+ *
+ * @typedef {{from: number, to: number, source: string, isFullExtent?: boolean}} TimelineRange
+ */
+
+/**
+ * @typedef {object} TimelineProps
+ * @property {string} [context]  Context tag slug.
+ * @property {'popover'|'filter'} [mode]  'popover' (the default) opens a year's
+ *   posts; 'filter' reports the range to onRangeChange instead.
+ * @property {(range: TimelineRange) => void} [onRangeChange]  Filter mode.
+ * @property {{from: number, to: number}} [initialRange]  The range to open on.
+ * @property {string} [initialYear]  A year to centre on when there is no range.
+ * @property {number} [total]  The host's post count, for the all-years cluster.
+ * @property {boolean} [canShow]
+ */
+
+/**
  * Timeline component — horizontal date-tag navigation control.
  *
- * Props:
- *   context        {string}   Optional context tag slug
- *   mode           {string}   'popover' (default) or 'filter'
- *   onRangeChange  {function} Callback for filter mode {from, to, source}
+ * @extends {Component<TimelineProps>}
  */
 export class Timeline extends Component {
   constructor(container, props = {}) {

@@ -122,13 +122,22 @@ export function subclassHooks(component) {
   return /** @type {SubclassHooks} */ (/** @type {unknown} */ (component));
 }
 
+/**
+ * Generic in its props. A subclass that reads this.props names their shape —
+ * `@extends {Component<PostGridProps>}` above the class — and the default,
+ * `object`, is what a component that declares nothing gets: it can be handed
+ * props, but reading one off it is an error until it says what they are.
+ *
+ * @template {object} [P=object]
+ */
 export class Component {
   /**
    * @param {HTMLElement} container  The DOM node this component renders into
-   * @param {object}      [props]    Initial properties
+   * @param {P}           [props]    Initial properties
    */
-  constructor(container, props = {}) {
+  constructor(container, props = /** @type {P} */ ({})) {
     this.container = container;
+    /** @type {P} */
     this.props = props;
     this.state = {};
     /** @type {Component[]} */
@@ -208,7 +217,7 @@ export class Component {
 
   /**
    * Merge delta into props and re-render.
-   * @param {object} delta
+   * @param {Partial<P>} delta
    */
   setProps(delta) {
     if (this._unmounted) return;
@@ -251,13 +260,13 @@ export class Component {
    * `browser.openFilePicker()` is calling a method only the subclass has.
    *
    * @template {Component} T
-   * @param {new (container: HTMLElement, props?: object) => T} Cls  Component
+   * @param {new (container: HTMLElement, props?: T['props']) => T} Cls  Component
    *   class to instantiate
    * @param {string|HTMLElement} target  Selector or element inside this.container
-   * @param {object} [props]
+   * @param {T['props']} [props]  Checked against the child's own props type.
    * @returns {T}
    */
-  mountChild(Cls, target, props = {}) {
+  mountChild(Cls, target, props = /** @type {T['props']} */ ({})) {
     const el = typeof target === 'string' ? this.container.querySelector(target) : target;
     if (!el) {
       throw new Error(`${this.constructor.name}.mountChild: target "${target}" not found`);
@@ -428,7 +437,7 @@ export class Component {
   // ── Private ───────────────────────────────────────────────────────────────
 
   /**
-   * @param {object} [prevProps]  props as they were before this change
+   * @param {P} [prevProps]  props as they were before this change
    * @param {object} [prevState]  state as it was before this change
    */
   _rerender(prevProps, prevState) {

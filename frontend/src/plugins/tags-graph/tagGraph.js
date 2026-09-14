@@ -47,17 +47,24 @@ import { bounds, fitScale, fitTransform, pickNode, screenToWorld, zoomAt } from 
 /** Frames the reduced-motion path settles the layout over, off-screen. */
 const SETTLE_STEPS = 400;
 
+/** @typedef {import('./graphModel.js').GraphNode} GraphNode */
+
 export class TagGraph {
+  /**
+   * The handler defaults are no-ops, so their signatures are written out here —
+   * an inferred `() => {}` says the graph calls them with nothing, while every
+   * call site below passes a node or an href.
+   *
+   * @param {HTMLCanvasElement} canvas
+   * @param {import('./graphModel.js').GraphData} data
+   * @param {{ onNavigate?: (href: string) => void,
+   *           onHover?: (node: GraphNode|null) => void,
+   *           onSelect?: (node: GraphNode|null) => void }} [handlers]
+   */
   constructor(canvas, data, { onNavigate = () => {}, onHover = () => {}, onSelect = () => {} } = {}) {
     this.canvas = canvas;
-    // The defaults are no-ops, so the signatures have to be written out here —
-    // an inferred `() => {}` says the graph calls these with nothing, while
-    // every call site below passes a node or an href.
-    /** @type {(href: string) => void} */
     this.onNavigate = onNavigate;
-    /** @type {(node: object|null) => void} */
     this.onHover = onHover;
-    /** @type {(node: object|null) => void} */
     this.onSelect = onSelect;
 
     this.alpha = 1;

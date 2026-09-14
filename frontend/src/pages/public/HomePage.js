@@ -29,8 +29,15 @@ import { ViewContext } from '../../utils/viewContext.js';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
 import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.js';
 
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
+/** @extends {Component<PageProps>} */
 export default class HomePage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = { loading: true, data: null, error: null, forceImmersive: false, startIndex: 0 };
     // Stops the viewport fit chasing a per_page whose own chrome moves the

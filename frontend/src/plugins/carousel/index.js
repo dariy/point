@@ -312,13 +312,21 @@ function applyMessage(name, report) {
   return parts.join(" ");
 }
 
+/**
+ * `query.post` carries the target post id; `renderDeps` overrides the browser
+ * render backend (tests inject a fake).
+ *
+ * @typedef {import('../../router.js').PageProps
+ *   & { renderDeps?: import('./render.js').RenderDeps }} CarouselStudioProps
+ */
+
+/** @extends {Component<CarouselStudioProps>} */
 export default class CarouselStudioPage extends Component {
   /**
    * @param {HTMLElement} container
-   * @param {object} [props]  `query.post` carries the target post id;
-   *   `renderDeps` overrides the browser render backend (tests inject a fake).
+   * @param {CarouselStudioProps} [props]
    */
-  constructor(container, props = {}) {
+  constructor(container, props) {
     super(container, props);
     this.state = {
       postId: readPostId(this.props.query),
@@ -2888,7 +2896,7 @@ export default class CarouselStudioPage extends Component {
    * loses the middle ones the moment this panel writes.
    *
    * @param {import('./document.js').CarouselSlide} slide
-   * @returns {object|null}
+   * @returns {import('./document.js').CarouselBg|null}
    */
   _bgFromFields(slide) {
     const value = (sel, fallback) => {

@@ -9,16 +9,6 @@ import { html, setHTML, raw } from "../../utils/helpers.js";
  *   - UI auto-hide
  *   - Slide progress indicators
  *   - Full-screen post-to-post navigation
- *
- * Props:
- *   items      {Array<{ type, url, alt, html }>}
- *   startIndex {number}
- *   showClose  {boolean}
- *   showShare  {boolean}
- *   onClose    {function}
- *   onStep     {function(index)}
- *   navPrev    {object|null}  { slug, title }
- *   navNext    {object|null}  { slug, title }
  */
 
 import { Component } from '../../components/Component.js';
@@ -40,7 +30,31 @@ const MIN_SHOW_MS = 2000;
 // mount skips its entrance fade — the dragged photo is already in place, so a
 // fade-in would re-blink it. Lives at module scope to bridge the route swap.
 let _suppressNextFadeIn = false;
+/**
+ * @typedef {object} MediaViewerProps
+ * @property {import('../../utils/postMedia.js').MediaItem[]} [items]  Slides.
+ * @property {import('../../api/posts.js').PostMediaRef[]} [media]  The post's
+ *   media records, for the per-slide EXIF panel.
+ * @property {number} [startIndex]
+ * @property {boolean} [showClose]
+ * @property {boolean} [showShare]  On unless exactly false.
+ * @property {() => void} [onClose]
+ * @property {(index: number) => void} [onStep]
+ * @property {import('../../api/posts.js').PostStub|null} [navPrev]  Older post,
+ *   for cross-post navigation.
+ * @property {import('../../api/posts.js').PostStub|null} [navNext]  Newer post.
+ * @property {boolean} [sheetMode]
+ * @property {import('../../api/posts.js').Post} [post]  Read only by
+ *   ImmersiveSheetViewer, which renders the post's details in its sheet.
+ * @property {string} [editUrl]  Read only by ImmersiveSheetViewer.
+ */
+
+/** @extends {Component<MediaViewerProps>} */
 export class MediaViewer extends Component {
+  /**
+   * @param {HTMLElement} container
+   * @param {MediaViewerProps} [props]
+   */
   constructor(container, props = {}) {
     super(container, props);
     this._index = props.startIndex || 0;

@@ -42,13 +42,20 @@ const log = debugLog("PluginHost");
 // table — see routes() below.
 const CLAIM_ROUTE_SLOTS = new Set(["tags-route", "map-route"]);
 
+/**
+ * One plugin of the injected manifest — plugins.ManifestEntry. `entry` is the
+ * hashed chunk to import, absent for a plugin with no built chunk.
+ *
+ * @typedef {{id:string,type:string,slot?:string,routes?:string[],entry?:string}} ManifestEntry
+ */
+
 class PluginHost {
   constructor() {
-    /** @type {Array<{id:string,type:string,slot?:string,routes?:string[],entry?:string}>} */
+    /** @type {ManifestEntry[]} */
     this._manifest = [];
     /** @type {Map<string, Array>} slot name -> entries */
     this._bySlot = new Map();
-    /** @type {Map<string, object>} id -> entry */
+    /** @type {Map<string, ManifestEntry>} id -> entry */
     this._byId = new Map();
     /** @type {Map<string, Promise>} entry url -> import promise (loaded once) */
     this._loaded = new Map();

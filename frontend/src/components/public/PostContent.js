@@ -3,12 +3,6 @@
  *
  * Immersive mode activates when the post has image/video media and little/no text.
  * It uses the unified MediaViewer component.
- *
- * Props:
- *   post           {object}      Full post from GET /api/posts/slug/:slug
- *   showViewCount  {boolean}
- *   prevPost       {object|null}
- *   nextPost       {object|null}
  */
 
 import { Component } from "../Component.js";
@@ -112,6 +106,24 @@ export function shouldUseImmersive(post) {
   return hasVisualMedia || hasContentMedia;
 }
 
+/**
+ * @typedef {object} PostContentProps
+ * @property {import('../../api/posts.js').Post} [post]  Full post from
+ *   GET /api/posts/slug/:slug.
+ * @property {import('../../api/posts.js').PostStub|null} [prevPost]
+ * @property {import('../../api/posts.js').PostStub|null} [nextPost]
+ * @property {boolean} [forceImmersive]  Show the viewer even for a post that
+ *   would read as an article (header expand, image click, #N link).
+ * @property {number} [startIndex]  Slide the viewer opens on.
+ * @property {string} [tagSlug]  The tag archive the post was opened from.
+ * @property {() => void} [onExitImmersive]  Unwind a forced viewer to the article.
+ * @property {(index?: number) => void} [onEnterImmersive]  Open the viewer at a slide.
+ * @property {boolean} [showViewCount]  Passed by every host; not read here.
+ * @property {boolean} [showImmersiveExcerpt]  Passed by every host; not read
+ *   here since the viewer stopped rendering the excerpt (#222).
+ */
+
+/** @extends {Component<PostContentProps>} */
 export class PostContent extends Component {
   render() {
     const { post, prevPost, nextPost, forceImmersive = false } = this.props;

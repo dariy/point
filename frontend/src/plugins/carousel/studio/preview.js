@@ -174,7 +174,7 @@ export function paintDeckSlide({ imgs, bgs }, { slide, srcW, srcH, aspect, hasPa
  *
  * @param {ArrayLike<HTMLElement>} bgs
  * @param {{slide: import('../document.js').CarouselSlide,
- *   fit: ReturnType<import('../geometry.js').deckSlideFitCSS>, url: string,
+ *   fit: ReturnType<typeof import('../geometry.js').deckSlideFitCSS>, url: string,
  *   aspect: string, hasPad: boolean}} o
  */
 function paintDeckBg(bgs, { slide, fit, url, aspect, hasPad }) {

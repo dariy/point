@@ -226,6 +226,36 @@ function _anchorFlyoutTo(anchorEl) {
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
 }
+/**
+ * One row of a header dropdown. It links to /tags/<slug> unless it carries its
+ * own href; a custom menu link has an href and no count.
+ *
+ * @typedef {object} FlyoutItem
+ * @property {string} name
+ * @property {string} [slug]
+ * @property {string} [href]
+ * @property {number} [count]
+ * @property {number} [post_count]
+ * @property {boolean} [is_hidden]
+ */
+
+/**
+ * One step of the ancestor trail a breadcrumb dropdown shows above its list.
+ * The current crumb, and any crumb without an href, renders as plain text.
+ *
+ * @typedef {object} FlyoutCrumb
+ * @property {string} name
+ * @property {string} [href]
+ * @property {boolean} [is_hidden]
+ * @property {boolean} [current]
+ */
+
+/**
+ * @param {HTMLElement} section
+ * @param {FlyoutItem} item
+ * @param {Function} navigateFn
+ * @param {string} [extraClass]
+ */
 function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
   const a = document.createElement('a');
   a.href = item.href || `/tags/${item.slug}`;
@@ -255,7 +285,8 @@ function _appendFlyoutLink(section, item, navigateFn, extraClass = '') {
  *     and "drill down" so the folded "…" ancestors stay reachable on mobile.
  *
  * @param {HTMLElement} anchorEl   The element to anchor the flyout to
- * @param {object[]|object} spec   Flat item list, or {path, children}
+ * @param {FlyoutItem[]|{path?: FlyoutCrumb[], children?: FlyoutItem[]}} spec
+ *   Flat item list, or {path, children}
  * @param {Function}    navigateFn navigate(url) function
  * @param {HTMLElement} [excludeEl] Clicks inside this element won't dismiss it
  */

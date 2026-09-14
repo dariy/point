@@ -12,6 +12,9 @@
 
 import { clamp } from './viewport.js';
 
+/** @typedef {import('./graphModel.js').GraphNode} GraphNode */
+/** @typedef {import('./graphModel.js').GraphLink} GraphLink */
+
 function readColors(canvas) {
   const cs = window.getComputedStyle(canvas);
   const v = (name, fallback) => {
@@ -51,12 +54,12 @@ export class GraphRenderer {
 
   /**
    * @param {object}   frame
-   * @param {object[]} frame.nodes    visible nodes
-   * @param {object[]} frame.links    visible links
-   * @param {object}   frame.view     { scale, tx, ty, dpr }
-   * @param {object}   frame.size     { width, height } in CSS px
-   * @param {Set|null} frame.focus    highlighted ids; null means "nothing dimmed"
-   * @param {Set|null} frame.related  second-wave tags, drawn with a dashed ring
+   * @param {GraphNode[]} frame.nodes  visible nodes
+   * @param {GraphLink[]} frame.links  visible links
+   * @param {{scale:number, tx:number, ty:number, dpr:number}} frame.view
+   * @param {{width:number, height:number}} frame.size  in CSS px
+   * @param {Set<string>|null} frame.focus  highlighted ids; null means "nothing dimmed"
+   * @param {Set<string>|null} frame.related  second-wave tags, drawn with a dashed ring
    * @param {?string}  frame.activeId the hovered/selected node, with a solid ring
    */
   draw({ nodes, links, view, size, focus, related, activeId }) {

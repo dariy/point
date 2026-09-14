@@ -13,6 +13,16 @@
 import { api } from './client.js';
 
 /**
+ * The signed-in user, as login, passkey login and /api/auth/me report them.
+ *
+ * @typedef {object} User
+ * @property {number} id
+ * @property {string} username
+ * @property {string} display_name
+ * @property {string} email
+ */
+
+/**
  * SHA-256 hash a string. Uses Web Crypto API when available (secure context),
  * falls back to a pure-JS implementation for plain-HTTP dev environments.
  *
@@ -73,7 +83,7 @@ export async function sha256(value) {
  * @param {string|null} username
  * @param {string} password
  * @param {boolean} [rememberMe]
- * @returns {Promise<{ message: string, user: object }>}
+ * @returns {Promise<{ message: string, user: User }>}
  */
 export async function login(username, password, rememberMe = false) {
   return api.post('/api/auth/login', {
@@ -90,7 +100,7 @@ export function logout() {
 
 /**
  * Return the current user, or null if unauthenticated.
- * @returns {Promise<object|null>}
+ * @returns {Promise<User|null>}
  */
 export async function getMe() {
   try {
@@ -231,7 +241,7 @@ export async function registerPasskey() {
 
 /**
  * Full login ceremony: begin → browser → finish.
- * @returns {Promise<{ message: string, user: object }>}
+ * @returns {Promise<{ message: string, user: User }>}
  */
 export async function loginWithPasskey() {
   const options = await api.post('/api/auth/webauthn/login/begin');

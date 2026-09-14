@@ -1,21 +1,24 @@
 /**
  * ConfirmDialog — specialized Modal for confirmations.
- *
- * Props:
- *   title        {string}    Heading
- *   message      {string}    Body text; markup only when it is html`` output
- *                            and allowHtml is set (see afterRender)
- *   confirmText  {string}    Label for primary button
- *   onConfirm    {Function}  Called when confirmed
- *   onCancel     {Function}  Called when cancelled
- *   variant      {string}    'danger' | 'primary'
- *   allowHtml    {boolean}   Render `message` as markup rather than as text
  */
 
 import { Component } from '../Component.js';
 import { Modal } from './Modal.js';
 import { html, setHTML } from '../../utils/helpers.js';
 
+/**
+ * @typedef {object} ConfirmDialogProps
+ * @property {import('../../utils/helpers.js').Slot} [title]
+ * @property {string|import('../../utils/helpers.js').RawHtml} [message]  Body
+ *   text; markup only when it is html`` output and allowHtml is set.
+ * @property {string} [confirmText]  Primary button label.
+ * @property {() => void} [onConfirm]
+ * @property {() => void} [onCancel]
+ * @property {'primary'|'danger'} [variant]
+ * @property {boolean} [allowHtml]  Render `message` as markup rather than text.
+ */
+
+/** @extends {Component<ConfirmDialogProps>} */
 export class ConfirmDialog extends Component {
   render() {
     return html`<div id="modal-wrapper"></div>`;
@@ -41,7 +44,7 @@ export class ConfirmDialog extends Component {
         setHTML(body, html`${message}`);
       } else {
         const p = document.createElement('p');
-        p.textContent = message;
+        p.textContent = String(message);
         body.appendChild(p);
       }
     }

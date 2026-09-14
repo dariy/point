@@ -1,21 +1,24 @@
 /**
  * Pagination component.
- *
- * Props:
- *   page     {number}   Current page
- *   pages    {number}   Last page
- *   minPage  {number}   First page — 1 normally. The home feed lowers it to 0
- *                       or below for the owner, where the non-positive pages
- *                       hold the scheduled queue (see pages/public/HomePage.js).
- *   total    {number}   Total items
- *   compact  {boolean}  Show the item count as a tooltip instead of a label
- *                       (for tight housings like the footer's centre slot)
- *   onPage   {Function} Called with new page number when user navigates
  */
 
 import { Component } from '../Component.js';
 import { html } from '../../utils/helpers.js';
 
+/**
+ * @typedef {object} PaginationProps
+ * @property {number} [page]  Current page.
+ * @property {number} [pages]  Last page.
+ * @property {number} [minPage]  First page — 1 normally. The home feed lowers
+ *   it to 0 or below for the owner, where the non-positive pages hold the
+ *   scheduled queue (see pages/public/HomePage.js).
+ * @property {number} [total]  Total items.
+ * @property {boolean} [compact]  Show the item count as a tooltip instead of a
+ *   label (for tight housings like the footer's centre slot).
+ * @property {(page: number) => void} [onPage]  Called with the page navigated to.
+ */
+
+/** @extends {Component<PaginationProps>} */
 export class Pagination extends Component {
   render() {
     const { page, pages, total, compact } = this.props;

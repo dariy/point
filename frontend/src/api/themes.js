@@ -7,8 +7,24 @@
 import { api } from './client.js';
 
 /**
+ * A theme — services.Theme. The preview_* colours are read from the theme's
+ * :root block for the admin swatch, and are omitted when the theme does not
+ * declare them as plain colour literals.
+ *
+ * @typedef {object} Theme
+ * @property {string} name
+ * @property {string} description
+ * @property {string} preview_color  The declared accent.
+ * @property {string} [preview_bg]
+ * @property {string} [preview_surface]
+ * @property {string} [preview_text]
+ * @property {string} [preview_border]
+ * @property {boolean} has_dark_mode
+ */
+
+/**
  * Get all available themes.
- * @returns {Promise<object[]>} A bare array — the handler serializes the slice
+ * @returns {Promise<Theme[]>} A bare array — the handler serializes the slice
  *   directly, with no envelope object around it.
  */
 export function getThemes() {
@@ -17,7 +33,7 @@ export function getThemes() {
 
 /**
  * Get the currently active theme.
- * @returns {Promise<object>}
+ * @returns {Promise<Theme>}
  */
 export function getActiveTheme() {
   return api.get('/api/themes/active');
@@ -26,7 +42,7 @@ export function getActiveTheme() {
 /**
  * Set the active theme.
  * @param {string} name Theme name to set as active
- * @returns {Promise<object>}
+ * @returns {Promise<Theme>}
  */
 export function setActiveTheme(name) {
   return api.put('/api/themes/active', { name });
@@ -34,7 +50,7 @@ export function setActiveTheme(name) {
 
 /**
  * Get the system-wide custom CSS.
- * @returns {Promise<object>} { css: string }
+ * @returns {Promise<{ css: string }>}
  */
 export function getCustomCSS() {
   return api.get('/api/themes/custom-css');

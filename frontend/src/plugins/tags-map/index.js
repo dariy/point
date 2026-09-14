@@ -26,6 +26,8 @@ import {
   loadLeaflet,
 } from "../../utils/leaflet.js";
 
+/** @typedef {import('../../router.js').PageProps} PageProps */
+
 /** Marker radius in px, scaled by post count. */
 function markerRadius(postCount) {
   return Math.min(30, Math.max(12, 10 + Math.sqrt(postCount || 1) * 2));
@@ -41,8 +43,13 @@ function getCountryColor(name) {
   return `hsl(${h}, 65%, 45%)`;
 }
 
+/** @extends {Component<PageProps>} */
 export default class MapPage extends Component {
-  constructor(container, props = {}) {
+  /**
+   * @param {HTMLElement} container
+   * @param {PageProps} [props]
+   */
+  constructor(container, props) {
     super(container, props);
     this.state = { loading: true, tags: [], error: null };
     this._map = null;

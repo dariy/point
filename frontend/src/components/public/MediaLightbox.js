@@ -60,6 +60,7 @@ export class MediaLightbox {
     this._el.classList.add('active');
     document.body.classList.add('ui-hidden'); // hide main site header/footer
     
+    /** @type {import('../../utils/postMedia.js').MediaItem[]} */
     const items = this._images.map(img => ({ type: 'image', url: img.src, alt: img.alt }));
     
     if (this._viewer) this._viewer.unmount();

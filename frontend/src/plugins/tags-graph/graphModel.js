@@ -12,6 +12,54 @@
 
 import { tagKind } from '../../utils/tagLinks.js';
 
+/**
+ * The payload the graph is built from — GET /api/pages/graph, or the Atlas's
+ * per-place subset of it. Every list is optional: the Atlas asks for no posts,
+ * and so gets no membership edges either.
+ *
+ * @typedef {object} GraphData
+ * @property {Array<{id:number, name:string, slug:string, kind?:string,
+ *   latitude?:number, longitude?:number, post_count?:number}>} [tags]
+ * @property {Array<{id:number, slug:string, title?:string, media_url?:string}>} [posts]
+ * @property {Array<{parent:number, child:number}>} [hierarchyEdges]
+ * @property {Array<{post:number, tag:number}>} [membershipEdges]
+ */
+
+/**
+ * One node on the canvas. x/y/vx/vy are the force layout's working state,
+ * rewritten in place every tick; `r` is fixed once the degree is known.
+ *
+ * @typedef {object} GraphNode
+ * @property {string} id  't<tag id>' or 'p<post id>' — one shared namespace.
+ * @property {string} type  'post', or the tag's kind: 'tag' | 'year' | 'geo'.
+ * @property {number} [tagId]  Tag nodes only.
+ * @property {number} [postId]  Post nodes only.
+ * @property {string} name
+ * @property {string} slug
+ * @property {number} [postCount]  Tag nodes only.
+ * @property {number} x
+ * @property {number} y
+ * @property {number} vx
+ * @property {number} vy
+ * @property {number} degree
+ * @property {number} r  Radius, from the degree — see nodeRadius().
+ */
+
+/**
+ * @typedef {object} GraphLink
+ * @property {GraphNode} source
+ * @property {GraphNode} target
+ * @property {'hierarchy'|'membership'} kind
+ */
+
+/**
+ * @typedef {object} Graph
+ * @property {GraphNode[]} nodes
+ * @property {GraphLink[]} links
+ * @property {Map<string, GraphNode>} nodeById
+ * @property {Map<string, Set<string>>} neighbors  node id -> adjacent node ids
+ */
+
 // Deterministic PRNG so the initial layout is stable across reloads.
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -43,15 +91,19 @@ export function nodeRadius(type, degree) {
  * ('t1', 'p1') — without that a tag and a post with the same database id would
  * collide in nodeById and one would silently vanish.
  *
- * @param {object} data       { tags, posts, hierarchyEdges, membershipEdges }
+ * @param {GraphData} data
  * @param {{width:number,height:number}} size  viewport, for the initial scatter
- * @returns {{nodes:object[], links:object[], nodeById:Map, neighbors:Map}}
+ * @returns {Graph}
  */
 export function buildGraph(data, { width, height }) {
+  /** @type {GraphNode[]} */
   const nodes = [];
+  /** @type {GraphLink[]} */
   const links = [];
+  /** @type {Map<string, GraphNode>} */
   const nodeById = new Map();
-  const neighbors = new Map(); // node.id -> Set(node.id)
+  /** @type {Map<string, Set<string>>} */
+  const neighbors = new Map();
 
   const rng = mulberry32(0x9e3779b9);
   const cx = width / 2;

@@ -9,6 +9,11 @@
   // strict stays off deliberately: turning it on adds null-safety errors to
   // every DOM read at once, which is a separate piece of work.
   //
+  // Since TypeScript 7 a JSDoc `{object}` is the `object` type, not `any`:
+  // reading a property off one is an error. Name the shape — a typedef, the
+  // API module's response type, or `Component<Props>` via `@extends` for a
+  // component's props (see components/Component.js).
+  //
   // frontend/test/** is deliberately NOT in the checked set. Checking it once
   // cost 401 errors across 70 files, and a file-by-file audit of them found
   // exactly one real defect: linkedom's DOM is not the DOM lib's DOM, mocks are
@@ -22,7 +27,6 @@
     "moduleResolution": "bundler",
     "checkJs": true,
     "strict": false,
-    "baseUrl": ".",
     // @types/node pulls in the real punycode.js, which does not typecheck.
     "maxNodeModuleJsDepth": 0,
     "skipLibCheck": true

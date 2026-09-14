@@ -1,10 +1,5 @@
 /**
  * LightSidebar — admin navigation sidebar.
- *
- * Props:
- *   currentPath  {string}   Active route path
- *   user         {object}   Current user (display_name, username)
- *   onLogout     {Function} Called when user clicks logout
  */
 
 import { Component } from '../Component.js';
@@ -34,6 +29,19 @@ const MANAGE_ITEMS = [
   { href: '/light/system',   label: 'System',    icon: SYSTEM_SVG    },
 ];
 
+/**
+ * setupAdminLayout hands the sidebar and the bottom bar the same bag, so this
+ * carries two props the sidebar does not read: it has no user block and no
+ * public-site link.
+ *
+ * @typedef {object} LightSidebarProps
+ * @property {string} [currentPath]  Active route path.
+ * @property {() => void} [onLogout]
+ * @property {object} [user]  Not read.
+ * @property {string} [publicUrl]  Not read.
+ */
+
+/** @extends {Component<LightSidebarProps>} */
 export class LightSidebar extends Component {
   constructor(container, props = {}) {
     super(container, props);

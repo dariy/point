@@ -33,6 +33,16 @@ import { setPageTitle } from "./utils/documentTitle.js";
 import { subclassHooks } from "./components/Component.js";
 
 /**
+ * What the router hands every page it mounts, and again to onRouteUpdate() on
+ * a same-route navigation: the `:name` segments of the matched pattern and the
+ * parsed query string.
+ *
+ * @typedef {object} PageProps
+ * @property {Record<string, string>} params
+ * @property {Record<string, string>} query
+ */
+
+/**
  * One route table entry.
  *
  * @typedef {object} Route

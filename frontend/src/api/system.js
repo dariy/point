@@ -12,13 +12,29 @@ export function getStats() {
 }
 
 /**
+ * One background job's record — GetHealth in api/internal/api/system.go. The
+ * timestamps are omitted, not zeroed, when the event has not happened, so
+ * "never" and "at the epoch" stay distinguishable.
+ *
+ * @typedef {object} TaskHealth
+ * @property {string} name
+ * @property {boolean} healthy  The most recent run succeeded, or none has failed.
+ * @property {number} runs
+ * @property {number} failures
+ * @property {string} [last_run]
+ * @property {string} [last_success]
+ * @property {string} [last_error]
+ * @property {string} [last_error_at]
+ */
+
+/**
  * @param {{ log_type?: string, lines?: number }} [params]
  * @returns {Promise<string[]>}
  */
 /**
  * Background-job health: last run / last success / last error per job.
  * Per process — a restart clears it.
- * @returns {Promise<{tasks: object[], degraded: number, uptime: number}>}
+ * @returns {Promise<{tasks: TaskHealth[], degraded: number, uptime: number}>}
  */
 export function getHealth() {
   return api.get('/api/system/health');
@@ -94,13 +110,21 @@ export function backupDownloadUrl(filename, token) {
 }
 
 /**
+ * @typedef {object} BackupUpload
+ * @property {string} status
+ * @property {string} filename
+ * @property {string} sha256
+ * @property {string} message
+ */
+
+/**
  * Move in — upload a local .tar.gz into the backups folder (staging only; it is
  * NOT applied — the user restores it afterward if they choose). Uses XHR (not the
  * JSON client) so the File streams as the raw body and we get upload progress.
  * @param {File} file
  * @param {(fraction:number)=>void} [onProgress] - 0..1 upload progress
  * @param {string} [expectedChecksum] - optional sha256-hex to verify the upload
- * @returns {Promise<object>}
+ * @returns {Promise<BackupUpload>}
  */
 export function uploadBackupArchive(file, onProgress, expectedChecksum) {
   return new Promise((resolve, reject) => {
@@ -113,9 +137,10 @@ export function uploadBackupArchive(file, onProgress, expectedChecksum) {
       if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
     });
     xhr.addEventListener('load', () => {
+      /** @type {Partial<BackupUpload>} */
       let body = {};
       try { body = JSON.parse(xhr.responseText || '{}'); } catch { /* non-JSON */ }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(/** @type {BackupUpload} */ (body));
       else reject(new Error(body.message || `Upload failed (${xhr.status})`));
     });
     xhr.addEventListener('error', () => reject(new Error('Upload failed')));
@@ -158,7 +183,7 @@ export function getPhotoLibraryContents(path = '') {
 /**
  * Import specific files from the external photo library into site media.
  * @param {string[]} paths - Relative paths within the library
- * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ * @returns {Promise<{imported: number, skipped: number, errors: string[], items: import('./media.js').Media[]}>}
  */
 export function importSelectedPhotos(paths) {
   return api.post('/api/system/photo-library/import', { paths });

@@ -11,6 +11,9 @@
  * Nothing here touches a canvas or the DOM.
  */
 
+/** @typedef {import('./graphModel.js').GraphNode} GraphNode */
+/** @typedef {import('./graphModel.js').GraphLink} GraphLink */
+
 // ── Layout / physics constants ───────────────────────────────────────────────
 export const ALPHA_MIN = 0.001;
 export const ALPHA_DECAY = 0.0228;
@@ -28,18 +31,19 @@ const COLLIDE_ITERS = 2;
 /**
  * Advance the layout by one frame.
  *
- * @param {object[]} nodes  visible nodes, mutated in place
- * @param {object[]} links  visible links (endpoints are node objects)
+ * @param {GraphNode[]} nodes  visible nodes, mutated in place
+ * @param {GraphLink[]} links  visible links (endpoints are node objects)
  * @param {object}   opts
  * @param {number}   opts.alpha   cooling factor; 0 leaves only the collision pass
  * @param {number}   opts.cx      gravity centre, world x
  * @param {number}   opts.cy      gravity centre, world y
- * @param {object}   [opts.pinned] node held by the pointer — follows the finger,
- *                                 not the physics
+ * @param {GraphNode|null} [opts.pinned] node held by the pointer — follows the
+ *                                 finger, not the physics
  */
 export function tick(nodes, links, { alpha, cx, cy, pinned = null }) {
   // Spatial grid for O(n) repulsion + collision.
   const cell = REPULSION_CUTOFF;
+  /** @type {Map<string, GraphNode[]>} */
   const grid = new Map();
   const key = (gx, gy) => gx + ',' + gy;
   for (const n of nodes) {

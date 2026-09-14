@@ -57,6 +57,7 @@ function openDB() {
 
 /**
  * Save a full snapshot to IndexedDB.
+ * @returns {Promise<void>}
  */
 export async function saveSnapshot(data) {
   const db = await openDB();
@@ -143,6 +144,7 @@ export async function getMeta(key) {
 
 /**
  * Save metadata.
+ * @returns {Promise<void>}
  */
 export async function saveMeta(key, value) {
   const db = await openDB();

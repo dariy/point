@@ -1,9 +1,6 @@
 /**
  * ExploreBlock — homepage widget showing top tags as plain pills.
  * Replaces the weighted TagCloud.
- *
- * Props:
- *   tags  {Array<{ id, name, slug, count }>}
  */
 
 import { Component } from "../../components/Component.js";
@@ -13,6 +10,12 @@ import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
 import { setupTagFlyout } from "../../utils/tagFlyout.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
+/**
+ * @typedef {object} ExploreBlockProps
+ * @property {import('../../api/pages.js').TagCloudItem[]} [tags]
+ */
+
+/** @extends {Component<ExploreBlockProps>} */
 export class ExploreBlock extends Component {
   render() {
     const { tags = [] } = this.props;

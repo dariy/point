@@ -1,9 +1,5 @@
 /**
  * TagsInput — inline tag-badge input with autocomplete.
- *
- * Props:
- *   tags     {string[]}   Initial tag names
- *   onChange {Function}   Called with updated string[] whenever tags change
  */
 
 import { Component } from '../Component.js';
@@ -11,6 +7,16 @@ import { listTags, createTag } from '../../api/tags.js';
 import { html, setHTML, debounce } from '../../utils/helpers.js';
 import { openTagFamilyPopover } from './TagFamilyPopover.js';
 let _tagInputCounter = 0;
+/**
+ * @typedef {object} TagsInputProps
+ * @property {string[]} [tags]  Initial tag names.
+ * @property {(tags: string[]) => void} [onChange]  Called with the updated
+ *   names whenever they change.
+ * @property {string} [placeholder]  Passed by the posts list's tag filter but
+ *   not read — the input's placeholder is fixed.
+ */
+
+/** @extends {Component<TagsInputProps>} */
 export class TagsInput extends Component {
   constructor(container, props = {}) {
     super(container, props);
