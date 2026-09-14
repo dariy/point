@@ -62,8 +62,8 @@ const ASPECT_OPTIONS = [
  *  is the `logo_url` setting. */
 const LAYER_KINDS = [
   ["text", "Text"],
-  ["image", "Logo"],
-  ["rect", "Rectangle"],
+  ["image", "Image"],
+  ["rect", "Shape"],
   ["counter", "Counter"],
   ["arrow", "Arrow"],
 ];
