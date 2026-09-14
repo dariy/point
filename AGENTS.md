@@ -19,8 +19,10 @@ is meant to be true and runnable; if a command here does not work, that is a bug
 `esbuild` is missing), compiles the Go binary, creates `data/`, initializes the SQLite schema, and
 serves. First run opens a setup wizard at the root URL.
 
-`check.sh` is the same set of checks CI runs. Run it before you open a PR — it keeps going after a
-failure and prints a PASS/FAIL summary, so one red step still tells you about the rest.
+`check.sh` is the same set of checks CI runs — every CI step is a `check.sh --only <step>` call. Run
+it before you open a PR. It runs its Go, JS and E2E lanes in parallel and keeps going after a
+failure: one `PASS`/`FAIL` line per step, and for a failed step the tail of its log
+(`tmp/check/<step>.log` holds the whole of it), so one red step still tells you about the rest.
 
 ## Reading the codebase: ask the index, don't grep the tree
 
@@ -59,9 +61,10 @@ The rules that keep this honest:
   empty `callers` list carries a `*_basis` saying how much of the call graph resolved; a zero with a
   weak basis is "unknown", not "nothing calls this". The generated section at the end of this file
   spells the fields out.
-- **Send noisy commands through `repowise distill`.** Tests, builds, `git log`/`git diff`, long
-  listings: `repowise distill ./scripts/check.sh` runs the same command, preserves its exit code,
-  and prints errors first. A `[repowise#<ref>: N lines omitted]` marker expands with
+- **Send noisy commands through `repowise distill`.** Builds, a bare `go test`, `git log`/`git
+  diff`, long listings: `repowise distill ./scripts/run-tests.sh` runs the same command, preserves
+  its exit code, and prints errors first. `check.sh` does not need it — its output is already one
+  line per step plus the failures. A `[repowise#<ref>: N lines omitted]` marker expands with
   `repowise expand <ref>` (`-q <regex>` to filter) — never re-run the command to see what was cut.
 - **Record a decision you had to reason out**: `repowise decision add --title T --decision D`. It
   lands as `proposed`, for a person to confirm. Anything a future reader would otherwise have to
@@ -77,7 +80,7 @@ The rules that keep this honest:
 | Environment check | `./scripts/doctor.sh` — PASS/WARN/FAIL per tool, `--json` for machine use; exits non-zero only when a build is impossible |
 | Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
 | Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 <!-- verify:skip needs Docker; the image is built by the docker-smoke job --> |
-| Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
+| Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
 | Frontend typecheck | `npm run typecheck` — `tsc --noEmit` over the JSDoc types; no `.ts` files, no emit |
@@ -89,7 +92,7 @@ The rules that keep this honest:
 | Release tarball | `./scripts/build-tarball.sh` — `dist/point-linux-{amd64,arm64}.tar.gz`, what `install.sh --method=native` downloads <!-- verify:skip cross-compiles both arches; the release workflow builds and boots it on every tag --> |
 
 Any of these that prints more than a screenful is worth wrapping in `repowise distill` — the failure
-still surfaces, the 400 passing test lines do not.
+still surfaces, the 400 passing test lines do not. `check.sh` is the exception: it is quiet already.
 
 `check.sh` also needs `golangci-lint` and `govulncheck` on your `PATH`; everything else in this
 table runs with just Go and Node. `doctor.sh` is where that becomes visible before a failing run

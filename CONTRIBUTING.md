@@ -32,9 +32,12 @@ extras (AI analysis, comments, SMTP, photo-library import) if you want them.
 ```
 
 `scripts/check.sh` runs exactly what CI runs: Go lint, JS lint, `go vet`, Go tests with a coverage
-floor, frontend tests with a coverage floor, and a vulnerability scan. It keeps going after a
-failure and prints a PASS/FAIL summary at the end. `--short` skips the slow tests while you iterate,
-and `--fix` applies the lint autofixes; run it once without either before opening a PR.
+floor, frontend tests with a coverage floor, and a vulnerability scan — each CI step is a
+`check.sh --only <step>` call. The Go, JS and E2E lanes run in parallel; it keeps going after a
+failure, prints one PASS/FAIL line per step and the tail of each failed step's log
+(`tmp/check/<step>.log`). `--short` skips the slow tests while you iterate, `--changed` runs only the
+lanes your branch touches, `--only <step>` runs one step (`--list` names them), and `--fix` applies
+the lint autofixes; run it once with none of them before opening a PR.
 
 It is the one command that needs more than Go and Node: `golangci-lint` (the v2 module path) and
 `govulncheck` have to be on your `PATH` — `.github/workflows/test.yml` pins the versions CI uses.
