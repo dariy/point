@@ -477,6 +477,57 @@ describe('carousel studio panels', () => {
     });
   });
 
+  describe('layerPanel — the visibility switch', () => {
+    const deck = toDeckDocument(doc3, 3000, 1000);
+    const rect = normalizeLayer({ type: 'rect', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 } });
+    const withLayers = (...layers) => ({
+      ...deck,
+      slides: deck.slides.map((s, i) => (i === 0 ? { ...s, layers } : s)),
+    });
+    const panel = (doc, o = {}) =>
+      str(layerPanel({ doc, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '', ...o }));
+
+    test('every row opens with an eye, ahead of the layer name', () => {
+      const out = panel(withLayers(rect));
+      assert.match(out, /data-action="layer-visibility"\s+data-scope="slide"\s+data-index="0"/);
+      const eye = out.indexOf('carousel-studio__layer-eye');
+      const name = out.indexOf('carousel-studio__layer-name');
+      assert.ok(eye >= 0 && eye < name, 'the switch comes before the name it belongs to');
+    });
+
+    test('a visible row offers to hide it; a hidden row offers to show it', () => {
+      assert.match(panel(withLayers(rect)), /data-action="layer-visibility"[\s\S]*?aria-label="Hide layer"/);
+      assert.match(
+        panel(withLayers({ ...rect, hidden: true })),
+        /data-action="layer-visibility"[\s\S]*?aria-label="Show layer"/,
+      );
+    });
+
+    test('the icon and the row dim together, and only for the hidden row', () => {
+      const out = panel(withLayers({ ...rect, hidden: true }, rect));
+      // Rows render top of stack first, so the visible layer 1 is the first row.
+      const rows = out.split('carousel-studio__layer-row').slice(1);
+      assert.strictEqual(rows.length, 2);
+      assert.ok(!rows[0].includes('is-hidden'), 'the visible row is undimmed');
+      assert.ok(rows[1].includes('is-hidden'), 'the hidden one is dimmed');
+      // The eye-off glyph — the crossing line the plain eye does not have.
+      assert.ok(!/<line/.test(rows[0].split('carousel-studio__layer-name')[0]));
+      assert.ok(/<line/.test(rows[1].split('carousel-studio__layer-name')[0]));
+    });
+
+    test('a hidden layer keeps every other control on its row', () => {
+      const out = panel(withLayers({ ...rect, hidden: true }));
+      for (const action of ['select-layer', 'layer-raise', 'layer-lower', 'delete-layer']) {
+        assert.match(out, new RegExp(`data-action="${action}"`), action);
+      }
+    });
+
+    test('a span row carries the switch, scoped to the deck', () => {
+      const out = panel({ ...deck, spanLayers: [rect] });
+      assert.match(out, /data-action="layer-visibility"\s+data-scope="span"\s+data-index="0"/);
+    });
+  });
+
   // ── Templates ─────────────────────────────────────────────────────────────
 
   describe('templateGallery', () => {

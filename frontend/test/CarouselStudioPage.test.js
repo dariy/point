@@ -1956,6 +1956,42 @@ describe('CarouselStudioPage', () => {
         assert.equal(page.state.doc.slides[0].layers.length, 1, 'the layer is back');
       });
 
+      test('the eye switches a layer off and back on, without losing its place', async () => {
+        const el = await toDeck();
+        click(addLayerBtn(el, 'rect'));
+        await settle();
+        assert.equal(page.state.selectedLayer, 0);
+
+        const eye = () => el.querySelector('[data-action="layer-visibility"][data-index="0"]');
+        click(eye());
+        await settle();
+
+        assert.equal(page.state.doc.slides[0].layers[0].hidden, true);
+        assert.equal(page.state.doc.slides[0].layers.length, 1, 'switched off, not deleted');
+        assert.equal(page.state.selectedLayer, 0, 'still the layer being edited');
+        assert.ok(el.querySelector('.carousel-studio__layer-form'), 'and its form is still open');
+        assert.equal(stageLayer(el, 0, 0).style.display, 'none', 'gone from the stage');
+
+        click(eye());
+        await settle();
+        assert.ok(!('hidden' in page.state.doc.slides[0].layers[0]), 'back to a plain visible layer');
+        assert.equal(stageLayer(el, 0, 0).style.display, '');
+      });
+
+      test('hiding a layer is a document edit: one undo step, and a dirty deck', async () => {
+        const el = await renderedDeck();
+        click(addLayerBtn(el, 'rect'));
+        await settle();
+        click(el.querySelector('[data-action="layer-visibility"][data-index="0"]'));
+        await settle();
+        assert.equal(page.state.doc.slides[0].layers[0].hidden, true);
+        assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'the JPEG no longer matches');
+
+        click(el.querySelector('[data-action="undo"]'));
+        await settle();
+        assert.ok(!page.state.doc.slides[0].layers[0].hidden, 'one step back is visible again');
+      });
+
       test('picking a slide clears the layer selection', async () => {
         const el = await toDeck();
         click(addLayerBtn(el, 'text'));
@@ -2159,6 +2195,21 @@ describe('CarouselStudioPage', () => {
               !stageCol(el, 0).querySelector('.carousel-studio__chrome'),
               'and not on slide 0 any more',
             );
+          });
+
+          test('a hidden layer is not in the hit list — it paints nothing to click', async () => {
+            const el = await withLayer({ x: 0.4, y: 0.4, w: 0.2, h: 0.2 });
+            click(el.querySelector('[data-action="layer-visibility"][data-index="0"]'));
+            await settle();
+            page.setState({ selectedLayer: null });
+            await settle();
+
+            const frame = withFrameBox(stageCol(el, 0));
+            // Dead centre of the box the hidden layer still occupies.
+            press(frame, 100, 125, []);
+            await settle();
+
+            assert.equal(page.state.selectedLayer, null, 'the press found nothing to select');
           });
         });
 

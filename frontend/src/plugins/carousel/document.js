@@ -99,12 +99,20 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  * in `doc.spanLayers`, in the deck's. A tagged union over five `type`s sharing
  * one `box`; {@link normalizeLayer} is the only thing that produces one.
  *
+ * `hidden` switches a layer off without deleting it: it keeps its place in the
+ * list (and so its index, its selection and its property form) but paints in
+ * neither the preview nor the JPEG. It is stored **only when `true`** — absent
+ * means visible — so the flag cannot move an existing slide's `specHash` until
+ * something is actually hidden, and a document written before it existed reads
+ * back byte-identical.
+ *
  * @typedef {{type:'text', box:CarouselBox, text:string, lineHeight:number} & CarouselTextStyle} CarouselTextLayer
  * @typedef {{type:'image', box:CarouselBox, source:string, fit:'cover'|'contain', opacity:number}} CarouselImageLayer
  * @typedef {{type:'rect', box:CarouselBox, fill:string, opacity:number, radius:number}} CarouselRectLayer
  * @typedef {{type:'counter', box:CarouselBox, format:string} & CarouselTextStyle} CarouselCounterLayer
  * @typedef {{type:'arrow', box:CarouselBox, direction:'left'|'right', color:string, opacity:number}} CarouselArrowLayer
- * @typedef {CarouselTextLayer|CarouselImageLayer|CarouselRectLayer|CarouselCounterLayer|CarouselArrowLayer} CarouselLayer
+ * @typedef {(CarouselTextLayer|CarouselImageLayer|CarouselRectLayer|CarouselCounterLayer
+ *   |CarouselArrowLayer) & {hidden?: boolean}} CarouselLayer
  */
 
 /**
@@ -428,6 +436,11 @@ export const LAYER_TYPES = Object.keys(LAYER_BUILDERS);
  * other field degrades instead — out of range is clamped, unrecognized is
  * defaulted, unknown is dropped, exactly as everywhere else in this module.
  *
+ * `hidden` is the one field outside the per-type builders: it means the same
+ * thing whatever the layer draws, and it is written only when `true` so a
+ * visible layer normalizes to exactly the object it did before the flag
+ * existed — see the {@link CarouselLayer} typedef.
+ *
  * @param {*} layer
  * @param {*} [base] an already-normal layer of the same `type` whose fields
  *   stand in for the schema defaults. This is how {@link updateLayer} keeps
@@ -441,7 +454,9 @@ export function normalizeLayer(layer, base = undefined) {
   const b = isObj(base) && /** @type {*} */ (base).type === l.type ? /** @type {*} */ (base) : {};
   /** The base layer's field when it has one, else the schema default. */
   const fb = (key, dflt) => (b[key] === undefined ? dflt : b[key]);
-  return LAYER_BUILDERS[l.type](l, fb, normalizeBox(l.box, b.box));
+  const next = LAYER_BUILDERS[l.type](l, fb, normalizeBox(l.box, b.box));
+  const hidden = l.hidden === undefined ? fb('hidden', false) : l.hidden;
+  return hidden ? { ...next, hidden: true } : next;
 }
 
 /**

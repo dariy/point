@@ -473,9 +473,14 @@ const LAYER_PAINTERS = {
  * `rotate === 0` (the common case) skips `ctx.save`/`restore` entirely rather
  * than issuing a rotate by zero radians, so an unrotated layer's draw calls —
  * and the byte-identical JPEG they encode to — are untouched.
+ *
+ * A `hidden` layer returns here without issuing a single call, which is what
+ * makes the switch mean the same thing in the JPEG as in the studio: this is
+ * the one point both lists route through, so neither a slide's own layers nor
+ * the deck's spanning ones can paint one the other would have skipped.
  */
 function paintDispatch(ctx, layer, box, env) {
-  const paint = layer && LAYER_PAINTERS[layer.type];
+  const paint = layer && !layer.hidden && LAYER_PAINTERS[layer.type];
   if (!paint || !box) return;
   const rotate = num(layer.box?.rotate, 0);
   if (!rotate) {
@@ -688,7 +693,9 @@ async function loadLayerImages(layers, aspect, load, deps, spanEntries) {
   if (!load) return images;
 
   const place = async (layer, box) => {
-    if (!layer || layer.type !== 'image' || !layer.source || images.has(layer)) return;
+    if (!layer || layer.hidden || layer.type !== 'image' || !layer.source || images.has(layer)) {
+      return;
+    }
     try {
       const { blob, w, h } = await load(layer.source);
       const fit = fitRect(w, h, box.w, box.h, layer.fit === 'cover' ? 'cover' : 'contain');
@@ -811,14 +818,17 @@ const TYPESET_LAYERS = ['text', 'counter'];
  * one that returns nothing usable, and one that throws all land on
  * {@link DEFAULT_FONT_STACK} — type in the wrong face beats a failed encode.
  *
+ * A hidden `text` or `counter` layer does not count: nothing is typeset for it,
+ * so waiting on a face for its sake would be a wait for no glyphs.
+ *
  * @param {RenderDeps} deps
- * @returns {(layers: Array<{type?: string}|null|undefined>) => Promise<string>}
+ * @returns {(layers: Array<{type?: string, hidden?: boolean}|null|undefined>) => Promise<string>}
  */
 function fontResolver(deps) {
   /** @type {Promise<string>|null} */
   let pending = null;
   return async (layers) => {
-    if (!layers.some((l) => l && TYPESET_LAYERS.includes(l.type))) return '';
+    if (!layers.some((l) => l && !l.hidden && TYPESET_LAYERS.includes(l.type))) return '';
     if (!pending) {
       pending = (async () => {
         try {

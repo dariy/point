@@ -577,6 +577,9 @@ export default class CarouselStudioPage extends Component {
       const j = Number(el.dataset.index);
       this._reorderLayer(j, j - 1, el.dataset.scope);
     },
+    "layer-visibility"(_e, el) {
+      this._toggleLayerVisibility(Number(el.dataset.index), el.dataset.scope);
+    },
     "delete-layer"(_e, el) {
       this._removeLayer(Number(el.dataset.index), el.dataset.scope);
     },
@@ -1328,7 +1331,10 @@ export default class CarouselStudioPage extends Component {
    * paints before the slide's own layers there, so it sits underneath.
    *
    * Read by `studio/gestures.js`'s click-to-select, for a press that misses
-   * the active layer (or there is none) to hit-test against.
+   * the active layer (or there is none) to hit-test against. A `hidden` layer
+   * is left out: it paints nothing on the column, so a press that lands on
+   * where it used to be belongs to whatever is actually visible under it. It
+   * stays selectable — and draggable, once selected — from the layer list.
    *
    * @param {number} i
    * @returns {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>}
@@ -1341,9 +1347,11 @@ export default class CarouselStudioPage extends Component {
     /** @type {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>} */
     const out = [];
     for (let j = slideLayers.length - 1; j >= 0; j--) {
+      if (slideLayers[j].hidden) continue;
       out.push({ scope: "slide", j, box: slideLayers[j].box });
     }
     for (let j = spanLayers.length - 1; j >= 0; j--) {
+      if (spanLayers[j].hidden) continue;
       if (spanLayerCoverage(spanLayers[j], n, doc.aspect).includes(i)) {
         out.push({ scope: "span", j, box: spanLayers[j].box });
       }
@@ -1528,6 +1536,24 @@ export default class CarouselStudioPage extends Component {
       patch.selectedLayer = sel;
     }
     this._setDoc(doc, patch);
+  }
+
+  /**
+   * Switch a layer off, or back on — the row's eye. A document write like any
+   * other edit, so it is one Ctrl+Z away and it moves the slide's `specHash`,
+   * which is what makes the next render drop the layer from the JPEG rather
+   * than reuse a render that still has it.
+   *
+   * The selection is left exactly where it was: hiding the layer you are
+   * editing must not close its property form, because switching a headline off
+   * to see what is under it and then rewording it is one task, not two.
+   */
+  _toggleLayerVisibility(j, scope) {
+    const s = scope === "span" ? "span" : "slide";
+    const { slideIndex, list } = this._layerTarget(s);
+    const layer = list[j];
+    if (!layer) return;
+    this._setDoc(updateLayer(this.state.doc, slideIndex, j, { hidden: !layer.hidden }));
   }
 
   /** Drop a layer. No confirm — the removal is a document write, so it is one
