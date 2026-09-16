@@ -49,6 +49,7 @@ export class MediaBrowser extends Component {
       /** @type {{ page?: number, pages?: number, total?: number }} */
       pagination: {},
       typeFilter: "",
+      filenameFilter: "",
       selectedFolder: null,
       folders: [],
       error: null,
@@ -103,7 +104,7 @@ export class MediaBrowser extends Component {
     const {
       page
     } = this.state.pagination;
-    return [page, this.state.typeFilter, this.state.selectedFolder, this._lastPerPage].join("|");
+    return [page, this.state.typeFilter, this.state.filenameFilter, this.state.selectedFolder, this._lastPerPage].join("|");
   }
 
   /**
@@ -118,6 +119,7 @@ export class MediaBrowser extends Component {
       per_page: this._lastPerPage || 24
     };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+    if (this.state.filenameFilter) params.filename = this.state.filenameFilter;
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
     const data = await listMedia(params);
     const items = data.media || [];
@@ -151,13 +153,18 @@ export class MediaBrowser extends Component {
       selectedIds
     } = this.state;
     const pickerMode = this.props.pickerMode;
-    const grid = loading ? html`<div class="loading-spinner" aria-label="Loading media…"></div>` : error ? html`<p class="error-state" role="alert">${error}</p>` : !media.length ? html`<p class="empty-state">No media files. Drag &amp; drop to upload.</p>` : html`<div class="media-grid">${media.map(m => this._renderItem(m, selectedIds))}</div>`;
-    const dropOverlay = pickerMode ? html`<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
+      const grid = loading
+          ? html`<div class="loading-spinner" aria-label="Loading media…"></div>`: error
+              ? html`<p class="error-state" role="alert">${error}</p>`: !media.length
+                  ? html`<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`: html`<div class="media-grid">${media.map(m => this._renderItem(m, selectedIds))}</div>`;
+      const dropOverlay = pickerMode
+          ? html`<div class="media-browser-drop-overlay${draggingOver? " visible": ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
-         </div>` : html`<div class="drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
+         </div>` : html`<div class="drop-overlay${draggingOver
+              ? " visible": ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
@@ -220,7 +227,8 @@ export class MediaBrowser extends Component {
       <div class="mb-mobile-bar">
         ${this.props.pickerMode ? this._renderBreadcrumbs() : ""}
         ${controls ? html`<div class="mb-mobile-controls">${raw(controls)}</div>` : ""}
-        <div class="mb-folder-row">
+        <div class="filters mb-folder-row" style="margin-bottom: 0;">
+          <input type="search" class="form-input filter-search mb-search-input" placeholder="Search media…" value="${this.state.filenameFilter || ''}" aria-label="Search media">
           ${this._renderTypeFilter(typeFilter)}
           <div class="mb-folder-chips" role="group" aria-label="Media folders">${chips}</div>
         </div>
@@ -780,6 +788,19 @@ export class MediaBrowser extends Component {
         });
       });
     });
+
+    // Search input
+    this.$$(".mb-search-input").forEach(input => {
+      input.addEventListener("input", (e) => {
+        const val = /** @type {HTMLInputElement} */ (e.target).value;
+        this.state.filenameFilter = val; // save without re-rendering
+        if (this._searchTimeout) clearTimeout(this._searchTimeout);
+        this._searchTimeout = setTimeout(() => {
+          this.setFilenameFilter(val);
+        }, 300);
+      });
+    });
+
     this._centerActiveChip();
     if (pickerMode || this.state.selectMode) {
       // Picker/Select: toggle selection via checkbox or clicking the item
@@ -1206,6 +1227,11 @@ export class MediaBrowser extends Component {
     const rows = Math.max(1, Math.floor((area.clientHeight + gap) / (item.offsetHeight + gap)));
     return Math.min(MAX, Math.max(BASE, cols * rows));
   }
+  setFilenameFilter(query) {
+    this.setState({ filenameFilter: query });
+    this._load({ page: 1 });
+  }
+
   async _load(overrides = {}) {
     this.setState({
       loading: true,
@@ -1218,6 +1244,7 @@ export class MediaBrowser extends Component {
       per_page: perPage
     };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+    if (this.state.filenameFilter) params.filename = this.state.filenameFilter;
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
     try {
       const data = await listMedia(params);

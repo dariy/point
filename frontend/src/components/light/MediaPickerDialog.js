@@ -47,6 +47,7 @@ export class MediaPickerDialog extends Component {
       <div class="modal media-picker-modal">
         <header class="modal-header media-picker-header">
           <h3>Insert Media</h3>
+          <div style="margin-left: auto;"></div>
           <button class="btn btn-sm btn-secondary" id="mpd-upload-btn" title="Upload files">${raw(UPLOAD_SVG)}<span class="btn-label">Upload</span></button>
           <button class="modal-close" id="mpd-close-btn" aria-label="Close">\xd7</button>
         </header>
