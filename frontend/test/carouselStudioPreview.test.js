@@ -19,6 +19,7 @@ import {
   paintDeckLayers,
   paintDeckSlide,
   paintSpanChrome,
+  paintSpanLayers,
   paintSplit,
   textPlan,
 } from '../src/plugins/carousel/studio/preview.js';
@@ -758,6 +759,46 @@ describe('carousel studio preview', () => {
       );
       assert.strictEqual(els[0].style.display, '');
       assert.strictEqual(els[1].style.display, 'none');
+    });
+
+    test('a layer switched off hides its element, and paints no content into it', () => {
+      const { els, host: h } = host(2);
+      const rect = { type: 'rect', box: { x: 0, y: 0, w: 1, h: 1 } };
+      paintDeckLayers(
+        { hosts: [h] },
+        {
+          layers: [normalizeLayer(rect), normalizeLayer({ ...rect, hidden: true })],
+          aspect: ASPECT,
+          index: 0,
+          count: 1,
+        },
+      );
+      assert.strictEqual(els[0].style.display, '');
+      assert.strictEqual(els[1].style.display, 'none');
+      assert.deepStrictEqual(els[1].children, [], 'nothing drawn into a hidden layer');
+    });
+
+    test('a hidden span layer is not painted on the slide it crosses', () => {
+      const nodes = [0, 1].map((j) => {
+        const el = node('div', null);
+        el.dataset = { spanLayer: String(j) };
+        el.ownerDocument = stubDoc;
+        el.classList = { toggle() {} };
+        return el;
+      });
+      const span = { type: 'rect', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 } };
+      paintSpanLayers(
+        { hosts: [{ querySelectorAll: () => nodes }] },
+        {
+          spanLayers: [normalizeLayer(span), normalizeLayer({ ...span, hidden: true })],
+          aspect: ASPECT,
+          index: 0,
+          count: 1,
+          selected: null,
+        },
+      );
+      assert.strictEqual(nodes[0].style.display, '');
+      assert.strictEqual(nodes[1].style.display, 'none');
     });
   });
 });

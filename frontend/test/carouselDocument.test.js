@@ -1055,6 +1055,80 @@ describe('layer mutators', () => {
   });
 });
 
+describe('layer visibility', () => {
+  const docOf = (...layers) =>
+    normalizeDocument({
+      mode: 'deck',
+      slides: [{ source: '/a.jpg', layers }, { source: '/b.jpg' }],
+    });
+  const text = { type: 'text', text: 'one', box: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } };
+
+  test('a visible layer carries no `hidden` key at all', () => {
+    // Absent means visible: the flag must not appear on a document nobody has
+    // hidden anything in, or every slide written before it existed re-renders.
+    const layer = docOf(text).slides[0].layers[0];
+    assert.ok(!('hidden' in layer));
+    assert.strictEqual(normalizeLayer({ type: 'rect', hidden: false }).hidden, undefined);
+  });
+
+  test('hidden normalizes to the literal `true`, whatever was stored', () => {
+    for (const raw of [true, 1, 'yes']) {
+      assert.strictEqual(normalizeLayer({ type: 'rect', hidden: raw }).hidden, true, String(raw));
+    }
+  });
+
+  test('updateLayer toggles it both ways, and the flag survives a round-trip', () => {
+    const off = updateLayer(docOf(text), 0, 0, { hidden: true });
+    assert.strictEqual(off.slides[0].layers[0].hidden, true);
+    assert.deepStrictEqual(parseDocument(serializeDocument(off)), off);
+
+    const on = updateLayer(off, 0, 0, { hidden: false });
+    assert.ok(!('hidden' in on.slides[0].layers[0]));
+    assert.strictEqual(serializeDocument(on), serializeDocument(docOf(text)));
+  });
+
+  test('hiding a layer leaves every other field of it alone', () => {
+    const doc = docOf({ ...text, align: 'center', weight: 700 });
+    const before = doc.slides[0].layers[0];
+    const after = updateLayer(doc, 0, 0, { hidden: true }).slides[0].layers[0];
+    assert.deepStrictEqual(after, { ...before, hidden: true });
+  });
+
+  test('hiding a layer misses that slide\u2019s cached render and no other', () => {
+    const doc = docOf(text);
+    const hash = (d) => d.slides.map((s) => specHash(s, d.aspect, d));
+    const before = hash(doc);
+    const after = hash(updateLayer(doc, 0, 0, { hidden: true }));
+    assert.notStrictEqual(after[0], before[0], 'slide 0 must miss');
+    assert.strictEqual(after[1], before[1], 'slide 1 must hit');
+  });
+
+  test('hiding a span layer misses every slide it painted on', () => {
+    const doc = normalizeDocument({
+      mode: 'deck',
+      slides: [{ source: '/a.jpg' }, { source: '/b.jpg' }],
+      spanLayers: [{ type: 'text', text: 'across', box: { x: 0.06, y: 0.1, w: 0.88, h: 0.2 } }],
+    });
+    const hash = (d) => d.slides.map((s) => specHash(s, d.aspect, d));
+    const before = hash(doc);
+    const after = hash(updateLayer(doc, SPAN_SLIDE, 0, { hidden: true }));
+    assert.notStrictEqual(after[0], before[0]);
+    assert.notStrictEqual(after[1], before[1]);
+  });
+
+  test('a hidden layer stays a layer: it keeps its index through a reorder', () => {
+    const doc = updateLayer(docOf(text, { type: 'rect' }), 0, 0, { hidden: true });
+    const moved = reorderLayer(doc, 0, 0, 1);
+    assert.deepStrictEqual(
+      moved.slides[0].layers.map((l) => [l.type, Boolean(l.hidden)]),
+      [
+        ['rect', false],
+        ['text', true],
+      ],
+    );
+  });
+});
+
 describe('slide mutators', () => {
   const layer = { type: 'text', text: 'one', box: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } };
   const span = { type: 'text', text: 'across', box: { x: 0.06, y: 0.1, w: 0.88, h: 0.2 } };

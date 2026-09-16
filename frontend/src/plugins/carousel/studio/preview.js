@@ -415,7 +415,9 @@ export function arrowPlan(box, direction) {
  * of it, so the preview cannot round a box differently from the canvas. The
  * pixel rect goes on to the type paint, which needs canvas pixels to typeset
  * in. A `data-layer` index past the end of the list (the layer was deleted
- * since the last render) hides its element rather than leaving a stale mark.
+ * since the last render) hides its element rather than leaving a stale mark,
+ * and so does a layer the author switched off (`hidden`) — the preview's half
+ * of the same skip `paintDispatch` (`render.js`) makes on the canvas.
  * A non-zero `box.rotate` becomes a CSS `rotate()` about the element's own
  * centre — its default transform-origin — the same point `paintDispatch`
  * (`render.js`) rotates the canvas draw about.
@@ -439,7 +441,7 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
     );
     Array.from(nodes).forEach((el) => {
       const layer = list[Number(el.dataset.layer)];
-      if (!layer) {
+      if (!layer || layer.hidden) {
         el.style.display = "none";
         return;
       }
@@ -461,8 +463,9 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
  * node is resolved through `spanLayerRect`: a slide-local rect that starts
  * off-frame and overflows the width where the layer crosses a seam, so the
  * host's `overflow: hidden` clips it exactly where the JPEG's frame edge will.
- * A node that resolves to `null` (the layer misses this slide) or has no layer
- * behind it (deleted since the last render) is hidden.
+ * A node that resolves to `null` (the layer misses this slide), has no layer
+ * behind it (deleted since the last render), or belongs to a layer the author
+ * switched off (`hidden`) is not painted.
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
  * @param {{spanLayers: import('../document.js').CarouselLayer[]|undefined,
@@ -481,7 +484,7 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
     Array.from(nodes).forEach((el) => {
       const j = Number(el.dataset.spanLayer);
       const layer = list[j];
-      const rect = layer ? spanLayerRect(layer, index, count, aspect) : null;
+      const rect = layer && !layer.hidden ? spanLayerRect(layer, index, count, aspect) : null;
       if (!rect) {
         el.style.display = "none";
         return;

@@ -373,6 +373,22 @@ still the unrotated rectangle those functions have always returned. See
 "Rotation" under "The stage is the editor" for how the render and the preview
 turn that stored angle into a rotated mark.
 
+A layer may also carry `hidden` — the eye ahead of its name in the layer list.
+It switches the layer off without deleting it: the layer keeps its place in the
+list, its index, its selection and its property form, but `paintDispatch`
+(`render.js`) and the two preview painters skip it, so it is absent from the
+JPEG and from the stage alike. Two consequences are deliberate. It is stored
+**only when `true`** — absent means visible — so adding the flag left every
+document already written normalizing byte-for-byte as before, and no slide's
+`specHash` moved until something was actually hidden. And because `hidden` *is*
+in `specHash`, switching a layer off marks the slide dirty and the next render
+re-encodes it, rather than reusing a JPEG that still has the layer in it. A
+hidden layer also drops out of `_layersOnColumn` (`index.js`), the stage's
+click-to-select hit list: it paints nothing there, so a press belongs to
+whatever is visible underneath. It stays selectable from the list, and stays
+draggable once selected — its selection chrome is drawn from the box, not from
+the mark.
+
 `text` and `counter` share one typography block (`normalizeTextStyle`, so the two
 cannot drift into subtly different typesetters):
 

@@ -1343,6 +1343,69 @@ describe('layers through the sequencers', () => {
   });
 });
 
+describe('hidden layers', () => {
+  const hide = (layer) => ({ ...layer, hidden: true });
+
+  test('a hidden layer issues not one call — the visible one beside it still does', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [
+      hide(rectLayer({ fill: '#101820' })),
+      textLayer({ text: 'Over' }),
+    ], { aspect: '4:5' });
+
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'fillRect'), [], 'the rect is off');
+    assert.deepStrictEqual(painted(log).map((l) => l.text), ['Over'], 'the text is not');
+  });
+
+  test('hiding a rotated layer skips the rotation wrapper too, not just the paint', () => {
+    const log = [];
+    const layer = hide(rectLayer({ box: { x: 0, y: 0.8, w: 1, h: 0.2, rotate: 45 } }));
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [layer], { aspect: '4:5' });
+    assert.deepStrictEqual(log.filter((e) => ['save', 'rotate', 'translate', 'restore'].includes(e[0])), []);
+  });
+
+  test('a hidden image layer is never fetched or decoded', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    doc.slides[0].layers = [hide(imageLayer())];
+    await renderDeck(doc, f.deps);
+
+    assert.deepStrictEqual(
+      f.log.filter((e) => e[0] === 'fetchBlob').map((e) => e[1]),
+      ['/x.jpg'],
+      'only the slide source — the logo bytes are not worth a request for a layer nobody sees',
+    );
+    assert.deepStrictEqual(f.log.filter((e) => e[0] === 'drawImage').length, 2, 'one blit per slide, no logo');
+  });
+
+  test('a deck whose only text is hidden never waits on a font', async () => {
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = deckOf('/x.jpg', 2, '4:5', 3000, 1000);
+    doc.slides[0].layers = [hide(textLayer())];
+    doc.slides[1].layers = [hide(counterLayer())];
+    await renderDeck(doc, f.deps);
+
+    assert.strictEqual(f.fontCalls.count, 0, 'nothing typeset, nothing to await');
+    assert.deepStrictEqual(painted(f.log), []);
+  });
+
+  test('a hidden span layer paints on none of the slides it crosses', async () => {
+    const spanRect = normalizeLayer({
+      type: 'rect',
+      box: { x: 0.3, y: 0.4, w: 0.4, h: 0.2 },
+      fill: '#123456',
+    });
+    const f = fakeDeps({ srcW: 3000, srcH: 1000 });
+    const doc = { ...deckOf('/x.jpg', 3, '4:5', 3000, 1000), spanLayers: [hide(spanRect)] };
+    await renderDeck(doc, f.deps);
+
+    assert.deepStrictEqual(
+      surfaces(f.log).map((seg) => seg.filter((e) => e[0] === 'fillRect').length),
+      [0, 0, 0],
+    );
+  });
+});
+
 describe('renderAndUpload', () => {
   test('uploads each slide with post_id set, in deck order, forwarding progress', async () => {
     const f = fakeDeps();

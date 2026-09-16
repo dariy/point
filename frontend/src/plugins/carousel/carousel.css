@@ -891,6 +891,40 @@
   align-items: center;
 }
 
+/* The row's visibility switch: an eye ahead of the layer's name, borderless so
+ * it reads as part of the row rather than as a fourth chip beside the three
+ * action buttons at the other end. The icon constants are 24px; the row is
+ * `--font-size-xs` tall, so they are sized down here rather than duplicated. */
+.carousel-studio__layer-eye {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs);
+  border: 0;
+  border-radius: var(--border-radius);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.carousel-studio__layer-eye svg {
+  width: 14px;
+  height: 14px;
+}
+
+.carousel-studio__layer-eye:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+/* A layer switched off keeps its row, its buttons and its place in the stack —
+ * it is not deleted — so the whole row dims rather than disappearing, and the
+ * eye itself stays at full strength because it is the way back. */
+.carousel-studio__layer-row.is-hidden .carousel-studio__layer-name {
+  opacity: 0.55;
+}
+
 .carousel-studio__layer-name {
   flex: 1;
   min-width: 0;

@@ -14,7 +14,16 @@
  */
 
 import { html, raw } from "../../../utils/helpers.js";
-import { CHEVRON_SVG, COPY_SVG, GRIP_SVG, PLUS_SVG, REFRESH_SVG, TRASH_SVG } from "../../../utils/icons.js";
+import {
+  CHEVRON_SVG,
+  COPY_SVG,
+  EYE_OFF_SVG,
+  EYE_SVG,
+  GRIP_SVG,
+  PLUS_SVG,
+  REFRESH_SVG,
+  TRASH_SVG,
+} from "../../../utils/icons.js";
 import {
   canvasSize,
   fitReport,
@@ -926,6 +935,14 @@ function spanRangeLabel(covered) {
  * slide's own `layers` or to `doc.spanLayers` without a second family of
  * actions. `meta(j)` is an optional trailing note per row (the span range).
  *
+ * Each row opens with the visibility switch — an eye ahead of the layer's name,
+ * the one control that says what the row *is* rather than what to do with it.
+ * Its accessible name is the action it will perform ("Hide layer" / "Show
+ * layer") rather than a state plus `aria-pressed`, because the icon already
+ * carries the state and a toggle that announces both reads twice. A hidden row
+ * keeps its place and its buttons — it is a layer switched off, not a deleted
+ * one — and only dims (`is-hidden`).
+ *
  * @param {import('../document.js').CarouselLayer[]} layers
  * @param {{scope: "slide"|"span", selectedLayer: number|null,
  *   meta?: (j: number) => string, labelledBy: string}} o
@@ -936,7 +953,22 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
     .reverse()
     .map(
       ({ layer, j }) => html`
-        <li class="carousel-studio__layer-row ${j === selectedLayer ? "is-selected" : ""}">
+        <li
+          class="carousel-studio__layer-row ${j === selectedLayer ? "is-selected" : ""} ${
+            layer.hidden ? "is-hidden" : ""
+          }"
+        >
+          <button
+            type="button"
+            class="carousel-studio__layer-eye"
+            data-action="layer-visibility"
+            data-scope="${scope}"
+            data-index="${String(j)}"
+            aria-label="${layer.hidden ? "Show layer" : "Hide layer"}"
+            title="${layer.hidden ? "Show layer" : "Hide layer"}"
+          >
+            ${raw(layer.hidden ? EYE_OFF_SVG : EYE_SVG)}
+          </button>
           <button
             type="button"
             class="carousel-studio__layer-name"
