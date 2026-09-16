@@ -418,16 +418,17 @@ type ListMediaParams struct {
 	PerPage  int32
 	FileType string
 	Folder   string // "YYYY/MM" format; empty means no folder filter
+	Filename string // substring search
 }
 
 func (s *MediaService) ListMedia(ctx context.Context, p ListMediaParams) ([]models.Medium, int64, error) {
 	offset := (p.Page - 1) * p.PerPage
-	media, err := s.repo.ListMediaFiltered(ctx, p.FileType, p.Folder, int64(p.PerPage), int64(offset))
+	media, err := s.repo.ListMediaFiltered(ctx, p.FileType, p.Folder, p.Filename, int64(p.PerPage), int64(offset))
 	if err != nil {
 		return nil, 0, err
 	}
 
-	total, err := s.repo.CountMediaFiltered(ctx, p.FileType, p.Folder)
+	total, err := s.repo.CountMediaFiltered(ctx, p.FileType, p.Folder, p.Filename)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1299,7 +1300,7 @@ func (s *MediaService) sweepLegacyThumbnails(ctx context.Context) (int, error) {
 func (s *MediaService) videoPosterPaths(ctx context.Context) (map[string]bool, error) {
 	posters := make(map[string]bool)
 	for offset := int64(0); ; offset += mediaScanPage {
-		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", mediaScanPage, offset)
+		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", "", mediaScanPage, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -1322,7 +1323,7 @@ func (s *MediaService) videoPosterPaths(ctx context.Context) (map[string]bool, e
 // seconds. Only one prewarm runs at a time: a second rebuild while the first is
 // still warming would double the decode load to produce the same files.
 func (s *MediaService) startPrewarm(ctx context.Context) int {
-	rows, err := s.repo.ListMediaFiltered(ctx, "", "", prewarmLimit, 0)
+	rows, err := s.repo.ListMediaFiltered(ctx, "", "", "", prewarmLimit, 0)
 	if err != nil {
 		slog.Warn("thumbnail rebuild: prewarm list failed", "error", err)
 		return 0

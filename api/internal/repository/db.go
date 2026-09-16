@@ -56,8 +56,8 @@ type Repository interface {
 	DeleteMediaByIDs(ctx context.Context, ids []int64) error
 	ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
 	ListMediaFolders(ctx context.Context, fileType string) ([]MediaFolder, error)
-	ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
-	CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error)
+	ListMediaFiltered(ctx context.Context, fileType, folder, filename string, limit, offset int64) ([]models.Medium, error)
+	CountMediaFiltered(ctx context.Context, fileType, folder, filename string) (int64, error)
 	GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error)
 	SetMediaPublic(ctx context.Context, mediaID int64, isPublic bool, postID *int64) error
 	GetAllMediaPaths(ctx context.Context) ([]models.Medium, error)
