@@ -76,6 +76,7 @@ import {
 import {
   addLayer,
   addSlide,
+  adoptFencePaths,
   applyCarouselBlock,
   applyTemplate,
   carouselFences,
@@ -185,17 +186,21 @@ function readBlockParam(query) {
  * so a hand-written `#2` stays addressable: the editor sends a node's key when
  * it has one and its position when it does not, and the two overlap.
  *
+ * `paths` is what that fence currently lists, which is what `_adoptLoaded`
+ * reconciles the stored document against — empty when there is no fence.
+ *
  * @param {string} content the post's markdown
  * @param {string|null} param
- * @returns {{ key: string|null, ordinal: number|null }}
+ * @returns {{ key: string|null, ordinal: number|null, paths: string[] }}
  */
 function resolveBlock(content, param) {
   const fences = carouselFences(content);
+  const none = { key: null, ordinal: null, paths: [] };
   const at = (n) => {
     const fence = fences[n - 1];
     // Both: the key addresses the row and the fence, and the position says
     // which fence that is even before the key is written into it.
-    return fence ? { key: fence.key, ordinal: n } : { key: null, ordinal: null };
+    return fence ? { key: fence.key, ordinal: n, paths: fence.paths } : none;
   };
   if (!param) return at(1);
   const keyed = fences.findIndex((f) => f.key === param);
@@ -203,7 +208,7 @@ function resolveBlock(content, param) {
   if (/^[0-9]+$/.test(param)) return at(Number(param));
   // A key no fence carries: a fence hand-deleted from the post, or a stale
   // link. Its row may well still be there, so keep addressing it by that key.
-  return { key: param, ordinal: null };
+  return { ...none, key: param };
 }
 
 /** Does `el` own the keystroke? A text entry keeps its own undo stack — inside
@@ -846,11 +851,25 @@ export default class CarouselStudioPage extends Component {
     return row && !row.block_key ? row : null;
   }
 
-  /** Take a freshly loaded post and its carousel (or null) as the working
-   *  state, including the dirty-state baseline: only a document whose every
-   *  slide has been rendered is something later edits can be dirty against. */
-  _adoptLoaded(post, carousel, block = { key: null, ordinal: null }) {
-    const doc = carousel ? parseDocument(carousel.doc) : emptyDocument();
+  /**
+   * Take a freshly loaded post and its carousel (or null) as the working state,
+   * including the dirty-state baseline: only a document whose every slide has
+   * been rendered is something later edits can be dirty against.
+   *
+   * The post's own fence has the last word on which slides exist
+   * (`adoptFencePaths`). That is what lets the studio open a *plain* carousel —
+   * a fence of the author's photos with no row behind it, written in Text mode
+   * or by the editor — instead of showing the pick prompt and then replacing
+   * that fence with its own first render. It is also what keeps a slide deleted
+   * by hand in Text mode from coming back on the next render.
+   *
+   * @param {*} post
+   * @param {*} carousel the stored row for this block, or null
+   * @param {{ key: string|null, ordinal: number|null, paths?: string[] }} block
+   */
+  _adoptLoaded(post, carousel, block = { key: null, ordinal: null, paths: [] }) {
+    const stored = carousel ? parseDocument(carousel.doc) : emptyDocument();
+    const doc = adoptFencePaths(stored, block.paths || []);
     this._blockKey = block.key || carousel?.block_key || null;
     this._blockOrdinal = block.ordinal ?? null;
     this._legacyRow = Boolean(carousel) && !carousel.block_key;
@@ -866,7 +885,9 @@ export default class CarouselStudioPage extends Component {
         loading: false,
         post,
         selected: 0,
-        hasCarousel: Boolean(carousel),
+        // An adopted fence is a carousel as much as a stored row is: there are
+        // slides in the post, so Remove has something to take out of it.
+        hasCarousel: Boolean(carousel) || doc.slides.length > 0,
       },
       { history: false },
     );
@@ -2037,10 +2058,17 @@ export default class CarouselStudioPage extends Component {
     });
   }
 
+  /** Remove asks first, and asks accurately: `_removeCarousel` deletes exactly
+   *  the media this studio rendered, so a carousel whose slides are the
+   *  author's own photos (adopted, `media_id: null`) loses its fence and
+   *  nothing else. Saying otherwise would talk them out of a reversible edit. */
   _confirmRemove() {
+    const deletesMedia = this._priorRendered.some((r) => Number.isFinite(r.media_id));
     this._showConfirm(
       "Remove carousel",
-      "Delete this carousel? Its slides are removed from the post and their media deleted. This cannot be undone.",
+      deletesMedia
+        ? "Delete this carousel? Its slides are removed from the post and their media deleted. This cannot be undone."
+        : "Remove this carousel? Its slides come out of the post; the photos themselves stay in your media library.",
       "Remove",
       "danger",
       () => this._removeCarousel(),

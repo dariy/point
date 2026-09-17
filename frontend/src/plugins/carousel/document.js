@@ -15,7 +15,7 @@
  * No DOM, no canvas, no network. Schema: `docs/features/carousel-studio.md`.
  */
 
-import { carouselFence, CAROUSEL_BLOCK_CLASS } from '../../utils/postNodes.js';
+import { carouselFence, CAROUSEL_BLOCK_CLASS, IMAGE_PATH_RE } from '../../utils/postNodes.js';
 import { sliceRects, clampPan } from './geometry.js';
 import { MIN_SLIDES, MAX_SLIDES } from './studio/bounds.js';
 
@@ -591,7 +591,7 @@ const FENCE_SOURCE = ':::\\{([^}\\n]*)\\}\\n[\\s\\S]*?\\n:::';
  * reader has, because both read posts a person may have hand-edited.
  *
  * @param {string} content the post's markdown
- * @returns {{ key: string|null, start: number, end: number }[]}
+ * @returns {{ key: string|null, paths: string[], start: number, end: number }[]}
  */
 export function carouselFences(content) {
   const re = new RegExp(FENCE_SOURCE, 'g');
@@ -601,9 +601,25 @@ export function carouselFences(content) {
     const attrs = m[1].trim().split(/\s+/).filter(Boolean);
     if (!attrs.includes(`.${CAROUSEL_BLOCK_CLASS}`)) continue;
     const id = attrs.find((a) => a.length > 1 && a.startsWith('#'));
-    out.push({ key: id ? id.slice(1) : null, start: m.index, end: m.index + m[0].length });
+    out.push({
+      key: id ? id.slice(1) : null,
+      paths: fencePaths(m[0]),
+      start: m.index,
+      end: m.index + m[0].length,
+    });
   }
   return out;
+}
+
+/** The media paths a fence's body lists, in order — the same per-line test
+ *  `parseNodes` applies, so the studio and the editor read one hand-written
+ *  fence identically. The `:::{…}` and `:::` lines cannot match it, so there is
+ *  nothing to skip. */
+function fencePaths(fence) {
+  return fence
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => IMAGE_PATH_RE.test(line));
 }
 
 /**
@@ -663,6 +679,80 @@ export function applyCarouselBlock(content, doc, key, ordinal) {
   }
   if (!block) return src;
   return src.trim() ? `${src.trim()}\n\n${block}` : block;
+}
+
+/**
+ * One slide for a photo the post already carries: the photographer's own file,
+ * recorded as this slide's source AND as its rendered output.
+ *
+ * `media_id: null` is the whole point and is not an omission. `reusableMedia`
+ * reuses only a finite id and `_deleteSuperseded` (index.js) deletes only a
+ * finite id, so a null one means "this slide's file is not the studio's to
+ * reuse or to delete" — the studio renders a fresh file beside it and leaves
+ * the original in the media library. Recording the real media id here would
+ * make the next render delete the author's photo.
+ *
+ * @param {string} path
+ * @returns {CarouselSlide}
+ */
+function adoptedSlide(path) {
+  return normalizeSlide({ source: path, rendered: { path, media_id: null, specHash: '' } });
+}
+
+/**
+ * Reconcile a stored document against the paths its fence actually carries, so
+ * a carousel written by hand (or edited by hand since) opens as what the post
+ * says it is.
+ *
+ * Content wins, because content is what the reader sees. Each fence path takes
+ * the doc slide that rendered to it, in fence order; a path the document does
+ * not know is adopted (`adoptedSlide`); a slide whose rendered path is no
+ * longer in the fence is dropped, so paths deleted in Text mode stay deleted
+ * instead of coming back on the next render.
+ *
+ * Two documents are left exactly as they are:
+ * - one with no fence to reconcile against (`paths` empty) — a design in
+ *   progress, or a fence the author removed, which the next render re-appends;
+ * - one whose slides are not all rendered, which a template apply saves before
+ *   any render. Its slides never went into a fence, so a fence cannot correct
+ *   them, and reconciling would throw the design away.
+ *
+ * A document built entirely by adoption is a **deck**, not a split: every slide
+ * names its own photo, and `split` means the opposite — one source, sliced into
+ * columns by `sliceRects` from the slide index alone, which would render slide
+ * 0's photo `n` times and drop the rest. A document that already had slides
+ * keeps its mode; split → deck is a freeze the author asks for
+ * (`toDeckDocument`), and doing it here would need source pixel sizes this pure
+ * function does not have.
+ *
+ * @param {*} doc the stored document, or an empty one for a block with no row
+ * @param {string[]} paths the fence's paths, in document order
+ * @returns {CarouselDoc} a new document; the input is not mutated
+ */
+export function adoptFencePaths(doc, paths) {
+  const base = normalizeDocument(doc);
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && p);
+  if (!list.length) return base;
+  if (base.slides.length && !base.slides.every((s) => s.rendered)) return base;
+  if (!base.slides.length) {
+    return { ...base, mode: 'deck', slides: list.map(adoptedSlide) };
+  }
+
+  // Consumed on match, so a fence that lists one path twice gets two slides
+  // rather than the same object at two indices.
+  const known = new Map();
+  for (const slide of base.slides) {
+    if (slide.rendered && !known.has(slide.rendered.path)) known.set(slide.rendered.path, slide);
+  }
+  return {
+    ...base,
+    slides: list.map((path) => {
+      const match = known.get(path);
+      if (!match) return adoptedSlide(path);
+      known.delete(path);
+      return match;
+    }),
+  };
 }
 
 /**
