@@ -105,33 +105,32 @@ func TestRenderContent_CarouselBlock_BlankLineContract(t *testing.T) {
 	}
 }
 
-// TestCarouselBlockPaths covers the "carousel block wins" selector that
-// post_publish.go uses to decide an Instagram carousel: when a post carries a
-// :::{.carousel-block} fence, only its slides ship — in fence order, in the DB
-// "originals/…" form — and the post's other loose photos are dropped.
-func TestCarouselBlockPaths(t *testing.T) {
-	t.Run("no fence returns nil", func(t *testing.T) {
-		if got := carouselBlockPaths("![a](/2026/06/a.jpg)\n![b](/2026/06/b.jpg)"); got != nil {
-			t.Errorf("want nil, got %v", got)
-		}
-	})
+// TestCarouselFenceFlattensIntoMediaPaths pins the reversal of decision C8.
+// A :::{.carousel-block} fence used to be THE Instagram carousel, selected by
+// carouselBlockPaths, which dropped the post's loose photos. Several carousels
+// per post make "the carousel" undefined, so the fence is now nothing special
+// to path extraction: its slides are content paths like any other, in document
+// order, deduped once.
+func TestCarouselFenceFlattensIntoMediaPaths(t *testing.T) {
+	content := "![loose](/2026/06/a.jpg)\n\n" +
+		":::{.carousel-block}\n\n/2026/06/s1.jpg\n\n/2026/06/s2.jpg\n\n:::\n\n" +
+		"![loose](/2026/06/b.jpg)\n\n" +
+		":::{.carousel-block}\n\n/2026/06/s3.jpg\n\n/2026/06/s1.jpg\n\n:::"
 
-	t.Run("fence slides only, in order", func(t *testing.T) {
-		content := "![loose](/2026/06/loose.jpg)\n\n" +
-			":::{.carousel-block}\n\n/2026/06/s1.jpg\n\n/2026/06/s2.jpg\n\n/2026/06/s3.jpg\n\n:::"
-		got := carouselBlockPaths(content)
-		want := []string{
-			"originals/2026/06/s1.jpg",
-			"originals/2026/06/s2.jpg",
-			"originals/2026/06/s3.jpg",
+	want := []string{
+		"originals/2026/06/a.jpg",
+		"originals/2026/06/s1.jpg",
+		"originals/2026/06/s2.jpg",
+		"originals/2026/06/b.jpg",
+		"originals/2026/06/s3.jpg",
+	}
+	got := ExtractMediaPaths(content, "")
+	if len(got) != len(want) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("path %d: want %q, got %q", i, want[i], got[i])
 		}
-		if len(got) != len(want) {
-			t.Fatalf("want %v, got %v", want, got)
-		}
-		for i := range want {
-			if got[i] != want[i] {
-				t.Errorf("slide %d: want %q, got %q", i, want[i], got[i])
-			}
-		}
-	})
+	}
 }

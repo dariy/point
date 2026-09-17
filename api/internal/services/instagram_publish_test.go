@@ -265,7 +265,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		}
 	})
 
-	t.Run("Carousel Block Wins Over Loose Photos", func(t *testing.T) {
+	t.Run("Carousel Block Flattens Into The Post's Images", func(t *testing.T) {
 		data := map[string]string{
 			"instagram_access_token": "test-token",
 			"instagram_user_id":      "ig-user-id",
@@ -310,10 +310,13 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 					Title:          "Carousel Post",
 					Slug:           "carousel-post",
 					InstagramShare: true,
-					// Two loose photos AND a carousel block — only the block's
-					// slides must reach Instagram, in fence order.
-					Content: "![loose](/2026/06/loose1.jpg)\n\n![loose](/2026/06/loose2.jpg)\n\n" +
-						":::{.carousel-block}\n\n/2026/06/slide1.jpg\n\n/2026/06/slide2.jpg\n\n/2026/06/slide3.jpg\n\n:::",
+					// A loose photo, a carousel block, another loose photo.
+					// Every image ships, in document order — the block used to
+					// win and drop the loose ones (decision C8, reversed).
+					// The repeat of slide1 at the end proves dedup survives.
+					Content: "![loose](/2026/06/loose1.jpg)\n\n" +
+						":::{.carousel-block}\n\n/2026/06/slide1.jpg\n\n/2026/06/slide2.jpg\n\n/2026/06/slide3.jpg\n\n:::\n\n" +
+						"![loose](/2026/06/loose2.jpg)\n\n![again](/2026/06/slide1.jpg)",
 				}, nil
 			},
 			// Echo whatever paths were asked for, so the test measures the
@@ -342,9 +345,11 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		}
 
 		want := []string{
+			ts.URL + "/2026/06/loose1.jpg",
 			ts.URL + "/2026/06/slide1.jpg",
 			ts.URL + "/2026/06/slide2.jpg",
 			ts.URL + "/2026/06/slide3.jpg",
+			ts.URL + "/2026/06/loose2.jpg",
 		}
 		if len(childURLs) != len(want) {
 			t.Fatalf("expected %d carousel children, got %d (%v)", len(want), len(childURLs), childURLs)
