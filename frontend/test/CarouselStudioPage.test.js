@@ -777,6 +777,185 @@ describe('CarouselStudioPage', () => {
     });
   });
 
+  // ── One post, several carousels ───────────────────────────────────────────
+  //
+  // The studio addresses ONE block: `?block=` names it by key, or by 1-based
+  // position while its fence has no key yet. Everything asserted here is about
+  // the blocks the studio was NOT opened on — they have to come through a save
+  // byte for byte.
+  describe('several carousels in one post', () => {
+    const FIRST = ':::{.carousel-block #c-aaaa}\n\n/2026/08/a1.jpg\n\n:::';
+    const MIDDLE = ':::{.carousel-block #c-bbbb}\n\n/2026/08/b1.jpg\n\n:::';
+    const LAST = ':::{.carousel-block}\n\n/2026/08/c1.jpg\n\n:::';
+    const THREE = {
+      ...POST,
+      content: `Intro.\n\n${FIRST}\n\nBetween.\n\n${MIDDLE}\n\nAlso.\n\n${LAST}\n\nOutro.`,
+    };
+
+    /** A one-slide rendered document for the slide at `path`. */
+    const docFor = (path, mediaId) => ({
+      version: 1,
+      aspect: '4:5',
+      mode: 'split',
+      slides: [{ source: '/2026/08/w.jpg', rendered: { path, media_id: mediaId } }],
+    });
+
+    /**
+     * The carousel store as the server keeps it: rows by block key, and an
+     * unkeyed request resolving to the post's first row whatever its key —
+     * which is the whole reason a keyless block cannot just ask unkeyed.
+     */
+    function routes(post, rows) {
+      return [
+        [/\/api\/posts\/42$/, (url, opts) =>
+          (opts.method === 'PUT' ? { body: {} } : { body: post })],
+        [/\/api\/carousel/, (url, opts) => {
+          if (opts.method === 'PUT' || opts.method === 'DELETE') return { body: {} };
+          const asked = new URL(url, 'http://t').searchParams.get('block');
+          const key = asked ?? Object.keys(rows)[0] ?? '';
+          const doc = rows[key];
+          return doc
+            ? { body: { post_id: 42, block_key: key, doc } }
+            : { status: 404, body: { message: 'no carousel' } };
+        }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+    }
+
+    /** The content of the post PUT this test provoked. */
+    const savedContent = () =>
+      JSON.parse(calls.find((c) => c.method === 'PUT' && /\/api\/posts\/42$/.test(c.url)).body)
+        .content;
+
+    /** The `?block=` of every carousel request made, by method. */
+    const blockParams = (method) =>
+      calls
+        .filter((c) => c.method === method && /\/api\/carousel\?/.test(c.url))
+        .map((c) => new URL(c.url, 'http://t').searchParams.get('block'));
+
+    test('opens the block its key names, not the post’s first', async () => {
+      await mount({ post: '42', block: 'c-bbbb' }, routes(THREE, {
+        'c-aaaa': docFor('/2026/08/a1.jpg', 100),
+        'c-bbbb': docFor('/2026/08/b1.jpg', 101),
+      }), { renderDeps: fakeRenderDeps(async () => ({})) });
+
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered.path),
+        ['/2026/08/b1.jpg'],
+      );
+      assert.deepEqual(blockParams('GET'), ['c-bbbb']);
+    });
+
+    test('rendering the middle carousel leaves the other two byte-identical', async () => {
+      const deps = fakeRenderDeps(async () => ({ id: 201, path: '/2026/08/new1.jpg' }));
+      await mount({ post: '42', block: 'c-bbbb' }, routes(THREE, {
+        'c-bbbb': docFor('/2026/08/b1.jpg', 101),
+      }), { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      assert.equal(
+        savedContent(),
+        `Intro.\n\n${FIRST}\n\nBetween.\n\n:::{.carousel-block #c-bbbb}\n\n/2026/08/new1.jpg\n\n:::\n\nAlso.\n\n${LAST}\n\nOutro.`,
+      );
+      assert.deepEqual(blockParams('PUT'), ['c-bbbb'], 'the row was saved under its own key');
+    });
+
+    test('a keyless fence opened by position gains a key on the save that adopts it', async () => {
+      const deps = fakeRenderDeps(async () => ({ id: 202, path: '/2026/08/new3.jpg' }));
+      // Position 3 is the keyless fence, and it has no row: an unkeyed request
+      // would have handed back the first block's document.
+      await mount({ post: '42', block: '3' }, routes(THREE, {
+        'c-aaaa': docFor('/2026/08/a1.jpg', 100),
+      }), { renderDeps: deps });
+
+      assert.deepEqual(page.state.doc.slides, [], 'no document adopted from another block');
+      assert.deepEqual(blockParams('GET'), [], 'and none asked for');
+
+      // The slide the fence already shows, carrying no media_id — an adopted
+      // block must never let a re-render delete the author's own photo.
+      page._setDoc(normalizeDocument(docFor('/2026/08/c1.jpg', null)), {}, { history: false });
+      await page._render();
+      await settle();
+
+      const content = savedContent();
+      const minted = content.match(/:::\{\.carousel-block #(c-[0-9a-f]{4}(?:-\d+)?)\}\n\n\/2026\/08\/new3\.jpg/);
+      assert.ok(minted, `the adopted fence carries a minted key: ${content}`);
+      assert.notEqual(minted[1], 'c-aaaa');
+      assert.notEqual(minted[1], 'c-bbbb');
+      assert.equal(
+        content,
+        `Intro.\n\n${FIRST}\n\nBetween.\n\n${MIDDLE}\n\nAlso.\n\n:::{.carousel-block #${minted[1]}}\n\n/2026/08/new3.jpg\n\n:::\n\nOutro.`,
+        'the two keyed siblings are untouched',
+      );
+      assert.deepEqual(blockParams('PUT'), [minted[1]]);
+    });
+
+    test('removing one carousel deletes that fence and that row only', async () => {
+      const el = await mount({ post: '42', block: 'c-bbbb' }, routes(THREE, {
+        'c-bbbb': docFor('/2026/08/b1.jpg', 101),
+      }), { renderDeps: fakeRenderDeps(async () => ({})) });
+      page._showConfirm = (title, message, confirmText, variant, onConfirm) => onConfirm();
+
+      click(el.querySelector('[data-action="remove-carousel"]'));
+      await settle();
+      await settle();
+
+      assert.equal(
+        savedContent(),
+        `Intro.\n\n${FIRST}\n\nBetween.\n\nAlso.\n\n${LAST}\n\nOutro.`,
+      );
+      assert.deepEqual(blockParams('DELETE'), ['c-bbbb']);
+    });
+
+    test('a first fence keyed by hand still finds its pre-key document', async () => {
+      // Someone typed `#c-aaaa` into the fence in Text mode; the row it was
+      // saved under still carries the empty key, and no other address can
+      // reach it.
+      await mount({ post: '42', block: 'c-aaaa' }, routes(THREE, {
+        '': docFor('/2026/08/a1.jpg', 100),
+      }), { renderDeps: fakeRenderDeps(async () => ({})) });
+
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered.path),
+        ['/2026/08/a1.jpg'],
+      );
+      assert.deepEqual(blockParams('GET'), ['c-aaaa', null], 'the key first, then the pre-key row');
+    });
+
+    test('a keyed fence further down does not fall back to the pre-key row', async () => {
+      await mount({ post: '42', block: 'c-bbbb' }, routes(THREE, {
+        '': docFor('/2026/08/a1.jpg', 100),
+      }), { renderDeps: fakeRenderDeps(async () => ({})) });
+
+      assert.deepEqual(page.state.doc.slides, [], 'the first block\u2019s design is not borrowed');
+      assert.deepEqual(blockParams('GET'), ['c-bbbb']);
+    });
+
+    test('the pre-key row is retired by the save that keys its fence', async () => {
+      // One keyless fence and a row under the backfilled empty key: a post from
+      // before block keys. The keyed save writes a new row, so the old one has
+      // to go or the block keeps two documents.
+      const legacy = { ...POST, content: `Intro.\n\n${LAST}\n\nOutro.` };
+      const deps = fakeRenderDeps(async () => ({ id: 203, path: '/2026/08/new-legacy.jpg' }));
+      await mount({ post: '42' }, routes(legacy, { '': docFor('/2026/08/c1.jpg', 102) }), {
+        renderDeps: deps,
+      });
+
+      assert.deepEqual(blockParams('GET'), [null], 'the pre-key row is asked for unkeyed');
+
+      await page._render();
+      await settle();
+
+      const content = savedContent();
+      const minted = content.match(/#(c-[0-9a-f]{4}(?:-\d+)?)\}/);
+      assert.ok(minted, `the fence was keyed: ${content}`);
+      assert.deepEqual(blockParams('PUT'), [minted[1]]);
+      assert.deepEqual(blockParams('DELETE'), [null], 'and the pre-key row deleted unkeyed');
+    });
+  });
+
   describe('templates', () => {
     /** A 1x1 PNG and a 1x1 GIF — the two smallest real images there are, and
      *  what an importer inlines into an envelope. */

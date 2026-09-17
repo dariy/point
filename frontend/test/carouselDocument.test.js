@@ -25,6 +25,7 @@ import {
   parseDocument,
   serializeDocument,
   buildCarouselBlock,
+  carouselFences,
   applyCarouselBlock,
   splitDocument,
   toDeckDocument,
@@ -1342,6 +1343,82 @@ describe('applyCarouselBlock', () => {
 
   test('no fence and nothing to write is a no-op', () => {
     assert.strictEqual(applyCarouselBlock('Just text.', { slides: [] }), 'Just text.');
+  });
+});
+
+describe('applyCarouselBlock across several blocks', () => {
+  const doc = { slides: [{ rendered: { path: '/2026/08/new.jpg' } }] };
+  const first = ':::{.carousel-block #c-aaaa}\n\n/2026/08/a.jpg\n\n:::';
+  const middle = ':::{.carousel-block #c-bbbb}\n\n/2026/08/b.jpg\n\n:::';
+  const last = ':::{.carousel-block}\n\n/2026/08/c.jpg\n\n:::';
+  const post = `Intro.\n\n${first}\n\nBetween.\n\n${middle}\n\nAlso.\n\n${last}\n\nOutro.`;
+
+  test('replaces the fence carrying the key and nothing else', () => {
+    const after = applyCarouselBlock(post, doc, 'c-bbbb');
+    assert.strictEqual(
+      after,
+      `Intro.\n\n${first}\n\nBetween.\n\n:::{.carousel-block #c-bbbb}\n\n/2026/08/new.jpg\n\n:::\n\nAlso.\n\n${last}\n\nOutro.`,
+    );
+    // Byte-identical, not merely present: the neighbours are text this write
+    // never asked to touch.
+    assert.ok(after.includes(first) && after.includes(last));
+  });
+
+  test('an ordinal keys the keyless fence it names, leaving the rest alone', () => {
+    const after = applyCarouselBlock(post, doc, 'c-cccc', 3);
+    assert.strictEqual(
+      after,
+      `Intro.\n\n${first}\n\nBetween.\n\n${middle}\n\nAlso.\n\n:::{.carousel-block #c-cccc}\n\n/2026/08/new.jpg\n\n:::\n\nOutro.`,
+    );
+  });
+
+  test('a key no fence carries appends a new keyed block', () => {
+    const after = applyCarouselBlock(post, doc, 'c-dddd');
+    assert.strictEqual(
+      after,
+      `${post}\n\n:::{.carousel-block #c-dddd}\n\n/2026/08/new.jpg\n\n:::`,
+    );
+  });
+
+  test('an empty document drops that block and closes the gap', () => {
+    assert.strictEqual(
+      applyCarouselBlock(post, { slides: [] }, 'c-bbbb'),
+      `Intro.\n\n${first}\n\nBetween.\n\nAlso.\n\n${last}\n\nOutro.`,
+    );
+  });
+
+  test('no address at all still means the first carousel', () => {
+    const after = applyCarouselBlock(post, doc);
+    assert.ok(after.startsWith('Intro.\n\n:::{.carousel-block}\n\n/2026/08/new.jpg\n\n:::'));
+    assert.ok(after.includes(middle) && after.includes(last));
+  });
+});
+
+describe('carouselFences', () => {
+  test('reports each carousel fence in document order, with its key', () => {
+    const content = [
+      ':::{.note}\n\nNot a carousel.\n\n:::',
+      ':::{.carousel-block}\n\n/2026/08/a.jpg\n\n:::',
+      ':::{ #c-7f3a .carousel-block }\n\n/2026/08/b.jpg\n\n:::',
+    ].join('\n\n');
+    assert.deepStrictEqual(
+      carouselFences(content).map((f) => f.key),
+      [null, 'c-7f3a'],
+    );
+  });
+
+  test('a span is the fence itself, first `:::` to first close', () => {
+    const content = 'Intro.\n\n:::{.carousel-block}\n\n/2026/08/a.jpg\n\n:::\n\nOutro.';
+    const [fence] = carouselFences(content);
+    assert.strictEqual(
+      content.slice(fence.start, fence.end),
+      ':::{.carousel-block}\n\n/2026/08/a.jpg\n\n:::',
+    );
+  });
+
+  test('content with no carousel has no fences', () => {
+    assert.deepStrictEqual(carouselFences('Just text.'), []);
+    assert.deepStrictEqual(carouselFences(null), []);
   });
 });
 

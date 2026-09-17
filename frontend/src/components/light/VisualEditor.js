@@ -26,8 +26,10 @@ const VE_THUMB_SIZES = "80px";
  *   Called with the new list on any structural change.
  * @property {() => void} [onInput]  Called after an in-place text edit.
  * @property {(index: number) => void} [onAddMedia]  Open the picker to insert at `index`.
- * @property {(() => void)|null} [onEditCarousel]  Open the carousel studio;
- *   null hides the entry point.
+ * @property {((block: string) => void)|null} [onEditCarousel]  Open the carousel
+ *   studio on one card's block, addressed by its key or — for a carousel typed
+ *   by hand, whose fence has no key yet — by its 1-based position among the
+ *   post's carousels. null hides the entry point.
  * @property {(oldPath: string, newFilename: string) => Promise<void>} [onRename]
  *   Inline rename of an image card's file.
  */
@@ -36,6 +38,12 @@ const VE_THUMB_SIZES = "80px";
 export class VisualEditor extends Component {
   render() {
     const { nodes = [] } = this.props;
+
+    // How the studio is told which carousel a card's button opens: the node's
+    // key, or its position among the post's carousels while it has none. The
+    // count runs over the whole list, so it matches the fence order the studio
+    // reads out of the saved content.
+    let carouselCount = 0;
 
     const insertZone = (index) =>
       html`<div class="ve-insert-zone" data-insert-at="${index}">
@@ -94,6 +102,10 @@ export class VisualEditor extends Component {
           // editor's — but the card must show every path it holds so a Visual
           // mode round-trip (see serializeNodes) never silently drops one.
           const paths = node.paths || [];
+          // Counted for every carousel, keyed ones included: the position has
+          // to be the one the studio finds by scanning the post's fences.
+          carouselCount += 1;
+          const block = node.key || String(carouselCount);
           const mediaByPath = this.props.mediaByPath || {};
           const thumbs = paths
             .map((path) => {
@@ -118,7 +130,7 @@ export class VisualEditor extends Component {
                 <span class="ve-carousel-label" aria-hidden="true">▦</span>
                 <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
                 ${this.props.onEditCarousel
-                  ? html`<button class="ve-carousel-edit btn btn-sm" type="button">Edit in Studio</button>`
+                  ? html`<button class="ve-carousel-edit btn btn-sm" type="button" data-block="${block}">Edit in Studio</button>`
                   : ""}
               </div>
               <div class="ve-carousel-strip">${thumbs}</div>
@@ -428,7 +440,7 @@ export class VisualEditor extends Component {
     this.$$(".ve-carousel-edit").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.props.onEditCarousel();
+        this.props.onEditCarousel(btn.dataset.block || "");
       });
     });
   }

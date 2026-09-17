@@ -61,7 +61,7 @@ import {
 import { getSettings, setToast } from "../../store.js";
 import { showConfirm } from "../../utils/dialogs.js";
 import { html, navigate } from "../../utils/helpers.js";
-import { parseNodes } from "../../utils/postNodes.js";
+import { newCarouselKey, parseNodes } from "../../utils/postNodes.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
 import {
   canvasSize,
@@ -78,6 +78,7 @@ import {
   addSlide,
   applyCarouselBlock,
   applyTemplate,
+  carouselFences,
   duplicateSlide,
   emptyDocument,
   moveSlide,
@@ -156,6 +157,55 @@ function readPostId(query) {
   return raw != null && /^[0-9]+$/.test(String(raw)) ? Number(raw) : null;
 }
 
+/**
+ * What a `?block=` value may look like: the id a carousel fence carries. The
+ * shape is the server's own (`blockKeyPattern`, api/internal/api/carousel.go)
+ * rather than the minted `c-<hex>` one, because the id comes from the post's
+ * markdown and a person may have written it by hand.
+ */
+const BLOCK_PARAM_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+
+/** The `?block=` parameter as written — a block key, or the 1-based position of
+ *  a fence that has no key yet. Null when it is absent or malformed, which
+ *  reads as "this post's first carousel", the whole studio's address before
+ *  block keys existed. */
+function readBlockParam(query) {
+  const raw = /** @type {{ block?: string }} */ (query || {}).block;
+  const value = raw == null ? "" : String(raw);
+  return BLOCK_PARAM_RE.test(value) ? value : null;
+}
+
+/**
+ * Which of a post's carousel fences the `?block=` parameter names: its `key`
+ * when it carries one, and `ordinal`, its 1-based position. Both null means no
+ * such fence — a block this post does not have yet, whose key is minted by the
+ * save that creates it.
+ *
+ * An id a fence actually carries wins over reading the same text as a position,
+ * so a hand-written `#2` stays addressable: the editor sends a node's key when
+ * it has one and its position when it does not, and the two overlap.
+ *
+ * @param {string} content the post's markdown
+ * @param {string|null} param
+ * @returns {{ key: string|null, ordinal: number|null }}
+ */
+function resolveBlock(content, param) {
+  const fences = carouselFences(content);
+  const at = (n) => {
+    const fence = fences[n - 1];
+    // Both: the key addresses the row and the fence, and the position says
+    // which fence that is even before the key is written into it.
+    return fence ? { key: fence.key, ordinal: n } : { key: null, ordinal: null };
+  };
+  if (!param) return at(1);
+  const keyed = fences.findIndex((f) => f.key === param);
+  if (keyed !== -1) return at(keyed + 1);
+  if (/^[0-9]+$/.test(param)) return at(Number(param));
+  // A key no fence carries: a fence hand-deleted from the post, or a stale
+  // link. Its row may well still be there, so keep addressing it by that key.
+  return { key: param, ordinal: null };
+}
+
 /** Does `el` own the keystroke? A text entry keeps its own undo stack — inside
  *  one, Ctrl+Z is the browser's, and it is the only thing that can put a
  *  half-typed caption back (the studio never sees the keystrokes that built it,
@@ -188,6 +238,13 @@ function insertPlainText(el, text) {
 /** A picked media item is usable as a split source only if it is an image. */
 function isImagePath(path) {
   return typeof path === "string" && !/\.(mp4|mov|webm|m4v|avi)$/i.test(path);
+}
+
+/** A 404 from the carousel store is the normal answer for "this block has no
+ *  document"; anything else is a real failure and stays thrown. */
+function noRowOn404(err) {
+  if (err?.status === 404) return null;
+  throw err;
 }
 
 /** The `rendered` blocks of a document's slides that actually carry a path. */
@@ -409,6 +466,20 @@ export default class CarouselStudioPage extends Component {
     // Has the author edited the slug by hand? Until they do, it follows the
     // name — after, it is theirs and the name stops overwriting it.
     this._slugTouched = false;
+    // Which carousel of the post this studio is editing. `_blockParam` is the
+    // URL's `?block=`; the two below are what it resolves to once the post's
+    // content is in hand (see `resolveBlock`), and they are the address of
+    // every write: the block key, and — only until that key is written into
+    // the fence — the fence's 1-based position, which is how a carousel typed
+    // by hand in Text mode is reachable at all.
+    this._blockParam = readBlockParam(this.props.query);
+    this._blockKey = null;
+    this._blockOrdinal = null;
+    // Was the loaded row stored under the pre-key empty key? That row is the
+    // post's first carousel from before block keys, it is not migrated by the
+    // key this studio mints, and it is the one thing an unkeyed write may
+    // still address (see `_rowKey`).
+    this._legacyRow = false;
     // The `rendered` block of every slide the *saved* document points at — the
     // slides really in the post right now. Two readers: the "Rendered slides"
     // strip, and the cleanup a re-render owes (see _render), which takes only
@@ -722,26 +793,70 @@ export default class CarouselStudioPage extends Component {
     // slow template listing must not hold up the post the studio is for.
     this._loadTemplates();
     try {
-      const [post, carousel] = await Promise.all([
-        getPost(postId),
-        getCarousel(postId).catch((err) => {
-          if (err?.status === 404) return null;
-          throw err;
-        }),
-      ]);
+      // The post first, then its carousel — not the two alongside each other:
+      // which block this studio opened is a fact about the post's content
+      // (`?block=` may name a keyless fence by position), so asking for the
+      // right row means having the content first. One round trip, once, on a
+      // page that then decodes every slide.
+      const post = await getPost(postId);
       if (this._unmounted) return;
-      this._adoptLoaded(post, carousel);
+      const block = resolveBlock(post?.content || "", this._blockParam);
+      const carousel = await this._loadBlockRow(postId, block);
+      if (this._unmounted) return;
+      this._adoptLoaded(post, carousel, block);
     } catch (err) {
       if (this._unmounted) return;
       this.setState({ loading: false, error: err?.message || "Could not load the post." });
     }
   }
 
+  /**
+   * The stored document for the block this studio opened, or null when that
+   * block has none.
+   *
+   * A keyed block asks for its key. A keyless one has no key to ask with, and
+   * the unkeyed address is not a substitute: the server resolves it to the
+   * post's FIRST carousel whatever that row's key is (`blockKey`,
+   * api/internal/api/carousel.go). So it answers for a keyless fence only when
+   * the row that comes back is the pre-key one — the empty key, which means
+   * exactly "the first fence, the one with no id yet". A keyless fence further
+   * down the post never had a row, and taking the first block's design for it
+   * would show the wrong carousel.
+   *
+   * @param {number} postId
+   * @param {{ key: string|null, ordinal: number|null }} block
+   */
+  async _loadBlockRow(postId, block) {
+    if (block.key) {
+      const row = await getCarousel(postId, block.key).catch(noRowOn404);
+      // A keyed FIRST fence may still be stored under the pre-key empty key:
+      // both mean "the post's first carousel", and keying that fence by hand in
+      // Text mode does not move the row. There is nowhere else its design can
+      // be, and the next save re-homes it under the key.
+      return row || (block.ordinal === 1 ? this._preKeyRow(postId) : null);
+    }
+    // No fence at all: whatever the post's first carousel is, it is the one the
+    // studio has always opened, and its key becomes this block's.
+    if (block.ordinal == null) return getCarousel(postId).catch(noRowOn404);
+    return block.ordinal === 1 ? this._preKeyRow(postId) : null;
+  }
+
+  /** The post's first carousel row while it is still stored under the pre-key
+   *  empty key, else null — the unkeyed address is positional, and a row with a
+   *  key of its own belongs to whichever block carries that key. */
+  async _preKeyRow(postId) {
+    const row = await getCarousel(postId).catch(noRowOn404);
+    return row && !row.block_key ? row : null;
+  }
+
   /** Take a freshly loaded post and its carousel (or null) as the working
    *  state, including the dirty-state baseline: only a document whose every
    *  slide has been rendered is something later edits can be dirty against. */
-  _adoptLoaded(post, carousel) {
+  _adoptLoaded(post, carousel, block = { key: null, ordinal: null }) {
     const doc = carousel ? parseDocument(carousel.doc) : emptyDocument();
+    this._blockKey = block.key || carousel?.block_key || null;
+    this._blockOrdinal = block.ordinal ?? null;
+    this._legacyRow = Boolean(carousel) && !carousel.block_key;
     this._priorRendered = renderedBlocks(doc);
     const fullyRendered = doc.slides.length > 0 && doc.slides.every((s) => s.rendered);
     this._renderedDoc = fullyRendered ? serializeDocument(doc) : null;
@@ -1817,13 +1932,74 @@ export default class CarouselStudioPage extends Component {
     );
   }
 
-  /** Save the rendered document and write its block into the post. Returns the
-   *  post content as it ended up — the server's copy where it sent one back. */
+  /** A block key no fence in this post already uses. Minting lives here, in a
+   *  writer: `parseNodes`/`serializeNodes` stay deterministic, or the same
+   *  markdown would parse into two different documents (see postNodes). */
+  _mintBlockKey(content) {
+    const taken = carouselFences(content)
+      .map((f) => f.key)
+      .filter(Boolean);
+    return newCarouselKey(new Set(taken));
+  }
+
+  /**
+   * The key this block's row is stored under, for a write that is NOT also
+   * writing the fence. Null is the unkeyed address, which the server resolves
+   * positionally to the post's first carousel — this block's row exactly while
+   * its fence has no id and the pre-key row is the one we loaded. Every other
+   * keyless block mints here instead, so a write can never land on a different
+   * block's row; the next render writes that key into the fence.
+   */
+  _rowKey() {
+    if (!this._blockKey && !this._legacyRow) {
+      this._blockKey = this._mintBlockKey(this.state.post?.content || "");
+    }
+    return this._blockKey || undefined;
+  }
+
+  /**
+   * Save the rendered document and write its block into the post. Returns the
+   * post content as it ended up — the server's copy where it sent one back.
+   *
+   * This is the write that keys a block: a fence typed by hand has no id, and
+   * addressing it by position works for exactly this one save, which mints the
+   * key and puts it in that fence. Every other fence in the post comes through
+   * untouched.
+   */
   async _saveRendered(postId, post, doc) {
-    await saveCarousel(postId, doc);
-    const content = applyCarouselBlock(post.content, doc);
+    const key = this._blockKey || this._mintBlockKey(post.content);
+    await saveCarousel(postId, doc, key);
+    // Before the content write, not after: if that write fails, a retry must
+    // reuse this key rather than mint a second one and orphan this row.
+    this._blockKey = key;
+    const content = applyCarouselBlock(post.content, doc, key, this._blockOrdinal ?? undefined);
     const updated = await updatePost(postId, this._postPayload(post, content));
-    return updated?.content ?? content;
+    const finalContent = updated?.content ?? content;
+    // The fence carries the key now, so its position stops mattering.
+    this._blockOrdinal = null;
+    await this._retirePreKeyRow(postId);
+    return finalContent;
+  }
+
+  /**
+   * Drop the row this block was stored under before it had a key. The keyed
+   * save above wrote a NEW row — the backfilled empty-key one is not migrated
+   * with it — so leaving it behind gives one block two documents, the stale one
+   * answering every unkeyed request.
+   *
+   * The unkeyed DELETE resolves to the post's oldest carousel row
+   * (ListCarouselsByPostID orders by id), which is that row: it predates every
+   * keyed row, the one just written included. Re-read first anyway — the
+   * address is positional, and deleting a different block's design because that
+   * reasoning was wrong is not recoverable.
+   */
+  async _retirePreKeyRow(postId) {
+    if (!this._legacyRow) return;
+    this._legacyRow = false;
+    // Best effort throughout: a row that outlives its block is untidy, not
+    // broken, and not worth failing a finished render over.
+    const row = await this._preKeyRow(postId).catch(() => null);
+    if (row) await deleteCarousel(postId).catch(() => {});
   }
 
   /**
@@ -1880,8 +2056,17 @@ export default class CarouselStudioPage extends Component {
 
     this.setState({ busy: true, error: null });
     try {
-      await deleteCarousel(postId);
-      const content = applyCarouselBlock(post.content, emptyDocument());
+      // This block's row and no other: the keyed address names it outright,
+      // and the unkeyed one is safe only for the pre-key row we actually
+      // loaded, since it otherwise resolves to the post's oldest carousel.
+      if (this._blockKey) await deleteCarousel(postId, this._blockKey);
+      else await this._retirePreKeyRow(postId);
+      const content = applyCarouselBlock(
+        post.content,
+        emptyDocument(),
+        this._blockKey || undefined,
+        this._blockOrdinal ?? undefined,
+      );
       const updated = await updatePost(postId, this._postPayload(post, content));
       const finalContent = updated?.content ?? content;
 
@@ -1891,6 +2076,10 @@ export default class CarouselStudioPage extends Component {
       }
       this._priorRendered = [];
       this._renderedDoc = null;
+      // The fence is gone, so its position now names whatever followed it. A
+      // later render in this session appends instead — under this block's key
+      // when it has one.
+      this._blockOrdinal = null;
 
       if (this._unmounted) return;
       // Undo cannot reach this — the media rows are gone from the server, not
@@ -2070,7 +2259,7 @@ export default class CarouselStudioPage extends Component {
       const next = normalizeDocument(
         replaceAssets(doc, await this._materializeAssets(doc, deps, uploaded)),
       );
-      await saveCarousel(postId, next);
+      await saveCarousel(postId, next, this._rowKey());
       if (this._unmounted) return;
 
       // A template brings its own aspect, mode and slides, so the selection and

@@ -474,7 +474,44 @@ describe('PostEditPage (mounted)', () => {
       await settle();
 
       assert.equal(sent('PUT', '/api/posts/7').length, 1);
-      assert.equal(wentTo(), '/light/carousel?post=7');
+      // The fence is keyless, so the card addresses it by position — the studio
+      // mints its key on the save that adopts it.
+      assert.equal(wentTo(), '/light/carousel?post=7&block=1');
+    });
+
+    test("a keyed card sends the studio that block's key", async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: carouselFence(['/2024/08/a.jpg'], 'c-7f3a'),
+      });
+      await mountPage({ params: { id: '7' } });
+
+      click(q('.ve-carousel-edit'));
+      await settle();
+
+      assert.equal(wentTo(), '/light/carousel?post=7&block=c-7f3a');
+    });
+
+    test('each card addresses its own carousel', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: [
+          carouselFence(['/2024/08/a.jpg']),
+          carouselFence(['/2024/08/b.jpg'], 'c-7f3a'),
+          carouselFence(['/2024/08/c.jpg']),
+        ].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+
+      const buttons = [...page.container.querySelectorAll('.ve-carousel-edit')];
+      assert.equal(buttons.length, 3);
+      // Position counts every carousel, keyed ones included, so an ordinal and
+      // the fence order the studio reads out of the content are the same list.
+      assert.deepEqual(buttons.map(b => b.dataset.block), ['1', 'c-7f3a', '3']);
+
+      click(buttons[2]);
+      await settle();
+      assert.equal(wentTo(), '/light/carousel?post=7&block=3');
     });
 
     test('the card has no Edit in Studio affordance with the plugin disabled', async () => {

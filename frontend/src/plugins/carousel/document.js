@@ -563,41 +563,103 @@ export function serializeDocument(doc) {
  * rendered output yet are skipped; an empty result is the empty string.
  *
  * @param {*} doc
+ * @param {string} [key] the block key to write into the fence — omitted, the
+ *   fence stays in its keyless form.
  * @returns {string}
  */
-export function buildCarouselBlock(doc) {
+export function buildCarouselBlock(doc, key) {
   const paths = normalizeDocument(doc)
     .slides.map((s) => (s.rendered ? s.rendered.path : ''))
     .filter(Boolean);
-  return paths.length ? carouselFence(paths) : '';
+  return paths.length ? carouselFence(paths, key || undefined) : '';
 }
 
 /**
- * The existing `:::{.carousel-block}` fence in a post's content, if any.
- * Non-greedy to the first closing `:::` — a slide path can never contain one.
+ * A `:::{…}` fence with its attribute list captured. Non-greedy to the first
+ * closing `:::` — a slide path can never contain one. Built per call rather
+ * than shared: a `g` regex carries `lastIndex` from one scan to the next.
  */
-const CAROUSEL_FENCE_RE = new RegExp(
-  `:::\\{\\.${CAROUSEL_BLOCK_CLASS}\\}\\n[\\s\\S]*?\\n:::`,
-);
+const FENCE_SOURCE = ':::\\{([^}\\n]*)\\}\\n[\\s\\S]*?\\n:::';
 
 /**
- * Splice a document's rendered block into a post's content: replace the
- * existing carousel fence in place, append one when there is none, or drop it
- * when the document has no rendered slides left. Everything else in the content
- * is untouched — this is a targeted string edit, not a parse/serialize round
- * trip.
+ * Every carousel fence in a post's content, in document order: the key it
+ * carries and the span it occupies.
+ *
+ * Attribute order and spacing are whatever goldmark-attributes accepts, so
+ * `:::{ #c-7f3a .carousel-block }` is the same fence as
+ * `:::{.carousel-block #c-7f3a}` — the same tolerance postNodes' own fence
+ * reader has, because both read posts a person may have hand-edited.
+ *
+ * @param {string} content the post's markdown
+ * @returns {{ key: string|null, start: number, end: number }[]}
+ */
+export function carouselFences(content) {
+  const re = new RegExp(FENCE_SOURCE, 'g');
+  const src = String(content ?? '');
+  const out = [];
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    const attrs = m[1].trim().split(/\s+/).filter(Boolean);
+    if (!attrs.includes(`.${CAROUSEL_BLOCK_CLASS}`)) continue;
+    const id = attrs.find((a) => a.length > 1 && a.startsWith('#'));
+    out.push({ key: id ? id.slice(1) : null, start: m.index, end: m.index + m[0].length });
+  }
+  return out;
+}
+
+/**
+ * The one fence a write targets, or null when there is none to replace and the
+ * block has to be appended.
+ *
+ * `key` wins when a fence carries it. `ordinal` (1-based) addresses a fence
+ * that has no key yet — a carousel typed by hand in Text mode — for exactly the
+ * one save that adopts it, which is also the save that writes `key` into it.
+ * With neither given the target is the post's first carousel, which is what a
+ * caller that predates block keys means by "the carousel".
+ *
+ * @param {{ key: string|null, start: number, end: number }[]} fences
+ * @param {string} [key]
+ * @param {number} [ordinal]
+ * @returns {{ key: string|null, start: number, end: number }|null}
+ */
+function targetFence(fences, key, ordinal) {
+  if (key) {
+    const keyed = fences.find((f) => f.key === key);
+    if (keyed) return keyed;
+  }
+  if (ordinal != null) return fences[ordinal - 1] || null;
+  // A key no fence carries, with no position to fall back on, is a block this
+  // post does not have yet: append it rather than overwriting somebody else's.
+  return key ? null : fences[0] || null;
+}
+
+/**
+ * Splice a document's rendered block into a post's content: replace the fence
+ * this block owns in place, append one when there is none, or drop it when the
+ * document has no rendered slides left. Everything else in the content — every
+ * other carousel fence included — comes through byte for byte: this is a
+ * targeted string edit, not a parse/serialize round trip.
  *
  * @param {string} content the post's markdown
  * @param {*} doc the carousel document
+ * @param {string} [key] the block key: which fence to replace, and the key the
+ *   written fence carries.
+ * @param {number} [ordinal] 1-based position of the target fence, for a block
+ *   whose fence is still keyless. Only consulted when no fence carries `key`.
  * @returns {string}
  */
-export function applyCarouselBlock(content, doc) {
-  const block = buildCarouselBlock(doc);
+export function applyCarouselBlock(content, doc, key, ordinal) {
+  const block = buildCarouselBlock(doc, key);
   const src = String(content ?? '');
+  const fence = targetFence(carouselFences(src), key, ordinal);
 
-  if (CAROUSEL_FENCE_RE.test(src)) {
-    const next = src.replace(CAROUSEL_FENCE_RE, () => block);
-    return next.replace(/\n{3,}/g, '\n\n').trim();
+  if (fence) {
+    const before = src.slice(0, fence.start);
+    const after = src.slice(fence.end);
+    if (block) return `${before}${block}${after}`;
+    // Removing the fence leaves the blank lines that surrounded it back to
+    // back. Collapse that seam alone — reformatting the whole post would be a
+    // second, unasked-for edit to text the author wrote.
+    return `${before.replace(/\s+$/, '')}\n\n${after.replace(/^\s+/, '')}`.trim();
   }
   if (!block) return src;
   return src.trim() ? `${src.trim()}\n\n${block}` : block;
