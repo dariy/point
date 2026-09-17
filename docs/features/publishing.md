@@ -16,6 +16,12 @@ cross-posting). The editor is `frontend/src/pages/light/PostEditPage.js`.
   (`parseNodes`/`serializeNodes` in `frontend/src/utils/postNodes.js`) over image
   sequences + text blocks — deliberately not a WYSIWYG rewrite; media references
   serialize as bare paths matched by `IMAGE_PATH_RE`.
+- **Reordering cards** in Visual mode is pointer-based (`utils/pointerReorder.js`, the
+  same gesture Arrange mode and the carousel studio use) rather than HTML5 DnD, which
+  does not exist on iOS — so it works with a mouse, a finger or a pen. Each card's
+  handle is a button, so ArrowUp/ArrowDown on a focused handle moves the card one
+  place and focus follows it. Both paths commit through `VisualEditor._moveNode()`,
+  which holds all of the index arithmetic and none of the geometry.
 - **Per-post custom CSS** (via the `custom-css` plugin): a CSS textarea in the editor;
   `SanitizePostCSS` enforces an explicit safe-property allowlist (excluded: `position`,
   `z-index`, `background-image`, `content`, `transform`, `animation`, `transition`),

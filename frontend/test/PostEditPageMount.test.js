@@ -625,7 +625,7 @@ describe('PostEditPage (mounted)', () => {
       );
       assert.equal(
         fire(cards()[0].querySelector('.ve-handle'), 'mousedown', { shiftKey: true }).defaultPrevented, false,
-        'the handle keeps its mousedown, so the drag it arms still gets a dragstart',
+        'the handle is never a selection target, so its press is left to the reorder gesture',
       );
       assert.equal(
         fire(cards()[0], 'mousedown', {}).defaultPrevented, false,
@@ -804,6 +804,149 @@ describe('PostEditPage (mounted)', () => {
         content.startsWith(carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], key)),
         `fence not well formed:\n${content}`,
       );
+    });
+  });
+
+  // ── Reordering ────────────────────────────────────────────────────────────
+
+  /**
+   * Card reordering, which is pointer-driven (utils/pointerReorder.js) rather
+   * than HTML5 drag-and-drop.
+   *
+   * linkedom has no layout engine, so every element reports a zero rect and the
+   * gesture's midpoint test is meaningless here. That is exactly why the
+   * arithmetic lives in _moveNode(fromIdx, afterIdx): the pointer path and the
+   * arrow keys both reduce to that pair, and the pair is assertable. What is
+   * tested by hand is the keyboard half — a real path from a key to a new
+   * order — plus _moveNode's ±1 directly.
+   */
+  describe('reordering cards', () => {
+    const PHOTOS = ['/2024/08/a.jpg', '/2024/08/b.jpg', '/2024/08/c.jpg'];
+
+    beforeEach(() => {
+      routes['GET /api/posts/7'] = () => ({ ...POST(), content: PHOTOS.join('\n\n') });
+    });
+
+    const cards = () => [...page.container.querySelectorAll('.ve-card')];
+    const order = () => page._nodes.map(n => n.path || n.type);
+    const ve = () => page._visualEditorRef;
+
+    test('nothing in the editor is draggable — the gesture is pointer events', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      assert.equal(
+        page.container.querySelector('#ve-list [draggable]'), null,
+        'a draggable attribute would put HTML5 DnD back alongside the pointer gesture',
+      );
+    });
+
+    test('the handle is a focusable button that says what it moves', async () => {
+      await mountPage({ params: { id: '7' } });
+      const handle = cards()[0].querySelector('.ve-handle');
+
+      assert.equal(handle.tagName, 'BUTTON');
+      assert.equal(handle.getAttribute('type'), 'button');
+      assert.equal(handle.getAttribute('aria-label'), 'Move a.jpg');
+    });
+
+    test('ArrowDown on a focused handle moves the card one place later', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      const e = fire(cards()[0].querySelector('.ve-handle'), 'keydown', { key: 'ArrowDown' });
+
+      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
+      assert.equal(e.defaultPrevented, true, 'the arrows would otherwise scroll the page');
+    });
+
+    test('ArrowUp moves it back, and focus follows the card it moved', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      // linkedom's `focus()` does not move `activeElement`, so record the calls
+      // instead — what matters is that the rebuilt handle gets one. Without it
+      // the second press of a repeated arrow would land on a dead node.
+      const proto = dom.window.HTMLElement.prototype;
+      const realFocus = proto.focus;
+      const focused = [];
+      proto.focus = function focusSpy() { focused.push(this); };
+      try {
+        fire(cards()[2].querySelector('.ve-handle'), 'keydown', { key: 'ArrowUp' });
+      } finally {
+        proto.focus = realFocus;
+      }
+
+      assert.deepEqual(order(), ['/2024/08/a.jpg', '/2024/08/c.jpg', '/2024/08/b.jpg']);
+      assert.equal(focused.at(-1), cards()[1].querySelector('.ve-handle'));
+    });
+
+    test('ArrowUp onto the front of the list works — there is no card to land behind', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      fire(cards()[1].querySelector('.ve-handle'), 'keydown', { key: 'ArrowUp' });
+
+      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
+    });
+
+    test('an arrow off either end of the list does nothing at all', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      const up = fire(cards()[0].querySelector('.ve-handle'), 'keydown', { key: 'ArrowUp' });
+      const down = fire(cards()[2].querySelector('.ve-handle'), 'keydown', { key: 'ArrowDown' });
+
+      assert.deepEqual(order(), PHOTOS);
+      assert.equal(up.defaultPrevented, false, 'a refused move leaves the key to the page');
+      assert.equal(down.defaultPrevented, false);
+    });
+
+    test('an arrow away from a handle is left alone — a text card is being typed in', async () => {
+      routes['GET /api/posts/7'] = () => ({ ...POST(), content: 'Caption line.\n\n/2024/08/a.jpg' });
+      await mountPage({ params: { id: '7' } });
+
+      const e = fire(page.container.querySelector('.ve-text-area'), 'keydown', { key: 'ArrowDown' });
+
+      assert.deepEqual(order(), ['text', '/2024/08/a.jpg']);
+      assert.equal(e.defaultPrevented, false);
+    });
+
+    test('_moveNode lands the node behind its anchor, forwards and backwards', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      // Forwards: the anchor sits behind the moved node, so splicing it out
+      // first slides the anchor down one — insert AT the anchor's old index.
+      ve()._moveNode(0, 2);
+      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
+
+      // Backwards: nothing behind the anchor moved, so insert after it.
+      ve()._moveNode(2, 0);
+      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
+    });
+
+    test('_moveNode with a null anchor puts the node at the front', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      ve()._moveNode(2, null);
+
+      assert.deepEqual(order(), ['/2024/08/c.jpg', '/2024/08/a.jpg', '/2024/08/b.jpg']);
+    });
+
+    test('a move that changes nothing is not a change', async () => {
+      await mountPage({ params: { id: '7' } });
+      const before = page._nodes;
+
+      ve()._moveNode(1, 0);      // already directly behind a.jpg
+      ve()._moveNode(0, null);   // already at the front
+      ve()._moveNode(1, 1);      // released over itself, which names itself as anchor
+
+      assert.equal(page._nodes, before, 'an identical list would still cost an autosave');
+    });
+
+    test('_moveNode refuses an index that is not a card', async () => {
+      await mountPage({ params: { id: '7' } });
+      const before = page._nodes;
+
+      ve()._moveNode(null, 1);
+      ve()._moveNode(9, 0);
+
+      assert.equal(page._nodes, before);
     });
   });
 
