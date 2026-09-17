@@ -708,13 +708,22 @@ export default class PostEditPage extends Component {
   }
 
   /**
-   * Open Carousel Studio for this post, flushing pending edits first so text
-   * typed inside the autosave idle window isn't dropped — the studio loads
-   * the post's saved content, not the in-memory form state.
+   * Open Carousel Studio for one of this post's carousels, flushing pending
+   * edits first so text typed inside the autosave idle window isn't dropped —
+   * the studio loads the post's saved content, not the in-memory form state,
+   * and `block` addresses a fence in that content.
+   *
+   * @param {string} [block] the block's key, or its 1-based position among the
+   *   post's carousels when its fence carries no key yet (a carousel typed by
+   *   hand in Text mode). Omitted — the overflow menu — means the post's first
+   *   carousel, the studio's only address before blocks had keys.
    */
-  async _openCarouselStudio() {
+  async _openCarouselStudio(block) {
     if (this.state.hasPendingEdits) await this._autosave();
-    if (this.state.postId) navigate(`/light/carousel?post=${this.state.postId}`);
+    if (!this.state.postId) return;
+    const query = new URLSearchParams({ post: String(this.state.postId) });
+    if (block) query.set("block", String(block));
+    navigate(`/light/carousel?${query}`);
   }
 
   /**
@@ -938,7 +947,7 @@ export default class PostEditPage extends Component {
     this._visualEditorRef = this.mountChild(VisualEditor, "#visual-editor-mount", {
       nodes: this._nodes,
       mediaByPath: this._mediaByPath || {},
-      onEditCarousel: pluginHost.isEnabled("carousel") ? () => this._openCarouselStudio() : null,
+      onEditCarousel: pluginHost.isEnabled("carousel") ? block => this._openCarouselStudio(block) : null,
       onChange: nodes => {
         this._nodes = nodes;
         this._visualEditorRef.setProps({
