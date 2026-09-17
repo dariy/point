@@ -523,6 +523,290 @@ describe('PostEditPage (mounted)', () => {
     });
   });
 
+  // ── Selecting cards, grouping, ungrouping ────────────────────────────
+
+  /**
+   * Making a carousel out of the post's own photos, from the editor.
+   *
+   * The action is a selection plus one button, and the two things that make it
+   * safe are asserted here: the selection is keyed by node identity, so a
+   * structural change cannot silently retarget it, and both writes hand back an
+   * Undo carrying a snapshot of the list as it was.
+   */
+  describe('selecting cards and making a carousel', () => {
+    const PHOTOS = ['/2024/08/a.jpg', '/2024/08/b.jpg', '/2024/08/c.jpg'];
+
+    beforeEach(() => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: `${PHOTOS.join('\n\n')}\n\nCaption line.`,
+      });
+    });
+
+    const cards = () => [...page.container.querySelectorAll('.ve-card')];
+    const selected = () => cards().filter(c => c.classList.contains('is-selected')).map(c => c.dataset.index);
+    const bar = () => q('.ve-selection-bar');
+    const nodes = () => page._nodes;
+
+    test('the post parses into three photo cards and a text card', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      assert.deepEqual(nodes().map(n => n.type), ['image', 'image', 'image', 'text']);
+      assert.equal(bar().hidden, true, 'the bar is out of the way until something is picked');
+    });
+
+    test('a click selects a card and the bar reports the count', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+
+      assert.deepEqual(selected(), ['0']);
+      assert.equal(bar().hidden, false);
+      assert.equal(q('.ve-selection-count').textContent, '1 selected');
+    });
+
+    test('clicking a selected card again lets it go', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(cards()[0]);
+
+      assert.deepEqual(selected(), []);
+      assert.equal(bar().hidden, true);
+    });
+
+    test('shift-click takes the whole range from the anchor', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(cards()[2], { shiftKey: true });
+
+      assert.deepEqual(selected(), ['0', '1', '2']);
+      assert.equal(q('.ve-selection-count').textContent, '3 selected');
+    });
+
+    test('a text card is refused — it cannot become a slide', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[3]);
+
+      assert.deepEqual(selected(), []);
+    });
+
+    test('a shift-range skips a text card it spans', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: '/2024/08/a.jpg\n\nCaption line.\n\n/2024/08/b.jpg',
+      });
+      await mountPage({ params: { id: '7' } });
+      assert.deepEqual(nodes().map(n => n.type), ['image', 'text', 'image']);
+
+      click(cards()[0]);
+      click(cards()[2], { shiftKey: true });
+
+      assert.deepEqual(selected(), ['0', '2']);
+    });
+
+    test('shift-clicking a text card is refused like any other click on one', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(cards()[3], { shiftKey: true });
+
+      assert.deepEqual(selected(), ['0'], 'the range is not extended to a card that cannot hold slides');
+    });
+
+    test('a shift-mousedown on a card refuses the browser text smear, but not on the handle', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      assert.equal(
+        fire(cards()[0], 'mousedown', { shiftKey: true }).defaultPrevented, true,
+        'shift-clicking cards would otherwise paint a text selection across the page',
+      );
+      assert.equal(
+        fire(cards()[0].querySelector('.ve-handle'), 'mousedown', { shiftKey: true }).defaultPrevented, false,
+        'the handle keeps its mousedown, so the drag it arms still gets a dragstart',
+      );
+      assert.equal(
+        fire(cards()[0], 'mousedown', {}).defaultPrevented, false,
+        'an unmodified mousedown is left alone entirely',
+      );
+    });
+
+    test('clicking the list outside a card clears the selection', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(q('#ve-list'));
+
+      assert.deepEqual(selected(), []);
+      assert.equal(bar().hidden, true);
+    });
+
+    test('the Clear button drops the selection', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(q('.ve-selection-clear'));
+
+      assert.deepEqual(selected(), []);
+    });
+
+    test('clicking a thumbnail or a path still does its own job, not selection', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0].querySelector('.ve-thumb'));
+      assert.deepEqual(selected(), [], 'the thumbnail opens the lightbox');
+
+      click(cards()[0].querySelector('.ve-path'));
+      assert.deepEqual(selected(), [], 'the path starts an inline rename');
+      assert.ok(cards()[0].querySelector('.ve-rename-input'));
+    });
+
+    test('the selection follows the node, not its index, across a re-render', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[1]);
+      assert.deepEqual(selected(), ['1'], 'b.jpg');
+
+      // A text card inserted above shifts every photo down one. An index-keyed
+      // selection would now be painting a.jpg.
+      click(q('.ve-insert-zone[data-insert-at="0"] .ve-insert-text'));
+
+      assert.deepEqual(selected(), ['2']);
+      assert.equal(nodes()[2].path, '/2024/08/b.jpg');
+    });
+
+    test('the selection survives a bare setProps re-render', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      page._visualEditorRef.setProps({ nodes: page._nodes });
+
+      assert.deepEqual(selected(), ['0']);
+      assert.equal(bar().hidden, false);
+    });
+
+    test('Make carousel folds the selection into one keyed carousel, in place', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[1]);
+      click(cards()[2], { shiftKey: true });
+      click(q('.ve-make-carousel'));
+
+      assert.deepEqual(nodes().map(n => n.type), ['image', 'carousel', 'text']);
+      assert.equal(nodes()[0].path, '/2024/08/a.jpg');
+      assert.deepEqual(nodes()[1].paths, ['/2024/08/b.jpg', '/2024/08/c.jpg']);
+      assert.match(nodes()[1].key, /^c-[0-9a-f]{4}$/, 'editor-made carousels are studio-addressable');
+      assert.deepEqual(selected(), [], 'the cards it named are gone');
+    });
+
+    test('one photo makes a legal one-slide carousel', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(q('.ve-make-carousel'));
+
+      assert.equal(nodes()[0].type, 'carousel');
+      assert.deepEqual(nodes()[0].paths, ['/2024/08/a.jpg']);
+    });
+
+    test('grouping a photo into a carousel keeps that block\'s key', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: `${carouselFence(['/2024/08/a.jpg'], 'c-7f3a')}\n\n/2024/08/b.jpg`,
+      });
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(cards()[1], { shiftKey: true });
+      click(q('.ve-make-carousel'));
+
+      assert.equal(nodes().length, 1);
+      assert.equal(nodes()[0].key, 'c-7f3a', 'the block keeps its design document');
+      assert.deepEqual(nodes()[0].paths, ['/2024/08/a.jpg', '/2024/08/b.jpg']);
+    });
+
+    test('a lone carousel is not offered Make carousel — it would do nothing', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: carouselFence(['/2024/08/a.jpg'], 'c-7f3a'),
+      });
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+
+      assert.deepEqual(selected(), ['0'], 'a carousel card is still selectable');
+      assert.equal(q('.ve-make-carousel').hidden, true);
+    });
+
+    test('the toast Undo restores the exact pre-group list', async () => {
+      await mountPage({ params: { id: '7' } });
+      const before = [...nodes()];
+
+      click(cards()[0]);
+      click(cards()[1], { shiftKey: true });
+      click(q('.ve-make-carousel'));
+      assert.equal(nodes().length, 3);
+      assert.match(getToast().message, /Carousel created from 2 photos/);
+
+      getToast().action.onAction();
+
+      assert.deepEqual(nodes(), before);
+      assert.deepEqual(selected(), [], 'and nothing is left picked');
+    });
+
+    test('Ungroup turns a carousel back into image cards, in order', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], 'c-7f3a'),
+      });
+      await mountPage({ params: { id: '7' } });
+
+      click(q('.ve-carousel-ungroup'));
+
+      assert.deepEqual(nodes(), [
+        { type: 'image', path: '/2024/08/a.jpg' },
+        { type: 'image', path: '/2024/08/b.jpg' },
+      ]);
+      assert.match(getToast().message, /Carousel ungrouped into 2 photos/);
+    });
+
+    test("Ungroup's Undo puts the carousel back with its key", async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: `/2024/08/z.jpg\n\n${carouselFence(['/2024/08/a.jpg'], 'c-7f3a')}`,
+      });
+      await mountPage({ params: { id: '7' } });
+      const before = [...nodes()];
+
+      click(q('.ve-carousel-ungroup'));
+      assert.deepEqual(nodes().map(n => n.type), ['image', 'image']);
+
+      getToast().action.onAction();
+
+      assert.deepEqual(nodes(), before);
+      assert.equal(nodes()[1].key, 'c-7f3a');
+    });
+
+    test('a grouped post saves as a well-formed keyed fence', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(cards()[0]);
+      click(cards()[1], { shiftKey: true });
+      click(q('.ve-make-carousel'));
+      await page._save();
+      await settle();
+
+      const { content } = sent('PUT', '/api/posts/7').at(-1).body;
+      const key = nodes()[0].key;
+      assert.ok(
+        content.startsWith(carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], key)),
+        `fence not well formed:\n${content}`,
+      );
+    });
+  });
+
   // ── Preview link ──────────────────────────────────────────────────────────
 
   describe('preview link', () => {

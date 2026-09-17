@@ -9,12 +9,22 @@ import { setToast } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
-import { carouselFence } from "../../utils/postNodes.js";
+import {
+  carouselFence,
+  groupIntoCarousel,
+  ungroupCarousel,
+} from "../../utils/postNodes.js";
 
 // .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still
 // points at the original: the card's lightbox (see _bindLightbox) opens the
 // full image, not the rung the card painted.
 const VE_THUMB_SIZES = "80px";
+
+// What a click inside a card already means, so card selection never takes it:
+// the thumbnail opens the lightbox, the path starts a rename, the handle arms
+// the drag, and every control does what it says.
+const VE_CARD_CONTROLS =
+  "button, input, textarea, a, label, .ve-thumb, .ve-path, .ve-rename-form, .ve-exif-panel, .ve-handle";
 
 /**
  * @typedef {object} VisualEditorProps
@@ -36,6 +46,29 @@ const VE_THUMB_SIZES = "80px";
 
 /** @extends {Component<VisualEditorProps>} */
 export class VisualEditor extends Component {
+  /**
+   * The cards the selection bar acts on, held as the NODE OBJECTS themselves.
+   *
+   * Every structural change re-renders this component through setProps() with
+   * a freshly built array, so an index-keyed selection would silently retarget
+   * — grouping cards 2 and 3 leaves "2 and 3" pointing at whatever slid up into
+   * those slots. The node ops build their result with map()/slice(), so an
+   * untouched node keeps its identity across the change and a Set of nodes does
+   * not. Entries whose node has left the list are dropped in
+   * _syncSelectionUI(), which is also what makes the set safe to keep across
+   * renders.
+   *
+   * @type {Set<import('../../utils/postNodes.js').EditorNode>}
+   */
+  _selected = new Set();
+
+  /**
+   * The node a shift-click measures its range from — the last card clicked
+   * without shift. Null when there is none.
+   * @type {import('../../utils/postNodes.js').EditorNode|null}
+   */
+  _anchor = null;
+
   render() {
     const { nodes = [] } = this.props;
 
@@ -129,9 +162,13 @@ export class VisualEditor extends Component {
               <div class="ve-carousel-head">
                 <span class="ve-carousel-label" aria-hidden="true">▦</span>
                 <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
-                ${this.props.onEditCarousel
-                  ? html`<button class="ve-carousel-edit btn btn-sm" type="button" data-block="${block}">Edit in Studio</button>`
-                  : ""}
+                <div class="ve-carousel-actions">
+                  <button class="ve-carousel-ungroup btn btn-sm" type="button" data-index="${i}"
+                          title="Split this carousel back into separate photos">Ungroup</button>
+                  ${this.props.onEditCarousel
+                    ? html`<button class="ve-carousel-edit btn btn-sm" type="button" data-block="${block}">Edit in Studio</button>`
+                    : ""}
+                </div>
               </div>
               <div class="ve-carousel-strip">${thumbs}</div>
             </div>
@@ -164,6 +201,7 @@ export class VisualEditor extends Component {
 
     return html`
       <div class="ve-root">
+        ${this._renderSelectionBar()}
         <div class="ve-list" id="ve-list">
           ${cards}
           ${insertZone(nodes.length)}
@@ -173,6 +211,8 @@ export class VisualEditor extends Component {
   }
 
   afterRender() {
+    this._bindSelection();
+    this._bindUngroup();
     this._bindRemove();
     this._bindCarouselEdit();
     this._bindDrag();
@@ -182,6 +222,298 @@ export class VisualEditor extends Component {
     this._bindTextCards();
     this._bindVeExif();
     setupTextareaMaximizer(this.container);
+  }
+
+  // ── Selection ──────────────────────────────────────────────────────────
+
+  /**
+   * The bar the selection acts from. Emitted on every pass and starting empty
+   * and hidden: _syncSelectionUI() is the one owner of what it says, so there
+   * is no second copy of that rule here to drift out of step with it.
+   * @returns {import('../../utils/helpers.js').RawHtml}
+   */
+  _renderSelectionBar() {
+    return html`
+      <div class="ve-selection-bar" role="toolbar" aria-label="Selected cards" hidden>
+        <span class="ve-selection-count" aria-live="polite"></span>
+        <button class="ve-make-carousel btn btn-sm" type="button"
+                title="Fold the selected photos into one carousel block">Make carousel</button>
+        <button class="ve-selection-clear btn btn-sm" type="button">Clear</button>
+      </div>`;
+  }
+
+  /**
+   * Which cards a click may select: the ones that can become carousel slides.
+   *
+   * A text card is refused rather than selected-and-ignored. `groupIntoCarousel`
+   * would leave it exactly where it is, so including one in a selection would
+   * paint it as part of the group and then visibly not fold it in. Carousel
+   * cards ARE selectable: grouping a photo with a carousel merges it into that
+   * block, keeping the block's key and therefore its design document.
+   *
+   * @param {import('../../utils/postNodes.js').EditorNode} [node]
+   * @returns {boolean}
+   */
+  _isSelectable(node) {
+    return Boolean(node) && (node.type === "image" || node.type === "carousel");
+  }
+
+  /**
+   * The selected nodes' positions in the current list, in document order, with
+   * entries whose node has left the list pruned from the set as a side effect.
+   *
+   * One pass does both because they answer the same question: a node still in
+   * `nodes` is live, and anything else in `_selected` is a card that a group,
+   * an ungroup or a remove has already retired.
+   *
+   * @param {import('../../utils/postNodes.js').EditorNode[]} nodes
+   * @returns {number[]}
+   */
+  _selectedIndices(nodes) {
+    /** @type {Set<import('../../utils/postNodes.js').EditorNode>} */
+    const live = new Set();
+    const indices = [];
+    (nodes || []).forEach((node, i) => {
+      if (!this._selected.has(node)) return;
+      live.add(node);
+      indices.push(i);
+    });
+    this._selected = live;
+    if (this._anchor && !live.has(this._anchor)) this._anchor = null;
+    return indices;
+  }
+
+  /**
+   * Whether "Make carousel" would change anything — the exact set
+   * `groupIntoCarousel` refuses, restated as a predicate so the button is
+   * absent rather than inert. Only selectable nodes can be in the selection, so
+   * the one refusal left is a lone card that is already a carousel.
+   *
+   * @param {import('../../utils/postNodes.js').EditorNode[]} nodes
+   * @param {number[]} indices
+   * @returns {boolean}
+   */
+  _canGroup(nodes, indices) {
+    if (!indices.length) return false;
+    return !(indices.length === 1 && nodes[indices[0]].type === "carousel");
+  }
+
+  /**
+   * Paint the selection onto the DOM the current render produced.
+   *
+   * The sole owner of `.is-selected` and of the bar's contents, called from
+   * afterRender() as well as from the click handler — which is what carries a
+   * selection across the setProps() re-render every structural change triggers,
+   * without render() holding a second copy of the rule.
+   */
+  _syncSelectionUI() {
+    const nodes = this.props.nodes || [];
+    const indices = this._selectedIndices(nodes);
+    const selected = new Set(indices);
+
+    this.$$(".ve-card").forEach((card) => {
+      const i = parseInt(card.dataset.index, 10);
+      card.classList.toggle("is-selected", selected.has(i));
+    });
+
+    const bar = this.$(".ve-selection-bar");
+    if (!bar) return;
+    bar.hidden = indices.length === 0;
+    const count = this.$(".ve-selection-count");
+    if (count) {
+      count.textContent = `${indices.length} selected`;
+    }
+    const make = this.$(".ve-make-carousel");
+    if (make) make.hidden = !this._canGroup(nodes, indices);
+  }
+
+  /** Drop the whole selection and repaint. */
+  _clearSelection() {
+    if (!this._selected.size && !this._anchor) return;
+    this._selected = new Set();
+    this._anchor = null;
+    this._syncSelectionUI();
+  }
+
+  /**
+   * Add every selectable card between two positions, inclusive. A text card
+   * caught in the middle of the range is stepped over rather than picked up.
+   *
+   * @param {import('../../utils/postNodes.js').EditorNode[]} nodes
+   * @param {number} from
+   * @param {number} to
+   */
+  _selectRange(nodes, from, to) {
+    for (let i = Math.min(from, to); i <= Math.max(from, to); i += 1) {
+      if (this._isSelectable(nodes[i])) this._selected.add(nodes[i]);
+    }
+  }
+
+  /**
+   * Take or drop one card, and leave the anchor on it. The anchor is cleared
+   * along with the last selected card, so the next shift-click has nothing
+   * stale to measure a range from.
+   *
+   * @param {import('../../utils/postNodes.js').EditorNode} node
+   */
+  _toggleOne(node) {
+    if (this._selected.delete(node)) {
+      this._anchor = this._selected.size ? node : null;
+      return;
+    }
+    this._selected.add(node);
+    this._anchor = node;
+  }
+
+  /**
+   * Answer a click on a card: toggle it, or — with shift held and an anchor to
+   * measure from — take the range between them.
+   *
+   * A plain click toggles rather than replaces: building a group of photos is
+   * the whole point of the selection, and requiring a modifier to add the
+   * second one would make the common case the awkward one.
+   *
+   * @param {number} index  Position of the clicked card.
+   * @param {boolean} shift
+   */
+  _toggleSelection(index, shift) {
+    const nodes = this.props.nodes || [];
+    const node = nodes[index];
+    if (!this._isSelectable(node)) return;
+
+    const anchorIndex = this._anchor ? nodes.indexOf(this._anchor) : -1;
+    if (shift && anchorIndex !== -1) this._selectRange(nodes, anchorIndex, index);
+    else this._toggleOne(node);
+    this._syncSelectionUI();
+  }
+
+  /**
+   * The card a click on `target` selects: the card it landed in, unless it
+   * landed on something that already answers a click.
+   *
+   * @param {EventTarget|null} target
+   * @returns {HTMLElement|null}
+   */
+  _selectionTarget(target) {
+    const el = /** @type {HTMLElement} */ (target);
+    if (!el?.closest || el.closest(VE_CARD_CONTROLS)) return null;
+    return /** @type {HTMLElement} */ (el.closest(".ve-card"));
+  }
+
+  _bindSelection() {
+    const list = this.$("#ve-list");
+    if (list) {
+      // Shift-click also extends the browser's own text selection, which paints
+      // a smear across the page behind the cards it just picked. Suppressing it
+      // has to happen on mousedown — by click the range is already made. The
+      // handle is excluded from VE_CARD_CONTROLS' complement here, so the drag
+      // it arms still gets its dragstart.
+      list.addEventListener("mousedown", (e) => {
+        if (!(/** @type {MouseEvent} */ (e).shiftKey)) return;
+        if (this._selectionTarget(e.target)) e.preventDefault();
+      });
+
+      list.addEventListener("click", (e) => {
+        const el = /** @type {HTMLElement} */ (e.target);
+        if (el.closest(VE_CARD_CONTROLS)) return;
+
+        const card = this._selectionTarget(el);
+        if (!card) {
+          this._clearSelection();
+          return;
+        }
+        this._toggleSelection(
+          parseInt(card.dataset.index, 10),
+          Boolean(/** @type {MouseEvent} */ (e).shiftKey),
+        );
+      });
+    }
+
+    this.$(".ve-make-carousel")?.addEventListener("click", () => this._makeCarousel());
+    this.$(".ve-selection-clear")?.addEventListener("click", () => this._clearSelection());
+
+    this._syncSelectionUI();
+  }
+
+  _bindUngroup() {
+    this.$$(".ve-carousel-ungroup").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._ungroup(parseInt(btn.dataset.index, 10));
+      });
+    });
+  }
+
+  // ── Grouping ────────────────────────────────────────────────────
+
+  /**
+   * Announce a structural change and offer the way back.
+   *
+   * `before` is a snapshot of the list as it was, held in this closure rather
+   * than pushed onto a history stack: the offer is scoped to one toast, and
+   * Toast.js already spends the button on the first press, so there is no stack
+   * to keep, invalidate, or apply twice.
+   *
+   * @param {string} message
+   * @param {import('../../utils/postNodes.js').EditorNode[]} before
+   */
+  _changeToast(message, before) {
+    setToast({
+      message,
+      type: "success",
+      action: { label: "Undo", onAction: () => this._applyNodes(before) },
+    });
+  }
+
+  /**
+   * Hand a new list to the parent, with the selection dropped — the cards it
+   * named are gone, or have become something else.
+   * @param {import('../../utils/postNodes.js').EditorNode[]} nodes
+   */
+  _applyNodes(nodes) {
+    this._selected = new Set();
+    this._anchor = null;
+    this.props.onChange?.(nodes);
+  }
+
+  /**
+   * Fold the selection into one carousel, in place. A single photo is a legal
+   * carousel of one slide — it renders as a swipe track of one, and a photo can
+   * be dragged into it afterwards.
+   */
+  _makeCarousel() {
+    const nodes = this.props.nodes || [];
+    const indices = this._selectedIndices(nodes);
+    if (!this._canGroup(nodes, indices)) return;
+
+    const before = [...nodes];
+    const next = groupIntoCarousel(nodes, indices);
+    if (next === nodes) return;
+
+    const slides = indices.reduce(
+      (n, i) => n + (nodes[i].type === "carousel" ? (nodes[i].paths || []).length : 1),
+      0,
+    );
+    this._applyNodes(next);
+    this._changeToast(`Carousel created from ${slides} ${slides === 1 ? "photo" : "photos"}.`, before);
+  }
+
+  /**
+   * Turn one carousel's slides back into image cards, in place and in order.
+   * @param {number} index
+   */
+  _ungroup(index) {
+    const nodes = this.props.nodes || [];
+    const node = nodes[index];
+    if (!node || node.type !== "carousel") return;
+
+    const before = [...nodes];
+    const next = ungroupCarousel(nodes, index);
+    if (next === nodes) return;
+
+    const slides = (node.paths || []).length;
+    this._applyNodes(next);
+    this._changeToast(`Carousel ungrouped into ${slides} ${slides === 1 ? "photo" : "photos"}.`, before);
   }
 
   _renderVeExifRows(media) {
@@ -589,7 +921,9 @@ export class VisualEditor extends Component {
 
     span.replaceWith(form);
     input.focus();
-    input.select();
+    // Optional: linkedom's input has focus() but no select(), and the rename is
+    // reachable from a test only if starting one does not throw there.
+    input.select?.();
 
     const cancel = () => {
       if (document.body.contains(form)) form.replaceWith(span);
