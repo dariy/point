@@ -449,7 +449,7 @@ describe('carousel studio panels', () => {
       assert.match(out, /Slide 1 layers/);
       assert.match(out, /Deck layers/);
       // every add / select / reorder / delete in the span section carries the scope.
-      assert.match(out, /data-action="add-layer"[\s\S]*?data-scope="span"/);
+      assert.match(out, /class="carousel-studio__add-layer-select"[\s\S]*?data-scope="span"/);
       assert.match(out, /data-action="select-layer"\s+data-scope="span"\s+data-index="0"/);
       assert.match(out, /data-action="delete-layer"\s+data-scope="span"/);
     });
