@@ -950,6 +950,161 @@ describe('PostEditPage (mounted)', () => {
     });
   });
 
+  /**
+   * Reordering a carousel card's own slides, within its strip. Same pointer
+   * gesture as card reordering, a second container and axis, and its own
+   * index arithmetic in _moveSlide(nodeIdx, fromIdx, afterIdx) — the strip's
+   * counterpart to _moveNode().
+   */
+  describe('reordering slides within a carousel', () => {
+    const SLIDES = ['/2024/08/a.jpg', '/2024/08/b.jpg', '/2024/08/c.jpg'];
+
+    beforeEach(() => {
+      routes['GET /api/posts/7'] = () => ({ ...POST(), content: carouselFence(SLIDES) });
+    });
+
+    const slides = () => [...page.container.querySelectorAll('.ve-slide')];
+    const paths = () => page._nodes[0].paths;
+    const ve = () => page._visualEditorRef;
+
+    test('.ve-thumb is not the reorder item selector, so the ambiguity cannot come back', async () => {
+      await mountPage({ params: { id: '7' } });
+      const before = page._nodes;
+      const thumb = slides()[0].querySelector('.ve-thumb');
+
+      assert.equal(thumb.dataset.index, undefined, 'only .ve-slide carries the position');
+
+      // A drop naming the thumb as the moved item — the exact ambiguity a
+      // shared .ve-thumb selector used to create — has no index to read and
+      // moves nothing.
+      ve()._onReorderDrop({
+        item: thumb,
+        from: page.container.querySelector('.ve-carousel-strip'),
+        to: page.container.querySelector('.ve-carousel-strip'),
+        afterEl: null,
+      });
+
+      assert.equal(page._nodes, before);
+    });
+
+    test('the slide handle is a focusable button that says what it moves', async () => {
+      await mountPage({ params: { id: '7' } });
+      const handle = slides()[0].querySelector('.ve-slide-handle');
+
+      assert.equal(handle.tagName, 'BUTTON');
+      assert.equal(handle.getAttribute('type'), 'button');
+      assert.equal(handle.getAttribute('aria-label'), 'Move slide 1 of 3');
+    });
+
+    test('ArrowRight on a focused slide handle moves it one place later', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      const e = fire(slides()[0].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowRight' });
+
+      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
+      assert.equal(e.defaultPrevented, true, 'the arrows would otherwise scroll the strip');
+    });
+
+    test('ArrowLeft moves it back, and focus follows the slide it moved', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      const proto = dom.window.HTMLElement.prototype;
+      const realFocus = proto.focus;
+      const focused = [];
+      proto.focus = function focusSpy() { focused.push(this); };
+      try {
+        fire(slides()[2].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowLeft' });
+      } finally {
+        proto.focus = realFocus;
+      }
+
+      assert.deepEqual(paths(), ['/2024/08/a.jpg', '/2024/08/c.jpg', '/2024/08/b.jpg']);
+      assert.equal(focused.at(-1), slides()[1].querySelector('.ve-slide-handle'));
+    });
+
+    test('ArrowLeft onto the front of the strip works — there is no slide to land behind', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      fire(slides()[1].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowLeft' });
+
+      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
+    });
+
+    test('an arrow off either end of the strip does nothing at all', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      const left = fire(slides()[0].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowLeft' });
+      const right = fire(slides()[2].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowRight' });
+
+      assert.deepEqual(paths(), SLIDES);
+      assert.equal(left.defaultPrevented, false, 'a refused move leaves the key to the page');
+      assert.equal(right.defaultPrevented, false);
+    });
+
+    test('the drop handler, given a synthetic drop within the same strip, reorders the paths', async () => {
+      await mountPage({ params: { id: '7' } });
+      const strip = page.container.querySelector('.ve-carousel-strip');
+
+      ve()._onReorderDrop({ item: slides()[0], from: strip, to: strip, afterEl: slides()[2] });
+
+      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
+    });
+
+    test('the drop handler refuses a slide dropped into a different container', async () => {
+      await mountPage({ params: { id: '7' } });
+      const strip = page.container.querySelector('.ve-carousel-strip');
+      const list = page.container.querySelector('#ve-list');
+
+      ve()._onReorderDrop({ item: slides()[0], from: strip, to: list, afterEl: null });
+
+      assert.deepEqual(paths(), SLIDES, 'a slide cannot yet leave its strip');
+    });
+
+    test('_moveSlide lands the slide behind its anchor, forwards and backwards', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      ve()._moveSlide(0, 0, 2);
+      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
+
+      ve()._moveSlide(0, 2, 0);
+      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
+    });
+
+    test('_moveSlide with a null anchor puts the slide at the front', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      ve()._moveSlide(0, 2, null);
+
+      assert.deepEqual(paths(), ['/2024/08/c.jpg', '/2024/08/a.jpg', '/2024/08/b.jpg']);
+    });
+
+    test('a move that changes nothing is not a change', async () => {
+      await mountPage({ params: { id: '7' } });
+      const before = page._nodes;
+
+      ve()._moveSlide(0, 1, 0);   // already directly behind a.jpg
+      ve()._moveSlide(0, 0, null); // already at the front
+      ve()._moveSlide(0, 1, 1);   // released over itself
+
+      assert.equal(page._nodes, before, 'an identical list would still cost an autosave');
+    });
+
+    test('_moveSlide refuses an index that is not a slide, or a node that is not a carousel', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: [carouselFence(SLIDES), '/2024/08/d.jpg'].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const before = page._nodes;
+
+      ve()._moveSlide(0, null, 1);
+      ve()._moveSlide(0, 9, 0);
+      ve()._moveSlide(1, 0, null); // node 1 is the plain image card, not a carousel
+
+      assert.equal(page._nodes, before);
+    });
+  });
+
   // ── Preview link ──────────────────────────────────────────────────────────
 
   describe('preview link', () => {
