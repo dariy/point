@@ -1966,8 +1966,11 @@ describe('CarouselStudioPage', () => {
     });
 
     describe('layers (S3)', () => {
-      const addLayerBtn = (el, type) =>
-        el.querySelector(`[data-action="add-layer"][data-type="${type}"]`);
+      const addLayer = (el, type, scope = 'slide') => {
+        const s = el.querySelector(`.carousel-studio__add-layer-select[data-scope="${scope}"]`);
+        s.value = type;
+        s.dispatchEvent(new window.Event('change', { bubbles: true }));
+      };
       const stageLayer = (el, slice, j) =>
         el.querySelector(
           `.carousel-studio__stage-slide[data-slice="${slice}"] .carousel-studio__layer[data-layer="${j}"]`,
@@ -2023,7 +2026,7 @@ describe('CarouselStudioPage', () => {
       test('adding each type puts one normalized layer inside the safe area', async () => {
         const el = await toDeck();
         for (const type of ['text', 'image', 'rect', 'counter', 'arrow']) {
-          click(addLayerBtn(el, type));
+          addLayer(el, type);
           await settle();
         }
         const layers = page.state.doc.slides[0].layers;
@@ -2040,16 +2043,16 @@ describe('CarouselStudioPage', () => {
       test('an image layer defaults its source to the logo_url setting', async () => {
         setSettings({ blog_title: 'Test blog', logo_url: '/2026/01/wordmark.png' });
         const el = await toDeck();
-        click(addLayerBtn(el, 'image'));
+        addLayer(el, 'image');
         await settle();
         assert.equal(page.state.doc.slides[0].layers[0].source, '/2026/01/wordmark.png');
       });
 
       test('the list is topmost-first and reordering maps to the array move', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'text'));
+        addLayer(el, 'text');
         await settle();
-        click(addLayerBtn(el, 'rect'));
+        addLayer(el, 'rect');
         await settle();
         // Array is back-to-front: [text, rect]. The list shows rect first.
         const names = [...el.querySelectorAll('.carousel-studio__layer-name')].map((b) =>
@@ -2066,7 +2069,7 @@ describe('CarouselStudioPage', () => {
 
       test('the property form writes through updateLayer, not into state', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'text'));
+        addLayer(el, 'text');
         await settle();
 
         const before = page.state.doc;
@@ -2087,7 +2090,7 @@ describe('CarouselStudioPage', () => {
 
       test('a layer renders on the stage as a positioned element', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'text'));
+        addLayer(el, 'text');
         await settle();
         const textInput = el.querySelector('#carousel-layer-text');
         textInput.value = 'Hello';
@@ -2106,14 +2109,14 @@ describe('CarouselStudioPage', () => {
         assert.equal(page.state.doc.mode, 'deck');
         assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean on load');
 
-        click(addLayerBtn(el, 'counter'));
+        addLayer(el, 'counter');
         await settle();
         assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'a new layer is a dirty document');
       });
 
       test('deleting a layer drops it at once, and the toast offers Undo', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'rect'));
+        addLayer(el, 'rect');
         await settle();
 
         let confirmed = null;
@@ -2137,7 +2140,7 @@ describe('CarouselStudioPage', () => {
 
       test('the eye switches a layer off and back on, without losing its place', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'rect'));
+        addLayer(el, 'rect');
         await settle();
         assert.equal(page.state.selectedLayer, 0);
 
@@ -2159,7 +2162,7 @@ describe('CarouselStudioPage', () => {
 
       test('hiding a layer is a document edit: one undo step, and a dirty deck', async () => {
         const el = await renderedDeck();
-        click(addLayerBtn(el, 'rect'));
+        addLayer(el, 'rect');
         await settle();
         click(el.querySelector('[data-action="layer-visibility"][data-index="0"]'));
         await settle();
@@ -2173,7 +2176,7 @@ describe('CarouselStudioPage', () => {
 
       test('picking a slide clears the layer selection', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'text'));
+        addLayer(el, 'text');
         await settle();
         assert.equal(page.state.selectedLayer, 0);
 
@@ -2189,7 +2192,7 @@ describe('CarouselStudioPage', () => {
          *  frame is re-queried by the caller — the setState re-renders it. */
         async function withLayer(box = { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }, n = 3) {
           const el = await toDeck({ post: '42' }, n);
-          click(addLayerBtn(el, 'text'));
+          addLayer(el, 'text');
           await settle();
           page.setState({ doc: updateLayer(page.state.doc, 0, 0, { box }) });
           await settle();
@@ -2427,7 +2430,7 @@ describe('CarouselStudioPage', () => {
 
           test('a rect layer never enters edit mode — only `text` is editable in place', async () => {
             const el = await toDeck();
-            click(addLayerBtn(el, 'rect'));
+            addLayer(el, 'rect');
             await settle();
             page.setState({ doc: updateLayer(page.state.doc, 0, 0, { box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 } }) });
             await settle();
@@ -2440,7 +2443,7 @@ describe('CarouselStudioPage', () => {
 
           test('typing live-updates a deck-wide layer on every other column, never the one being edited', async () => {
             const el = await toDeck();
-            click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+            addLayer(el, 'text', 'span');
             await settle();
             page.setState({
               doc: updateLayer(page.state.doc, SPAN_SLIDE, 0, {
@@ -2556,7 +2559,7 @@ describe('CarouselStudioPage', () => {
 
         test('adding a deck layer lands in doc.spanLayers, not a slide', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+          addLayer(el, 'text', 'span');
           await settle();
 
           assert.equal(page.state.doc.spanLayers.length, 1);
@@ -2572,7 +2575,7 @@ describe('CarouselStudioPage', () => {
 
         test('a span layer renders as a positioned element on every frame it crosses', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          addLayer(el, 'rect', 'span');
           await settle();
           // The default span box is 0.06..0.94 of the deck — it crosses all 3.
           const lefts = [0, 1, 2].map((i) => {
@@ -2592,7 +2595,7 @@ describe('CarouselStudioPage', () => {
           const el = await renderedDeck(3);
           assert.ok(!el.querySelector('.carousel-studio__dirty-badge'), 'clean after load');
 
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          addLayer(el, 'rect', 'span');
           await settle();
           assert.ok(el.querySelector('.carousel-studio__dirty-badge'), 'a span layer is a dirty document');
 
@@ -2631,9 +2634,9 @@ describe('CarouselStudioPage', () => {
 
         test('reorder and delete on a span row route to the span list', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+          addLayer(el, 'text', 'span');
           await settle();
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          addLayer(el, 'rect', 'span');
           await settle();
           assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['text', 'rect']);
 
@@ -2651,7 +2654,7 @@ describe('CarouselStudioPage', () => {
          *  600×250 and a client x of 300 is dead centre of the deck. */
         async function withSpanLayer(box) {
           const el = await toDeck();
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="rect"]'));
+          addLayer(el, 'rect', 'span');
           await settle();
           page.setState({ doc: updateLayer(page.state.doc, SPAN_SLIDE, 0, { box }) });
           await settle();
@@ -2759,7 +2762,7 @@ describe('CarouselStudioPage', () => {
 
         test('switching back to split keeps the deck layers', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="add-layer"][data-scope="span"][data-type="text"]'));
+          addLayer(el, 'text', 'span');
           await settle();
 
           click(el.querySelector('[data-action="mode"][data-mode="split"]'));
@@ -2779,8 +2782,11 @@ describe('CarouselStudioPage', () => {
      */
     describe('undo / redo', () => {
       const key = (opts) => fire(dom.document, 'keydown', { key: 'z', ...opts });
-      const addLayerBtn = (el, type) =>
-        el.querySelector(`[data-action="add-layer"][data-type="${type}"]`);
+      const addLayer = (el, type, scope = 'slide') => {
+        const s = el.querySelector(`.carousel-studio__add-layer-select[data-scope="${scope}"]`);
+        s.value = type;
+        s.dispatchEvent(new window.Event('change', { bubbles: true }));
+      };
 
       test('the header buttons start disabled and follow the ring', async () => {
         const el = await toDeck();
@@ -2807,7 +2813,7 @@ describe('CarouselStudioPage', () => {
         const el = await toDeck();
         const before = page.state.doc;
 
-        click(addLayerBtn(el, 'rect'));
+        addLayer(el, 'rect');
         await settle();
         assert.equal(page.state.doc.slides[0].layers.length, 1);
 
@@ -2819,7 +2825,7 @@ describe('CarouselStudioPage', () => {
 
       test('Ctrl+Z undoes and Ctrl+Shift+Z redoes', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'text'));
+        addLayer(el, 'text');
         await settle();
         assert.equal(page.state.doc.slides[0].layers.length, 1);
 
@@ -2839,7 +2845,7 @@ describe('CarouselStudioPage', () => {
 
       test('inside a text field Ctrl+Z is left to the browser', async () => {
         const el = await toDeck();
-        click(addLayerBtn(el, 'text'));
+        addLayer(el, 'text');
         await settle();
         const field = el.querySelector('#carousel-layer-text');
         assert.ok(field, 'the layer form has a text field');
@@ -2896,7 +2902,7 @@ describe('CarouselStudioPage', () => {
         const el = await mount({ post: '42' }, routes, { renderDeps: deps });
         click(el.querySelector('[data-action="mode"][data-mode="deck"]'));
         await settle();
-        click(addLayerBtn(el, 'rect'));
+        addLayer(el, 'rect');
         await settle();
         const withLayer = page.state.doc;
 
