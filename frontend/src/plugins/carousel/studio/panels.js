@@ -1021,23 +1021,19 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
     : "";
 }
 
-/** The "+ Text / + Logo / …" add chips for one scope. */
+/** The "+ Add layer" dropdown for one scope. */
 function addLayerChips(scope) {
   return html`
-    <div class="carousel-studio__fit-chips" role="group" aria-label="Add layer">
+    <select
+      class="carousel-studio__add-layer-select"
+      data-scope="${scope}"
+      aria-label="Add layer"
+    >
+      <option value="" disabled selected>+ Add layer...</option>
       ${LAYER_KINDS.map(
-        ([type, text]) => html`
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="add-layer"
-            data-scope="${scope}"
-            data-type="${type}"
-          >
-            + ${text}
-          </button>`,
+        ([type, text]) => html`<option value="${type}">${text}</option>`,
       )}
-    </div>`;
+    </select>`;
 }
 
 /**

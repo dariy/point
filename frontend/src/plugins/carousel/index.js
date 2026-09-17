@@ -634,9 +634,6 @@ export default class CarouselStudioPage extends Component {
         fit: "cover",
       });
     },
-    "add-layer"(_e, el) {
-      this._addLayer(el.dataset.type, el.dataset.scope);
-    },
     "select-layer"(_e, el) {
       this._selectLayer(Number(el.dataset.index), el.dataset.scope);
     },
@@ -2998,6 +2995,18 @@ export default class CarouselStudioPage extends Component {
       this.on(el, "change", () => {
         const { layer } = this._selectedLayerRef();
         if (layer) this._setLayer(this._layerFromFields(layer));
+      });
+    }
+
+    const addSelects = /** @type {HTMLSelectElement[]} */ (Array.from(this.$$(".carousel-studio__add-layer-select")));
+    for (const select of addSelects) {
+      this.on(select, "change", () => {
+        const type = select.value;
+        const scope = select.dataset.scope;
+        if (type) {
+          this._addLayer(type, scope);
+          select.value = "";
+        }
       });
     }
   }
