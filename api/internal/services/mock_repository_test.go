@@ -972,14 +972,14 @@ func (m *mockRepository) ListMediaFolders(ctx context.Context, fileType string) 
 	return nil, fmt.Errorf("ListMediaFolders not implemented")
 }
 
-func (m *mockRepository) ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error) {
+func (m *mockRepository) ListMediaFiltered(ctx context.Context, fileType, folder, filename string, limit, offset int64) ([]models.Medium, error) {
 	if m.MockListMediaFiltered != nil {
 		return m.MockListMediaFiltered(ctx, fileType, folder, limit, offset)
 	}
 	return nil, fmt.Errorf("ListMediaFiltered not implemented")
 }
 
-func (m *mockRepository) CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error) {
+func (m *mockRepository) CountMediaFiltered(ctx context.Context, fileType, folder, filename string) (int64, error) {
 	if m.MockCountMediaFiltered != nil {
 		return m.MockCountMediaFiltered(ctx, fileType, folder)
 	}

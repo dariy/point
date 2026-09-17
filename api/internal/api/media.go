@@ -175,12 +175,14 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 	page, perPage := ParsePaginationParams(c, 20)
 	fileType := c.QueryParam("file_type")
 	folder := c.QueryParam("folder")
+	filename := c.QueryParam("filename")
 
 	media, total, err := h.mediaService.ListMedia(c.Request().Context(), services.ListMediaParams{
 		Page:     page,
 		PerPage:  perPage,
 		FileType: fileType,
 		Folder:   folder,
+		Filename: filename,
 	})
 	if err != nil {
 		return MapError(err)
