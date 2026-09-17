@@ -26,6 +26,7 @@ import {
   serializeDocument,
   buildCarouselBlock,
   carouselFences,
+  adoptFencePaths,
   applyCarouselBlock,
   splitDocument,
   toDeckDocument,
@@ -44,6 +45,7 @@ import {
   toTemplate,
 } from '../src/plugins/carousel/document.js';
 import { MIN_SLIDES, MAX_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
+import { carouselFence } from '../src/utils/postNodes.js';
 import {
   canvasSize,
   sliceRects,
@@ -1419,6 +1421,124 @@ describe('carouselFences', () => {
   test('content with no carousel has no fences', () => {
     assert.deepStrictEqual(carouselFences('Just text.'), []);
     assert.deepStrictEqual(carouselFences(null), []);
+  });
+
+  test('carries the paths each fence lists, and only those', () => {
+    const content = [
+      ':::{.carousel-block}\n\n/2026/08/a.jpg\n\nnot a path\n\n/2026/08/b.jpg\n\n:::',
+      ':::{.carousel-block #c-7f3a}\n\n/2026/08/c.jpg\n\n:::',
+    ].join('\n\n');
+    assert.deepStrictEqual(
+      carouselFences(content).map((f) => f.paths),
+      [['/2026/08/a.jpg', '/2026/08/b.jpg'], ['/2026/08/c.jpg']],
+    );
+  });
+});
+
+// ── Adoption ────────────────────────────────────────────────────────────────
+//
+// A carousel in a post may have no stored document at all — an author typed the
+// fence in Text mode, or the editor grouped photos into one. The studio has to
+// open that as a document, and every slide it adopts has to be marked as not
+// the studio's to delete, or the first render takes the author's photos with
+// it. See `docs/features/carousel-studio.md`, "Plain and designed carousels".
+describe('adoptFencePaths', () => {
+  const PATHS = ['/2026/08/a.jpg', '/2026/08/b.jpg', '/2026/08/c.jpg'];
+
+  /** A fully rendered document: `sources[i]` rendered out to `outs[i]`. */
+  const rendered = (sources, outs) =>
+    normalizeDocument({
+      slides: sources.map((source, i) => ({
+        source,
+        rendered: { path: outs[i], media_id: 100 + i, specHash: 'h' },
+      })),
+    });
+
+  test('a block with no document becomes one slide per fence path', () => {
+    const doc = adoptFencePaths(emptyDocument(), PATHS);
+    assert.deepStrictEqual(doc.slides.map((s) => s.source), PATHS);
+    assert.strictEqual(doc.mode, 'deck', 'one photo per slide is a deck, never a split');
+    assert.deepStrictEqual(
+      doc.slides.map((s) => s.rendered),
+      PATHS.map((path) => ({ path, media_id: null, specHash: '' })),
+    );
+  });
+
+  test('an adopted slide names no media row, so nothing can delete or reuse it', () => {
+    const doc = adoptFencePaths(emptyDocument(), PATHS);
+    assert.ok(doc.slides.every((s) => s.rendered.media_id === null));
+  });
+
+  test('adoption round-trips: the block it builds is the fence it read', () => {
+    const doc = adoptFencePaths(emptyDocument(), PATHS);
+    assert.strictEqual(buildCarouselBlock(doc), carouselFence(PATHS));
+  });
+
+  test('a path dropped from the fence drops its slide', () => {
+    const doc = rendered(['/w.jpg', '/w.jpg', '/w.jpg'], PATHS);
+    const next = adoptFencePaths(doc, [PATHS[0], PATHS[2]]);
+    assert.deepStrictEqual(
+      next.slides.map((s) => s.rendered.path),
+      [PATHS[0], PATHS[2]],
+    );
+    assert.deepStrictEqual(next.slides.map((s) => s.rendered.media_id), [100, 102]);
+  });
+
+  test('a path added to the fence by hand is adopted beside the designed ones', () => {
+    const doc = rendered(['/w.jpg'], [PATHS[0]]);
+    const next = adoptFencePaths(doc, ['/2026/08/new.jpg', PATHS[0]]);
+    assert.deepStrictEqual(
+      next.slides.map((s) => [s.rendered.path, s.rendered.media_id]),
+      [['/2026/08/new.jpg', null], [PATHS[0], 100]],
+    );
+  });
+
+  test('order follows the fence, not the document', () => {
+    const doc = rendered(['/w.jpg', '/w.jpg'], [PATHS[0], PATHS[1]]);
+    const next = adoptFencePaths(doc, [PATHS[1], PATHS[0]]);
+    assert.deepStrictEqual(next.slides.map((s) => s.rendered.path), [PATHS[1], PATHS[0]]);
+  });
+
+  test('one path listed twice gets two slides, and they are not the same object', () => {
+    const next = adoptFencePaths(emptyDocument(), [PATHS[0], PATHS[0]]);
+    assert.strictEqual(next.slides.length, 2);
+    assert.notStrictEqual(next.slides[0], next.slides[1]);
+  });
+
+  test('doc-level framing survives adoption', () => {
+    const doc = normalizeDocument({ aspect: '1:1', strategy: 'pad', anchorY: 0.25 });
+    const next = adoptFencePaths(doc, PATHS);
+    assert.strictEqual(next.aspect, '1:1');
+    assert.strictEqual(next.strategy, 'pad');
+    assert.strictEqual(next.anchorY, 0.25);
+  });
+
+  test('a split document that only drifts keeps its mode', () => {
+    // `split` derives every slide from ONE source by column, so it cannot
+    // express a per-slide photo — but converting it here would re-frame slides
+    // the author already designed, and needs source pixels this does not have.
+    const doc = { ...rendered(['/w.jpg', '/w.jpg'], [PATHS[0], PATHS[1]]), mode: 'split' };
+    assert.strictEqual(adoptFencePaths(doc, [PATHS[1]]).mode, 'split');
+  });
+
+  test('no fence, no reconciliation — a design with no block yet is left alone', () => {
+    const doc = rendered(['/w.jpg'], [PATHS[0]]);
+    assert.deepStrictEqual(adoptFencePaths(doc, []), doc);
+    assert.deepStrictEqual(adoptFencePaths(doc, null), doc);
+  });
+
+  test('an unrendered document is left alone: its slides were never in a fence', () => {
+    // What a template apply stores before any render. Reconciling it against
+    // some other fence in the post would throw the design away.
+    const doc = normalizeDocument({ slides: [{ source: '/w.jpg' }, { source: '/x.jpg' }] });
+    assert.deepStrictEqual(adoptFencePaths(doc, PATHS), doc);
+  });
+
+  test('the input document is not mutated', () => {
+    const doc = rendered(['/w.jpg'], [PATHS[0]]);
+    const before = serializeDocument(doc);
+    adoptFencePaths(doc, PATHS);
+    assert.strictEqual(serializeDocument(doc), before);
   });
 });
 

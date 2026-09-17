@@ -870,12 +870,13 @@ describe('CarouselStudioPage', () => {
         'c-aaaa': docFor('/2026/08/a1.jpg', 100),
       }), { renderDeps: deps });
 
-      assert.deepEqual(page.state.doc.slides, [], 'no document adopted from another block');
-      assert.deepEqual(blockParams('GET'), [], 'and none asked for');
+      // Its own fence, adopted — never the first block's document.
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered.path),
+        ['/2026/08/c1.jpg'],
+      );
+      assert.deepEqual(blockParams('GET'), [], 'and no row asked for');
 
-      // The slide the fence already shows, carrying no media_id — an adopted
-      // block must never let a re-render delete the author's own photo.
-      page._setDoc(normalizeDocument(docFor('/2026/08/c1.jpg', null)), {}, { history: false });
       await page._render();
       await settle();
 
@@ -929,7 +930,12 @@ describe('CarouselStudioPage', () => {
         '': docFor('/2026/08/a1.jpg', 100),
       }), { renderDeps: fakeRenderDeps(async () => ({})) });
 
-      assert.deepEqual(page.state.doc.slides, [], 'the first block\u2019s design is not borrowed');
+      // Its own fence adopted, not the first block's design borrowed: the
+      // slide on screen is `#c-bbbb`'s, and it carries no media id.
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered),
+        [{ path: '/2026/08/b1.jpg', media_id: null, specHash: '' }],
+      );
       assert.deepEqual(blockParams('GET'), ['c-bbbb']);
     });
 
@@ -953,6 +959,199 @@ describe('CarouselStudioPage', () => {
       assert.ok(minted, `the fence was keyed: ${content}`);
       assert.deepEqual(blockParams('PUT'), [minted[1]]);
       assert.deepEqual(blockParams('DELETE'), [null], 'and the pre-key row deleted unkeyed');
+    });
+  });
+
+  // ── Adopting a carousel the studio did not make ───────────────────────────
+  //
+  // A *plain* carousel is a fence of the post's own photos with no `carousels`
+  // row behind it — typed in Text mode, or grouped by the editor. The studio
+  // has to open it as a document, or its first render replaces that fence with
+  // slides the author never asked for. Every slide it adopts carries
+  // `rendered.media_id: null`, which is what keeps `_deleteSuperseded` and
+  // `reusableMedia` off the author's originals.
+  describe('adopting a plain carousel', () => {
+    const PATHS = ['/2026/08/p1.jpg', '/2026/08/p2.jpg', '/2026/08/p3.jpg'];
+    const fence = (paths, key) =>
+      `:::{.carousel-block${key ? ` #${key}` : ''}}\n\n${paths.join('\n\n')}\n\n:::`;
+
+    /** A post whose only carousel is `paths`, and a store with no row for it. */
+    function routes(paths, rows = {}) {
+      const post = { ...POST, content: `Intro.\n\n${fence(paths)}\n\nOutro.` };
+      return { post, routes: routesFor(post, rows) };
+    }
+
+    function routesFor(post, rows) {
+      return [
+        [/\/api\/posts\/42$/, (url, opts) =>
+          (opts.method === 'PUT' ? { body: {} } : { body: post })],
+        [/\/api\/carousel/, (url, opts) => {
+          if (opts.method === 'PUT' || opts.method === 'DELETE') return { body: {} };
+          const asked = new URL(url, 'http://t').searchParams.get('block') ?? '';
+          return rows[asked]
+            ? { body: { post_id: 42, block_key: asked, doc: rows[asked] } }
+            : { status: 404, body: { message: 'no carousel' } };
+        }],
+        [/\/api\/media\/\d+$/, { body: {} }],
+      ];
+    }
+
+    const savedContent = () =>
+      JSON.parse(calls.find((c) => c.method === 'PUT' && /\/api\/posts\/42$/.test(c.url)).body)
+        .content;
+
+    const mediaDeletes = () =>
+      calls.filter((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url));
+
+    test('a fence with no row loads as one slide per path', async () => {
+      const el = await mount({ post: '42' }, routes(PATHS).routes, {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+
+      assert.equal(page.state.doc.slides.length, PATHS.length);
+      assert.equal(page.state.doc.mode, 'deck', 'a photo per slide, not one photo sliced');
+      assert.deepEqual(page.state.doc.slides.map((s) => s.source), PATHS);
+      assert.deepEqual(page.state.doc.slides.map((s) => s.rendered.path), PATHS);
+      assert.ok(
+        page.state.doc.slides.every((s) => s.rendered.media_id === null),
+        'no adopted slide names a media row',
+      );
+      assert.equal(page.state.hasCarousel, true);
+      assert.ok(!el.querySelector('.carousel-studio__pick'), 'the pick prompt is gone');
+      assert.ok(el.querySelector('.carousel-studio__stage'), 'the builder is on screen instead');
+      assert.ok(!page.container.querySelector('.carousel-studio__dirty-badge'), 'clean on load');
+    });
+
+    test('the adopted generation offers nothing to delete', async () => {
+      await mount({ post: '42' }, routes(PATHS).routes, {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+      assert.deepEqual(page._priorRendered.map((r) => r.path), PATHS);
+      assert.equal(
+        page._priorRendered.filter((r) => Number.isFinite(r.media_id)).length,
+        0,
+        'no deletion candidate among them',
+      );
+    });
+
+    test('rendering an adopted carousel makes fresh slides and keeps the originals', async () => {
+      let n = 0;
+      const { post } = routes(PATHS);
+      const deps = fakeRenderDeps(async () => {
+        n += 1;
+        return { id: 700 + n, path: `/2026/08/slide${n}.jpg` };
+      });
+      deps.fetched = [];
+      deps.fetchBlob = async (path) => {
+        deps.fetched.push(path);
+        return new Blob(['src']);
+      };
+      await mount({ post: '42' }, routes(PATHS).routes, { renderDeps: deps });
+
+      await page._render();
+      await settle();
+
+      assert.equal(page.state.error, null);
+      assert.equal(n, PATHS.length, 'every slide was rendered fresh — none reused');
+      assert.deepEqual(
+        deps.fetched,
+        PATHS,
+        'each slide drew from its own photo, not from slide 1\u2019s',
+      );
+      assert.deepEqual(mediaDeletes(), [], 'the author\u2019s photos were not deleted');
+
+      const content = savedContent();
+      const key = content.match(/#(c-[0-9a-f]{4}(?:-\d+)?)\}/)[1];
+      assert.equal(
+        content,
+        `Intro.\n\n${fence(['/2026/08/slide1.jpg', '/2026/08/slide2.jpg', '/2026/08/slide3.jpg'], key)}\n\nOutro.`,
+      );
+      assert.ok(!PATHS.some((p) => content.includes(p)), 'the originals left the fence');
+      assert.ok(post.content.includes(PATHS[0]), 'and the loaded post was never mutated');
+    });
+
+    test('removing an adopted carousel takes the fence, not the photos', async () => {
+      const el = await mount({ post: '42' }, routes(PATHS).routes, {
+        renderDeps: fakeRenderDeps(async () => ({})),
+      });
+      let asked = '';
+      page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
+        asked = message;
+        onConfirm();
+      };
+
+      click(el.querySelector('[data-action="remove-carousel"]'));
+      await settle();
+      await settle();
+
+      assert.match(asked, /stay in your media library/);
+      assert.deepEqual(mediaDeletes(), [], 'nothing was deleted');
+      assert.equal(savedContent(), 'Intro.\n\nOutro.');
+    });
+
+    // ── Drift ──
+    //
+    // The row and the fence can disagree: Text mode is a first-class writer, so
+    // the author may edit a rendered fence by hand. Content wins.
+    describe('drift between the row and the fence', () => {
+      const OUTS = ['/2026/08/old1.jpg', '/2026/08/old2.jpg', '/2026/08/old3.jpg'];
+      const designed = (outs) => ({
+        version: 1,
+        aspect: '4:5',
+        mode: 'split',
+        slides: outs.map((path, i) => ({
+          source: '/2026/08/w.jpg',
+          rendered: { path, media_id: 100 + i, specHash: 'stale' },
+        })),
+      });
+
+      test('a slide deleted by hand is gone, and does not come back on the next render', async () => {
+        const kept = [OUTS[0], OUTS[2]];
+        const post = { ...POST, content: `Intro.\n\n${fence(kept, 'c-dead')}\n\nOutro.` };
+        let n = 0;
+        await mount({ post: '42', block: 'c-dead' }, routesFor(post, { 'c-dead': designed(OUTS) }), {
+          renderDeps: fakeRenderDeps(async () => {
+            n += 1;
+            return { id: 800 + n, path: `/2026/08/re${n}.jpg` };
+          }),
+        });
+
+        assert.deepEqual(page.state.doc.slides.map((s) => s.rendered.path), kept);
+
+        await page._render();
+        await settle();
+
+        assert.equal(page.state.error, null);
+        const content = savedContent();
+        assert.ok(!content.includes(OUTS[1]), 'the hand-deleted slide stayed deleted');
+        assert.equal(
+          content,
+          `Intro.\n\n${fence(['/2026/08/re1.jpg', '/2026/08/re2.jpg'], 'c-dead')}\n\nOutro.`,
+        );
+        // Slide 2's media row is now unreferenced, but it was never this
+        // generation's to begin with — it left `_priorRendered` on load.
+        assert.deepEqual(
+          mediaDeletes().map((c) => c.url.match(/\/api\/media\/(\d+)$/)[1]).sort(),
+          ['100', '102'],
+        );
+      });
+
+      test('a photo added to a rendered fence by hand joins the deck unowned', async () => {
+        const added = '/2026/08/mine.jpg';
+        const post = {
+          ...POST,
+          content: `Intro.\n\n${fence([OUTS[0], added, OUTS[1]], 'c-mix')}\n\nOutro.`,
+        };
+        await mount({ post: '42', block: 'c-mix' }, routesFor(post, { 'c-mix': designed(OUTS) }), {
+          renderDeps: fakeRenderDeps(async () => ({})),
+        });
+
+        assert.deepEqual(
+          page.state.doc.slides.map((s) => [s.rendered.path, s.rendered.media_id]),
+          [[OUTS[0], 100], [added, null], [OUTS[1], 101]],
+          'fence order, and only the studio\u2019s own slides carry a media id',
+        );
+      });
     });
   });
 

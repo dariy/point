@@ -63,7 +63,12 @@ held, a plain drag or wheel scrolls the strip instead; a layer can be selected
 by clicking it directly, wherever it sits on the stage; a `box.rotate` field
 lets a layer tilt, presentational only, driven by a ninth handle above the
 box's own edge; and a `text` layer is editable in place through a double-click
-into a `contenteditable` block. See "The stage is the editor" below. Production
+into a `contenteditable` block. See "The stage is the editor" below. Composition has caught up with it: a post may hold
+several carousels, each addressed by a key in its fence (`:::{.carousel-block
+#c-7f3a}`), and a *plain* carousel — a fence of the author's own photos with no
+stored document — opens in the studio as a document rather than as an empty
+pick prompt, with every adopted slide marked as not the studio's to delete. See
+"Plain and designed carousels" below. Production
 (S5) is not built yet. See "Delivery stages".
 
 Ahead of S2, `geometry.js` gained the inverse of the split question — `fitReport`
@@ -137,6 +142,126 @@ Pinned by `TestRenderContent_CarouselBlock_BlankLineContract`.
 If this contract ever breaks, the fix is to emit the `<div>` and `<img>` tags
 directly from the block writer rather than relying on markdown expansion — and this
 doc, plus the epic, must be updated.
+
+## Plain and designed carousels
+
+There are two kinds of carousel and **one** block format.
+
+- A **plain** carousel is a fence of the post's own photo paths. No `carousels`
+  row, no render, nothing encoded: the author grouped some photos, or typed the
+  fence. It works with the carousel plugin switched off, because the fence is
+  ordinary markdown and the public strip is CSS
+  (`frontend/css/public/carousel-block.css`).
+- A **designed** carousel is the studio's rendered slides — cropped, framed,
+  layered — backed by a `carousels` row. That row is the source of truth for the
+  *design*; the fence the studio writes is the design's **output**, regenerated
+  from `slides[].rendered.path` on every render.
+
+The markup is identical and the public rendering is identical; only provenance
+differs. `postMedia.js` keys purely on the block class and the `<img>` tags, so
+the article view and the immersive viewer cannot tell the two apart and do not
+need to. A plain carousel can become a designed one at any time — see
+"Adoption" below — and a designed one degrades to a plain one if its row is ever
+lost, because the paths in the post are self-sufficient.
+
+### The block key
+
+A fence may carry an id, which is how a post addresses one carousel among
+several:
+
+```
+:::{.carousel-block #c-7f3a}
+
+/2026/08/slide-1.jpg
+
+:::
+```
+
+The id survives the pipeline end to end: goldmark-attributes is enabled
+(`newPostMarkdown`, `post_render.go`) and bluemonday already allows `id` on
+`div` (`newPostPolicy`). `postMedia.js`'s `CAROUSEL_BLOCK_RE` matches on the
+class alone and is unaffected by it. Attribute order and spacing are whatever
+goldmark-attributes accepts, so `:::{ #c-7f3a .carousel-block }` is the same
+fence — both readers (`matchCarouselFenceOpen` in `postNodes.js`,
+`carouselFences` in `document.js`) are tolerant of it, because a person may have
+typed it.
+
+Keys are minted by **writers** only — `newCarouselKey` (`postNodes.js`) for the
+editor, `_mintBlockKey` (`index.js`) for the studio — never by a parser, or the
+same markdown would parse into two different documents.
+
+A fence with no key is not broken: it is addressed by **1-based position** for
+exactly the one save that adopts it, which is also the save that writes a key
+into it (`resolveBlock` / `targetFence`). Rows written before block keys existed
+carry the **empty** key, which means "the first fence, the one with no id yet",
+and the unkeyed API address resolves to it (`api.firstBlockKey`). The save that
+keys such a fence writes a new row and retires the pre-key one
+(`_retirePreKeyRow`), or the block would have two documents.
+
+### Several blocks in one post
+
+`carousels` is `UNIQUE(post_id, block_key)`: one design document per block, so
+any carousel in a post can be opened in the studio. The studio is opened on one
+of them by `/light/carousel?post=<id>&block=<key-or-position>`.
+
+Every write is **targeted**: `applyCarouselBlock` replaces the one fence this
+block owns by byte offset (`carouselFences` gives the span) and passes the rest
+of the content through unchanged — it is a string edit, not a parse/serialize
+round trip, so no other carousel in the post and no line the author wrote is
+reformatted.
+
+### Who may write the block
+
+| Writer | What it writes | Row? |
+|---|---|---|
+| Visual editor (`postNodes.js` + `VisualEditor.js`) | a plain fence, keyed on creation — grouping images, ungrouping, adding or removing a slide | no |
+| Text mode | anything the author types, key or no key | no |
+| Carousel Studio (`index.js`) | a designed fence of rendered slide paths, always keyed | yes |
+| Publish (`post_publish.go`) | nothing — `ExtractMediaPaths` reads every image in the post, fence slides included, in document order | — |
+
+Text mode is a **first-class** writer, not an escape hatch: a fence edited by
+hand is as authoritative as one the studio wrote. That is what makes the
+reconciliation below necessary rather than defensive.
+
+### Adoption: content wins, and the author's photos are never deleted
+
+When the studio opens a block, `adoptFencePaths` (`document.js`) reconciles the
+stored document — an empty one when the block has no row — against the paths the
+fence actually carries, and `_adoptLoaded` takes the result as the working
+document:
+
+- each fence path takes the doc slide that rendered to it, **in fence order**;
+- a fence path the document does not know is **adopted** as a new slide, its
+  `source` and its `rendered.path` both being that path;
+- a doc slide whose `rendered.path` is no longer in the fence is **dropped**, so
+  a slide deleted by hand in Text mode stays deleted instead of being restored
+  by the next render.
+
+A document built entirely by adoption is a **deck**, never a split: every slide
+names its own photo, and `split` means the opposite — one source cut into
+columns by `sliceRects` from the slide index alone, which would render the first
+photo `n` times and drop the rest. A document that already had slides keeps its
+mode; split → deck is a freeze the author asks for, and doing it during adoption
+would re-frame slides they already designed.
+
+Two documents are left exactly as they are: one with no fence to reconcile
+against (a design in progress, or a fence the author removed — the next render
+re-appends it), and one whose slides are not all rendered, which is what a
+template apply stores before any render. Those slides were never in a fence, so
+a fence cannot correct them.
+
+**An adopted slide carries `rendered.media_id: null`, and that is load-bearing.**
+`_deleteSuperseded` (`index.js`) deletes exactly the previous generation's
+entries with a *finite* `media_id`, and `reusableMedia` reuses only finite ones.
+A null id therefore means "this file is not the studio's to reuse or to delete":
+the render encodes a fresh slide beside the original and leaves the original in
+the media library, where the photographer put it. Recording the real media id on
+an adopted slide would make the studio **delete the author's own photos** on the
+next render — which is why adoption mints nothing and claims nothing.
+
+For the same reason `_removeCarousel` deletes only media rows with a finite id,
+and the Remove confirmation says so: removing a plain carousel takes its fence
+out of the post and leaves every photo alone.
 
 ## Sizing
 
@@ -1424,6 +1549,7 @@ S4's are all in the gallery rather than in the format:
 | Public block CSS | New partial appended to the **main** bundle list in `build-css.sh`, not the plugin dir | Plugin CSS is served only when the plugin is enabled; published content must stay styled with the plugin off. Only the admin studio CSS belongs in the plugin dir |
 | UI surface | Full-page admin route `/light/carousel?post=<id>` | A filmstrip + stage + properties panel does not fit a `<details>` field group. Param-less path: plugin routes are merged verbatim and filtered on `startsWith("/light")` (`app.js`) |
 | Document storage | New `carousels` table, keyed `UNIQUE(post_id, block_key)` | sqlc expands `SELECT *`; a multi-KB JSON blob on `posts` would ride along on every post-list query. `post_id` alone was UNIQUE through C6, one carousel per post; a post may hold several now, so the row is keyed by the block's fence id (`:::{.carousel-block #c-7f3a}`) instead. The `rekey_carousels_by_block_key` migration rebuilds the table around the composite key and backfills every existing row with the **empty** key — "the first fence, the one with no id yet" — which rewrites no post's content and is the key an unkeyed request still resolves to (`api.firstBlockKey`). The studio replaces it with a minted key on that block's next save |
+| Opening a block the studio did not make | The fence is adopted as a document, one slide per path, and every adopted slide carries `rendered.media_id: null`. Content wins on drift: fence order rules, an unknown path is adopted, a slide whose path left the fence is dropped. A document built wholly by adoption is a `deck` | Without it the studio showed the pick prompt over a carousel the post already had, and its first render replaced that fence with slides the author never asked for. `media_id: null` is the whole safety property: `_deleteSuperseded` deletes only a *finite* id and `reusableMedia` reuses only a finite one, so a real id on an adopted slide would make the next render **delete the photographer's originals**. Reconciling toward content is the same decision seen from the fence's side — Text mode is a first-class writer, so a slide deleted by hand must not be restored by the next render. A document with no fence, or one whose slides are not all rendered (what a template apply stores), is left alone: those slides were never in a fence. `deck` because `split` derives every slide from one source by column and would drop every photo but the first; an already-designed split document keeps its mode, since converting it needs source pixel sizes and would re-frame work the author already did. See "Plain and designed carousels" above |
 | Superseded slides on re-render | Studio deletes the prior generation's `rendered[].media_id` rows explicitly, skipping any path still elsewhere in the post | Slides carry a `post_id`, so `ListOrphanedMedia` (`post_id IS NULL`) never flags them — without an explicit delete every re-render leaks the old slides onto disk forever. Widening orphan detection into a content scan is a media-library change and out of scope |
 | A post with a carousel block on Instagram | Every image in the post ships, in document order, then the ≤20 truncation still applies. This **reverses** the earlier rule ("the block's slides ARE the carousel, the loose photos are dropped") recorded here through C8 | A post may carry several carousel blocks, so "the post's carousel" no longer names anything: the old selector took the *first* fence and silently dropped every other image in the post, the other decks included. `post_publish.go` now reads `ExtractMediaPaths(post.Content, "")` alone — `carouselBlockPaths` and `carouselBlockRe` are deleted — so a fence's slides are ordinary content paths, deduped and ordered with everything else. An author who wants only the deck on Instagram publishes a post that carries only the deck |
 | Grid thumbnail of a post whose first media is a carousel | Slide 1 becomes the post's `media_url` — kept, not worked around | `DeriveMediaURL` (`api/internal/utils/media.go`) takes the first bare media path in content, and the fence emits bare paths, so a carousel at the top of a post makes its cover slide the grid thumbnail. That is the right thumbnail for a designed deck. A post that wants a different thumbnail sets `thumbnail_path` explicitly, which still wins |
