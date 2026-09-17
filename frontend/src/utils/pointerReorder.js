@@ -13,10 +13,18 @@
  * @param {object}   opts
  * @param {string}   opts.handleSelector  drag handle, inside an item
  * @param {string}   opts.itemSelector    a movable item
- * @param {Function} opts.containers      () => Element[] — evaluated per gesture
- * @param {"x"|"y"} [opts.axis]           which way the list runs; `"x"` is a
+ * @param {Function} opts.containers      () => Element[] — evaluated per
+ *   gesture, and FIRST MATCH WINS: both the container under the pointer and
+ *   the one an item started in are the first entry that claims it. A caller
+ *   whose containers nest — a rail inside a card inside the list — must
+ *   therefore list the inner one BEFORE its ancestor, or the ancestor
+ *   swallows every drop over the inner one.
+ * @param {"x"|"y"|Function} [opts.axis]  which way a list runs, or
+ *   `(container) => "x"|"y"` when the containers do not agree; `"x"` is a
  *   horizontal rail, where the midpoint test, the drop line and the edge
- *   scroll all turn 90° (a rail scrolls itself, not the page)
+ *   scroll all turn 90° (a rail scrolls itself, not the page). Resolved per
+ *   placement, so one gesture can leave a vertical list and enter a
+ *   horizontal rail and get the right line at each end.
  * @param {Function} [opts.isEnabled]     () => boolean — gate the whole gesture
  * @param {Function} opts.onDrop          ({ item, from, to, afterEl }) => void
  * @returns {Function} cleanup
@@ -29,7 +37,10 @@ export function attachPointerReorder({
   isEnabled = () => true,
   onDrop,
 }) {
-  const horizontal = axis === "x";
+  /** Which way `container` runs. Asked per placement, never cached: a gesture
+   *  that crosses containers crosses axes with them. */
+  const isHorizontal = (container) =>
+    (typeof axis === "function" ? axis(container) : axis) === "x";
   let item = null;      // the element being moved
   let from = null;      // container it started in
   let indicator = null; // the drop line
@@ -79,12 +90,14 @@ export function attachPointerReorder({
    * — a filmstrip overflows sideways inside a page that does not.
    */
   const scrollTarget = () => {
-    if (!horizontal) return { el: null, lo: 0, hi: window.innerHeight, pos: lastY };
     const c = containerAt(lastX, lastY);
+    if (!c || !isHorizontal(c)) {
+      return { el: null, lo: 0, hi: window.innerHeight, pos: lastY };
+    }
     // A rail short enough to fit has no scroll to drive, and its whole width
     // is inside the edge band — without this the loop would spin for the
     // length of every drag over a three-slide strip, scrolling nothing.
-    if (!c || c.scrollWidth <= c.clientWidth) return null;
+    if (c.scrollWidth <= c.clientWidth) return null;
     const r = c.getBoundingClientRect?.();
     return r ? { el: c, lo: r.left, hi: r.right, pos: lastX } : null;
   };
@@ -111,7 +124,9 @@ export function attachPointerReorder({
     }
   };
 
-  /** The container under the pointer, or the one the gesture started in. */
+  /** The container under the pointer, or the one the gesture started in.
+   *  First match wins — see `containers` above: nested containers must be
+   *  listed before their ancestors, whose rect contains theirs. */
   const containerAt = (x, y) => {
     for (const c of containers()) {
       if (!c || !c.isConnected) continue;
@@ -137,10 +152,21 @@ export function attachPointerReorder({
   const showIndicator = (container, x, y) => {
     if (!indicator) {
       indicator = document.createElement("div");
-      indicator.className = `reorder-indicator${horizontal ? " reorder-indicator--x" : ""}`;
       indicator.setAttribute("aria-hidden", "true");
     }
-    const items = [...container.querySelectorAll(itemSelector)].filter((el) => el !== item);
+    const horizontal = isHorizontal(container);
+    // Reassigned every time, not once at creation: the same line moves between
+    // containers mid-gesture, and a vertical rule left over from the list is
+    // invisible inside a horizontal rail.
+    indicator.className = `reorder-indicator${horizontal ? " reorder-indicator--x" : ""}`;
+    // Direct children only. A descendant query would offer the slides of a
+    // carousel nested inside a card as drop points for the outer list, and
+    // `insertBefore` on an element that is not the container's own child
+    // throws — so nesting works for every container without a second,
+    // per-container selector.
+    const items = [...container.children].filter(
+      (el) => el !== item && el !== indicator && el.matches(itemSelector),
+    );
     const before = items.find((el) => {
       const r = el.getBoundingClientRect();
       return horizontal ? x < r.left + r.width / 2 : y < r.top + r.height / 2;
