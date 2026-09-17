@@ -9,6 +9,7 @@ import { setToast } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
+import { carouselFence } from "../../utils/postNodes.js";
 
 // .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still
 // points at the original: the card's lightbox (see _bindLightbox) opens the
@@ -324,9 +325,10 @@ export class VisualEditor extends Component {
       .map((node, i) => {
         if (node.type === "image") return node.path;
         if (node.type === "carousel") {
-          // Read-only in the editor: emit the paths back untouched, in the
-          // blank-line form the render contract requires (postNodes.js).
-          return `:::{.carousel-block}\n\n${(node.paths || []).join("\n\n")}\n\n:::`;
+          // Read-only in the editor: emit the paths and the block key back
+          // untouched. The fence is postNodes.js's to write — a second copy of
+          // the blank-line contract here is a second thing to get wrong.
+          return carouselFence(node.paths || [], node.key);
         }
         const card = this.container.querySelector(
           `.ve-card[data-index="${i}"]`,

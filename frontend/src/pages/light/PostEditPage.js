@@ -29,7 +29,7 @@ import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG, MEDIA_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
-import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNodes.js";
+import { parseNodes, serializeNodes, firstImagePath, dedupeCarouselKeys } from "../../utils/postNodes.js";
 import { attachWindowFileDrop } from "../../utils/windowFileDrop.js";
 import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.js";
 import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.js";
@@ -1006,7 +1006,7 @@ export default class PostEditPage extends Component {
       }))
     };
     if (targetMode === "visual") {
-      this._nodes = parseNodes(data.content);
+      this._nodes = dedupeCarouselKeys(parseNodes(data.content));
       this.setState({
         editorMode: "visual",
         post
@@ -1030,7 +1030,7 @@ export default class PostEditPage extends Component {
           content: initialContent
         };
         if (this.state.editorMode === "visual") {
-          this._nodes = parseNodes(initialContent);
+          this._nodes = dedupeCarouselKeys(parseNodes(initialContent));
         }
         sessionStorage.removeItem("newPostInitialContent");
       }
@@ -1108,7 +1108,7 @@ export default class PostEditPage extends Component {
       const [post, igStatus] = await Promise.all([getPost(id), getInstagramStatus().catch(() => null)]);
       if (post.status) post.status = post.status.toLowerCase();
       this._tags = toTagNames(post.tags);
-      this._nodes = parseNodes(post.content);
+      this._nodes = dedupeCarouselKeys(parseNodes(post.content));
       this._mediaByPath = {};
       // Resolve exactly the paths this post references. This used to take the
       // first 200 media site-wide and hope: the listing is ordered by upload
@@ -1282,7 +1282,7 @@ export default class PostEditPage extends Component {
           slug: name
         }))
       };
-      if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
+      if (this.state.editorMode === "visual") this._nodes = dedupeCarouselKeys(parseNodes(post.content));
       setToast({
         message: "Analysis complete.",
         type: "success"
@@ -1308,7 +1308,7 @@ export default class PostEditPage extends Component {
           slug: name
         }))
       };
-      if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
+      if (this.state.editorMode === "visual") this._nodes = dedupeCarouselKeys(parseNodes(post.content));
       setToast({
         message: err.message || "Analysis failed.",
         type: "error"

@@ -5,6 +5,17 @@ import (
 	"testing"
 )
 
+// assertRendered fails once per fragment RenderContent(in) should have produced
+// but did not, quoting the whole output so the diff is readable.
+func assertRendered(t *testing.T, in, got string, want ...string) {
+	t.Helper()
+	for _, w := range want {
+		if !strings.Contains(got, w) {
+			t.Errorf("RenderContent(%q) = %q\n  missing %q", in, got, w)
+		}
+	}
+}
+
 // TestRenderContent_CarouselBlock pins the render contract the Carousel Studio
 // feature is built on: a :::{.carousel-block} fence wrapping bare media paths
 // must render to a <div class="carousel-block"> containing one <img> per path.
@@ -22,15 +33,11 @@ func TestRenderContent_CarouselBlock(t *testing.T) {
 		t.Fatalf("RenderContent returned error: %v", err)
 	}
 
-	for _, want := range []string{
+	assertRendered(t, in, got,
 		`<div class="carousel-block">`,
 		`<img src="/2026/08/a.jpg"`,
 		`<img src="/2026/08/b.jpg"`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("RenderContent(%q) = %q\n  missing %q", in, got, want)
-		}
-	}
+	)
 
 	// The <img> tags must be *inside* the div, not siblings emitted before or
 	// after it.
@@ -44,6 +51,27 @@ func TestRenderContent_CarouselBlock(t *testing.T) {
 		t.Errorf("RenderContent(%q): want 2 <img> inside the div, got %d\n  inner = %q",
 			in, strings.Count(inner, "<img "), inner)
 	}
+
+	// A keyed fence — :::{.carousel-block #c-7f3a} — is how a post addresses one
+	// carousel among several. Nothing downstream may key off the fence being
+	// bare: the class still has to land, the id has to survive bluemonday, and
+	// the slides still render through the same generic pipeline.
+	t.Run("keyed fence", func(t *testing.T) {
+		const keyed = ":::{.carousel-block #c-7f3a}\n\n/2026/08/a.jpg\n\n/2026/08/b.jpg\n\n:::"
+		got, err := svc.RenderContent(keyed)
+		if err != nil {
+			t.Fatalf("RenderContent returned error: %v", err)
+		}
+		assertRendered(t, keyed, got,
+			`class="carousel-block"`,
+			`id="c-7f3a"`,
+			`<img src="/2026/08/a.jpg"`,
+			`<img src="/2026/08/b.jpg"`,
+		)
+		if n := strings.Count(got, "<img "); n != 2 {
+			t.Errorf("RenderContent(%q): want 2 <img>, got %d\n  %q", keyed, n, got)
+		}
+	})
 }
 
 // TestRenderContent_CarouselBlock_BlankLineContract records *why* the block
