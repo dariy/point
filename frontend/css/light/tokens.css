@@ -153,6 +153,8 @@
     --ve-thumb-width: var(--size-5);
     --ve-thumb-height: var(--size-3-5);
     --ve-thumb-border-radius: var(--size-0-125);
+    --ve-slide-handle-size: var(--size-1-25);
+    --ve-slide-handle-dots-size: var(--size-0-75);
     --ve-rename-input-min-width: var(--size-2-5);
     --ve-rename-input-border-bottom: var(--size-0-09375);
     --ve-rename-input-padding: var(--size-0-125);

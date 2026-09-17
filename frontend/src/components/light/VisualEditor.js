@@ -144,16 +144,24 @@ export class VisualEditor extends Component {
           const block = node.key || String(carouselCount);
           const mediaByPath = this.props.mediaByPath || {};
           const thumbs = paths
-            .map((path) => {
+            .map((path, slideIdx) => {
               const media = mediaByPath[path];
-              return html`<img class="ve-thumb" ${thumbAttrs(path, {
-                sizes: VE_THUMB_SIZES,
-                width: media?.width,
-                height: media?.height,
-              })}
-                   alt="${path.split("/").pop()}"
-                   data-full="${path}"
-                   loading="lazy" decoding="async">`;
+              return html`
+              <div class="ve-slide" data-index="${slideIdx}">
+                <button class="ve-slide-handle" type="button"
+                        aria-label="Move slide ${slideIdx + 1} of ${paths.length}"
+                        title="Drag to reorder — or the arrow keys">
+                  <span class="ve-handle-dots" aria-hidden="true"></span>
+                </button>
+                <img class="ve-thumb" ${thumbAttrs(path, {
+                  sizes: VE_THUMB_SIZES,
+                  width: media?.width,
+                  height: media?.height,
+                })}
+                     alt="${path.split("/").pop()}"
+                     data-full="${path}"
+                     loading="lazy" decoding="async">
+              </div>`;
             });
           return html`
           ${insertZone(i)}
@@ -791,25 +799,36 @@ export class VisualEditor extends Component {
    *
    * Pointer events rather than HTML5 drag-and-drop: DnD does not exist on iOS
    * Safari, so for the life of this component the handle was mouse-only. The
-   * util owns the gesture — press, a line showing where the card would land,
-   * release — and hands back the card the line came to rest behind; deciding
-   * what that means for the list is this component's job, and it is all in
-   * _moveNode(), which is the half a test can reach without a layout engine.
+   * util owns the gesture — press, a line showing where the item would land,
+   * release — and hands back the item the line came to rest behind; deciding
+   * what that means for the model is this component's job, split across
+   * _onReorderDrop() (which container, which model) and _moveNode()/
+   * _moveSlide() (the index arithmetic) — the half a test can reach without a
+   * layout engine.
    */
   _bindReorder() {
     const list = this.$("#ve-list");
     if (!list) return;
 
+    // One gesture, two kinds of container: the top-level list (vertical) and
+    // every carousel card's strip (horizontal). Strips are listed before the
+    // list itself — attachPointerReorder's containers() is first-match-wins,
+    // and a strip's rect sits inside the list's, so the list would otherwise
+    // always win. Cards and slides share the gesture but not a model: onDrop
+    // below routes each to its own mutation and refuses a drop that would
+    // cross from one container kind to the other, since neither a slide
+    // leaving its strip nor a card entering one is supported yet.
+    //
     // afterRender() runs again on every render and the attachment is a set of
     // document-level listeners, so it has to be released with the render that
     // took it — otherwise every setState() leaves another live gesture behind.
     this.registerCleanup(
       attachPointerReorder({
-        handleSelector: ".ve-handle",
-        itemSelector: ".ve-card",
-        containers: () => [this.$("#ve-list")],
-        onDrop: ({ item, afterEl }) =>
-          this._moveNode(this._cardIndex(item), this._cardIndex(afterEl)),
+        handleSelector: ".ve-handle, .ve-slide-handle",
+        itemSelector: ".ve-card, .ve-slide",
+        containers: () => [...this.$$(".ve-carousel-strip"), list],
+        axis: (container) => (container.classList.contains("ve-carousel-strip") ? "x" : "y"),
+        onDrop: (drop) => this._onReorderDrop(drop),
       }),
     );
 
@@ -819,13 +838,45 @@ export class VisualEditor extends Component {
     // the page, which is still free to scroll on it.
     this.on(list, "keydown", (e) => {
       const key = /** @type {KeyboardEvent} */ (e).key;
+      const target = /** @type {HTMLElement} */ (e.target);
+
+      const slideHandle = target.closest?.(".ve-slide-handle");
+      if (slideHandle) {
+        if (key !== "ArrowLeft" && key !== "ArrowRight") return;
+        if (this._stepSlide(slideHandle.closest(".ve-slide"), key === "ArrowLeft" ? -1 : 1)) {
+          e.preventDefault();
+        }
+        return;
+      }
+
       if (key !== "ArrowUp" && key !== "ArrowDown") return;
-      const handle = /** @type {HTMLElement} */ (e.target).closest?.(".ve-handle");
+      const handle = target.closest?.(".ve-handle");
       if (!handle) return;
       if (this._stepCard(handle.closest(".ve-card"), key === "ArrowUp" ? -1 : 1)) {
         e.preventDefault();
       }
     });
+  }
+
+  /**
+   * What a drop means, once the util has reduced the gesture to an item, the
+   * container it started and ended in, and the item it landed behind. Split
+   * out of _bindReorder() so a test can reach it directly, the same way
+   * _moveNode() is the half of card reordering a test can reach without a
+   * layout engine — linkedom reports a zero rect for everything, so nothing
+   * upstream of this point (the midpoint test, the drop line) is assertable.
+   *
+   * @param {{item: Element, from: Element, to: Element, afterEl: Element|null}} drop
+   */
+  _onReorderDrop({ item, from, to, afterEl }) {
+    if (item.matches(".ve-slide")) {
+      if (to !== from) return; // a slide cannot yet leave its strip
+      const nodeIdx = this._cardIndex(item.closest(".ve-card--carousel"));
+      this._moveSlide(nodeIdx, this._cardIndex(item), this._cardIndex(afterEl));
+      return;
+    }
+    if (to !== from) return; // a card cannot yet enter a strip
+    this._moveNode(this._cardIndex(item), this._cardIndex(afterEl));
   }
 
   /**
@@ -853,9 +904,37 @@ export class VisualEditor extends Component {
   }
 
   /**
+   * Move one slide a single place in `dir` (-1 left, +1 right) within its own
+   * strip — the strip's counterpart to _stepCard().
+   *
+   * @param {Element|null} slide
+   * @param {-1|1} dir
+   * @returns {boolean} false when there is nowhere to go.
+   */
+  _stepSlide(slide, dir) {
+    const card = /** @type {HTMLElement|null} */ (slide)?.closest(".ve-card--carousel");
+    const nodeIdx = this._cardIndex(card);
+    const node = nodeIdx === null ? null : (this.props.nodes || [])[nodeIdx];
+    if (!node) return false;
+
+    const from = this._cardIndex(slide);
+    if (from === null) return false;
+    const to = from + dir;
+    if (to < 0 || to >= (node.paths || []).length) return false;
+
+    this._moveSlide(nodeIdx, from, dir < 0 ? (to > 0 ? to - 1 : null) : to);
+    const newCard = this.$$(".ve-card")[nodeIdx];
+    /** @type {HTMLElement|null} */ (
+      newCard?.querySelectorAll(".ve-slide")[to]?.querySelector(".ve-slide-handle")
+    )?.focus();
+    return true;
+  }
+
+  /**
    * The node index a card element stands for; null for anything that is not a
    * card — including the null the drop line hands back when it came to rest at
-   * the very front of the list.
+   * the very front of the list. The same lookup answers for a slide within a
+   * strip, since both read the same `data-index` convention.
    * @param {Element|null} el
    * @returns {number|null}
    */
@@ -895,6 +974,37 @@ export class VisualEditor extends Component {
     const [moved] = next.splice(fromIdx, 1);
     next.splice(insertAt, 0, moved);
     this.props.onChange?.(next);
+  }
+
+  /**
+   * Move one carousel's slide so it sits directly after `afterIdx` — the
+   * strip's counterpart to _moveNode(), operating on one node's `paths`
+   * instead of the top-level list. Same ±1 arithmetic, same bails: an
+   * out-of-range `fromIdx`, a drop on the slide's own anchor, and a drop that
+   * changes nothing.
+   *
+   * @param {number|null} nodeIdx   The carousel node's index in `nodes`.
+   * @param {number|null} fromIdx   The slide's index in `node.paths`.
+   * @param {number|null} afterIdx  The slide it should land behind, or null for first.
+   */
+  _moveSlide(nodeIdx, fromIdx, afterIdx) {
+    const node = nodeIdx === null ? null : (this.props.nodes || [])[nodeIdx];
+    if (!node || node.type !== "carousel") return;
+
+    const paths = node.paths || [];
+    if (fromIdx === null || fromIdx < 0 || fromIdx >= paths.length) return;
+    if (afterIdx === fromIdx) return;
+
+    const insertAt = afterIdx === null ? 0 : afterIdx > fromIdx ? afterIdx : afterIdx + 1;
+    if (insertAt === fromIdx) return;
+
+    const nextPaths = [...paths];
+    const [moved] = nextPaths.splice(fromIdx, 1);
+    nextPaths.splice(insertAt, 0, moved);
+
+    const nodes = this.props.nodes || [];
+    const nextNodes = nodes.map((n, i) => (i === nodeIdx ? { ...n, paths: nextPaths } : n));
+    this.props.onChange?.(nextNodes);
   }
 
   _bindInlineRename() {

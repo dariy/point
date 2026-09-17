@@ -633,6 +633,48 @@ body.drag-active::after {
     padding-bottom: 2px;
 }
 
+/* One slide in the strip — a positioning context for its own handle, so
+   dragging it stays a corner grip and never grows the item's footprint. */
+.ve-slide {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.ve-slide-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ve-slide-handle-size);
+    height: var(--ve-slide-handle-size);
+    padding: 0;
+    background: var(--bg-overlay);
+    border: none;
+    border-radius: 0 0 var(--ve-thumb-border-radius) 0;
+    cursor: grab;
+    color: var(--color-white);
+    /* The gesture owns the pointer — without this a touch-drag scrolls instead */
+    touch-action: none;
+}
+
+.ve-slide-handle:active {
+    cursor: grabbing;
+}
+
+.ve-slide-handle:hover,
+.ve-slide-handle:focus-visible {
+    color: var(--color-primary-light);
+}
+
+.ve-slide-handle .ve-handle-dots {
+    width: var(--ve-slide-handle-dots-size);
+    height: var(--ve-slide-handle-dots-size);
+    background-size: var(--ve-slide-handle-dots-size) var(--ve-slide-handle-dots-size);
+}
+
 /* ===========================
    Insert zone — appears between cards on list hover
    =========================== */
