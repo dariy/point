@@ -2,9 +2,8 @@
  * Pointer-driven reordering of items across one or more containers.
  *
  * Pointer events rather than HTML5 drag-and-drop: DnD does not exist on iOS, so
- * a `draggable` list is dead weight on exactly the device this was asked for
- * (see VisualEditor, which is still DnD and therefore mouse-only). Pointer
- * events cover mouse, touch and pen through one code path.
+ * a `draggable` list is dead weight on exactly the device this was asked for.
+ * Pointer events cover mouse, touch and pen through one code path.
  *
  * The util owns the gesture — press on a handle, a line showing where the item
  * would land, release — and nothing else. It never mutates the list itself:

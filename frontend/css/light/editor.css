@@ -327,7 +327,7 @@ body.drag-active::after {
     background: var(--surface-hover);
 }
 
-.ve-card.dragging {
+.ve-card.is-dragging {
     opacity: 0.4;
 }
 
@@ -376,7 +376,8 @@ body.drag-active::after {
     display: none;
 }
 
-/* Drag handle — dotted left zone */
+/* Drag handle — dotted left zone. A button, so it is in the tab order and the
+   arrow keys reach it; the appearance is entirely this rule's doing. */
 .ve-handle {
     display: flex;
     align-items: center;
@@ -384,13 +385,24 @@ body.drag-active::after {
     width: var(--ve-handle-width);
     flex-shrink: 0;
     align-self: stretch;
+    padding: 0;
+    background: none;
+    border: none;
     border-right: var(--border-width) dotted var(--border-primary);
+    border-radius: 0;
     cursor: grab;
     color: var(--text-muted);
+    /* The gesture owns the pointer — without this a touch-drag scrolls instead */
+    touch-action: none;
 }
 
 .ve-handle:active {
     cursor: grabbing;
+}
+
+.ve-handle:hover,
+.ve-handle:focus-visible {
+    color: var(--color-primary);
 }
 
 .ve-handle-dots {
@@ -485,16 +497,6 @@ body.drag-active::after {
 
 .ve-remove:hover {
     color: var(--color-danger);
-}
-
-/* Drop indicator line */
-.ve-drop-indicator {
-    height: var(--ve-drop-indicator-height);
-    background: var(--color-primary);
-    border-radius: var(--ve-drop-indicator-border-radius);
-    pointer-events: none;
-    margin: 0 var(--spacing-xs);
-    flex-shrink: 0;
 }
 
 /* VisualEditor lightbox */
@@ -1118,6 +1120,7 @@ textarea.is-maximized,
     background: var(--color-primary);
     border-radius: var(--ve-drop-indicator-border-radius);
     pointer-events: none;
+    flex-shrink: 0;
 }
 
 /* A horizontal rail's drop line stands up: same bar, turned 90°. Emitted by

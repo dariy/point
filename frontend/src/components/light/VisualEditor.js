@@ -9,6 +9,7 @@ import { setToast } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { thumbAttrs } from "../../utils/mediaUrl.js";
+import { attachPointerReorder } from "../../utils/pointerReorder.js";
 import {
   carouselFence,
   groupIntoCarousel,
@@ -21,8 +22,8 @@ import {
 const VE_THUMB_SIZES = "80px";
 
 // What a click inside a card already means, so card selection never takes it:
-// the thumbnail opens the lightbox, the path starts a rename, the handle arms
-// the drag, and every control does what it says.
+// the thumbnail opens the lightbox, the path starts a rename, the handle owns
+// the reorder gesture, and every control does what it says.
 const VE_CARD_CONTROLS =
   "button, input, textarea, a, label, .ve-thumb, .ve-path, .ve-rename-form, .ve-exif-panel, .ve-handle";
 
@@ -111,9 +112,11 @@ export class VisualEditor extends Component {
           return html`
           ${insertZone(i)}
           <div class="ve-card" data-index="${i}">
-            <div class="ve-handle" title="Drag to reorder">
-              <span class="ve-handle-dots"></span>
-            </div>
+            <button class="ve-handle" type="button"
+                    aria-label="Move ${filename}"
+                    title="Drag to reorder \u2014 or the arrow keys">
+              <span class="ve-handle-dots" aria-hidden="true"></span>
+            </button>
             <img class="ve-thumb" ${thumbAttrs(node.path, {
               sizes: VE_THUMB_SIZES,
               width: media?.width,
@@ -121,7 +124,7 @@ export class VisualEditor extends Component {
             })}
                  alt="${filename}"
                  data-full="${node.path}"
-                 loading="lazy" decoding="async" draggable="false">
+                 loading="lazy" decoding="async">
             <div class="ve-card-row">
               <span class="ve-path">${node.path}</span>
               ${exifBtn}
@@ -150,14 +153,16 @@ export class VisualEditor extends Component {
               })}
                    alt="${path.split("/").pop()}"
                    data-full="${path}"
-                   loading="lazy" decoding="async" draggable="false">`;
+                   loading="lazy" decoding="async">`;
             });
           return html`
           ${insertZone(i)}
           <div class="ve-card ve-card--carousel" data-index="${i}">
-            <div class="ve-handle" title="Drag to reorder">
-              <span class="ve-handle-dots"></span>
-            </div>
+            <button class="ve-handle" type="button"
+                    aria-label="Move carousel of ${paths.length} ${paths.length === 1 ? "slide" : "slides"}"
+                    title="Drag to reorder \u2014 or the arrow keys">
+              <span class="ve-handle-dots" aria-hidden="true"></span>
+            </button>
             <div class="ve-carousel-body">
               <div class="ve-carousel-head">
                 <span class="ve-carousel-label" aria-hidden="true">▦</span>
@@ -179,9 +184,11 @@ export class VisualEditor extends Component {
           return html`
           ${insertZone(i)}
           <div class="ve-card ve-card--text" data-index="${i}">
-            <div class="ve-handle" title="Drag to reorder">
-              <span class="ve-handle-dots"></span>
-            </div>
+            <button class="ve-handle" type="button"
+                    aria-label="Move text block"
+                    title="Drag to reorder \u2014 or the arrow keys">
+              <span class="ve-handle-dots" aria-hidden="true"></span>
+            </button>
             <span class="ve-text-icon" aria-hidden="true">¶</span>
             <div class="ve-text-body">
               <input class="ve-block-class" type="text" placeholder="Block class (optional)"
@@ -215,7 +222,7 @@ export class VisualEditor extends Component {
     this._bindUngroup();
     this._bindRemove();
     this._bindCarouselEdit();
-    this._bindDrag();
+    this._bindReorder();
     this._bindLightbox();
     this._bindInlineRename();
     this._bindInsertZones();
@@ -406,8 +413,8 @@ export class VisualEditor extends Component {
       // Shift-click also extends the browser's own text selection, which paints
       // a smear across the page behind the cards it just picked. Suppressing it
       // has to happen on mousedown — by click the range is already made. The
-      // handle is excluded from VE_CARD_CONTROLS' complement here, so the drag
-      // it arms still gets its dragstart.
+      // handle is one of VE_CARD_CONTROLS, so it is never a selection target and
+      // its own press is left entirely to the reorder gesture.
       list.addEventListener("mousedown", (e) => {
         if (!(/** @type {MouseEvent} */ (e).shiftKey)) return;
         if (this._selectionTarget(e.target)) e.preventDefault();
@@ -777,107 +784,119 @@ export class VisualEditor extends Component {
     });
   }
 
-  // Drag and lightbox wired in later tasks — stubs to avoid errors
-  _bindDrag() {
+  // ── Reordering ─────────────────────────────────────────────────────────
+
+  /**
+   * Reordering, by pointer and by keyboard, over one commit.
+   *
+   * Pointer events rather than HTML5 drag-and-drop: DnD does not exist on iOS
+   * Safari, so for the life of this component the handle was mouse-only. The
+   * util owns the gesture — press, a line showing where the card would land,
+   * release — and hands back the card the line came to rest behind; deciding
+   * what that means for the list is this component's job, and it is all in
+   * _moveNode(), which is the half a test can reach without a layout engine.
+   */
+  _bindReorder() {
     const list = this.$("#ve-list");
     if (!list) return;
 
-    let dragIdx = null;
-    let indicator = null;
+    // afterRender() runs again on every render and the attachment is a set of
+    // document-level listeners, so it has to be released with the render that
+    // took it — otherwise every setState() leaves another live gesture behind.
+    this.registerCleanup(
+      attachPointerReorder({
+        handleSelector: ".ve-handle",
+        itemSelector: ".ve-card",
+        containers: () => [this.$("#ve-list")],
+        onDrop: ({ item, afterEl }) =>
+          this._moveNode(this._cardIndex(item), this._cardIndex(afterEl)),
+      }),
+    );
 
-    const getCards = () => [...list.querySelectorAll(".ve-card")];
-
-    const removeIndicator = () => {
-      indicator?.remove();
-      indicator = null;
-    };
-
-    const insertIndicator = (referenceCard, before) => {
-      removeIndicator();
-      indicator = document.createElement("div");
-      indicator.className = "ve-drop-indicator";
-      if (before) {
-        list.insertBefore(indicator, referenceCard);
-      } else {
-        referenceCard.insertAdjacentElement("afterend", indicator);
-      }
-    };
-
-    // Compute drop slot index (0 = before first card, n = after last card)
-    const slotFromEvent = (e) => {
-      const cards = getCards();
-      for (let i = 0; i < cards.length; i++) {
-        const rect = cards[i].getBoundingClientRect();
-        const mid = rect.top + rect.height / 2;
-        if (e.clientY < mid) return i;
-      }
-      return cards.length;
-    };
-
-    // Enable dragging only when mousedown starts on the handle
-    list.addEventListener("mousedown", (e) => {
-      const handle = /** @type {HTMLElement} */ (e.target).closest(".ve-handle");
+    // Keyboard equivalent: the handle is a button, so the arrows are free.
+    // Without it reordering would be a pointer-only feature, which is the same
+    // hole in a different shape. A step with nowhere to go leaves the key to
+    // the page, which is still free to scroll on it.
+    this.on(list, "keydown", (e) => {
+      const key = /** @type {KeyboardEvent} */ (e).key;
+      if (key !== "ArrowUp" && key !== "ArrowDown") return;
+      const handle = /** @type {HTMLElement} */ (e.target).closest?.(".ve-handle");
       if (!handle) return;
-      const card = handle.closest(".ve-card");
-      if (card) card.setAttribute("draggable", "true");
-    });
-
-    list.addEventListener("dragstart", (e) => {
-      const card = /** @type {HTMLElement} */ (
-        /** @type {HTMLElement} */ (e.target).closest(".ve-card"));
-      if (!card || card.getAttribute("draggable") !== "true") return;
-      dragIdx = parseInt(card.dataset.index, 10);
-      card.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-    });
-
-    list.addEventListener("dragover", (e) => {
-      if (dragIdx === null) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-
-      const cards = getCards();
-      const slot = slotFromEvent(e);
-
-      if (slot === 0) {
-        if (cards[0]) insertIndicator(cards[0], true);
-      } else if (slot >= cards.length) {
-        if (cards[cards.length - 1])
-          insertIndicator(cards[cards.length - 1], false);
-      } else {
-        insertIndicator(cards[slot], true);
+      if (this._stepCard(handle.closest(".ve-card"), key === "ArrowUp" ? -1 : 1)) {
+        e.preventDefault();
       }
-    });
-
-    list.addEventListener("dragleave", (e) => {
-      if (!list.contains(/** @type {Node} */ (e.relatedTarget))) removeIndicator();
-    });
-
-    list.addEventListener("drop", (e) => {
-      if (dragIdx === null) return;
-      e.preventDefault();
-      removeIndicator();
-
-      const slot = slotFromEvent(e);
-      const next = [...this.props.nodes];
-      const [moved] = next.splice(dragIdx, 1);
-      // Adjust insertion index after removal
-      const insertAt = slot > dragIdx ? slot - 1 : slot;
-      next.splice(insertAt, 0, moved);
-
-      dragIdx = null;
-      this.props.onChange(next);
-    });
-
-    list.addEventListener("dragend", () => {
-      dragIdx = null;
-      removeIndicator();
-      list.querySelectorAll(".ve-card").forEach((c) => {
-        c.classList.remove("dragging");
-        c.removeAttribute("draggable");
-      });
     });
   }
+
+  /**
+   * Move one card a single place in `dir` (-1 up, +1 down) and keep the
+   * keyboard on it: the list is rebuilt around the move, so the handle that had
+   * focus is a dead node and the next press would land on nothing.
+   *
+   * @param {Element|null} card
+   * @param {-1|1} dir
+   * @returns {boolean} false when there is nowhere to go, so the caller can
+   *   leave the key alone.
+   */
+  _stepCard(card, dir) {
+    const from = this._cardIndex(card);
+    if (from === null) return false;
+    const to = from + dir;
+    if (to < 0 || to >= (this.props.nodes || []).length) return false;
+    // Landing behind the card being stepped over — which, going up, is the one
+    // before that, or the front of the list when there is none.
+    this._moveNode(from, dir < 0 ? (to > 0 ? to - 1 : null) : to);
+    /** @type {HTMLElement|null} */ (
+      this.$$(".ve-card")[to]?.querySelector(".ve-handle")
+    )?.focus();
+    return true;
+  }
+
+  /**
+   * The node index a card element stands for; null for anything that is not a
+   * card — including the null the drop line hands back when it came to rest at
+   * the very front of the list.
+   * @param {Element|null} el
+   * @returns {number|null}
+   */
+  _cardIndex(el) {
+    const raw = /** @type {HTMLElement|null} */ (el)?.dataset?.index;
+    if (raw === undefined) return null;
+    const i = Number(raw);
+    return Number.isInteger(i) ? i : null;
+  }
+
+  /**
+   * Move the node at `fromIdx` so it sits directly after `afterIdx` — or at the
+   * front of the list, when that is null.
+   *
+   * Indices rather than elements, because both the gesture and the arrow keys
+   * reduce to this pair: the geometry stays in the util, and what is left here
+   * is arithmetic a test can assert. `afterIdx` names a position in the list AS
+   * IT IS NOW, so once the moved node is spliced out everything behind it has
+   * slid down one — that is the ±1.
+   *
+   * @param {number|null} fromIdx   The node to move.
+   * @param {number|null} afterIdx  The node it should land behind, or null for first.
+   */
+  _moveNode(fromIdx, afterIdx) {
+    const nodes = this.props.nodes || [];
+    if (fromIdx === null || fromIdx < 0 || fromIdx >= nodes.length) return;
+    // Released over itself: the drop line can come to rest directly behind the
+    // card being dragged, which names that card as its own anchor.
+    if (afterIdx === fromIdx) return;
+
+    const insertAt = afterIdx === null ? 0 : afterIdx > fromIdx ? afterIdx : afterIdx + 1;
+    // Dropped back where it started. Bailing here rather than handing back an
+    // identical list keeps a nudge that changes nothing out of the autosave.
+    if (insertAt === fromIdx) return;
+
+    const next = [...nodes];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(insertAt, 0, moved);
+    this.props.onChange?.(next);
+  }
+
   _bindInlineRename() {
     this.$$(".ve-path").forEach((span) => {
       span.addEventListener("click", () => {
