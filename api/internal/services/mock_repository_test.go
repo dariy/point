@@ -28,9 +28,10 @@ type mockRepository struct {
 	MockCreateSession             func(ctx context.Context, arg models.CreateSessionParams) (models.Session, error)
 	MockCreateTag                 func(ctx context.Context, arg models.CreateTagParams) (models.Tag, error)
 	MockCreateUser                func(ctx context.Context, arg models.CreateUserParams) (models.User, error)
-	MockGetCarouselByPostID       func(ctx context.Context, postID int64) (models.Carousel, error)
+	MockGetCarouselByBlockKey     func(ctx context.Context, arg models.GetCarouselByBlockKeyParams) (models.Carousel, error)
+	MockListCarouselsByPostID     func(ctx context.Context, postID int64) ([]models.ListCarouselsByPostIDRow, error)
 	MockUpsertCarousel            func(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error)
-	MockDeleteCarouselByPostID    func(ctx context.Context, postID int64) error
+	MockDeleteCarouselByBlockKey  func(ctx context.Context, arg models.DeleteCarouselByBlockKeyParams) error
 	MockListCarouselTemplates     func(ctx context.Context) ([]models.ListCarouselTemplatesRow, error)
 	MockGetCarouselTemplateBySlug func(ctx context.Context, slug string) (models.CarouselTemplate, error)
 	MockUpsertCarouselTemplate    func(ctx context.Context, arg models.UpsertCarouselTemplateParams) (models.CarouselTemplate, error)
@@ -193,11 +194,18 @@ var _ repository.Repository = (*mockRepository)(nil)
 
 // Implementation of Querier methods
 
-func (m *mockRepository) GetCarouselByPostID(ctx context.Context, postID int64) (models.Carousel, error) {
-	if m.MockGetCarouselByPostID != nil {
-		return m.MockGetCarouselByPostID(ctx, postID)
+func (m *mockRepository) GetCarouselByBlockKey(ctx context.Context, arg models.GetCarouselByBlockKeyParams) (models.Carousel, error) {
+	if m.MockGetCarouselByBlockKey != nil {
+		return m.MockGetCarouselByBlockKey(ctx, arg)
 	}
-	return models.Carousel{}, fmt.Errorf("GetCarouselByPostID not implemented")
+	return models.Carousel{}, fmt.Errorf("GetCarouselByBlockKey not implemented")
+}
+
+func (m *mockRepository) ListCarouselsByPostID(ctx context.Context, postID int64) ([]models.ListCarouselsByPostIDRow, error) {
+	if m.MockListCarouselsByPostID != nil {
+		return m.MockListCarouselsByPostID(ctx, postID)
+	}
+	return nil, fmt.Errorf("ListCarouselsByPostID not implemented")
 }
 
 func (m *mockRepository) UpsertCarousel(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error) {
@@ -207,11 +215,11 @@ func (m *mockRepository) UpsertCarousel(ctx context.Context, arg models.UpsertCa
 	return models.Carousel{}, fmt.Errorf("UpsertCarousel not implemented")
 }
 
-func (m *mockRepository) DeleteCarouselByPostID(ctx context.Context, postID int64) error {
-	if m.MockDeleteCarouselByPostID != nil {
-		return m.MockDeleteCarouselByPostID(ctx, postID)
+func (m *mockRepository) DeleteCarouselByBlockKey(ctx context.Context, arg models.DeleteCarouselByBlockKeyParams) error {
+	if m.MockDeleteCarouselByBlockKey != nil {
+		return m.MockDeleteCarouselByBlockKey(ctx, arg)
 	}
-	return fmt.Errorf("DeleteCarouselByPostID not implemented")
+	return fmt.Errorf("DeleteCarouselByBlockKey not implemented")
 }
 
 func (m *mockRepository) ListCarouselTemplates(ctx context.Context) ([]models.ListCarouselTemplatesRow, error) {

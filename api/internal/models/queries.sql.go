@@ -556,13 +556,18 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) erro
 	return err
 }
 
-const deleteCarouselByPostID = `-- name: DeleteCarouselByPostID :exec
+const deleteCarouselByBlockKey = `-- name: DeleteCarouselByBlockKey :exec
 DELETE FROM carousels
-WHERE post_id = ?
+WHERE post_id = ? AND block_key = ?
 `
 
-func (q *Queries) DeleteCarouselByPostID(ctx context.Context, postID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteCarouselByPostID, postID)
+type DeleteCarouselByBlockKeyParams struct {
+	PostID   int64  `json:"post_id"`
+	BlockKey string `json:"block_key"`
+}
+
+func (q *Queries) DeleteCarouselByBlockKey(ctx context.Context, arg DeleteCarouselByBlockKeyParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCarouselByBlockKey, arg.PostID, arg.BlockKey)
 	return err
 }
 
@@ -695,21 +700,34 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 	return i, err
 }
 
-const getCarouselByPostID = `-- name: GetCarouselByPostID :one
+const getCarouselByBlockKey = `-- name: GetCarouselByBlockKey :one
 
-SELECT id, post_id, doc, created_at, updated_at FROM carousels
-WHERE post_id = ? LIMIT 1
+SELECT id, post_id, block_key, doc, created_at, updated_at FROM carousels
+WHERE post_id = ? AND block_key = ? LIMIT 1
 `
 
+type GetCarouselByBlockKeyParams struct {
+	PostID   int64  `json:"post_id"`
+	BlockKey string `json:"block_key"`
+}
+
 // CAROUSELS
-// One Carousel Studio document per post. doc is opaque JSON, stored and
+// One Carousel Studio document per carousel block, keyed (post_id, block_key):
+// a post may hold several independent carousels. doc is opaque JSON, stored and
 // returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
-func (q *Queries) GetCarouselByPostID(ctx context.Context, postID int64) (Carousel, error) {
-	row := q.db.QueryRowContext(ctx, getCarouselByPostID, postID)
+//
+// ListCarouselsByPostID names its columns and omits doc for the same reason
+// ListCarouselTemplates does: the caller wants to know which of a post's blocks
+// have a stored document, not to load every document to find out. Ordered by id,
+// so its first row is the post's oldest carousel -- which is what an unkeyed
+// request resolves to.
+func (q *Queries) GetCarouselByBlockKey(ctx context.Context, arg GetCarouselByBlockKeyParams) (Carousel, error) {
+	row := q.db.QueryRowContext(ctx, getCarouselByBlockKey, arg.PostID, arg.BlockKey)
 	var i Carousel
 	err := row.Scan(
 		&i.ID,
 		&i.PostID,
+		&i.BlockKey,
 		&i.Doc,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1528,6 +1546,41 @@ func (q *Queries) ListCarouselTemplates(ctx context.Context) ([]ListCarouselTemp
 	for rows.Next() {
 		var i ListCarouselTemplatesRow
 		if err := rows.Scan(&i.Slug, &i.Name, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCarouselsByPostID = `-- name: ListCarouselsByPostID :many
+SELECT block_key, created_at, updated_at FROM carousels
+WHERE post_id = ?
+ORDER BY id
+`
+
+type ListCarouselsByPostIDRow struct {
+	BlockKey  string    `json:"block_key"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListCarouselsByPostID(ctx context.Context, postID int64) ([]ListCarouselsByPostIDRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCarouselsByPostID, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCarouselsByPostIDRow
+	for rows.Next() {
+		var i ListCarouselsByPostIDRow
+		if err := rows.Scan(&i.BlockKey, &i.CreatedAt, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2361,23 +2414,25 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 }
 
 const upsertCarousel = `-- name: UpsertCarousel :one
-INSERT INTO carousels (post_id, doc, created_at, updated_at)
-VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT(post_id) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
-RETURNING id, post_id, doc, created_at, updated_at
+INSERT INTO carousels (post_id, block_key, doc, created_at, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(post_id, block_key) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
+RETURNING id, post_id, block_key, doc, created_at, updated_at
 `
 
 type UpsertCarouselParams struct {
-	PostID int64  `json:"post_id"`
-	Doc    string `json:"doc"`
+	PostID   int64  `json:"post_id"`
+	BlockKey string `json:"block_key"`
+	Doc      string `json:"doc"`
 }
 
 func (q *Queries) UpsertCarousel(ctx context.Context, arg UpsertCarouselParams) (Carousel, error) {
-	row := q.db.QueryRowContext(ctx, upsertCarousel, arg.PostID, arg.Doc)
+	row := q.db.QueryRowContext(ctx, upsertCarousel, arg.PostID, arg.BlockKey, arg.Doc)
 	var i Carousel
 	err := row.Scan(
 		&i.ID,
 		&i.PostID,
+		&i.BlockKey,
 		&i.Doc,
 		&i.CreatedAt,
 		&i.UpdatedAt,

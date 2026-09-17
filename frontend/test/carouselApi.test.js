@@ -2,8 +2,10 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 
-// The carousel document API: the post id rides in ?post=<id> on every verb,
-// there is no path parameter, and PUT wraps the document in { doc }.
+// The carousel document API: the row address rides in ?post=<id>&block=<key> on
+// every verb, there is no path parameter, and PUT wraps the document in { doc }.
+// `block` is left off entirely when the caller has no key, which is what the
+// server reads as "the post's first carousel".
 describe('carousel API client', () => {
   let dom;
   // The client's PUT/DELETE fall to the IndexedDB mutation queue when
@@ -33,6 +35,49 @@ describe('carousel API client', () => {
     assert.strictEqual(method, 'GET');
     assert.strictEqual(requested, '/api/carousel?post=7');
     assert.deepStrictEqual(res.doc, { version: 1 });
+  });
+
+  test('a block key rides along on all three verbs, encoded', async () => {
+    const seen = [];
+    global.fetch = async (url, opts) => {
+      seen.push([opts.method, url]);
+      if (opts.method === 'DELETE') return { status: 204, ok: true, headers: { get: () => '' } };
+      return jsonOk({ post_id: 7, block_key: 'c-7f3a', doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
+    };
+
+    const { getCarousel, saveCarousel, deleteCarousel } = await import('../src/api/carousel.js');
+    await getCarousel(7, 'c-7f3a');
+    await saveCarousel(7, { version: 1 }, 'c-7f3a');
+    await deleteCarousel(7, 'c-7f3a');
+    // Whatever the fence put in the id, the query string is encoded.
+    await getCarousel(7, 'a b');
+
+    assert.deepStrictEqual(seen, [
+      ['GET', '/api/carousel?post=7&block=c-7f3a'],
+      ['PUT', '/api/carousel?post=7&block=c-7f3a'],
+      ['DELETE', '/api/carousel?post=7&block=c-7f3a'],
+      ['GET', '/api/carousel?post=7&block=a+b'],
+    ]);
+  });
+
+  test('no block key means no block parameter at all', async () => {
+    const seen = [];
+    global.fetch = async (url, opts) => {
+      seen.push([opts.method, url]);
+      if (opts.method === 'DELETE') return { status: 204, ok: true, headers: { get: () => '' } };
+      return jsonOk({ post_id: 7, block_key: '', doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
+    };
+
+    const { getCarousel, saveCarousel, deleteCarousel } = await import('../src/api/carousel.js');
+    await getCarousel(7);
+    await saveCarousel(7, { version: 1 });
+    await deleteCarousel(7, '');
+
+    assert.deepStrictEqual(seen, [
+      ['GET', '/api/carousel?post=7'],
+      ['PUT', '/api/carousel?post=7'],
+      ['DELETE', '/api/carousel?post=7'],
+    ]);
   });
 
   test('saveCarousel PUTs { doc } to the ?post= URL', async () => {

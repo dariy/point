@@ -1,9 +1,15 @@
 /**
- * Carousel API — the Carousel Studio document, one per post.
+ * Carousel API — the Carousel Studio document, one per carousel block.
  *
  * Backend prefix: /api/carousel — gated by the `carousel` plugin, so every call
- * here 404s when the plugin is disabled. The post id rides in `?post=<id>` on
- * every verb; there is no path parameter.
+ * here 404s when the plugin is disabled. The row address rides in
+ * `?post=<id>&block=<key>` on every verb; there is no path parameter.
+ *
+ * `blockKey` is the id the post's own markup gives the block —
+ * `:::{.carousel-block #c-7f3a}`, minted by postNodes.newCarouselKey — which is
+ * what lets one post hold several independent carousels. Leave it off and the
+ * server addresses the post's first carousel, which is how a caller written
+ * against the one-carousel API keeps working.
  *
  * `doc` is the carousel document (see plugins/carousel/document.js). The server
  * stores and returns it verbatim, validating only that it is a JSON object.
@@ -15,38 +21,57 @@
 import { api } from './client.js';
 
 /**
- * Fetch a post's carousel document.
+ * The `?post=&block=` query string for one row, `block` omitted when there is no
+ * key — the server then resolves the post's first carousel, and an omitted
+ * parameter is what says so.
  *
- * Rejects with `{ status: 404 }` when the post has no carousel yet — a caller
+ * @param {number} postId
+ * @param {string} [blockKey]
+ * @returns {string}
+ */
+function rowQuery(postId, blockKey) {
+  const params = new URLSearchParams({ post: String(postId) });
+  if (blockKey) params.set('block', blockKey);
+  return params.toString();
+}
+
+/**
+ * Fetch one block's carousel document.
+ *
+ * Rejects with `{ status: 404 }` when the block has no carousel yet — a caller
  * opening the studio should treat that as "start from an empty document".
  *
  * @param {number} postId
- * @returns {Promise<{ post_id: number, doc: object, created_at: string, updated_at: string }>}
+ * @param {string} [blockKey]  Omitted: the post's first carousel.
+ * @returns {Promise<{ post_id: number, block_key: string, doc: object, created_at: string, updated_at: string }>}
  */
-export function getCarousel(postId) {
-  return api.get('/api/carousel', { post: postId });
+export function getCarousel(postId, blockKey) {
+  return api.get(`/api/carousel?${rowQuery(postId, blockKey)}`);
 }
 
 /**
- * Create or replace a post's carousel document. The post must already exist.
+ * Create or replace one block's carousel document, leaving the post's other
+ * carousels untouched. The post must already exist.
  *
  * @param {number} postId
  * @param {import('../plugins/carousel/document.js').CarouselDoc} doc
- * @returns {Promise<{ post_id: number, doc: object, created_at: string, updated_at: string }>}
+ * @param {string} [blockKey]  Omitted: the post's first carousel.
+ * @returns {Promise<{ post_id: number, block_key: string, doc: object, created_at: string, updated_at: string }>}
  */
-export function saveCarousel(postId, doc) {
-  return api.put(`/api/carousel?post=${encodeURIComponent(postId)}`, { doc });
+export function saveCarousel(postId, doc, blockKey) {
+  return api.put(`/api/carousel?${rowQuery(postId, blockKey)}`, { doc });
 }
 
 /**
- * Delete a post's carousel document. Idempotent — deleting one that is not
+ * Delete one block's carousel document. Idempotent — deleting one that is not
  * there still resolves.
  *
  * @param {number} postId
+ * @param {string} [blockKey]  Omitted: the post's first carousel.
  * @returns {Promise<null>}
  */
-export function deleteCarousel(postId) {
-  return api.delete(`/api/carousel?post=${encodeURIComponent(postId)}`);
+export function deleteCarousel(postId, blockKey) {
+  return api.delete(`/api/carousel?${rowQuery(postId, blockKey)}`);
 }
 
 // ── Templates ────────────────────────────────────────────────────────────────
