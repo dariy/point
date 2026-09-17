@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"point-api/internal/models"
 	"point-api/internal/repository"
 )
 
@@ -311,5 +312,94 @@ func TestRun_BuildsAndBackfillsTheSearchIndex(t *testing.T) {
 	}
 	if rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "written", "", false, 10, 0); err != nil || len(rows) != 0 {
 		t.Errorf("search for the replaced body = (%d rows, %v), want (0, nil)", len(rows), err)
+	}
+}
+
+// A post could hold one carousel, keyed post_id UNIQUE; it can hold several
+// now, keyed by the block. The row an install already has must survive that
+// without its post's content being rewritten — so the backfill is the empty
+// key, "the first fence, the one with no id yet", which is the key an unkeyed
+// request resolves to (api.firstBlockKey) until the studio saves a real one.
+func TestRun_RekeysCarouselsByBlock(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Stand in for a database written before block keys: put back the table as
+	// it was, one carousel per post, and a row in it. As in the FTS test above,
+	// NewRepository writes no migration_history, so nothing has to be undone.
+	for _, stmt := range []string{
+		`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','e','h','D')`,
+		`INSERT INTO posts (id, title, slug, content, author_id, status) VALUES (1,'P','p','body',1,'draft')`,
+		`DROP TABLE IF EXISTS carousels`,
+		`CREATE TABLE carousels (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id    INTEGER NOT NULL UNIQUE REFERENCES posts(id) ON DELETE CASCADE,
+			doc        TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO carousels (id, post_id, doc) VALUES (7, 1, '{"version":1,"aspect":"4:5"}')`,
+	} {
+		if _, err := repo.DB().ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed the old database (%s): %v", stmt, err)
+		}
+	}
+
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// The row is still there, same id, same document, and now addressable by
+	// the keyless key.
+	got, err := repo.GetCarouselByBlockKey(ctx, models.GetCarouselByBlockKeyParams{PostID: 1, BlockKey: ""})
+	if err != nil {
+		t.Fatalf("the pre-existing carousel is unreachable after the rekey: %v", err)
+	}
+	if got.ID != 7 || got.Doc != `{"version":1,"aspect":"4:5"}` {
+		t.Fatalf("the rekey changed the row: %+v", got)
+	}
+
+	// And the post can hold a second carousel now, which the old post_id UNIQUE
+	// constraint would have rejected.
+	if _, err := repo.UpsertCarousel(ctx, models.UpsertCarouselParams{
+		PostID: 1, BlockKey: "c-7f3a", Doc: `{"version":1}`,
+	}); err != nil {
+		t.Fatalf("second carousel in the same post: %v", err)
+	}
+	list, err := repo.ListCarouselsByPostID(ctx, 1)
+	if err != nil {
+		t.Fatalf("ListCarouselsByPostID: %v", err)
+	}
+	if len(list) != 2 || list[0].BlockKey != "" || list[1].BlockKey != "c-7f3a" {
+		t.Fatalf("after the rekey the post holds %+v", list)
+	}
+
+	// The cascade survives the table rebuild — the foreign key is declared on
+	// the new table, not inherited.
+	if _, err := repo.DB().ExecContext(ctx, `DELETE FROM posts WHERE id = 1`); err != nil {
+		t.Fatalf("delete post: %v", err)
+	}
+	var n int
+	if err := repo.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM carousels`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("%d carousel rows survived the post delete; the rebuilt table lost its cascade", n)
+	}
+
+	// Re-running is a no-op: the step is recorded, and nothing is pending.
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	pending, err := Pending(ctx, repo)
+	if err != nil {
+		t.Fatalf("Pending: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("still pending after two runs: %v", pending)
 	}
 }

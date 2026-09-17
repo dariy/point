@@ -420,9 +420,10 @@ var schema = []struct{ name, sql string }{
 		`INSERT INTO posts_fts(posts_fts) VALUES ('rebuild')`,
 	},
 	{
-		// Carousel Studio's document store. One row per post, keyed post_id
-		// UNIQUE; doc is opaque JSON. Same statement as in sql/schema.sql,
-		// which is where a fresh database gets it.
+		// Carousel Studio's document store, in its original shape: one row per
+		// post, keyed post_id UNIQUE; doc is opaque JSON. The two steps at the
+		// end of this list rekey it by block. Left as it was so a database that
+		// has never seen a carousel arrives at the same place as one that has.
 		"create_carousels_table",
 		`CREATE TABLE IF NOT EXISTS carousels (
 				id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -445,6 +446,57 @@ var schema = []struct{ name, sql string }{
 				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 			)`,
+	},
+	{
+		// A post may hold several carousels now, each one a `.carousel-block`
+		// fence with an id of its own, so a carousel row is keyed by the block
+		// rather than by the post. This is the first half: the column, with the
+		// backfill riding on its DEFAULT.
+		//
+		// The backfill rule is the empty string, and it rewrites no post's
+		// content. Every row that already exists belongs to the post's one
+		// carousel, whose fence has no id yet -- so the empty key means exactly
+		// that, "the first fence, the one with no key", and an unkeyed request
+		// still finds its row (api.firstBlockKey). The studio upgrades it to a
+		// real key the next time it saves that block.
+		//
+		// A fresh database already has the column from sql/schema.sql and gets
+		// "duplicate column" here, which ApplyMigration records as a no-op.
+		"add_carousels_block_key",
+		`ALTER TABLE carousels ADD COLUMN block_key TEXT NOT NULL DEFAULT ''`,
+	},
+	{
+		// ...and the second half: drop the post_id UNIQUE constraint, which is
+		// what limited a post to one carousel. SQLite cannot drop a column
+		// constraint, so the table is rebuilt around the composite key -- the
+		// same shape sql/schema.sql now creates.
+		//
+		// Copying block_key (added by the step above, so it exists in both
+		// shapes) is what makes this lossless whichever shape it meets: on a
+		// database that came from schema.sql it rebuilds an already-correct
+		// table into an identical one, ids and all.
+		//
+		// Foreign keys go off for the swap because the rows are copied before
+		// the old table is dropped, and back on after -- ON is the pool's
+		// default (repository.pragmaDSN). The leftover-table DROP at the top
+		// covers a previous attempt that died mid-swap.
+		"rekey_carousels_by_block_key",
+		`PRAGMA foreign_keys = OFF;
+			DROP TABLE IF EXISTS carousels_rekeyed;
+			CREATE TABLE carousels_rekeyed (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+				block_key  TEXT NOT NULL DEFAULT '',
+				doc        TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(post_id, block_key)
+			);
+			INSERT INTO carousels_rekeyed (id, post_id, block_key, doc, created_at, updated_at)
+				SELECT id, post_id, block_key, doc, created_at, updated_at FROM carousels;
+			DROP TABLE carousels;
+			ALTER TABLE carousels_rekeyed RENAME TO carousels;
+			PRAGMA foreign_keys = ON`,
 	},
 }
 

@@ -216,10 +216,11 @@ func registerPluginRoutes(e *echo.Echo, h *api.PluginsHandler, svcs *AppServices
 }
 
 // registerCarouselRoutes mounts the carousel plugin's document API and its
-// template store. The post id rides in ?post=<id> on every document verb; the
-// template routes take the slug in the path instead. RequirePlugin runs before
-// auth, so a disabled plugin 404s exactly like a route that was never
-// registered instead of falling through to the SPA shell.
+// template store. The row address rides in ?post=<id>&block=<key> on every
+// document verb — one document per carousel block, so a post may hold several —
+// while the template routes take the slug in the path instead. RequirePlugin
+// runs before auth, so a disabled plugin 404s exactly like a route that was
+// never registered instead of falling through to the SPA shell.
 func registerCarouselRoutes(e *echo.Echo, h *api.CarouselHandler, svcs *AppServices) {
 	g := e.Group("/api/carousel",
 		api.RequirePlugin(svcs.Settings, "carousel"),

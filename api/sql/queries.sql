@@ -468,22 +468,34 @@ FROM posts
 WHERE deleted_at IS NULL AND status = 'published';
 
 -- CAROUSELS
--- One Carousel Studio document per post. doc is opaque JSON, stored and
+-- One Carousel Studio document per carousel block, keyed (post_id, block_key):
+-- a post may hold several independent carousels. doc is opaque JSON, stored and
 -- returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
+--
+-- ListCarouselsByPostID names its columns and omits doc for the same reason
+-- ListCarouselTemplates does: the caller wants to know which of a post's blocks
+-- have a stored document, not to load every document to find out. Ordered by id,
+-- so its first row is the post's oldest carousel -- which is what an unkeyed
+-- request resolves to.
 
--- name: GetCarouselByPostID :one
+-- name: GetCarouselByBlockKey :one
 SELECT * FROM carousels
-WHERE post_id = ? LIMIT 1;
+WHERE post_id = ? AND block_key = ? LIMIT 1;
+
+-- name: ListCarouselsByPostID :many
+SELECT block_key, created_at, updated_at FROM carousels
+WHERE post_id = ?
+ORDER BY id;
 
 -- name: UpsertCarousel :one
-INSERT INTO carousels (post_id, doc, created_at, updated_at)
-VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT(post_id) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
+INSERT INTO carousels (post_id, block_key, doc, created_at, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(post_id, block_key) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
--- name: DeleteCarouselByPostID :exec
+-- name: DeleteCarouselByBlockKey :exec
 DELETE FROM carousels
-WHERE post_id = ?;
+WHERE post_id = ? AND block_key = ?;
 
 -- CAROUSEL TEMPLATES
 -- A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as

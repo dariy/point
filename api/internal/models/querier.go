@@ -27,7 +27,7 @@ type Querier interface {
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
-	DeleteCarouselByPostID(ctx context.Context, postID int64) error
+	DeleteCarouselByBlockKey(ctx context.Context, arg DeleteCarouselByBlockKeyParams) error
 	DeleteCarouselTemplate(ctx context.Context, slug string) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMedia(ctx context.Context, id int64) error
@@ -38,9 +38,16 @@ type Querier interface {
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error)
 	// CAROUSELS
-	// One Carousel Studio document per post. doc is opaque JSON, stored and
+	// One Carousel Studio document per carousel block, keyed (post_id, block_key):
+	// a post may hold several independent carousels. doc is opaque JSON, stored and
 	// returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
-	GetCarouselByPostID(ctx context.Context, postID int64) (Carousel, error)
+	//
+	// ListCarouselsByPostID names its columns and omits doc for the same reason
+	// ListCarouselTemplates does: the caller wants to know which of a post's blocks
+	// have a stored document, not to load every document to find out. Ordered by id,
+	// so its first row is the post's oldest carousel -- which is what an unkeyed
+	// request resolves to.
+	GetCarouselByBlockKey(ctx context.Context, arg GetCarouselByBlockKeyParams) (Carousel, error)
 	GetCarouselTemplateBySlug(ctx context.Context, slug string) (CarouselTemplate, error)
 	GetFirstUser(ctx context.Context) (User, error)
 	// MEDIA
@@ -77,6 +84,7 @@ type Querier interface {
 	// omits doc: a template inlines its assets as data: URLs, so SELECT * here
 	// would pull every asset of every template to draw a list of names.
 	ListCarouselTemplates(ctx context.Context) ([]ListCarouselTemplatesRow, error)
+	ListCarouselsByPostID(ctx context.Context, postID int64) ([]ListCarouselsByPostIDRow, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)

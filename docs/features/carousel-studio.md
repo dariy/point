@@ -30,8 +30,9 @@ test), the editor's Visual mode preserves a `:::{.carousel-block}` fence (C3), t
 `carousel` plugin exists as a gated skeleton — registry descriptor, an empty studio
 shell at `/light/carousel?post=<id>`, and a post-editor menu entry (C4) — and the pure
 `geometry.js` / `document.js` modules with their unit tests have landed (C5), and the
-`carousels` table with its `GET/PUT/DELETE /api/carousel?post=<id>` document API is
-wired and gated (C6). The splitter MVP is live (C7) — the studio picks one image,
+`carousels` table with its `GET/PUT/DELETE /api/carousel?post=<id>&block=<key>`
+document API is wired and gated (C6 — rekeyed by block since, see the Decisions
+row). The splitter MVP is live (C7) — the studio picks one image,
 slices it into 2–20 equal 4:5 / 1:1 / 1.91:1 slides through a thin browser-canvas
 `render.js`, uploads each as a post-owned media file, saves the document, and writes
 the `:::{.carousel-block}` into post content. Re-render cleanup and Instagram
@@ -1134,8 +1135,9 @@ is `normalizeDocument(doc)`.
 
 ### Where templates live
 
-`carousel_templates(slug UNIQUE, name, doc)` — the `carousels` table repeated,
-including the decision that **`doc` is opaque to Go**: the schema is the
+`carousel_templates(slug UNIQUE, name, doc)` — the `carousels` table repeated with
+a slug where the block key would be, including the decision that **`doc` is opaque
+to Go**: the schema is the
 frontend's, and that is what has let the document evolve through S2, S3 and S6
 without a single Go change. `slug` and `name` are columns rather than fields
 read out of the envelope, because the handler does not parse what it stores.
@@ -1421,7 +1423,7 @@ S4's are all in the gallery rather than in the format:
 | Block class | `.carousel-block`, **not** `.carousel` | `frontend/css/public/carousel.css` owns the `.carousel-*` namespace for the lightbox/immersive viewer and bundles into `viewer.css` |
 | Public block CSS | New partial appended to the **main** bundle list in `build-css.sh`, not the plugin dir | Plugin CSS is served only when the plugin is enabled; published content must stay styled with the plugin off. Only the admin studio CSS belongs in the plugin dir |
 | UI surface | Full-page admin route `/light/carousel?post=<id>` | A filmstrip + stage + properties panel does not fit a `<details>` field group. Param-less path: plugin routes are merged verbatim and filtered on `startsWith("/light")` (`app.js`) |
-| Document storage | New `carousels` table keyed `post_id UNIQUE` | sqlc expands `SELECT *`; a multi-KB JSON blob on `posts` would ride along on every post-list query |
+| Document storage | New `carousels` table, keyed `UNIQUE(post_id, block_key)` | sqlc expands `SELECT *`; a multi-KB JSON blob on `posts` would ride along on every post-list query. `post_id` alone was UNIQUE through C6, one carousel per post; a post may hold several now, so the row is keyed by the block's fence id (`:::{.carousel-block #c-7f3a}`) instead. The `rekey_carousels_by_block_key` migration rebuilds the table around the composite key and backfills every existing row with the **empty** key — "the first fence, the one with no id yet" — which rewrites no post's content and is the key an unkeyed request still resolves to (`api.firstBlockKey`). The studio replaces it with a minted key on that block's next save |
 | Superseded slides on re-render | Studio deletes the prior generation's `rendered[].media_id` rows explicitly, skipping any path still elsewhere in the post | Slides carry a `post_id`, so `ListOrphanedMedia` (`post_id IS NULL`) never flags them — without an explicit delete every re-render leaks the old slides onto disk forever. Widening orphan detection into a content scan is a media-library change and out of scope |
 | A post with a carousel block on Instagram | Every image in the post ships, in document order, then the ≤20 truncation still applies. This **reverses** the earlier rule ("the block's slides ARE the carousel, the loose photos are dropped") recorded here through C8 | A post may carry several carousel blocks, so "the post's carousel" no longer names anything: the old selector took the *first* fence and silently dropped every other image in the post, the other decks included. `post_publish.go` now reads `ExtractMediaPaths(post.Content, "")` alone — `carouselBlockPaths` and `carouselBlockRe` are deleted — so a fence's slides are ordinary content paths, deduped and ordered with everything else. An author who wants only the deck on Instagram publishes a post that carries only the deck |
 | Grid thumbnail of a post whose first media is a carousel | Slide 1 becomes the post's `media_url` — kept, not worked around | `DeriveMediaURL` (`api/internal/utils/media.go`) takes the first bare media path in content, and the fence emits bare paths, so a carousel at the top of a post makes its cover slide the grid thumbnail. That is the right thumbnail for a designed deck. A post that wants a different thumbnail sets `thumbnail_path` explicitly, which still wins |
@@ -1473,9 +1475,10 @@ S4's are all in the gallery rather than in the format:
 
 ### The carousel document
 
-One JSON document per post in `carousels.doc` is the source of truth; the
+One JSON document per carousel block in `carousels.doc` is the source of truth; the
 `:::{.carousel-block}` in post content is its *rendered output*, regenerated on each
-render.
+render. A post may carry several blocks, each with a document of its own, keyed by
+the id in its fence — see "Document storage" in the Decisions table.
 
 ```jsonc
 {
@@ -1546,7 +1549,7 @@ document delete its own superseded slide rows: orphan detection is `post_id IS N
 | **Slides as a new media type / kind column** | Slides are ordinary images once rendered; a new type means teaching every media query, filter, and the library UI about it. The document's `rendered[].media_id` tracks provenance without a schema-wide concept. |
 | **A new goldmark AST node + renderer for carousels** | The `:::{.carousel-block}` fence already renders correctly through goldmark-fences + goldmark-attributes (pinned above). A custom node is code to maintain for output the generic path already produces, and it would diverge from how `::: {.hero}` and other attribute fences work. |
 | **A "carousels are not in content" model** (block lives only in the `carousels` table, injected at render) | Needs a second writer to `media.is_public` to publish slide media, duplicating the privacy-critical visibility logic. Writing the fence into post content reuses the one existing rule (`ExtractMediaPaths` → visible published post → public media). Also breaks RSS, search indexing, and the plain-markdown export. |
-| **A JSON blob column on `posts`** | sqlc `SELECT *` would carry a multi-KB document on every post-list query. Separate `carousels` table, keyed `post_id UNIQUE`. |
+| **A JSON blob column on `posts`** | sqlc `SELECT *` would carry a multi-KB document on every post-list query. Separate `carousels` table, keyed `UNIQUE(post_id, block_key)`. |
 | **A custom-template editor** (S5) | Turns a publishing tool into a design tool. If custom templates ship at all, ship JSON import/export, not an editor. |
 | **One unified draw-rect type with a single optional `pad: {x, w}`** (the S2 design sketch's `SlideDrawRects`) | A `contain` slide is letterboxed on two opposite sides at once — left+right *or* top+bottom — which one rect cannot describe. Rather than widen the split path's `{x, w}` and force it to carry `y`/`h` it never varies, the two producers keep their natural shapes and `geometry.padRects` flattens both into the one list the draw layer fills. `paintSlide` still has a single loop. |
 | **A two-way `split` ⇄ `deck` toggle that preserves both projections** | Would mean keeping the doc-level `strategy`/`anchorY` *and* per-slide crops simultaneously meaningful, with a rule for which wins — the parallel-state problem the document-as-truth decision exists to kill. The freeze is one-way and the reverse is destructive-and-confirmed instead. |
@@ -1588,7 +1591,7 @@ before it existed.
 | **C3** | `postNodes.js` + `VisualEditor.js` carousel node — line-based parse ahead of `IMAGE_PATH_RE`, serialize in both, round-trip tests. Data-loss guard: today, opening a carousel post in Visual mode and saving destroys the block. Must precede any writer. |
 | **C4** | Plugin skeleton: `registry.go` descriptor, `frontend/src/plugins/carousel/index.js`, post-editor menu entry, gating tests (chunk + `/api/carousel` 404 when off). |
 | **C5** | Pure `geometry.js` + `document.js` + unit tests. No UI, no canvas. **Done** — `frontend/src/plugins/carousel/{geometry,document}.js`, `frontend/test/carousel{Geometry,Document}.test.js`. |
-| **C6** | `carousels` table + migration + repo queries + handler + JS API client + Go tests. **Done** — `carousels(post_id UNIQUE)`, sqlc `GetCarouselByPostID` / `UpsertCarousel` / `DeleteCarouselByPostID`, `api/internal/api/carousel.go`, `frontend/src/api/carousel.js`. `doc` is stored and returned verbatim (validated only as a JSON object); `?post=<id>` on every verb; all 404 with the plugin off; post delete cascades. |
+| **C6** | `carousels` table + migration + repo queries + handler + JS API client + Go tests. **Done** — `api/internal/api/carousel.go`, `frontend/src/api/carousel.js`. `doc` is stored and returned verbatim (validated only as a JSON object); all 404 with the plugin off; post delete cascades. C6 landed one row per post (`carousels(post_id UNIQUE)`, `GetCarouselByPostID` / `UpsertCarousel` / `DeleteCarouselByPostID`, `?post=<id>` on every verb); the row is keyed by block since — `UNIQUE(post_id, block_key)`, `GetCarouselByBlockKey` / `UpsertCarousel` / `ListCarouselsByPostID` / `DeleteCarouselByBlockKey`, and `?post=<id>&block=<key>`, with `block` omissible for the post's first carousel. |
 | **C7** | Splitter MVP: source picker, N/aspect controls, safe-area guides, thin `render.js`, `createImageBitmap` downscale, upload, write block, save document. **Done** — `frontend/src/plugins/carousel/{index,render}.js`, `document.js` gains `splitDocument` / `applyCarouselBlock`, tests in `frontend/test/carousel{Render,Document,StudioPage}.test.js`. |
 | **C8** | Superseded-slide cleanup on re-render; "carousel block wins" + the >20 rule in `post_publish.go`; resolve the duplicate-path divergence between Go (`ExtractMediaPaths` dedups) and the browser (`extractMedia` does not). **Done** — `index.js` `_render` deletes superseded `media_id`s and refuses byte-identical slides; `post_publish.go` `carouselBlockPaths` selected the fence's slides — **since reversed**, the publish path now ships every image in the post in document order and that helper is gone; see the Decisions rows above. |
 | **C9** | Public block CSS partial; verify non-immersive and immersive rendering, including `mediaFromHtml` expansion in the immersive viewer. **Done** — `frontend/css/public/carousel-block.css` appended to the **main** bundle list in `build-css.sh` (not the plugin chunk); `mediaFromHtml` (`postMedia.js`) expands a `<div class="carousel-block">` into its N media items on the `<hr>` path and marks each `carousel: true`; the immersive `MediaViewer` pans between same-deck slides rather than crossfading (see Decisions); grid-thumbnail behaviour recorded below. |

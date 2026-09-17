@@ -114,6 +114,11 @@ func TestCarouselHandler_BadRequests(t *testing.T) {
 		{"doc is string", "post=1", `{"doc":"x"}`, h.SaveCarousel, http.StatusBadRequest},
 		{"doc malformed", "post=1", `{"doc":{`, h.SaveCarousel, http.StatusBadRequest},
 		{"post does not exist", "post=999", `{"doc":{"version":1}}`, h.SaveCarousel, http.StatusNotFound},
+		{"block with a space", "post=1&block=c%207f3a", "", h.GetCarousel, http.StatusBadRequest},
+		{"block starting with a hyphen", "post=1&block=-c7f3a", "", h.GetCarousel, http.StatusBadRequest},
+		{"block with a slash", "post=1&block=c/7f3a", "", h.GetCarousel, http.StatusBadRequest},
+		{"block too long", "post=1&block=c" + strings.Repeat("a", 64), "", h.GetCarousel, http.StatusBadRequest},
+		{"block rejected on save too", "post=1&block=c%207f3a", `{"doc":{"version":1}}`, h.SaveCarousel, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,6 +150,125 @@ func TestCarouselHandler_PostDeleteCascades(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("carousel row survived post deletion: %d rows", n)
 	}
+}
+
+// Several carousels in one post is the whole point of keying rows by block:
+// each one round-trips on its own, a save to one leaves the others alone, and
+// delete reaches only the block it names.
+func TestCarouselHandler_BlocksAreIndependent(t *testing.T) {
+	h, _ := newCarouselHandler(t)
+
+	const (
+		first  = "post=1&block=c-7f3a"
+		second = "post=1&block=c-91b0"
+	)
+
+	for _, q := range []string{first, second} {
+		if rec := drive(t, h.GetCarousel, http.MethodGet, q, ""); rec.Code != http.StatusNotFound {
+			t.Fatalf("GET %s before save: want 404, got %d", q, rec.Code)
+		}
+	}
+
+	// Two blocks, two documents.
+	if rec := drive(t, h.SaveCarousel, http.MethodPut, first, `{"doc":{"version":1,"aspect":"4:5"}}`); rec.Code != http.StatusOK {
+		t.Fatalf("PUT first: %d (%s)", rec.Code, rec.Body.String())
+	}
+	if rec := drive(t, h.SaveCarousel, http.MethodPut, second, `{"doc":{"version":1,"aspect":"1:1"}}`); rec.Code != http.StatusOK {
+		t.Fatalf("PUT second: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// Each reads back its own, and says which block it is.
+	if got := getBlock(t, h, first); got.BlockKey != "c-7f3a" || string(got.Doc) != `{"version":1,"aspect":"4:5"}` {
+		t.Fatalf("GET first returned %+v", got)
+	}
+	if got := getBlock(t, h, second); got.BlockKey != "c-91b0" || string(got.Doc) != `{"version":1,"aspect":"1:1"}` {
+		t.Fatalf("GET second returned %+v", got)
+	}
+
+	// Saving one block does not touch the other.
+	if rec := drive(t, h.SaveCarousel, http.MethodPut, first, `{"doc":{"version":2}}`); rec.Code != http.StatusOK {
+		t.Fatalf("PUT first again: %d", rec.Code)
+	}
+	if got := getBlock(t, h, second); string(got.Doc) != `{"version":1,"aspect":"1:1"}` {
+		t.Fatalf("saving the first block rewrote the second: %s", got.Doc)
+	}
+
+	// Delete is block-scoped.
+	if rec := drive(t, h.DeleteCarousel, http.MethodDelete, second, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE second: %d", rec.Code)
+	}
+	if rec := drive(t, h.GetCarousel, http.MethodGet, second, ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("GET second after delete: want 404, got %d", rec.Code)
+	}
+	if got := getBlock(t, h, first); string(got.Doc) != `{"version":2}` {
+		t.Fatalf("deleting the second block took the first with it: %+v", got)
+	}
+}
+
+// A request with no ?block= is the pre-block-key API, and it has to keep
+// addressing a row rather than creating a second one beside the post's
+// carousel: on an empty post it saves under the keyless key, and once a block
+// has a real key it resolves to that row.
+func TestCarouselHandler_UnkeyedRequestsResolveToTheFirstBlock(t *testing.T) {
+	h, repo := newCarouselHandler(t)
+
+	// Nothing stored: an unkeyed save is the keyless row the migration's
+	// backfill produces.
+	if rec := drive(t, h.SaveCarousel, http.MethodPut, "post=1", `{"doc":{"version":1}}`); rec.Code != http.StatusOK {
+		t.Fatalf("unkeyed PUT: %d (%s)", rec.Code, rec.Body.String())
+	}
+	if got := getBlock(t, h, "post=1"); got.BlockKey != "" {
+		t.Fatalf("unkeyed PUT stored block_key %q, want the keyless one", got.BlockKey)
+	}
+	// An explicitly empty block= is the same request, not a different key.
+	if got := getBlock(t, h, "post=1&block="); got.BlockKey != "" || string(got.Doc) != `{"version":1}` {
+		t.Fatalf("block= (empty) resolved elsewhere: %+v", got)
+	}
+
+	// Once that block carries a key, an unkeyed caller lands on its row rather
+	// than starting a second one.
+	if _, err := repo.DB().Exec(`UPDATE carousels SET block_key = 'c-7f3a' WHERE post_id = 1`); err != nil {
+		t.Fatalf("rekey the row: %v", err)
+	}
+	got := getBlock(t, h, "post=1")
+	if got.BlockKey != "c-7f3a" || string(got.Doc) != `{"version":1}` {
+		t.Fatalf("unkeyed GET after rekey: %+v", got)
+	}
+	if rec := drive(t, h.SaveCarousel, http.MethodPut, "post=1", `{"doc":{"version":2}}`); rec.Code != http.StatusOK {
+		t.Fatalf("unkeyed PUT after rekey: %d", rec.Code)
+	}
+	var n int
+	if err := repo.DB().QueryRow(`SELECT COUNT(*) FROM carousels WHERE post_id = 1`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("the unkeyed save made a second row: %d rows", n)
+	}
+	if got := getBlock(t, h, "post=1&block=c-7f3a"); string(got.Doc) != `{"version":2}` {
+		t.Fatalf("the unkeyed save missed the keyed row: %s", got.Doc)
+	}
+
+	// ...and an unkeyed delete reaches it too.
+	if rec := drive(t, h.DeleteCarousel, http.MethodDelete, "post=1", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("unkeyed DELETE: %d", rec.Code)
+	}
+	if rec := drive(t, h.GetCarousel, http.MethodGet, "post=1&block=c-7f3a", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("after unkeyed DELETE: want 404, got %d", rec.Code)
+	}
+}
+
+// getBlock GETs one row and decodes it, failing the test on anything but 200.
+func getBlock(t *testing.T, h *CarouselHandler, query string) carouselResponse {
+	t.Helper()
+	rec := drive(t, h.GetCarousel, http.MethodGet, query, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET %s: want 200, got %d (%s)", query, rec.Code, rec.Body.String())
+	}
+	var got carouselResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode GET %s: %v", query, err)
+	}
+	return got
 }
 
 // ── Templates ────────────────────────────────────────────────────────────────

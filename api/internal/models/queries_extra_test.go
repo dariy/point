@@ -109,11 +109,12 @@ func TestQueries_Extra(t *testing.T) {
 }
 
 // TestCarouselQueries exercises the carousel document queries against a real
-// schema: absent -> insert -> upsert-replaces-in-place -> get -> delete. These
-// run here, in package models, because `go test ./...` records coverage per
-// package — the repository and api tests that also call these functions never
-// attribute to queries.sql.go. (The ON DELETE CASCADE from posts needs
-// PRAGMA foreign_keys and is covered by repository.TestRepository_Carousels.)
+// schema: absent -> insert -> upsert-replaces-in-place -> get -> delete, and a
+// second block in the same post to pin the composite key. These run here, in
+// package models, because `go test ./...` records coverage per package — the
+// repository and api tests that also call these functions never attribute to
+// queries.sql.go. (The ON DELETE CASCADE from posts needs PRAGMA foreign_keys
+// and is covered by repository.TestRepository_Carousels.)
 func TestCarouselQueries(t *testing.T) {
 	q, db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
@@ -121,27 +122,28 @@ func TestCarouselQueries(t *testing.T) {
 
 	u, _ := q.CreateUser(ctx, CreateUserParams{Username: "cu", Email: "cu@t.com", PasswordHash: "h", DisplayName: "U"})
 	p, _ := q.CreatePost(ctx, CreatePostParams{Title: "CP", Slug: "cp", AuthorID: u.ID, Status: "draft"})
+	block := GetCarouselByBlockKeyParams{PostID: p.ID, BlockKey: "c-7f3a"}
 
 	// Absent.
-	if _, err := q.GetCarouselByPostID(ctx, p.ID); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("GetCarouselByPostID on empty: want sql.ErrNoRows, got %v", err)
+	if _, err := q.GetCarouselByBlockKey(ctx, block); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetCarouselByBlockKey on empty: want sql.ErrNoRows, got %v", err)
 	}
 	// Deleting an absent row is a no-op, not an error.
-	if err := q.DeleteCarouselByPostID(ctx, p.ID); err != nil {
-		t.Fatalf("DeleteCarouselByPostID on absent row: %v", err)
+	if err := q.DeleteCarouselByBlockKey(ctx, DeleteCarouselByBlockKeyParams(block)); err != nil {
+		t.Fatalf("DeleteCarouselByBlockKey on absent row: %v", err)
 	}
 
 	// Insert.
-	row, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, Doc: `{"version":1}`})
+	row, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, BlockKey: block.BlockKey, Doc: `{"version":1}`})
 	if err != nil {
 		t.Fatalf("UpsertCarousel insert: %v", err)
 	}
-	if row.Doc != `{"version":1}` || row.PostID != p.ID {
+	if row.Doc != `{"version":1}` || row.PostID != p.ID || row.BlockKey != block.BlockKey {
 		t.Fatalf("stored row = %+v", row)
 	}
 
 	// Upsert replaces the doc in place — same row id.
-	row2, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, Doc: `{"version":2}`})
+	row2, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, BlockKey: block.BlockKey, Doc: `{"version":2}`})
 	if err != nil {
 		t.Fatalf("UpsertCarousel update: %v", err)
 	}
@@ -149,17 +151,33 @@ func TestCarouselQueries(t *testing.T) {
 		t.Fatalf("upsert made a new row: %d -> %d", row.ID, row2.ID)
 	}
 
-	got, err := q.GetCarouselByPostID(ctx, p.ID)
+	got, err := q.GetCarouselByBlockKey(ctx, block)
 	if err != nil || got.Doc != `{"version":2}` {
 		t.Fatalf("after upsert: doc=%q err=%v", got.Doc, err)
 	}
 
-	// Explicit delete.
-	if err := q.DeleteCarouselByPostID(ctx, p.ID); err != nil {
-		t.Fatalf("DeleteCarouselByPostID: %v", err)
+	// A keyless row lives beside the keyed one: the empty key is a key like any
+	// other, which is what lets the block_key backfill leave old rows reachable.
+	if _, err := q.UpsertCarousel(ctx, UpsertCarouselParams{PostID: p.ID, Doc: `{"version":0}`}); err != nil {
+		t.Fatalf("UpsertCarousel keyless: %v", err)
 	}
-	if _, err := q.GetCarouselByPostID(ctx, p.ID); !errors.Is(err, sql.ErrNoRows) {
+	list, err := q.ListCarouselsByPostID(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCarouselsByPostID: %v", err)
+	}
+	if len(list) != 2 || list[0].BlockKey != block.BlockKey || list[1].BlockKey != "" {
+		t.Fatalf("ListCarouselsByPostID returned %+v", list)
+	}
+
+	// Explicit delete takes one block only.
+	if err := q.DeleteCarouselByBlockKey(ctx, DeleteCarouselByBlockKeyParams(block)); err != nil {
+		t.Fatalf("DeleteCarouselByBlockKey: %v", err)
+	}
+	if _, err := q.GetCarouselByBlockKey(ctx, block); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("after delete: want sql.ErrNoRows, got %v", err)
+	}
+	if rest, err := q.ListCarouselsByPostID(ctx, p.ID); err != nil || len(rest) != 1 {
+		t.Fatalf("after delete: %d rows left, err=%v", len(rest), err)
 	}
 }
 
