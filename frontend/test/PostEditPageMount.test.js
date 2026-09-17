@@ -1050,14 +1050,37 @@ describe('PostEditPage (mounted)', () => {
       assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
     });
 
-    test('the drop handler refuses a slide dropped into a different container', async () => {
+    test('the drop handler moves a slide dropped into the list out of its carousel', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: [carouselFence(SLIDES), '/2024/08/z.jpg'].join('\n\n'),
+      });
       await mountPage({ params: { id: '7' } });
       const strip = page.container.querySelector('.ve-carousel-strip');
       const list = page.container.querySelector('#ve-list');
 
       ve()._onReorderDrop({ item: slides()[0], from: strip, to: list, afterEl: null });
 
-      assert.deepEqual(paths(), SLIDES, 'a slide cannot yet leave its strip');
+      assert.deepEqual(
+        page._nodes.map(n => (n.type === 'carousel' ? n.paths : n.path)),
+        ['/2024/08/a.jpg', ['/2024/08/b.jpg', '/2024/08/c.jpg'], '/2024/08/z.jpg'],
+        'the slide became a loose image at the front, and the carousel kept the rest',
+      );
+    });
+
+    test('the drop handler collapses a carousel whose last slide leaves for the list', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: [carouselFence(['/2024/08/a.jpg']), '/2024/08/z.jpg'].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const strip = page.container.querySelector('.ve-carousel-strip');
+      const list = page.container.querySelector('#ve-list');
+      const order = () => page._nodes.map(n => n.path || n.type);
+
+      ve()._onReorderDrop({ item: slides()[0], from: strip, to: list, afterEl: null });
+
+      assert.deepEqual(order(), ['/2024/08/a.jpg', '/2024/08/z.jpg'], 'no empty carousel card is left behind');
     });
 
     test('_moveSlide lands the slide behind its anchor, forwards and backwards', async () => {
@@ -1102,6 +1125,90 @@ describe('PostEditPage (mounted)', () => {
       ve()._moveSlide(1, 0, null); // node 1 is the plain image card, not a carousel
 
       assert.equal(page._nodes, before);
+    });
+  });
+
+  /**
+   * Crossing the boundary between the top-level list and a carousel's strip:
+   * a photo dragged in, a slide dragged out, a slide dragged into a different
+   * carousel. Each is one onChange() call, built out of A1's node operations
+   * (insertPathIntoCarousel, removePathFromCarousel) rather than duplicating
+   * their arithmetic here.
+   */
+  describe('dragging photos in and out of a carousel', () => {
+    const ve = () => page._visualEditorRef;
+    const nodeShapes = () => page._nodes.map(n => (n.type === 'carousel' ? n.paths : n.path || n.type));
+
+    test('a photo dropped into a strip joins that carousel, and leaves the list', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: ['/2024/08/x.jpg', carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'])].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const card = page.container.querySelector('.ve-card:not(.ve-card--carousel)');
+      const strip = page.container.querySelector('.ve-carousel-strip');
+      const firstSlide = strip.querySelector('.ve-slide');
+
+      ve()._onReorderDrop({ item: card, from: page.container.querySelector('#ve-list'), to: strip, afterEl: firstSlide });
+
+      assert.deepEqual(
+        nodeShapes(),
+        [['/2024/08/a.jpg', '/2024/08/x.jpg', '/2024/08/b.jpg']],
+        'the photo left the list and landed behind the slide it was dropped on',
+      );
+    });
+
+    test('a text card dropped into a strip is refused — only a photo can join a carousel', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: ['Caption line.', carouselFence(['/2024/08/a.jpg'])].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const before = page._nodes;
+      const card = page.container.querySelector('.ve-card--text');
+      const strip = page.container.querySelector('.ve-carousel-strip');
+
+      ve()._onReorderDrop({ item: card, from: page.container.querySelector('#ve-list'), to: strip, afterEl: null });
+
+      assert.equal(page._nodes, before);
+    });
+
+    test('a slide dragged into a different carousel moves between them', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: [
+          carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg']),
+          carouselFence(['/2024/08/c.jpg']),
+        ].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const strips = [...page.container.querySelectorAll('.ve-carousel-strip')];
+      const firstSlide = strips[0].querySelector('.ve-slide');
+
+      ve()._onReorderDrop({ item: firstSlide, from: strips[0], to: strips[1], afterEl: null });
+
+      assert.deepEqual(
+        nodeShapes(),
+        [['/2024/08/b.jpg'], ['/2024/08/a.jpg', '/2024/08/c.jpg']],
+        'the slide left the first carousel and landed at the front of the second',
+      );
+    });
+
+    test('the last slide crossing into another carousel collapses its old one', async () => {
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: [
+          carouselFence(['/2024/08/a.jpg']),
+          carouselFence(['/2024/08/c.jpg']),
+        ].join('\n\n'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const strips = [...page.container.querySelectorAll('.ve-carousel-strip')];
+      const firstSlide = strips[0].querySelector('.ve-slide');
+
+      ve()._onReorderDrop({ item: firstSlide, from: strips[0], to: strips[1], afterEl: null });
+
+      assert.deepEqual(nodeShapes(), [['/2024/08/a.jpg', '/2024/08/c.jpg']]);
     });
   });
 

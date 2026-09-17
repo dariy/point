@@ -13,6 +13,8 @@ import { attachPointerReorder } from "../../utils/pointerReorder.js";
 import {
   carouselFence,
   groupIntoCarousel,
+  insertPathIntoCarousel,
+  removePathFromCarousel,
   ungroupCarousel,
 } from "../../utils/postNodes.js";
 
@@ -815,9 +817,8 @@ export class VisualEditor extends Component {
     // list itself — attachPointerReorder's containers() is first-match-wins,
     // and a strip's rect sits inside the list's, so the list would otherwise
     // always win. Cards and slides share the gesture but not a model: onDrop
-    // below routes each to its own mutation and refuses a drop that would
-    // cross from one container kind to the other, since neither a slide
-    // leaving its strip nor a card entering one is supported yet.
+    // below routes each to its own mutation, including the crossings — a
+    // photo into a strip, a slide out of one, a slide into another.
     //
     // afterRender() runs again on every render and the attachment is a set of
     // document-level listeners, so it has to be released with the render that
@@ -870,12 +871,23 @@ export class VisualEditor extends Component {
    */
   _onReorderDrop({ item, from, to, afterEl }) {
     if (item.matches(".ve-slide")) {
-      if (to !== from) return; // a slide cannot yet leave its strip
       const nodeIdx = this._cardIndex(item.closest(".ve-card--carousel"));
-      this._moveSlide(nodeIdx, this._cardIndex(item), this._cardIndex(afterEl));
+      const slideIdx = this._cardIndex(item);
+      if (to === from) {
+        this._moveSlide(nodeIdx, slideIdx, this._cardIndex(afterEl));
+      } else if (to.classList.contains("ve-carousel-strip")) {
+        const targetIdx = this._cardIndex(to.closest(".ve-card--carousel"));
+        this._moveSlideBetweenCarousels(nodeIdx, slideIdx, targetIdx, this._cardIndex(afterEl));
+      } else {
+        this._moveSlideOutOfCarousel(nodeIdx, slideIdx, this._cardIndex(afterEl));
+      }
       return;
     }
-    if (to !== from) return; // a card cannot yet enter a strip
+    if (to !== from) {
+      const targetIdx = this._cardIndex(to.closest(".ve-card--carousel"));
+      this._moveCardIntoCarousel(this._cardIndex(item), targetIdx, this._cardIndex(afterEl));
+      return;
+    }
     this._moveNode(this._cardIndex(item), this._cardIndex(afterEl));
   }
 
@@ -1005,6 +1017,83 @@ export class VisualEditor extends Component {
     const nodes = this.props.nodes || [];
     const nextNodes = nodes.map((n, i) => (i === nodeIdx ? { ...n, paths: nextPaths } : n));
     this.props.onChange?.(nextNodes);
+  }
+
+  /**
+   * A photo card crossing into a carousel's strip: its image node leaves the
+   * top-level list and its path takes a slide's place in that carousel.
+   * `insertPathIntoCarousel` never changes the list's length, so `fromIdx`
+   * still names the dragged card once it has run.
+   *
+   * @param {number|null} fromIdx    The image node's index in `nodes`.
+   * @param {number|null} targetIdx  The carousel node's index in `nodes`.
+   * @param {number|null} afterIdx   The slide it should land behind, or null for first.
+   */
+  _moveCardIntoCarousel(fromIdx, targetIdx, afterIdx) {
+    const nodes = this.props.nodes || [];
+    const node = fromIdx === null ? null : nodes[fromIdx];
+    if (!node || node.type !== "image") return; // only a photo can join a carousel
+
+    const at = afterIdx === null ? 0 : afterIdx + 1;
+    const withSlide = insertPathIntoCarousel(nodes, targetIdx, node.path, at);
+    if (withSlide === nodes) return; // targetIdx did not name a carousel
+
+    this.props.onChange?.(withSlide.filter((_, i) => i !== fromIdx));
+  }
+
+  /**
+   * A slide crossing out of its strip into the top-level list: its path
+   * leaves the carousel and becomes an image node at the drop slot.
+   * `removePathFromCarousel` drops the carousel node outright once its last
+   * slide is gone, which shifts every index after it down by one — the
+   * adjustment `insertAt` needs when the vacated carousel sat before the
+   * drop point.
+   *
+   * @param {number|null} sourceIdx  The carousel node's index in `nodes`.
+   * @param {number|null} slideIdx   The slide's index in the carousel's `paths`.
+   * @param {number|null} afterIdx   The card it should land behind, or null for first.
+   */
+  _moveSlideOutOfCarousel(sourceIdx, slideIdx, afterIdx) {
+    const nodes = this.props.nodes || [];
+    const node = sourceIdx === null ? null : nodes[sourceIdx];
+    const path = node && node.type === "carousel" ? (node.paths || [])[slideIdx] : undefined;
+    if (!path) return;
+
+    const withoutSlide = removePathFromCarousel(nodes, sourceIdx, path);
+    const collapsed = withoutSlide.length < nodes.length;
+    let insertAt = afterIdx === null ? 0 : afterIdx + 1;
+    if (collapsed && sourceIdx < insertAt) insertAt -= 1;
+
+    const next = [...withoutSlide];
+    next.splice(insertAt, 0, { type: "image", path });
+    this.props.onChange?.(next);
+  }
+
+  /**
+   * A slide crossing from one carousel's strip into another's. Same collapse
+   * bookkeeping as _moveSlideOutOfCarousel(), because removing the source's
+   * last slide can shift the target's own index before the insert runs.
+   *
+   * @param {number|null} sourceIdx  The source carousel's index in `nodes`.
+   * @param {number|null} slideIdx   The slide's index in the source's `paths`.
+   * @param {number|null} targetIdx  The destination carousel's index in `nodes`.
+   * @param {number|null} afterIdx   The slide it should land behind, or null for first.
+   */
+  _moveSlideBetweenCarousels(sourceIdx, slideIdx, targetIdx, afterIdx) {
+    const nodes = this.props.nodes || [];
+    const node = sourceIdx === null ? null : nodes[sourceIdx];
+    const path = node && node.type === "carousel" ? (node.paths || [])[slideIdx] : undefined;
+    if (!path || targetIdx === null) return;
+
+    const withoutSlide = removePathFromCarousel(nodes, sourceIdx, path);
+    const collapsed = withoutSlide.length < nodes.length;
+    const adjustedTarget = collapsed && sourceIdx < targetIdx ? targetIdx - 1 : targetIdx;
+
+    const at = afterIdx === null ? 0 : afterIdx + 1;
+    const withSlide = insertPathIntoCarousel(withoutSlide, adjustedTarget, path, at);
+    if (withSlide === withoutSlide) return; // adjustedTarget did not name a carousel
+
+    this.props.onChange?.(withSlide);
   }
 
   _bindInlineRename() {
