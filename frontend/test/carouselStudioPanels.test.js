@@ -449,7 +449,7 @@ describe('carousel studio panels', () => {
       assert.match(out, /Slide 1 layers/);
       assert.match(out, /Deck layers/);
       // every add / select / reorder / delete in the span section carries the scope.
-      assert.match(out, /data-action="add-layer"[\s\S]*?data-scope="span"/);
+      assert.match(out, /class="carousel-studio__add-layer-select"[\s\S]*?data-scope="span"/);
       assert.match(out, /data-action="select-layer"\s+data-scope="span"\s+data-index="0"/);
       assert.match(out, /data-action="delete-layer"\s+data-scope="span"/);
     });
@@ -472,7 +472,7 @@ describe('carousel studio panels', () => {
 
     test('no span layers still offers the add chips and an explainer', () => {
       const out = str(layerPanel({ doc: deck, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
-      assert.match(out, /data-action="add-layer"[\s\S]*?data-scope="span"/);
+      assert.match(out, /class="carousel-studio__add-layer-select"[\s\S]*?data-scope="span"/);
       assert.match(out, /runs across the seams/);
     });
   });
