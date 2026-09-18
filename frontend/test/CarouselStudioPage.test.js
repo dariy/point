@@ -193,7 +193,7 @@ describe('CarouselStudioPage', () => {
 
     const range = el.querySelector('#carousel-n');
     range.value = '5';
-    range.dispatchEvent(new dom.window.Event('change'));
+    fire(range, 'change');
     await settle();
 
     assert.equal(page.state.doc.slides.length, 5);
