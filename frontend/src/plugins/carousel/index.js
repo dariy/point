@@ -909,7 +909,8 @@ export default class CarouselStudioPage extends Component {
       const post = await getPost(postId);
       if (this._unmounted) return;
       const block = resolveBlock(post?.content || "", this._blockParam);
-      const carousel = await this._loadBlockRow(postId, block);
+      const fences = carouselFences(post?.content || "");
+      const carousel = await this._loadBlockRow(postId, block, fences);
       if (this._unmounted) return;
       this._adoptLoaded(post, carousel, block);
     } catch (err) {
@@ -933,28 +934,49 @@ export default class CarouselStudioPage extends Component {
    *
    * @param {number} postId
    * @param {{ key: string|null, ordinal: number|null }} block
+   * @param {{key: string|null}[]} fences every carousel fence in the post,
+   *   for {@link _preKeyRow} to tell an orphaned key from one a different
+   *   fence still claims
    */
-  async _loadBlockRow(postId, block) {
+  async _loadBlockRow(postId, block, fences) {
     if (block.key) {
       const row = await getCarousel(postId, block.key).catch(noRowOn404);
       // A keyed FIRST fence may still be stored under the pre-key empty key:
       // both mean "the post's first carousel", and keying that fence by hand in
       // Text mode does not move the row. There is nowhere else its design can
       // be, and the next save re-homes it under the key.
-      return row || (block.ordinal === 1 ? this._preKeyRow(postId) : null);
+      return row || (block.ordinal === 1 ? this._preKeyRow(postId, fences) : null);
     }
     // No fence at all: whatever the post's first carousel is, it is the one the
     // studio has always opened, and its key becomes this block's.
     if (block.ordinal == null) return getCarousel(postId).catch(noRowOn404);
-    return block.ordinal === 1 ? this._preKeyRow(postId) : null;
+    return block.ordinal === 1 ? this._preKeyRow(postId, fences) : null;
   }
 
-  /** The post's first carousel row while it is still stored under the pre-key
-   *  empty key, else null — the unkeyed address is positional, and a row with a
-   *  key of its own belongs to whichever block carries that key. */
-  async _preKeyRow(postId) {
+  /**
+   * The post's first carousel row, for a fence that carries no id of its own.
+   *
+   * The unkeyed address is positional and resolves to the post's oldest row
+   * whatever key it now carries (`ListCarouselsByPostID` orders by id). An
+   * empty key is the classic case: this fence has never been saved since
+   * block keys existed. A row that already carries its own key is still this
+   * fence's, as long as no OTHER fence in the post claims that key — a save
+   * keys the row and the fence together, so a keyless fence with a keyed row
+   * beneath it means the fence lost its `#id` afterward (a hand edit in Text
+   * mode, or a re-render that did not carry it through), not that the row
+   * moved. A key some other fence does carry stays untouched: that fence is
+   * the row's rightful match, and adopting it here would steal its design.
+   *
+   * @param {number} postId
+   * @param {{key: string|null}[]} [fences] every carousel fence in the post;
+   *   omitted only by {@link _retirePreKeyRow}, which never reaches the check
+   *   that needs it — the row it is retiring always has the empty key.
+   */
+  async _preKeyRow(postId, fences = []) {
     const row = await getCarousel(postId).catch(noRowOn404);
-    return row && !row.block_key ? row : null;
+    if (!row) return null;
+    if (!row.block_key) return row;
+    return fences.some((f) => f.key === row.block_key) ? null : row;
   }
 
   /**

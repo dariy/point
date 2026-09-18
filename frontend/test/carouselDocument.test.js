@@ -1474,6 +1474,21 @@ describe('adoptFencePaths', () => {
     assert.strictEqual(buildCarouselBlock(doc), carouselFence(PATHS));
   });
 
+  test('a matched slide keeps its layers', () => {
+    const doc = normalizeDocument({
+      slides: [
+        {
+          source: '/w.jpg',
+          rendered: { path: PATHS[0], media_id: 100, specHash: 'h' },
+          layers: [{ type: 'text', text: 'Hello' }],
+        },
+      ],
+    });
+    const next = adoptFencePaths(doc, [PATHS[0]]);
+    assert.strictEqual(next.slides[0].layers.length, 1);
+    assert.strictEqual(next.slides[0].layers[0].text, 'Hello');
+  });
+
   test('a path dropped from the fence drops its slide', () => {
     const doc = rendered(['/w.jpg', '/w.jpg', '/w.jpg'], PATHS);
     const next = adoptFencePaths(doc, [PATHS[0], PATHS[2]]);

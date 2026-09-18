@@ -939,6 +939,44 @@ describe('CarouselStudioPage', () => {
       assert.deepEqual(blockParams('GET'), ['c-bbbb']);
     });
 
+    test('a first fence that lost its own key still finds its row, once nothing else claims it', async () => {
+      // The fence used to carry `#c-orphan` — a hand edit in Text mode, or a
+      // re-render that did not carry it through — dropped the id, but the row
+      // underneath is still keyed with it. No fence in the post asks for
+      // `c-orphan`, so the keyless one at position 1 is unambiguously its
+      // match: this is the "old carousel opens empty" bug (p-carousel-studio-
+      // khzq.24), and the row's layers and media id must survive it.
+      const ORPHANED = { ...THREE, content: `Intro.\n\n${LAST}\n\nBetween.\n\n${MIDDLE}\n\nAlso.\n\n${FIRST}\n\nOutro.` };
+      await mount({ post: '42' }, routes(ORPHANED, {
+        'c-orphan': docFor('/2026/08/c1.jpg', 102),
+        'c-bbbb': docFor('/2026/08/b1.jpg', 101),
+        'c-aaaa': docFor('/2026/08/a1.jpg', 100),
+      }), { renderDeps: fakeRenderDeps(async () => ({})) });
+
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered),
+        [{ path: '/2026/08/c1.jpg', media_id: 102, specHash: '' }],
+        'the design behind the keyless fence, not an empty adopted slide',
+      );
+      assert.deepEqual(blockParams('GET'), [null], 'the pre-key row is asked for unkeyed');
+    });
+
+    test('a first fence does not borrow a row a different fence still keys', async () => {
+      // Same shape as above, but this time `c-bbbb` really is `MIDDLE`'s key —
+      // stealing the row the unkeyed lookup happens to resolve to would rob
+      // that fence of its design instead of restoring this one's.
+      const AMBIGUOUS = { ...THREE, content: `Intro.\n\n${LAST}\n\nBetween.\n\n${MIDDLE}\n\nOutro.` };
+      await mount({ post: '42' }, routes(AMBIGUOUS, {
+        'c-bbbb': docFor('/2026/08/b1.jpg', 101),
+      }), { renderDeps: fakeRenderDeps(async () => ({})) });
+
+      assert.deepEqual(
+        page.state.doc.slides.map((s) => s.rendered),
+        [{ path: '/2026/08/c1.jpg', media_id: null, specHash: '' }],
+        'the keyless fence adopts its own photo rather than borrowing c-bbbb’s',
+      );
+    });
+
     test('the pre-key row is retired by the save that keys its fence', async () => {
       // One keyless fence and a row under the backfilled empty key: a post from
       // before block keys. The keyed save writes a new row, so the old one has
