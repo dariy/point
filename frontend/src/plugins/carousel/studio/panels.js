@@ -306,8 +306,11 @@ function layerLabel(layer) {
 }
 
 /**
- * The builder: mode toggle, stage, the mode's own panel, the
- * doc-level controls, and the strip of slides really in the post.
+ * The builder: the studio's three-row shell — toolbar, body, tray — around
+ * the mode toggle, the stage, the mode's own panel, the doc-level controls,
+ * and the strip of slides really in the post. `.carousel-studio` (the section
+ * around this) lays the three out as a fixed-viewport grid at 48em+
+ * (`carousel.css`); below that they simply stack in document flow.
  *
  * @param {object} o
  * @param {import('../document.js').CarouselDoc} o.doc
@@ -329,6 +332,14 @@ function layerLabel(layer) {
  *   page's group cards use, rather than a separate open/close control.
  * @param {number} [o.stageZoom]   multiplier on the stage's CSS height budget,
  *   emitted as the one custom property the stylesheet reads.
+ * @param {string} [o.error]      a load/save failure, shown in the toolbar row
+ *   rather than pushed above it — the page has one error slot regardless of
+ *   whether a source is picked yet (see `_renderStudio` in `index.js`).
+ * @param {import('../../../utils/helpers.js').Slot} [o.tray]  extra markup for
+ *   the tray row, appended after the rendered strip — `index.js` hands in the
+ *   template gallery and the import report, which have to reach the tray
+ *   whether or not a source is picked (`pickPrompt` takes the body row instead
+ *   of this function then, but the tray is shared).
  */
 export function builder({
   doc,
@@ -346,6 +357,8 @@ export function builder({
   renderedPaths,
   propsOpen = true,
   stageZoom = 1,
+  error = "",
+  tray = "",
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
@@ -534,40 +547,6 @@ export function builder({
       ${deck ? "Use one photo for all slides" : "Change photo"}
     </button>`;
 
-  // The aspect select's current label doubles as the caption's "active export
-  // format" — it names the canvas the rendered strip was cut for, without a
-  // second source of truth for what "active" means.
-  const aspectLabel = ASPECT_OPTIONS.find(([val]) => val === doc.aspect)?.[1] ?? doc.aspect;
-  const renderedStrip = renderedPaths.length
-    ? html`
-        <div class="carousel-studio__rendered">
-          <h2 class="carousel-studio__subhead">
-            Rendered slides — ${aspectLabel} · ${String(w)}&times;${String(h)}
-          </h2>
-          <div class="carousel-studio__slides">
-            ${renderedPaths.map(
-              (p, i) => html`
-                <figure class="carousel-studio__rendered-item">
-                  <button
-                    type="button"
-                    class="carousel-studio__rendered-trigger"
-                    data-action="preview-rendered"
-                    data-index="${String(i)}"
-                    aria-label="Preview the rendered carousel, starting at slide ${String(i + 1)}"
-                  >
-                    <img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />
-                  </button>
-                  <figcaption class="carousel-studio__rendered-caption">
-                    <span class="carousel-studio__rendered-badge">${String(i + 1)}</span>
-                    <span>${String(i + 1)} / ${String(renderedPaths.length)}</span>
-                    <span>${String(w)}&times;${String(h)}</span>
-                  </figcaption>
-                </figure>`,
-            )}
-          </div>
-        </div>`
-    : "";
-
   // Aspect + safe-area guides + the "one photo for all slides" swap act on the
   // whole document, not the selected slide, but they read as document-level
   // properties all the same, so they live in the sidebar under whatever the
@@ -613,15 +592,17 @@ export function builder({
     </div>`;
 
   return html`
+    <div class="carousel-studio__toolbar">
+      ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
+      ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+      ${stageBar({ stageZoom })}
+    </div>
+
     <div
       class="carousel-studio__builder"
       style="--carousel-stage-zoom:${String(stageZoom)}"
     >
       <div class="carousel-studio__main">
-        ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
-
-        ${stageBar({ stageZoom })}
-
         <div class="carousel-studio__stage-scroll">
           <div class="carousel-studio__stage-col">
             ${topPane}
@@ -636,8 +617,6 @@ export function builder({
             </div>
           </div>
         </div>
-
-        ${renderedStrip}
       </div>
 
       <aside
@@ -664,6 +643,56 @@ export function builder({
             : ""}
         </div>
       </aside>
+    </div>
+
+    <div class="carousel-studio__tray">
+      ${renderedStrip({ doc, renderedPaths })}
+      ${tray}
+    </div>`;
+}
+
+/**
+ * The tray's own strip: the slides actually rendered and uploaded so far, for
+ * the aspect they were cut at. A pure function of `renderedPaths` so it can
+ * sit in the tray row even when there is no source yet to hand `builder` a
+ * document worth building (`pickPrompt` takes the body row then) — `index.js`
+ * calls this straight from `_renderStudio` in both branches.
+ *
+ * @param {{doc: import('../document.js').CarouselDoc, renderedPaths: string[]}} o
+ */
+export function renderedStrip({ doc, renderedPaths }) {
+  if (!renderedPaths.length) return "";
+  const [w, h] = canvasSize(doc.aspect);
+  // The aspect select's current label doubles as the caption's "active export
+  // format" — it names the canvas the rendered strip was cut for, without a
+  // second source of truth for what "active" means.
+  const aspectLabel = ASPECT_OPTIONS.find(([val]) => val === doc.aspect)?.[1] ?? doc.aspect;
+  return html`
+    <div class="carousel-studio__rendered">
+      <h2 class="carousel-studio__subhead">
+        Rendered slides — ${aspectLabel} · ${String(w)}&times;${String(h)}
+      </h2>
+      <div class="carousel-studio__slides">
+        ${renderedPaths.map(
+          (p, i) => html`
+            <figure class="carousel-studio__rendered-item">
+              <button
+                type="button"
+                class="carousel-studio__rendered-trigger"
+                data-action="preview-rendered"
+                data-index="${String(i)}"
+                aria-label="Preview the rendered carousel, starting at slide ${String(i + 1)}"
+              >
+                <img class="carousel-studio__slide" src="${p}" alt="" loading="lazy" />
+              </button>
+              <figcaption class="carousel-studio__rendered-caption">
+                <span class="carousel-studio__rendered-badge">${String(i + 1)}</span>
+                <span>${String(i + 1)} / ${String(renderedPaths.length)}</span>
+                <span>${String(w)}&times;${String(h)}</span>
+              </figcaption>
+            </figure>`,
+        )}
+      </div>
     </div>`;
 }
 
