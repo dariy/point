@@ -195,8 +195,7 @@ export function layerSpace(rect, safe, seams = []) {
  */
 export function hitLayer(rect, box, cx, cy) {
   if (!rect.width || !rect.height) return null;
-  const fx = (cx - rect.left) / rect.width;
-  const fy = (cy - rect.top) / rect.height;
+  const { fx, fy } = unrotatePoint(rect, box, cx, cy);
   const tx = HANDLE_GRAB_PX / rect.width;
   const ty = HANDLE_GRAB_PX / rect.height;
   const withinX = fx >= box.x - tx && fx <= box.x + box.w + tx;
@@ -228,9 +227,37 @@ export function hitLayer(rect, box, cx, cy) {
  */
 export function layerContains(rect, box, cx, cy) {
   if (!rect.width || !rect.height) return false;
-  const fx = (cx - rect.left) / rect.width;
-  const fy = (cy - rect.top) / rect.height;
+  const { fx, fy } = unrotatePoint(rect, box, cx, cy);
   return fx >= box.x && fx <= box.x + box.w && fy >= box.y && fy <= box.y + box.h;
+}
+
+/**
+ * The inverse of {@link rotateHandlePoint}'s rotation: turns a client point
+ * into the fraction it would land on if `box` carried no `rotate` at all.
+ * `hitLayer` and `layerContains` test this point rather than the raw screen
+ * fraction, so the eight resize zones (and the plain containment test) grab
+ * where the rotated chrome is actually drawn, not where an axis-aligned box
+ * would be.
+ *
+ * @param {{left:number,top:number,width:number,height:number}} rect
+ * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {{fx:number, fy:number}}
+ */
+export function unrotatePoint(rect, box, cx, cy) {
+  const w = rect.width || 1;
+  const h = rect.height || 1;
+  const rotate = box.rotate || 0;
+  if (!rotate) return { fx: (cx - rect.left) / w, fy: (cy - rect.top) / h };
+  const ccx = rect.left + (box.x + box.w / 2) * w;
+  const ccy = rect.top + (box.y + box.h / 2) * h;
+  const rad = (-rotate * Math.PI) / 180;
+  const dx = cx - ccx;
+  const dy = cy - ccy;
+  const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
+  const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
+  return { fx: (ccx + rx - rect.left) / w, fy: (ccy + ry - rect.top) / h };
 }
 
 /** The rotate handle's centre in client coordinates: `ROTATE_HANDLE_OFFSET_PX`
@@ -292,29 +319,60 @@ function clampBox(box) {
 }
 
 /** The box a move or resize of `startBox` by `(dfx, dfy)` canvas fractions
- *  produces, before snapping and clamping. A resize keeps the anchored edge put
- *  and never crosses it — a width dragged past zero pins to `MIN_BOX`. Spreads
- *  `startBox` in both branches (rather than rebuilding `{x,y,w,h}` by hand) so
- *  a rotated layer's `rotate` rides through a move or resize untouched — drop
- *  it and the provisional paint would flash the layer back to unrotated for
- *  the length of the drag. */
-export function dragBox(startBox, mode, anchor, dfx, dfy) {
+ *  produces, before snapping and clamping. A move needs no rotation: the
+ *  parent element doesn't rotate, and translating a box's local `x/y` moves
+ *  it by the same screen amount whatever `rotate` is. A resize keeps the
+ *  anchored edge put on screen and never crosses it — a width dragged past
+ *  zero pins to `MIN_BOX`. `rect` (only its `width`/`height`) is what turns
+ *  `dfx/dfy` from screen fractions into the box's own axes; a caller with no
+ *  rotated layers may omit it, since every rotation term below cancels out
+ *  when `startBox.rotate` is `0`. Spreads `startBox` in both branches (rather
+ *  than rebuilding `{x,y,w,h}` by hand) so a rotated layer's `rotate` rides
+ *  through a move or resize untouched — drop it and the provisional paint
+ *  would flash the layer back to unrotated for the length of the drag. */
+export function dragBox(startBox, mode, anchor, dfx, dfy, rect) {
   if (mode === "move") {
     return { ...startBox, x: startBox.x + dfx, y: startBox.y + dfy };
   }
-  let { x, y, w, h } = startBox;
-  if (anchor.h < 0) {
-    w = Math.max(MIN_BOX, startBox.w - dfx);
-    x = startBox.x + startBox.w - w;
-  } else if (anchor.h > 0) {
-    w = Math.max(MIN_BOX, startBox.w + dfx);
+  const rectW = rect?.width || 1;
+  const rectH = rect?.height || 1;
+  const rotate = startBox.rotate || 0;
+
+  // The screen-space pointer delta, rotated into the box's own axes — a
+  // resize handle on a rotated box has to grow along the layer's own edges,
+  // not the screen's, or it shears away from the pointer.
+  const rad = (-rotate * Math.PI) / 180;
+  const dpx = dfx * rectW;
+  const dpy = dfy * rectH;
+  const ldx = (dpx * Math.cos(rad) - dpy * Math.sin(rad)) / rectW;
+  const ldy = (dpx * Math.sin(rad) + dpy * Math.cos(rad)) / rectH;
+
+  const w = anchor.h ? Math.max(MIN_BOX, startBox.w + anchor.h * ldx) : startBox.w;
+  const h = anchor.v ? Math.max(MIN_BOX, startBox.h + anchor.v * ldy) : startBox.h;
+
+  // No rotation: the anchored edge is exactly the untouched startBox value,
+  // same as ever — this is the overwhelmingly common case, and the plain
+  // assignment below is exact where the general formula past this point
+  // would only be exact up to a float ulp.
+  if (!rotate) {
+    const x = anchor.h < 0 ? startBox.x + startBox.w - w : startBox.x;
+    const y = anchor.v < 0 ? startBox.y + startBox.h - h : startBox.y;
+    return { ...startBox, x, y, w, h };
   }
-  if (anchor.v < 0) {
-    h = Math.max(MIN_BOX, startBox.h - dfy);
-    y = startBox.y + startBox.h - h;
-  } else if (anchor.v > 0) {
-    h = Math.max(MIN_BOX, startBox.h + dfy);
-  }
+
+  // The corner opposite the dragged handle is the anchor. Its half-extent
+  // shrinks or grows with `w`/`h`, and that change has to be turned back
+  // through the box's own rotation (the forward half of the transform
+  // `unrotatePoint` inverts) before it can be added to the box's centre —
+  // otherwise the anchor corner drifts on screen as the box resizes.
+  const radF = (rotate * Math.PI) / 180;
+  const ox = (-anchor.h * (startBox.w - w)) / 2;
+  const oy = (-anchor.v * (startBox.h - h)) / 2;
+  const dcx = (ox * rectW * Math.cos(radF) - oy * rectH * Math.sin(radF)) / rectW;
+  const dcy = (ox * rectW * Math.sin(radF) + oy * rectH * Math.cos(radF)) / rectH;
+
+  const x = startBox.x + startBox.w / 2 + dcx - w / 2;
+  const y = startBox.y + startBox.h / 2 + dcy - h / 2;
   return { ...startBox, x, y, w, h };
 }
 
@@ -593,9 +651,13 @@ export function createDeckGestures(host) {
     const dfy = (e.clientY - drag.startY) / (rect.height || 1);
     if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
 
-    const raw = dragBox(drag.startBox, drag.mode, drag.anchor, dfx, dfy);
+    const raw = dragBox(drag.startBox, drag.mode, drag.anchor, dfx, dfy, rect);
+    // The guides are axis-aligned; a rotated box's own edges aren't, so there
+    // is no honest line for it to snap to. Route it through `suppressed`
+    // rather than growing a second, rotation-aware snapping model.
+    const suppressed = Boolean(raw.rotate) || e.altKey || e.metaKey;
     const { box, guides } = drag.moved
-      ? snapBox(raw, drag.mode, drag.anchor, lines, tol, e.altKey || e.metaKey)
+      ? snapBox(raw, drag.mode, drag.anchor, lines, tol, suppressed)
       : { box: raw, guides: { v: [], h: [] } };
     drag.box = clampBox(box);
     host.paintLayer?.(drag.slide, drag.j, drag.box, guides);

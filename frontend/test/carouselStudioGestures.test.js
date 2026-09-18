@@ -537,6 +537,15 @@ describe('carousel studio gestures', () => {
     test('an unmeasured frame misses rather than dividing by zero', () => {
       assert.strictEqual(hitLayer({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), null);
     });
+
+    test('a rotated box grabs handles where they are actually drawn, not the axis-aligned spot', () => {
+      const rotated = { ...box, rotate: 90 };
+      // Clockwise, matching rotateHandlePoint: the left edge's handle swings
+      // to the top after a 90° turn.
+      assert.deepStrictEqual(hitLayer(rect, rotated, 100, 50), { mode: 'resize', h: -1, v: 0 });
+      // That old, unrotated left-edge point now belongs to the bottom edge.
+      assert.deepStrictEqual(hitLayer(rect, rotated, 50, 100), { mode: 'resize', h: 0, v: 1 });
+    });
   });
 
   describe('layerContains', () => {
@@ -558,6 +567,15 @@ describe('carousel studio gestures', () => {
 
     test('an unmeasured frame misses rather than dividing by zero', () => {
       assert.strictEqual(layerContains({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), false);
+    });
+
+    test('containment follows a wide layer around a 90° turn', () => {
+      // A wide, short box: unrotated it covers y 0.4..0.6; rotated 90° about
+      // its own centre it stands tall instead, covering x 0.2..0.8 no longer,
+      // but reaching (100, 50) — outside the unrotated box — instead.
+      const wide = { x: 0.2, y: 0.4, w: 0.6, h: 0.2 };
+      assert.strictEqual(layerContains(rect, wide, 100, 50), false, 'outside the unrotated box');
+      assert.strictEqual(layerContains(rect, { ...wide, rotate: 90 }, 100, 50), true, 'inside once rotated');
     });
   });
 
@@ -618,6 +636,55 @@ describe('carousel studio gestures', () => {
       assert.ok(b.w >= 1 / 1080);
       // The right edge stays put: x + w === start.x + start.w.
       assert.ok(Math.abs(b.x + b.w - (start.x + start.w)) < 1e-9);
+    });
+
+    test('a rotated resize grows along the box\'s own axis, not the screen\'s', () => {
+      const rect = { left: 0, top: 0, width: 200, height: 200 };
+      const box = { x: 0.3, y: 0.3, w: 0.4, h: 0.4, rotate: 45 };
+      // A screen-diagonal pointer move, but exactly along this box's own
+      // (45°) local +x axis — it should read as a pure local dfx, growing
+      // only the width, the way a plain east-drag grows an unrotated box.
+      const mag = 0.1;
+      const dfx = mag * Math.cos((45 * Math.PI) / 180);
+      const dfy = mag * Math.sin((45 * Math.PI) / 180);
+      const after = dragBox(box, 'resize', { h: 1, v: 0 }, dfx, dfy, rect);
+      assert.ok(Math.abs(after.h - box.h) < 1e-9, 'the height axis is untouched');
+      assert.ok(Math.abs(after.w - (box.w + mag)) < 1e-9, `${after.w}`);
+    });
+
+    test('a rotated corner resize keeps the opposite corner fixed on screen', () => {
+      const rect = { left: 0, top: 0, width: 200, height: 200 };
+      const box = { x: 0.3, y: 0.3, w: 0.4, h: 0.4, rotate: 30 };
+      // The screen position of a box's own local point, forward-rotated
+      // about its centre — the same transform rotateHandlePoint applies to
+      // one fixed offset, generalised to any local (x, y).
+      const screenPoint = (b, lx, ly) => {
+        const cx = rect.left + (b.x + b.w / 2) * rect.width;
+        const cy = rect.top + (b.y + b.h / 2) * rect.height;
+        const px = rect.left + lx * rect.width;
+        const py = rect.top + ly * rect.height;
+        const rad = ((b.rotate || 0) * Math.PI) / 180;
+        const dx = px - cx;
+        const dy = py - cy;
+        return {
+          x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+          y: cy + dx * Math.sin(rad) + dy * Math.cos(rad),
+        };
+      };
+      const before = screenPoint(box, box.x, box.y); // the top-left corner
+      // A pointer delta along the box's own local axes (0.1 wider, 0.15
+      // taller), forward-rotated into screen fractions — the inverse of what
+      // dragBox itself has to undo.
+      const rad = (30 * Math.PI) / 180;
+      const dpx = 0.1 * rect.width * Math.cos(rad) - 0.15 * rect.height * Math.sin(rad);
+      const dpy = 0.1 * rect.width * Math.sin(rad) + 0.15 * rect.height * Math.cos(rad);
+      const after = dragBox(box, 'resize', { h: 1, v: 1 }, dpx / rect.width, dpy / rect.height, rect);
+      const afterCorner = screenPoint(after, after.x, after.y);
+      assert.ok(Math.abs(afterCorner.x - before.x) < 1e-9, `${afterCorner.x} vs ${before.x}`);
+      assert.ok(Math.abs(afterCorner.y - before.y) < 1e-9, `${afterCorner.y} vs ${before.y}`);
+      // Not a no-op: the box actually grew, along its own axes.
+      assert.ok(Math.abs(after.w - (box.w + 0.1)) < 1e-9, `${after.w}`);
+      assert.ok(Math.abs(after.h - (box.h + 0.15)) < 1e-9, `${after.h}`);
     });
   });
 
@@ -804,6 +871,18 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
 
+    test('a rotated layer never snaps — the guides are axis-aligned and its edges are not', () => {
+      const rotated = { x: 0.4, y: 0.3, w: 0.2, h: 0.2, rotate: 15 };
+      const { host, gestures, frame } = setup(rotated);
+      host.active = { i: 0, j: 0, box: rotated };
+      // Same drag as the unrotated case above, which lands the edge right on
+      // the centre guide.
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 80 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 120, clientY: 80 });
+      assert.deepStrictEqual(host.calls.paintLayer.at(-1).guides, { v: [], h: [] });
+      gestures.destroy();
+    });
+
     describe('rotate drag', () => {
       // LAYER_BOX is 0.3..0.7 square in a 200×200 frame: centre (100, 100),
       // handle 24px above the top edge at (100, 36) — see rotateHandlePoint.
@@ -884,13 +963,20 @@ describe('carousel studio gestures', () => {
       });
 
       test('a rotated layer holds its angle through a resize from each of the eight handles', () => {
-        // LAYER_BOX in a 200×200 frame: edges at 60 and 140, centre at 100. The
-        // rotate handle of a 30° box sits at ~(132, 45), clear of all eight.
-        const HANDLES = [
-          [60, 60], [100, 60], [140, 60],
-          [60, 100], [140, 100],
-          [60, 140], [100, 140], [140, 140],
+        // LAYER_BOX in a 200×200 frame: unrotated edges at 60 and 140, centre
+        // at (100, 100). A 30° box draws its eight handles rotated about that
+        // same centre, not at the axis-aligned points above — so the press
+        // has to land there too, or it misses every one of them.
+        const rad = (30 * Math.PI) / 180;
+        const rotated = (dx, dy) => [
+          100 + dx * Math.cos(rad) - dy * Math.sin(rad),
+          100 + dx * Math.sin(rad) + dy * Math.cos(rad),
         ];
+        const HANDLES = [
+          [-40, -40], [0, -40], [40, -40],
+          [-40, 0], [40, 0],
+          [-40, 40], [0, 40], [40, 40],
+        ].map(([dx, dy]) => rotated(dx, dy));
         for (const [hx, hy] of HANDLES) {
           const { host, gestures, frame } = setup({ ...LAYER_BOX, rotate: 30 });
           const where = `handle (${hx}, ${hy})`;
