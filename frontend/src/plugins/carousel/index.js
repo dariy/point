@@ -257,6 +257,14 @@ function renderedBlocks(doc) {
   return doc.slides.map((s) => s.rendered).filter((r) => r && r.path);
 }
 
+/** The `stored` document's rendered slides that `adoptFencePaths` dropped in
+ *  producing `doc` — a hand-edited fence removes a slide from the document
+ *  without ever routing it through `doc`, so it needs surfacing separately. */
+function droppedByFence(stored, doc) {
+  const kept = new Set(renderedBlocks(doc).map((r) => r.path));
+  return renderedBlocks(stored).filter((r) => !kept.has(r.path));
+}
+
 /** One slide's spec hash under its document's framing — the doc-level fields
  *  are folded in, so a strategy or anchor change invalidates every slide. */
 function slideSpecHash(doc, slide) {
@@ -968,6 +976,7 @@ export default class CarouselStudioPage extends Component {
   async _adoptLoaded(post, carousel, block = { key: null, ordinal: null, paths: [] }) {
     const stored = carousel ? parseDocument(carousel.doc) : emptyDocument();
     let doc = adoptFencePaths(stored, block.paths || []);
+    const droppedByAdoption = droppedByFence(stored, doc);
     let dims = this.state.dims;
     // A split names one source for the whole strip (render.js's renderSplit
     // slices `slides[0].source` by index alone) — it cannot carry a slide
@@ -985,7 +994,7 @@ export default class CarouselStudioPage extends Component {
     this._blockKey = block.key || carousel?.block_key || null;
     this._blockOrdinal = block.ordinal ?? null;
     this._legacyRow = Boolean(carousel) && !carousel.block_key;
-    this._priorRendered = renderedBlocks(doc);
+    this._priorRendered = renderedBlocks(doc).concat(droppedByAdoption);
     const fullyRendered = doc.slides.length > 0 && doc.slides.every((s) => s.rendered);
     this._renderedDoc = fullyRendered ? serializeDocument(doc) : null;
     // What was loaded is the floor of the history: there is no edit before it
