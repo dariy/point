@@ -103,6 +103,12 @@ SELECT p.*
 FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1;
 
+-- name: ListPostIDsAndContent :many
+-- Every post's id and content, deleted or not: a trashed post can still be
+-- restored, so its fences stay live for the orphan-carousel sweep.
+SELECT id, content FROM posts
+ORDER BY id;
+
 -- name: CreatePost :one
 INSERT INTO posts (
     title, slug, content, excerpt, formatter, status, type, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
@@ -496,6 +502,13 @@ RETURNING *;
 -- name: DeleteCarouselByBlockKey :exec
 DELETE FROM carousels
 WHERE post_id = ? AND block_key = ?;
+
+-- name: ListAllCarouselBlockKeys :many
+-- Every stored carousel's address, for the orphan sweep to check against each
+-- post's own content: a row whose (post_id, block_key) matches no fence there
+-- is orphaned (see api/cmd/api/orphansweep.go).
+SELECT post_id, block_key FROM carousels
+ORDER BY post_id, block_key;
 
 -- CAROUSEL TEMPLATES
 -- A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as
