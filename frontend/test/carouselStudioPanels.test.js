@@ -511,13 +511,17 @@ describe('carousel studio panels', () => {
       assert.ok(!rows[0].includes('is-hidden'), 'the visible row is undimmed');
       assert.ok(rows[1].includes('is-hidden'), 'the hidden one is dimmed');
       // The eye-off glyph — the crossing line the plain eye does not have.
-      assert.ok(!/<line/.test(rows[0].split('carousel-studio__layer-name')[0]));
-      assert.ok(/<line/.test(rows[1].split('carousel-studio__layer-name')[0]));
+      // Sliced from the eye button, not the row's start: the drag handle
+      // ahead of it is a grip icon of its own `<line>`s, on every row alike.
+      const eyeToName = (row) => row.slice(row.indexOf('carousel-studio__layer-eye')).split('carousel-studio__layer-name')[0];
+      assert.ok(!/<line/.test(eyeToName(rows[0])));
+      assert.ok(/<line/.test(eyeToName(rows[1])));
     });
 
     test('a hidden layer keeps every other control on its row', () => {
       const out = panel(withLayers({ ...rect, hidden: true }));
-      for (const action of ['select-layer', 'layer-raise', 'layer-lower', 'delete-layer']) {
+      assert.match(out, /carousel-studio__layer-handle/, 'drag handle');
+      for (const action of ['select-layer', 'delete-layer']) {
         assert.match(out, new RegExp(`data-action="${action}"`), action);
       }
     });

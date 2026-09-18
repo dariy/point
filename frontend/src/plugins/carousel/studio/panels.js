@@ -935,13 +935,21 @@ function spanRangeLabel(covered) {
  * slide's own `layers` or to `doc.spanLayers` without a second family of
  * actions. `meta(j)` is an optional trailing note per row (the span range).
  *
- * Each row opens with the visibility switch — an eye ahead of the layer's name,
- * the one control that says what the row *is* rather than what to do with it.
- * Its accessible name is the action it will perform ("Hide layer" / "Show
- * layer") rather than a state plus `aria-pressed`, because the icon already
- * carries the state and a toggle that announces both reads twice. A hidden row
- * keeps its place and its buttons — it is a layer switched off, not a deleted
- * one — and only dims (`is-hidden`).
+ * Each row opens with a drag handle — the same grip `attachPointerReorder`
+ * gives the slide rail (`_setupLayerReorder`, `index.js`) — and the up/down
+ * arrow keys on it step through the same reorder one row at a time, in place
+ * of the raise/lower chips this list used to carry. The `<li>` and the handle
+ * both carry `data-index`/`data-scope`: the `<li>` because it is the item
+ * `attachPointerReorder` drags, the handle because the keydown listener reads
+ * the row a press landed on from the element the browser gave it focus.
+ *
+ * The eye ahead of the layer's name is the one control that says what the row
+ * *is* rather than what to do with it. Its accessible name is the action it
+ * will perform ("Hide layer" / "Show layer") rather than a state plus
+ * `aria-pressed`, because the icon already carries the state and a toggle
+ * that announces both reads twice. A hidden row keeps its place and its
+ * buttons — it is a layer switched off, not a deleted one — and only dims
+ * (`is-hidden`).
  *
  * @param {import('../document.js').CarouselLayer[]} layers
  * @param {{scope: "slide"|"span", selectedLayer: number|null,
@@ -957,7 +965,18 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
           class="carousel-studio__layer-row ${j === selectedLayer ? "is-selected" : ""} ${
             layer.hidden ? "is-hidden" : ""
           }"
+          data-scope="${scope}"
+          data-index="${String(j)}"
         >
+          <button
+            type="button"
+            class="carousel-studio__layer-handle"
+            data-scope="${scope}"
+            data-index="${String(j)}"
+            aria-label="Reorder ${layerLabel(layer)} — drag, or press the up and down arrow keys"
+          >
+            ${raw(GRIP_SVG)}
+          </button>
           <button
             type="button"
             class="carousel-studio__layer-eye"
@@ -982,28 +1001,6 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
           <button
             type="button"
             class="carousel-studio__chip"
-            data-action="layer-raise"
-            data-scope="${scope}"
-            data-index="${String(j)}"
-            aria-label="Move layer up"
-            ${j === layers.length - 1 ? "disabled" : ""}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            class="carousel-studio__chip"
-            data-action="layer-lower"
-            data-scope="${scope}"
-            data-index="${String(j)}"
-            aria-label="Move layer down"
-            ${j === 0 ? "disabled" : ""}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            class="carousel-studio__chip"
             data-action="delete-layer"
             data-scope="${scope}"
             data-index="${String(j)}"
@@ -1015,7 +1012,11 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
     );
 
   return layers.length
-    ? html`<ul class="carousel-studio__layer-list" aria-labelledby="${labelledBy}">
+    ? html`<ul
+        class="carousel-studio__layer-list"
+        data-scope="${scope}"
+        aria-labelledby="${labelledBy}"
+      >
         ${rows}
       </ul>`
     : "";
@@ -1043,10 +1044,14 @@ function addLayerChips(scope) {
  *
  * Each list is shown **top of stack first**: users think in stacking order and
  * the arrays are back-to-front, so the view is reversed here, never the
- * document. "Move up" raises a layer toward the front — a later array index.
+ * document. Dragging a row toward the top raises it toward the front — a
+ * later array index (`_setupLayerReorder`, `index.js`).
  *
- * Every add / select / reorder / delete button is a delegated `action` carrying
- * `data-scope` (`"slide"` or `"span"`); the form's fields carry the
+ * Every add / select / delete button is a delegated `action` carrying
+ * `data-scope` (`"slide"` or `"span"`); the row's own reorder handle is not —
+ * like the slide rail's handle, it is claimed directly by `attachPointerReorder`
+ * and a keydown listener, both outside the `actions` dispatcher. The form's
+ * fields carry the
  * `#carousel-layer-*` ids `_wireLayerFields` (`index.js`) binds. Span layers
  * reuse the same five types and the same form — a second family of editors for
  * one schema is the failure mode. The studio never constructs a layer literal:
