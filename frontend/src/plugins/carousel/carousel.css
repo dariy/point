@@ -25,14 +25,32 @@
   align-items: flex-start;
 }
 
+/* Mode toggle and stage-zoom controls — the studio's toolbar row. A studio
+ * with no source yet renders it empty (`_renderStudio`, index.js), so it
+ * collapses to nothing rather than leaving a bare bar above the pick prompt. */
+.carousel-studio__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.carousel-studio__toolbar > .error-state {
+  /* Its own line, not squeezed between the mode toggle and the zoom chips. */
+  flex: 1 1 100%;
+}
+
+/* The stage and the properties panel — the studio's body row. */
 .carousel-studio__builder {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
 }
 
-/* Everything but the properties panel: mode toggle, stage, rendered strip.
- * Its own class so `.carousel-studio__builder` can become a
+/* Everything but the properties panel: just the stage now — the mode toggle,
+ * the zoom bar and the rendered strip moved out to the toolbar and tray rows
+ * they belong to. Its own class so `.carousel-studio__builder` can become a
  * row at 64em+ with this as the flexible column and the panel as a fixed
  * sidebar beside it, the same split `.editor-layout`/`.editor-main` draw in
  * `frontend/css/light/editor.css`. */
@@ -41,6 +59,15 @@
   flex-direction: column;
   gap: var(--spacing-md);
   min-width: 0;
+}
+
+/* The rendered strip and the template gallery — the studio's tray row, so
+ * neither can push the document taller (see .carousel-studio-main,
+ * light/layout.css). */
+.carousel-studio__tray {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
 }
 
 /* The stage scrolls sideways rather than shrinking. A stage sized to the
@@ -322,6 +349,53 @@
  * out of `.light-content` — every other admin page still wants the clamp. */
 .light-content.carousel-studio-full-width {
   max-width: none;
+}
+
+/* ── The studio owns the viewport (48em+) ────────────────────────────────
+ * Paired with `.carousel-studio-main` (light/layout.css), which clamps
+ * `.light-main`/`.light-content` to the viewport at this same breakpoint so
+ * `.carousel-studio` has a definite height to divide. Toolbar, body
+ * (`.carousel-studio__builder`) and tray replace the plain flex column below
+ * as a three-row grid; only the body and the tray scroll from here down, and
+ * the document itself does not. Below 48em (the phone) none of this
+ * applies — the section keeps the flex column it always had, and the studio
+ * scrolls with the rest of the document. */
+@media (min-width: 48em) {
+  .carousel-studio-main .light-content .carousel-studio {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    /* The grid has one implicit column, and a grid item's automatic minimum
+     * width defaults to its content's min-content size — the same trap
+     * `.carousel-studio__main` already clears below with its own
+     * `min-width: 0`. Left unset here, the (very wide, deliberately
+     * horizontal-scrolling) stage stretches this column, and the whole
+     * studio, out to the stage's own width instead of the viewport's. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-md);
+  }
+
+  .carousel-studio__toolbar,
+  .carousel-studio__builder,
+  .carousel-studio__tray {
+    min-width: 0;
+  }
+
+  /* One scroller for the whole body row below 64em, where the stage and the
+   * properties card still stack (see the 64em block for the row split) — the
+   * card keeps exactly the look and the collapse it has today; only the row
+   * around it stops the page from growing to fit both. */
+  .carousel-studio__builder {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .carousel-studio__tray {
+    min-height: 0;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
 }
 
 /* The rendered strip is a labelled grid of cards, not a single scrolling row —
@@ -1165,23 +1239,55 @@
 }
 
 @media (min-width: 64em) {
+  /* The row is now the body row of the fixed-viewport grid above (48em
+   * block) rather than a natural-height block the page scrolled past — so it
+   * fills that row exactly (`height: 100%`) and its own scroll is handed
+   * down to `.main` and `.props` instead of staying here (`overflow: visible`
+   * undoes the single stacked scroller the 48-64em range still uses). */
   .carousel-studio__builder {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
     gap: var(--spacing-lg);
+    height: 100%;
+    overflow: visible;
   }
 
   .carousel-studio__builder .carousel-studio__main {
     flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* The stage's own scroller. Vertical scroll was never needed while the
+   * stage's height came from a `vh` clamp; now that it fills the column
+   * instead (see `.carousel-studio__stage`, below), a zoomed-in stage can
+   * exceed it. */
+  .carousel-studio__stage-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .carousel-studio__stage-col {
+    height: 100%;
+  }
+
+  .carousel-studio__stage {
+    /* The budget is "the column's own height, minus the top pane" instead of
+     * a `vh` clamp now that the column has one to give — measured in
+     * `_measureStageBudget` (index.js) into `--carousel-stage-budget` the
+     * same way `_fitStageZoom` measures width, since only layout knows what
+     * a flex-filled column is worth in pixels. The fallback is the old
+     * clamp's own floor, for the one frame before the first measurement. */
+    height: calc(var(--carousel-stage-budget, 12rem) * var(--carousel-stage-zoom, 1));
   }
 
   .carousel-studio__builder .carousel-studio__props {
     flex-shrink: 0;
     width: 20rem;
-    position: sticky;
-    top: var(--spacing-md);
-    max-height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
-    max-height: calc(100dvh - var(--header-height) - var(--spacing-xl) * 2);
+    height: 100%;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -1192,7 +1298,7 @@
    * freed width rather than sitting next to a mostly empty rail. */
   .carousel-studio__builder .carousel-studio__props.collapsed {
     width: auto;
-    max-height: none;
+    height: auto;
     overflow-y: visible;
   }
 }

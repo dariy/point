@@ -534,6 +534,32 @@ body:has(.light-layout) {
     flex-shrink: 0;
 }
 
+/* Carousel Studio: fixed-viewport layout at 48em+ — the studio's own three
+   rows (toolbar/body/tray, carousel.css) fill the space and scroll
+   individually; the document itself does not. Tablet+ only, the same way
+   .media-page-main (light/media.css) gates its clamp: the phone keeps the
+   document flow and the bottom sheet it has today rather than a fixed shell
+   a thumb has no room to work in. `flex: 0 0 auto` + `min-height: 0` clear
+   the flex-item defaults that otherwise make a height on .light-main inert —
+   see .posts-list-main above for the full note. */
+@media (min-width: 48em) {
+    .carousel-studio-main {
+        flex: 0 0 auto;
+        min-height: 0;
+        /* lvh, not dvh — see .light-layout. */
+        height: 100vh;
+        height: 100lvh;
+        overflow: hidden;
+    }
+
+    .carousel-studio-main .light-content {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+    }
+}
+
 /* Post list navigation arrows. Position only — visibility (including the
    mobile hide) belongs to .page-nav-arrow in common/pagination.css, which is
    bundled ahead of this file. Admin has no content gutter to park them in, so

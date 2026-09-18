@@ -2733,22 +2733,32 @@ export default class CarouselStudioPage extends Component {
         </section>`;
     }
 
-    // The gallery is a sibling of the builder, not a panel inside it: a studio
-    // with no photo yet renders `pickPrompt` instead of a builder, and "import
-    // a deck to start" is exactly the state where it has to be reachable.
+    // The gallery is part of the tray row, not a panel inside the builder: a
+    // studio with no photo yet takes the body row with `pickPrompt` instead of
+    // a builder, and "import a deck to start" is exactly the state where the
+    // gallery has to stay reachable — so the tray is built once here and
+    // handed to whichever one is showing (`builder` in `studio/panels.js`
+    // reads none of the page's own state; this is where that state is read).
     const busy = this.state.busy || this.state.templateBusy;
+    const tray = html`
+      ${templateGallery({
+        templates: this.state.templates,
+        loading: this.state.templatesLoading,
+        error: this.state.templatesError,
+        busy,
+        canSave: this.state.doc.slides.length > 0,
+      })}
+      ${importReportPanel(this.state.importReport)}`;
     return html`
       <section class="carousel-studio" data-post-id="${String(postId)}">
-        ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
-        ${this._source() ? this._renderBuilder() : pickPrompt()}
-        ${templateGallery({
-          templates: this.state.templates,
-          loading: this.state.templatesLoading,
-          error: this.state.templatesError,
-          busy,
-          canSave: this.state.doc.slides.length > 0,
-        })}
-        ${importReportPanel(this.state.importReport)}
+        ${this._source()
+          ? this._renderBuilder(tray)
+          : html`
+              <div class="carousel-studio__toolbar">
+                ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
+              </div>
+              <div class="carousel-studio__builder">${pickPrompt()}</div>
+              <div class="carousel-studio__tray">${tray}</div>`}
         ${this.state.importOpen
           ? importDialog({ busy: this.state.templateBusy, error: this.state.importError })
           : ""}
@@ -2805,8 +2815,9 @@ export default class CarouselStudioPage extends Component {
   }
 
   /** The zoom at which the whole strip fits the scroller's width. Measured
-   *  rather than derived: the budget is a `clamp()` of `vh`, so only layout
-   *  knows what the stage is currently worth in pixels. */
+   *  rather than derived: the budget is a `clamp()` of `vh` below 64em and
+   *  `--carousel-stage-budget` above it (see `_measureStageBudget`), so only
+   *  layout knows what the stage is currently worth in pixels. */
   _fitStageZoom() {
     const scroll = this.$(".carousel-studio__stage-scroll");
     const stage = this.$(".carousel-studio__stage");
@@ -2816,10 +2827,29 @@ export default class CarouselStudioPage extends Component {
     this._setStageZoom((this._stageZoom * room) / width);
   }
 
+  /** At 64em+ the stage fills its column instead of reading a `vh` clamp
+   *  (carousel.css `.carousel-studio__stage`), so the zoom-neutral height has
+   *  to come from layout: the column's own box minus whatever the top pane
+   *  (deck mode only) takes off it. Below 64em `--carousel-stage-budget` is
+   *  unread — the stylesheet's own clamp still applies there — so measuring
+   *  early is harmless, not just unused. */
+  _measureStageBudget() {
+    const col = this.$(".carousel-studio__stage-col");
+    const builder = this.$(".carousel-studio__builder");
+    if (!col || !builder) return;
+    const paneHeight = this.$(".carousel-studio__pane-row--top")?.offsetHeight || 0;
+    const budget = col.clientHeight - paneHeight;
+    if (budget > 0) builder.style.setProperty("--carousel-stage-budget", `${budget}px`);
+  }
+
   /** Everything the builder markup needs, read off the state in one place —
-   *  `studio/panels.js` answers no questions about the page itself. */
-  _renderBuilder() {
-    const { doc, showGuides, selected, srcW, srcH, busy, selectedLayer, layerScope } = this.state;
+   *  `studio/panels.js` answers no questions about the page itself.
+   *
+   * @param {import('../../utils/helpers.js').Slot} tray  the gallery and the
+   *   import report, built once by `_renderStudio` so the same markup reaches
+   *   the tray row whether or not a source is picked. */
+  _renderBuilder(tray) {
+    const { doc, showGuides, selected, srcW, srcH, busy, selectedLayer, layerScope, error } = this.state;
     const deckIndex = this._selectedIndex();
     return builder({
       doc,
@@ -2837,6 +2867,8 @@ export default class CarouselStudioPage extends Component {
       renderedPaths: this._renderedPaths(),
       propsOpen: this.state.propsOpen,
       stageZoom: this._stageZoom,
+      error,
+      tray,
     });
   }
 
@@ -2852,6 +2884,13 @@ export default class CarouselStudioPage extends Component {
 
   afterRender() {
     setupAdminLayout(this, { currentPath: "/light/carousel" });
+
+    // Fixed-viewport layout at 48em+ (layout.css .carousel-studio-main): the
+    // studio's three rows fill the admin shell and only the stage, the
+    // properties rail and the tray scroll — the document itself does not.
+    // Below 48em the page keeps its natural flow (see PostsListPage.js,
+    // MediaPage.js for the same pattern).
+    this.$(".light-main")?.classList.add("carousel-studio-main");
 
     // Put the stage scroller back where the user left it — see `beforeRender`.
     const stageScroll = this.$(".carousel-studio__stage-scroll");
@@ -2869,6 +2908,16 @@ export default class CarouselStudioPage extends Component {
     if (source) {
       if (deck) this._paintDeck();
       else this._paintSplit(source);
+    }
+
+    // The 64em+ stage budget is measured, not derived (see
+    // `--carousel-stage-budget` in carousel.css) — re-taken every render and
+    // on any resize of the column, since a sidebar collapse or a properties
+    // toggle changes the room without firing `window`'s own `resize`.
+    const stageCol = this.$(".carousel-studio__stage-col");
+    if (stageCol) {
+      this._measureStageBudget();
+      this.observe(new ResizeObserver(() => this._measureStageBudget())).observe(stageCol);
     }
 
     // The preview typesets on a real 2D context, and until the theme's face has

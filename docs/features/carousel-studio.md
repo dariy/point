@@ -829,19 +829,44 @@ and nothing else: same crop gesture, same snapping, same commits, same clamps.
 
 Width alone would not have been the fix. At `n = 20` the stage is 16:1, and
 fitting that to the container turns it straight back into a sliver. The stage
-runs off a **height budget** instead — `clamp(12rem, 45vh, 32rem)`, and
-`clamp(9rem, 38vh, 20rem)` on a phone — with `width: fit-content` letting the
+runs off a **height budget** instead, with `width: fit-content` letting the
 inline `aspect-ratio` transfer that height into a width, inside a
 `__stage-scroll` wrapper that absorbs the overflow so the page itself never
-gains a horizontal scrollbar. Measured: 1080×450 at three slides on a 1376px
-column, 6480×405 at twenty.
+gains a horizontal scrollbar. Below 64em the budget is still a `clamp()` of
+`vh` — `clamp(12rem, 45vh, 32rem)`, and `clamp(9rem, 38vh, 20rem)` on a phone.
+At 64em+ (S8) the stage has its own column instead, so the budget is *that
+column's own height*, measured into `--carousel-stage-budget`
+(`_measureStageBudget`, `index.js`) rather than read off the viewport — the
+same reason `_fitStageZoom` measures width instead of deriving it. Measured
+below 64em: 1080×450 at three slides on a 1376px column, 6480×405 at twenty.
 
 A zoom control under the stage (− / readout / + / Fit / 100%) multiplies the
 budget through one custom property, `--carousel-stage-zoom`, written straight to
 the builder root — so a zoom costs no rebuild, the same way the properties
 toggle costs none. "100%" there means *the budget*, not 1:1 with the 1350px
-canvas, which is taller than any laptop. *Fit* measures, because the budget is a
-`clamp()` of `vh` and only layout knows what that is worth in pixels.
+canvas, which is taller than any laptop. *Fit* measures, because the budget —
+a `clamp()` of `vh` below 64em, the column's own box above it — is something
+only layout knows the pixel value of.
+
+### The studio owns the viewport (S8)
+
+Every other admin page that opts out of document scroll (`PostsListPage`,
+`MediaPage`) does it above 48em only; the studio does too
+(`.carousel-studio-main`, `light/layout.css`, mirrored by
+`.carousel-studio-main .light-content .carousel-studio` in `carousel.css`).
+Below that the phone keeps the document flow it always had — a fixed shell
+gives a thumb no room to work in, and the phone is explicitly a
+view-and-adjust surface, not first-class editing (see the epic's Decisions).
+
+At 48em+, `.carousel-studio` becomes a three-row grid — toolbar
+(`.carousel-studio__toolbar`: the mode toggle and the zoom bar), body
+(`.carousel-studio__builder`: the stage and the properties panel) and tray
+(`.carousel-studio__tray`: the rendered strip and the template gallery) — so
+none of the three can push `document.scrollingElement` taller. Below 64em the
+body row is one scroller (the properties card still stacks under the stage,
+exactly as it does today); at 64em+ the stage column and the properties rail
+each scroll on their own, which is what lets the stage claim the column's
+full height as its budget instead of a `vh` guess.
 
 `carousel.css` had no `@media` rule at all before S6, and now honours both admin
 breakpoints: 48em trims the stage budget and the rail's frames, and below 64em
