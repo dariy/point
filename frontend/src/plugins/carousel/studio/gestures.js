@@ -72,8 +72,16 @@
  * and the same direction-declaring touch claim, mirrored to the other axis.
  */
 
-import { gestureDirection } from "../../../components/light/tags/tagGestures.js";
 import { clampPan, deckSlideFitCSS } from "../geometry.js";
+import {
+  DRAG_SLOP_PX,
+  claimPointer,
+  commitIfChanged,
+  createListenerGroup,
+  pastSlop,
+  releasePointer,
+  resolveTouchClaim,
+} from "./pointerSession.js";
 
 /** Wheel-notch → zoom factor. One notch (100px) is ~16%, and the exponential
  *  keeps zooming in and back out along the same path. */
@@ -86,8 +94,6 @@ const KEY_ZOOM = 1.1;
  *  Long enough that a scroll burst is one document mutation, short enough that
  *  the dirty badge feels immediate. */
 const WHEEL_COMMIT_MS = 140;
-/** Pointer travel below this is a click, not a drag. */
-const DRAG_SLOP_PX = 3;
 /** A press within this many CSS px of a selected layer's edge grabs the resize
  *  handle there rather than moving the layer. */
 const HANDLE_GRAB_PX = 12;
@@ -588,8 +594,7 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  * @param {DeckGestureHost} host
  */
 export function createDeckGestures(host) {
-  /** Listener removers for the currently bound columns. */
-  let bound = [];
+  const listeners = createListenerGroup();
   /** How many columns the last `attach` bound — the deck's slide count, which
    *  is what turns one column's rect into the whole deck's. */
   let count = 0;
@@ -630,12 +635,16 @@ export function createDeckGestures(host) {
     if (!slide) return;
     const { srcW, srcH } = host.dims(i);
     const next = clamp(i, crop);
-    if (sameCrop(next, slide.crop, srcW, srcH)) {
-      host.paint(i, slide);
-      host.select(i);
-      return;
-    }
-    host.commit(i, next);
+    commitIfChanged(
+      (a, b) => sameCrop(a, b, srcW, srcH),
+      next,
+      slide.crop,
+      () => {
+        host.paint(i, slide);
+        host.select(i);
+      },
+      (n) => host.commit(i, n),
+    );
   };
 
   const commitPending = () => {
@@ -646,15 +655,12 @@ export function createDeckGestures(host) {
     commitCrop(p.i, p.crop);
   };
 
-  /** True once a layer press has travelled past the slop threshold. */
-  const past = (a, b) => Math.abs(a) > DRAG_SLOP_PX || Math.abs(b) > DRAG_SLOP_PX;
-
   const onLayerMove = (e) => {
     if (!drag || drag.kind !== "layer") return;
     const { rect, lines, tol } = drag.space;
     const dfx = (e.clientX - drag.startX) / (rect.width || 1);
     const dfy = (e.clientY - drag.startY) / (rect.height || 1);
-    if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
+    if (pastSlop(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
 
     const raw = dragBox(drag.startBox, drag.mode, drag.anchor, dfx, dfy, rect);
     // The guides are axis-aligned; a rotated box's own edges aren't, so there
@@ -669,20 +675,6 @@ export function createDeckGestures(host) {
     e.preventDefault?.();
   };
 
-  const onLayerUp = (e, frame) => {
-    const ended = drag;
-    drag = null;
-    frame.releasePointerCapture?.(e.pointerId);
-    frame.classList.remove("is-dragging");
-    if (!ended.moved) {
-      // A press that never travelled: keep the layer selected, move nothing —
-      // the slop threshold is what stops a select-click from nudging.
-      host.select(ended.i);
-      return;
-    }
-    host.commitLayer?.(ended.slide, ended.j, ended.box);
-  };
-
   /** The angle from the box's own (fixed) centre to `(x, y)`, in degrees —
    *  `atan2` in client-pixel space, so it reads the true angle whatever the
    *  frame's aspect ratio is. */
@@ -691,7 +683,7 @@ export function createDeckGestures(host) {
 
   const onRotateMove = (e) => {
     if (!drag || drag.kind !== "rotate") return;
-    if (past(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
+    if (pastSlop(e.clientX - drag.startX, e.clientY - drag.startY)) drag.moved = true;
     // Wrapped into (-180, 180] so a press near the ±180° seam doesn't jump.
     const delta = (((pointerAngle(drag, e.clientX, e.clientY) - drag.startAngle + 180) % 360) + 360) % 360 - 180;
     let rotate = drag.startRotate + delta;
@@ -701,12 +693,15 @@ export function createDeckGestures(host) {
     e.preventDefault?.();
   };
 
-  const onRotateUp = (e, frame) => {
+  /** The release half of both a layer move/resize and a rotate drag — the
+   *  same not-moved-is-a-click bail, the same commit through `commitLayer`. */
+  const endLayerDrag = (e, frame) => {
     const ended = drag;
     drag = null;
-    frame.releasePointerCapture?.(e.pointerId);
-    frame.classList.remove("is-dragging");
+    releasePointer(e, frame, "is-dragging");
     if (!ended.moved) {
+      // A press that never travelled: keep the layer selected, move nothing —
+      // the slop threshold is what stops a select-click from nudging.
       host.select(ended.i);
       return;
     }
@@ -715,11 +710,7 @@ export function createDeckGestures(host) {
 
   /** Take the pointer for the crop gesture: capture it, dress the frame, and
    *  stop the browser doing anything else with the event. */
-  const claimCrop = (e, frame) => {
-    frame.setPointerCapture?.(e.pointerId);
-    frame.classList.add("is-dragging");
-    e.preventDefault?.();
-  };
+  const claimCrop = (e, frame) => claimPointer(e, frame, "is-dragging");
 
   // A press or a key on the reorder handle nested in the column belongs to
   // `attachPointerReorder` / the arrow-key reorder in `index.js`, not to this
@@ -728,6 +719,98 @@ export function createDeckGestures(host) {
   // capture-phase document listener for the pointer case, can't) stop the
   // column's bubble-phase ones from also running.
   const onHandle = (e) => Boolean(e.target?.closest?.(".carousel-studio__rail-handle"));
+
+  /** Everything a fresh press's rotate/layer/select attempts ask in common —
+   *  computed once, since all three read the same "what's active here". */
+  const pressContext = (frame, i) => {
+    const active = host.activeLayer?.();
+    const span = active?.scope === "span";
+    const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
+    const grabbable = active && (span || active.i === i);
+    return { active, span, rect, grabbable };
+  };
+
+  /**
+   * The first-claim-wins table a fresh press is tried against, in the
+   * priority order the stage draws them in: the rotate handle over the
+   * move/resize handles over every other layer on the column. Each entry
+   * claims the press (and returns `true`) or defers to the next — the same
+   * shape `LAYER_BUILDERS`/`LAYER_PAINTERS` use for a kind-keyed table, not
+   * a switch.
+   */
+  const PRESS_KINDS = [
+    // rotate: a press on the ninth handle, above the box's own top edge.
+    (e, frame, i, ctx) => {
+      if (!ctx.grabbable || !hitRotateHandle(ctx.rect, ctx.active.box, e.clientX, e.clientY)) {
+        return false;
+      }
+      const cx = ctx.rect.left + (ctx.active.box.x + ctx.active.box.w / 2) * ctx.rect.width;
+      const cy = ctx.rect.top + (ctx.active.box.y + ctx.active.box.h / 2) * ctx.rect.height;
+      drag = {
+        kind: "rotate",
+        i,
+        slide: ctx.active.i,
+        j: ctx.active.j,
+        frame,
+        centerX: cx,
+        centerY: cy,
+        startX: e.clientX,
+        startY: e.clientY,
+        startAngle: (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI,
+        startRotate: ctx.active.box.rotate || 0,
+        startBox: { ...ctx.active.box },
+        box: { ...ctx.active.box },
+        moved: false,
+      };
+      claimPointer(e, frame, "is-dragging");
+      return true;
+    },
+    // layer: a press on the active layer's own box or one of its eight
+    // move/resize handles.
+    (e, frame, i, ctx) => {
+      const hit = ctx.grabbable ? hitLayer(ctx.rect, ctx.active.box, e.clientX, e.clientY) : null;
+      if (!hit) return false;
+      drag = {
+        kind: "layer",
+        i,
+        slide: ctx.active.i,
+        j: ctx.active.j,
+        frame,
+        mode: hit.mode,
+        anchor: { h: hit.h, v: hit.v },
+        space: layerSpace(
+          ctx.rect,
+          host.safeArea?.(ctx.span ? "span" : "slide") || null,
+          ctx.span ? deckSeams(count) : [],
+        ),
+        startX: e.clientX,
+        startY: e.clientY,
+        startBox: { ...ctx.active.box },
+        box: { ...ctx.active.box },
+        moved: false,
+      };
+      claimPointer(e, frame, "is-dragging");
+      return true;
+    },
+    // select: the press missed the active layer (or nothing is active), but
+    // still lands on some *other* layer painted on this column — the
+    // stage's click-to-select. Topmost first, and a plain containment test —
+    // an unselected layer shows no handles to grab.
+    (e, frame, i) => {
+      const picked = (host.layersOnColumn?.(i) || []).find((cand) =>
+        layerContains(
+          cand.scope === "span" ? deckRect(frameRect(frame), i, count) : frameRect(frame),
+          cand.box,
+          e.clientX,
+          e.clientY,
+        ),
+      );
+      if (!picked) return false;
+      e.preventDefault?.();
+      host.selectLayer?.(i, picked.j, picked.scope);
+      return true;
+    },
+  ];
 
   // Mid on-canvas edit, no press claims a gesture — one on the
   // `contenteditable` block itself belongs to it (caret placement,
@@ -753,78 +836,8 @@ export function createDeckGestures(host) {
     // is grabbable on its own column only; a span layer on every column it
     // reaches, because its box spans them all.
     if (!drag) {
-      const active = host.activeLayer?.();
-      const span = active?.scope === "span";
-      const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
-      const grabbable = active && (span || active.i === i);
-      if (grabbable && hitRotateHandle(rect, active.box, e.clientX, e.clientY)) {
-        frame.setPointerCapture?.(e.pointerId);
-        frame.classList.add("is-dragging");
-        const cx = rect.left + (active.box.x + active.box.w / 2) * rect.width;
-        const cy = rect.top + (active.box.y + active.box.h / 2) * rect.height;
-        drag = {
-          kind: "rotate",
-          i,
-          slide: active.i,
-          j: active.j,
-          frame,
-          centerX: cx,
-          centerY: cy,
-          startX: e.clientX,
-          startY: e.clientY,
-          startAngle: (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI,
-          startRotate: active.box.rotate || 0,
-          startBox: { ...active.box },
-          box: { ...active.box },
-          moved: false,
-        };
-        e.preventDefault?.();
-        return;
-      }
-      const hit = grabbable ? hitLayer(rect, active.box, e.clientX, e.clientY) : null;
-      if (hit) {
-        frame.setPointerCapture?.(e.pointerId);
-        frame.classList.add("is-dragging");
-        drag = {
-          kind: "layer",
-          i,
-          slide: active.i,
-          j: active.j,
-          frame,
-          mode: hit.mode,
-          anchor: { h: hit.h, v: hit.v },
-          space: layerSpace(
-            rect,
-            host.safeArea?.(span ? "span" : "slide") || null,
-            span ? deckSeams(count) : [],
-          ),
-          startX: e.clientX,
-          startY: e.clientY,
-          startBox: { ...active.box },
-          box: { ...active.box },
-          moved: false,
-        };
-        e.preventDefault?.();
-        return;
-      }
-
-      // The press missed the active layer (or nothing is active): it may
-      // still land on some *other* layer painted on this column — the
-      // stage's click-to-select. Topmost first, and a plain containment
-      // test — an unselected layer shows no handles to grab.
-      const picked = (host.layersOnColumn?.(i) || []).find((cand) =>
-        layerContains(
-          cand.scope === "span" ? deckRect(frameRect(frame), i, count) : frameRect(frame),
-          cand.box,
-          e.clientX,
-          e.clientY,
-        ),
-      );
-      if (picked) {
-        e.preventDefault?.();
-        host.selectLayer?.(i, picked.j, picked.scope);
-        return;
-      }
+      const ctx = pressContext(frame, i);
+      if (PRESS_KINDS.some((attempt) => attempt(e, frame, i, ctx))) return;
     }
     if (drag && drag.kind === "layer") return;
 
@@ -836,8 +849,7 @@ export function createDeckGestures(host) {
         // drag-to-scroll of its own, so this drives it through the host —
         // which owns the scroller, the same way it owns every other write.
         drag = { kind: "pane", i, frame, lastX: e.clientX, startX: e.clientX, moved: false };
-        frame.setPointerCapture?.(e.pointerId);
-        frame.classList.add("is-dragging");
+        claimPointer(e, frame, "is-dragging", { preventDefault: false });
         return;
       }
       drag = {
@@ -865,40 +877,46 @@ export function createDeckGestures(host) {
     drag.startCrop = { ...drag.crop };
   };
 
-  const onPointerMove = (e, frame, i) => {
-    if (drag && drag.kind === "rotate") {
-      if (drag.i === i) onRotateMove(e);
-      return;
+  const onPaneMove = (e) => {
+    const dx = e.clientX - drag.lastX;
+    drag.lastX = e.clientX;
+    if (Math.abs(e.clientX - drag.startX) > DRAG_SLOP_PX) drag.moved = true;
+    // The content follows the pointer, the same convention a touch's own
+    // native pan already uses: a leftward drag moves the strip left,
+    // revealing what is to its right.
+    host.scrollPaneBy(-dx);
+    e.preventDefault?.();
+  };
+
+  const onPaneUp = (e, frame, i) => {
+    const ended = drag;
+    drag = null;
+    releasePointer(e, frame, "is-dragging");
+    if (!ended.moved) {
+      // A click, not a drag: select the slide, same as a tap always has.
+      host.select(i);
     }
-    if (drag && drag.kind === "layer") {
-      if (drag.i === i) onLayerMove(e);
-      return;
-    }
-    if (drag && drag.kind === "pane") {
-      if (drag.i !== i) return;
-      const dx = e.clientX - drag.lastX;
-      drag.lastX = e.clientX;
-      if (Math.abs(e.clientX - drag.startX) > DRAG_SLOP_PX) drag.moved = true;
-      // The content follows the pointer, the same convention a touch's own
-      // native pan already uses: a leftward drag moves the strip left,
-      // revealing what is to its right.
-      host.scrollPaneBy(-dx);
-      e.preventDefault?.();
-      return;
-    }
+  };
+
+  const onCropMove = (e, frame, i) => {
     const slide = host.slideAt(i);
     if (!drag || drag.i !== i || !drag.pointers.has(e.pointerId) || !slide) return;
 
     // The undecided single finger: no modifier and not yet a pinch, so
     // `touch-action` is already panning the strip (and, off-axis, the page)
     // with it — nothing here claims the pointer or paints a crop. Only
-    // whether it passed the slop threshold matters, so a release that turns
-    // out to have been a scroll doesn't also select the tile (`onPointerUp`
-    // reads `!drag` the same way an abandoned gesture always has).
+    // whether a direction has resolved matters, so a release that turns out
+    // to have been a scroll doesn't also select the tile (`onCropUp` reads
+    // `!drag` the same way an abandoned gesture always has). Neither axis is
+    // this gesture's own — the tile is `touch-action: pan-x pan-y` — so any
+    // resolved direction hands the finger back.
     if (drag.undecided) {
-      const dx = e.clientX - drag.start.cx;
-      const dy = e.clientY - drag.start.cy;
-      if (Math.abs(dx) > DRAG_SLOP_PX || Math.abs(dy) > DRAG_SLOP_PX) drag = null;
+      const claimed = resolveTouchClaim(
+        e.clientX - drag.start.cx,
+        e.clientY - drag.start.cy,
+        () => false,
+      );
+      if (claimed === "abandon") drag = null;
       return;
     }
 
@@ -921,7 +939,7 @@ export function createDeckGestures(host) {
       y: zoomed.y - dy * scale.y,
     });
 
-    if (Math.abs(dx) > DRAG_SLOP_PX || Math.abs(dy) > DRAG_SLOP_PX || ratio !== 1) {
+    if (pastSlop(dx, dy) || ratio !== 1) {
       drag.moved = true;
     }
     drag.crop = crop;
@@ -931,27 +949,7 @@ export function createDeckGestures(host) {
     e.preventDefault?.();
   };
 
-  const onPointerUp = (e, frame, i) => {
-    if (drag && drag.kind === "rotate") {
-      if (drag.i === i) onRotateUp(e, frame);
-      return;
-    }
-    if (drag && drag.kind === "layer") {
-      if (drag.i === i) onLayerUp(e, frame);
-      return;
-    }
-    if (drag && drag.kind === "pane") {
-      if (drag.i !== i) return;
-      const ended = drag;
-      drag = null;
-      frame.releasePointerCapture?.(e.pointerId);
-      frame.classList.remove("is-dragging");
-      if (!ended.moved) {
-        // A click, not a drag: select the slide, same as a tap always has.
-        host.select(i);
-      }
-      return;
-    }
+  const onCropUp = (e, frame, i) => {
     if (!drag || drag.i !== i) return;
     const ended = drag;
     ended.pointers.delete(e.pointerId);
@@ -971,6 +969,32 @@ export function createDeckGestures(host) {
       return;
     }
     commitCrop(i, ended.crop);
+  };
+
+  /** Every kind but `"crop"` dispatches the same way: only the column that
+   *  started it hears its move/up, and `"crop"` — the fallback — reads its
+   *  own guard, since a pinch may span more than one pointer over one
+   *  column. A table over `drag.kind`, not a switch, in the same spirit as
+   *  `LAYER_BUILDERS`/`LAYER_PAINTERS`. */
+  const MOVE_HANDLERS = { rotate: onRotateMove, layer: onLayerMove, pane: onPaneMove };
+  const END_HANDLERS = { rotate: endLayerDrag, layer: endLayerDrag, pane: onPaneUp };
+
+  const onPointerMove = (e, frame, i) => {
+    const handler = drag && MOVE_HANDLERS[drag.kind];
+    if (handler) {
+      if (drag.i === i) handler(e, frame, i);
+      return;
+    }
+    onCropMove(e, frame, i);
+  };
+
+  const onPointerUp = (e, frame, i) => {
+    const handler = drag && END_HANDLERS[drag.kind];
+    if (handler) {
+      if (drag.i === i) handler(e, frame, i);
+      return;
+    }
+    onCropUp(e, frame, i);
   };
 
   /** Double-click-to-edit: only for the layer already selected (`.3`'s
@@ -1098,10 +1122,7 @@ export function createDeckGestures(host) {
 
   /** Release the current frames' listeners. The pending wheel commit is left
    *  alone — a rebuild between two notches is not the end of the gesture. */
-  const detach = () => {
-    for (const off of bound) off();
-    bound = [];
-  };
+  const detach = () => listeners.release();
 
   return {
     /**
@@ -1118,8 +1139,7 @@ export function createDeckGestures(host) {
       count = Array.from(frames).length;
       for (const frame of Array.from(frames)) {
         const i = Number(frame.dataset.slice);
-        /** @type {Array<[string, (e: any) => void, AddEventListenerOptions|undefined]>} */
-        const handlers = [
+        listeners.bind(frame, [
           ["pointerdown", (e) => onPointerDown(e, frame, i), undefined],
           ["pointermove", (e) => onPointerMove(e, frame, i), undefined],
           ["pointerup", (e) => onPointerUp(e, frame, i), undefined],
@@ -1129,11 +1149,7 @@ export function createDeckGestures(host) {
           ["wheel", (e) => onWheel(e, i), { passive: false }],
           ["keydown", (e) => onFrameKey(e, i), undefined],
           ["focus", () => { if (!drag) host.select(i); }, undefined],
-        ];
-        for (const [type, fn, opts] of handlers) {
-          frame.addEventListener(type, fn, opts);
-          bound.push(() => frame.removeEventListener(type, fn, opts));
-        }
+        ]);
       }
     },
 
@@ -1223,24 +1239,18 @@ export function sameAnchor(a, b, trimmedH) {
  * @param {AnchorGestureHost} host
  */
 export function createAnchorGesture(host) {
-  /** Listener removers for the currently bound stage. */
-  let bound = [];
+  const listeners = createListenerGroup();
   /** The in-flight drag, or null. One at a time. */
   let drag = null;
   let destroyed = false;
 
-  const detach = () => {
-    for (const off of bound) off();
-    bound = [];
-  };
+  const detach = () => listeners.release();
 
   /** Take the pointer: capture it, dress the stage, and stop the browser doing
    *  anything else with the event. */
   const claim = (e, stage) => {
-    stage.setPointerCapture?.(e.pointerId);
-    stage.classList?.add("is-anchoring");
+    claimPointer(e, stage, "is-anchoring");
     host.dress?.(true);
-    e.preventDefault?.();
   };
 
   const onPointerDown = (e, stage) => {
@@ -1276,9 +1286,13 @@ export function createAnchorGesture(host) {
     // drag belongs to the scroller and this lets go of it; below the threshold
     // the movement is still noise.
     if (drag.undecided) {
-      const dir = gestureDirection(e.clientX - drag.startX, e.clientY - drag.startY);
-      if (!dir) return;
-      if (dir === "horizontal") {
+      const claimed = resolveTouchClaim(
+        e.clientX - drag.startX,
+        e.clientY - drag.startY,
+        (dir) => dir === "vertical",
+      );
+      if (claimed === null) return;
+      if (claimed === "abandon") {
         drag = null;
         return;
       }
@@ -1299,18 +1313,19 @@ export function createAnchorGesture(host) {
     if (!drag || e.pointerId !== drag.pointerId) return;
     const ended = drag;
     drag = null;
-    stage.releasePointerCapture?.(e.pointerId);
-    stage.classList?.remove("is-anchoring");
+    releasePointer(e, stage, "is-anchoring");
     host.dress?.(false);
     if (!ended.moved) return;
     // A drag that ran into the end of the slack lands back where it started;
     // committing that would mark the studio dirty and re-cut a strip whose
     // pixels are identical. Repaint from the document instead.
-    if (sameAnchor(ended.anchorY, ended.startAnchor, ended.trimmedH)) {
-      host.paint(ended.startAnchor);
-      return;
-    }
-    host.commit(ended.anchorY);
+    commitIfChanged(
+      (a, b) => sameAnchor(a, b, ended.trimmedH),
+      ended.anchorY,
+      ended.startAnchor,
+      () => host.paint(ended.startAnchor),
+      (n) => host.commit(n),
+    );
   };
 
   return {
@@ -1323,17 +1338,12 @@ export function createAnchorGesture(host) {
     attach(stage) {
       detach();
       if (destroyed || !stage) return;
-      /** @type {Array<[string, (e: any) => void]>} */
-      const handlers = [
+      listeners.bind(stage, [
         ["pointerdown", (e) => onPointerDown(e, stage)],
         ["pointermove", (e) => onPointerMove(e, stage)],
         ["pointerup", (e) => onPointerUp(e, stage)],
         ["pointercancel", (e) => onPointerUp(e, stage)],
-      ];
-      for (const [type, fn] of handlers) {
-        stage.addEventListener(type, fn);
-        bound.push(() => stage.removeEventListener(type, fn));
-      }
+      ]);
     },
 
     detach,
