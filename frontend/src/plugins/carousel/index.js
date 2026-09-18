@@ -532,6 +532,12 @@ export default class CarouselStudioPage extends Component {
     // `_enterTextEdit`, cleared by `_exitTextEdit` — see studio/gestures.js's
     // `editLayer` and its `onPointerDown`/`onDoubleClick` guards.
     this._editing = null;
+    // The properties rail field currently focused, or null — set on `focus`,
+    // cleared on `blur` or a commit (see `_wireLayerFields`, `_flushLayerFields`).
+    // Not read from `document.activeElement`: a stage gesture's own
+    // `preventDefault()` is what keeps that from moving off a field mid-edit,
+    // which is the whole reason a gesture has to flush one by hand.
+    this._focusedLayerField = null;
     // Undo/redo. A ring of `doc` references, not a log of operations — the
     // document is immutable by construction, so the previous state is simply
     // the previous reference (see studio/history.js). Every write goes through
@@ -592,6 +598,7 @@ export default class CarouselStudioPage extends Component {
       // never a selection change.
       editLayer: (i, j, scope) => this._enterTextEdit(i, j, scope),
       isEditing: () => Boolean(this._editing),
+      flushFields: () => this._flushLayerFields(),
     });
     // Panorama direct manipulation, over the stage itself — the band is one
     // projection across the whole strip, so the whole strip is the surface.
@@ -1934,6 +1941,22 @@ export default class CarouselStudioPage extends Component {
     this._setDoc(updateLayer(this.state.doc, slideIndex, j, patch));
   }
 
+  /** Commit whatever the properties rail's focused layer field currently
+   *  holds, through `_setLayer` — the exact commit its own `change` handler
+   *  makes (`_wireLayerFields`). Every stage gesture calls `e.preventDefault()`
+   *  on its press, which suppresses the focus change a text field's `change`
+   *  depends on, so a gesture about to claim the press flushes the field
+   *  itself first — tracked by `focus`/`blur` (see `_wireLayerFields`) rather
+   *  than `document.activeElement`, since `preventDefault()` is exactly what
+   *  keeps that from moving. A no-op when nothing in the rail is focused. */
+  _flushLayerFields() {
+    const el = this._focusedLayerField;
+    if (!el) return;
+    this._focusedLayerField = null;
+    const { layer } = this._selectedLayerRef();
+    if (layer) this._setLayer(this._layerFromFields(layer));
+  }
+
   /** The safe-area rect to snap a layer against, in the fractions of the space
    *  that layer's box lives in. A slide layer gets the slide's own. A span
    *  layer gets the *deck's*: vertically the same band, horizontally the left
@@ -3162,6 +3185,15 @@ export default class CarouselStudioPage extends Component {
     const fields = ids.map((sel) => this.$(sel)).filter(Boolean);
 
     for (const el of fields) {
+      // `focus`/`blur` track which field a stage gesture may need to flush
+      // (see `_flushLayerFields`) — not `document.activeElement`, which a
+      // gesture's own `preventDefault()` keeps from moving in the first place.
+      this.on(el, "focus", () => {
+        this._focusedLayerField = el;
+      });
+      this.on(el, "blur", () => {
+        if (this._focusedLayerField === el) this._focusedLayerField = null;
+      });
       this.on(el, "input", () => {
         const { i, scope, j, layer } = this._selectedLayerRef();
         if (!layer) return;

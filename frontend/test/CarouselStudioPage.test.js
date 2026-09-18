@@ -2475,6 +2475,40 @@ describe('CarouselStudioPage', () => {
         assert.equal(page.state.doc.slides[0].layers[0].color, '#ff0000');
       });
 
+      test('a stage press commits a focused field, not just an already-blurred one', async () => {
+        // The bug this pins: a stage press's own `preventDefault()`
+        // (`onPointerDown`) suppresses the focus change a field's `change`
+        // depends on, so without a flush the typed text never reaches the
+        // document — it is lost the moment the press rebuilds the panel.
+        const el = await toDeck();
+        addLayer(el, 'text');
+        await settle();
+
+        const text = el.querySelector('#carousel-layer-text');
+        fire(text, 'focus');
+        text.value = 'Swipe →';
+        fire(text, 'input');
+        assert.equal(page.state.doc.slides[0].layers[0].text, '', 'still uncommitted');
+
+        const col = stageCol(el, 0);
+        fire(col, 'pointerdown', { pointerId: 9, button: 0, clientX: 0, clientY: 0 });
+        assert.equal(page.state.doc.slides[0].layers[0].text, 'Swipe →');
+      });
+
+      test('the same flush covers every field the panel wires, not text alone', async () => {
+        const el = await toDeck();
+        addLayer(el, 'rect');
+        await settle();
+
+        const radius = el.querySelector('#carousel-layer-radius');
+        fire(radius, 'focus');
+        radius.value = '0.3';
+        fire(radius, 'input');
+
+        fire(stageCol(el, 0), 'pointerdown', { pointerId: 10, button: 0, clientX: 0, clientY: 0 });
+        assert.equal(page.state.doc.slides[0].layers[0].radius, 0.3);
+      });
+
       test('a layer renders on the stage as a positioned element', async () => {
         const el = await toDeck();
         addLayer(el, 'text');

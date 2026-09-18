@@ -573,6 +573,11 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   for the whole gesture surface, not just the column being edited: every
  *   `onPointerDown`/`onDoubleClick` bails out while it holds, so the only way
  *   out of an edit is the blur (or Escape) that ends it.
+ * @property {() => void} [flushFields]
+ *   Commit the properties rail's focused field, if any, before a press, a
+ *   wheel notch or a frame key claims the gesture. Every path here calls
+ *   `e.preventDefault()`, which suppresses the focus change a text field's
+ *   own `change` depends on — this is the host's chance to commit it anyway.
  */
 
 /**
@@ -735,6 +740,7 @@ export function createDeckGestures(host) {
   // the active layer's own move zone (`hitLayer`, below) would claim it and
   // `preventDefault` the very focus change that blur depends on.
   const onPointerDown = (e, frame, i) => {
+    host.flushFields?.();
     if (e.button != null && e.button > 0) return;
     if (onHandle(e)) return;
     if (host.isEditing?.()) return;
@@ -986,6 +992,7 @@ export function createDeckGestures(host) {
   };
 
   const onWheel = (e, i) => {
+    host.flushFields?.();
     const slide = host.slideAt(i);
     if (!slide) return;
 
@@ -1018,6 +1025,7 @@ export function createDeckGestures(host) {
   };
 
   const onFrameKey = (e, i) => {
+    host.flushFields?.();
     if (onHandle(e)) return;
     const slide = host.slideAt(i);
     if (!slide) return;
