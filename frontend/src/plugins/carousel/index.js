@@ -709,6 +709,102 @@ export default class CarouselStudioPage extends Component {
     "preview-rendered"(_e, el) {
       this._openRenderedPreview(Number(el.dataset.index));
     },
+
+    // ── Live controls ─────────────────────────────────────────────────────
+    // Same split as every other live control below: `input` writes the live
+    // readout or repaints straight to the DOM, `change` commits to the
+    // document (and re-renders the preview) — so a slider or colour picker
+    // doesn't fight a rebuild mid-drag.
+    "input:carousel-n"(_e, el) {
+      const out = this.$("#carousel-n-out");
+      if (out) out.textContent = String(/** @type {HTMLInputElement} */ (el).value);
+    },
+    "change:carousel-n"(_e, el) {
+      // A manual count is a free `cover` count — the pixel-exact strategies own
+      // their slide count, so leaving `strategy` on `exact`/`pad` here would
+      // show a stale readout. The chips and the radio set both together.
+      this._setSplit({
+        n: clampSlides(Number(/** @type {HTMLInputElement} */ (el).value)),
+        strategy: "cover",
+      });
+    },
+    "change:carousel-aspect"(_e, el) {
+      const aspect = /** @type {HTMLSelectElement} */ (el).value;
+      // Deck slides carry their own crops, so an aspect change reframes them
+      // where a split deck has to be re-sliced from scratch.
+      this._setDoc(
+        this.state.doc.mode === "deck"
+          ? normalizeDocument({ ...this.state.doc, aspect })
+          : this._splitDoc({ aspect }),
+      );
+    },
+    "change:carousel-guides"(_e, el) {
+      this.setState({ showGuides: /** @type {HTMLInputElement} */ (el).checked });
+    },
+    "input:carousel-anchor"(_e, el) {
+      const out = this.$("#carousel-anchor-out");
+      if (out) {
+        out.textContent = `${Math.round(Number(/** @type {HTMLInputElement} */ (el).value) * 100)}%`;
+      }
+    },
+    "change:carousel-anchor"(_e, el) {
+      this._setSplit({ anchorY: Number(/** @type {HTMLInputElement} */ (el).value) });
+    },
+
+    // The keyboard half of the stage reorder: the handle is a button, so the
+    // arrows are free, and left/right is the axis the stage runs on (see
+    // `_setupSlideReorder`). Without this the reorder would be pointer-only,
+    // which is the failure the arrange mode in `PostEditPage` avoids the same
+    // way.
+    "keydown:rail-handle"(e, el) {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+      ev.preventDefault();
+      const from = Number(el.dataset.slide);
+      this._moveSlide(from, from + (ev.key === "ArrowLeft" ? -1 : 1), { refocus: true });
+    },
+    // The keyboard half of the layer reorder, the same split as the rail's
+    // above but up/down — the axis the layer list runs on — and reading
+    // `scope` off the handle instead of assuming one list.
+    "keydown:layer-handle"(e, el) {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
+      ev.preventDefault();
+      const j = Number(el.dataset.index);
+      // Up raises a layer toward the front of the stack — a later array
+      // index, since the list shows top of stack first (`layerRows`).
+      this._reorderLayer(j, j + (ev.key === "ArrowUp" ? 1 : -1), el.dataset.scope, {
+        refocus: true,
+      });
+    },
+    // The properties card's header is a div (`role="button"`, for the chevron
+    // and title to share one clickable row), so Enter/Space need wiring by
+    // hand the way a real `<button>` would not — same as the plugins page's
+    // group headers.
+    "keydown:toggle-props"(e) {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      this._toggleProps();
+    },
+
+    // The background fill's own fields — the colour ends and the gradient
+    // angle share one `data-action`, since every field commits through the
+    // same `_bgFromFields` read of the whole panel.
+    "input:bg-field"() {
+      const i = this._selectedIndex();
+      const slide = this.state.doc.slides[i];
+      if (!slide) return;
+      const angle = /** @type {HTMLInputElement|null} */ (this.$("#carousel-bg-angle"));
+      const angleOut = this.$("#carousel-bg-angle-out");
+      if (angleOut && angle) angleOut.textContent = `${angle.value}°`;
+      this._paintDeckSlide(i, { ...slide, bg: this._bgFromFields(slide) });
+    },
+    "change:bg-field"() {
+      const i = this._selectedIndex();
+      const slide = this.state.doc.slides[i];
+      if (slide) this._setSlideFraming(i, { bg: this._bgFromFields(slide) });
+    },
   };
 
   mount() {
@@ -1339,7 +1435,7 @@ export default class CarouselStudioPage extends Component {
 
   /**
    * Slide reordering directly on the stage: a pointer drag on a column's own
-   * handle, and the arrow keys on the same handle (`_wireControls`). Pointer
+   * handle, and the arrow keys on the same handle (`actions["keydown:rail-handle"]`). Pointer
    * events rather than HTML5 drag-and-drop — `attachPointerReorder` says why —
    * and the util owns the gesture and nothing else: the drop arrives here as
    * an element and the item it landed after, and becomes a `moveSlide` write
@@ -1395,7 +1491,7 @@ export default class CarouselStudioPage extends Component {
 
   /**
    * Layer reordering on the side panel: a pointer drag on a row's own handle,
-   * and the arrow keys on the same handle (`_wireControls`) — the same split
+   * and the arrow keys on the same handle (`actions["keydown:layer-handle"]`) — the same split
    * `_setupSlideReorder` uses for the rail, over the two layer lists instead
    * of the one rail.
    *
@@ -1720,7 +1816,7 @@ export default class CarouselStudioPage extends Component {
    * keyboard step off either end of the list, this is the belt-and-braces
    * (a drag's own `to` is always in range by construction).
    *
-   * `refocus: true` is the keyboard path only (`_wireControls`): the panel
+   * `refocus: true` is the keyboard path only (`actions["keydown:layer-handle"]`): the panel
    * rebuilds under the row the user is holding a key on, so this records
    * where its handle lands, for `afterRender` to refocus.
    */
@@ -2711,7 +2807,7 @@ export default class CarouselStudioPage extends Component {
       });
     }
 
-    this._wireControls();
+    this._wireLayerFields();
     this._wireTemplateDialog();
     this._gestures.attach(deck ? this.$$(".carousel-studio__stage-slide") : []);
     // The panorama stage takes the pointer only when it is the surface — and
@@ -2956,103 +3052,6 @@ export default class CarouselStudioPage extends Component {
 
   // ── Control wiring ────────────────────────────────────────────────────────
 
-  _wireControls() {
-    const nInput = /** @type {HTMLInputElement|null} */ (this.$("#carousel-n"));
-    const nOut = this.$("#carousel-n-out");
-    // Live readout while dragging; commit to the document (and re-render the
-    // preview) only on release, so the slider doesn't fight a rebuild mid-drag.
-    this.on(nInput, "input", () => {
-      if (nOut) nOut.textContent = String(nInput.value);
-    });
-    this.on(nInput, "change", () => {
-      // A manual count is a free `cover` count — the pixel-exact strategies own
-      // their slide count, so leaving `strategy` on `exact`/`pad` here would
-      // show a stale readout. The chips and the radio set both together.
-      this._setSplit({ n: clampSlides(Number(nInput.value)), strategy: "cover" });
-    });
-
-    this.on(this.$("#carousel-aspect"), "change", (e) => {
-      const aspect = /** @type {HTMLSelectElement} */ (e.target).value;
-      // Deck slides carry their own crops, so an aspect change reframes them
-      // where a split deck has to be re-sliced from scratch.
-      this._setDoc(
-        this.state.doc.mode === "deck"
-          ? normalizeDocument({ ...this.state.doc, aspect })
-          : this._splitDoc({ aspect }),
-      );
-    });
-    this.on(this.$("#carousel-guides"), "change", (e) => {
-      this.setState({ showGuides: /** @type {HTMLInputElement} */ (e.target).checked });
-    });
-
-    const anchor = /** @type {HTMLInputElement|null} */ (this.$("#carousel-anchor"));
-    if (anchor) {
-      const anchorOut = this.$("#carousel-anchor-out");
-      this.on(anchor, "input", () => {
-        if (anchorOut) {
-          anchorOut.textContent = `${Math.round(Number(anchor.value) * 100)}%`;
-        }
-      });
-      this.on(anchor, "change", () => {
-        this._setSplit({ anchorY: Number(anchor.value) });
-      });
-    }
-
-    // The keyboard half of the stage reorder: the handle is a button, so the
-    // arrows are free, and left/right is the axis the stage runs on (see
-    // `_setupSlideReorder`). Without this the reorder would be pointer-only,
-    // which is the failure the arrange mode in `PostEditPage` avoids the same
-    // way. Delegated on the stage column — the handle now lives in the top
-    // management pane, a sibling of the stage rather than a descendant of it —
-    // so it survives the rebuild a move causes.
-    this.on(this.$(".carousel-studio__stage-col"), "keydown", (e) => {
-      const ev = /** @type {KeyboardEvent} */ (e);
-      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
-      const handle = /** @type {HTMLElement|null} */ (
-        /** @type {HTMLElement} */ (ev.target).closest?.(".carousel-studio__rail-handle")
-      );
-      if (!handle) return;
-      ev.preventDefault();
-      const from = Number(handle.dataset.slide);
-      this._moveSlide(from, from + (ev.key === "ArrowLeft" ? -1 : 1), { refocus: true });
-    });
-
-    // The keyboard half of the layer reorder, the same split as the rail's
-    // above but up/down — the axis the layer list runs on — and reading
-    // `scope` off the handle instead of assuming one list. Delegated on the
-    // panel that wraps both lists, since a reorder rebuilds the list the
-    // handle lives in.
-    this.on(this.$(".carousel-studio__layers"), "keydown", (e) => {
-      const ev = /** @type {KeyboardEvent} */ (e);
-      if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
-      const handle = /** @type {HTMLElement|null} */ (
-        /** @type {HTMLElement} */ (ev.target).closest?.(".carousel-studio__layer-handle")
-      );
-      if (!handle) return;
-      ev.preventDefault();
-      const j = Number(handle.dataset.index);
-      // Up raises a layer toward the front of the stack — a later array
-      // index, since the list shows top of stack first (`layerRows`).
-      this._reorderLayer(j, j + (ev.key === "ArrowUp" ? 1 : -1), handle.dataset.scope, {
-        refocus: true,
-      });
-    });
-
-    // The properties card's header is a div (`role="button"`, for the chevron
-    // and title to share one clickable row), so Enter/Space need wiring by
-    // hand the way a real `<button>` would not — same as the plugins page's
-    // group headers.
-    this.on(this.$(".carousel-studio__props-header"), "keydown", (e) => {
-      const ev = /** @type {KeyboardEvent} */ (e);
-      if (ev.key !== "Enter" && ev.key !== " ") return;
-      ev.preventDefault();
-      this._toggleProps();
-    });
-
-    this._wireBgFields();
-    this._wireLayerFields();
-  }
-
   /**
    * The save-as-template dialog's two fields.
    *
@@ -3205,39 +3204,6 @@ export default class CarouselStudioPage extends Component {
       };
     }
     return {};
-  }
-
-  /**
-   * The background fill's own fields — the colour ends and the gradient angle.
-   * The type chips are an action; these edit the type that is already chosen.
-   *
-   * Same split as every other live control here: `input` repaints the fill
-   * layer straight into the DOM, `change` commits it to the document. Dragging
-   * a colour picker across a hue ramp therefore costs two style writes per step
-   * rather than a document mutation and a rebuild.
-   */
-  _wireBgFields() {
-    const angle = /** @type {HTMLInputElement|null} */ (this.$("#carousel-bg-angle"));
-    const angleOut = this.$("#carousel-bg-angle-out");
-    const fields = ["#carousel-bg-color", "#carousel-bg-from", "#carousel-bg-to"]
-      .map((sel) => this.$(sel))
-      .concat(angle)
-      .filter(Boolean);
-
-    for (const el of fields) {
-      this.on(el, "input", () => {
-        const i = this._selectedIndex();
-        const slide = this.state.doc.slides[i];
-        if (!slide) return;
-        if (angleOut && angle) angleOut.textContent = `${angle.value}°`;
-        this._paintDeckSlide(i, { ...slide, bg: this._bgFromFields(slide) });
-      });
-      this.on(el, "change", () => {
-        const i = this._selectedIndex();
-        const slide = this.state.doc.slides[i];
-        if (slide) this._setSlideFraming(i, { bg: this._bgFromFields(slide) });
-      });
-    }
   }
 
   /**

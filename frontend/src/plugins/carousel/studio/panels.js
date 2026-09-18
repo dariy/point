@@ -496,6 +496,7 @@ export function builder({
                 <button
                   type="button"
                   class="carousel-studio__rail-handle"
+                  data-action="rail-handle"
                   data-slide="${String(i)}"
                   aria-label="Reorder slide ${String(i + 1)} — drag, or press the left and right arrow keys"
                 >
@@ -581,6 +582,7 @@ export function builder({
               <input
                 type="range"
                 id="carousel-n"
+                data-action="carousel-n"
                 min="${String(MIN_SLIDES)}"
                 max="${String(MAX_SLIDES)}"
                 value="${String(n)}"
@@ -589,7 +591,7 @@ export function builder({
 
       <label class="carousel-studio__control">
         <span>Aspect</span>
-        <select id="carousel-aspect">
+        <select id="carousel-aspect" data-action="carousel-aspect">
           ${ASPECT_OPTIONS.map(
             ([val, text]) => html`
               <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
@@ -598,7 +600,12 @@ export function builder({
       </label>
 
       <label class="carousel-studio__control carousel-studio__control--check">
-        <input type="checkbox" id="carousel-guides" ${showGuides ? "checked" : ""} />
+        <input
+          type="checkbox"
+          id="carousel-guides"
+          data-action="carousel-guides"
+          ${showGuides ? "checked" : ""}
+        />
         <span>Safe-area guides</span>
       </label>
 
@@ -879,6 +886,7 @@ export function bgControl({ index, slide }) {
               <input
                 type="color"
                 id="carousel-bg-color"
+                data-action="bg-field"
                 value="${colorInputValue(solid.color)}"
               />
             </label>`
@@ -890,6 +898,7 @@ export function bgControl({ index, slide }) {
               <input
                 type="color"
                 id="carousel-bg-from"
+                data-action="bg-field"
                 value="${colorInputValue(gradient.stops[0].color)}"
               />
             </label>
@@ -898,6 +907,7 @@ export function bgControl({ index, slide }) {
               <input
                 type="color"
                 id="carousel-bg-to"
+                data-action="bg-field"
                 value="${colorInputValue(
                   gradient.stops[gradient.stops.length - 1].color,
                 )}"
@@ -911,6 +921,7 @@ export function bgControl({ index, slide }) {
               <input
                 type="range"
                 id="carousel-bg-angle"
+                data-action="bg-field"
                 min="0"
                 max="359"
                 step="1"
@@ -971,6 +982,7 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
           <button
             type="button"
             class="carousel-studio__layer-handle"
+            data-action="layer-handle"
             data-scope="${scope}"
             data-index="${String(j)}"
             aria-label="Reorder ${layerLabel(layer)} — drag, or press the up and down arrow keys"
@@ -1441,6 +1453,7 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
               <input
                 type="range"
                 id="carousel-anchor"
+                data-action="carousel-anchor"
                 min="0"
                 max="1"
                 step="0.01"
