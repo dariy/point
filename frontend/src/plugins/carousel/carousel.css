@@ -891,9 +891,32 @@
   align-items: center;
 }
 
+/* The row's drag handle: the same grip `.carousel-studio__rail-handle` gives
+ * the slide rail, at the front of the row rather than the raise/lower chips
+ * it replaces. `touch-action: none` is what lets a finger drag it at all —
+ * `.carousel-studio__rail-handle`'s own comment says why. */
+.carousel-studio__layer-handle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs);
+  border: 0;
+  border-radius: var(--border-radius);
+  background: none;
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.carousel-studio__layer-handle:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
 /* The row's visibility switch: an eye ahead of the layer's name, borderless so
- * it reads as part of the row rather than as a fourth chip beside the three
- * action buttons at the other end. The icon constants are 24px; the row is
+ * it reads as part of the row rather than as a second chip beside the delete
+ * button at the other end. The icon constants are 24px; the row is
  * `--font-size-xs` tall, so they are sized down here rather than duplicated. */
 .carousel-studio__layer-eye {
   flex: none;

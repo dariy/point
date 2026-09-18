@@ -2260,10 +2260,125 @@ describe('CarouselStudioPage', () => {
         assert.equal(names[0], 'Rectangle');
         assert.ok(names[1].startsWith('Text'));
 
-        // "Move down" on the top (rect, index 1) drops it under the text layer.
-        click(el.querySelector('[data-action="layer-lower"][data-index="1"]'));
+        // ArrowDown on the top row's handle (rect, index 1) drops it under the
+        // text layer — the keyboard half of the drag reorder.
+        const handle = el.querySelector(
+          '.carousel-studio__layer-handle[data-scope="slide"][data-index="1"]',
+        );
+        fire(handle, 'keydown', { key: 'ArrowDown' });
         await settle();
         assert.deepEqual(page.state.doc.slides[0].layers.map((l) => l.type), ['rect', 'text']);
+      });
+
+      test('a layer row carries a drag handle, not raise/lower buttons', async () => {
+        const el = await toDeck();
+        addLayer(el, 'text');
+        await settle();
+
+        const row = el.querySelector('.carousel-studio__layer-row[data-index="0"]');
+        assert.ok(row, 'the row itself carries data-index, for the drag to read');
+        const handle = row.querySelector('.carousel-studio__layer-handle');
+        assert.ok(handle, 'and a handle');
+        assert.equal(handle, row.firstElementChild, 'at the beginning of the row');
+        assert.equal(el.querySelector('[data-action="layer-raise"]'), null);
+        assert.equal(el.querySelector('[data-action="layer-lower"]'), null);
+      });
+
+      /** Drag layer row `from` (an array index) within `scope` and release it
+       *  over the row at DOM position `overIndex` (`0` is the topmost row,
+       *  `-1` above all of them) — linkedom has no layout, so the boxes the
+       *  reorder measures are supplied here, the same idea as `dragSlide`
+       *  (`slide controls`, below) but along `y` and DOM-position addressed,
+       *  since the list is reversed from array order.
+       *
+       *  `BASE` keeps every `clientY` well clear of 0: `pointerReorder.js`
+       *  auto-scrolls the page within 64px of the viewport edge, and
+       *  `window.scrollBy` does not exist in linkedom (`pointerReorder.test.js`
+       *  says the same for its own layout). */
+      const BASE = 100;
+      function dragLayer(el, scope, from, overIndex) {
+        const rows = [...el.querySelectorAll(`.carousel-studio__layer-list[data-scope="${scope}"] .carousel-studio__layer-row`)];
+        rows.forEach((row, domI) => {
+          const top = BASE + domI * 30;
+          row.getBoundingClientRect = () => ({
+            top, bottom: top + 30, height: 30, left: 0, right: 100, width: 100,
+          });
+        });
+        const list = el.querySelector(`.carousel-studio__layer-list[data-scope="${scope}"]`);
+        list.getBoundingClientRect = () => ({
+          top: BASE, bottom: BASE + rows.length * 30, height: rows.length * 30, left: 0, right: 100, width: 100,
+        });
+        const handle = el.querySelector(
+          `.carousel-studio__layer-handle[data-scope="${scope}"][data-index="${from}"]`,
+        );
+        const fromDomI = rows.findIndex((r) => r.dataset.index === String(from));
+        const y = BASE + overIndex * 30 + 15;
+        fire(handle, 'pointerdown', { pointerId: 5, button: 0, clientX: 50, clientY: BASE + fromDomI * 30 + 15 });
+        fire(handle, 'pointermove', { pointerId: 5, clientX: 50, clientY: y });
+        fire(handle, 'pointerup', { pointerId: 5, clientX: 50, clientY: y });
+      }
+
+      test('dragging a layer handle reorders the layers, both ways', async () => {
+        const el = await toDeck();
+        addLayer(el, 'text');
+        await settle();
+        addLayer(el, 'rect');
+        await settle();
+        addLayer(el, 'counter');
+        await settle();
+        // Array is [text, rect, counter]; the list shows counter first.
+
+        // Drag text (array index 0, DOM position 2 — the bottom row) to the
+        // very top of the list.
+        dragLayer(el, 'slide', 0, -1);
+        await settle();
+        assert.deepEqual(
+          page.state.doc.slides[0].layers.map((l) => l.type),
+          ['rect', 'counter', 'text'],
+          'text is now the topmost — the array’s last slot',
+        );
+
+        // And back down to the bottom of the stack.
+        dragLayer(page.container, 'slide', 2, 2);
+        await settle();
+        assert.deepEqual(
+          page.state.doc.slides[0].layers.map((l) => l.type),
+          ['text', 'rect', 'counter'],
+        );
+      });
+
+      test('dragging a layer handle into the other scope’s list is a no-op', async () => {
+        const el = await toDeck();
+        addLayer(el, 'text');
+        await settle();
+        addLayer(el, 'rect', 'span');
+        await settle();
+        const before = page.state.doc;
+
+        const slideRow = el.querySelector('.carousel-studio__layer-row[data-scope="slide"]');
+        slideRow.getBoundingClientRect = () => ({
+          top: 0, bottom: 30, height: 30, left: 0, right: 100, width: 100,
+        });
+        el.querySelector('.carousel-studio__layer-list[data-scope="slide"]').getBoundingClientRect = () => ({
+          top: 0, bottom: 30, height: 30, left: 0, right: 100, width: 100,
+        });
+        const spanRow = el.querySelector('.carousel-studio__layer-row[data-scope="span"]');
+        spanRow.getBoundingClientRect = () => ({
+          top: 200, bottom: 230, height: 30, left: 0, right: 100, width: 100,
+        });
+        el.querySelector('.carousel-studio__layer-list[data-scope="span"]').getBoundingClientRect = () => ({
+          top: 200, bottom: 230, height: 30, left: 0, right: 100, width: 100,
+        });
+
+        const handle = el.querySelector(
+          '.carousel-studio__layer-handle[data-scope="slide"][data-index="0"]',
+        );
+        fire(handle, 'pointerdown', { pointerId: 6, button: 0, clientX: 50, clientY: 15 });
+        fire(handle, 'pointermove', { pointerId: 6, clientX: 50, clientY: 215 });
+        fire(handle, 'pointerup', { pointerId: 6, clientX: 50, clientY: 215 });
+        await settle();
+
+        assert.strictEqual(page.state.doc, before, 'crossing lists writes nothing');
       });
 
       test('the property form writes through updateLayer, not into state', async () => {
@@ -2751,9 +2866,9 @@ describe('CarouselStudioPage', () => {
 
       // ── Span layers (S3.8) ───────────────────────────────────────────────
       describe('span layers', () => {
-        const spanRow = (el, action, index) =>
+        const spanHandle = (el, index) =>
           el.querySelector(
-            `[data-action="${action}"][data-scope="span"][data-index="${index}"]`,
+            `.carousel-studio__layer-handle[data-scope="span"][data-index="${index}"]`,
           );
 
         test('adding a deck layer lands in doc.spanLayers, not a slide', async () => {
@@ -2839,7 +2954,7 @@ describe('CarouselStudioPage', () => {
           await settle();
           assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['text', 'rect']);
 
-          click(spanRow(el, 'layer-lower', '1'));
+          fire(spanHandle(el, '1'), 'keydown', { key: 'ArrowDown' });
           await settle();
           assert.deepEqual(page.state.doc.spanLayers.map((l) => l.type), ['rect', 'text']);
 

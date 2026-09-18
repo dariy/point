@@ -500,6 +500,10 @@ export default class CarouselStudioPage extends Component {
     // The same, for the rail's drag handle after a keyboard reorder — a
     // different element, and only one of the two is ever pending.
     this._refocusRail = null;
+    // The same again, for a layer row's handle — `{ scope, index }` (index
+    // is the row's position after the move) or null. A layer keyboard
+    // reorder rebuilds the whole panel, same as the rail's.
+    this._refocusLayerHandle = null;
     // The stage scroller's horizontal offset, carried across a rebuild the
     // same way `_stageZoom` is: every setState() (a slide select, a crop
     // drag's commit, a zoom change) replaces the scroller node outright, and
@@ -510,6 +514,9 @@ export default class CarouselStudioPage extends Component {
     // since the util re-queries its containers per gesture and so survives a
     // rebuild; released in `beforeUnmount`.
     this._detachReorder = null;
+    // The same, for the layer lists (slide + span) — a second, independent
+    // gesture over a different pair of containers.
+    this._detachLayerReorder = null;
     // The in-flight on-canvas text edit, or null — `{ i, j, scope, layerEl,
     // block, original, teardown }`. Lives outside `state`: every keystroke
     // restyles the block directly (see `_liveEditText`), and a `setState`
@@ -642,14 +649,6 @@ export default class CarouselStudioPage extends Component {
     "select-layer"(_e, el) {
       this._selectLayer(Number(el.dataset.index), el.dataset.scope);
     },
-    "layer-raise"(_e, el) {
-      const j = Number(el.dataset.index);
-      this._reorderLayer(j, j + 1, el.dataset.scope);
-    },
-    "layer-lower"(_e, el) {
-      const j = Number(el.dataset.index);
-      this._reorderLayer(j, j - 1, el.dataset.scope);
-    },
     "layer-visibility"(_e, el) {
       this._toggleLayerVisibility(Number(el.dataset.index), el.dataset.scope);
     },
@@ -715,12 +714,15 @@ export default class CarouselStudioPage extends Component {
   mount() {
     super.mount();
     this._setupSlideReorder();
+    this._setupLayerReorder();
     this._load();
   }
 
   beforeUnmount() {
     this._detachReorder?.();
     this._detachReorder = null;
+    this._detachLayerReorder?.();
+    this._detachLayerReorder = null;
     this._picker?.destroy();
     this._picker = null;
     this._layerPicker?.destroy();
@@ -1392,6 +1394,68 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
+   * Layer reordering on the side panel: a pointer drag on a row's own handle,
+   * and the arrow keys on the same handle (`_wireControls`) — the same split
+   * `_setupSlideReorder` uses for the rail, over the two layer lists instead
+   * of the one rail.
+   *
+   * Both lists are live containers even though only one scope's rows can be
+   * dragged into the other's space: `onDrop` below refuses a drop that
+   * crossed lists, since a slide layer and a span layer are not
+   * interchangeable items — `reorderLayer` (`document.js`) only ever moves a
+   * layer within its own list.
+   *
+   * Bound once, for the life of the page, like the rail's.
+   */
+  _setupLayerReorder() {
+    this._detachLayerReorder?.();
+    this._detachLayerReorder = attachPointerReorder({
+      handleSelector: ".carousel-studio__layer-handle",
+      itemSelector: ".carousel-studio__layer-row",
+      containers: () => [
+        this.$('.carousel-studio__layer-list[data-scope="slide"]'),
+        this.$('.carousel-studio__layer-list[data-scope="span"]'),
+      ],
+      axis: "y",
+      isEnabled: () => this.state.doc.mode === "deck" && !this.state.busy,
+      onDrop: ({ item, from, to, afterEl }) => {
+        if (to !== from) return;
+        const scope = from?.dataset.scope === "span" ? "span" : "slide";
+        const j = Number(item?.dataset?.index);
+        if (!Number.isInteger(j)) return;
+        if (afterEl === item) return;
+        this._reorderLayer(j, this._layerDropIndex(j, afterEl, scope), scope);
+      },
+    });
+  }
+
+  /**
+   * Where a layer drag's drop line lands, translated into `reorderLayer`'s
+   * `to` (a post-removal array index) — the mirror image of
+   * `_setupSlideReorder`'s `after`/`from` arithmetic, because the list is
+   * shown **top of stack first** (`layerRows`, `studio/panels.js`) while the
+   * array is back-to-front: a row's DOM predecessor is the layer with the
+   * NEXT HIGHER array index, not the next lower one.
+   *
+   * `afterEl` is the row immediately before the drop line in DOM order
+   * (`pointerReorder.js`'s own doc), which — DOM running top-to-bottom while
+   * the array runs bottom-to-top — is the layer one slot ABOVE where the
+   * drag landed. Null means the drop line sits above every row — the top of
+   * the stack — which is the array's last slot once `from` has been removed.
+   *
+   * @param {number} from the dragged row's index before the move
+   * @param {HTMLElement|null} afterEl the row (if any) the drop line sits
+   *   directly under, in DOM order
+   * @param {"slide"|"span"} scope
+   */
+  _layerDropIndex(from, afterEl, scope) {
+    const { list } = this._layerTarget(scope);
+    if (!afterEl) return list.length - 1;
+    const above = Number(afterEl.dataset.index);
+    return above < from ? above : above - 1;
+  }
+
+  /**
    * A fresh layer of `type`, its box landed inside the slide's `safeAreaRect`
    * (`geometry.js`) rather than at the origin — a layer outside the frame's
    * honest bounds is one the user has to move before it is any use. A `"span"`
@@ -1652,10 +1716,15 @@ export default class CarouselStudioPage extends Component {
   /**
    * Move a layer from `from` to `to` in paint order within its scope's list,
    * keeping the selection on whichever layer the user was pointing at when the
-   * selection is in that same scope. `to` out of range is a no-op — the list's
-   * end buttons are disabled, this is the belt-and-braces.
+   * selection is in that same scope. `to` out of range is a no-op — the
+   * keyboard step off either end of the list, this is the belt-and-braces
+   * (a drag's own `to` is always in range by construction).
+   *
+   * `refocus: true` is the keyboard path only (`_wireControls`): the panel
+   * rebuilds under the row the user is holding a key on, so this records
+   * where its handle lands, for `afterRender` to refocus.
    */
-  _reorderLayer(from, to, scope) {
+  _reorderLayer(from, to, scope, { refocus = false } = {}) {
     const s = scope === "span" ? "span" : "slide";
     const { slideIndex, list } = this._layerTarget(s);
     if (to < 0 || to >= list.length) return;
@@ -1668,6 +1737,7 @@ export default class CarouselStudioPage extends Component {
       else if (sel < from && sel >= to) sel += 1;
       patch.selectedLayer = sel;
     }
+    if (refocus) this._refocusLayerHandle = { scope: s, index: to };
     this._setDoc(doc, patch);
   }
 
@@ -2680,6 +2750,16 @@ export default class CarouselStudioPage extends Component {
       this._refocusRail = null;
       this.$(`.carousel-studio__rail-handle[data-slide="${i}"]`)?.focus?.();
     }
+
+    // The same for a layer row: `scope` picks the right list, `index` the
+    // row inside it — the panel rebuilds both on every write.
+    if (this._refocusLayerHandle != null) {
+      const { scope, index } = this._refocusLayerHandle;
+      this._refocusLayerHandle = null;
+      this.$(
+        `.carousel-studio__layer-handle[data-scope="${scope}"][data-index="${index}"]`,
+      )?.focus?.();
+    }
   }
 
   /**
@@ -2935,6 +3015,27 @@ export default class CarouselStudioPage extends Component {
       ev.preventDefault();
       const from = Number(handle.dataset.slide);
       this._moveSlide(from, from + (ev.key === "ArrowLeft" ? -1 : 1), { refocus: true });
+    });
+
+    // The keyboard half of the layer reorder, the same split as the rail's
+    // above but up/down — the axis the layer list runs on — and reading
+    // `scope` off the handle instead of assuming one list. Delegated on the
+    // panel that wraps both lists, since a reorder rebuilds the list the
+    // handle lives in.
+    this.on(this.$(".carousel-studio__layers"), "keydown", (e) => {
+      const ev = /** @type {KeyboardEvent} */ (e);
+      if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
+      const handle = /** @type {HTMLElement|null} */ (
+        /** @type {HTMLElement} */ (ev.target).closest?.(".carousel-studio__layer-handle")
+      );
+      if (!handle) return;
+      ev.preventDefault();
+      const j = Number(handle.dataset.index);
+      // Up raises a layer toward the front of the stack — a later array
+      // index, since the list shows top of stack first (`layerRows`).
+      this._reorderLayer(j, j + (ev.key === "ArrowUp" ? 1 : -1), handle.dataset.scope, {
+        refocus: true,
+      });
     });
 
     // The properties card's header is a div (`role="button"`, for the chevron
