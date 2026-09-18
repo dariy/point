@@ -1128,11 +1128,12 @@ describe('CarouselStudioPage', () => {
           content,
           `Intro.\n\n${fence(['/2026/08/re1.jpg', '/2026/08/re2.jpg'], 'c-dead')}\n\nOutro.`,
         );
-        // Slide 2's media row is now unreferenced, but it was never this
-        // generation's to begin with — it left `_priorRendered` on load.
+        // Slide 2's media row never entered this generation's document — it
+        // left the reconciled `doc` on load (p-ix7c) — but reconciliation
+        // still hands it to `_priorRendered` as a deletion candidate.
         assert.deepEqual(
           mediaDeletes().map((c) => c.url.match(/\/api\/media\/(\d+)$/)[1]).sort(),
-          ['100', '102'],
+          ['100', '101', '102'],
         );
       });
 
@@ -3642,6 +3643,106 @@ describe('CarouselStudioPage', () => {
 
       test('is kept when its path is still used elsewhere in the post', async () => {
         await deleteMiddleAndRender('![keep](/2026/08/old2.jpg)\n\n');
+        assert.deepEqual(deletes(), [], 'the row is still referenced, so it stays');
+      });
+    });
+
+    /**
+     * A slide dropped by hand-editing the fence in Text mode never enters the
+     * document `adoptFencePaths` reconciles it against, so `_priorRendered`
+     * would never carry it and `_deleteSuperseded` could never collect it —
+     * the same leak `ListOrphanedMedia` cannot catch either (p-ix7c).
+     */
+    describe("a slide dropped from the fence by hand", () => {
+      /** A stored three-slide deck whose fence only lists `fencePaths` — as if
+       *  the author deleted a path from it in Text mode before reopening. */
+      function renderedDeckWithFence(fencePaths) {
+        const base = normalizeDocument({
+          version: 1,
+          aspect: '4:5',
+          mode: 'deck',
+          slides: [
+            { source: SRC, crop: { x: 0, y: 0, w: 0.3, h: 1 } },
+            { source: SRC, crop: { x: 0.35, y: 0, w: 0.3, h: 1 } },
+            { source: SRC, crop: { x: 0.7, y: 0, w: 0.3, h: 1 } },
+          ],
+        });
+        const doc = {
+          ...base,
+          slides: base.slides.map((slide, i) => ({
+            ...slide,
+            rendered: {
+              path: `/2026/08/old${String(i + 1)}.jpg`,
+              media_id: 100 + i,
+              specHash: specHash(slide, base.aspect, base),
+            },
+          })),
+        };
+        const post = {
+          ...POST,
+          content: `:::{.carousel-block}\n\n${fencePaths.join('\n\n')}\n\n:::`,
+        };
+        const routes = [
+          [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: post })],
+          [/\/api\/carousel/, (url, opts) =>
+            (opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } })],
+          [/\/api\/media\/\d+$/, { body: {} }],
+        ];
+        const deps = {
+          ...fakeRenderDeps(async () => {
+            throw new Error('an unchanged slide must not be re-encoded');
+          }),
+          probeSize: async () => ({ w: SRC_W, h: SRC_H }),
+        };
+        return { routes, deps };
+      }
+
+      const deletes = () =>
+        calls
+          .filter((c) => c.method === 'DELETE' && /\/api\/media\/\d+$/.test(c.url))
+          .map((c) => Number(c.url.match(/\/api\/media\/(\d+)$/)[1]))
+          .sort((a, b) => a - b);
+
+      test('is a deletion candidate on load, and only it is deleted by the next render', async () => {
+        const { routes, deps } = renderedDeckWithFence([
+          '/2026/08/old1.jpg',
+          '/2026/08/old3.jpg',
+        ]);
+        await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        assert.equal(page.state.doc.slides.length, 2, 'the fence-dropped slide left the document');
+        assert.deepEqual(
+          page._priorRendered
+            .filter((r) => Number.isFinite(r.media_id))
+            .map((r) => r.media_id)
+            .sort((a, b) => a - b),
+          [100, 101, 102],
+          'the fence-dropped slide is still a deletion candidate, alongside the kept ones',
+        );
+
+        await page._render();
+        await settle();
+
+        assert.deepEqual(deletes(), [101], "exactly the slide the fence dropped");
+      });
+
+      test('is kept when its path is still used elsewhere in the post', async () => {
+        const { routes, deps } = renderedDeckWithFence(['/2026/08/old1.jpg', '/2026/08/old3.jpg']);
+        routes[0][1] = (url, opts) => {
+          if (opts.method === 'PUT') return { body: {} };
+          const post = {
+            ...POST,
+            content:
+              '![keep](/2026/08/old2.jpg)\n\n:::{.carousel-block}\n\n/2026/08/old1.jpg' +
+              '\n\n/2026/08/old3.jpg\n\n:::',
+          };
+          return { body: post };
+        };
+        await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        await page._render();
+        await settle();
+
         assert.deepEqual(deletes(), [], 'the row is still referenced, so it stays');
       });
     });
