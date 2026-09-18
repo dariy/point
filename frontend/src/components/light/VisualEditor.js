@@ -75,141 +75,11 @@ export class VisualEditor extends Component {
   render() {
     const { nodes = [] } = this.props;
 
-    // How the studio is told which carousel a card's button opens: the node's
-    // key, or its position among the post's carousels while it has none. The
-    // count runs over the whole list, so it matches the fence order the studio
-    // reads out of the saved content.
-    let carouselCount = 0;
-
-    const insertZone = (index) =>
-      html`<div class="ve-insert-zone" data-insert-at="${index}">
-         <div class="ve-insert-actions">
-           <button class="ve-insert-btn ve-insert-text" type="button" title="Insert text node">+ Text</button>
-           <button class="ve-insert-btn ve-insert-media" type="button" title="Insert media node">+ Media</button>
-         </div>
-       </div>`;
-
-    const cards = nodes
-      .map((node, i) => {
-        if (node.type === "image") {
-          const filename = node.path.split("/").pop();
-          const mediaByPath = this.props.mediaByPath || {};
-          const media = mediaByPath[node.path];
-          const mediaId = media ? String(media.id) : "";
-
-          const exifBtn = mediaId
-            ? html`<button class="ve-exif-toggle btn btn-sm" data-media-id="${mediaId}" type="button" title="Edit EXIF">\u2139</button>`
-            : "";
-          const exifPanel = mediaId
-            ? html`<div class="ve-exif-panel" data-media-id="${mediaId}" hidden>
-               ${this._renderVeExifRows(media)}
-               <div class="exif-actions">
-                 <button class="btn btn-sm ve-exif-add-btn" type="button">+ Add field</button>
-                 <button class="btn btn-sm ve-exif-save-btn" data-media-id="${mediaId}" type="button">Save EXIF</button>
-                 <button class="btn btn-sm ve-exif-reextract-btn" data-media-id="${mediaId}" type="button">Re-extract</button>
-               </div>
-             </div>`
-            : "";
-
-          return html`
-          ${insertZone(i)}
-          <div class="ve-card" data-index="${i}">
-            <button class="ve-handle" type="button"
-                    aria-label="Move ${filename}"
-                    title="Drag to reorder \u2014 or the arrow keys">
-              <span class="ve-handle-dots" aria-hidden="true"></span>
-            </button>
-            <img class="ve-thumb" ${thumbAttrs(node.path, {
-              sizes: VE_THUMB_SIZES,
-              width: media?.width,
-              height: media?.height,
-            })}
-                 alt="${filename}"
-                 data-full="${node.path}"
-                 loading="lazy" decoding="async">
-            <div class="ve-card-row">
-              <span class="ve-path">${node.path}</span>
-              ${exifBtn}
-              <button class="ve-remove" data-index="${i}" type="button"
-                      aria-label="Remove image" title="Remove">&times;</button>
-            </div>
-            ${exifPanel}
-          </div>`;
-        } else if (node.type === "carousel") {
-          // Read-only card. Editing slides is Carousel Studio's job, not the
-          // editor's — but the card must show every path it holds so a Visual
-          // mode round-trip (see serializeNodes) never silently drops one.
-          const paths = node.paths || [];
-          // Counted for every carousel, keyed ones included: the position has
-          // to be the one the studio finds by scanning the post's fences.
-          carouselCount += 1;
-          const block = node.key || String(carouselCount);
-          const mediaByPath = this.props.mediaByPath || {};
-          const thumbs = paths
-            .map((path, slideIdx) => {
-              const media = mediaByPath[path];
-              return html`
-              <div class="ve-slide" data-index="${slideIdx}">
-                <button class="ve-slide-handle" type="button"
-                        aria-label="Move slide ${slideIdx + 1} of ${paths.length}"
-                        title="Drag to reorder — or the arrow keys">
-                  <span class="ve-handle-dots" aria-hidden="true"></span>
-                </button>
-                <img class="ve-thumb" ${thumbAttrs(path, {
-                  sizes: VE_THUMB_SIZES,
-                  width: media?.width,
-                  height: media?.height,
-                })}
-                     alt="${path.split("/").pop()}"
-                     data-full="${path}"
-                     loading="lazy" decoding="async">
-              </div>`;
-            });
-          return html`
-          ${insertZone(i)}
-          <div class="ve-card ve-card--carousel" data-index="${i}">
-            <button class="ve-handle" type="button"
-                    aria-label="Move carousel of ${paths.length} ${paths.length === 1 ? "slide" : "slides"}"
-                    title="Drag to reorder \u2014 or the arrow keys">
-              <span class="ve-handle-dots" aria-hidden="true"></span>
-            </button>
-            <div class="ve-carousel-body">
-              <div class="ve-carousel-head">
-                <span class="ve-carousel-label" aria-hidden="true">▦</span>
-                <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
-                <div class="ve-carousel-actions">
-                  <button class="ve-carousel-ungroup btn btn-sm" type="button" data-index="${i}"
-                          title="Split this carousel back into separate photos">Ungroup</button>
-                  ${this.props.onEditCarousel
-                    ? html`<button class="ve-carousel-edit btn btn-sm" type="button" data-block="${block}">Edit in Studio</button>`
-                    : ""}
-                </div>
-              </div>
-              <div class="ve-carousel-strip">${thumbs}</div>
-            </div>
-            <button class="ve-remove" data-index="${i}" type="button"
-                    aria-label="Remove carousel block" title="Remove">&times;</button>
-          </div>`;
-        } else {
-          return html`
-          ${insertZone(i)}
-          <div class="ve-card ve-card--text" data-index="${i}">
-            <button class="ve-handle" type="button"
-                    aria-label="Move text block"
-                    title="Drag to reorder \u2014 or the arrow keys">
-              <span class="ve-handle-dots" aria-hidden="true"></span>
-            </button>
-            <span class="ve-text-icon" aria-hidden="true">¶</span>
-            <div class="ve-text-body">
-              <input class="ve-block-class" type="text" placeholder="Block class (optional)"
-                     value="${node.blockClass || ""}" aria-label="Block class">
-              <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${node.text || ""}</textarea>
-            </div>
-            <button class="ve-remove" data-index="${i}" type="button"
-                    aria-label="Remove text block" title="Remove">&times;</button>
-          </div>`;
-        }
-      });
+    const cards = nodes.map((node, i) => {
+      if (node.type === "image") return this._renderImageCard(node, i);
+      if (node.type === "carousel") return this._renderCarouselCard(node, i);
+      return this._renderTextCard(node, i);
+    });
 
     const empty =
       nodes.length === 0
@@ -221,10 +91,157 @@ export class VisualEditor extends Component {
         ${this._renderSelectionBar()}
         <div class="ve-list" id="ve-list">
           ${cards}
-          ${insertZone(nodes.length)}
+          ${this._renderInsertZone(nodes.length)}
           ${empty}
         </div>
       </div>`;
+  }
+
+  // ── Cards ──────────────────────────────────────────────────────────────
+
+  _renderInsertZone(index) {
+    return html`<div class="ve-insert-zone" data-insert-at="${index}">
+       <div class="ve-insert-actions">
+         <button class="ve-insert-btn ve-insert-text" type="button" title="Insert text node">+ Text</button>
+         <button class="ve-insert-btn ve-insert-media" type="button" title="Insert media node">+ Media</button>
+       </div>
+     </div>`;
+  }
+
+  /**
+   * A carousel card's position among the post's carousels, counting up to
+   * and including `i` — the number a keyless block falls back to, matching
+   * the fence order the studio reads out of the saved content.
+   * @param {number} i
+   * @returns {number}
+   */
+  _carouselPosition(i) {
+    const nodes = this.props.nodes || [];
+    let count = 0;
+    for (let idx = 0; idx <= i; idx++) {
+      if (nodes[idx]?.type === "carousel") count += 1;
+    }
+    return count;
+  }
+
+  _renderImageCard(node, i) {
+    const filename = node.path.split("/").pop();
+    const mediaByPath = this.props.mediaByPath || {};
+    const media = mediaByPath[node.path];
+    const mediaId = media ? String(media.id) : "";
+
+    const exifBtn = mediaId
+      ? html`<button class="ve-exif-toggle btn btn-sm" data-media-id="${mediaId}" type="button" title="Edit EXIF">\u2139</button>`
+      : "";
+    const exifPanel = mediaId
+      ? html`<div class="ve-exif-panel" data-media-id="${mediaId}" hidden>
+         ${this._renderVeExifRows(media)}
+         <div class="exif-actions">
+           <button class="btn btn-sm ve-exif-add-btn" type="button">+ Add field</button>
+           <button class="btn btn-sm ve-exif-save-btn" data-media-id="${mediaId}" type="button">Save EXIF</button>
+           <button class="btn btn-sm ve-exif-reextract-btn" data-media-id="${mediaId}" type="button">Re-extract</button>
+         </div>
+       </div>`
+      : "";
+
+    return html`
+    ${this._renderInsertZone(i)}
+    <div class="ve-card" data-index="${i}">
+      <button class="ve-handle" type="button"
+              aria-label="Move ${filename}"
+              title="Drag to reorder \u2014 or the arrow keys">
+        <span class="ve-handle-dots" aria-hidden="true"></span>
+      </button>
+      <img class="ve-thumb" ${thumbAttrs(node.path, {
+        sizes: VE_THUMB_SIZES,
+        width: media?.width,
+        height: media?.height,
+      })}
+           alt="${filename}"
+           data-full="${node.path}"
+           loading="lazy" decoding="async">
+      <div class="ve-card-row">
+        <span class="ve-path">${node.path}</span>
+        ${exifBtn}
+        <button class="ve-remove" data-index="${i}" type="button"
+                aria-label="Remove image" title="Remove">&times;</button>
+      </div>
+      ${exifPanel}
+    </div>`;
+  }
+
+  // Read-only card. Editing slides is Carousel Studio's job, not the
+  // editor's — but the card must show every path it holds so a Visual mode
+  // round-trip (see serializeNodes) never silently drops one.
+  _renderCarouselCard(node, i) {
+    const paths = node.paths || [];
+    const block = node.key || String(this._carouselPosition(i));
+    const mediaByPath = this.props.mediaByPath || {};
+    const thumbs = paths
+      .map((path, slideIdx) => {
+        const media = mediaByPath[path];
+        return html`
+        <div class="ve-slide" data-index="${slideIdx}">
+          <button class="ve-slide-handle" type="button"
+                  aria-label="Move slide ${slideIdx + 1} of ${paths.length}"
+                  title="Drag to reorder — or the arrow keys">
+            <span class="ve-handle-dots" aria-hidden="true"></span>
+          </button>
+          <img class="ve-thumb" ${thumbAttrs(path, {
+            sizes: VE_THUMB_SIZES,
+            width: media?.width,
+            height: media?.height,
+          })}
+               alt="${path.split("/").pop()}"
+               data-full="${path}"
+               loading="lazy" decoding="async">
+        </div>`;
+      });
+    return html`
+    ${this._renderInsertZone(i)}
+    <div class="ve-card ve-card--carousel" data-index="${i}">
+      <button class="ve-handle" type="button"
+              aria-label="Move carousel of ${paths.length} ${paths.length === 1 ? "slide" : "slides"}"
+              title="Drag to reorder \u2014 or the arrow keys">
+        <span class="ve-handle-dots" aria-hidden="true"></span>
+      </button>
+      <div class="ve-carousel-body">
+        <div class="ve-carousel-head">
+          <span class="ve-carousel-label" aria-hidden="true">▦</span>
+          <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
+          <div class="ve-carousel-actions">
+            <button class="ve-carousel-ungroup btn btn-sm" type="button" data-index="${i}"
+                    title="Split this carousel back into separate photos">Ungroup</button>
+            ${this.props.onEditCarousel
+              ? html`<button class="ve-carousel-edit btn btn-sm" type="button" data-block="${block}">Edit in Studio</button>`
+              : ""}
+          </div>
+        </div>
+        <div class="ve-carousel-strip">${thumbs}</div>
+      </div>
+      <button class="ve-remove" data-index="${i}" type="button"
+              aria-label="Remove carousel block" title="Remove">&times;</button>
+    </div>`;
+  }
+
+  _renderTextCard(node, i) {
+    return html`
+    ${this._renderInsertZone(i)}
+    <div class="ve-card ve-card--text" data-index="${i}">
+      <button class="ve-handle" type="button"
+              aria-label="Move text block"
+              title="Drag to reorder \u2014 or the arrow keys">
+        <span class="ve-handle-dots" aria-hidden="true"></span>
+      </button>
+      <span class="ve-text-icon" aria-hidden="true">¶</span>
+      <div class="ve-text-body">
+        <input class="ve-block-class" type="text" placeholder="Block class (optional)"
+               value="${node.blockClass || ""}" aria-label="Block class">
+        <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${node.text || ""}</textarea>
+      </div>
+      <button class="ve-remove" data-index="${i}" type="button"
+              aria-label="Remove text block" title="Remove">&times;</button>
+    </div>`;
   }
 
   afterRender() {
