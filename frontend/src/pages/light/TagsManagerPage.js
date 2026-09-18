@@ -25,6 +25,7 @@ import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/
 import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.js';
 import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../components/light/tags/tagFlows.js';
 import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.js';
+import { setupListFilters } from '../../components/light/tags/tagListFilters.js';
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 
@@ -294,49 +295,33 @@ export default class TagsManagerPage extends Component {
       });
     });
     if (this.state.view === 'list') {
-      this.$$('.tm-sortable-header').forEach(th => {
-        th.addEventListener('click', () => this._handleSort(th.dataset.field));
-      });
-      const searchInput = /** @type {HTMLInputElement|null} */ (this.$('.tm-list-search'));
-      if (searchInput) {
-        searchInput.focus();
-        const len = searchInput.value.length;
-        searchInput.setSelectionRange(len, len);
-        searchInput.addEventListener('input', e => {
-          this._listSearch = /** @type {HTMLInputElement} */ (e.target).value;
+      setupListFilters(this.container, {
+        state: () => ({
+          listFilterFlags: this._listFilterFlags
+        }),
+        onSort: field => this._handleSort(field),
+        onSearch: value => {
+          this._listSearch = value;
           this._applyListFilter();
           this._syncClearBtn();
-        });
-      }
-      this.$$('.tm-parent-filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = parseInt(btn.dataset.parentId, 10);
-          const name = btn.dataset.parentName;
-          if (!this._listFilterParents.find(p => p.id === id)) {
-            this._listFilterParents.push({
-              id,
-              name
-            });
-            this._updateFilterChips();
-            this._applyListFilter();
-            this._syncClearBtn();
-          }
-        });
-      });
-      this.$$('.tm-quick-filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const key = btn.dataset.flag;
+        },
+        onParentFilter: parent => {
+          if (this._listFilterParents.find(p => p.id === parent.id)) return;
+          this._listFilterParents.push(parent);
+          this._updateFilterChips();
+          this._applyListFilter();
+          this._syncClearBtn();
+        },
+        onQuickFilter: key => {
           const active = this._listFilterFlags.includes(key);
           this._listFilterFlags = active
             ? this._listFilterFlags.filter(k => k !== key)
             : [...this._listFilterFlags, key];
-          btn.classList.toggle('btn-primary', !active);
-          btn.classList.toggle('btn-secondary', active);
           this._applyListFilter();
           this._syncClearBtn();
-        });
+        },
+        onClear: () => this._clearListFilters()
       });
-      this.$('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
       this._updateFilterChips();
       this._applyListFilter();
     }
