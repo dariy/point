@@ -965,9 +965,23 @@ export default class CarouselStudioPage extends Component {
    * @param {*} carousel the stored row for this block, or null
    * @param {{ key: string|null, ordinal: number|null, paths?: string[] }} block
    */
-  _adoptLoaded(post, carousel, block = { key: null, ordinal: null, paths: [] }) {
+  async _adoptLoaded(post, carousel, block = { key: null, ordinal: null, paths: [] }) {
     const stored = carousel ? parseDocument(carousel.doc) : emptyDocument();
-    const doc = adoptFencePaths(stored, block.paths || []);
+    let doc = adoptFencePaths(stored, block.paths || []);
+    let dims = this.state.dims;
+    // A split names one source for the whole strip (render.js's renderSplit
+    // slices `slides[0].source` by index alone) — it cannot carry a slide
+    // adoption gave its own path. Freeze it to a deck, which needs the shared
+    // source's pixel size to derive each slide's crop (see toDeckDocument).
+    if (doc.mode === "split" && doc.slides.some((s) => s.source !== doc.slides[0]?.source)) {
+      const source = doc.slides[0].source;
+      const { w, h } = await this._probeSize(source);
+      if (this._unmounted) return;
+      if (w && h) {
+        doc = toDeckDocument(doc, w, h);
+        dims = { ...dims, [source]: { srcW: w, srcH: h } };
+      }
+    }
     this._blockKey = block.key || carousel?.block_key || null;
     this._blockOrdinal = block.ordinal ?? null;
     this._legacyRow = Boolean(carousel) && !carousel.block_key;
@@ -986,6 +1000,7 @@ export default class CarouselStudioPage extends Component {
         // An adopted fence is a carousel as much as a stored row is: there are
         // slides in the post, so Remove has something to take out of it.
         hasCarousel: Boolean(carousel) || doc.slides.length > 0,
+        dims,
       },
       { history: false },
     );
@@ -1103,27 +1118,34 @@ export default class CarouselStudioPage extends Component {
     this.setState({ srcW: known.srcW, srcH: known.srcH });
   }
 
+  /** A source image's pixel size, or nulls on failure (no throw — callers
+   *  decide what a missing size means for them). */
+  async _probeSize(path) {
+    try {
+      const deps = this.props.renderDeps || browserDeps();
+      const { w, h } = await deps.probeSize(path);
+      return { w: w || null, h: h || null };
+    } catch {
+      return { w: null, h: null };
+    }
+  }
+
   /** Measure a source image and record it. Fills the per-path `dims` cache, and
    *  `srcW`/`srcH` too when the path is the document's own source. On failure
    *  the fit panel simply stays hidden and the bare slider is used. */
   async _probeSource(path) {
-    try {
-      const deps = this.props.renderDeps || browserDeps();
-      const { w, h } = await deps.probeSize(path);
-      if (this._unmounted) return;
-      /** @type {Record<string, *>} */
-      const patch = {};
-      if (w && h) patch.dims = { ...this.state.dims, [path]: { srcW: w, srcH: h } };
-      // A slide that is not the document's source repaints off `dims`; setting
-      // the pair from it would hand the fit panel another slide's numbers.
-      if (this._source() === path) {
-        patch.srcW = w || null;
-        patch.srcH = h || null;
-      }
-      if (Object.keys(patch).length) this.setState(patch);
-    } catch {
-      /* no dimensions — the fit panel falls back to the plain controls */
+    const { w, h } = await this._probeSize(path);
+    if (this._unmounted) return;
+    /** @type {Record<string, *>} */
+    const patch = {};
+    if (w && h) patch.dims = { ...this.state.dims, [path]: { srcW: w, srcH: h } };
+    // A slide that is not the document's source repaints off `dims`; setting
+    // the pair from it would hand the fit panel another slide's numbers.
+    if (this._source() === path) {
+      patch.srcW = w;
+      patch.srcH = h;
     }
+    if (Object.keys(patch).length) this.setState(patch);
   }
 
   // ── Document mutation ─────────────────────────────────────────────────────

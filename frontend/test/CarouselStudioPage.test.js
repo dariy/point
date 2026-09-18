@@ -1152,6 +1152,40 @@ describe('CarouselStudioPage', () => {
           'fence order, and only the studio\u2019s own slides carry a media id',
         );
       });
+
+      test('a hand-added photo that a split cannot carry freezes the document to a deck, and renders', async () => {
+        const added = '/2026/08/mine.jpg';
+        const post = {
+          ...POST,
+          content: `Intro.\n\n${fence([OUTS[0], added, OUTS[1]], 'c-mix')}\n\nOutro.`,
+        };
+        let n = 0;
+        const deps = fakeRenderDeps(async () => {
+          n += 1;
+          return { id: 900 + n, path: `/2026/08/re${n}.jpg` };
+        });
+        deps.fetched = [];
+        deps.fetchBlob = async (path) => {
+          deps.fetched.push(path);
+          return new Blob(['src']);
+        };
+        await mount({ post: '42', block: 'c-mix' }, routesFor(post, { 'c-mix': designed(OUTS) }), {
+          renderDeps: deps,
+        });
+
+        assert.equal(page.state.doc.mode, 'deck', 'a split cannot express a per-slide photo');
+        assert.deepEqual(
+          page.state.doc.slides.map((s) => s.source),
+          ['/2026/08/w.jpg', added, '/2026/08/w.jpg'],
+          'each slide keeps the source it rendered from, adoption included',
+        );
+
+        await page._render();
+        await settle();
+
+        assert.equal(page.state.error, null);
+        assert.ok(deps.fetched.includes(added), 'the hand-added photo was drawn, not silently dropped');
+      });
     });
   });
 
