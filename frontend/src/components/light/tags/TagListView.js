@@ -3,12 +3,12 @@
  *
  * Same contract as TagTreeView: no DOM, no page state. The caller passes a
  * `view` descriptor ({ sortField, sortOrder, selectMode, selectedIds, search,
- * filterParents }) and gets HTML — or, for matchesListFilter/sortTagsForList,
- * a plain answer — back.
+ * filterParents, filterFlags }) and gets HTML — or, for
+ * matchesListFilter/sortTagsForList, a plain answer — back.
  *
- * The DOM-side filter wiring (chips, the clear button, row hiding) stays on
- * the page; only the predicate it applies lives here, so that the page and
- * "Select all" cannot drift apart on what "filtered" means.
+ * The DOM-side filter wiring (chips, quick-filter buttons, the clear button,
+ * row hiding) stays on the page; only the predicate it applies lives here, so
+ * that the page and "Select all" cannot drift apart on what "filtered" means.
  *
  * All markup is built with the html`` tag, which escapes every interpolation.
  */
@@ -17,11 +17,20 @@ import { html, raw } from '../../../utils/helpers.js';
 import { EDIT_SVG, X_SVG, MAP_SVG } from '../../../utils/icons.js';
 
 /**
- * Does this tag survive the list view's search box and parent chips?
- * Shared with "Select all" so the selection can never reach past what the
- * filters are showing.
+ * Quick filters for tag attributes that aren't a parent or a search term.
+ * Each `test` reads the same fields the tree view's badges already show.
  */
-export function matchesListFilter(tag, { search = '', filterParents = [] } = {}) {
+export const QUICK_FILTERS = [
+  { key: 'hidden', label: 'Hidden', test: tag => !!(tag.hidden || tag.effective_hidden) },
+  { key: 'coords', label: 'Has coordinates', test: tag => (tag.locations?.length ?? 0) > 0 },
+];
+
+/**
+ * Does this tag survive the list view's search box, parent chips and quick
+ * filters? Shared with "Select all" so the selection can never reach past
+ * what the filters are showing.
+ */
+export function matchesListFilter(tag, { search = '', filterParents = [], filterFlags = [] } = {}) {
   const q = (search || '').trim().toLowerCase();
   const parents = tag.parents || [];
   const textMatch = !q ||
@@ -31,7 +40,13 @@ export function matchesListFilter(tag, { search = '', filterParents = [] } = {})
 
   const parentIds = parents.map(p => p.id);
   const parentMatch = filterParents.every(f => parentIds.includes(f.id));
-  return textMatch && parentMatch;
+
+  const flagMatch = filterFlags.every(key => {
+    const flag = QUICK_FILTERS.find(f => f.key === key);
+    return !flag || flag.test(tag);
+  });
+
+  return textMatch && parentMatch && flagMatch;
 }
 
 /** Sort a copy of `tags` by the list view's active column. */
@@ -73,6 +88,12 @@ export function renderFilterChips(filterParents = []) {
   return chips.length ? html`${chips}` : '';
 }
 
+/** The quick-filter toggle buttons, active ones painted like the view toggle. */
+export function renderQuickFilters(filterFlags = []) {
+  return html`${QUICK_FILTERS.map(f => html`
+      <button type="button" class="btn btn-sm tm-quick-filter-btn${filterFlags.includes(f.key) ? ' btn-primary' : ' btn-secondary'}" data-flag="${f.key}">${f.label}</button>`)}`;
+}
+
 export function renderSortHeader(field, label, className = '', title = '',
   /** @type {{ sortField?: string, sortOrder?: string }} */ { sortField, sortOrder } = {}) {
   const isActive = sortField === field;
@@ -92,7 +113,7 @@ export function renderSortHeader(field, label, className = '', title = '',
 export function renderTagList(tags, view) {
   if (!tags.length) return html`<p class="empty-state">No tags found.</p>`;
 
-  const { sortField, sortOrder, selectMode, selectedIds, search, filterParents } = view;
+  const { sortField, sortOrder, selectMode, selectedIds, search, filterParents, filterFlags = [] } = view;
   const sorted = sortTagsForList(tags, sortField, sortOrder);
 
   const rows = sorted.map(tag => {
@@ -128,12 +149,13 @@ export function renderTagList(tags, view) {
   });
 
   const chips = renderFilterChips(filterParents);
-  const hasFilters = search || filterParents.length > 0;
+  const hasFilters = search || filterParents.length > 0 || filterFlags.length > 0;
 
   return html`
       <div class="tm-list-filter-bar">
         <div class="tm-list-search-row">
           <input type="text" class="form-input tm-list-search" placeholder="Search name, slug, parents…" value="${search || ''}">
+          ${renderQuickFilters(filterFlags)}
           ${hasFilters ? html`<button type="button" class="btn btn-sm btn-secondary tm-clear-filters">Clear</button>` : ''}
         </div>
         ${chips ? html`<div class="tm-filter-chips" id="tm-filter-chips">${chips}</div>` : html`<div class="tm-filter-chips" id="tm-filter-chips"></div>`}
