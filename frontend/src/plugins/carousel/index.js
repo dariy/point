@@ -431,6 +431,10 @@ export default class CarouselStudioPage extends Component {
       // Rail wide, bottom sheet below 64em. Remembered only on a wide viewport
       // — a sheet sitting over the stage always opens closed (see layout.js).
       propsOpen: readPropsPref(),
+      // The document-controls popover — plain viewport state like `propsOpen`,
+      // but not remembered: it is a rarely-used disclosure, not a rail, so it
+      // opens closed every visit.
+      docControlsOpen: false,
       // ── Templates (S4) ──────────────────────────────────────────────────
       // The gallery listing: name and slug only, never envelopes — the store
       // holds a template's inlined assets and a gallery must not pull them.
@@ -675,6 +679,9 @@ export default class CarouselStudioPage extends Component {
     },
     "toggle-props"() {
       this._toggleProps();
+    },
+    "toggle-doc-controls"() {
+      this._toggleDocControls();
     },
     "stage-zoom"(_e, el) {
       this._zoomStage(el.dataset.zoom);
@@ -2796,6 +2803,15 @@ export default class CarouselStudioPage extends Component {
     }
   }
 
+  /** Same DOM-only toggle as `_toggleProps`, for the toolbar's "Document"
+   *  popover — no `localStorage`, since this one always opens closed. */
+  _toggleDocControls(force) {
+    const open = typeof force === "boolean" ? force : !this.state.docControlsOpen;
+    this.state.docControlsOpen = open;
+    this.$('[data-action="toggle-doc-controls"]')?.setAttribute("aria-expanded", String(open));
+    this.$("#carousel-doc-controls")?.classList.toggle("collapsed", !open);
+  }
+
   /** One of the four zoom buttons. `fit` is the only one that has to measure. */
   _zoomStage(which) {
     if (which === "fit") return this._fitStageZoom();
@@ -2866,6 +2882,7 @@ export default class CarouselStudioPage extends Component {
       logoUrl: getSettings()?.logo_url || "",
       renderedPaths: this._renderedPaths(),
       propsOpen: this.state.propsOpen,
+      docControlsOpen: this.state.docControlsOpen,
       stageZoom: this._stageZoom,
       error,
       tray,

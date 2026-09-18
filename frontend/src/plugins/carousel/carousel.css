@@ -41,6 +41,14 @@
   flex: 1 1 100%;
 }
 
+/* `.editor-mode-toggle` (`light/editor.css`) is styled for a form column —
+ * `align-self: flex-start` plus a bottom margin meant to space it from the
+ * field below. Neither belongs in a horizontal toolbar row. */
+.carousel-studio__toolbar > .editor-mode-toggle {
+  align-self: center;
+  margin-bottom: 0;
+}
+
 /* The stage and the properties panel — the studio's body row. */
 .carousel-studio__builder {
   display: flex;
@@ -677,18 +685,50 @@
   height: 100%;
 }
 
-/* ── Mode toggle ───────────────────────────────────────────────────────────── */
-
-.carousel-studio__modes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  align-items: center;
+/* ── Document controls popover ────────────────────────────────────────────
+ * The slide count, the aspect select, the safe-area guides checkbox and the
+ * source button: document-level, so they sit behind their own "Document"
+ * toggle in the toolbar rather than inside the mode's panel, which is about
+ * the selected slide. Same disclosure idea as the properties card
+ * (`data-action`, `aria-expanded`, a `.collapsed` class the JS toggles
+ * straight on the DOM — see `_toggleDocControls`, index.js) but floated, since
+ * unlike the panel it has no row of its own to expand into. */
+.carousel-studio__doc-menu {
+  position: relative;
+  display: inline-flex;
 }
 
-.carousel-studio__mode-hint {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
+.carousel-studio__doc-popover {
+  position: absolute;
+  top: calc(100% + var(--spacing-xs));
+  /* Centred on the toggle rather than left-aligned to it: the toggle sits in
+   * the toolbar's own middle (`justify-content: space-between`, `builder()`),
+   * so a fixed-width popover hung off its left edge would run past the
+   * viewport's right edge below ~54em. Centring splits any overflow evenly,
+   * and `max-width` below keeps a full-width popover off the edges too. */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  /* Fixed, not `max-content`: the row inside has room to lay its fields out
+   * flat given enough width, and `max-content` would take it — overflowing
+   * the viewport on any screen narrower than the fields' combined width. A
+   * fixed width makes `.carousel-studio__controls`' own `flex-wrap` do the
+   * sizing instead, the same width the properties rail already commits to. */
+  width: 20rem;
+  max-width: calc(100vw - 2rem);
+  padding: var(--spacing-md);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+}
+
+.carousel-studio__doc-popover.collapsed {
+  display: none;
+}
+
+.carousel-studio__doc-menu button[aria-expanded="true"] .toggle-icon {
+  transform: rotate(180deg);
 }
 
 .carousel-studio__controls {
