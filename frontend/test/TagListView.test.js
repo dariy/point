@@ -7,6 +7,7 @@ import {
   renderSortHeader as _renderSortHeader,
   renderTagList as _renderTagList,
   renderFilterChips as _renderFilterChips,
+  renderQuickFilters as _renderQuickFilters,
 } from '../src/components/light/tags/TagListView.js';
 
 // The renderers return the RawHtml html`` produces — a String object, which
@@ -17,6 +18,8 @@ const renderTagList = (/** @type {Parameters<typeof _renderTagList>} */ ...a) =>
   String(_renderTagList(...a));
 const renderFilterChips = (/** @type {Parameters<typeof _renderFilterChips>} */ ...a) =>
   String(_renderFilterChips(...a));
+const renderQuickFilters = (/** @type {Parameters<typeof _renderQuickFilters>} */ ...a) =>
+  String(_renderQuickFilters(...a));
 
 // No DOM stubs: TagListView is pure, same as TagTreeView.
 const view = (over = {}) => ({
@@ -78,6 +81,47 @@ describe('matchesListFilter', () => {
 
   test('handles a tag with no parents key', () => {
     assert.equal(matchesListFilter({ id: 1, name: 'Bare', slug: 'bare' }, view({ search: 'bar' })), true);
+  });
+
+  test('the "hidden" quick filter matches a tag hidden on its own or via an ancestor', () => {
+    const own = tag(1, 'Own', { hidden: true });
+    const inherited = tag(2, 'Inherited', { effective_hidden: true });
+    const visible = tag(3, 'Visible');
+    assert.equal(matchesListFilter(own, view({ filterFlags: ['hidden'] })), true);
+    assert.equal(matchesListFilter(inherited, view({ filterFlags: ['hidden'] })), true);
+    assert.equal(matchesListFilter(visible, view({ filterFlags: ['hidden'] })), false);
+  });
+
+  test('the "coords" quick filter matches a tag with at least one location', () => {
+    const located = tag(1, 'Located', { locations: [{ latitude: 1, longitude: 2 }] });
+    const bare = tag(2, 'Bare', { locations: [] });
+    const missing = tag(3, 'Missing');
+    assert.equal(matchesListFilter(located, view({ filterFlags: ['coords'] })), true);
+    assert.equal(matchesListFilter(bare, view({ filterFlags: ['coords'] })), false);
+    assert.equal(matchesListFilter(missing, view({ filterFlags: ['coords'] })), false);
+  });
+
+  test('quick filters are ANDed with each other, search and parent chips', () => {
+    const match = tag(1, 'Kyoto', {
+      hidden: true,
+      locations: [{ latitude: 1, longitude: 2 }],
+      parents: [{ id: 9, name: 'Japan' }],
+    });
+    assert.equal(matchesListFilter(match, view({ filterFlags: ['hidden', 'coords'] })), true);
+    assert.equal(
+      matchesListFilter(match, view({ search: 'kyo', filterParents: [{ id: 9 }], filterFlags: ['hidden', 'coords'] })),
+      true,
+    );
+    assert.equal(matchesListFilter(match, view({ search: 'nope', filterFlags: ['hidden'] })), false,
+      'a failing search still rejects even when the flag matches');
+
+    const onlyHidden = tag(2, 'Nara', { hidden: true, locations: [] });
+    assert.equal(matchesListFilter(onlyHidden, view({ filterFlags: ['hidden', 'coords'] })), false,
+      'missing coords fails the AND even though hidden matches');
+  });
+
+  test('an unknown flag key does not reject a tag', () => {
+    assert.equal(matchesListFilter(tag(1, 'Anything'), view({ filterFlags: ['nonsense'] })), true);
   });
 });
 
@@ -208,6 +252,19 @@ describe('renderTagList', () => {
 
     const chipped = renderTagList(tags, view({ filterParents: [{ id: 9, name: 'Japan' }] }));
     assert.match(chipped, /tm-clear-filters/, 'chips alone are enough');
+
+    const flagged = renderTagList(tags, view({ filterFlags: ['hidden'] }));
+    assert.match(flagged, /tm-clear-filters/, 'a quick filter alone is enough');
+  });
+
+  test('quick-filter buttons render one per QUICK_FILTERS entry, active ones painted primary', () => {
+    const off = renderTagList(tags, view());
+    assert.equal((off.match(/tm-quick-filter-btn/g) || []).length, 2);
+    assert.match(off, /tm-quick-filter-btn btn-secondary" data-flag="hidden"/);
+
+    const on = renderTagList(tags, view({ filterFlags: ['hidden'] }));
+    assert.match(on, /tm-quick-filter-btn btn-primary" data-flag="hidden"/);
+    assert.match(on, /tm-quick-filter-btn btn-secondary" data-flag="coords"/, 'only the active flag is painted primary');
   });
 
   test('active parent chips render with a remove target', () => {
@@ -232,6 +289,21 @@ describe('renderTagList', () => {
 
   test('the chips container is always present, even when empty', () => {
     assert.match(renderTagList(tags, view()), /<div class="tm-filter-chips" id="tm-filter-chips"><\/div>/);
+  });
+
+  describe('renderQuickFilters', () => {
+    test('renders a labelled toggle for each quick filter, none active by default', () => {
+      const html = renderQuickFilters();
+      assert.match(html, /data-flag="hidden">Hidden</);
+      assert.match(html, /data-flag="coords">Has coordinates</);
+      assert.doesNotMatch(html, /btn-primary/);
+    });
+
+    test('marks only the flags passed in as active', () => {
+      const html = renderQuickFilters(['coords']);
+      assert.match(html, /tm-quick-filter-btn btn-secondary" data-flag="hidden"/);
+      assert.match(html, /tm-quick-filter-btn btn-primary" data-flag="coords"/);
+    });
   });
 
   test('rows follow the requested sort', () => {

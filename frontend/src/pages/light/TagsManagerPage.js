@@ -2,7 +2,8 @@
  * TagsManagerPage — hierarchical tag management.
  *
  * Tree view: nav roots (by nav_order) → filed roots → Unfiled(N) group.
- * List view: tabular with search and parent filters.
+ * List view: tabular with search, parent filters and quick filters (hidden,
+ * has coordinates).
  * Editor modal: Identity / Visibility / Display / Kind / Structure / Coordinates.
  * Markup is built with the html`` tag, which escapes every interpolation.
  */
@@ -51,6 +52,7 @@ export default class TagsManagerPage extends Component {
     this._modalKeyHandler = null;
     this._listSearch = '';
     this._listFilterParents = [];
+    this._listFilterFlags = [];
     // Track initial structure for change detection in modal
     this._initialParentIds = [];
     this._initialChildIds = [];
@@ -122,7 +124,8 @@ export default class TagsManagerPage extends Component {
       selectMode,
       selectedIds,
       search: this._listSearch,
-      filterParents: this._listFilterParents
+      filterParents: this._listFilterParents,
+      filterFlags: this._listFilterFlags
     };
   }
   _applyListFilter() {
@@ -148,7 +151,7 @@ export default class TagsManagerPage extends Component {
   }
   _syncClearBtn() {
     const btn = this.$('.tm-clear-filters');
-    const hasFilters = this._listSearch || '' || this._listFilterParents.length > 0;
+    const hasFilters = this._listSearch || '' || this._listFilterParents.length > 0 || this._listFilterFlags.length > 0;
     if (btn) {
       btn.classList.toggle('hidden', !hasFilters);
     } else if (hasFilters) {
@@ -169,8 +172,13 @@ export default class TagsManagerPage extends Component {
   _clearListFilters() {
     this._listSearch = '';
     this._listFilterParents = [];
+    this._listFilterFlags = [];
     const searchInput = /** @type {HTMLInputElement|null} */ (this.$('.tm-list-search'));
     if (searchInput) searchInput.value = '';
+    this.$$('.tm-quick-filter-btn').forEach(btn => {
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-secondary');
+    });
     this._updateFilterChips();
     this._applyListFilter();
     const btn = this.$('.tm-clear-filters');
@@ -313,6 +321,19 @@ export default class TagsManagerPage extends Component {
             this._applyListFilter();
             this._syncClearBtn();
           }
+        });
+      });
+      this.$$('.tm-quick-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.flag;
+          const active = this._listFilterFlags.includes(key);
+          this._listFilterFlags = active
+            ? this._listFilterFlags.filter(k => k !== key)
+            : [...this._listFilterFlags, key];
+          btn.classList.toggle('btn-primary', !active);
+          btn.classList.toggle('btn-secondary', active);
+          this._applyListFilter();
+          this._syncClearBtn();
         });
       });
       this.$('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
