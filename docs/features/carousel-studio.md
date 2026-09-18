@@ -859,7 +859,8 @@ gives a thumb no room to work in, and the phone is explicitly a
 view-and-adjust surface, not first-class editing (see the epic's Decisions).
 
 At 48em+, `.carousel-studio` becomes a three-row grid — toolbar
-(`.carousel-studio__toolbar`: the mode toggle and the zoom bar), body
+(`.carousel-studio__toolbar`: the mode toggle, the document-controls popover
+and the zoom bar, all one row), body
 (`.carousel-studio__builder`: the stage and the properties panel) and tray
 (`.carousel-studio__tray`: the rendered strip and the template gallery) — so
 none of the three can push `document.scrollingElement` taller. Below 64em the

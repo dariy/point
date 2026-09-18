@@ -330,6 +330,8 @@ function layerLabel(layer) {
  * @param {boolean} [o.propsOpen]  is the properties card's body expanded? The
  *   same collapsible `.card`/`.card-header`/`.card-body` pattern the plugins
  *   page's group cards use, rather than a separate open/close control.
+ * @param {boolean} [o.docControlsOpen]  is the toolbar's "Document" popover
+ *   open? Same disclosure idea as `propsOpen`, floated instead of inline.
  * @param {number} [o.stageZoom]   multiplier on the stage's CSS height budget,
  *   emitted as the one custom property the stylesheet reads.
  * @param {string} [o.error]      a load/save failure, shown in the toolbar row
@@ -356,6 +358,7 @@ export function builder({
   logoUrl,
   renderedPaths,
   propsOpen = true,
+  docControlsOpen = false,
   stageZoom = 1,
   error = "",
   tray = "",
@@ -538,7 +541,7 @@ export function builder({
   // here now that `deckPanel` can change a single slide's photo instead.
   const sourceButton = html`
     <button
-      class="btn btn-secondary"
+      class="btn btn-sm btn-secondary"
       data-action="pick-source"
       title="${deck
         ? "Put one photo on every slide, keeping each slide's framing"
@@ -549,8 +552,9 @@ export function builder({
 
   // Aspect + safe-area guides + the "one photo for all slides" swap act on the
   // whole document, not the selected slide, but they read as document-level
-  // properties all the same, so they live in the sidebar under whatever the
-  // mode's own panel is, rather than as a stray block outside it.
+  // properties all the same, so they sit together behind the toolbar's own
+  // "Document" disclosure rather than inside the mode's panel, which is about
+  // the selected slide.
   const docControls = html`
     <div class="carousel-studio__controls">
       ${deck
@@ -595,6 +599,23 @@ export function builder({
     <div class="carousel-studio__toolbar">
       ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
       ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+      <div class="carousel-studio__doc-menu">
+        <button
+          type="button"
+          class="btn btn-sm btn-secondary"
+          data-action="toggle-doc-controls"
+          aria-expanded="${docControlsOpen ? "true" : "false"}"
+          aria-controls="carousel-doc-controls"
+        >
+          Document <span class="toggle-icon">${raw(CHEVRON_SVG)}</span>
+        </button>
+        <div
+          class="carousel-studio__doc-popover${docControlsOpen ? "" : " collapsed"}"
+          id="carousel-doc-controls"
+        >
+          ${docControls}
+        </div>
+      </div>
       ${stageBar({ stageZoom })}
     </div>
 
@@ -637,7 +658,6 @@ export function builder({
         </div>
         <div class="card-body carousel-studio__props-body" id="carousel-props-body">
           ${deck ? deckPanel({ doc, index: deckIndex, hasPad }) : fitPanel({ doc, srcW, srcH, fitMode })}
-          ${docControls}
           ${deck
             ? layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
             : ""}
@@ -697,8 +717,8 @@ export function renderedStrip({ doc, renderedPaths }) {
 }
 
 /**
- * The bar under the stage: stage zoom, the studio's only control that is
- * neither the document nor the properties panel. Writes one CSS custom
+ * The toolbar's right-hand group: stage zoom, the studio's only control that
+ * is neither the document nor the properties panel. Writes one CSS custom
  * property on the builder root, applied without a rebuild (see
  * `_setStageZoom` in `index.js`).
  *
@@ -713,7 +733,7 @@ export function stageBar({ stageZoom }) {
       <div class="carousel-studio__zoom" role="group" aria-label="Stage zoom">
         <button
           type="button"
-          class="carousel-studio__chip"
+          class="btn btn-sm btn-secondary"
           data-action="stage-zoom"
           data-zoom="out"
           aria-label="Zoom out"
@@ -725,7 +745,7 @@ export function stageBar({ stageZoom }) {
         >
         <button
           type="button"
-          class="carousel-studio__chip"
+          class="btn btn-sm btn-secondary"
           data-action="stage-zoom"
           data-zoom="in"
           aria-label="Zoom in"
@@ -734,7 +754,7 @@ export function stageBar({ stageZoom }) {
         </button>
         <button
           type="button"
-          class="carousel-studio__chip"
+          class="btn btn-sm btn-secondary"
           data-action="stage-zoom"
           data-zoom="fit"
           title="Fit the whole deck across the stage"
@@ -743,7 +763,7 @@ export function stageBar({ stageZoom }) {
         </button>
         <button
           type="button"
-          class="carousel-studio__chip"
+          class="btn btn-sm btn-secondary"
           data-action="stage-zoom"
           data-zoom="reset"
           title="Back to the default stage height"
@@ -761,43 +781,52 @@ export function stageBar({ stageZoom }) {
  * at the view layer only: no migration, and the code and the docs keep one
  * vocabulary while the chips speak the user's.
  *
+ * A real segmented control (`.editor-mode-toggle`, shared with the post
+ * editor's Text/Visual switch) rather than a third segmented pattern of its
+ * own. What used to be a visible hint paragraph below the two chips is now
+ * each button's own `title`: the base description on the mode it names, plus
+ * — on the mode that is *not* current — what switching to it would cost, so
+ * the warning sits on the choice it actually describes.
+ *
  * Slides is unavailable until the source pixel size is known — there would be
  * nothing to derive the per-slide crops from.
  *
  * @param {{mode: string, canDeck: boolean, busy: boolean}} o
  */
 export function modeToggle({ mode, canDeck, busy }) {
+  const panoramaHint =
+    mode === "deck"
+      ? "One wide photo cut across every slide. Going back keeps only the first slide's photo and discards the framing."
+      : "One wide photo cut across every slide";
+  const slidesHint = !canDeck
+    ? "Waiting for the source dimensions"
+    : mode === "split"
+      ? "A photo per slide — one shared, or a different one on each. Switching freezes exactly what you see — nothing moves."
+      : "A photo per slide — one shared, or a different one on each";
   return html`
-    <div class="carousel-studio__modes" role="group" aria-label="Framing mode">
+    <div class="editor-mode-toggle" role="group" aria-label="Framing mode">
       <button
         type="button"
-        class="carousel-studio__chip ${mode === "split" ? "is-active" : ""}"
+        class="${mode === "split" ? "active" : ""}"
         data-action="mode"
         data-mode="split"
         aria-pressed="${mode === "split" ? "true" : "false"}"
         ${busy ? "disabled" : ""}
-        title="One wide photo cut across every slide"
+        title="${panoramaHint}"
       >
         Panorama
       </button>
       <button
         type="button"
-        class="carousel-studio__chip ${mode === "deck" ? "is-active" : ""}"
+        class="${mode === "deck" ? "active" : ""}"
         data-action="mode"
         data-mode="deck"
         aria-pressed="${mode === "deck" ? "true" : "false"}"
         ${busy || !canDeck ? "disabled" : ""}
-        title="${canDeck
-          ? "A photo per slide — one shared, or a different one on each"
-          : "Waiting for the source dimensions"}"
+        title="${slidesHint}"
       >
         Slides
       </button>
-      <span class="carousel-studio__mode-hint">
-        ${mode === "deck"
-          ? "A photo per slide, framed slide by slide. Going back to Panorama keeps only the first slide's photo and discards the framing."
-          : "One wide photo, cut into a column per slide. Switching to Slides freezes exactly what you see — nothing moves."}
-      </span>
     </div>`;
 }
 

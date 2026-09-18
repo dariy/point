@@ -196,11 +196,21 @@ describe('carousel studio panels', () => {
       assert.match(out, /data-mode="deck"/);
     });
 
-    test('the hint says what switching away from Slides costs', () => {
+    test('the hint moved into the control — the title says what switching costs, not a visible paragraph', () => {
       const out = str(modeToggle({ mode: 'deck', canDeck: true, busy: false }));
-      // The interpolation escapes the apostrophe, so match around it.
-      assert.match(out, /Panorama keeps only the first slide.{0,6}s photo/);
+      assert.doesNotMatch(out, /carousel-studio__mode-hint/);
+      // Panorama is the mode a click here would switch *to*, so its title
+      // carries the warning; the interpolation escapes the apostrophe, so
+      // match around it.
+      assert.match(out, /data-mode="split"[^>]*title="[^"]*keeps only the first slide.{0,6}s photo/s);
       assert.match(out, /discards the framing/);
+    });
+
+    test('a real segmented control, not the retired chip class', () => {
+      const out = str(modeToggle({ mode: 'split', canDeck: true, busy: false }));
+      assert.match(out, /class="editor-mode-toggle"/);
+      assert.doesNotMatch(out, /carousel-studio__chip/);
+      assert.match(out, /class="active"[^>]*data-mode="split"/s);
     });
 
     test('deck is disabled until the source pixels are known', () => {
@@ -402,6 +412,28 @@ describe('carousel studio panels', () => {
       assert.match(out, /id="carousel-zoom-readout"[^>]*>150%/);
       assert.match(out, /data-action="stage-zoom"[\s\S]*?data-zoom="fit"/);
       assert.match(out, /data-action="stage-zoom"[\s\S]*?data-zoom="reset"/);
+    });
+
+    test('the document controls sit behind their own toolbar popover, closed by default', () => {
+      const shut = str(builder(builderProps));
+      assert.match(shut, /data-action="toggle-doc-controls"[\s\S]*?aria-expanded="false"/);
+      assert.match(
+        shut,
+        /class="carousel-studio__doc-popover collapsed"[\s\S]*?id="carousel-doc-controls"/,
+      );
+      // The controls themselves live in the popover, not the properties card.
+      assert.match(
+        shut,
+        /id="carousel-doc-controls"[\s\S]*?id="carousel-aspect"[\s\S]*?<\/div>/,
+      );
+      assert.doesNotMatch(
+        shut,
+        /carousel-studio__props-body"[\s\S]*?id="carousel-aspect"/,
+      );
+
+      const open = str(builder({ ...builderProps, docControlsOpen: true }));
+      assert.match(open, /data-action="toggle-doc-controls"[\s\S]*?aria-expanded="true"/);
+      assert.match(open, /class="carousel-studio__doc-popover"[\s\S]*?id="carousel-doc-controls"/);
     });
 
     test('the mode’s panel is a collapsible properties card, header reporting its state', () => {
