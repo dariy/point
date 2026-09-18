@@ -78,6 +78,10 @@ type Querier interface {
 	GetUserSessions(ctx context.Context, userID int64) ([]Session, error)
 	IncrementPostViewCount(ctx context.Context, id int64) error
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
+	// Every stored carousel's address, for the orphan sweep to check against each
+	// post's own content: a row whose (post_id, block_key) matches no fence there
+	// is orphaned (see api/cmd/api/orphansweep.go).
+	ListAllCarouselBlockKeys(ctx context.Context) ([]ListAllCarouselBlockKeysRow, error)
 	// CAROUSEL TEMPLATES
 	// A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as
 	// carousels.doc. ListCarouselTemplates deliberately names its columns and
@@ -86,6 +90,9 @@ type Querier interface {
 	ListCarouselTemplates(ctx context.Context) ([]ListCarouselTemplatesRow, error)
 	ListCarouselsByPostID(ctx context.Context, postID int64) ([]ListCarouselsByPostIDRow, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
+	// Every post's id and content, deleted or not: a trashed post can still be
+	// restored, so its fences stay live for the orphan-carousel sweep.
+	ListPostIDsAndContent(ctx context.Context) ([]ListPostIDsAndContentRow, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
 	ListTrashedPosts(ctx context.Context, arg ListTrashedPostsParams) ([]Post, error)

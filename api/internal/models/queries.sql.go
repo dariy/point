@@ -1519,6 +1519,42 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey
 	return items, nil
 }
 
+const listAllCarouselBlockKeys = `-- name: ListAllCarouselBlockKeys :many
+SELECT post_id, block_key FROM carousels
+ORDER BY post_id, block_key
+`
+
+type ListAllCarouselBlockKeysRow struct {
+	PostID   int64  `json:"post_id"`
+	BlockKey string `json:"block_key"`
+}
+
+// Every stored carousel's address, for the orphan sweep to check against each
+// post's own content: a row whose (post_id, block_key) matches no fence there
+// is orphaned (see api/cmd/api/orphansweep.go).
+func (q *Queries) ListAllCarouselBlockKeys(ctx context.Context) ([]ListAllCarouselBlockKeysRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllCarouselBlockKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllCarouselBlockKeysRow
+	for rows.Next() {
+		var i ListAllCarouselBlockKeysRow
+		if err := rows.Scan(&i.PostID, &i.BlockKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCarouselTemplates = `-- name: ListCarouselTemplates :many
 
 SELECT slug, name, created_at FROM carousel_templates
@@ -1641,6 +1677,41 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.OriginalMetadata,
 			&i.IsPublic,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostIDsAndContent = `-- name: ListPostIDsAndContent :many
+SELECT id, content FROM posts
+ORDER BY id
+`
+
+type ListPostIDsAndContentRow struct {
+	ID      int64  `json:"id"`
+	Content string `json:"content"`
+}
+
+// Every post's id and content, deleted or not: a trashed post can still be
+// restored, so its fences stay live for the orphan-carousel sweep.
+func (q *Queries) ListPostIDsAndContent(ctx context.Context) ([]ListPostIDsAndContentRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostIDsAndContent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPostIDsAndContentRow
+	for rows.Next() {
+		var i ListPostIDsAndContentRow
+		if err := rows.Scan(&i.ID, &i.Content); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

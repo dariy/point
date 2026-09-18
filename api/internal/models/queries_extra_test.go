@@ -78,6 +78,7 @@ func TestQueries_Extra(t *testing.T) {
 	p, _ := q.CreatePost(ctx, CreatePostParams{Title: "P", Slug: "p", AuthorID: u.ID, Status: "draft"})
 	_, _ = q.GetPost(ctx, p.ID)
 	_, _ = q.GetPostBySlug(ctx, "p")
+	_, _ = q.ListPostIDsAndContent(ctx)
 	_ = q.AddTagToPost(ctx, AddTagToPostParams{PostID: p.ID, TagID: tag.ID})
 	_, _ = q.GetTagsForPost(ctx, p.ID)
 	_, _ = q.GetPostsByTag(ctx, GetPostsByTagParams{TagID: tag.ID})
@@ -169,6 +170,17 @@ func TestCarouselQueries(t *testing.T) {
 		t.Fatalf("ListCarouselsByPostID returned %+v", list)
 	}
 
+	// ListAllCarouselBlockKeys sees every post's rows, not just this one's — the
+	// orphan sweep (api/cmd/api/orphansweep.go) needs the whole table to check
+	// each address against its post's content.
+	all, err := q.ListAllCarouselBlockKeys(ctx)
+	if err != nil {
+		t.Fatalf("ListAllCarouselBlockKeys: %v", err)
+	}
+	if len(all) != 2 || all[0].PostID != p.ID || all[0].BlockKey != "" || all[1].BlockKey != block.BlockKey {
+		t.Fatalf("ListAllCarouselBlockKeys returned %+v", all)
+	}
+
 	// Explicit delete takes one block only.
 	if err := q.DeleteCarouselByBlockKey(ctx, DeleteCarouselByBlockKeyParams(block)); err != nil {
 		t.Fatalf("DeleteCarouselByBlockKey: %v", err)
@@ -178,6 +190,9 @@ func TestCarouselQueries(t *testing.T) {
 	}
 	if rest, err := q.ListCarouselsByPostID(ctx, p.ID); err != nil || len(rest) != 1 {
 		t.Fatalf("after delete: %d rows left, err=%v", len(rest), err)
+	}
+	if all, err := q.ListAllCarouselBlockKeys(ctx); err != nil || len(all) != 1 {
+		t.Fatalf("ListAllCarouselBlockKeys after delete: %+v, err=%v", all, err)
 	}
 }
 

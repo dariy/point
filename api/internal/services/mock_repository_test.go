@@ -30,6 +30,7 @@ type mockRepository struct {
 	MockCreateUser                func(ctx context.Context, arg models.CreateUserParams) (models.User, error)
 	MockGetCarouselByBlockKey     func(ctx context.Context, arg models.GetCarouselByBlockKeyParams) (models.Carousel, error)
 	MockListCarouselsByPostID     func(ctx context.Context, postID int64) ([]models.ListCarouselsByPostIDRow, error)
+	MockListAllCarouselBlockKeys  func(ctx context.Context) ([]models.ListAllCarouselBlockKeysRow, error)
 	MockUpsertCarousel            func(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error)
 	MockDeleteCarouselByBlockKey  func(ctx context.Context, arg models.DeleteCarouselByBlockKeyParams) error
 	MockListCarouselTemplates     func(ctx context.Context) ([]models.ListCarouselTemplatesRow, error)
@@ -72,6 +73,7 @@ type mockRepository struct {
 	MockListMedia                 func(ctx context.Context, arg models.ListMediaParams) ([]models.Medium, error)
 	MockListPosts                 func(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error)
 	MockListPostsByViews          func(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error)
+	MockListPostIDsAndContent     func(ctx context.Context) ([]models.ListPostIDsAndContentRow, error)
 	MockListSettings              func(ctx context.Context) ([]models.BlogSetting, error)
 	MockListTags                  func(ctx context.Context, includeEmptyFilter interface{}) ([]models.Tag, error)
 	MockListTrashedPosts          func(ctx context.Context, arg models.ListTrashedPostsParams) ([]models.Post, error)
@@ -206,6 +208,13 @@ func (m *mockRepository) ListCarouselsByPostID(ctx context.Context, postID int64
 		return m.MockListCarouselsByPostID(ctx, postID)
 	}
 	return nil, fmt.Errorf("ListCarouselsByPostID not implemented")
+}
+
+func (m *mockRepository) ListAllCarouselBlockKeys(ctx context.Context) ([]models.ListAllCarouselBlockKeysRow, error) {
+	if m.MockListAllCarouselBlockKeys != nil {
+		return m.MockListAllCarouselBlockKeys(ctx)
+	}
+	return nil, fmt.Errorf("ListAllCarouselBlockKeys not implemented")
 }
 
 func (m *mockRepository) UpsertCarousel(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error) {
@@ -605,6 +614,13 @@ func (m *mockRepository) ListPosts(ctx context.Context, arg models.ListPostsPara
 		return m.MockListPosts(ctx, arg)
 	}
 	return nil, fmt.Errorf("ListPosts not implemented")
+}
+
+func (m *mockRepository) ListPostIDsAndContent(ctx context.Context) ([]models.ListPostIDsAndContentRow, error) {
+	if m.MockListPostIDsAndContent != nil {
+		return m.MockListPostIDsAndContent(ctx)
+	}
+	return nil, fmt.Errorf("ListPostIDsAndContent not implemented")
 }
 
 func (m *mockRepository) ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error) {

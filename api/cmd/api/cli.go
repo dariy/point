@@ -60,6 +60,25 @@ func runEarlyCLI() {
 		os.Exit(0)
 	}
 
+	// Operator sweep for `carousels` rows a hand-edited Text-mode delete
+	// orphaned (see orphansweep.go). Needs only the repository, like
+	// reset-password, so it runs here rather than after initServices.
+	if isSweepOrphanCarouselsCmd(os.Args) {
+		slog.Info("CLI sweep-orphan-carousels command detected. Initializing...")
+		cfg, err := config.LoadConfig(".")
+		if err != nil {
+			slog.Error("sweep-orphan-carousels: failed to load config", "error", err)
+			os.Exit(1)
+		}
+		repo, err := repository.NewRepository(cfg.DatabaseURL)
+		if err != nil {
+			slog.Error("sweep-orphan-carousels: failed to initialize repository", "error", err)
+			os.Exit(1)
+		}
+		runSweepOrphanCarouselsCLI(repo)
+		os.Exit(0)
+	}
+
 	for _, arg := range os.Args[1:] {
 		if arg == "-v" || arg == "--version" || arg == "-version" {
 			fmt.Println(Version)
@@ -90,6 +109,20 @@ func isResetPasswordCmd(args []string) bool {
 		trimmed := strings.Trim(arg, " \t\n\r\"'")
 		if trimmed == "reset-password" || strings.HasPrefix(trimmed, "reset-password ") ||
 			strings.Contains(trimmed, " reset-password ") || strings.HasSuffix(trimmed, " reset-password") {
+			return true
+		}
+	}
+	return false
+}
+
+// isSweepOrphanCarouselsCmd reports whether the args invoke the orphan-carousel
+// sweep, tolerating merged args like "point sweep-orphan-carousels" the same
+// way setup detection does.
+func isSweepOrphanCarouselsCmd(args []string) bool {
+	for _, arg := range args {
+		trimmed := strings.Trim(arg, " \t\n\r\"'")
+		if trimmed == "sweep-orphan-carousels" || strings.HasPrefix(trimmed, "sweep-orphan-carousels ") ||
+			strings.Contains(trimmed, " sweep-orphan-carousels ") || strings.HasSuffix(trimmed, " sweep-orphan-carousels") {
 			return true
 		}
 	}
