@@ -270,7 +270,7 @@ describe('CarouselStudioPage', () => {
       return { routes, deps };
     }
 
-    test('shows the source size, the fractional slide count and a live readout', async () => {
+    test('shows the source size, the target size and a live readout in one line', async () => {
       const { routes, deps } = sized(4, 4096, 2731);
       const el = await mount({ post: '42' }, routes, { renderDeps: deps });
 
@@ -278,18 +278,16 @@ describe('CarouselStudioPage', () => {
       assert.ok(panel, 'fit panel rendered');
       assert.equal(page.state.srcW, 4096);
 
-      const dims = panel.querySelector('.carousel-studio__fit-dims').textContent.replace(/\s+/g, ' ');
-      assert.match(dims, /4096 × 2731/);
-      assert.match(dims, /1080 × 1350/);
-      assert.match(dims, /3\.79 slides/);
-
       // n=4 cover across a 4096-wide source: scale 4320/4096 ≈ 1.055 → upscale.
-      const readout = panel.querySelector('.carousel-studio__fit-readout').textContent.trim();
-      assert.match(readout, /^4 slides/);
+      const readout = panel.querySelector('.carousel-studio__fit-readout').textContent.replace(/\s+/g, ' ').trim();
+      assert.match(readout, /4096 × 2731/);
+      assert.match(readout, /1080 × 1350/);
+      assert.match(readout, /4 slides/);
       assert.match(readout, /105\.5% scale/);
       assert.match(readout, /0 px trimmed/);
       assert.match(readout, /full bleed/);
-      assert.ok(panel.querySelector('.carousel-studio__fit-warning'), 'upscale warning row');
+      assert.match(readout, /upscaled, will look soft/);
+      assert.ok(panel.querySelector('.carousel-studio__fit-warning'), 'upscale warning, inline in the readout');
       assert.ok(panel.querySelector('#carousel-anchor'), 'anchor slider shown (vertical slack)');
     });
 

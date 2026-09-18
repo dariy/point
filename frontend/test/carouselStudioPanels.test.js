@@ -502,10 +502,30 @@ describe('carousel studio panels', () => {
       );
     });
 
-    test('no span layers still offers the add chips and an explainer', () => {
+    test('the form is spliced in right after the selected row, not after every row', () => {
+      // Array order [text, rect]; the view is topmost-first, so rect (added
+      // last) renders first and text renders second.
+      const text = normalizeLayer({ type: 'text', box: { x: 0.1, y: 0.1, w: 0.8, h: 0.2 }, text: 'Hi' });
+      const rect = normalizeLayer({ type: 'rect', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 } });
+      const withLayers = {
+        ...deck,
+        slides: deck.slides.map((s, i) => (i === 0 ? { ...s, layers: [text, rect] } : s)),
+      };
+      // Select rect (array index 1) — the first row in the reversed view.
+      const out = str(layerPanel({ doc: withLayers, index: 0, selectedLayer: 1, layerScope: 'slide', logoUrl: '' }));
+      const rectRow = out.indexOf('data-index="1"');
+      const form = out.indexOf('class="carousel-studio__layer-form"');
+      const textRow = out.indexOf('data-index="0"');
+      assert.ok(rectRow >= 0 && form > rectRow, 'the form follows the selected row');
+      assert.ok(form < textRow, 'and lands before the row under it, not after the whole list');
+    });
+
+    test('no span layers still offers the add chips, a short empty state, and the seams explainer on the control', () => {
       const out = str(layerPanel({ doc: deck, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
       assert.match(out, /class="carousel-studio__add-layer-select"[\s\S]*?data-scope="span"/);
-      assert.match(out, /runs across the seams/);
+      assert.match(out, /No deck layers yet\./);
+      // The explanation moved off the empty state and onto the control itself.
+      assert.match(out, /data-scope="span"[\s\S]*?aria-label="Add layer — spans every slide, across the seams"/);
     });
   });
 

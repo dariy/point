@@ -846,18 +846,22 @@ export function deckPanel({ doc, index, hasPad }) {
 
   const { crop } = slide;
   const zoom = crop.w > 0 ? Math.round(100 / crop.w) : 100;
-  const readout = [
+  const gestureHint = "Drag to pan. Wheel or pinch to zoom. Arrow keys nudge.";
+  const status = [
+    `Slide ${String(index + 1)} of ${String(doc.slides.length)}`,
     `showing ${Math.round(crop.w * 100)}% × ${Math.round(crop.h * 100)}% of the source`,
     `${zoom}% zoom`,
     slide.fit === "contain" ? "letterboxed" : "filling the frame",
   ].join(" · ");
 
   return html`
-    <div class="carousel-studio__fit carousel-studio__deck">
-      <p class="carousel-studio__fit-dims">
-        Slide ${String(index + 1)} of ${String(doc.slides.length)} · drag to pan ·
-        wheel or pinch to zoom · arrow keys nudge
-      </p>
+    <div
+      class="carousel-studio__fit carousel-studio__deck"
+      role="group"
+      aria-label="${gestureHint}"
+      title="${gestureHint}"
+    >
+      <p class="carousel-studio__fit-readout" aria-live="polite">${status}</p>
 
       <div class="carousel-studio__fit-chips" role="group" aria-label="Slide fit">
         ${SLIDE_FITS.map(
@@ -895,8 +899,6 @@ export function deckPanel({ doc, index, hasPad }) {
       </div>
 
       ${hasPad ? bgControl({ index, slide }) : ""}
-
-      <p class="carousel-studio__fit-readout" aria-live="polite">${readout}</p>
     </div>`;
 }
 
@@ -1022,9 +1024,14 @@ function spanRangeLabel(covered) {
  *
  * @param {import('../document.js').CarouselLayer[]} layers
  * @param {{scope: "slide"|"span", selectedLayer: number|null,
- *   meta?: (j: number) => string, labelledBy: string}} o
+ *   meta?: (j: number) => string, labelledBy: string, formHtml?: import('../../../utils/helpers.js').Slot}} o
+ *   `formHtml`, when given, is the selected layer's property form — spliced
+ *   in as its own `<li>` right after the row it belongs to, rather than
+ *   after both lists, so the form and the object it edits stay adjacent. It
+ *   is not `.carousel-studio__layer-row` — `_setupLayerReorder` (`index.js`)
+ *   and its `itemSelector` must not pick it up as a draggable item.
  */
-function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
+function layerRows(layers, { scope, selectedLayer, meta, labelledBy, formHtml }) {
   const rows = layers
     .map((layer, j) => ({ layer, j }))
     .reverse()
@@ -1078,7 +1085,10 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
           >
             ✕
           </button>
-        </li>`,
+        </li>
+        ${j === selectedLayer && formHtml
+          ? html`<li class="carousel-studio__layer-form-row">${formHtml}</li>`
+          : ""}`,
     );
 
   return layers.length
@@ -1092,13 +1102,19 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy }) {
     : "";
 }
 
-/** The "+ Add layer" dropdown for one scope. */
+/** The "+ Add layer" dropdown for one scope. A deck layer runs across every
+ *  slide's seams, which is not obvious from "Deck layers" alone — that
+ *  explanation lives here, in `title`/`aria-label`, rather than as a visible
+ *  sentence under an empty list. */
 function addLayerChips(scope) {
+  const hint =
+    scope === "span" ? "Add layer — spans every slide, across the seams" : "Add layer";
   return html`
     <select
       class="carousel-studio__add-layer-select"
       data-scope="${scope}"
-      aria-label="Add layer"
+      aria-label="${hint}"
+      title="${hint}"
     >
       <option value="" disabled selected>+ Add layer...</option>
       ${LAYER_KINDS.map(
@@ -1144,6 +1160,7 @@ export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", lo
   const spanSel = layerScope === "span" ? selectedLayer : null;
   const list = layerScope === "span" ? spanLayers : slideLayers;
   const selected = selectedLayer == null ? null : list[selectedLayer] || null;
+  const form = selected ? layerForm(selected, logoUrl) : "";
 
   return html`
     <div class="carousel-studio__layers">
@@ -1158,8 +1175,9 @@ export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", lo
             scope: "slide",
             selectedLayer: slideSel,
             labelledBy: "carousel-layers-label",
+            formHtml: layerScope === "slide" ? form : "",
           })
-        : html`<p class="carousel-studio__fit-dims">No layers on this slide yet.</p>`}
+        : html`<p class="carousel-studio__fit-dims">No layers yet.</p>`}
 
       <div class="carousel-studio__layers-head carousel-studio__layers-head--span">
         <span class="carousel-studio__bg-label" id="carousel-span-layers-label">
@@ -1173,12 +1191,9 @@ export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", lo
             selectedLayer: spanSel,
             meta: (j) => spanRangeLabel(spanLayerCoverage(spanLayers[j], n, doc.aspect)),
             labelledBy: "carousel-span-layers-label",
+            formHtml: layerScope === "span" ? form : "",
           })
-        : html`<p class="carousel-studio__fit-dims">
-            No deck layers — a headline or logo lockup placed here runs across the seams.
-          </p>`}
-
-      ${selected ? layerForm(selected, logoUrl) : ""}
+        : html`<p class="carousel-studio__fit-dims">No deck layers yet.</p>`}
     </div>`;
 }
 
@@ -1449,9 +1464,13 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
 
   return html`
     <div class="carousel-studio__fit">
-      <p class="carousel-studio__fit-dims">
-        Source ${String(srcW)} × ${String(srcH)} · slide ${String(dstW)} ×
-        ${String(dstH)} · ${(srcW / dstW).toFixed(2)} slides
+      <p class="carousel-studio__fit-readout" aria-live="polite">
+        Source ${String(srcW)} × ${String(srcH)} → slide ${String(dstW)} ×
+        ${String(dstH)} · ${readout}${report.scale > 1.02
+          ? html`<span class="carousel-studio__fit-warning" role="status">
+              · upscaled, will look soft</span
+            >`
+          : ""}
       </p>
 
       <div
@@ -1493,12 +1512,6 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
         )}
       </fieldset>
 
-      <p class="carousel-studio__fit-readout" aria-live="polite">${readout}</p>
-      ${report.scale > 1.02
-        ? html`<p class="carousel-studio__fit-warning" role="status">
-            warning: upscaling — slides will be soft
-          </p>`
-        : ""}
       ${report.trimmedH > 1
         ? html`
             <label class="carousel-studio__control carousel-studio__control--anchor">
@@ -1516,10 +1529,9 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
                 max="1"
                 step="0.01"
                 value="${String(anchorY)}"
+                title="Or drag the band up and down on the stage."
+                aria-label="Vertical anchor, ${String(Math.round(anchorY * 100))}%. Or drag the band up and down on the stage."
               />
-              <span class="carousel-studio__hint"
-                >Or drag the band up and down on the stage.</span
-              >
             </label>`
         : ""}
     </div>`;
