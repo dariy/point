@@ -859,12 +859,52 @@ describe('carousel studio gestures', () => {
       });
 
       test('a press off the handle but on the box still moves it, not rotates', () => {
-        const { host, gestures, frame } = setup();
+        // A 30° box, so "the angle did not move" is a real assertion: a rotate
+        // drag from here would push it off 30.
+        const { host, gestures, frame } = setup({ ...LAYER_BOX, rotate: 30 });
         frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
         frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 100 });
-        assert.strictEqual(host.calls.paintLayer.at(-1).box.rotate, undefined);
+        assert.strictEqual(host.calls.paintLayer.at(-1).box.rotate, 30);
         assert.ok(host.calls.paintLayer.at(-1).box.x > 0.3, 'it moved instead');
         gestures.destroy();
+      });
+
+      test('a rotated layer holds its angle through every provisional paint of a move', () => {
+        const { host, gestures, frame } = setup({ ...LAYER_BOX, rotate: 30 });
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, clientX: 120, clientY: 110 });
+        frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 130 });
+        assert.ok(host.calls.paintLayer.length >= 2, 'the move painted the layer');
+        for (const call of host.calls.paintLayer) {
+          assert.strictEqual(call.box.rotate, 30, 'the provisional paint kept the angle');
+        }
+        frame.emit('pointerup', { pointerId: 1, clientX: 140, clientY: 130 });
+        assert.strictEqual(host.calls.commitLayer[0].box.rotate, 30);
+        gestures.destroy();
+      });
+
+      test('a rotated layer holds its angle through a resize from each of the eight handles', () => {
+        // LAYER_BOX in a 200×200 frame: edges at 60 and 140, centre at 100. The
+        // rotate handle of a 30° box sits at ~(132, 45), clear of all eight.
+        const HANDLES = [
+          [60, 60], [100, 60], [140, 60],
+          [60, 100], [140, 100],
+          [60, 140], [100, 140], [140, 140],
+        ];
+        for (const [hx, hy] of HANDLES) {
+          const { host, gestures, frame } = setup({ ...LAYER_BOX, rotate: 30 });
+          const where = `handle (${hx}, ${hy})`;
+          frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: hx, clientY: hy });
+          frame.emit('pointermove', { pointerId: 1, clientX: hx + 20, clientY: hy + 20 });
+          assert.ok(host.calls.paintLayer.length >= 1, `${where} started a drag`);
+          for (const call of host.calls.paintLayer) {
+            assert.strictEqual(call.box.rotate, 30, `${where} kept the angle while dragging`);
+          }
+          frame.emit('pointerup', { pointerId: 1, clientX: hx + 20, clientY: hy + 20 });
+          assert.strictEqual(host.calls.commitLayer.length, 1, `${where} committed once`);
+          assert.strictEqual(host.calls.commitLayer[0].box.rotate, 30, `${where} committed the angle`);
+          gestures.destroy();
+        }
       });
     });
   });

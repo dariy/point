@@ -275,11 +275,15 @@ export function hitRotateHandle(rect, box, cx, cy) {
 }
 
 /** Clamp a box to the canvas the way `normalizeBox` (`document.js`) does — a
- *  preview-smoothness clamp only; the commit re-clamps through the mutator. */
+ *  preview-smoothness clamp only; the commit re-clamps through the mutator.
+ *  Spreads `box` for the same reason `dragBox` and `snapBox` do: the clamp owns
+ *  only the four geometry fields, and a rebuilt `{x,y,w,h}` would drop a layer's
+ *  `rotate` into every provisional frame of a drag. */
 function clampBox(box) {
   const w = Math.min(Math.max(box.w, MIN_BOX), 1);
   const h = Math.min(Math.max(box.h, MIN_BOX), 1);
   return {
+    ...box,
     x: Math.min(Math.max(box.x, 0), 1 - w),
     y: Math.min(Math.max(box.y, 0), 1 - h),
     w,

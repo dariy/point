@@ -959,6 +959,14 @@ cycle is the one every other layer edit uses: provisional paint on every move
 no movement re-selects rather than rotating, the same not-moved-is-a-click rule
 `onLayerUp` already keeps.
 
+Because the angle is a field of the same `box` a move or a resize rewrites, the
+three functions a dragged box passes through — `dragBox`, `snapBox` and
+`clampBox` (`gestures.js`) — each spread the box they got, and write only the
+geometry fields they own. A function that rebuilds `{x, y, w, h}` by hand drops
+`rotate` into every provisional frame of the drag, and the layer paints upright
+until the release puts the stored angle back (`document.js`'s `mergeCrop` copies
+finite numbers only, so the document itself is never damaged).
+
 ### On-canvas text editing
 
 S7.6. A `text` layer (never a `counter` — its DOM text is a computed preview,
