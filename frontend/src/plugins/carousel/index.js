@@ -607,6 +607,9 @@ export default class CarouselStudioPage extends Component {
     this._renderedDoc = null;
     // Slide index to restore focus to after a keyboard nudge rebuilds the strip.
     this._refocus = null;
+    // True for exactly one render: the one the dock's stepper asked for, which
+    // is the only move the touch layout animates (see `_stepSlide`).
+    this._stepSmooth = false;
     // The same, for the rail's drag handle after a keyboard reorder — a
     // different element, and only one of the two is ever pending.
     this._refocusRail = null;
@@ -817,6 +820,9 @@ export default class CarouselStudioPage extends Component {
     },
     "layer-pick-image"() {
       this._openLayerPicker();
+    },
+    "step-slide"(_e, el) {
+      this._stepSlide(Number(el.dataset.step));
     },
     "toggle-props"() {
       this._toggleProps();
@@ -1524,6 +1530,29 @@ export default class CarouselStudioPage extends Component {
     const patch = { selected: i };
     if (this.state.layerScope === "slide") patch.selectedLayer = null;
     this.setState(patch);
+  }
+
+  /**
+   * The dock's `‹ ›` pair: move the selection one slide along, clamped at both
+   * ends. The ends are disabled buttons as well, so a step past them is a
+   * no-op rather than a toast — there is nothing here the user did wrong.
+   *
+   * A button press is not a gesture, so the rebuild `_select` does is safe —
+   * it is the mid-gesture rebuild the comment above `_select` warns about.
+   * The scroll cannot run here, though: it measures the active column, and
+   * that column belongs to the next render. So this only arms the flag, and
+   * `afterRender` makes the move — the one place that already scrolls the
+   * touch layout, and the one place that runs late enough to measure.
+   *
+   * @param {number} delta  -1 or 1
+   */
+  _stepSlide(delta) {
+    const n = this.state.doc.slides.length;
+    const from = this._selectedIndex();
+    const i = Math.max(0, Math.min(n - 1, from + delta));
+    if (i === from) return;
+    this._stepSmooth = true;
+    this._select(i);
   }
 
   // ── Slides (deck mode) ────────────────────────────────────────────────────
@@ -3388,7 +3417,11 @@ export default class CarouselStudioPage extends Component {
     // column's width follows from `--carousel-stage-budget`, which
     // `_measureStageBudget` wrote higher up in this same pass. The
     // fine-pointer path keeps the `_stageScrollLeft` restore above untouched.
-    if (isTouchLayout()) this._scrollActiveIntoView(false);
+    // A stepper press animates the move (`_stepSlide`); every other render
+    // jumps, because there is no move to show. The flag is cleared either way,
+    // including on a fine pointer, so it can never outlive its own render.
+    if (isTouchLayout()) this._scrollActiveIntoView(this._stepSmooth);
+    this._stepSmooth = false;
   }
 
   /**

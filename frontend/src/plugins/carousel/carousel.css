@@ -86,6 +86,28 @@
   cursor: default;
 }
 
+/* The slide stepper — `‹ 3 / 8 ›`. The arrows are text, so they take the
+ * button's font rather than an icon's box; the count between them is fixed in
+ * width, because a readout that moves as the deck grows past nine slides
+ * drags the arrows out from under the thumb that is pressing them. */
+.carousel-studio__dock-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.carousel-studio__dock-btn--step {
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.carousel-studio__dock-count {
+  min-width: 5ch;
+  text-align: center;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* The stage and the properties panel — the studio's body row. */
 .carousel-studio__builder {
   display: flex;

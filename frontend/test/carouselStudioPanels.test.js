@@ -222,6 +222,46 @@ describe('carousel studio panels', () => {
       const busy = str(dock({ canUndo: false, canRedo: false, busy: true }));
       assert.ok(!buttonTag(busy, 'toggle-props').includes('disabled'));
     });
+
+    describe('the slide stepper', () => {
+      const base = { canUndo: false, canRedo: false, busy: false };
+      /** The one arrow carrying `data-step="<delta>"`, up to its `>` — both
+       *  arrows share a `data-action`, so `buttonTag` cannot tell them apart. */
+      function arrowTag(out, delta) {
+        const marker = `data-step="${delta}"`;
+        const at = out.indexOf(marker);
+        assert.notStrictEqual(at, -1, `no ${delta} arrow`);
+        return out.slice(out.lastIndexOf('<', at), out.indexOf('>', at));
+      }
+
+      test('reads `2 / 5`, and says so out loud', () => {
+        const out = str(dock({ ...base, selected: 1, n: 5 }));
+        assert.match(out, /<output[^>]*aria-live="polite"[^>]*>\s*2 \/ 5\s*<\/output>/);
+        assert.match(arrowTag(out, '-1'), /aria-label="Previous slide"/);
+        assert.match(arrowTag(out, '1'), /aria-label="Next slide"/);
+      });
+
+      test('each arrow goes dark at its own end of the deck', () => {
+        const first = str(dock({ ...base, selected: 0, n: 5 }));
+        assert.ok(arrowTag(first, '-1').includes('disabled'), 'nothing before slide 1');
+        assert.ok(!arrowTag(first, '1').includes('disabled'), 'four slides still ahead');
+
+        const last = str(dock({ ...base, selected: 4, n: 5 }));
+        assert.ok(!arrowTag(last, '-1').includes('disabled'));
+        assert.ok(arrowTag(last, '1').includes('disabled'), 'nothing after the last slide');
+
+        // The floor case: both ends are the same slide.
+        const lone = str(dock({ ...base, selected: 0, n: 1 }));
+        assert.ok(arrowTag(lone, '-1').includes('disabled'));
+        assert.ok(arrowTag(lone, '1').includes('disabled'));
+      });
+
+      test('a render in flight leaves it live — it selects, it does not edit', () => {
+        const out = str(dock({ ...base, busy: true, selected: 1, n: 5 }));
+        assert.ok(!arrowTag(out, '-1').includes('disabled'));
+        assert.ok(!arrowTag(out, '1').includes('disabled'));
+      });
+    });
   });
 
   describe('modeToggle', () => {
@@ -522,6 +562,18 @@ describe('carousel studio panels', () => {
       const fresh = str(builder(builderProps));
       const freshRow = fresh.slice(fresh.indexOf('carousel-studio__dock'));
       assert.match(freshRow, /data-action="undo"[^>]*disabled/);
+    });
+
+    test('the stepper counts the deck in both modes, from the clamped selection', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      for (const doc of [doc3, deck]) {
+        // `deckIndex` is what the page hands in (`_selectedIndex`), so the
+        // readout cannot point past a deck that shrank under it.
+        const out = str(builder({ ...builderProps, doc, deckIndex: 2 }));
+        const dockRow = out.slice(out.indexOf('carousel-studio__dock'));
+        assert.match(dockRow, /<output[^>]*>\s*3 \/ 3\s*<\/output>/);
+        assert.match(dockRow, /data-action="step-slide"[^>]*data-step="-1"/);
+      }
     });
 
     test('the toolbar’s controls reach the properties panel, for the layout with no toolbar', () => {

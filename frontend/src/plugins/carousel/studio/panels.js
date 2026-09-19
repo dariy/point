@@ -137,20 +137,28 @@ export function historyButtons({ canUndo, canRedo, busy }) {
  * `.carousel-studio__toolbar` does not, and on a fine pointer the reverse. One
  * markup tree, two layouts — the discipline the properties rail already keeps.
  *
- * The row ships three of its five slots. The slide stepper (`‹ 3 / 8 ›`) goes
- * after the burger, and the "+ Add layer…" select goes last; each arrives with
- * its own bead (p-carousel-touch-layout-vfs1.4 and .7). The gap is left empty
- * on purpose: a button that does nothing reads as a broken control, which is
- * worse than a shorter row.
+ * The row ships four of its five slots. The "+ Add layer…" select goes last
+ * and arrives with its own bead (p-carousel-touch-layout-vfs1.7). The gap is
+ * left empty on purpose: a button that does nothing reads as a broken control,
+ * which is worse than a shorter row.
  *
- * Every label here is an icon, so every button carries an `aria-label` as
- * well. The history pair takes the rule `historyButtons` takes — the ring's
- * own depth, and dark through a render. The burger does not: it opens a panel,
- * which stays a fair thing to do while the render runs.
+ * The stepper (`‹ 3 / 8 ›`) is what changes the active slide where the strip
+ * no longer scrolls, so no gesture has to. Each arrow goes dark at its own end
+ * of the deck, and the readout is an `<output>` with `aria-live="polite"` — a
+ * screen reader hears the new slide, because on this layout the stage itself
+ * gives no other sign that the selection moved. The stepper stays live through
+ * a render: it selects, it does not edit.
  *
- * @param {{canUndo: boolean, canRedo: boolean, busy: boolean}} o
+ * Every label here is an icon or a glyph, so every button carries an
+ * `aria-label` as well. The history pair takes the rule `historyButtons`
+ * takes — the ring's own depth, and dark through a render. The burger does
+ * not: it opens a panel, which stays a fair thing to do while the render runs.
+ *
+ * @param {{canUndo: boolean, canRedo: boolean, busy: boolean,
+ *   selected?: number, n?: number}} o  `selected` is the clamped slide index
+ *   (`_selectedIndex` in `index.js`), `n` the slide count.
  */
-export function dock({ canUndo, canRedo, busy }) {
+export function dock({ canUndo, canRedo, busy, selected = 0, n = 1 }) {
   const button = (action, glyph, label, enabled) => html`
     <button
       type="button"
@@ -162,12 +170,32 @@ export function dock({ canUndo, canRedo, busy }) {
     >
       ${raw(glyph)}
     </button>`;
-  // Slot — the slide stepper (p-carousel-touch-layout-vfs1.4) belongs between
-  // the burger and the history pair, and the add-layer select
-  // (p-carousel-touch-layout-vfs1.7) after them.
+  // A text glyph, not an icon: the arrows read as one control with the count
+  // between them, and they scale with it.
+  const step = (delta, glyph, label, enabled) => html`
+    <button
+      type="button"
+      class="carousel-studio__dock-btn carousel-studio__dock-btn--step"
+      data-action="step-slide"
+      data-step="${String(delta)}"
+      title="${label}"
+      aria-label="${label}"
+      ${enabled ? "" : "disabled"}
+    >
+      ${raw(glyph)}
+    </button>`;
+  // Slot — the add-layer select (p-carousel-touch-layout-vfs1.7) goes after
+  // the history pair.
   return html`
     <div class="carousel-studio__dock" role="toolbar" aria-label="Studio actions">
       ${button("toggle-props", MENU_SVG, "Properties", true)}
+      <div class="carousel-studio__dock-stepper" role="group" aria-label="Slide">
+        ${step(-1, "&#8249;", "Previous slide", selected > 0)}
+        <output class="carousel-studio__dock-count" aria-live="polite">
+          ${String(selected + 1)} / ${String(n)}
+        </output>
+        ${step(1, "&#8250;", "Next slide", selected < n - 1)}
+      </div>
       ${button("undo", UNDO_SVG, "Undo", canUndo && !busy)}
       ${button("redo", REDO_SVG, "Redo", canRedo && !busy)}
     </div>`;
@@ -398,7 +426,9 @@ function layerLabel(layer) {
  *   state and the properties panel swap all read this one value.
  * @param {boolean} [o.canUndo]  can the document's history ring step back? The
  *   dock carries its own undo/redo pair, because the header's pair
- *   (`actionsBar`) is out of a thumb's reach on a phone.
+ *   (`actionsBar`) is out of a thumb's reach on a phone. The dock's stepper
+ *   reads `deckIndex` for the same reason the deck panel does — it is the
+ *   selection pinned inside the deck, in both modes.
  * @param {boolean} [o.canRedo]  can it step forward?
  */
 export function builder({
@@ -787,7 +817,7 @@ export function builder({
       ${tray}
     </div>
 
-    ${dock({ canUndo, canRedo, busy })}`;
+    ${dock({ canUndo, canRedo, busy, selected: deckIndex, n })}`;
 }
 
 /**
