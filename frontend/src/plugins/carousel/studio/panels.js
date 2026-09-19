@@ -302,6 +302,10 @@ function layerLabel(layer) {
   if (layer.type === "rect") return "Rectangle";
   if (layer.type === "counter") return `Counter — ${layer.format || "{i}/{n}"}`;
   if (layer.type === "arrow") return `Arrow ${layer.direction === "left" ? "←" : "→"}`;
+  if (layer.type === "ink") {
+    const n = layer.strokes?.length || 0;
+    return `Ink — ${n} stroke${n === 1 ? "" : "s"}`;
+  }
   return layer.type;
 }
 
@@ -342,6 +346,10 @@ function layerLabel(layer) {
  *   template gallery and the import report, which have to reach the tray
  *   whether or not a source is picked (`pickPrompt` takes the body row instead
  *   of this function then, but the tray is shared).
+ * @param {{i: number, mode: "draw"|"erase", color: string, width: number,
+ *   opacity: number}|null} [o.inkSession]  the ink tool's live session
+ *   (`index.js`), or null while the tool is off — armed column, toolbar
+ *   state and the properties panel swap all read this one value.
  */
 export function builder({
   doc,
@@ -362,6 +370,7 @@ export function builder({
   stageZoom = 1,
   error = "",
   tray = "",
+  inkSession = null,
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
@@ -421,7 +430,7 @@ export function builder({
           <span
             class="carousel-studio__stage-slide ${i === selected ? "is-selected" : ""} ${
               (i === deckIndex && slideChrome) || spanChrome ? "is-layer-armed" : ""
-            }"
+            } ${inkSession && inkSession.i === i ? "is-ink-armed" : ""}"
             data-slice="${String(i)}"
             tabindex="0"
             role="group"
@@ -429,7 +438,7 @@ export function builder({
           >
             ${deckLayers()}${spanNodes}${layerNodes(slide)}${layerChrome(
               (i === deckIndex && slideChrome) || spanChrome,
-            )}
+            )}<span class="carousel-studio__ink-draft"></span>
           </span>`
       : html`<div class="carousel-studio__stage-slide" data-slice="${String(i)}"></div>`,
   );
@@ -601,6 +610,7 @@ export function builder({
     <div class="carousel-studio__toolbar">
       ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
       ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+      ${deck ? drawToolControl(inkSession) : ""}
       <div class="carousel-studio__doc-menu">
         <button
           type="button"
@@ -661,7 +671,9 @@ export function builder({
         <div class="card-body carousel-studio__props-body" id="carousel-props-body">
           ${deck ? deckPanel({ doc, index: deckIndex, hasPad }) : fitPanel({ doc, srcW, srcH, fitMode })}
           ${deck
-            ? layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
+            ? inkSession
+              ? inkToolPanel(inkSession)
+              : layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
             : ""}
         </div>
       </aside>
@@ -1104,6 +1116,120 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy, formHtml })
     : "";
 }
 
+/**
+ * The ink tool's own toggle, in the toolbar, and — only once a session is
+ * open — the Erase toggle beside it (`Decisions`: erase is a mode inside the
+ * one session, not a session of its own). Deck mode only: a session's box is
+ * one slide's, the same scope every other layer control keeps.
+ *
+ * @param {{i: number, mode: "draw"|"erase"}|null} session
+ */
+export function drawToolControl(session) {
+  const active = Boolean(session);
+  return html`
+    <div class="carousel-studio__ink-tool" role="group" aria-label="Draw">
+      <button
+        type="button"
+        class="btn btn-sm btn-secondary"
+        data-action="ink-tool"
+        aria-pressed="${active ? "true" : "false"}"
+        title="${active
+          ? "Finish drawing and add the mark as a layer (Esc)"
+          : "Draw on the selected slide with a stylus, mouse or finger"}"
+      >
+        Draw
+      </button>
+      ${active
+        ? html`
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              data-action="ink-erase"
+              aria-pressed="${session.mode === "erase" ? "true" : "false"}"
+              title="Erase a stroke the pointer touches"
+            >
+              Erase
+            </button>`
+        : ""}
+    </div>`;
+}
+
+/**
+ * The ink tool's own panel, shown in place of the ordinary layer panel while
+ * a session is open — there is nothing else in the rail to edit, since a
+ * press on the stage draws instead of selecting. Colour and opacity apply to
+ * the whole layer the session becomes; width is the pen's own, for
+ * whichever stroke is drawn next — already-drawn strokes keep the width
+ * they were drawn with, the same way a real font size does not
+ * retroactively resize a line already typed.
+ *
+ * @param {{mode: "draw"|"erase", color: string, width: number, opacity: number}} session
+ */
+export function inkToolPanel(session) {
+  return html`
+    <div class="carousel-studio__layers">
+      <span class="carousel-studio__bg-label">
+        Drawing — ${session.mode === "erase" ? "Erase" : "Draw"} mode
+      </span>
+      <p class="carousel-studio__fit-dims">
+        Press Escape, or Draw in the toolbar, to finish and add the mark as a layer.
+      </p>
+      <div class="carousel-studio__bg-row">
+        <label class="carousel-studio__bg-field">
+          <span>Colour</span>
+          <div class="carousel-studio__color-picker">
+            <input
+              type="color"
+              data-action="ink-color"
+              value="${colorInputValue(session.color)}"
+            />
+            <span aria-hidden="true">${colorInputValue(session.color).toUpperCase()}</span>
+          </div>
+        </label>
+      </div>
+      <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
+        <div class="carousel-studio__field-header">
+          <span>Pen width</span>
+          <output class="carousel-studio__field-badge" id="carousel-ink-width-out"
+            >${String(Math.round(session.width * 100))}%</output
+          >
+        </div>
+        <div class="carousel-studio__range-row">
+          <span>Thin</span>
+          <input
+            type="range"
+            data-action="ink-width"
+            min="0.001"
+            max="0.25"
+            step="0.001"
+            value="${String(session.width)}"
+          />
+          <span>Thick</span>
+        </div>
+      </label>
+      <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
+        <div class="carousel-studio__field-header">
+          <span>Opacity</span>
+          <output class="carousel-studio__field-badge" id="carousel-ink-opacity-out"
+            >${String(Math.round(session.opacity * 100))}%</output
+          >
+        </div>
+        <div class="carousel-studio__range-row">
+          <span>0%</span>
+          <input
+            type="range"
+            data-action="ink-opacity"
+            min="0"
+            max="1"
+            step="0.01"
+            value="${String(session.opacity)}"
+          />
+          <span>100%</span>
+        </div>
+      </label>
+    </div>`;
+}
+
 /** The "+ Add layer" dropdown for one scope. A deck layer runs across every
  *  slide's seams, which is not obvious from "Deck layers" alone — that
  *  explanation lives here, in `title`/`aria-label`, rather than as a visible
@@ -1217,6 +1343,7 @@ export function layerForm(layer, logoUrl) {
   const arrow = layer.type === "arrow" ? layer : null;
   const text = layer.type === "text" ? layer : null;
   const counter = layer.type === "counter" ? layer : null;
+  const ink = layer.type === "ink" ? layer : null;
 
   const opacityField = (value) => html`
     <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
@@ -1380,6 +1507,14 @@ export function layerForm(layer, logoUrl) {
         ${colorField("carousel-layer-color", arrow.color)}
       </div>
       ${opacityField(arrow.opacity)}`;
+  } else if (ink) {
+    // No width field here — a stroke's own width is set by the pen at the
+    // moment it was drawn (`inkToolPanel`, the session's own form) and never
+    // edited after the fact; only what applies to the whole layer belongs in
+    // its form, the same rule every other type here keeps.
+    body = html`
+      ${colorField("carousel-layer-color", ink.color)}
+      ${opacityField(ink.opacity)}`;
   }
 
   return html`<div class="carousel-studio__layer-form" data-layer-type="${t}">${body}</div>`;
