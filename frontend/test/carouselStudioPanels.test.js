@@ -466,6 +466,37 @@ describe('carousel studio panels', () => {
       // strip, not a second editing surface.
       assert.strictEqual(nodes.length, 3);
     });
+
+    test('a selected slide layer arms only its own column\'s touch-action', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const out = str(
+        builder({ ...builderProps, doc: deck, deckIndex: 0, selectedLayer: 0, layerScope: 'slide' }),
+      );
+      const slides = out.match(/<span[^>]*class="carousel-studio__stage-slide[^>]*data-slice="\d"/g) || [];
+      assert.strictEqual(slides.length, 3);
+      assert.match(slides[0], /is-layer-armed/, 'the column the layer sits on is armed');
+      assert.doesNotMatch(slides[1], /is-layer-armed/);
+      assert.doesNotMatch(slides[2], /is-layer-armed/);
+    });
+
+    test('a selected span layer arms every column it reaches', () => {
+      const deck = {
+        ...toDeckDocument(doc3, 3000, 1000),
+        spanLayers: [normalizeLayer({ type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'H' })],
+      };
+      const out = str(
+        builder({ ...builderProps, doc: deck, deckIndex: 0, selectedLayer: 0, layerScope: 'span' }),
+      );
+      const slides = out.match(/<span[^>]*class="carousel-studio__stage-slide[^>]*data-slice="\d"/g) || [];
+      assert.strictEqual(slides.length, 3);
+      for (const slide of slides) assert.match(slide, /is-layer-armed/);
+    });
+
+    test('no selected layer arms no column', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0, selectedLayer: null }));
+      assert.doesNotMatch(out, /is-layer-armed/);
+    });
   });
 
   describe('layerPanel — span layers', () => {

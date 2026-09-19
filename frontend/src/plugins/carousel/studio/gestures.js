@@ -55,7 +55,31 @@
  * that turned out to be a scroll still doesn't select the tile it ended over
  * (`drag = null` once past `DRAG_SLOP_PX`, same as a `null`-returning abandon
  * anywhere else in this module). A second finger arriving before that happens
- * still claims the pinch, exactly as it does with the modifier held.
+ * still claims the pinch, exactly as it does with the modifier held. That
+ * watch is keyed on `pointerType === "touch"` specifically, never on "not a
+ * mouse" — a stylus starts to move because it meant to, so a pen claims the
+ * gesture at the press the same as a mouse does, and never sits in the
+ * undecided state a finger does.
+ *
+ * The column holding a selected layer is `touch-action: none` (`carousel.css`,
+ * `is-layer-armed`), not `pan-x pan-y`, so a one-finger drag on it is this
+ * module's from the first pixel and never the scroller's to contest —
+ * `PRESS_KINDS`' unconditional claim already assumed as much, but the
+ * `pan-x pan-y` sitting under it until S8 let the browser start its own pan on
+ * the same finger regardless. That is scoped to the one armed column; every
+ * other one keeps scrolling the strip with a finger, panning under an empty
+ * patch of any column, exactly as before.
+ *
+ * A second finger onto a `"layer"` drag already in flight is a pinch too —
+ * `onLayerPointerAdd`/`onLayerPinchMove` — and this is the touch answer to the
+ * Ctrl/Shift a finger can never hold: distance apart scales the box about its
+ * own centre, the angle between the two fingers rotates it, and one finger
+ * lifting out hands the gesture back to the one still down rather than ending
+ * it. `HANDLE_GRAB_PX`, `ROTATE_HANDLE_OFFSET_PX` and `ROTATE_HANDLE_HIT_PX`
+ * each carry a `_COARSE` twin, read behind `matchMedia("(pointer: coarse)")`
+ * the way `studio/layout.js` reads its own breakpoint — a finger's eight
+ * resize handles and its rotate handle grab a ~44px target, not a mouse
+ * cursor's.
  *
  * Nothing here writes to the DOM by itself and nothing here holds a document:
  * a live gesture paints through `host.paint` with a provisional slide (no state
@@ -103,6 +127,16 @@ const HANDLE_GRAB_PX = 12;
 const ROTATE_HANDLE_OFFSET_PX = 24;
 /** A press within this many CSS px of the rotate handle grabs it. */
 const ROTATE_HANDLE_HIT_PX = 8;
+/** The same three constants, under a coarse (touch) pointer — a finger is not
+ *  a mouse cursor, so the grab zones widen to a ~44px target. Mirrors
+ *  `carousel.css`'s own `@media (pointer: coarse)` block the way
+ *  `studio/layout.js` mirrors `SHEET_BREAKPOINT`: `ROTATE_HANDLE_OFFSET_PX_
+ *  COARSE` is the one number both sides must actually agree on, since it also
+ *  clears the rotate handle's widened hit circle from the resize band below
+ *  it. */
+const HANDLE_GRAB_PX_COARSE = 22;
+const ROTATE_HANDLE_OFFSET_PX_COARSE = 48;
+const ROTATE_HANDLE_HIT_PX_COARSE = 22;
 /** One Shift-held rotate drag snaps to this many degrees. */
 const ROTATE_SNAP_DEG = 15;
 /** A dragged layer edge within this many CSS px of a guide clicks onto it. */
@@ -111,6 +145,17 @@ const SNAP_PX = 7;
  *  canvas width, matching `MIN_BOX` in `document.js`. Below it a layer is
  *  ungrabbable, so the preview clamp holds it here too. */
 const MIN_BOX = 1 / 1080;
+
+/** Whether the primary pointing device is coarse (a touchscreen) rather than
+ *  fine (a mouse or a pen) — `matchMedia`'s own live read of the CSS feature
+ *  `carousel.css` styles behind, so the two can never disagree. False where
+ *  there is no `matchMedia` to ask (a test, or SSR): a hit-test tolerance
+ *  widened without evidence is a mis-grab waiting to happen, so the default
+ *  is the precise one. */
+function isCoarsePointer(win = globalThis.window) {
+  if (!win || typeof win.matchMedia !== "function") return false;
+  return win.matchMedia("(pointer: coarse)").matches;
+}
 
 /** `frame.getBoundingClientRect()`, or a zero box where there is no layout
  *  (a headless test frame that never opts into one). */
@@ -199,11 +244,11 @@ export function layerSpace(rect, safe, seams = []) {
  * @param {number} cy
  * @returns {{mode:'move'|'resize', h:-1|0|1, v:-1|0|1}|null}
  */
-export function hitLayer(rect, box, cx, cy) {
+export function hitLayer(rect, box, cx, cy, grabPx = HANDLE_GRAB_PX) {
   if (!rect.width || !rect.height) return null;
   const { fx, fy } = unrotatePoint(rect, box, cx, cy);
-  const tx = HANDLE_GRAB_PX / rect.width;
-  const ty = HANDLE_GRAB_PX / rect.height;
+  const tx = grabPx / rect.width;
+  const ty = grabPx / rect.height;
   const withinX = fx >= box.x - tx && fx <= box.x + box.w + tx;
   const withinY = fy >= box.y - ty && fy <= box.y + box.h + ty;
   if (!withinX || !withinY) return null;
@@ -277,11 +322,11 @@ export function unrotatePoint(rect, box, cx, cy) {
  * @param {{left:number,top:number,width:number,height:number}} rect
  * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box  0..1 of rect
  */
-export function rotateHandlePoint(rect, box) {
+export function rotateHandlePoint(rect, box, offsetPx = ROTATE_HANDLE_OFFSET_PX) {
   const cx = rect.left + (box.x + box.w / 2) * rect.width;
   const cy = rect.top + (box.y + box.h / 2) * rect.height;
   const hx = cx;
-  const hy = rect.top + box.y * rect.height - ROTATE_HANDLE_OFFSET_PX;
+  const hy = rect.top + box.y * rect.height - offsetPx;
   const rad = ((box.rotate || 0) * Math.PI) / 180;
   const dx = hx - cx;
   const dy = hy - cy;
@@ -300,11 +345,20 @@ export function rotateHandlePoint(rect, box) {
  * @param {{x:number,y:number,w:number,h:number,rotate?:number}} box
  * @param {number} cx
  * @param {number} cy
+ * @param {number} [hitPx] `ROTATE_HANDLE_HIT_PX` by default, its coarse-pointer twin under a touch press.
+ * @param {number} [offsetPx] `ROTATE_HANDLE_OFFSET_PX` by default, its coarse-pointer twin under a touch press.
  */
-export function hitRotateHandle(rect, box, cx, cy) {
+export function hitRotateHandle(
+  rect,
+  box,
+  cx,
+  cy,
+  hitPx = ROTATE_HANDLE_HIT_PX,
+  offsetPx = ROTATE_HANDLE_OFFSET_PX,
+) {
   if (!rect.width || !rect.height) return false;
-  const p = rotateHandlePoint(rect, box);
-  return Math.hypot(cx - p.x, cy - p.y) <= ROTATE_HANDLE_HIT_PX;
+  const p = rotateHandlePoint(rect, box, offsetPx);
+  return Math.hypot(cx - p.x, cy - p.y) <= hitPx;
 }
 
 /** Clamp a box to the canvas the way `normalizeBox` (`document.js`) does — a
@@ -600,14 +654,18 @@ export function createDeckGestures(host) {
   let count = 0;
   /** The in-flight gesture, tagged by `kind`: a `"crop"` pan/pinch
    *  ({ i, frame, pointers, crop, startCrop, start, moved, undecided }), a
-   *  `"layer"` move/resize ({ i, slide, j, frame, mode, anchor, space,
-   *  startX, startY, startBox, box, moved }), a `"rotate"` drag ({ i, slide,
-   *  j, frame, centerX, centerY, startX, startY, startAngle, startRotate,
-   *  startBox, box, moved }), or a `"pane"` scroll-by-hand
+   *  `"layer"` move/resize/pinch ({ i, slide, j, frame, mode, anchor, space,
+   *  startX, startY, startBox, box, moved, pointers, pinch? }), a `"rotate"`
+   *  drag ({ i, slide, j, frame, centerX, centerY, startX, startY, startAngle,
+   *  startRotate, startBox, box, moved }), or a `"pane"` scroll-by-hand
    *  ({ i, frame, startX, lastX, moved }) — where `i` is
    *  the column holding the pointer and `slide` the index the box commits to,
    *  the two being the same thing for everything but a span layer. One at a
-   *  time — a press mid-gesture is ignored. */
+   *  time — a press mid-gesture is ignored, except a second finger onto a
+   *  `"layer"` drag already in flight (`onLayerPointerAdd`), which turns it
+   *  into a pinch: `pointers` grows to two and `pinch` — the baseline
+   *  distance, angle and box the two fingers scale and rotate from — appears
+   *  once it does. */
   let drag = null;
   /** A crop written to the DOM but not yet committed to the document (a wheel
    *  gesture, which has no release event to commit on). */
@@ -657,6 +715,13 @@ export function createDeckGestures(host) {
 
   const onLayerMove = (e) => {
     if (!drag || drag.kind !== "layer") return;
+    if (drag.pointers.size > 1) {
+      if (!drag.pointers.has(e.pointerId)) return;
+      drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      onLayerPinchMove();
+      e.preventDefault?.();
+      return;
+    }
     const { rect, lines, tol } = drag.space;
     const dfx = (e.clientX - drag.startX) / (rect.width || 1);
     const dfy = (e.clientY - drag.startY) / (rect.height || 1);
@@ -673,6 +738,55 @@ export function createDeckGestures(host) {
     drag.box = clampBox(box);
     host.paintLayer?.(drag.slide, drag.j, drag.box, guides);
     e.preventDefault?.();
+  };
+
+  /** A second finger landing on a `"layer"` drag already in flight: the touch
+   *  answer to the Ctrl/Shift a finger can never hold, since a modifier drag
+   *  isn't what a finger has to offer. From here the pair drives scale and
+   *  rotation instead of the single finger's translate/resize — a mouse or
+   *  pen drag never calls this, since neither carries a second pointer id. */
+  const onLayerPointerAdd = (e, frame) => {
+    if (drag.pointers.size >= 2) return;
+    drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const [a, b] = Array.from(drag.pointers.values());
+    drag.pinch = {
+      dist: Math.hypot(b.x - a.x, b.y - a.y),
+      angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
+      box: { ...drag.box },
+    };
+    claimPointer(e, frame, "is-dragging");
+  };
+
+  /**
+   * Two fingers on the active layer: distance apart scales it about its own
+   * centre, the angle between them rotates it — the same pair of numbers
+   * {@link pointerCentroid}'s `dist` and this module's own angle maths already
+   * read for the crop pinch and the rotate handle, just read together. Scale
+   * writes `w`/`h` (and re-derives `x`/`y` so the centre holds); rotate writes
+   * `box.rotate` and nothing else, the same rule the ninth handle's own drag
+   * keeps — the two never cross-contaminate each other's field.
+   */
+  const onLayerPinchMove = () => {
+    const [a, b] = Array.from(drag.pointers.values());
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+    const ratio = drag.pinch.dist > 0 ? dist / drag.pinch.dist : 1;
+    const rotateDelta = angle - drag.pinch.angle;
+    const start = drag.pinch.box;
+    const w = Math.min(Math.max(start.w * ratio, MIN_BOX), 1);
+    const h = Math.min(Math.max(start.h * ratio, MIN_BOX), 1);
+    const cx = start.x + start.w / 2;
+    const cy = start.y + start.h / 2;
+    drag.moved = true;
+    drag.box = clampBox({
+      ...start,
+      w,
+      h,
+      x: cx - w / 2,
+      y: cy - h / 2,
+      rotate: (start.rotate || 0) + rotateDelta,
+    });
+    host.paintLayer?.(drag.slide, drag.j, drag.box, { v: [], h: [] });
   };
 
   /** The angle from the box's own (fixed) centre to `(x, y)`, in degrees —
@@ -694,8 +808,23 @@ export function createDeckGestures(host) {
   };
 
   /** The release half of both a layer move/resize and a rotate drag — the
-   *  same not-moved-is-a-click bail, the same commit through `commitLayer`. */
+   *  same not-moved-is-a-click bail, the same commit through `commitLayer`.
+   *  A `"layer"` drag with two fingers down loses only the one that lifted —
+   *  the same partial-release rule `onCropUp` uses for a pinch — and rebases
+   *  the survivor as a fresh single-finger translate from where the pinch
+   *  left off, rather than ending the gesture under the finger still down. */
   const endLayerDrag = (e, frame) => {
+    if (drag.pointers?.size > 1) {
+      drag.pointers.delete(e.pointerId);
+      frame.releasePointerCapture?.(e.pointerId);
+      if (drag.pointers.size === 1) {
+        const [pt] = Array.from(drag.pointers.values());
+        drag.startX = pt.x;
+        drag.startY = pt.y;
+        drag.startBox = { ...drag.box };
+      }
+      return;
+    }
     const ended = drag;
     drag = null;
     releasePointer(e, frame, "is-dragging");
@@ -727,7 +856,8 @@ export function createDeckGestures(host) {
     const span = active?.scope === "span";
     const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
     const grabbable = active && (span || active.i === i);
-    return { active, span, rect, grabbable };
+    const coarse = isCoarsePointer();
+    return { active, span, rect, grabbable, coarse };
   };
 
   /**
@@ -741,7 +871,12 @@ export function createDeckGestures(host) {
   const PRESS_KINDS = [
     // rotate: a press on the ninth handle, above the box's own top edge.
     (e, frame, i, ctx) => {
-      if (!ctx.grabbable || !hitRotateHandle(ctx.rect, ctx.active.box, e.clientX, e.clientY)) {
+      const hitPx = ctx.coarse ? ROTATE_HANDLE_HIT_PX_COARSE : ROTATE_HANDLE_HIT_PX;
+      const offsetPx = ctx.coarse ? ROTATE_HANDLE_OFFSET_PX_COARSE : ROTATE_HANDLE_OFFSET_PX;
+      if (
+        !ctx.grabbable ||
+        !hitRotateHandle(ctx.rect, ctx.active.box, e.clientX, e.clientY, hitPx, offsetPx)
+      ) {
         return false;
       }
       const cx = ctx.rect.left + (ctx.active.box.x + ctx.active.box.w / 2) * ctx.rect.width;
@@ -768,7 +903,8 @@ export function createDeckGestures(host) {
     // layer: a press on the active layer's own box or one of its eight
     // move/resize handles.
     (e, frame, i, ctx) => {
-      const hit = ctx.grabbable ? hitLayer(ctx.rect, ctx.active.box, e.clientX, e.clientY) : null;
+      const grabPx = ctx.coarse ? HANDLE_GRAB_PX_COARSE : HANDLE_GRAB_PX;
+      const hit = ctx.grabbable ? hitLayer(ctx.rect, ctx.active.box, e.clientX, e.clientY, grabPx) : null;
       if (!hit) return false;
       drag = {
         kind: "layer",
@@ -788,6 +924,10 @@ export function createDeckGestures(host) {
         startBox: { ...ctx.active.box },
         box: { ...ctx.active.box },
         moved: false,
+        // A second finger arriving mid-drag turns this into a pinch — see
+        // `onLayerPointerAdd`/`onLayerPinchMove`. A mouse or pen drag never
+        // grows past one entry.
+        pointers: new Map([[e.pointerId, { x: e.clientX, y: e.clientY }]]),
       };
       claimPointer(e, frame, "is-dragging");
       return true;
@@ -839,7 +979,15 @@ export function createDeckGestures(host) {
       const ctx = pressContext(frame, i);
       if (PRESS_KINDS.some((attempt) => attempt(e, frame, i, ctx))) return;
     }
-    if (drag && drag.kind === "layer") return;
+    if (drag && drag.kind === "layer") {
+      // A second finger, still on the column the drag started on, is a pinch
+      // — see `onLayerPointerAdd`. One landing elsewhere (a span layer's
+      // other columns) is left alone: pinch reads both fingers off one rect,
+      // and a press mid-gesture on a column that isn't driving it claims
+      // nothing here either way.
+      if (drag.i === i) onLayerPointerAdd(e, frame);
+      return;
+    }
 
     if (!drag || drag.i !== i) {
       const modified = e.ctrlKey || e.shiftKey;
