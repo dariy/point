@@ -96,7 +96,7 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
 
 /**
  * One drawable placed over a slide's image, in that slide's canvas space — or,
- * in `doc.spanLayers`, in the deck's. A tagged union over five `type`s sharing
+ * in `doc.spanLayers`, in the deck's. A tagged union over six `type`s sharing
  * one `box`; {@link normalizeLayer} is the only thing that produces one.
  *
  * `hidden` switches a layer off without deleting it: it keeps its place in the
@@ -111,8 +111,10 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  * @typedef {{type:'rect', box:CarouselBox, fill:string, opacity:number, radius:number}} CarouselRectLayer
  * @typedef {{type:'counter', box:CarouselBox, format:string} & CarouselTextStyle} CarouselCounterLayer
  * @typedef {{type:'arrow', box:CarouselBox, direction:'left'|'right', color:string, opacity:number}} CarouselArrowLayer
+ * @typedef {{w:number, pts:Array<[number,number]>}} CarouselInkStroke
+ * @typedef {{type:'ink', box:CarouselBox, strokes:CarouselInkStroke[], color:string, opacity:number}} CarouselInkLayer
  * @typedef {(CarouselTextLayer|CarouselImageLayer|CarouselRectLayer|CarouselCounterLayer
- *   |CarouselArrowLayer) & {hidden?: boolean}} CarouselLayer
+ *   |CarouselArrowLayer|CarouselInkLayer) & {hidden?: boolean}} CarouselLayer
  */
 
 /**
@@ -362,12 +364,86 @@ function normalizeTextStyle(l, fb) {
   };
 }
 
+/** An ink stroke's width, as a fraction of the box's shorter side — the same
+ *  convention `rect`'s `radius` and `render.js`'s `ARROW_STROKE` use, so a
+ *  resize keeps the stroke sensible. Canvas px would not survive a resize. */
+const MIN_STROKE_WIDTH = 0.001;
+const MAX_STROKE_WIDTH = 0.25;
+const DEFAULT_STROKE_WIDTH = 0.02;
+
+/**
+ * Bounds on one `ink` layer so a hand-written or runaway document cannot make
+ * a slide take forever to paint: at most this many points on a single stroke,
+ * generous for a real stylus session sampled at pointer-move rate, and at most
+ * this many strokes on a layer, generous for one sitting's drawing.
+ */
+const MAX_STROKE_POINTS = 2000;
+const MAX_INK_STROKES = 200;
+
+/**
+ * One point of a stroke, `[x, y]` in the same 0..1-of-the-box space
+ * {@link normalizeBox} uses for everything else. There is no per-point
+ * fallback to fall back to, so a pair that is not two finite numbers is
+ * dropped rather than defaulted — {@link normalizeStroke} is what decides
+ * whether the stroke it belonged to survives that.
+ *
+ * @param {*} pt
+ * @returns {[number, number]|null}
+ */
+function normalizePoint(pt) {
+  if (!Array.isArray(pt) || pt.length < 2) return null;
+  const [x, y] = pt;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return [clamp(x, 0, 1), clamp(y, 0, 1)];
+}
+
+/**
+ * One free-hand stroke: a width and its points. A point the schema cannot use
+ * is dropped outright, and the stroke follows once fewer than two points
+ * survive — two is the least that draws a line. Points beyond
+ * {@link MAX_STROKE_POINTS} are dropped, not the whole stroke: a runaway
+ * session should lose its tail, not the mark.
+ *
+ * @param {*} stroke
+ * @returns {{w:number, pts:Array<[number,number]>}|null}
+ */
+function normalizeStroke(stroke) {
+  if (!isObj(stroke) || !Array.isArray(stroke.pts)) return null;
+  const pts = [];
+  for (const pt of stroke.pts) {
+    if (pts.length >= MAX_STROKE_POINTS) break;
+    const p = normalizePoint(pt);
+    if (p) pts.push(p);
+  }
+  if (pts.length < 2) return null;
+  return { w: clamp(num(stroke.w, DEFAULT_STROKE_WIDTH), MIN_STROKE_WIDTH, MAX_STROKE_WIDTH), pts };
+}
+
+/**
+ * A stroke list: every entry normalized, the ones that cannot be a stroke at
+ * all dropped, capped at {@link MAX_INK_STROKES} for the reason
+ * {@link normalizeStroke} caps points.
+ *
+ * @param {*} strokes
+ * @returns {Array<{w:number, pts:Array<[number,number]>}>}
+ */
+function normalizeStrokes(strokes) {
+  if (!Array.isArray(strokes)) return [];
+  const out = [];
+  for (const stroke of strokes) {
+    if (out.length >= MAX_INK_STROKES) break;
+    const normal = normalizeStroke(stroke);
+    if (normal) out.push(normal);
+  }
+  return out;
+}
+
 /**
  * One builder per `type`: the full shape that type normalizes to, given the raw
  * layer, the fallback resolver and an already-clamped box. A table rather than
  * a switch so that {@link LAYER_TYPES} can be derived from it — the list of
  * what is valid and the code that produces it cannot disagree — and so adding a
- * sixth type is one entry rather than a longer function.
+ * new type is one entry rather than a longer function.
  *
  * @type {Record<string, (l: *, fb: (key: string, dflt: *) => *, box: CarouselBox) => CarouselLayer>}
  */
@@ -419,9 +495,21 @@ const LAYER_BUILDERS = {
     color: normalizeColor(l.color, fb('color', DEFAULT_LAYER_COLOR)),
     opacity: normalizeOpacity(l, fb),
   }),
+
+  ink: (l, fb, box) => ({
+    type: 'ink',
+    box,
+    // A bad `strokes` value keeps the base's own rather than resetting to
+    // `[]`, exactly like every other field here — `updateLayer` sends the
+    // current value forward on a patch that doesn't touch it, so this only
+    // bites a hand-edited document.
+    strokes: Array.isArray(l.strokes) ? normalizeStrokes(l.strokes) : normalizeStrokes(fb('strokes', [])),
+    color: normalizeColor(l.color, fb('color', DEFAULT_LAYER_COLOR)),
+    opacity: normalizeOpacity(l, fb),
+  }),
 };
 
-/** The five things a layer can be. An unrecognized sixth is dropped, not kept. */
+/** The six things a layer can be. An unrecognized seventh is dropped, not kept. */
 export const LAYER_TYPES = Object.keys(LAYER_BUILDERS);
 
 /**

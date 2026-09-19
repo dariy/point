@@ -722,6 +722,13 @@ describe('layer schema', () => {
       color: '#ffffff',
       opacity: 1,
     });
+    assert.deepStrictEqual(one({ type: 'ink' }), {
+      type: 'ink',
+      box: FULL_BOX,
+      strokes: [],
+      color: '#ffffff',
+      opacity: 1,
+    });
   });
 
   test('every type round-trips through parse(serialize(doc))', () => {
@@ -735,13 +742,20 @@ describe('layer schema', () => {
             { type: 'rect', box: { x: 0, y: 0.8, w: 1, h: 0.2 }, fill: '#00000080', opacity: 0.5, radius: 0.25 },
             { type: 'counter', box: { x: 0.85, y: 0.02, w: 0.13, h: 0.06 }, format: 'Slide {i} of {n}', align: 'right', color: 'transparent' },
             { type: 'arrow', box: { x: 0.9, y: 0.45, w: 0.08, h: 0.1 }, direction: 'left', color: '#fff', opacity: 0.6 },
+            {
+              type: 'ink',
+              box: { x: 0.1, y: 0.1, w: 0.3, h: 0.3 },
+              strokes: [{ w: 0.03, pts: [[0, 0], [0.5, 0.5], [1, 1]] }],
+              color: '#00ff00',
+              opacity: 0.9,
+            },
           ],
         },
       ],
       spanLayers: [{ type: 'text', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }, text: 'Across the seam' }],
     };
     const normal = normalizeDocument(doc);
-    assert.strictEqual(normal.slides[0].layers.length, 5);
+    assert.strictEqual(normal.slides[0].layers.length, 6);
     assert.strictEqual(normal.spanLayers.length, 1);
     assert.deepStrictEqual(parseDocument(serializeDocument(doc)), normal);
   });
@@ -864,6 +878,77 @@ describe('layer schema', () => {
     assert.strictEqual(one({ type: 'counter', format: 42 }).format, '{i}/{n}');
     assert.strictEqual(one({ type: 'arrow', direction: 'left' }).direction, 'left');
     assert.strictEqual(one({ type: 'arrow', direction: 'up' }).direction, 'right');
+  });
+
+  test('ink: a valid stroke list round-trips', () => {
+    const layer = one({
+      type: 'ink',
+      strokes: [
+        { w: 0.05, pts: [[0, 0], [0.25, 0.5], [1, 1]] },
+        { w: 0.01, pts: [[0.2, 0.2], [0.8, 0.8]] },
+      ],
+      color: '#123456',
+      opacity: 0.5,
+    });
+    assert.deepStrictEqual(layer.strokes, [
+      { w: 0.05, pts: [[0, 0], [0.25, 0.5], [1, 1]] },
+      { w: 0.01, pts: [[0.2, 0.2], [0.8, 0.8]] },
+    ]);
+    assert.strictEqual(layer.color, '#123456');
+    assert.strictEqual(layer.opacity, 0.5);
+  });
+
+  test('ink: a stroke that is not a stroke is dropped, the rest survive', () => {
+    assert.deepStrictEqual(
+      one({
+        type: 'ink',
+        strokes: [
+          { w: 0.02, pts: [[0, 0], [1, 1]] },
+          'nope',
+          null,
+          { w: 0.02, pts: [[0, 0]] }, // one point — no line
+          { w: 0.02, pts: 'nope' }, // pts not an array
+          { w: 0.02, pts: [[0, 0], ['x', 0], [1, 1]] }, // a bad point mid-stroke is dropped, not the stroke
+        ],
+      }).strokes,
+      [{ w: 0.02, pts: [[0, 0], [1, 1]] }, { w: 0.02, pts: [[0, 0], [1, 1]] }],
+    );
+  });
+
+  test('ink: stroke width and point coordinates are clamped', () => {
+    const layer = one({
+      type: 'ink',
+      strokes: [{ w: 99, pts: [[-1, 2], [0.5, 0.5]] }],
+    });
+    assert.strictEqual(layer.strokes[0].w, 0.25);
+    assert.deepStrictEqual(layer.strokes[0].pts[0], [0, 1]);
+  });
+
+  test('ink: the stroke and point caps hold', () => {
+    const bigStroke = { w: 0.02, pts: Array.from({ length: 5000 }, (_, i) => [i / 5000, 0.5]) };
+    const capped = one({ type: 'ink', strokes: [bigStroke] });
+    assert.strictEqual(capped.strokes[0].pts.length, 2000);
+
+    const manyStrokes = Array.from({ length: 500 }, () => ({ w: 0.02, pts: [[0, 0], [1, 1]] }));
+    const layer = one({ type: 'ink', strokes: manyStrokes });
+    assert.strictEqual(layer.strokes.length, 200);
+  });
+
+  test('ink: a bad patch keeps the layer\'s own strokes instead of clearing them', () => {
+    const doc = normalizeDocument({
+      slides: [{ layers: [{ type: 'ink', strokes: [{ w: 0.02, pts: [[0, 0], [1, 1]] }] }] }],
+    });
+    const patched = updateLayer(doc, 0, 0, { strokes: 'not-an-array', opacity: 0.4 });
+    assert.deepStrictEqual(patched.slides[0].layers[0].strokes, [{ w: 0.02, pts: [[0, 0], [1, 1]] }]);
+    assert.strictEqual(patched.slides[0].layers[0].opacity, 0.4);
+  });
+
+  test('ink is additive: DOC_VERSION holds, and a document with no ink layer is unchanged', () => {
+    assert.strictEqual(DOC_VERSION, 1);
+    const doc = { slides: [{ layers: [{ type: 'rect', fill: '#112233' }] }] };
+    assert.deepStrictEqual(normalizeDocument(doc).slides[0].layers, [
+      { type: 'rect', box: FULL_BOX, fill: '#112233', opacity: 1, radius: 0 },
+    ]);
   });
 
   test('normalizeDocument stays idempotent over a document full of layers', () => {
