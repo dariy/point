@@ -521,6 +521,25 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(q('.ve-carousel-edit'), null);
       assert.equal(q('#carousel-studio-btn'), null);
     });
+
+    test('with the plugin disabled, the card still shows its thumbnails, ungroups, and reorders slides', async () => {
+      pluginHost.init([]);
+      routes['GET /api/posts/7'] = () => ({
+        ...POST(),
+        content: carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], 'c-7f3a'),
+      });
+      await mountPage({ params: { id: '7' } });
+      const slides = () => [...page.container.querySelectorAll('.ve-slide')];
+
+      assert.equal(slides().length, 2, 'both slides still show a thumbnail');
+      assert.ok(slides()[0].querySelector('.ve-thumb'));
+
+      fire(slides()[0].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowRight' });
+      assert.deepEqual(page._nodes[0].paths, ['/2024/08/b.jpg', '/2024/08/a.jpg']);
+
+      click(q('.ve-carousel-ungroup'));
+      assert.deepEqual(page._nodes.map(n => n.type), ['image', 'image']);
+    });
   });
 
   // ── Selecting cards, grouping, ungrouping ────────────────────────────
