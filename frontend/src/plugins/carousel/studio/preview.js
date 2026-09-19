@@ -408,6 +408,30 @@ export function arrowPlan(box, direction) {
 }
 
 /**
+ * The strokes `paintInkLayer` (`render.js`) will draw, in the box's own canvas
+ * pixels: each stroke's points scaled by the box's width and height — the
+ * same 0..1 space {@link layerRect} resolves everything else from — paired
+ * with its own width in canvas pixels, the {@link ARROW_STROKE}-style
+ * fraction of the box's shorter side. `[]` for a box too small to hold its
+ * own stroke — which the painter skips too, so the preview skips it the same
+ * way {@link arrowPlan} does.
+ *
+ * @param {{w:number, h:number}} box
+ * @param {Array<{w:number, pts:Array<[number,number]>}>} strokes
+ * @returns {Array<{stroke:number, points:Array<[number,number]>}>}
+ */
+export function inkPlan(box, strokes) {
+  if (box.w < 1 || box.h < 1) return [];
+  const short = Math.min(box.w, box.h);
+  return (Array.isArray(strokes) ? strokes : [])
+    .filter((s) => Array.isArray(s.pts) && s.pts.length >= 2)
+    .map((s) => ({
+      stroke: Math.max(1, Math.round(short * s.w)),
+      points: s.pts.map(([x, y]) => [x * box.w, y * box.h]),
+    }));
+}
+
+/**
  * Paint a slide's own layers as positioned DOM elements over its image — the
  * CSS twin of `render.js`'s `paintLayers`. Every `.carousel-studio__layer` the
  * markup placed inside a `[data-slice]` host is resolved through `layerRect` —
@@ -543,6 +567,8 @@ function paintLayerContent(el, layer, env) {
     el.style.opacity = String(layer.opacity);
   } else if (layer.type === "arrow") {
     paintArrowContent(el, layer, env.rect);
+  } else if (layer.type === "ink") {
+    paintInkContent(el, layer, env.rect);
   }
 }
 
@@ -667,6 +693,42 @@ function paintArrowContent(el, layer, rect) {
   poly.setAttribute("stroke-linecap", "round");
   poly.setAttribute("stroke-linejoin", "round");
   svg.appendChild(poly);
+  el.appendChild(svg);
+}
+
+/**
+ * One `ink` layer, as the SVG twin of `paintInkLayer`'s strokes: one
+ * `<polyline>` per stroke, each over the same `viewBox` — the layer's
+ * canvas-pixel box — {@link paintArrowContent} uses, so the drawing is the
+ * render's geometry scaled, not an approximation of it.
+ *
+ * @param {HTMLElement} el
+ * @param {import('../document.js').CarouselInkLayer} layer
+ * @param {{w:number, h:number}} rect the layer's box in canvas pixels
+ */
+function paintInkContent(el, layer, rect) {
+  el.style.opacity = String(layer.opacity);
+  const strokes = inkPlan(rect, layer.strokes);
+  if (!strokes.length) return;
+
+  const doc = el.ownerDocument;
+  const svg = doc.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${rect.w} ${rect.h}`);
+  svg.style.position = "absolute";
+  svg.style.left = "0";
+  svg.style.top = "0";
+  svg.style.width = "100%";
+  svg.style.height = "100%";
+  for (const { stroke, points } of strokes) {
+    const poly = doc.createElementNS(SVG_NS, "polyline");
+    poly.setAttribute("points", points.map(([x, y]) => `${x},${y}`).join(" "));
+    poly.setAttribute("fill", "none");
+    poly.setAttribute("stroke", layer.color || DEFAULT_MARK_COLOR);
+    poly.setAttribute("stroke-width", String(stroke));
+    poly.setAttribute("stroke-linecap", "round");
+    poly.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(poly);
+  }
   el.appendChild(svg);
 }
 

@@ -15,6 +15,7 @@ import assert from 'node:assert';
 
 import {
   arrowPlan,
+  inkPlan,
   paintAnchorRail,
   paintDeckLayers,
   paintDeckSlide,
@@ -582,6 +583,49 @@ describe('carousel studio preview', () => {
       );
     });
 
+    test('an ink layer strokes the render’s polylines, in the box’s own pixels', () => {
+      const layer = normalizeLayer({
+        type: 'ink',
+        box: { x: 0.1, y: 0.1, w: 0.3, h: 0.3 },
+        strokes: [{ w: 0.05, pts: [[0, 0], [0.5, 1], [1, 0]] }],
+      });
+      const rect = layerRect(layer, ASPECT);
+      const plan = inkPlan(rect, layer.strokes);
+      const path = rendered(layer)
+        .filter((e) => e[0] === 'moveTo' || e[0] === 'lineTo')
+        .map((e) => [e[1], e[2]]);
+
+      assert.strictEqual(plan.length, 1);
+      assert.deepStrictEqual(
+        plan[0].points.map(([x, y]) => [x + rect.x, y + rect.y]),
+        path,
+        'the same points, once the box origin is added back',
+      );
+    });
+
+    test('multiple strokes paint as separate polylines, each its own width', () => {
+      const layer = normalizeLayer({
+        type: 'ink',
+        box: { x: 0.2, y: 0.2, w: 0.4, h: 0.2 },
+        strokes: [
+          { w: 0.02, pts: [[0, 0], [1, 1]] },
+          { w: 0.1, pts: [[1, 0], [0, 1]] },
+        ],
+      });
+      const rect = layerRect(layer, ASPECT);
+      const plan = inkPlan(rect, layer.strokes);
+      assert.strictEqual(plan.length, 2);
+      assert.notStrictEqual(plan[0].stroke, plan[1].stroke);
+
+      const path = rendered(layer)
+        .filter((e) => e[0] === 'moveTo' || e[0] === 'lineTo')
+        .map((e) => [e[1], e[2]]);
+      assert.deepStrictEqual(
+        plan.flatMap((s) => s.points.map(([x, y]) => [x + rect.x, y + rect.y])),
+        path,
+      );
+    });
+
     test('blank text sets nothing, exactly as the render paints nothing', () => {
       const layer = textLayer({ text: '   ', size: 0.06 });
       const rect = layerRect(layer, ASPECT);
@@ -744,6 +788,38 @@ describe('carousel studio preview', () => {
         }),
       );
       assert.deepStrictEqual(el.children, []);
+    });
+
+    test('ink is emitted as one polyline per stroke, in the layer’s own box', () => {
+      const layer = normalizeLayer({
+        type: 'ink',
+        box: { x: 0.6, y: 0.3, w: 0.3, h: 0.3 },
+        color: '#00ff00',
+        strokes: [
+          { w: 0.03, pts: [[0, 0], [0.5, 0.5], [1, 1]] },
+          { w: 0.08, pts: [[0, 1], [1, 0]] },
+        ],
+      });
+      const rect = layerRect(layer, ASPECT);
+      const plan = inkPlan(rect, layer.strokes);
+
+      const el = paintOne(layer);
+      const svg = el.children[0];
+      assert.strictEqual(svg.tag, 'svg');
+      assert.strictEqual(svg.attrs.viewBox, `0 0 ${rect.w} ${rect.h}`);
+      assert.strictEqual(svg.children.length, plan.length);
+      svg.children.forEach((poly, i) => {
+        assert.strictEqual(poly.tag, 'polyline');
+        assert.strictEqual(
+          poly.attrs.points,
+          plan[i].points.map(([x, y]) => `${x},${y}`).join(' '),
+        );
+        assert.strictEqual(poly.attrs['stroke-width'], String(plan[i].stroke));
+        assert.strictEqual(poly.attrs['stroke-linecap'], 'round');
+        assert.strictEqual(poly.attrs['stroke-linejoin'], 'round');
+        assert.strictEqual(poly.attrs.stroke, '#00ff00');
+        assert.strictEqual(poly.attrs.fill, 'none');
+      });
     });
 
     test('a layer deleted since the last render hides its element', () => {

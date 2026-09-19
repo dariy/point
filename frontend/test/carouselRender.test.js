@@ -489,6 +489,13 @@ const counterLayer = (patch) =>
   normalizeLayer({ type: 'counter', box: { x: 0.1, y: 0.1, w: 0.8, h: 0.2 }, ...patch });
 const arrowLayer = (patch) =>
   normalizeLayer({ type: 'arrow', box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }, ...patch });
+const inkLayer = (patch) =>
+  normalizeLayer({
+    type: 'ink',
+    box: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 },
+    strokes: [{ w: 0.1, pts: [[0, 0], [1, 1]] }],
+    ...patch,
+  });
 
 /** A decoded layer image, as `loadLayerImages` hands it to `paintSlide`. */
 const placedImage = (layer, entry) => new Map([[layer, { bitmap: 'LOGO', ...entry }]]);
@@ -766,6 +773,52 @@ describe('paintSlide — arrow layers', () => {
       [arrowLayer({ box: { x: 0.5, y: 0.5, w: 1 / 1080, h: 1 / 1080 } })], { aspect: '4:5' });
     assert.deepStrictEqual(log.filter((e) => e[0] === 'stroke'), []);
   });
+});
+
+describe('paintSlide — ink layers', () => {
+  test('a stroked freehand path, in the box’s own pixels', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null, [inkLayer()], { aspect: '4:5' });
+    assert.deepStrictEqual(log, [
+      ['clearRect', 0, 0, 1080, 1350],
+      ['drawImage', 'BMP', 0, 0, 1080, 1350],
+      ['save'],
+      ['strokeStyle', '#ffffff'],
+      ['lineCap', 'round'],
+      ['lineJoin', 'round'],
+      // A 216x270 box: the stroke is 0.1 of the shorter side (216), in pixels.
+      ['lineWidth', 22],
+      ['beginPath'],
+      ['moveTo', 432, 540],
+      ['lineTo', 648, 810],
+      ['stroke'],
+      ['restore'],
+    ]);
+    assert.deepStrictEqual(painted(log), [], 'a path, not a glyph — no font is consulted');
+  });
+
+  test('each stroke is its own path and its own width', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [inkLayer({
+        strokes: [
+          { w: 0.02, pts: [[0, 0], [1, 0]] },
+          { w: 0.1, pts: [[0, 1], [1, 1]] },
+        ],
+      })], { aspect: '4:5' });
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'lineWidth').map((e) => e[1]), [4, 22]);
+    assert.strictEqual(log.filter((e) => e[0] === 'beginPath').length, 2);
+    assert.strictEqual(log.filter((e) => e[0] === 'stroke').length, 2);
+  });
+
+  test('colour and opacity come from the layer', () => {
+    const log = [];
+    paintSlide(recordingCtx(log), 'BMP', FULL_RECT, 1080, 1350, null,
+      [inkLayer({ color: '#ff0088', opacity: 0.25 })], { aspect: '4:5' });
+    assert.ok(log.some((e) => e[0] === 'strokeStyle' && e[1] === '#ff0088'));
+    assert.deepStrictEqual(log.filter((e) => e[0] === 'globalAlpha'), [['globalAlpha', 0.25]]);
+  });
+
 });
 
 describe('renderSplit', () => {
