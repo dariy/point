@@ -426,6 +426,48 @@ function paintArrowLayer(ctx, layer, box) {
 }
 
 /**
+ * Paint one `ink` layer: each stroke a rounded, stroked path over the points
+ * normalized inside the layer's own box — the same 0..1 space {@link
+ * layerRect} resolves everything else from, so a stroke scales and rotates
+ * exactly as any other layer does.
+ *
+ * Stroke width is a fraction of the box's shorter side, the
+ * {@link ARROW_STROKE} convention, converted to canvas pixels per stroke
+ * since each one carries its own width. A box under a pixel on either side
+ * cannot hold its own stroke, so it is skipped whole.
+ *
+ * @param {any} ctx 2D context
+ * @param {import('./document.js').CarouselInkLayer} layer
+ * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ */
+function paintInkLayer(ctx, layer, box) {
+  const alpha = alphaOf(layer);
+  if (alpha <= 0 || box.w < 1 || box.h < 1) return;
+  const short = Math.min(box.w, box.h);
+
+  ctx.save();
+  try {
+    if (alpha < 1) ctx.globalAlpha = alpha;
+    ctx.strokeStyle = layer.color || DEFAULT_MARK_COLOR;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const stroke of layer.strokes || []) {
+      const pts = stroke.pts;
+      if (!Array.isArray(pts) || pts.length < 2) continue;
+      ctx.lineWidth = Math.max(1, Math.round(short * stroke.w));
+      ctx.beginPath();
+      ctx.moveTo(box.x + pts[0][0] * box.w, box.y + pts[0][1] * box.h);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(box.x + pts[i][0] * box.w, box.y + pts[i][1] * box.h);
+      }
+      ctx.stroke();
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
  * One painter per layer `type`, the draw-layer twin of `LAYER_BUILDERS` in
  * `document.js`: a table rather than a switch, so a type the schema knows and
  * this build cannot draw is a missing key — skipped whole — rather than a
@@ -461,6 +503,8 @@ const LAYER_PAINTERS = {
     ),
 
   arrow: (ctx, layer, box) => paintArrowLayer(ctx, layer, box),
+
+  ink: (ctx, layer, box) => paintInkLayer(ctx, layer, box),
 };
 
 /**
