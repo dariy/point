@@ -20,9 +20,12 @@ import {
   EYE_OFF_SVG,
   EYE_SVG,
   GRIP_SVG,
+  MENU_SVG,
   PLUS_SVG,
+  REDO_SVG,
   REFRESH_SVG,
   TRASH_SVG,
+  UNDO_SVG,
 } from "../../../utils/icons.js";
 import {
   canvasSize,
@@ -124,6 +127,49 @@ export function historyButtons({ canUndo, canRedo, busy }) {
     <div class="carousel-studio__history" role="group" aria-label="History">
       ${step("undo", "&#8630;", "Undo", "Ctrl+Z", canUndo)}
       ${step("redo", "&#8631;", "Redo", "Ctrl+Shift+Z", canRedo)}
+    </div>`;
+}
+
+/**
+ * The icon dock — one row of large touch targets against the bottom edge of
+ * the fixed shell, inside the thumb arc. `builder()` emits it always; CSS
+ * decides which bar the user sees, so on a coarse pointer this row shows and
+ * `.carousel-studio__toolbar` does not, and on a fine pointer the reverse. One
+ * markup tree, two layouts — the discipline the properties rail already keeps.
+ *
+ * The row ships three of its five slots. The slide stepper (`‹ 3 / 8 ›`) goes
+ * after the burger, and the "+ Add layer…" select goes last; each arrives with
+ * its own bead (p-carousel-touch-layout-vfs1.4 and .7). The gap is left empty
+ * on purpose: a button that does nothing reads as a broken control, which is
+ * worse than a shorter row.
+ *
+ * Every label here is an icon, so every button carries an `aria-label` as
+ * well. The history pair takes the rule `historyButtons` takes — the ring's
+ * own depth, and dark through a render. The burger does not: it opens a panel,
+ * which stays a fair thing to do while the render runs.
+ *
+ * @param {{canUndo: boolean, canRedo: boolean, busy: boolean}} o
+ */
+export function dock({ canUndo, canRedo, busy }) {
+  const button = (action, glyph, label, enabled) => html`
+    <button
+      type="button"
+      class="carousel-studio__dock-btn"
+      data-action="${action}"
+      title="${label}"
+      aria-label="${label}"
+      ${enabled ? "" : "disabled"}
+    >
+      ${raw(glyph)}
+    </button>`;
+  // Slot — the slide stepper (p-carousel-touch-layout-vfs1.4) belongs between
+  // the burger and the history pair, and the add-layer select
+  // (p-carousel-touch-layout-vfs1.7) after them.
+  return html`
+    <div class="carousel-studio__dock" role="toolbar" aria-label="Studio actions">
+      ${button("toggle-props", MENU_SVG, "Properties", true)}
+      ${button("undo", UNDO_SVG, "Undo", canUndo && !busy)}
+      ${button("redo", REDO_SVG, "Redo", canRedo && !busy)}
     </div>`;
 }
 
@@ -350,6 +396,10 @@ function layerLabel(layer) {
  *   opacity: number}|null} [o.inkSession]  the ink tool's live session
  *   (`index.js`), or null while the tool is off — armed column, toolbar
  *   state and the properties panel swap all read this one value.
+ * @param {boolean} [o.canUndo]  can the document's history ring step back? The
+ *   dock carries its own undo/redo pair, because the header's pair
+ *   (`actionsBar`) is out of a thumb's reach on a phone.
+ * @param {boolean} [o.canRedo]  can it step forward?
  */
 export function builder({
   doc,
@@ -371,6 +421,8 @@ export function builder({
   error = "",
   tray = "",
   inkSession = null,
+  canUndo = false,
+  canRedo = false,
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
@@ -566,16 +618,31 @@ export function builder({
   // properties all the same, so they sit together behind the toolbar's own
   // "Document" disclosure rather than inside the mode's panel, which is about
   // the selected slide.
-  const docControls = html`
+  //
+  // Built twice, like `stageBar` below it: the toolbar's copy for a fine
+  // pointer and the properties panel's copy for a coarse one. Only one copy
+  // may own the ids — `withIds: false` is the copy that gives them up, and the
+  // page updates the count readout through the class both copies share
+  // (`input:carousel-n`, index.js). Every control here is driven by
+  // `data-action`, which a delegated listener reads off whichever copy the
+  // user actually pressed, so the second copy is live without a second wiring.
+  const docControls = (withIds) => html`
     <div class="carousel-studio__controls">
       ${deck
         ? ""
         : html`
             <label class="carousel-studio__control">
-              <span>Slides: <output id="carousel-n-out">${String(n)}</output></span>
+              <span
+                >Slides:
+                <output
+                  class="carousel-studio__n-out"
+                  ${withIds ? raw('id="carousel-n-out"') : ""}
+                  >${String(n)}</output
+                ></span
+              >
               <input
                 type="range"
-                id="carousel-n"
+                ${withIds ? raw('id="carousel-n"') : ""}
                 data-action="carousel-n"
                 min="${String(MIN_SLIDES)}"
                 max="${String(MAX_SLIDES)}"
@@ -585,7 +652,7 @@ export function builder({
 
       <label class="carousel-studio__control">
         <span>Aspect</span>
-        <select id="carousel-aspect" data-action="carousel-aspect">
+        <select ${withIds ? raw('id="carousel-aspect"') : ""} data-action="carousel-aspect">
           ${ASPECT_OPTIONS.map(
             ([val, text]) => html`
               <option value="${val}" ${val === doc.aspect ? "selected" : ""}>${text}</option>`,
@@ -596,7 +663,7 @@ export function builder({
       <label class="carousel-studio__control carousel-studio__control--check">
         <input
           type="checkbox"
-          id="carousel-guides"
+          ${withIds ? raw('id="carousel-guides"') : ""}
           data-action="carousel-guides"
           ${showGuides ? "checked" : ""}
         />
@@ -605,6 +672,41 @@ export function builder({
 
       ${sourceButton}
     </div>`;
+
+  // The toolbar's own controls, again, for the layout that has no toolbar. On
+  // a coarse pointer the dock takes the bottom edge and `.carousel-studio__
+  // toolbar` is `display: none`, which would take the mode toggle, the
+  // Document disclosure, the Draw switch and the stage zoom with it. They are
+  // emitted here as well, each under its own heading, and the two copies are
+  // hidden in turn by the same query (`carousel.css`, the coarse block) — the
+  // props rail's discipline: one markup tree, two layouts.
+  //
+  // The disclosure does not come along. A popover inside a panel that is
+  // itself a disclosure is one wrapper too many, and dropping it also drops
+  // the second `#carousel-doc-controls`, which `_toggleDocControls` looks up
+  // by id.
+  const propsTools = html`
+    <section class="carousel-studio__props-tools">
+      <div class="carousel-studio__props-tool">
+        <h3 class="carousel-studio__subhead">Framing mode</h3>
+        ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
+      </div>
+      ${deck
+        ? html`
+            <div class="carousel-studio__props-tool">
+              <h3 class="carousel-studio__subhead">Drawing</h3>
+              ${drawToolControl(inkSession)}
+            </div>`
+        : ""}
+      <div class="carousel-studio__props-tool">
+        <h3 class="carousel-studio__subhead">Document</h3>
+        ${docControls(false)}
+      </div>
+      <div class="carousel-studio__props-tool">
+        <h3 class="carousel-studio__subhead">Stage</h3>
+        ${stageBar({ stageZoom, withIds: false })}
+      </div>
+    </section>`;
 
   return html`
     <div class="carousel-studio__toolbar">
@@ -625,7 +727,7 @@ export function builder({
           class="carousel-studio__doc-popover${docControlsOpen ? "" : " collapsed"}"
           id="carousel-doc-controls"
         >
-          ${docControls}
+          ${docControls(true)}
         </div>
       </div>
       ${stageBar({ stageZoom })}
@@ -675,6 +777,7 @@ export function builder({
               ? inkToolPanel(inkSession)
               : layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
             : ""}
+          ${propsTools}
         </div>
       </aside>
     </div>
@@ -682,7 +785,9 @@ export function builder({
     <div class="carousel-studio__tray">
       ${renderedStrip({ doc, renderedPaths })}
       ${tray}
-    </div>`;
+    </div>
+
+    ${dock({ canUndo, canRedo, busy })}`;
 }
 
 /**
@@ -739,9 +844,16 @@ export function renderedStrip({ doc, renderedPaths }) {
  * "100%" here means the stage's own height budget, not 1:1 with the 1350px
  * canvas — the canvas is taller than any laptop.
  *
- * @param {{stageZoom: number}} o
+ * `builder()` emits this bar twice — once in the toolbar, once in the
+ * properties panel for the coarse-pointer layout, which has no toolbar. Only
+ * one of the two may carry the readout's id, because two live nodes under one
+ * id make `document.getElementById` pick a winner and leave the other stale.
+ * `withIds: false` is the copy that gives the id up; the page writes both
+ * through the class they share (`_setStageZoom`, index.js).
+ *
+ * @param {{stageZoom: number, withIds?: boolean}} o
  */
-export function stageBar({ stageZoom }) {
+export function stageBar({ stageZoom, withIds = true }) {
   return html`
     <div class="carousel-studio__stage-bar">
       <div class="carousel-studio__zoom" role="group" aria-label="Stage zoom">
@@ -754,7 +866,9 @@ export function stageBar({ stageZoom }) {
         >
           &minus;
         </button>
-        <output class="carousel-studio__zoom-readout" id="carousel-zoom-readout"
+        <output
+          class="carousel-studio__zoom-readout"
+          ${withIds ? raw('id="carousel-zoom-readout"') : ""}
           >${String(Math.round(stageZoom * 100))}%</output
         >
         <button

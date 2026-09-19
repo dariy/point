@@ -879,8 +879,14 @@ export default class CarouselStudioPage extends Component {
     // document (and re-renders the preview) — so a slider or colour picker
     // doesn't fight a rebuild mid-drag.
     "input:carousel-n"(_e, el) {
-      const out = this.$("#carousel-n-out");
-      if (out) out.textContent = String(/** @type {HTMLInputElement} */ (el).value);
+      // Every copy, not the first: the coarse-pointer layout has no toolbar,
+      // so `builder` emits these controls a second time in the properties
+      // panel (`propsTools`, studio/panels.js). Only the toolbar's copy owns
+      // the id, and the class is what reaches both.
+      const value = String(/** @type {HTMLInputElement} */ (el).value);
+      this.$$(".carousel-studio__n-out").forEach((out) => {
+        out.textContent = value;
+      });
     },
     "change:carousel-n"(_e, el) {
       // A manual count is a free `cover` count — the pixel-exact strategies own
@@ -3121,8 +3127,11 @@ export default class CarouselStudioPage extends Component {
       "--carousel-stage-zoom",
       String(this._stageZoom),
     );
-    const out = this.$("#carousel-zoom-readout");
-    if (out) out.textContent = `${Math.round(this._stageZoom * 100)}%`;
+    // Both copies of the bar — see `input:carousel-n` above.
+    const text = `${Math.round(this._stageZoom * 100)}%`;
+    this.$$(".carousel-studio__zoom-readout").forEach((out) => {
+      out.textContent = text;
+    });
   }
 
   /** The zoom at which the whole strip fits the scroller's width. Measured
@@ -3258,6 +3267,8 @@ export default class CarouselStudioPage extends Component {
       error,
       tray,
       inkSession: this._drawSession,
+      canUndo: this._history.canUndo,
+      canRedo: this._history.canRedo,
     });
   }
 

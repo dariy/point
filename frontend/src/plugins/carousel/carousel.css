@@ -49,6 +49,43 @@
   margin-bottom: 0;
 }
 
+/* ── The icon dock ─────────────────────────────────────────────────────────
+ * The toolbar's opposite number: one row of 44px targets against the bottom
+ * edge of the fixed shell, where a thumb already is. `builder()` emits it on
+ * every pointer and this rule hides it; the coarse block near the end of the
+ * file turns it on and hides the toolbar instead. Markup does not choose the
+ * layout, because a media query is the only honest reader of "is this a
+ * finger?" — the same split the properties rail keeps. */
+.carousel-studio__dock {
+  display: none;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) 0;
+}
+
+.carousel-studio__dock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.carousel-studio__dock-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.carousel-studio__dock-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* The stage and the properties panel — the studio's body row. */
 .carousel-studio__builder {
   display: flex;
@@ -424,7 +461,11 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    /* Toolbar, body, tray — and the dock last, so it is against the shell's
+     * bottom edge rather than after the tray's own scroll. The row is `auto`
+     * and the dock is `display: none` on a fine pointer, so it costs nothing
+     * there. */
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     /* The grid has one implicit column, and a grid item's automatic minimum
      * width defaults to its content's min-content size — the same trap
      * `.carousel-studio__main` already clears below with its own
@@ -1330,6 +1371,23 @@
   gap: var(--spacing-md);
 }
 
+/* The toolbar's controls, second copy, for the layout that has no toolbar.
+ * Hidden here and shown by the coarse block — the mirror image of the dock
+ * rule above, and the reason `builder()` can emit one tree for both. */
+.carousel-studio__props-tools {
+  display: none;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: var(--border-width) solid var(--border-primary);
+}
+
+.carousel-studio__props-tool > .editor-mode-toggle {
+  /* Same correction the toolbar row makes: the shared toggle is styled for a
+   * form column and carries a bottom margin meant to space a field below it. */
+  margin-bottom: 0;
+}
+
 @media (min-width: 64em) {
   /* The row is now the body row of the fixed-viewport grid above (48em
    * block) rather than a natural-height block the page scrolled past — so it
@@ -1494,6 +1552,42 @@
      * tall may one column be and still fit?" rather than "how tall is the
      * column?" (`_touchStageBudget`, index.js). */
     height: calc(var(--carousel-stage-budget, 12rem) * var(--carousel-stage-zoom, 1));
+  }
+}
+
+/* ── Coarse pointer: the dock replaces the toolbar ───────────────────────────
+ * A row of text buttons at the top edge is the hardest place on a phone for a
+ * thumb to reach, so the dock takes the bottom edge and the toolbar row goes.
+ * Both are in the markup on every pointer (`builder()`, studio/panels.js);
+ * this is the only place that decides which one the user sees.
+ *
+ * The toolbar's own controls are not lost with it. The mode toggle, the Draw
+ * switch, the document controls and the stage zoom are emitted a second time
+ * in the properties panel (`.carousel-studio__props-tools`), and the panel is
+ * exactly what the dock's burger opens. The second copy carries no ids: the
+ * page looks `#carousel-n-out` and `#carousel-zoom-readout` up after render,
+ * and two live nodes under one id is a readout that quietly stops moving.
+ *
+ * The one thing the toolbar carries that has no second home is the error
+ * banner, which must be readable without opening a panel. So the row comes
+ * back — with the banner alone in it — exactly when there is an error to
+ * show. */
+@media (pointer: coarse) {
+  .carousel-studio__toolbar {
+    display: none;
+  }
+
+  .carousel-studio__toolbar:has(> .error-state) {
+    display: flex;
+  }
+
+  .carousel-studio__toolbar > :not(.error-state) {
+    display: none;
+  }
+
+  .carousel-studio__dock,
+  .carousel-studio__props-tools {
+    display: flex;
   }
 }
 

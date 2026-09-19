@@ -242,6 +242,25 @@ export const REFRESH_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill
     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+/* Undo and redo, drawn at 18px like the other icons a touch dock carries. The
+   studio's own header pair uses the ↶/↷ characters instead: that row is text
+   buttons beside text buttons, where a glyph reads as one of them. */
+export const UNDO_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="9 14 4 9 9 4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4 9h10a6 6 0 0 1 0 12h-4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const REDO_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="15 14 20 9 15 4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 9H10a6 6 0 0 0 0 12h4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 export const WARNING_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
