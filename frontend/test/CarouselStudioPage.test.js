@@ -3929,4 +3929,248 @@ describe('CarouselStudioPage', () => {
       });
     });
   });
+
+  /**
+   * The touch layout (S10): on a coarse pointer the stage scroller is locked
+   * and the page moves it, so the selected column — not the remembered
+   * offset — is what decides the view. The strip itself is untouched: all `n`
+   * slides are still in the DOM, which is why these tests can still find
+   * `[data-slice="2"]` at all.
+   */
+  describe('the touch layout', () => {
+    const SRC = '/2026/08/pano.jpg';
+
+    /** A coarse pointer, for `isTouchLayout` (studio/layout.js). Must be in
+     *  place before the mount: the page reads the query in its constructor
+     *  (`readPropsPref`) and again in every `afterRender`. */
+    const goCoarse = () => {
+      dom.window.matchMedia = (q) => ({
+        matches: q === '(pointer: coarse)',
+        media: q,
+        addEventListener() {}, removeEventListener() {},
+        addListener() {}, removeListener() {},
+      });
+    };
+
+    /** A deck of `n` slides from one source. */
+    function deck(n) {
+      const doc = {
+        version: 1,
+        aspect: '4:5',
+        mode: 'deck',
+        strategy: 'cover',
+        slides: Array.from({ length: n }, () => ({ source: SRC })),
+      };
+      const routes = [
+        [/\/api\/posts\/42$/, (url, opts) => (opts.method === 'PUT' ? { body: {} } : { body: POST })],
+        [/\/api\/carousel/, (url, opts) =>
+          opts.method === 'PUT' ? { body: {} } : { body: { post_id: 42, doc } }],
+      ];
+      const deps = {
+        ...fakeRenderDeps(async () => ({})),
+        probeSize: async () => ({ w: 4096, h: 2000 }),
+      };
+      return { routes, deps };
+    }
+
+    /** linkedom has no layout engine, so hand the two nodes the arithmetic
+     *  reads the boxes a browser would have measured: a 400px pane holding
+     *  368px columns, the 16px left over being the `padding-inline` the locked
+     *  scroller carries for the end insert-zone buttons. */
+    function measure(el, i, { paneW = 400, pad = 16, colW = 368 } = {}) {
+      const scroll = el.querySelector('.carousel-studio__stage-scroll');
+      const col = el.querySelector(`.carousel-studio__stage-slide[data-slice="${i}"]`);
+      const box = (left, width) => ({
+        left, width, right: left + width, top: 0, bottom: 0, height: 0,
+      });
+      scroll.clientWidth = paneW;
+      scroll.getBoundingClientRect = () => box(0, paneW);
+      col.getBoundingClientRect = () => box(pad + i * colW - scroll.scrollLeft, colW);
+      const moves = [];
+      scroll.scrollTo = (opts) => moves.push(opts);
+      return { scroll, col, moves };
+    }
+
+    test('centres the selected column in the locked pane', async () => {
+      goCoarse();
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      page.state.selected = 2;
+      const { moves } = measure(el, 2);
+      page._scrollActiveIntoView(false);
+
+      // The column starts 16 + 2·368 = 752px into the content. Centring it in
+      // the 400px pane backs off half the 32px slack, so 16px of padding stays
+      // visible on each side and neither end "+ Slide" button is clipped.
+      assert.deepStrictEqual(moves, [{ left: 736, behavior: 'auto' }]);
+    });
+
+    test('asks for a smooth move when the caller wants one', async () => {
+      goCoarse();
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      page.state.selected = 1;
+      const { moves } = measure(el, 1);
+      page._scrollActiveIntoView(true);
+
+      assert.deepStrictEqual(moves, [{ left: 368, behavior: 'smooth' }]);
+    });
+
+    /**
+     * Geometry and `scrollTo` stubbed at the **prototype**, because a render
+     * tears every node down and builds it again — a box stubbed on the live
+     * scroller would not survive the pass under test. Everything that is
+     * neither the scroller nor a stage column keeps the zero box the rest of
+     * the harness already hands out.
+     *
+     * @returns the moves the locked scroller was asked to make, and a restore
+     */
+    function watchRenderScroll(win, { paneW = 400, pad = 16, colW = 368 } = {}) {
+      const proto = win.HTMLElement.prototype;
+      const savedRect = Object.getOwnPropertyDescriptor(proto, 'getBoundingClientRect');
+      const savedTo = Object.getOwnPropertyDescriptor(proto, 'scrollTo');
+      const savedWidth = Object.getOwnPropertyDescriptor(proto, 'clientWidth');
+      const moves = [];
+      const box = (left, width) => ({
+        x: left, y: 0, left, width, right: left + width, top: 0, bottom: 0, height: 0,
+      });
+      const isScroller = (el) => el.classList?.contains('carousel-studio__stage-scroll');
+      proto.getBoundingClientRect = function getBoundingClientRect() {
+        if (isScroller(this)) return box(0, paneW);
+        if (this.classList?.contains('carousel-studio__stage-slide') && this.dataset?.slice != null) {
+          // A real box moves with the scroll; the arithmetic under test adds
+          // `scrollLeft` back, so a fixed box would hide a sign error.
+          const scrolled = this.closest?.('.carousel-studio__stage-scroll')?.scrollLeft || 0;
+          return box(pad + Number(this.dataset.slice) * colW - scrolled, colW);
+        }
+        return box(0, 0);
+      };
+      proto.scrollTo = function scrollTo(opts) {
+        if (isScroller(this)) moves.push(opts);
+      };
+      Object.defineProperty(proto, 'clientWidth', {
+        configurable: true,
+        get() {
+          return isScroller(this) ? paneW : (savedWidth?.get?.call(this) ?? 0);
+        },
+        set(v) {
+          savedWidth?.set?.call(this, v);
+        },
+      });
+      return {
+        moves,
+        restore() {
+          if (savedRect) Object.defineProperty(proto, 'getBoundingClientRect', savedRect);
+          else delete proto.getBoundingClientRect;
+          if (savedTo) Object.defineProperty(proto, 'scrollTo', savedTo);
+          else delete proto.scrollTo;
+          if (savedWidth) Object.defineProperty(proto, 'clientWidth', savedWidth);
+          else delete proto.clientWidth;
+        },
+      };
+    }
+
+    test('a render scrolls to the selection rather than the remembered offset', async () => {
+      goCoarse();
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      // The offset the next `beforeRender` will snapshot and the old path
+      // would restore. On a coarse pointer it loses to the selection.
+      el.querySelector('.carousel-studio__stage-scroll').scrollLeft = 999;
+      page.state.selected = 2;
+
+      const watch = watchRenderScroll(dom.window);
+      try {
+        await page._render();
+        await settle();
+      } finally {
+        watch.restore();
+      }
+
+      // A load settles over several passes (the deck paint, the preview font).
+      // What matters is that every one of them lands on the same column, the
+      // selected one, centred — never on the remembered 999.
+      assert.ok(watch.moves.length > 0, 'the render moved the locked scroller');
+      assert.deepStrictEqual(
+        [...new Set(watch.moves.map((m) => JSON.stringify(m)))],
+        [JSON.stringify({ left: 736, behavior: 'auto' })],
+        'every pass centred slide 3 — 16 + 2·368, less half the 32px of slack',
+      );
+      assert.ok(
+        el.querySelector('.carousel-studio__stage-slide[data-slice="2"]'),
+        'every slide is still in the DOM — the strip is locked, not rebuilt',
+      );
+    });
+
+    test('a fine pointer keeps the remembered offset, untouched', async () => {
+      // No `goCoarse()` — the harness answers `matches: false` to everything.
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      el.querySelector('.carousel-studio__stage-scroll').scrollLeft = 999;
+      page.state.selected = 2;
+
+      const watch = watchRenderScroll(dom.window);
+      try {
+        await page._render();
+        await settle();
+      } finally {
+        watch.restore();
+      }
+
+      assert.deepStrictEqual(watch.moves, [], 'nothing scrolled the stage');
+      assert.equal(
+        el.querySelector('.carousel-studio__stage-scroll').scrollLeft,
+        999,
+        'the remembered offset was restored, exactly as before S10',
+      );
+    });
+
+    test('the budget fits one whole column, not the whole pane', async () => {
+      goCoarse();
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const scroll = el.querySelector('.carousel-studio__stage-scroll');
+      const builder = el.querySelector('.carousel-studio__builder');
+      // The locked scroller's `padding-inline` — `clientWidth` counts it, and
+      // a column sized against it would eat the room the end insert-zone
+      // buttons ride in.
+      globalThis.getComputedStyle = () => ({ paddingLeft: '16px', paddingRight: '16px' });
+
+      // A short, wide pane: at 4:5 a column as wide as the 368px of content
+      // wants 368 · 1350/1080 = 460px of height, which 300px cannot give, so
+      // the pane's own height binds.
+      scroll.clientWidth = 400;
+      scroll.clientHeight = 300;
+      page._measureStageBudget();
+      assert.equal(builder.style.getPropertyValue('--carousel-stage-budget'), '300px');
+
+      // A tall pane: now the width binds, and the budget is the tallest a
+      // column may be and still fit across.
+      scroll.clientHeight = 2000;
+      page._measureStageBudget();
+      assert.equal(builder.style.getPropertyValue('--carousel-stage-budget'), '460px');
+    });
+
+    test('a fine pointer still measures the column, not the pane', async () => {
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      const col = el.querySelector('.carousel-studio__stage-col');
+      const scroll = el.querySelector('.carousel-studio__stage-scroll');
+      const builder = el.querySelector('.carousel-studio__builder');
+
+      col.clientHeight = 512;
+      // Whatever the scroller says is irrelevant off the touch layout.
+      scroll.clientWidth = 400;
+      scroll.clientHeight = 300;
+      page._measureStageBudget();
+
+      assert.equal(builder.style.getPropertyValue('--carousel-stage-budget'), '512px');
+    });
+  });
 });

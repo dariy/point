@@ -1454,6 +1454,49 @@
   }
 }
 
+/* ── Coarse pointer: one slide, maximized and still ──────────────────────────
+ * The strip stays in the DOM — all `n` slides, side by side, exactly as a
+ * mouse sees them. What changes is that the scroller no longer takes a
+ * gesture, and the budget is sized so one column fills it. The page moves the
+ * strip instead, by writing `scrollLeft` (`_scrollActiveIntoView`, index.js);
+ * `overflow: hidden` stops a finger, not a script.
+ *
+ * Rendering one slide instead would be the other way to do this, and it is
+ * rejected in the epic's Decisions: span layers cross the seams, the panes
+ * divide the same `n` segments, and the Canvas/CSS pair resolves every box
+ * against deck space. A one-slide DOM would be a second consumer of that
+ * geometry, which is the drift the pair exists to prevent.
+ *
+ * This block must stay **after** the `max-width: 48em` phone block above. Both
+ * set `.carousel-studio__stage`'s height at the same specificity, so source
+ * order is what decides it, and on a phone both queries match. The measured
+ * budget is meant to win; the phone's `clamp(9rem, 38vh, 20rem)` is the
+ * fine-pointer fallback and would otherwise override it. */
+@media (pointer: coarse) {
+  .carousel-studio__stage-scroll {
+    /* The lock. Both axes, and the vertical one hides nothing: the budget
+     * below fits the stage inside this box at rest, and a zoomed-in stage
+     * grows *this element* rather than overflowing inside it — what scrolls
+     * then is `.carousel-studio__builder`, which owns `overflow-y: auto` in
+     * the shell block above. */
+    overflow: hidden;
+    /* Half an insert-zone (`width: 2rem`, `translateX(-50%)`), so the head and
+     * tail "+ Slide" buttons keep the room they ride in. Without it the new
+     * `overflow: hidden` clips exactly the half that hangs off each end.
+     * `_touchStageBudget` subtracts this again before sizing a column, and
+     * `_scrollActiveIntoView` centres the column so both ends stay visible. */
+    padding-inline: 1rem;
+  }
+
+  .carousel-studio__stage {
+    /* The same measured budget the 64em column uses, for the same reason —
+     * only layout knows what the pane is worth in pixels — but answering "how
+     * tall may one column be and still fit?" rather than "how tall is the
+     * column?" (`_touchStageBudget`, index.js). */
+    height: calc(var(--carousel-stage-budget, 12rem) * var(--carousel-stage-zoom, 1));
+  }
+}
+
 /* ── Templates ─────────────────────────────────────────────────────────────
  * The gallery, and the report an import owes. Both sit below the builder as
  * siblings of it — a studio with no photo yet shows the pick prompt instead of
