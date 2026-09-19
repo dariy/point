@@ -733,6 +733,36 @@ function paintInkContent(el, layer, rect) {
 }
 
 /**
+ * The ink tool's own provisional layer (`index.js`'s draw session): one
+ * `.carousel-studio__ink-draft` node per slide, positioned and painted
+ * exactly like a real `ink` layer's element (`paintDeckLayers`, above) would
+ * be — the session simply has no document entry yet to read one from. Hidden
+ * outright while there is nothing to show, on the column the session is not
+ * scoped to as much as on one that has drawn no stroke.
+ *
+ * @param {HTMLElement} el
+ * @param {import('../document.js').CarouselInkLayer|null} layer a synthetic
+ *   layer built from the session's own strokes, or `null` to hide the node
+ * @param {string} aspect
+ */
+export function paintInkDraft(el, layer, aspect) {
+  if (!layer) {
+    el.style.display = "none";
+    return;
+  }
+  const [w, h] = canvasSize(aspect);
+  const heightCqw = w > 0 ? (h / w) * 100 : 100;
+  const rect = layerRect(layer, aspect);
+  el.style.display = "";
+  el.style.left = `${(rect.x / w) * 100}%`;
+  el.style.top = `${(rect.y / h) * 100}%`;
+  el.style.width = `${(rect.w / w) * 100}%`;
+  el.style.height = `${(rect.h / h) * 100}%`;
+  el.style.transform = "";
+  paintLayerContent(el, layer, { index: 0, count: 1, rect, frameH: h, heightCqw });
+}
+
+/**
  * Write one chrome node per host: the outline box (which carries the eight
  * resize handles and the ninth, rotate, handle) at `rect`, in percent of the
  * host, and one element per snap guide, in host fractions. A `null` rect hides

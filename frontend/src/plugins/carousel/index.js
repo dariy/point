@@ -98,7 +98,7 @@ import {
   updateSlideFraming,
 } from "./document.js";
 import { adapterFor, IMPORTERS } from "./import/index.js";
-import { browserDeps, renderAndUpload } from "./render.js";
+import { browserDeps, DEFAULT_MARK_COLOR, renderAndUpload } from "./render.js";
 import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
 import {
   PROPS_PREF_KEY,
@@ -128,6 +128,7 @@ import {
   paintAnchorRail,
   paintDeckLayers,
   paintDeckSlide,
+  paintInkDraft,
   paintLayerChrome,
   paintSpanChrome,
   paintSpanLayers,
@@ -151,6 +152,102 @@ const BG_PRESETS = {
     ],
   },
 };
+
+// ── Ink tool (S9) — geometry helpers ──────────────────────────────────────
+//
+// A drawing session gathers its strokes in the drawing column's own frame
+// fractions (the same space a slide-scoped layer's `box` lives in) and in a
+// pen width that is a fraction of the *frame's* shorter side — there is no
+// box yet to make it a fraction of. Ending the session rewrites both into
+// the schema's own convention, a fraction of the tight box every stroke
+// drew inside: points by translating and scaling into the box, width by
+// converting one canvas-pixel measurement into another — the pen's width in
+// frame px stays the pen's width in canvas px, so the mark looks exactly as
+// thick after the box shrinks to fit it as it did while it was drawn.
+
+/** The ink tool's pen defaults, before any stroke has set its own. */
+const DEFAULT_INK_WIDTH = 0.02;
+
+/** The smallest an ink session's box may be on either axis, before
+ *  `normalizeBox` (`document.js`) gets to re-clamp it for real — this
+ *  module's own copy of that module's own `MIN_BOX`, so dividing a stroke's
+ *  points by a zero-width box here never happens. */
+const MIN_INK_BOX = 1 / 1080;
+
+/** A press this close (canvas px) to one of a stroke's segments erases it
+ *  whole. */
+const INK_ERASE_TOLERANCE_PX = 18;
+
+/** The tight box every stroke in an ink session fits inside, in the drawing
+ *  column's own frame fractions — `Careful`'s "must not be empty": a single
+ *  point or a dead-straight line still gets a real box to live in. */
+function inkSessionBox(strokes) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const stroke of strokes) {
+    for (const [x, y] of stroke.pts) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, w: MIN_INK_BOX, h: MIN_INK_BOX, rotate: 0 };
+  return {
+    x: minX,
+    y: minY,
+    w: Math.max(maxX - minX, MIN_INK_BOX),
+    h: Math.max(maxY - minY, MIN_INK_BOX),
+    rotate: 0,
+  };
+}
+
+/** One session stroke rewritten as the schema's own shape: points a fraction
+ *  of `box` rather than of the frame they were drawn on, and a width
+ *  re-based from a fraction of the frame's shorter side to a fraction of
+ *  the box's — the two canvas-pixel widths made equal, and the fraction
+ *  read back off the smaller side. */
+function normalizeSessionStroke(stroke, box, canvasW, canvasH) {
+  const frameShortPx = Math.min(canvasW, canvasH);
+  const boxShortPx = Math.min(box.w * canvasW, box.h * canvasH) || 1;
+  return {
+    w: (stroke.w * frameShortPx) / boxShortPx,
+    pts: stroke.pts.map(([x, y]) => [(x - box.x) / box.w, (y - box.y) / box.h]),
+  };
+}
+
+/** Distance from `(px, py)` to the segment `(ax,ay)-(bx,by)` — the eraser's
+ *  own hit test, always run in canvas pixels so the touch tolerance means
+ *  the same thing on both axes regardless of the deck's own aspect. */
+function distToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+/** Whether a press at `(fx, fy)` (frame fractions) lands within
+ *  `INK_ERASE_TOLERANCE_PX` of any segment of `stroke` (also frame
+ *  fractions) — both scaled to canvas pixels first, for the same reason
+ *  {@link distToSegment} does. */
+function strokeTouchedAt(stroke, fx, fy, canvasW, canvasH) {
+  const px = fx * canvasW;
+  const py = fy * canvasH;
+  for (let k = 1; k < stroke.pts.length; k++) {
+    const [ax, ay] = stroke.pts[k - 1];
+    const [bx, by] = stroke.pts[k];
+    if (
+      distToSegment(px, py, ax * canvasW, ay * canvasH, bx * canvasW, by * canvasH) <=
+      INK_ERASE_TOLERANCE_PX
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /** The post id from `?post=`, or null when absent/malformed. */
 function readPostId(query) {
@@ -542,6 +639,14 @@ export default class CarouselStudioPage extends Component {
     // `preventDefault()` is what keeps that from moving off a field mid-edit,
     // which is the whole reason a gesture has to flush one by hand.
     this._focusedLayerField = null;
+    // The ink tool's own live state (S9), or null while the tool is off —
+    // `{ i, mode, color, width, opacity, strokes }`. A field, not state: a
+    // stylus samples far faster than any rebuild should run, so every point
+    // paints straight to the DOM (`_paintInkDraft`) the same way a layer
+    // drag's provisional box does, and only starting, stopping or toggling
+    // Erase — never a point — goes through `setState`. See the "Ink tool"
+    // methods below.
+    this._drawSession = null;
     // Undo/redo. A ring of `doc` references, not a log of operations — the
     // document is immutable by construction, so the previous state is simply
     // the previous reference (see studio/history.js). Every write goes through
@@ -603,6 +708,14 @@ export default class CarouselStudioPage extends Component {
       editLayer: (i, j, scope) => this._enterTextEdit(i, j, scope),
       isEditing: () => Boolean(this._editing),
       flushFields: () => this._flushLayerFields(),
+      // The ink tool (S9): a press on the session's own column draws or
+      // erases instead of selecting, panning or cropping — see the "Ink
+      // tool" methods below.
+      drawSession: (i) => this._inkSessionFor(i),
+      inkDrawStart: (fx, fy) => this._inkDrawStart(fx, fy),
+      inkDrawMove: (fx, fy) => this._inkDrawMove(fx, fy),
+      inkDrawEnd: () => this._inkDrawEnd(),
+      inkEraseAt: (fx, fy) => this._inkEraseAt(fx, fy),
     });
     // Panorama direct manipulation, over the stage itself — the band is one
     // projection across the whole strip, so the whole strip is the surface.
@@ -637,6 +750,33 @@ export default class CarouselStudioPage extends Component {
     },
     redo() {
       this._redo();
+    },
+    "ink-tool"() {
+      if (this._drawSession) this._endDrawSession();
+      else this._startDrawSession();
+    },
+    "ink-erase"() {
+      this._toggleInkErase();
+    },
+    "input:ink-color"(_e, el) {
+      if (!this._drawSession) return;
+      this._drawSession.color = /** @type {HTMLInputElement} */ (el).value;
+      this._paintInkDraft(this._drawSession.i);
+    },
+    "input:ink-width"(_e, el) {
+      if (!this._drawSession) return;
+      const value = Number(/** @type {HTMLInputElement} */ (el).value);
+      this._drawSession.width = value;
+      const out = this.$("#carousel-ink-width-out");
+      if (out) out.textContent = `${Math.round(value * 100)}%`;
+    },
+    "input:ink-opacity"(_e, el) {
+      if (!this._drawSession) return;
+      const value = Number(/** @type {HTMLInputElement} */ (el).value);
+      this._drawSession.opacity = value;
+      const out = this.$("#carousel-ink-opacity-out");
+      if (out) out.textContent = `${Math.round(value * 100)}%`;
+      this._paintInkDraft(this._drawSession.i);
     },
     "fit-chip"(_e, el) {
       this._setSplit({
@@ -1677,6 +1817,151 @@ export default class CarouselStudioPage extends Component {
     });
   }
 
+  // ── Ink tool (S9): draw and erase, one session, one commit ───────────────
+
+  /**
+   * Enter the ink tool, scoped to the slide currently selected — every
+   * stroke this session gathers lives on that one column
+   * (`_inkSessionFor`), the same way a selected layer's drag is scoped to
+   * one column. Clears the layer selection: while the session is on, a
+   * press draws instead of selecting (`studio/gestures.js`'s own routing).
+   * Deck mode only, matching every other layer-editing control.
+   */
+  _startDrawSession() {
+    if (this.state.doc.mode !== "deck" || this._drawSession) return;
+    this._drawSession = {
+      i: this._selectedIndex(),
+      mode: /** @type {"draw"|"erase"} */ ("draw"),
+      color: DEFAULT_MARK_COLOR,
+      width: DEFAULT_INK_WIDTH,
+      opacity: 1,
+      strokes: /** @type {Array<{w: number, pts: Array<[number, number]>}>} */ ([]),
+    };
+    this.setState({ selectedLayer: null });
+  }
+
+  /** Toggle Erase — a mode inside the one session, not a session of its own
+   *  (`Decisions`: "The eraser works during the session only"). A no-op
+   *  with no session open. */
+  _toggleInkErase() {
+    if (!this._drawSession) return;
+    this._drawSession.mode = this._drawSession.mode === "erase" ? "draw" : "erase";
+    // A plain rebuild, not `_render()` — that name belongs to the carousel's
+    // own render-and-upload action; this just reflects the mode flip into
+    // the toolbar and the stage's cursor.
+    this.setState({});
+  }
+
+  /**
+   * Leave the ink tool — Escape (`_onDrawKey`) or the toolbar control
+   * itself. A session that drew nothing commits nothing; otherwise every
+   * stroke becomes one `ink` layer through `addLayer`, its points and width
+   * rewritten against the tight box they drew inside (`inkSessionBox`,
+   * `normalizeSessionStroke`) — the studio never authors a layer literal
+   * with less than its final shape, and this is the one type whose final
+   * shape only the session, not a default, can provide. One `_setDoc` call,
+   * so undo sees one step for the whole session.
+   */
+  _endDrawSession() {
+    const session = this._drawSession;
+    if (!session) return;
+    this._drawSession = null;
+    if (!session.strokes.length) {
+      // Same plain rebuild as `_toggleInkErase` — nothing was drawn, so
+      // there is no document write and no history step, only the toolbar
+      // and rail reverting to their normal state.
+      this.setState({});
+      return;
+    }
+    const [canvasW, canvasH] = canvasSize(this.state.doc.aspect);
+    const box = inkSessionBox(session.strokes);
+    const strokes = session.strokes.map((s) => normalizeSessionStroke(s, box, canvasW, canvasH));
+    const doc = addLayer(this.state.doc, session.i, {
+      type: "ink",
+      box,
+      strokes,
+      color: session.color,
+      opacity: session.opacity,
+    });
+    const list = doc.slides[session.i]?.layers || [];
+    this._setDoc(doc, {
+      selected: session.i,
+      layerScope: "slide",
+      selectedLayer: list.length ? list.length - 1 : null,
+    });
+  }
+
+  /** The ink tool's session over column `i`, or null when the tool is off or
+   *  `i` is not its drawing column — `studio/gestures.js`'s own routing
+   *  hook, read on every press ahead of every other gesture. */
+  _inkSessionFor(i) {
+    return this._drawSession && this._drawSession.i === i ? this._drawSession : null;
+  }
+
+  /** A fresh stroke's first point. */
+  _inkDrawStart(fx, fy) {
+    const session = this._drawSession;
+    if (!session) return;
+    session.strokes.push({ w: session.width, pts: [[fx, fy]] });
+    this._paintInkDraft(session.i);
+  }
+
+  /** Every point `getCoalescedEvents` hands the gesture for a fast stylus
+   *  line, appended to the stroke in progress — the session's last. */
+  _inkDrawMove(fx, fy) {
+    const session = this._drawSession;
+    if (!session || !session.strokes.length) return;
+    session.strokes[session.strokes.length - 1].pts.push([fx, fy]);
+    this._paintInkDraft(session.i);
+  }
+
+  /** A press with no travel is still one mark: duplicate its lone point so
+   *  the stroke survives `normalizeStroke`'s two-point floor as a dot
+   *  (`Input policy`: a stylus is precise, so no slop discards it). */
+  _inkDrawEnd() {
+    const session = this._drawSession;
+    if (!session || !session.strokes.length) return;
+    const stroke = session.strokes[session.strokes.length - 1];
+    if (stroke.pts.length < 2) stroke.pts.push([stroke.pts[0][0], stroke.pts[0][1]]);
+    this._paintInkDraft(session.i);
+  }
+
+  /** Erase mode: drop the whole stroke a press or drag touches, never a
+   *  partial cut (`Decisions`). Only ever sees this session's own
+   *  not-yet-committed strokes — nothing reaches the document until the
+   *  session ends. */
+  _inkEraseAt(fx, fy) {
+    const session = this._drawSession;
+    if (!session) return;
+    const [canvasW, canvasH] = canvasSize(this.state.doc.aspect);
+    const before = session.strokes.length;
+    session.strokes = session.strokes.filter((s) => !strokeTouchedAt(s, fx, fy, canvasW, canvasH));
+    if (session.strokes.length !== before) this._paintInkDraft(session.i);
+  }
+
+  /** The ink tool's own provisional layer, straight to the DOM — no state
+   *  change, no rebuild, the same discipline every other stage gesture
+   *  keeps (`Careful`: a rebuild on every point would not hold 60fps).
+   *  Hidden on every column the session is not scoped to, and on that one
+   *  too until it has drawn a stroke. */
+  _paintInkDraft(i) {
+    const el = this.$(`[data-slice="${i}"] .carousel-studio__ink-draft`);
+    if (!el) return;
+    const session = this._inkSessionFor(i);
+    if (!session || !session.strokes.length) {
+      paintInkDraft(el, null, this.state.doc.aspect);
+      return;
+    }
+    const [canvasW, canvasH] = canvasSize(this.state.doc.aspect);
+    const box = inkSessionBox(session.strokes);
+    const strokes = session.strokes.map((s) => normalizeSessionStroke(s, box, canvasW, canvasH));
+    paintInkDraft(
+      el,
+      { type: "ink", box, strokes, color: session.color, opacity: session.opacity },
+      this.state.doc.aspect,
+    );
+  }
+
   _selectLayer(j, scope) {
     const s = scope === "span" ? "span" : "slide";
     if (this.state.layerScope === s && this.state.selectedLayer === j) return;
@@ -2447,6 +2732,15 @@ export default class CarouselStudioPage extends Component {
     else this.setState({ saveOpen: false, saveError: "" });
   }
 
+  /** Escape leaves the ink tool — the third way out, beside the toolbar
+   *  control and switching mode. Steps aside for a dialog exactly like
+   *  `_onDialogKey`'s own Escape does, so the two presses never both act. */
+  _onDrawKey(e) {
+    if (e.key !== "Escape" || !this._drawSession || this._dialogOpen()) return;
+    e.preventDefault();
+    this._endDrawSession();
+  }
+
   /** The post's own photos, in the order the post shows them — what a
    *  template's sourceless slides fill from.
    *
@@ -2886,6 +3180,7 @@ export default class CarouselStudioPage extends Component {
       stageZoom: this._stageZoom,
       error,
       tray,
+      inkSession: this._drawSession,
     });
   }
 
@@ -2917,6 +3212,7 @@ export default class CarouselStudioPage extends Component {
     // contract) — so navigating off the studio takes the shortcut with it.
     this.on(document, "keydown", (e) => {
       this._onDialogKey(/** @type {KeyboardEvent} */ (e));
+      this._onDrawKey(/** @type {KeyboardEvent} */ (e));
       this._onHistoryKey(/** @type {KeyboardEvent} */ (e));
     });
 
@@ -3122,6 +3418,7 @@ export default class CarouselStudioPage extends Component {
     );
     this._paintDeckSlideLayers(i, slide.layers);
     this._paintSpanLayersForSlide(i);
+    this._paintInkDraft(i);
   }
 
   /** Paint one slide's layers onto both elements that show it. Split out so a

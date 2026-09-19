@@ -3191,6 +3191,118 @@ describe('CarouselStudioPage', () => {
           assert.equal(page.state.doc.spanLayers.length, 1, 're-slicing keeps the headline');
         });
       });
+
+      describe('the ink tool (S9)', () => {
+        test('the Draw toggle opens a session on the selected slide and clears the layer selection', async () => {
+          const el = await toDeck();
+          addLayer(el, 'text');
+          await settle();
+          assert.equal(page.state.selectedLayer, 0);
+
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+
+          assert.equal(page.state.selectedLayer, null);
+          assert.ok(page._drawSession, 'a session is open');
+          assert.equal(page._drawSession.i, 0);
+          assert.equal(
+            el.querySelector('[data-action="ink-tool"]').getAttribute('aria-pressed'),
+            'true',
+          );
+          assert.ok(
+            stageCol(el, 0).classList.contains('is-ink-armed'),
+            'the selected column is armed',
+          );
+          assert.ok(el.querySelector('[data-action="ink-erase"]'), 'the Erase toggle appears');
+        });
+
+        test('a stroke drawn on the armed column, finished with Escape, commits one ink layer', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+
+          // A diagonal stroke, 0.2..0.8 of the 200×250 frame on both axes.
+          const frame = withFrameBox(stageCol(el, 0));
+          press(frame, 40, 50, [[100, 125], [160, 200]]);
+          assert.equal(page.state.doc.slides[0].layers.length, 0, 'nothing committed mid-session');
+
+          fire(document, 'keydown', { key: 'Escape' });
+          await settle();
+
+          assert.equal(page._drawSession, null, 'the session ended');
+          const layers = page.state.doc.slides[0].layers;
+          assert.equal(layers.length, 1);
+          const ink = layers[0];
+          assert.equal(ink.type, 'ink');
+          assert.equal(ink.strokes.length, 1);
+          assert.ok(Math.abs(ink.box.x - 0.2) < 0.01, `box.x: ${ink.box.x}`);
+          assert.ok(Math.abs(ink.box.y - 0.2) < 0.01, `box.y: ${ink.box.y}`);
+          assert.ok(Math.abs(ink.box.x + ink.box.w - 0.8) < 0.01, `box right: ${ink.box.x + ink.box.w}`);
+          assert.ok(Math.abs(ink.box.y + ink.box.h - 0.8) < 0.01, `box bottom: ${ink.box.y + ink.box.h}`);
+          for (const [x, y] of ink.strokes[0].pts) {
+            assert.ok(x >= -1e-6 && x <= 1 + 1e-6, `x in 0..1: ${x}`);
+            assert.ok(y >= -1e-6 && y <= 1 + 1e-6, `y in 0..1: ${y}`);
+          }
+          assert.equal(page.state.selectedLayer, layers.length - 1, 'the new layer is selected');
+          assert.equal(page.state.layerScope, 'slide');
+        });
+
+        test('the toolbar control itself also finishes the session', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+          press(withFrameBox(stageCol(el, 0)), 40, 50, [[160, 200]]);
+
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+
+          assert.equal(page._drawSession, null);
+          assert.equal(page.state.doc.slides[0].layers.length, 1);
+        });
+
+        test('a session that draws nothing commits nothing', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+
+          fire(document, 'keydown', { key: 'Escape' });
+          await settle();
+
+          assert.equal(page._drawSession, null);
+          assert.equal(page.state.doc.slides[0].layers.length, 0);
+        });
+
+        test('Erase drops a stroke the pointer touches, before the session ever commits', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+          press(withFrameBox(stageCol(el, 0)), 40, 50, [[160, 200]]);
+
+          click(el.querySelector('[data-action="ink-erase"]'));
+          await settle();
+          // A tap on the stroke's own midpoint — well inside its erase tolerance.
+          press(withFrameBox(stageCol(el, 0)), 100, 125, []);
+
+          fire(document, 'keydown', { key: 'Escape' });
+          await settle();
+
+          assert.equal(page.state.doc.slides[0].layers.length, 0, 'the only stroke was erased');
+        });
+
+        test('leaving deck mode is unaffected by an open session — Draw is deck-only', async () => {
+          const el = await toDeck();
+          click(el.querySelector('[data-action="ink-tool"]'));
+          await settle();
+          assert.ok(page._drawSession);
+
+          // Split mode carries no `[data-action="ink-tool"]` at all (panels.js
+          // gates it on `deck`); switching away leaves the session as it was
+          // rather than crashing on a control that no longer exists.
+          click(el.querySelector('[data-action="mode"][data-mode="split"]'));
+          await settle();
+          assert.doesNotThrow(() => page.state.doc);
+        });
+      });
     });
 
     /**

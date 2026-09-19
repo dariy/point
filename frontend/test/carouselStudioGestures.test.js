@@ -72,8 +72,10 @@ function fakeFrame(i, box = { width: 500, height: 500 }) {
 
 /** A host stand-in that records every callback the module makes. `layer`, when
  *  given, is `{ i, j, box }` (plus a `scope` for a span layer) and becomes the
- *  value `activeLayer()` returns. */
-function fakeHost(slides, layer = null, spanLayers = []) {
+ *  value `activeLayer()` returns. `session`, when given, is `{ i, mode }` and
+ *  becomes what `drawSession(i)` answers for that one column, matching
+ *  `index.js`'s own `_inkSessionFor`. */
+function fakeHost(slides, layer = null, spanLayers = [], session = null) {
   const calls = {
     paint: [],
     commit: [],
@@ -83,10 +85,19 @@ function fakeHost(slides, layer = null, spanLayers = []) {
     commitLayer: [],
     scrollPaneBy: [],
     selectLayer: [],
+    inkDrawStart: [],
+    inkDrawMove: [],
+    inkDrawEnd: [],
+    inkEraseAt: [],
   };
   return {
     calls,
     active: layer,
+    drawSession: (i) => (session && session.i === i ? session : null),
+    inkDrawStart: (fx, fy) => calls.inkDrawStart.push({ fx, fy }),
+    inkDrawMove: (fx, fy) => calls.inkDrawMove.push({ fx, fy }),
+    inkDrawEnd: () => calls.inkDrawEnd.push(true),
+    inkEraseAt: (fx, fy) => calls.inkEraseAt.push({ fx, fy }),
     dims: () => ({ srcW: 1000, srcH: 1000, aspect: '1:1' }),
     slideAt: (i) => slides[i] ?? null,
     paint: (i, slide) => calls.paint.push({ i, slide }),
@@ -1316,6 +1327,91 @@ describe('carousel studio gestures', () => {
       frame.emit('pointerup', { pointerId: 1, clientX: 10, clientY: 10, ctrlKey: true });
       assert.strictEqual(host.calls.selectLayer.length, 0);
       assert.deepStrictEqual(host.calls.select, [0]);
+      gestures.destroy();
+    });
+  });
+
+  describe('the ink tool session', () => {
+    test('a press on the session\'s own column draws instead of selecting, panning or cropping', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 40, clientY: 80 });
+      assert.deepStrictEqual(host.calls.inkDrawStart, [{ fx: 0.2, fy: 0.4 }]);
+      assert.strictEqual(host.calls.select.length, 0);
+      assert.strictEqual(host.calls.selectLayer.length, 0);
+      assert.strictEqual(host.calls.paint.length, 0, 'never fell through to the crop pan');
+      gestures.destroy();
+    });
+
+    test('every coalesced move point reaches the host, for a smooth fast line', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
+      frame.emit('pointermove', {
+        pointerId: 1,
+        clientX: 100,
+        clientY: 100,
+        getCoalescedEvents: () => [
+          { clientX: 20, clientY: 20 },
+          { clientX: 60, clientY: 60 },
+          { clientX: 100, clientY: 100 },
+        ],
+      });
+      assert.deepStrictEqual(host.calls.inkDrawMove, [
+        { fx: 0.1, fy: 0.1 },
+        { fx: 0.3, fy: 0.3 },
+        { fx: 0.5, fy: 0.5 },
+      ]);
+      gestures.destroy();
+    });
+
+    test('release finishes the stroke, once, through inkDrawEnd', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 50, clientY: 50 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 50, clientY: 50 });
+      assert.strictEqual(host.calls.inkDrawEnd.length, 1);
+      gestures.destroy();
+    });
+
+    test('erase mode reads every point as an erase, on press and on move, never a stroke', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'erase' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 20, clientY: 40 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 40, clientY: 40 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 40, clientY: 40 });
+      assert.deepStrictEqual(host.calls.inkEraseAt, [
+        { fx: 0.1, fy: 0.2 },
+        { fx: 0.2, fy: 0.2 },
+      ]);
+      assert.strictEqual(host.calls.inkDrawStart.length, 0);
+      assert.strictEqual(host.calls.inkDrawEnd.length, 0);
+      gestures.destroy();
+    });
+
+    test('a session scoped to a different column leaves this one panning as usual', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 1, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 10, clientY: 10, ctrlKey: true });
+      frame.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 10, ctrlKey: true });
+      assert.strictEqual(host.calls.inkDrawStart.length, 0);
+      assert.ok(host.calls.paint.length >= 1, 'the crop pan still ran on the un-armed column');
       gestures.destroy();
     });
   });

@@ -164,6 +164,18 @@ function frameRect(frame) {
   return r && r.width ? r : { left: 0, top: 0, width: 0, height: 0 };
 }
 
+/** A client point as a fraction of `frame`'s own rect — the ink tool's
+ *  coordinate space while a session is open, since a slide-scoped layer's
+ *  `box` is already fractions of exactly this rect (`pressContext`'s own
+ *  `rect` for the non-span case). */
+function frameFraction(frame, clientX, clientY) {
+  const rect = frameRect(frame);
+  return {
+    fx: (clientX - rect.left) / (rect.width || 1),
+    fy: (clientY - rect.top) / (rect.height || 1),
+  };
+}
+
 /**
  * The whole rect a spanning layer's `box` is fractions of, from the rect of
  * column `i` of `count`. The columns are equal widths laid side by side, so the
@@ -638,6 +650,25 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   wheel notch or a frame key claims the gesture. Every path here calls
  *   `e.preventDefault()`, which suppresses the focus change a text field's
  *   own `change` depends on — this is the host's chance to commit it anyway.
+ * @property {(i: number) => {mode: 'draw'|'erase'}|null} [drawSession]
+ *   The ink tool's session, if column `i` is the one it is scoped to — read
+ *   on every press ahead of every other `PRESS_KINDS` attempt and the crop
+ *   fallback, since a session claims the whole column while it is open. Null
+ *   everywhere else, including every other column while one is open.
+ * @property {(fx: number, fy: number) => void} [inkDrawStart]
+ *   Begin a fresh stroke at this column-fraction point — a session's own
+ *   `"draw"` press.
+ * @property {(fx: number, fy: number) => void} [inkDrawMove]
+ *   Append a point to the stroke in progress — called once per
+ *   `getCoalescedEvents` entry, not once per `pointermove`, so a fast stylus
+ *   line samples at the device's own rate rather than the frame rate.
+ * @property {() => void} [inkDrawEnd]
+ *   Finish the stroke in progress on release. Never writes to the document —
+ *   the session commits once, when it ends, not once per stroke.
+ * @property {(fx: number, fy: number) => void} [inkEraseAt]
+ *   Drop whichever of the session's own strokes this column-fraction point
+ *   touches, whole — the eraser never cuts one in half. Called on the press
+ *   and on every coalesced move point of an `"erase"`-mode session.
  */
 
 /**
@@ -657,8 +688,11 @@ export function createDeckGestures(host) {
    *  `"layer"` move/resize/pinch ({ i, slide, j, frame, mode, anchor, space,
    *  startX, startY, startBox, box, moved, pointers, pinch? }), a `"rotate"`
    *  drag ({ i, slide, j, frame, centerX, centerY, startX, startY, startAngle,
-   *  startRotate, startBox, box, moved }), or a `"pane"` scroll-by-hand
-   *  ({ i, frame, startX, lastX, moved }) — where `i` is
+   *  startRotate, startBox, box, moved }), a `"pane"` scroll-by-hand
+   *  ({ i, frame, startX, lastX, moved }), or an `"ink-draw"`/`"ink-erase"`
+   *  session stroke ({ i, frame }) — the stroke's own points and the
+   *  session's strokes both live in `host`'s own state (`index.js`), not
+   *  here, since they outlive any one press — where `i` is
    *  the column holding the pointer and `slide` the index the box commits to,
    *  the two being the same thing for everything but a span layer. One at a
    *  time — a press mid-gesture is ignored, except a second finger onto a
@@ -970,6 +1004,27 @@ export function createDeckGestures(host) {
     const slide = host.slideAt(i);
     if (!slide) return;
 
+    // The ink tool's own session, scoped to one column by `host.drawSession`
+    // (`index.js`): while it answers for this one, a press here draws or
+    // erases instead of selecting, panning or cropping — every other column
+    // is untouched, exactly as `is-layer-armed` scopes a layer drag to one.
+    if (!drag) {
+      const session = host.drawSession?.(i);
+      if (session) {
+        e.preventDefault?.();
+        claimPointer(e, frame, "is-drawing");
+        const { fx, fy } = frameFraction(frame, e.clientX, e.clientY);
+        if (session.mode === "erase") {
+          drag = { kind: "ink-erase", i, frame };
+          host.inkEraseAt?.(fx, fy);
+        } else {
+          drag = { kind: "ink-draw", i, frame };
+          host.inkDrawStart?.(fx, fy);
+        }
+        return;
+      }
+    }
+
     // A layer takes the press only when its own layer is selected and the press
     // lands on it or a handle; anything else falls through to the crop gesture,
     // so pan/zoom is unchanged wherever a layer is not in the way. A slide layer
@@ -1119,13 +1174,67 @@ export function createDeckGestures(host) {
     commitCrop(i, ended.crop);
   };
 
+  /** Every point `getCoalescedEvents` hands one `pointermove` — a fast
+   *  stylus line is many samples per frame, and reading only the dispatched
+   *  event would chain them into a chord instead of a smooth curve
+   *  (`Behaviour`). `host.inkDrawMove` appends each one to the stroke in
+   *  progress and repaints the draft; no state change, same as every other
+   *  provisional paint in this module. */
+  const onInkDrawMove = (e, frame) => {
+    if (!drag || drag.kind !== "ink-draw") return;
+    const events = e.getCoalescedEvents?.() || [e];
+    for (const ev of events) {
+      const { fx, fy } = frameFraction(frame, ev.clientX, ev.clientY);
+      host.inkDrawMove?.(fx, fy);
+    }
+    e.preventDefault?.();
+  };
+
+  /** The same coalesced read, for the eraser: every point along the drag is
+   *  tested against the session's own strokes, not just the ones the
+   *  dispatched event lands on — a fast wipe must not skip a mark between
+   *  two samples. */
+  const onInkEraseMove = (e, frame) => {
+    if (!drag || drag.kind !== "ink-erase") return;
+    const events = e.getCoalescedEvents?.() || [e];
+    for (const ev of events) {
+      const { fx, fy } = frameFraction(frame, ev.clientX, ev.clientY);
+      host.inkEraseAt?.(fx, fy);
+    }
+    e.preventDefault?.();
+  };
+
+  /** The release half of both ink drags: `"ink-draw"` finalizes the stroke in
+   *  progress (`host.inkDrawEnd`), `"ink-erase"` has nothing left to do —
+   *  every touch already erased live. Neither ever writes to the document:
+   *  the session commits once, when it ends (`index.js`'s `_endDrawSession`),
+   *  not once per stroke. */
+  const endInkDrag = (e, frame) => {
+    const kind = drag.kind;
+    releasePointer(e, frame, "is-drawing");
+    drag = null;
+    if (kind === "ink-draw") host.inkDrawEnd?.();
+  };
+
   /** Every kind but `"crop"` dispatches the same way: only the column that
    *  started it hears its move/up, and `"crop"` — the fallback — reads its
    *  own guard, since a pinch may span more than one pointer over one
    *  column. A table over `drag.kind`, not a switch, in the same spirit as
    *  `LAYER_BUILDERS`/`LAYER_PAINTERS`. */
-  const MOVE_HANDLERS = { rotate: onRotateMove, layer: onLayerMove, pane: onPaneMove };
-  const END_HANDLERS = { rotate: endLayerDrag, layer: endLayerDrag, pane: onPaneUp };
+  const MOVE_HANDLERS = {
+    rotate: onRotateMove,
+    layer: onLayerMove,
+    pane: onPaneMove,
+    "ink-draw": onInkDrawMove,
+    "ink-erase": onInkEraseMove,
+  };
+  const END_HANDLERS = {
+    rotate: endLayerDrag,
+    layer: endLayerDrag,
+    pane: onPaneUp,
+    "ink-draw": endInkDrag,
+    "ink-erase": endInkDrag,
+  };
 
   const onPointerMove = (e, frame, i) => {
     const handler = drag && MOVE_HANDLERS[drag.kind];

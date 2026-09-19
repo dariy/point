@@ -18,9 +18,12 @@ import {
   builder,
   colorInputValue,
   deckPanel,
+  drawToolControl,
   fitPanel,
   importDialog,
   importReportPanel,
+  inkToolPanel,
+  layerForm,
   layerPanel,
   modeToggle,
   pickPrompt,
@@ -496,6 +499,94 @@ describe('carousel studio panels', () => {
       const deck = toDeckDocument(doc3, 3000, 1000);
       const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0, selectedLayer: null }));
       assert.doesNotMatch(out, /is-layer-armed/);
+    });
+
+    test('an ink session arms only its own column, and puts the draft node on every column', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const session = { i: 1, mode: 'draw', color: '#ffffff', width: 0.02, opacity: 1 };
+      const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0, inkSession: session }));
+      const slides = out.match(/<span[^>]*class="carousel-studio__stage-slide[^>]*data-slice="\d"/g) || [];
+      assert.strictEqual(slides.length, 3);
+      assert.doesNotMatch(slides[0], /is-ink-armed/);
+      assert.match(slides[1], /is-ink-armed/);
+      assert.doesNotMatch(slides[2], /is-ink-armed/);
+      const drafts = out.match(/carousel-studio__ink-draft/g) || [];
+      assert.strictEqual(drafts.length, 3, 'every column gets a draft node, hidden until painted');
+    });
+
+    test('no ink session arms no column with it', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0, inkSession: null }));
+      assert.doesNotMatch(out, /is-ink-armed/);
+    });
+
+    test('the Draw toolbar control shows only in deck mode', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const inDeck = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
+      assert.match(inDeck, /data-action="ink-tool"/);
+
+      const inSplit = str(builder(builderProps));
+      assert.doesNotMatch(inSplit, /data-action="ink-tool"/);
+    });
+
+    test('an open session swaps the layer panel for the ink tool panel', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const session = { i: 0, mode: 'draw', color: '#ffffff', width: 0.02, opacity: 1 };
+      const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0, inkSession: session }));
+      assert.match(out, /data-action="ink-color"/);
+      assert.doesNotMatch(out, /carousel-studio__add-layer-select/);
+    });
+  });
+
+  describe('drawToolControl', () => {
+    test('off: just the Draw toggle, unpressed, with no Erase toggle', () => {
+      const out = str(drawToolControl(null));
+      assert.match(out, /data-action="ink-tool"[\s\S]*?aria-pressed="false"/);
+      assert.doesNotMatch(out, /data-action="ink-erase"/);
+    });
+
+    test('on: Draw reads pressed, and Erase appears beside it', () => {
+      const out = str(drawToolControl({ i: 0, mode: 'draw' }));
+      assert.match(out, /data-action="ink-tool"[\s\S]*?aria-pressed="true"/);
+      assert.match(out, /data-action="ink-erase"[\s\S]*?aria-pressed="false"/);
+    });
+
+    test('erase mode: the Erase toggle itself reads pressed', () => {
+      const out = str(drawToolControl({ i: 0, mode: 'erase' }));
+      assert.match(out, /data-action="ink-erase"[\s\S]*?aria-pressed="true"/);
+    });
+  });
+
+  describe('inkToolPanel', () => {
+    test('carries the session\'s own colour, width and opacity as field values', () => {
+      const out = str(inkToolPanel({ mode: 'draw', color: '#ff0000', width: 0.05, opacity: 0.5 }));
+      assert.match(out, /data-action="ink-color"[\s\S]*?value="#ff0000"/);
+      assert.match(out, /data-action="ink-width"[\s\S]*?value="0.05"/);
+      assert.match(out, /data-action="ink-opacity"[\s\S]*?value="0.5"/);
+      assert.match(out, /id="carousel-ink-width-out"[\s\S]*?>5%/);
+      assert.match(out, /id="carousel-ink-opacity-out"[\s\S]*?>50%/);
+    });
+
+    test('names the mode the session is in', () => {
+      assert.match(str(inkToolPanel({ mode: 'draw', color: '#fff', width: 0.02, opacity: 1 })), /Draw mode/);
+      assert.match(str(inkToolPanel({ mode: 'erase', color: '#fff', width: 0.02, opacity: 1 })), /Erase mode/);
+    });
+  });
+
+  describe('layerForm — ink', () => {
+    test('colour and opacity, no width — a stroke\'s width is the pen\'s, not the layer\'s', () => {
+      const ink = normalizeLayer({
+        type: 'ink',
+        box: { x: 0.1, y: 0.1, w: 0.3, h: 0.3 },
+        strokes: [{ w: 0.02, pts: [[0, 0], [1, 1]] }],
+        color: '#00ff00',
+        opacity: 0.75,
+      });
+      const out = str(layerForm(ink, ''));
+      assert.match(out, /data-layer-type="ink"/);
+      assert.match(out, /value="#00ff00"/);
+      assert.doesNotMatch(out, /carousel-layer-radius/);
+      assert.doesNotMatch(out, /Pen width/);
     });
   });
 

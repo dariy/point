@@ -214,6 +214,22 @@
   touch-action: none;
 }
 
+/* The ink tool's own armed column (`index.js`'s draw session, scoped to one
+ * slide the same way a selected layer's drag is) — same `touch-action: none`
+ * reasoning as `is-layer-armed`, plus a crosshair for the whole time the
+ * session is open, not only mid-stroke, so the pointer reads as "this column
+ * draws" before the first press. `is-drawing` (`gestures.js`'s own dress
+ * class for the stroke itself) keeps the same cursor rather than picking up
+ * `is-dragging`'s `grabbing` — nothing here is being panned. */
+.carousel-studio__stage-slide.is-ink-armed {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.carousel-studio__stage-slide.is-drawing {
+  cursor: crosshair;
+}
+
 /* An inset ring rather than a border: an equal-width flex item's border would
  * throw off the even division the dividers' `left %` math assumes. */
 .carousel-studio__stage-slide.is-selected {
@@ -360,6 +376,20 @@
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* The ink tool's Draw toggle, and — only while a session is open — the
+ * Erase toggle beside it. `[aria-pressed]` rather than a second class: the
+ * same highlight formula `.carousel-studio__chip.is-active` uses below,
+ * applied to the plain `.btn` two toolbar buttons already are. */
+.carousel-studio__ink-tool {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.carousel-studio__ink-tool button[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 /* The studio opts out of the admin content clamp the way the post editor does
@@ -1119,7 +1149,8 @@
  * the JPEG's own edge is. Clipping at the layer box would be the preview
  * inventing a boundary the render does not have. */
 .carousel-studio__layer,
-.carousel-studio__span-layer {
+.carousel-studio__span-layer,
+.carousel-studio__ink-draft {
   position: absolute;
   pointer-events: none;
   font-family: var(--font-family, sans-serif);
