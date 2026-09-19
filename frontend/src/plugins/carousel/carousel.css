@@ -401,16 +401,25 @@
   max-width: none;
 }
 
-/* ── The studio owns the viewport (48em+) ────────────────────────────────
+/* ── The studio owns the viewport (48em+, or any coarse pointer) ─────────
  * Paired with `.carousel-studio-main` (light/layout.css), which clamps
- * `.light-main`/`.light-content` to the viewport at this same breakpoint so
+ * `.light-main`/`.light-content` to the viewport behind the same query so
  * `.carousel-studio` has a definite height to divide. Toolbar, body
  * (`.carousel-studio__builder`) and tray replace the plain flex column below
  * as a three-row grid; only the body and the tray scroll from here down, and
- * the document itself does not. Below 48em (the phone) none of this
- * applies — the section keeps the flex column it always had, and the studio
- * scrolls with the rest of the document. */
-@media (min-width: 48em) {
+ * the document itself does not.
+ *
+ * The comma is an OR, and it is what widens the shell to a phone. S8 denied
+ * the phone this shell deliberately, because a fixed shell gave a thumb no
+ * room. The touch layout (S10) takes that room back elsewhere — it docks the
+ * controls at the bottom edge — and a dock needs an edge to sit on: a dock
+ * pinned to the bottom of a document-flow page is pinned to nothing. The stage
+ * needs the same thing, a definite height to claim rather than a `vh` guess.
+ *
+ * `TOUCH_LAYOUT` (`studio/layout.js`) is this query's second half, named in
+ * JS. What neither half covers is a narrow fine-pointer window, which keeps
+ * the flex column it always had and scrolls with the rest of the document. */
+@media (min-width: 48em), (pointer: coarse) {
   .carousel-studio-main .light-content .carousel-studio {
     flex: 1;
     min-height: 0;
