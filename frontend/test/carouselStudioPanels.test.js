@@ -18,6 +18,7 @@ import {
   builder,
   colorInputValue,
   deckPanel,
+  dock,
   drawToolControl,
   fitPanel,
   importDialog,
@@ -178,6 +179,48 @@ describe('carousel studio panels', () => {
       assert.match(out, /disabled/);
       assert.match(out, /2/);
       assert.match(out, /5/);
+    });
+  });
+
+  describe('dock', () => {
+    /** The one button tag carrying `data-action="<name>"`, up to its `>` — the
+     *  same reader `actionsBar` uses, for the same reason: `disabled` is per
+     *  button, and a whole-document regex reads the wrong one. */
+    function buttonTag(out, name) {
+      const marker = `data-action="${name}"`;
+      const at = out.indexOf(marker);
+      assert.notStrictEqual(at, -1, `no ${name} button`);
+      return out.slice(out.lastIndexOf('<', at), out.indexOf('>', at));
+    }
+
+    test('ships the burger and the history pair, each with a label a screen reader can read', () => {
+      const out = str(dock({ canUndo: true, canRedo: true, busy: false }));
+      assert.match(out, /role="toolbar"/);
+      assert.match(buttonTag(out, 'toggle-props'), /aria-label="Properties"/);
+      assert.match(buttonTag(out, 'undo'), /aria-label="Undo"/);
+      assert.match(buttonTag(out, 'redo'), /aria-label="Redo"/);
+    });
+
+    test('undo and redo go dark exactly when the header pair does', () => {
+      const base = { busy: false };
+      const undoable = str(dock({ ...base, canUndo: true, canRedo: false }));
+      assert.ok(!buttonTag(undoable, 'undo').includes('disabled'), 'undo is live');
+      assert.ok(buttonTag(undoable, 'redo').includes('disabled'), 'nothing to redo');
+
+      const fresh = str(dock({ ...base, canUndo: false, canRedo: false }));
+      assert.ok(buttonTag(fresh, 'undo').includes('disabled'));
+      assert.ok(buttonTag(fresh, 'redo').includes('disabled'));
+
+      // A render in flight takes both, the way `historyButtons` takes them:
+      // the document it is uploading from must not move under it.
+      const busy = str(dock({ canUndo: true, canRedo: true, busy: true }));
+      assert.ok(buttonTag(busy, 'undo').includes('disabled'));
+      assert.ok(buttonTag(busy, 'redo').includes('disabled'));
+    });
+
+    test('the burger stays live through a render — it opens a panel, it does not edit', () => {
+      const busy = str(dock({ canUndo: false, canRedo: false, busy: true }));
+      assert.ok(!buttonTag(busy, 'toggle-props').includes('disabled'));
     });
   });
 
@@ -456,6 +499,59 @@ describe('carousel studio panels', () => {
       const deck = toDeckDocument(doc3, 3000, 1000);
       const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
       assert.match(out, /<aside[\s\S]*?carousel-studio__layers[\s\S]*?<\/aside>/);
+    });
+
+    test('both bars are built — the toolbar and the dock — and CSS picks one', () => {
+      // Markup does not read the pointer. A media query does (carousel.css),
+      // so the tree carries both and hides one.
+      const out = str(builder(builderProps));
+      assert.match(out, /class="carousel-studio__toolbar"/);
+      assert.match(out, /class="carousel-studio__dock"[\s\S]*?data-action="toggle-props"/);
+      // The dock is the last row, so it lands against the shell's bottom edge.
+      assert.ok(
+        out.indexOf('carousel-studio__dock') > out.indexOf('carousel-studio__tray'),
+        'the dock follows the tray row',
+      );
+    });
+
+    test('the dock reads the document history, not the header’s own copy of it', () => {
+      const live = str(builder({ ...builderProps, canUndo: true, canRedo: true }));
+      const dockRow = live.slice(live.indexOf('carousel-studio__dock'));
+      assert.doesNotMatch(dockRow, /data-action="undo"[^>]*disabled/);
+
+      const fresh = str(builder(builderProps));
+      const freshRow = fresh.slice(fresh.indexOf('carousel-studio__dock'));
+      assert.match(freshRow, /data-action="undo"[^>]*disabled/);
+    });
+
+    test('the toolbar’s controls reach the properties panel, for the layout with no toolbar', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      for (const doc of [doc3, deck]) {
+        const out = str(builder({ ...builderProps, doc, deckIndex: 0 }));
+        const panel = out.slice(out.indexOf('carousel-studio__props-tools'));
+        assert.match(panel, /data-action="mode"/, 'the mode toggle');
+        assert.match(panel, /data-action="carousel-aspect"/, 'the document controls');
+        assert.match(panel, /data-action="stage-zoom"/, 'the stage zoom');
+      }
+      // Deck mode alone carries the Draw switch, in both copies.
+      const panel = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
+      assert.strictEqual(panel.split('data-action="ink-tool"').length - 1, 2);
+    });
+
+    test('no id is emitted twice — one live node per id, or the page wires the wrong one', () => {
+      // `index.js` reads `#carousel-n-out`, `#carousel-zoom-readout`,
+      // `#carousel-doc-controls` and `#carousel-props` after every render.
+      // Under a duplicate id the lookup picks the first and the second node
+      // silently stops updating, so the second copy of a control owns no id
+      // at all.
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      for (const doc of [doc3, deck]) {
+        const out = str(builder({ ...builderProps, doc, deckIndex: 0 }));
+        const ids = [...out.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+        const seen = new Set();
+        const twice = ids.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+        assert.deepStrictEqual(twice, [], `duplicate ids: ${twice.join(', ')}`);
+      }
     });
 
     test('deck mode emits a span-layer node per stage column for each span layer', () => {
