@@ -1174,16 +1174,26 @@ machine to extend rather than two.
 ### The studio owns the viewport
 
 Every other admin page that opts out of document scroll (`PostsListPage`,
-`MediaPage`) does it above 48em only; the studio does too
+`MediaPage`) does it above 48em only; the studio does it there and on any
+coarse pointer
 (`.carousel-studio-main`, `light/layout.css`, mirrored by
 `.carousel-studio-main .light-content .carousel-studio` in `carousel.css`),
 each backed by the same rule: `flex: 0 0 auto; min-height: 0; height: 100lvh;
 overflow: hidden`. Before S8 the studio only cleared the *width* clamp the
 admin content column applies everywhere else, which is why the body — not the
-studio — was still the page's scroller. Below 48em the phone keeps the
-document flow it always had — a fixed shell gives a thumb no room to work in,
-and the phone is explicitly a view-and-adjust surface, not first-class editing
-(see "Decisions").
+studio — was still the page's scroller.
+
+S8 denied the phone this shell, because a fixed shell gave a thumb no room to
+work in. S10 widens the query to `@media (min-width: 48em), (pointer: coarse)`
+in both files, because the touch layout takes that room back a different way:
+it docks the controls on the bottom edge, and a dock needs an edge to sit on. A
+dock pinned to the bottom of a document-flow page is pinned to nothing, and the
+stage there needs a definite height to claim rather than a `vh` guess. The
+query's second half is `TOUCH_LAYOUT` in `studio/layout.js` — the same
+`(pointer: coarse)` the studio already reads for grab targets. What is left
+outside both halves is a narrow fine-pointer window: it keeps the document flow
+it always had. This is where the studio parts from `MediaPage`, which is still
+tablet+ only.
 
 At 48em+, `.carousel-studio` becomes a three-row grid — toolbar
 (`.carousel-studio__toolbar`: the mode toggle, the document-controls popover

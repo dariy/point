@@ -13,15 +13,21 @@ import assert from 'node:assert';
 import {
   PROPS_PREF_KEY,
   SHEET_BREAKPOINT,
+  TOUCH_LAYOUT,
   ZOOM_MAX,
   ZOOM_MIN,
   clampZoom,
+  isTouchLayout,
   isWideViewport,
   readPropsPref,
 } from '../src/plugins/carousel/studio/layout.js';
 
 /** A window stand-in whose media query answers whatever it is told to. */
 const fakeWin = (matches) => ({ matchMedia: (q) => ({ matches: q === SHEET_BREAKPOINT && matches }) });
+/** The same, for the touch-layout query: a coarse pointer at any width. */
+const fakeTouchWin = (matches) => ({ matchMedia: (q) => ({ matches: q === TOUCH_LAYOUT && matches }) });
+/** Wide *and* coarse — a tablet. Both queries answer true. */
+const wideTouchWin = { matchMedia: () => ({ matches: true }) };
 const fakeStore = (value) => ({ getItem: () => value });
 const throwingStore = { getItem() { throw new Error('storage disabled'); } };
 
@@ -60,6 +66,30 @@ describe('carousel studio layout', () => {
     });
   });
 
+  describe('isTouchLayout', () => {
+    test('the gate is a pointer question, not a width one', () => {
+      // Named here because the stylesheet selects the whole layout with it:
+      // the fixed shell in carousel.css and light/layout.css, and the studio's
+      // own coarse-pointer block. `isCoarsePointer()` in studio/gestures.js
+      // reads the same string.
+      assert.strictEqual(TOUCH_LAYOUT, '(pointer: coarse)');
+    });
+
+    test('asks the pointer query when it can', () => {
+      assert.strictEqual(isTouchLayout(fakeTouchWin(true)), true);
+      assert.strictEqual(isTouchLayout(fakeTouchWin(false)), false);
+    });
+
+    test('is false where there is nothing to ask — the touch layout needs JS', () => {
+      // The asymmetry with isWideViewport, which is true in the same case: the
+      // rail works without JS and the touch layout does not, so an unanswered
+      // question falls back to the rail.
+      assert.strictEqual(isTouchLayout(undefined), false);
+      assert.strictEqual(isTouchLayout({}), false);
+      assert.strictEqual(isWideViewport({}), true);
+    });
+  });
+
   describe('readPropsPref', () => {
     test('opens by default: the panel holds the controls the studio is for', () => {
       assert.strictEqual(readPropsPref(fakeWin(true), fakeStore(null)), true);
@@ -72,6 +102,14 @@ describe('carousel studio layout', () => {
 
     test('opens closed on a narrow one whatever was remembered — it is a sheet over the stage', () => {
       assert.strictEqual(readPropsPref(fakeWin(false), fakeStore('1')), false);
+    });
+
+    test('opens closed on a coarse pointer whatever was remembered — the same sheet rule', () => {
+      assert.strictEqual(readPropsPref(fakeTouchWin(true), fakeStore('1')), false);
+      // A tablet is wide *and* coarse. The coarse half decides: a sheet that
+      // opens on arrival hides the stage it edits.
+      assert.strictEqual(readPropsPref(wideTouchWin, fakeStore('1')), false);
+      assert.strictEqual(readPropsPref(wideTouchWin, fakeStore(null)), false);
     });
 
     test('takes the default when storage is unavailable rather than throwing', () => {

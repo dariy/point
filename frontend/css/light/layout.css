@@ -534,15 +534,19 @@ body:has(.light-layout) {
     flex-shrink: 0;
 }
 
-/* Carousel Studio: fixed-viewport layout at 48em+ — the studio's own three
-   rows (toolbar/body/tray, carousel.css) fill the space and scroll
-   individually; the document itself does not. Tablet+ only, the same way
-   .media-page-main (light/media.css) gates its clamp: the phone keeps the
-   document flow and the bottom sheet it has today rather than a fixed shell
-   a thumb has no room to work in. `flex: 0 0 auto` + `min-height: 0` clear
-   the flex-item defaults that otherwise make a height on .light-main inert —
-   see .posts-list-main above for the full note. */
-@media (min-width: 48em) {
+/* Carousel Studio: fixed-viewport layout at 48em+, or on any coarse pointer —
+   the studio's own three rows (toolbar/body/tray, carousel.css) fill the space
+   and scroll individually; the document itself does not. The comma is an OR,
+   and the second half is the touch layout (`TOUCH_LAYOUT`, carousel
+   studio/layout.js): a phone gets the fixed shell, because the touch layout
+   docks its controls on the bottom edge and a dock needs an edge to sit on.
+   This is where the studio parts from .media-page-main (light/media.css),
+   which is still tablet+ only. Keep this query identical to the
+   "studio owns the viewport" block in carousel.css — the two halves of one
+   layout. `flex: 0 0 auto` + `min-height: 0` clear the flex-item defaults that
+   otherwise make a height on .light-main inert — see .posts-list-main above
+   for the full note. */
+@media (min-width: 48em), (pointer: coarse) {
     .carousel-studio-main {
         flex: 0 0 auto;
         min-height: 0;
