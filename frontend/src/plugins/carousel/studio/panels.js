@@ -419,7 +419,9 @@ export function builder({
     deck
       ? html`
           <span
-            class="carousel-studio__stage-slide ${i === selected ? "is-selected" : ""}"
+            class="carousel-studio__stage-slide ${i === selected ? "is-selected" : ""} ${
+              (i === deckIndex && slideChrome) || spanChrome ? "is-layer-armed" : ""
+            }"
             data-slice="${String(i)}"
             tabindex="0"
             role="group"

@@ -283,6 +283,24 @@ describe('carousel studio gestures', () => {
       gestures.destroy();
     });
 
+    test('a pen drag scrolls the strip immediately too — a stylus is not a thumb', () => {
+      // The undecided wait-and-see (below, "a vertical touch drag is handed
+      // back to the page") is keyed on `pointerType === "touch"` alone: a pen
+      // starts to move because it meant to, so it takes the pane gesture at
+      // the press, same as the mouse case above, and never sits undecided.
+      const host = fakeHost([{ crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0);
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'pen', clientX: 200, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, pointerType: 'pen', clientX: 150, clientY: 0 });
+
+      assert.strictEqual(host.calls.paint.length, 0, 'no crop gesture ran');
+      assert.deepStrictEqual(host.calls.scrollPaneBy, [50], 'the first pixel of travel already scrolled');
+      gestures.destroy();
+    });
+
     test('a press that never moves selects the slide instead of reframing it', () => {
       const host = fakeHost([{ crop: FULL, fit: 'cover' }]);
       const gestures = createDeckGestures(host);
@@ -546,6 +564,14 @@ describe('carousel studio gestures', () => {
       // That old, unrotated left-edge point now belongs to the bottom edge.
       assert.deepStrictEqual(hitLayer(rect, rotated, 50, 100), { mode: 'resize', h: 0, v: 1 });
     });
+
+    test('a wider grabPx (the coarse-pointer twin) reaches an edge the mouse tolerance misses', () => {
+      // Left edge at x=50. 18px off is past the default 12px tolerance but
+      // inside a 22px one — gestures.js passes HANDLE_GRAB_PX_COARSE there
+      // under a touch, mirroring carousel.css's own coarse-pointer rule.
+      assert.strictEqual(hitLayer(rect, box, 32, 100), null, 'the default tolerance misses');
+      assert.deepStrictEqual(hitLayer(rect, box, 32, 100, 22), { mode: 'resize', h: -1, v: 0 });
+    });
   });
 
   describe('layerContains', () => {
@@ -609,6 +635,19 @@ describe('carousel studio gestures', () => {
 
     test('an unmeasured frame misses rather than dividing by zero', () => {
       assert.strictEqual(hitRotateHandle({ left: 0, top: 0, width: 0, height: 0 }, box, 0, 0), false);
+    });
+
+    test('a wider offsetPx (the coarse-pointer twin) moves the handle further above the edge', () => {
+      // Top edge at y=50; the coarse offset (48) puts the handle at y=2,
+      // twice as far above it as the default 24px does.
+      const p = rotateHandlePoint(rect, box, 48);
+      assert.ok(Math.abs(p.x - 100) < 1e-9, `${p.x}`);
+      assert.ok(Math.abs(p.y - 2) < 1e-9, `${p.y}`);
+    });
+
+    test('a wider hitPx/offsetPx pair (the coarse-pointer twins) reaches a press the mouse tolerance misses', () => {
+      assert.strictEqual(hitRotateHandle(rect, box, 100, 15), false, 'the default handle sits too far below this press');
+      assert.strictEqual(hitRotateHandle(rect, box, 100, 15, 22, 48), true);
     });
   });
 
@@ -991,6 +1030,85 @@ describe('carousel studio gestures', () => {
           assert.strictEqual(host.calls.commitLayer[0].box.rotate, 30, `${where} committed the angle`);
           gestures.destroy();
         }
+      });
+    });
+
+    describe('two-finger pinch/rotate', () => {
+      // LAYER_BOX centred at (100, 100) in the 200×200 frame, right edge at
+      // (140, 100) — 40px from centre, clear of any resize handle so the
+      // first finger's press is an unambiguous move.
+
+      test('distance apart scales the box about its own centre, and the second finger up commits once', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+        assert.strictEqual(host.calls.paintLayer.length, 0, 'a second press alone paints nothing yet');
+
+        // 40px apart becomes 80: the box doubles, centred where it started.
+        frame.emit('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 });
+        const last = host.calls.paintLayer.at(-1);
+        assert.ok(Math.abs(last.box.w - 0.8) < 1e-9, `${last.box.w}`);
+        assert.ok(Math.abs(last.box.h - 0.8) < 1e-9, `${last.box.h}`);
+        assert.ok(Math.abs(last.box.x - 0.1) < 1e-9, 'the centre held');
+        assert.ok(Math.abs(last.box.y - 0.1) < 1e-9, 'the centre held');
+        assert.strictEqual(last.box.rotate, 0, 'no angle from a straight-apart pinch');
+
+        frame.emit('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 });
+        assert.strictEqual(host.calls.commitLayer.length, 0, 'the survivor is still down');
+        frame.emit('pointerup', { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 });
+        assert.strictEqual(host.calls.commitLayer.length, 1);
+        assert.ok(Math.abs(host.calls.commitLayer[0].box.w - 0.8) < 1e-9);
+        gestures.destroy();
+      });
+
+      test('the angle between the two fingers rotates the box, and writes rotate alone', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+
+        // The second finger swings from the centre's right to its bottom —
+        // same 40px distance, so no scale, but a quarter-turn.
+        frame.emit('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 140 });
+        const last = host.calls.paintLayer.at(-1);
+        assert.ok(Math.abs(last.box.rotate - 90) < 1e-9, `${last.box.rotate}`);
+        assert.ok(Math.abs(last.box.w - 0.4) < 1e-9, 'no scale from an equal-distance swing');
+        assert.ok(Math.abs(last.box.x - 0.3) < 1e-9, 'position untouched');
+        assert.ok(Math.abs(last.box.y - 0.3) < 1e-9, 'position untouched');
+        gestures.destroy();
+      });
+
+      test('one finger lifting out of a pinch hands the gesture to the one still down, not ending it', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 });
+
+        // Finger 2 lifts; finger 1 is still down at (100, 100) and keeps
+        // driving the gesture as a plain single-finger move from here.
+        frame.emit('pointerup', { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 });
+        assert.strictEqual(host.calls.commitLayer.length, 0, 'the gesture is still open');
+
+        frame.emit('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 120, clientY: 100 });
+        const last = host.calls.paintLayer.at(-1);
+        assert.ok(Math.abs(last.box.w - 0.8) < 1e-9, 'the pinch scale is kept, not undone');
+        assert.ok(last.box.x > 0.1, 'the survivor moved the box further');
+
+        frame.emit('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 120, clientY: 100 });
+        assert.strictEqual(host.calls.commitLayer.length, 1, 'now both fingers are up');
+        gestures.destroy();
+      });
+
+      test('a third finger is ignored — one pinch, two fingers', () => {
+        const { host, gestures, frame } = setup();
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 });
+        const before = host.calls.paintLayer.length;
+
+        frame.emit('pointerdown', { pointerId: 3, button: 0, pointerType: 'touch', clientX: 60, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 3, pointerType: 'touch', clientX: 20, clientY: 100 });
+        assert.strictEqual(host.calls.paintLayer.length, before, 'the third finger paints nothing new');
+        gestures.destroy();
       });
     });
   });

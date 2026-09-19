@@ -202,6 +202,18 @@
   cursor: grabbing;
 }
 
+/* The one column showing a selected layer's chrome (`is-layer-armed`,
+ * panels.js — the same `(i === deckIndex && slideChrome) || spanChrome` test
+ * `layerChrome` itself reads) must not hand a one-finger drag to the scroller:
+ * the layer's own grab (`PRESS_KINDS` in gestures.js) claims a press on it
+ * unconditionally, but `pan-x pan-y` above lets the browser start a native
+ * pan on that same finger regardless of the claim. Every other column keeps
+ * `pan-x pan-y`, so the strip still scrolls sideways with a finger wherever
+ * no layer is armed on it. */
+.carousel-studio__stage-slide.is-layer-armed {
+  touch-action: none;
+}
+
 /* An inset ring rather than a border: an equal-width flex item's border would
  * throw off the even division the dividers' `left %` math assumes. */
 .carousel-studio__stage-slide.is-selected {
@@ -1362,6 +1374,43 @@
   .carousel-studio__bg-field,
   .carousel-studio__control {
     flex: 1 1 100%;
+  }
+}
+
+/* ── Coarse pointer: bigger targets ──────────────────────────────────────────
+ * A finger is not a mouse cursor: every grab on the stage or the rail widens
+ * to a 44px target here, the same number a finger reliably hits on any
+ * platform's own touch-target guidance.
+ *
+ * The resize and rotate handles paint bigger so the target reads where it
+ * grabs, but the painted square is not what decides the grab — `gestures.js`
+ * resolves a press geometrically, against `HANDLE_GRAB_PX`, `ROTATE_
+ * HANDLE_OFFSET_PX` and `ROTATE_HANDLE_HIT_PX`. Those three constants carry a
+ * coarse-pointer twin in JS, read behind the same `(pointer: coarse)` query —
+ * `_COARSE` mirroring the plain constant's own px value here, the way
+ * `studio/layout.js` already mirrors `SHEET_BREAKPOINT`. The rotate handle's
+ * offset (-48px) is the one number both sides must actually agree on, since
+ * it also decides where the enlarged hit circle sits clear of the resize
+ * handles' own widened band. */
+@media (pointer: coarse) {
+  .carousel-studio__handle {
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+  }
+
+  .carousel-studio__handle--rotate {
+    top: -48px;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+  }
+
+  .carousel-studio__rail-handle,
+  .carousel-studio__pane-action,
+  .carousel-studio__layer-handle {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
