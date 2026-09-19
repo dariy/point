@@ -4156,6 +4156,81 @@ describe('CarouselStudioPage', () => {
       assert.equal(builder.style.getPropertyValue('--carousel-stage-budget'), '460px');
     });
 
+    /**
+     * The dock's stepper. It is the only way to change slide where the strip
+     * does not scroll, so these read the whole loop: the press, the selection,
+     * the readout, and the smooth move the press earns.
+     */
+    describe('the slide stepper', () => {
+      const stepBtn = (el, step) =>
+        el.querySelector(`[data-action="step-slide"][data-step="${step}"]`);
+      const readout = (el) =>
+        el.querySelector('.carousel-studio__dock-count').textContent.replace(/\s+/g, ' ').trim();
+
+      test('a press moves the selection on, and the readout with it', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        assert.equal(readout(el), '1 / 3');
+        click(stepBtn(el, '1'));
+
+        assert.equal(page.state.selected, 1);
+        assert.equal(readout(el), '2 / 3');
+      });
+
+      test('the press animates the move — every other render jumps', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        const watch = watchRenderScroll(dom.window);
+        try {
+          click(stepBtn(el, '1'));
+          // The flag is spent by the render the press caused, so a later pass
+          // over the same selection is back to a jump.
+          page.setState({});
+        } finally {
+          watch.restore();
+        }
+
+        assert.deepStrictEqual(watch.moves[0], { left: 368, behavior: 'smooth' });
+        assert.ok(
+          watch.moves.slice(1).every((m) => m.behavior === 'auto'),
+          'only the press itself was smooth',
+        );
+      });
+
+      test('the last slide darkens the next arrow, and a press there does nothing', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        click(stepBtn(el, '1'));
+        click(stepBtn(el, '1'));
+        assert.equal(page.state.selected, 2);
+        assert.ok(stepBtn(el, '1').disabled, 'the next arrow is dark at the last slide');
+        assert.ok(!stepBtn(el, '-1').disabled, 'previous is still live');
+
+        click(stepBtn(el, '1'));
+        assert.equal(page.state.selected, 2, 'the clamp holds, not just the disabled attribute');
+        assert.equal(readout(el), '3 / 3');
+      });
+
+      test('the first slide darkens the previous arrow, and a press there does nothing', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        assert.ok(stepBtn(el, '-1').disabled, 'previous is dark at slide 1');
+        assert.ok(!stepBtn(el, '1').disabled, 'next is live');
+
+        click(stepBtn(el, '-1'));
+        assert.equal(page.state.selected, 0);
+        assert.equal(readout(el), '1 / 3');
+      });
+    });
+
     test('a fine pointer still measures the column, not the pane', async () => {
       const { routes, deps } = deck(3);
       const el = await mount({ post: '42' }, routes, { renderDeps: deps });
