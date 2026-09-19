@@ -626,6 +626,14 @@ body.drag-active::after {
     margin-left: auto;
 }
 
+/* Fit the meta row: the default .btn-sm padding is sized for a standalone
+   button, not a label riding next to "Carousel · N slides". */
+.ve-carousel-ungroup,
+.ve-carousel-edit {
+    padding: var(--ve-carousel-action-padding-y) var(--ve-carousel-action-padding-x);
+    white-space: nowrap;
+}
+
 .ve-carousel-strip {
     display: flex;
     gap: var(--spacing-xs);
@@ -633,29 +641,29 @@ body.drag-active::after {
     padding-bottom: 2px;
 }
 
-/* One slide in the strip — a positioning context for its own handle, so
-   dragging it stays a corner grip and never grows the item's footprint. */
+/* One slide in the strip — a flex row like .ve-card, so the handle reads as
+   a smaller member of the same family: a dotted gutter beside the
+   thumbnail, not a grip floated over it. */
 .ve-slide {
-    position: relative;
+    display: flex;
+    align-items: stretch;
     flex-shrink: 0;
 }
 
 .ve-slide-handle {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--ve-slide-handle-size);
-    height: var(--ve-slide-handle-size);
+    width: var(--ve-slide-handle-width);
+    flex-shrink: 0;
+    align-self: stretch;
     padding: 0;
-    background: var(--bg-overlay);
+    background: none;
     border: none;
-    border-radius: 0 0 var(--ve-thumb-border-radius) 0;
+    border-right: var(--border-width) dotted var(--border-primary);
+    border-radius: 0;
     cursor: grab;
-    color: var(--color-white);
+    color: var(--text-muted);
     /* The gesture owns the pointer — without this a touch-drag scrolls instead */
     touch-action: none;
 }
@@ -666,7 +674,7 @@ body.drag-active::after {
 
 .ve-slide-handle:hover,
 .ve-slide-handle:focus-visible {
-    color: var(--color-primary-light);
+    color: var(--color-primary);
 }
 
 .ve-slide-handle .ve-handle-dots {

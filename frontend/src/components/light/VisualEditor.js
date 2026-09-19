@@ -210,10 +210,10 @@ export class VisualEditor extends Component {
           <span class="ve-carousel-label" aria-hidden="true">▦</span>
           <span class="ve-carousel-count">Carousel · ${paths.length} ${paths.length === 1 ? "slide" : "slides"}</span>
           <div class="ve-carousel-actions">
-            <button class="ve-carousel-ungroup btn btn-sm" type="button" data-index="${i}"
+            <button class="ve-carousel-ungroup btn btn-sm btn-outline" type="button" data-index="${i}"
                     title="Split this carousel back into separate photos">Ungroup</button>
             ${this.props.onEditCarousel
-              ? html`<button class="ve-carousel-edit btn btn-sm" type="button" data-block="${block}">Edit in Studio</button>`
+              ? html`<button class="ve-carousel-edit btn btn-sm btn-primary" type="button" data-block="${block}">Edit in Studio</button>`
               : ""}
           </div>
         </div>
@@ -270,9 +270,9 @@ export class VisualEditor extends Component {
     return html`
       <div class="ve-selection-bar" role="toolbar" aria-label="Selected cards" hidden>
         <span class="ve-selection-count" aria-live="polite"></span>
-        <button class="ve-make-carousel btn btn-sm" type="button"
+        <button class="ve-make-carousel btn btn-sm btn-primary" type="button"
                 title="Fold the selected photos into one carousel block">Make carousel</button>
-        <button class="ve-selection-clear btn btn-sm" type="button">Clear</button>
+        <button class="ve-selection-clear btn btn-sm btn-outline" type="button">Clear</button>
       </div>`;
   }
 
