@@ -104,6 +104,7 @@ import {
   PROPS_PREF_KEY,
   ZOOM_STEP,
   clampZoom,
+  isTouchLayout,
   readPropsPref,
 } from "./studio/layout.js";
 import {
@@ -3140,16 +3141,92 @@ export default class CarouselStudioPage extends Component {
   /** At 64em+ the stage fills its column instead of reading a `vh` clamp
    *  (carousel.css `.carousel-studio__stage`), so the zoom-neutral height has
    *  to come from layout: the column's own box minus whatever the top pane
-   *  (deck mode only) takes off it. Below 64em `--carousel-stage-budget` is
-   *  unread — the stylesheet's own clamp still applies there — so measuring
-   *  early is harmless, not just unused. */
+   *  (deck mode only) takes off it. Below 64em and on a fine pointer
+   *  `--carousel-stage-budget` is unread — the stylesheet's own clamp still
+   *  applies there — so measuring early is harmless, not just unused.
+   *
+   *  The touch layout reads it at every width instead, and asks a different
+   *  question of it — see `_touchStageBudget`. */
   _measureStageBudget() {
     const col = this.$(".carousel-studio__stage-col");
     const builder = this.$(".carousel-studio__builder");
     if (!col || !builder) return;
     const paneHeight = this.$(".carousel-studio__pane-row--top")?.offsetHeight || 0;
-    const budget = col.clientHeight - paneHeight;
+    const budget = isTouchLayout()
+      ? this._touchStageBudget(paneHeight)
+      : col.clientHeight - paneHeight;
     if (budget > 0) builder.style.setProperty("--carousel-stage-budget", `${budget}px`);
+  }
+
+  /**
+   * The touch layout's budget: the tallest stage that still shows **one whole
+   * slide** inside the pane, rather than the tallest that fits the pane.
+   *
+   * The stage is one strip `n` slides wide, so its height decides a single
+   * column's width through the inline `aspect-ratio`: a column is
+   * `budget · w / h` across. Fitting one column to the pane's width therefore
+   * caps the budget at `paneW · h / w`, and the pane's own height caps it at
+   * `paneH`. The smaller cap binds: the larger of the two would push the other
+   * dimension past the pane, and the scroller is locked here
+   * (`overflow: hidden`, carousel.css), so a finger could not bring it back.
+   *
+   * Which cap binds depends on the room the shell leaves this pane. While the
+   * toolbar and the tray keep their pre-S10 shapes the pane is short and wide,
+   * so the height binds and a column comes out narrower than the pane. That is
+   * the formula working, not failing — it never lets a column overflow.
+   *
+   * `paneW` is the scroller's **content** width. `clientWidth` includes the
+   * `padding-inline` the locked scroller carries for the end insert-zone
+   * buttons (carousel.css), and a column sized against that padding would eat
+   * the very room the padding reserves.
+   *
+   * @param {number} paneHeight the top pane's height, already measured
+   * @returns {number} the budget in px, or 0 where there is nothing to measure
+   */
+  _touchStageBudget(paneHeight) {
+    const scroll = this.$(".carousel-studio__stage-scroll");
+    if (!scroll) return 0;
+    const cs = getComputedStyle(scroll);
+    const padX =
+      (parseFloat(cs?.paddingLeft || "") || 0) + (parseFloat(cs?.paddingRight || "") || 0);
+    const paneW = scroll.clientWidth - padX;
+    const paneH = scroll.clientHeight - paneHeight;
+    const [w, h] = canvasSize(this.state.doc.aspect);
+    return Math.min(paneH, (paneW * h) / w);
+  }
+
+  /**
+   * Put the selected column in the middle of the locked stage scroller.
+   *
+   * The offset is measured, not computed as `i · columnWidth`: the scroller
+   * carries `padding-inline`, so the first column does not start at content
+   * offset 0. Reading the column's own box against the scroller's and adding
+   * the live `scrollLeft` gives its true offset whatever the padding is.
+   *
+   * Centring — rather than flushing the column to the left edge — is what
+   * keeps the head and tail `.carousel-studio__insert-zone` buttons visible.
+   * They ride half outside the stage by design, and the budget leaves the
+   * padding free for exactly that overhang; a flush column would scroll that
+   * padding out of view and clip the head button away.
+   *
+   * `scrollLeft` is still settable on an `overflow: hidden` element, which is
+   * what makes the strip movable by the page while it is immovable by a
+   * finger.
+   *
+   * @param {boolean} [smooth] animate the move — false for a render, true for
+   *   a deliberate step between slides
+   */
+  _scrollActiveIntoView(smooth = false) {
+    const scroll = this.$(".carousel-studio__stage-scroll");
+    const i = this._selectedIndex();
+    const col = this.$(`.carousel-studio__stage [data-slice="${i}"]`);
+    if (!scroll || !col?.getBoundingClientRect || !scroll.getBoundingClientRect) return;
+    const colBox = col.getBoundingClientRect();
+    const scrollBox = scroll.getBoundingClientRect();
+    if (!colBox.width) return; // no layout yet (a headless test frame)
+    const offset = colBox.left - scrollBox.left - scroll.clientLeft + scroll.scrollLeft;
+    const left = offset - (scroll.clientWidth - colBox.width) / 2;
+    scroll.scrollTo?.({ left, behavior: smooth ? "smooth" : "auto" });
   }
 
   /** Everything the builder markup needs, read off the state in one place —
@@ -3294,6 +3371,13 @@ export default class CarouselStudioPage extends Component {
         `.carousel-studio__layer-handle[data-scope="${scope}"][data-index="${index}"]`,
       )?.focus?.();
     }
+
+    // The touch layout shows one slide, so the selection — not the remembered
+    // offset — decides the view. This runs last because it measures: the
+    // column's width follows from `--carousel-stage-budget`, which
+    // `_measureStageBudget` wrote higher up in this same pass. The
+    // fine-pointer path keeps the `_stageScrollLeft` restore above untouched.
+    if (isTouchLayout()) this._scrollActiveIntoView(false);
   }
 
   /**

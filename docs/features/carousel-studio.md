@@ -845,8 +845,9 @@ fitting that to the container turns it straight back into a sliver. The stage
 runs off a **height budget** instead, with `width: fit-content` letting the
 inline `aspect-ratio` transfer that height into a width, inside a
 `__stage-scroll` wrapper that absorbs the overflow so the page itself never
-gains a horizontal scrollbar. Below 64em the budget is still a `clamp()` of
-`vh` — `clamp(12rem, 45vh, 32rem)`, and `clamp(9rem, 38vh, 20rem)` on a phone.
+gains a horizontal scrollbar. Below 64em on a fine pointer the budget is still
+a `clamp()` of `vh` — `clamp(12rem, 45vh, 32rem)`, and
+`clamp(9rem, 38vh, 20rem)` on a phone.
 At 64em+ (S8) the stage has its own column instead, so the budget is *that
 column's own height*, measured into `--carousel-stage-budget`
 (`_measureStageBudget`, `index.js`) rather than read off the viewport — the
@@ -855,6 +856,18 @@ same reason `_fitStageZoom` measures width instead of deriving it. A
 same height the old universal clamp gave a wide, short desktop window; today
 that height comes from `--carousel-stage-budget`, not `vh`, for any window
 wide enough to reach its own column.
+
+A coarse pointer (S10) reads the measured budget at every width, and asks a
+different question of it: not *how tall is the pane?* but *how tall may the
+stage be and still show one whole slide inside the pane?* The stage is one
+strip `n` slides wide, so its height fixes a single column's width through the
+same inline `aspect-ratio` — a column is `budget · w / h` across. Fitting one
+column to the pane therefore caps the budget at `paneW · h / w`, and the pane's
+own height caps it at `paneH`; `_touchStageBudget` (`index.js`) takes the
+smaller of the two, since the larger would push the other dimension past a
+scroller that is locked there (`overflow: hidden`) and cannot be dragged back.
+Which cap binds is a matter of the room the shell leaves: a short, wide pane is
+bound by its height, and the column comes out narrower than the pane.
 
 A zoom control under the stage (− / readout / + / Fit / 100%) multiplies the
 budget through one custom property, `--carousel-stage-zoom`, written straight to
