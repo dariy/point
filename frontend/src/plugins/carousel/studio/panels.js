@@ -69,15 +69,19 @@ const ASPECT_OPTIONS = [
   ["1.91:1", "Landscape 1.91:1"],
 ];
 
-/** The five layer types, with the label their "Add" chip and list row carry.
+/** The six layer types, with the label their "Add" chip and list row carry.
  *  `image` is called "Logo" — the S3 use is a wordmark, and the default source
- *  is the `logo_url` setting. */
+ *  is the `logo_url` setting. `ink` is here too, although it is the one type
+ *  the studio cannot author from a default: the dropdown opens a draw session
+ *  for it (`_addLayer`, index.js) and the session produces the layer. One
+ *  vocabulary for one schema — a type in the document is a type in this list. */
 const LAYER_KINDS = [
   ["text", "Text"],
   ["image", "Image"],
   ["rect", "Shape"],
   ["counter", "Counter"],
   ["arrow", "Arrow"],
+  ["ink", "Ink"],
 ];
 
 const LAYER_ALIGNS = [
@@ -137,17 +141,18 @@ export function historyButtons({ canUndo, canRedo, busy }) {
  * `.carousel-studio__toolbar` does not, and on a fine pointer the reverse. One
  * markup tree, two layouts — the discipline the properties rail already keeps.
  *
- * The row ships four of its five slots. The "+ Add layer…" select goes last
- * and arrives with its own bead (p-carousel-touch-layout-vfs1.7). The gap is
- * left empty on purpose: a button that does nothing reads as a broken control,
- * which is worse than a shorter row.
+ * The row has two states. Its resting one is ☰ · ‹ 3 / 8 › · ↶ · ↷. The
+ * stepper is what changes the active slide where the strip no longer scrolls,
+ * so no gesture has to. Each arrow goes dark at its own end of the deck, and
+ * the readout is an `<output>` with `aria-live="polite"` — a screen reader
+ * hears the new slide, because on this layout the stage itself gives no other
+ * sign that the selection moved. The stepper stays live through a render: it
+ * selects, it does not edit.
  *
- * The stepper (`‹ 3 / 8 ›`) is what changes the active slide where the strip
- * no longer scrolls, so no gesture has to. Each arrow goes dark at its own end
- * of the deck, and the readout is an `<output>` with `aria-live="polite"` — a
- * screen reader hears the new slide, because on this layout the stage itself
- * gives no other sign that the selection moved. The stepper stays live through
- * a render: it selects, it does not edit.
+ * With a draw session open the row reads ☰ · Erase · ↶ · ↷ · ✓ Done. The
+ * stepper gives up its slot: a session is pinned to the column it opened on
+ * (`_startDrawSession`), so stepping away would draw on a slide the user is
+ * not looking at. Done takes the far end, where a commit belongs.
  *
  * Every label here is an icon or a glyph, so every button carries an
  * `aria-label` as well. The history pair takes the rule `historyButtons`
@@ -155,10 +160,12 @@ export function historyButtons({ canUndo, canRedo, busy }) {
  * not: it opens a panel, which stays a fair thing to do while the render runs.
  *
  * @param {{canUndo: boolean, canRedo: boolean, busy: boolean,
- *   selected?: number, n?: number}} o  `selected` is the clamped slide index
- *   (`_selectedIndex` in `index.js`), `n` the slide count.
+ *   selected?: number, n?: number,
+ *   inkSession?: {i: number, mode: "draw"|"erase"}|null}} o  `selected` is the
+ *   clamped slide index (`_selectedIndex` in `index.js`), `n` the slide count,
+ *   `inkSession` the ink tool's live session or null while the tool is off.
  */
-export function dock({ canUndo, canRedo, busy, selected = 0, n = 1 }) {
+export function dock({ canUndo, canRedo, busy, selected = 0, n = 1, inkSession = null }) {
   const button = (action, glyph, label, enabled) => html`
     <button
       type="button"
@@ -184,20 +191,22 @@ export function dock({ canUndo, canRedo, busy, selected = 0, n = 1 }) {
     >
       ${raw(glyph)}
     </button>`;
-  // Slot — the add-layer select (p-carousel-touch-layout-vfs1.7) goes after
-  // the history pair.
+  const ink = inkSession ? inkActions(inkSession) : null;
+  const stepper = html`
+    <div class="carousel-studio__dock-stepper" role="group" aria-label="Slide">
+      ${step(-1, "&#8249;", "Previous slide", selected > 0)}
+      <output class="carousel-studio__dock-count" aria-live="polite">
+        ${String(selected + 1)} / ${String(n)}
+      </output>
+      ${step(1, "&#8250;", "Next slide", selected < n - 1)}
+    </div>`;
   return html`
     <div class="carousel-studio__dock" role="toolbar" aria-label="Studio actions">
       ${button("toggle-props", MENU_SVG, "Properties", true)}
-      <div class="carousel-studio__dock-stepper" role="group" aria-label="Slide">
-        ${step(-1, "&#8249;", "Previous slide", selected > 0)}
-        <output class="carousel-studio__dock-count" aria-live="polite">
-          ${String(selected + 1)} / ${String(n)}
-        </output>
-        ${step(1, "&#8250;", "Next slide", selected < n - 1)}
-      </div>
+      ${ink ? ink.erase : stepper}
       ${button("undo", UNDO_SVG, "Undo", canUndo && !busy)}
       ${button("redo", REDO_SVG, "Redo", canRedo && !busy)}
+      ${ink ? ink.done : ""}
     </div>`;
 }
 
@@ -422,8 +431,8 @@ function layerLabel(layer) {
  *   of this function then, but the tray is shared).
  * @param {{i: number, mode: "draw"|"erase", color: string, width: number,
  *   opacity: number}|null} [o.inkSession]  the ink tool's live session
- *   (`index.js`), or null while the tool is off — armed column, toolbar
- *   state and the properties panel swap all read this one value.
+ *   (`index.js`), or null while the tool is off — armed column, dock state
+ *   and the properties panel swap all read this one value.
  * @param {boolean} [o.canUndo]  can the document's history ring step back? The
  *   dock carries its own undo/redo pair, because the header's pair
  *   (`actionsBar`) is out of a thumb's reach on a phone. The dock's stepper
@@ -716,7 +725,7 @@ export function builder({
   // The toolbar's own controls, again, for the layout that has no toolbar. On
   // a coarse pointer the dock takes the bottom edge and `.carousel-studio__
   // toolbar` is `display: none`, which would take the mode toggle, the
-  // Document disclosure, the Draw switch and the stage zoom with it. They are
+  // Document disclosure and the stage zoom with it. They are
   // emitted here as well, each under its own heading, and the two copies are
   // hidden in turn by the same query (`carousel.css`, the coarse block) — the
   // props rail's discipline: one markup tree, two layouts.
@@ -731,13 +740,6 @@ export function builder({
         <h3 class="carousel-studio__subhead">Framing mode</h3>
         ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
       </div>
-      ${deck
-        ? html`
-            <div class="carousel-studio__props-tool">
-              <h3 class="carousel-studio__subhead">Drawing</h3>
-              ${drawToolControl(inkSession)}
-            </div>`
-        : ""}
       <div class="carousel-studio__props-tool">
         <h3 class="carousel-studio__subhead">Document</h3>
         ${docControls(false)}
@@ -770,7 +772,6 @@ export function builder({
     <div class="carousel-studio__toolbar">
       ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
       ${modeToggle({ mode: doc.mode, canDeck: Boolean(srcW && srcH), busy })}
-      ${deck ? drawToolControl(inkSession) : ""}
       <div class="carousel-studio__doc-menu">
         <button
           type="button"
@@ -844,7 +845,7 @@ export function builder({
 
     <div class="carousel-studio__tray">${touch ? "" : trayBody}</div>
 
-    ${dock({ canUndo, canRedo, busy, selected: deckIndex, n })}`;
+    ${dock({ canUndo, canRedo, busy, selected: deckIndex, n, inkSession })}`;
 }
 
 /**
@@ -1288,41 +1289,43 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy, formHtml })
 }
 
 /**
- * The ink tool's own toggle, in the toolbar, and — only once a session is
- * open — the Erase toggle beside it (`Decisions`: erase is a mode inside the
- * one session, not a session of its own). Deck mode only: a session's box is
- * one slide's, the same scope every other layer control keeps.
+ * The two controls an open draw session needs: Erase, the mode inside the one
+ * session (`Decisions`: erase is a mode, not a session of its own), and Done,
+ * which ends the session and commits the mark as one layer. There is no third
+ * control to start a session — the object dropdown does that now.
  *
- * @param {{i: number, mode: "draw"|"erase"}|null} session
+ * The pair is returned as two named parts rather than one group, because its
+ * two hosts place them differently: the properties panel puts them side by
+ * side, and the dock puts the history pair between them, to keep Done at the
+ * far end where a commit belongs. One function so the two hosts cannot drift
+ * apart on the `aria-pressed` the mode drives.
+ *
+ * @param {{mode: "draw"|"erase"}} session  the mode is all either button reads
+ * @returns {{erase: import('../../../utils/helpers.js').Slot,
+ *   done: import('../../../utils/helpers.js').Slot}}
  */
-export function drawToolControl(session) {
-  const active = Boolean(session);
-  return html`
-    <div class="carousel-studio__ink-tool" role="group" aria-label="Draw">
+export function inkActions(session) {
+  return {
+    erase: html`
       <button
         type="button"
-        class="btn btn-sm btn-secondary"
-        data-action="ink-tool"
-        aria-pressed="${active ? "true" : "false"}"
-        title="${active
-          ? "Finish drawing and add the mark as a layer (Esc)"
-          : "Draw on the selected slide with a stylus, mouse or finger"}"
+        class="btn btn-sm btn-secondary carousel-studio__ink-action"
+        data-action="ink-erase"
+        aria-pressed="${session.mode === "erase" ? "true" : "false"}"
+        title="Erase a stroke the pointer touches"
       >
-        Draw
-      </button>
-      ${active
-        ? html`
-            <button
-              type="button"
-              class="btn btn-sm btn-secondary"
-              data-action="ink-erase"
-              aria-pressed="${session.mode === "erase" ? "true" : "false"}"
-              title="Erase a stroke the pointer touches"
-            >
-              Erase
-            </button>`
-        : ""}
-    </div>`;
+        Erase
+      </button>`,
+    done: html`
+      <button
+        type="button"
+        class="btn btn-sm btn-secondary carousel-studio__ink-action"
+        data-action="ink-tool"
+        title="Finish drawing and add the mark as a layer (Esc)"
+      >
+        Done
+      </button>`,
+  };
 }
 
 /**
@@ -1334,16 +1337,24 @@ export function drawToolControl(session) {
  * they were drawn with, the same way a real font size does not
  * retroactively resize a line already typed.
  *
+ * Erase and Done sit at the top, where the panel is always visible — the
+ * fine-pointer path. The coarse one reaches the same two buttons from the
+ * dock, because this panel is behind a burger there.
+ *
  * @param {{mode: "draw"|"erase", color: string, width: number, opacity: number}} session
  */
 export function inkToolPanel(session) {
+  const { erase, done } = inkActions(session);
   return html`
     <div class="carousel-studio__layers">
       <span class="carousel-studio__bg-label">
         Drawing — ${session.mode === "erase" ? "Erase" : "Draw"} mode
       </span>
+      <div class="carousel-studio__ink-actions" role="group" aria-label="Drawing">
+        ${erase}${done}
+      </div>
       <p class="carousel-studio__fit-dims">
-        Press Escape, or Draw in the toolbar, to finish and add the mark as a layer.
+        Press Escape, or Done, to finish and add the mark as a layer.
       </p>
       <div class="carousel-studio__bg-row">
         <label class="carousel-studio__bg-field">
@@ -1408,6 +1419,10 @@ export function inkToolPanel(session) {
 function addLayerChips(scope) {
   const hint =
     scope === "span" ? "Add layer — spans every slide, across the seams" : "Add layer";
+  // The span list drops `ink`. A draw session is scoped to one slide
+  // (`_startDrawSession` pins it to the selected column), so there is no
+  // session that could produce a layer spanning the seams.
+  const kinds = scope === "span" ? LAYER_KINDS.filter(([type]) => type !== "ink") : LAYER_KINDS;
   return html`
     <select
       class="carousel-studio__add-layer-select"
@@ -1416,9 +1431,7 @@ function addLayerChips(scope) {
       title="${hint}"
     >
       <option value="" disabled selected>+ Add layer...</option>
-      ${LAYER_KINDS.map(
-        ([type, text]) => html`<option value="${type}">${text}</option>`,
-      )}
+      ${kinds.map(([type, text]) => html`<option value="${type}">${text}</option>`)}
     </select>`;
 }
 

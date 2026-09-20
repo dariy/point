@@ -1810,7 +1810,9 @@ export default class CarouselStudioPage extends Component {
    * set here; every other field is `normalizeLayer`'s to fill, because the
    * studio never authors a layer literal — see `addLayer` in `document.js`.
    *
-   * @param {string} type one of `LAYER_TYPES`
+   * @param {string} type one of `LAYER_TYPES`, never `"ink"` — an ink layer's
+   *   box and strokes are the draw session's own output, so `_addLayer` routes
+   *   that type to `_startDrawSession` and this function never sees it.
    * @param {"slide"|"span"} [scope]
    */
   _defaultLayer(type, scope = "slide") {
@@ -1847,8 +1849,17 @@ export default class CarouselStudioPage extends Component {
   }
 
   /** Add a layer to the scope's list and select it — a new layer lands on top
-   *  of the stack (`addLayer` appends), which is the row at the top of the list. */
+   *  of the stack (`addLayer` appends), which is the row at the top of the list.
+   *
+   *  `ink` is the one type that does not go through `addLayer` here. Its box
+   *  and its strokes are what a draw session produces, so the dropdown opens
+   *  the session and `_endDrawSession` adds the finished layer. The studio
+   *  still authors no layer literal with less than its final shape. */
   _addLayer(type, scope) {
+    if (type === "ink") {
+      this._startDrawSession();
+      return;
+    }
     const s = scope === "span" ? "span" : "slide";
     const { slideIndex } = this._layerTarget(s);
     const doc = addLayer(this.state.doc, slideIndex, this._defaultLayer(type, s));
@@ -1890,13 +1901,13 @@ export default class CarouselStudioPage extends Component {
     this._drawSession.mode = this._drawSession.mode === "erase" ? "draw" : "erase";
     // A plain rebuild, not `_render()` — that name belongs to the carousel's
     // own render-and-upload action; this just reflects the mode flip into
-    // the toolbar and the stage's cursor.
+    // the session's Erase button and the stage's cursor.
     this.setState({});
   }
 
   /**
-   * Leave the ink tool — Escape (`_onDrawKey`) or the toolbar control
-   * itself. A session that drew nothing commits nothing; otherwise every
+   * Leave the ink tool — Escape (`_onDrawKey`) or the session's own Done
+   * button. A session that drew nothing commits nothing; otherwise every
    * stroke becomes one `ink` layer through `addLayer`, its points and width
    * rewritten against the tight box they drew inside (`inkSessionBox`,
    * `normalizeSessionStroke`) — the studio never authors a layer literal
