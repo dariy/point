@@ -22,11 +22,11 @@
  *  `frontend/css/light/editor.css:1141` already use. */
 export const SHEET_BREAKPOINT = "(min-width: 64em)";
 
-/** The touch layout's gate: a pointer that cannot hit a small target. This is
- *  the same query `isCoarsePointer()` (`studio/gestures.js`) already reads to
- *  widen its grab targets, named here because the stylesheet selects the whole
- *  layout with it too — the fixed shell below 48em, and the studio's own
- *  `@media (pointer: coarse)` rules.
+/** The touch layout's gate: a pointer that cannot hit a small target. The
+ *  stylesheet selects the whole layout with it — the fixed shell below 48em,
+ *  the locked strip, the dock — and `studio/gestures.js` reads the same
+ *  `isTouchLayout` below once per press, to widen its grab targets and to send
+ *  a plain drag to the crop rather than to a scroller that no longer moves.
  *
  *  It is a pointer question, not a width question. A tablet and a touchscreen
  *  laptop have the same finger a phone has; a narrow desktop window does not. */

@@ -239,7 +239,11 @@
  * reach a scroller, the strip on one axis and the page on the other, or a
  * phone user whose thumb lands on the tile cannot scroll past it at all.
  * `gestures.js` claims a plain touch drag only for a second finger (a pinch),
- * never the first, so the two never fight over the same one. */
+ * never the first, so the two never fight over the same one.
+ *
+ * That is the fine pointer's rule. The touch layout replaces it with `none` —
+ * see "Coarse pointer: one slide, maximized and still" below, where the strip
+ * stops scrolling and the tile becomes the only thing a finger can drag. */
 .carousel-studio__stage-slide {
   position: relative;
   flex: 1 1 0%;
@@ -268,7 +272,13 @@
  * unconditionally, but `pan-x pan-y` above lets the browser start a native
  * pan on that same finger regardless of the claim. Every other column keeps
  * `pan-x pan-y`, so the strip still scrolls sideways with a finger wherever
- * no layer is armed on it. */
+ * no layer is armed on it.
+ *
+ * This rule and `is-ink-armed` below are both redundant in the touch layout,
+ * where every column is already `none`. They stay because the touch layout is
+ * not the only place a finger touches this stage: a touchscreen laptop reports
+ * a fine primary pointer, misses `(pointer: coarse)` entirely, and still has to
+ * keep a layer drag away from the scroller. */
 .carousel-studio__stage-slide.is-layer-armed {
   touch-action: none;
 }
@@ -1574,6 +1584,16 @@
      * tall may one column be and still fit?" rather than "how tall is the
      * column?" (`_touchStageBudget`, index.js). */
     height: calc(var(--carousel-stage-budget, 12rem) * var(--carousel-stage-zoom, 1));
+  }
+
+  .carousel-studio__stage-slide {
+    /* The whole column, not just an armed one. `pan-x pan-y` up in the base
+     * rule exists to leave a finger to the strip's own scroller; with the
+     * scroller locked above there is nothing left for the browser to pan, and
+     * `pan-x` would only cost the crop its first 8px of travel. So the tile
+     * takes every drag, and `gestures.js` pans the crop with it — no modifier,
+     * because a finger has none to hold (`isTouchLayout`, studio/layout.js). */
+    touch-action: none;
   }
 }
 

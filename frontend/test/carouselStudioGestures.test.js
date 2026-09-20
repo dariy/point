@@ -543,6 +543,114 @@ describe('carousel studio gestures', () => {
     });
   });
 
+  describe('the touch layout', () => {
+    /** Run `fn` with the touch layout on. `isTouchLayout()` (studio/layout.js)
+     *  asks `globalThis.window.matchMedia`, and this suite has no DOM, so the
+     *  window is this stub and the media query is the only thing it answers.
+     *  Restored afterwards, because every other test in this file is a fine
+     *  pointer and must stay one. */
+    function withTouchLayout(fn) {
+      const had = 'window' in globalThis;
+      const before = globalThis.window;
+      globalThis.window = { matchMedia: (q) => ({ matches: q === '(pointer: coarse)' }) };
+      try {
+        fn();
+      } finally {
+        if (had) globalThis.window = before;
+        else delete globalThis.window;
+      }
+    }
+
+    const PANNABLE = { crop: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, fit: 'cover' };
+
+    test('a one-finger drag pans the crop and commits once on release', () => {
+      // The strip is locked here (carousel.css, "one slide, maximized and
+      // still"), so there is no scroller to hand the finger back to: the first
+      // resolved direction claims the crop instead of abandoning it.
+      withTouchLayout(() => {
+        const host = fakeHost([PANNABLE]);
+        const gestures = createDeckGestures(host);
+        const frame = fakeFrame(0);
+        gestures.attach([frame]);
+
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 140, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 180, clientY: 100 });
+        frame.emit('pointerup', { pointerId: 1, pointerType: 'touch' });
+
+        assert.ok(host.calls.paint.length >= 2, 'every claimed move painted a provisional crop');
+        assert.strictEqual(host.calls.commit.length, 1, 'one document write, on release');
+        assert.ok(host.calls.commit[0].crop.x < 0.25, 'the image followed the finger');
+        assert.deepStrictEqual(host.calls.scrollPaneBy, [], 'nothing scrolled the locked strip');
+        assert.deepStrictEqual(host.calls.select, [], 'a drag is not a tap');
+        gestures.destroy();
+      });
+    });
+
+    test('a vertical one-finger drag pans the crop too — neither axis is the page\'s here', () => {
+      // The fine pointer hands a vertical finger back to the page ("a vertical
+      // touch drag is handed back to the page", above). The touch layout owns
+      // both axes, so the same drag reframes instead.
+      withTouchLayout(() => {
+        const host = fakeHost([PANNABLE]);
+        const gestures = createDeckGestures(host);
+        const frame = fakeFrame(0);
+        gestures.attach([frame]);
+
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 140 });
+        frame.emit('pointerup', { pointerId: 1, pointerType: 'touch' });
+
+        assert.strictEqual(host.calls.commit.length, 1);
+        assert.ok(host.calls.commit[0].crop.y < 0.25);
+        assert.deepStrictEqual(host.calls.scrollPaneBy, []);
+        gestures.destroy();
+      });
+    });
+
+    test('a mouse drag with no modifier pans the crop, never the strip', () => {
+      // `"pane"` is not a drag kind here at all — not for a finger, not for a
+      // pen, not for a mouse. A hybrid device's Ctrl/Shift still reaches the
+      // crop by its own branch, so it loses nothing.
+      withTouchLayout(() => {
+        const host = fakeHost([PANNABLE]);
+        const gestures = createDeckGestures(host);
+        const frame = fakeFrame(0);
+        gestures.attach([frame]);
+
+        frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 100 });
+        frame.emit('pointerup', { pointerId: 1 });
+
+        assert.ok(host.calls.paint.length >= 1, 'the crop painted from the first move');
+        assert.strictEqual(host.calls.commit.length, 1);
+        assert.deepStrictEqual(host.calls.scrollPaneBy, [], 'scrollPaneBy is never called');
+        gestures.destroy();
+      });
+    });
+
+    test('a tap still selects the slide', () => {
+      // The claim waits for a direction here exactly as it does on a fine
+      // pointer. That wait is what keeps a tap a tap: nothing resolved, so
+      // nothing was claimed and nothing is committed.
+      withTouchLayout(() => {
+        const host = fakeHost([PANNABLE]);
+        const gestures = createDeckGestures(host);
+        const frame = fakeFrame(0);
+        gestures.attach([frame]);
+
+        frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+        frame.emit('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 102, clientY: 102 });
+        frame.emit('pointerup', { pointerId: 1, pointerType: 'touch' });
+
+        assert.deepStrictEqual(host.calls.select, [0]);
+        assert.strictEqual(host.calls.commit.length, 0);
+        assert.strictEqual(host.calls.paint.length, 0);
+        gestures.destroy();
+      });
+    });
+  });
+
   describe('hitLayer', () => {
     const box = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
     const rect = { left: 0, top: 0, width: 200, height: 200 };
