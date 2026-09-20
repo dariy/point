@@ -19,10 +19,10 @@ import {
   colorInputValue,
   deckPanel,
   dock,
-  drawToolControl,
   fitPanel,
   importDialog,
   importReportPanel,
+  inkActions,
   inkToolPanel,
   layerForm,
   layerPanel,
@@ -31,6 +31,7 @@ import {
   saveTemplateDialog,
   templateGallery,
 } from '../src/plugins/carousel/studio/panels.js';
+import * as panels from '../src/plugins/carousel/studio/panels.js';
 import {
   emptyDocument,
   normalizeLayer,
@@ -585,9 +586,6 @@ describe('carousel studio panels', () => {
         assert.match(panel, /data-action="carousel-aspect"/, 'the document controls');
         assert.match(panel, /data-action="stage-zoom"/, 'the stage zoom');
       }
-      // Deck mode alone carries the Draw switch, in both copies.
-      const panel = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
-      assert.strictEqual(panel.split('data-action="ink-tool"').length - 1, 2);
     });
 
     /**
@@ -733,13 +731,24 @@ describe('carousel studio panels', () => {
       assert.doesNotMatch(out, /is-ink-armed/);
     });
 
-    test('the Draw toolbar control shows only in deck mode', () => {
+    test('no session, no session controls — in either mode', () => {
       const deck = toDeckDocument(doc3, 3000, 1000);
       const inDeck = str(builder({ ...builderProps, doc: deck, deckIndex: 0 }));
-      assert.match(inDeck, /data-action="ink-tool"/);
+      assert.doesNotMatch(inDeck, /data-action="ink-tool"/);
+      assert.doesNotMatch(inDeck, /data-action="ink-erase"/);
 
       const inSplit = str(builder(builderProps));
       assert.doesNotMatch(inSplit, /data-action="ink-tool"/);
+    });
+
+    test('a session puts Erase and Done in the dock, and the stepper gives up its slot', () => {
+      const deck = toDeckDocument(doc3, 3000, 1000);
+      const session = { i: 0, mode: 'draw', color: '#ffffff', width: 0.02, opacity: 1 };
+      const out = str(builder({ ...builderProps, doc: deck, deckIndex: 0, inkSession: session }));
+      const dockRow = out.slice(out.indexOf('carousel-studio__dock'));
+      assert.match(dockRow, /data-action="ink-erase"/);
+      assert.match(dockRow, /data-action="ink-tool"/);
+      assert.doesNotMatch(dockRow, /data-action="step-slide"/, 'a session is pinned to one slide');
     });
 
     test('an open session swaps the layer panel for the ink tool panel', () => {
@@ -751,22 +760,38 @@ describe('carousel studio panels', () => {
     });
   });
 
-  describe('drawToolControl', () => {
-    test('off: just the Draw toggle, unpressed, with no Erase toggle', () => {
-      const out = str(drawToolControl(null));
-      assert.match(out, /data-action="ink-tool"[\s\S]*?aria-pressed="false"/);
-      assert.doesNotMatch(out, /data-action="ink-erase"/);
+  describe('inkActions', () => {
+    test('there is no control that starts a session — the object dropdown does that', () => {
+      assert.strictEqual(panels.drawToolControl, undefined, 'the old toolbar control is gone');
     });
 
-    test('on: Draw reads pressed, and Erase appears beside it', () => {
-      const out = str(drawToolControl({ i: 0, mode: 'draw' }));
-      assert.match(out, /data-action="ink-tool"[\s\S]*?aria-pressed="true"/);
-      assert.match(out, /data-action="ink-erase"[\s\S]*?aria-pressed="false"/);
+    test('draw mode: Erase reads unpressed, and Done ends the session', () => {
+      const { erase, done } = inkActions({ i: 0, mode: 'draw' });
+      assert.match(str(erase), /data-action="ink-erase"[\s\S]*?aria-pressed="false"/);
+      assert.match(str(done), /data-action="ink-tool"/);
+      assert.match(str(done), />\s*Done\s*</);
     });
 
-    test('erase mode: the Erase toggle itself reads pressed', () => {
-      const out = str(drawToolControl({ i: 0, mode: 'erase' }));
-      assert.match(out, /data-action="ink-erase"[\s\S]*?aria-pressed="true"/);
+    test('erase mode: the Erase button itself reads pressed', () => {
+      const { erase } = inkActions({ i: 0, mode: 'erase' });
+      assert.match(str(erase), /data-action="ink-erase"[\s\S]*?aria-pressed="true"/);
+    });
+
+    test('both hosts render the same pair, each with the mode’s own state', () => {
+      for (const mode of ['draw', 'erase']) {
+        const pressed = mode === 'erase' ? 'true' : 'false';
+        const session = { i: 0, mode, color: '#ffffff', width: 0.02, opacity: 1 };
+
+        // The fine-pointer host: the panel, always visible.
+        const panel = str(inkToolPanel(session));
+        assert.match(panel, new RegExp(`data-action="ink-erase"[^>]*aria-pressed="${pressed}"`));
+        assert.match(panel, /data-action="ink-tool"/);
+
+        // The coarse one: the dock, because the panel is behind a burger.
+        const row = str(dock({ canUndo: false, canRedo: false, busy: false, inkSession: session }));
+        assert.match(row, new RegExp(`data-action="ink-erase"[^>]*aria-pressed="${pressed}"`));
+        assert.match(row, /data-action="ink-tool"/);
+      }
     });
   });
 
@@ -800,6 +825,30 @@ describe('carousel studio panels', () => {
       assert.match(out, /value="#00ff00"/);
       assert.doesNotMatch(out, /carousel-layer-radius/);
       assert.doesNotMatch(out, /Pen width/);
+    });
+  });
+
+  describe('the object dropdown', () => {
+    const deck = toDeckDocument(doc3, 3000, 1000);
+    /** The one `<select>` for a scope, from its tag to its close. */
+    function selectFor(out, scope) {
+      const chunk = out
+        .split('</select>')
+        .find((s) => s.includes('carousel-studio__add-layer-select') && s.includes(`data-scope="${scope}"`));
+      assert.ok(chunk, `no ${scope} dropdown`);
+      return chunk;
+    }
+
+    test('ink is an ordinary entry in the slide dropdown', () => {
+      const out = str(layerPanel({ doc: deck, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
+      assert.match(selectFor(out, 'slide'), /<option value="ink">Ink<\/option>/);
+    });
+
+    test('the span dropdown drops it — a draw session is scoped to one slide', () => {
+      const out = str(layerPanel({ doc: deck, index: 0, selectedLayer: null, layerScope: 'slide', logoUrl: '' }));
+      const span = selectFor(out, 'span');
+      assert.doesNotMatch(span, /value="ink"/);
+      assert.match(span, /value="text"/, 'the other five are still there');
     });
   });
 

@@ -108,6 +108,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The draw session's Erase and Done, which the dock borrows from the
+ * properties panel as they are. They arrive as `.btn-sm`, which is shorter
+ * than the 44px every other button in this row reaches — and a row of mixed
+ * heights reads as a broken control under a thumb. */
+.carousel-studio__dock .carousel-studio__ink-action {
+  min-height: 44px;
+}
+
 /* The stage and the properties panel — the studio's body row. */
 .carousel-studio__builder {
   display: flex;
@@ -447,16 +455,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The ink tool's Draw toggle, and — only while a session is open — the
- * Erase toggle beside it. `[aria-pressed]` rather than a second class: the
- * same highlight formula `.carousel-studio__chip.is-active` uses below,
- * applied to the plain `.btn` two toolbar buttons already are. */
-.carousel-studio__ink-tool {
+/* An open draw session's Erase and Done pair. The row that holds them in the
+ * properties panel; the dock holds the same two buttons apart, so the pressed
+ * highlight is keyed to the button and not to the row. `[aria-pressed]` rather
+ * than a second class: the same highlight formula
+ * `.carousel-studio__chip.is-active` uses below, applied to the plain `.btn`
+ * these two are. */
+.carousel-studio__ink-actions {
   display: flex;
   gap: var(--spacing-xs);
 }
 
-.carousel-studio__ink-tool button[aria-pressed="true"] {
+.carousel-studio__ink-action[aria-pressed="true"] {
   border-color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 15%, transparent);
 }

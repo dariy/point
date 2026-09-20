@@ -3193,32 +3193,35 @@ describe('CarouselStudioPage', () => {
       });
 
       describe('the ink tool (S9)', () => {
-        test('the Draw toggle opens a session on the selected slide and clears the layer selection', async () => {
+        test('choosing Ink opens a session on the selected slide, and adds no layer', async () => {
           const el = await toDeck();
           addLayer(el, 'text');
           await settle();
           assert.equal(page.state.selectedLayer, 0);
+          const before = page.state.doc.slides[0].layers.length;
 
-          click(el.querySelector('[data-action="ink-tool"]'));
+          addLayer(el, 'ink');
           await settle();
 
+          assert.equal(
+            page.state.doc.slides[0].layers.length,
+            before,
+            'the dropdown starts a session, it does not add a layer',
+          );
           assert.equal(page.state.selectedLayer, null);
           assert.ok(page._drawSession, 'a session is open');
           assert.equal(page._drawSession.i, 0);
-          assert.equal(
-            el.querySelector('[data-action="ink-tool"]').getAttribute('aria-pressed'),
-            'true',
-          );
           assert.ok(
             stageCol(el, 0).classList.contains('is-ink-armed'),
             'the selected column is armed',
           );
           assert.ok(el.querySelector('[data-action="ink-erase"]'), 'the Erase toggle appears');
+          assert.ok(el.querySelector('[data-action="ink-tool"]'), 'and Done beside it');
         });
 
         test('a stroke drawn on the armed column, finished with Escape, commits one ink layer', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="ink-tool"]'));
+          addLayer(el, 'ink');
           await settle();
 
           // A diagonal stroke, 0.2..0.8 of the 200×250 frame on both axes.
@@ -3247,9 +3250,9 @@ describe('CarouselStudioPage', () => {
           assert.equal(page.state.layerScope, 'slide');
         });
 
-        test('the toolbar control itself also finishes the session', async () => {
+        test('Done commits the session — one ink layer, one history step', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="ink-tool"]'));
+          addLayer(el, 'ink');
           await settle();
           press(withFrameBox(stageCol(el, 0)), 40, 50, [[160, 200]]);
 
@@ -3257,12 +3260,19 @@ describe('CarouselStudioPage', () => {
           await settle();
 
           assert.equal(page._drawSession, null);
-          assert.equal(page.state.doc.slides[0].layers.length, 1);
+          const layers = page.state.doc.slides[0].layers;
+          assert.equal(layers.length, 1);
+          assert.equal(layers[0].type, 'ink');
+
+          // One step, not two: the dropdown added nothing to undo past.
+          click(el.querySelector('[data-action="undo"]'));
+          await settle();
+          assert.equal(page.state.doc.slides[0].layers.length, 0, 'one undo drops the whole mark');
         });
 
         test('a session that draws nothing commits nothing', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="ink-tool"]'));
+          addLayer(el, 'ink');
           await settle();
 
           fire(document, 'keydown', { key: 'Escape' });
@@ -3274,7 +3284,7 @@ describe('CarouselStudioPage', () => {
 
         test('Erase drops a stroke the pointer touches, before the session ever commits', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="ink-tool"]'));
+          addLayer(el, 'ink');
           await settle();
           press(withFrameBox(stageCol(el, 0)), 40, 50, [[160, 200]]);
 
@@ -3289,14 +3299,21 @@ describe('CarouselStudioPage', () => {
           assert.equal(page.state.doc.slides[0].layers.length, 0, 'the only stroke was erased');
         });
 
-        test('leaving deck mode is unaffected by an open session — Draw is deck-only', async () => {
+        test('the span dropdown offers no Ink — a session is scoped to one slide', async () => {
           const el = await toDeck();
-          click(el.querySelector('[data-action="ink-tool"]'));
+          const span = el.querySelector('.carousel-studio__add-layer-select[data-scope="span"]');
+          assert.ok(span, 'the span dropdown is there');
+          assert.equal(span.querySelector('option[value="ink"]'), null);
+        });
+
+        test('leaving deck mode is unaffected by an open session — ink is deck-only', async () => {
+          const el = await toDeck();
+          addLayer(el, 'ink');
           await settle();
           assert.ok(page._drawSession);
 
-          // Split mode carries no `[data-action="ink-tool"]` at all (panels.js
-          // gates it on `deck`); switching away leaves the session as it was
+          // Split mode carries no layer panel at all, so no dropdown and no
+          // session controls; switching away leaves the session as it was
           // rather than crashing on a control that no longer exists.
           click(el.querySelector('[data-action="mode"][data-mode="split"]'));
           await settle();
@@ -4292,7 +4309,11 @@ describe('CarouselStudioPage', () => {
         const el = await mount({ post: '42' }, routes, { renderDeps: deps });
 
         click(burger(el));
-        click(el.querySelector('[data-action="ink-tool"]'));
+        // Ink is an entry in the object dropdown now, and picking it opens the
+        // session — there is no separate control that starts one.
+        const add = el.querySelector('.carousel-studio__add-layer-select[data-scope="slide"]');
+        add.value = 'ink';
+        add.dispatchEvent(new window.Event('change', { bubbles: true }));
         assert.ok(page._drawSession, 'a session is open');
         assert.ok(!shut(el), 'and so is the sheet');
 
