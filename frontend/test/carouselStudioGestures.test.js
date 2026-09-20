@@ -40,6 +40,7 @@ import {
   snapLines,
   zoomCrop,
 } from '../src/plugins/carousel/studio/gestures.js';
+import { createMultiTapWatcher } from '../src/plugins/carousel/studio/pointerSession.js';
 
 const FULL = { x: 0, y: 0, w: 1, h: 1 };
 
@@ -89,6 +90,8 @@ function fakeHost(slides, layer = null, spanLayers = [], session = null) {
     inkDrawMove: [],
     inkDrawEnd: [],
     inkEraseAt: [],
+    inkDrawAbort: [],
+    multiTap: [],
   };
   return {
     calls,
@@ -98,6 +101,8 @@ function fakeHost(slides, layer = null, spanLayers = [], session = null) {
     inkDrawMove: (fx, fy) => calls.inkDrawMove.push({ fx, fy }),
     inkDrawEnd: () => calls.inkDrawEnd.push(true),
     inkEraseAt: (fx, fy) => calls.inkEraseAt.push({ fx, fy }),
+    inkDrawAbort: () => calls.inkDrawAbort.push(true),
+    multiTap: (count) => calls.multiTap.push(count),
     dims: () => ({ srcW: 1000, srcH: 1000, aspect: '1:1' }),
     slideAt: (i) => slides[i] ?? null,
     paint: (i, slide) => calls.paint.push({ i, slide }),
@@ -1520,6 +1525,212 @@ describe('carousel studio gestures', () => {
       frame.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 10, ctrlKey: true });
       assert.strictEqual(host.calls.inkDrawStart.length, 0);
       assert.ok(host.calls.paint.length >= 1, 'the crop pan still ran on the un-armed column');
+      gestures.destroy();
+    });
+  });
+
+  // ── Two- and three-finger taps (S10) ─────────────────────────────────────
+
+  describe('createMultiTapWatcher', () => {
+    /** A watcher over a clock the test moves by hand, since what separates a
+     *  tap from a hold is elapsed time and nothing else. */
+    function watcher(tapMs = 300) {
+      const taps = [];
+      let t = 0;
+      const w = createMultiTapWatcher({ onTap: (k) => taps.push(k), tapMs, now: () => t });
+      return { taps, w, at: (ms) => { t = ms; } };
+    }
+
+    test('two fingers down together and released inside tapMs is a two-finger tap', () => {
+      const { taps, w, at } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      at(120);
+      w.up({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 2, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, [2]);
+    });
+
+    test('the count is the most fingers held at once, not the count at the last release', () => {
+      const { taps, w } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      w.down({ pointerId: 3, clientX: 110, clientY: 10 });
+      w.up({ pointerId: 3, clientX: 110, clientY: 10 });
+      w.up({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 2, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, [3]);
+    });
+
+    test('a finger past the slop is a drag — a pinch can never read as a tap', () => {
+      const { taps, w } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      w.move({ pointerId: 2, clientX: 90, clientY: 10 });
+      w.up({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 2, clientX: 90, clientY: 10 });
+      assert.deepStrictEqual(taps, []);
+    });
+
+    test('travel inside the slop is still a tap — a finger is never perfectly still', () => {
+      const { taps, w } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      w.move({ pointerId: 1, clientX: 12, clientY: 11 });
+      w.up({ pointerId: 1, clientX: 12, clientY: 11 });
+      w.up({ pointerId: 2, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, [2]);
+    });
+
+    test('a hold is not a tap, however still it was', () => {
+      const { taps, w, at } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      at(900);
+      w.up({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 2, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, []);
+    });
+
+    test('a disarmed group stays disarmed until every finger is up, then the next one starts clean', () => {
+      const { taps, w } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.move({ pointerId: 1, clientX: 90, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      w.up({ pointerId: 1, clientX: 90, clientY: 10 });
+      w.up({ pointerId: 2, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, [], 'the drag poisoned the whole group');
+
+      w.down({ pointerId: 3, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 4, clientX: 60, clientY: 10 });
+      w.up({ pointerId: 3, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 4, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, [2], 'and the next group is judged on its own');
+    });
+
+    test('a cancelled pointer is never a tap', () => {
+      const { taps, w } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.down({ pointerId: 2, clientX: 60, clientY: 10 });
+      w.cancel({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 2, clientX: 60, clientY: 10 });
+      assert.deepStrictEqual(taps, []);
+    });
+
+    test('a single tap is reported too — which count means what is the caller\'s policy', () => {
+      const { taps, w } = watcher();
+      w.down({ pointerId: 1, clientX: 10, clientY: 10 });
+      w.up({ pointerId: 1, clientX: 10, clientY: 10 });
+      assert.deepStrictEqual(taps, [1]);
+    });
+  });
+
+  describe('multi-finger taps on the deck', () => {
+    test('two fingers tapped on a column reach the host as multiTap(2)', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+      frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 100, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 2, clientX: 140, clientY: 100 });
+
+      assert.deepStrictEqual(host.calls.multiTap, [2]);
+      // The pair was also read as a crop pinch, and that costs nothing: a
+      // pinch that never moved ends through `commitIfChanged`'s own `!moved`
+      // branch, which selects the slide and commits no crop.
+      assert.strictEqual(host.calls.commit.length, 0, 'the pinch committed nothing');
+      gestures.destroy();
+    });
+
+    test('three fingers reach it as multiTap(3)', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      for (const [id, x] of [[1, 60], [2, 100], [3, 140]]) {
+        frame.emit('pointerdown', { pointerId: id, button: 0, pointerType: 'touch', clientX: x, clientY: 100 });
+      }
+      for (const [id, x] of [[1, 60], [2, 100], [3, 140]]) {
+        frame.emit('pointerup', { pointerId: id, clientX: x, clientY: 100 });
+      }
+
+      assert.deepStrictEqual(host.calls.multiTap, [3]);
+      assert.strictEqual(host.calls.commit.length, 0);
+      gestures.destroy();
+    });
+
+    test('a two-finger drag is a pinch and no tap at all', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }]);
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+      frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+      frame.emit('pointermove', { pointerId: 2, clientX: 190, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 100, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 2, clientX: 190, clientY: 100 });
+
+      assert.deepStrictEqual(host.calls.multiTap, [], 'the pinch moved, so it was never a tap');
+      assert.ok(host.calls.paint.length >= 1, 'and it zoomed the crop as usual');
+      gestures.destroy();
+    });
+
+    test('a second finger on a live draw aborts the stroke instead of drawing a second one', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, pointerType: 'touch', clientX: 100, clientY: 100 });
+      frame.emit('pointerdown', { pointerId: 2, button: 0, pointerType: 'touch', clientX: 140, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 100, clientY: 100 });
+      frame.emit('pointerup', { pointerId: 2, clientX: 140, clientY: 100 });
+
+      assert.strictEqual(host.calls.inkDrawStart.length, 1, 'the first finger did start one');
+      assert.strictEqual(host.calls.inkDrawAbort.length, 1, 'and the second threw it away');
+      assert.strictEqual(host.calls.inkDrawEnd.length, 0, 'an aborted stroke is never finished');
+      assert.deepStrictEqual(host.calls.multiTap, [2], 'the pair was the undo tap it looked like');
+      gestures.destroy();
+    });
+
+    test('a third finger on an aborted draw starts no stroke of its own', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      for (const [id, x] of [[1, 60], [2, 100], [3, 140]]) {
+        frame.emit('pointerdown', { pointerId: id, button: 0, pointerType: 'touch', clientX: x, clientY: 100 });
+      }
+      for (const [id, x] of [[1, 60], [2, 100], [3, 140]]) {
+        frame.emit('pointerup', { pointerId: id, clientX: x, clientY: 100 });
+      }
+
+      assert.strictEqual(host.calls.inkDrawStart.length, 1, 'only the first finger drew');
+      assert.strictEqual(host.calls.inkDrawAbort.length, 1, 'and it was aborted once, not twice');
+      assert.strictEqual(host.calls.inkDrawEnd.length, 0);
+      assert.deepStrictEqual(host.calls.multiTap, [3]);
+      gestures.destroy();
+    });
+
+    test('one finger drawing as usual still ends its stroke', () => {
+      const host = fakeHost([{ crop: FULL, fit: 'cover', layers: [] }], null, [], { i: 0, mode: 'draw' });
+      const gestures = createDeckGestures(host);
+      const frame = fakeFrame(0, { width: 200, height: 200 });
+      gestures.attach([frame]);
+
+      frame.emit('pointerdown', { pointerId: 1, button: 0, clientX: 0, clientY: 0 });
+      frame.emit('pointermove', { pointerId: 1, clientX: 50, clientY: 50 });
+      frame.emit('pointerup', { pointerId: 1, clientX: 50, clientY: 50 });
+
+      assert.strictEqual(host.calls.inkDrawEnd.length, 1);
+      assert.strictEqual(host.calls.inkDrawAbort.length, 0);
+      assert.deepStrictEqual(host.calls.multiTap, [], 'one finger is nobody\'s tap');
       gestures.destroy();
     });
   });
