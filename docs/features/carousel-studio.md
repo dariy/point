@@ -66,9 +66,15 @@ box's own edge; and a `text` layer is editable in place through a double-click
 into a `contenteditable` block. See "The stage is the editor" below. The
 studio became an app in S8 — a fixed-height shell above 48em, one toolbar row,
 the property form under its selected row, and touch/stylus as first-class
-input on the stage, with a tablet the surface that earns it; see "The studio
-is an app" below. Composition has caught up with it: a post may hold
-several carousels, each addressed by a key in its fence (`:::{.carousel-block
+input on the stage, with a tablet the surface that earned it; see "The studio
+is an app" below. S9 added the sixth layer type, `ink` — one freehand drawing
+session makes one ordinary layer, with an eraser while the session is open;
+see "Layers" below. S10 has landed too: any **coarse pointer** now gets a
+layout of its own at any width — one slide maximized over a locked strip, an
+icon dock on the bottom edge, the properties panel as a sheet behind a burger,
+`ink` in the object dropdown, and two- and three-finger taps for undo and
+redo; see "The touch layout" below. Composition has caught up with it: a post
+may hold several carousels, each addressed by a key in its fence (`:::{.carousel-block
 #c-7f3a}`), and a *plain* carousel — a fence of the author's own photos with no
 stored document — opens in the studio as a document rather than as an empty
 pick prompt, with every adopted slide marked as not the studio's to delete. See
@@ -809,8 +815,9 @@ is what produces bytes.
 
 S6 changed no stored field and no painter. It changed **where the pointer goes**:
 the big deck-space stage, a read-only picture since C7, became the surface every
-gesture acts on, and the filmstrip below it demoted to a rail whose only job is
-the selection.
+gesture acts on, and the filmstrip below it demoted to a rail whose only job
+was the selection — a job the stage took over too, not long after; see "The
+filmstrip is gone" below.
 
 That inversion — rather than a new canvas element — was the right shape because
 the canvas already existed. `.carousel-studio__stage` has been a single
@@ -874,18 +881,40 @@ budget through one custom property, `--carousel-stage-zoom`, written straight to
 the builder root — so a zoom costs no rebuild, the same way the properties
 toggle costs none. "100%" there means *the budget*, not 1:1 with the 1350px
 canvas, which is taller than any laptop. *Fit* measures, because the budget —
-a `clamp()` of `vh` below 64em, the column's own box above it — is something
-only layout knows the pixel value of. See "The studio is an app" below for how
+a `clamp()` of `vh` on a narrow fine pointer, the column's own box above 64em,
+`_touchStageBudget`'s `min()` on a coarse one — is something only layout knows
+the pixel value of. The control itself rides in the toolbar row since S8, so on
+a coarse pointer it is reached in the properties sheet instead — the budget it
+multiplies is unchanged. See "The studio is an app" below for how
 S8 gives the stage a whole column to claim that height from, rather than a
 `vh` guess, above 64em.
 
-### The filmstrip is a rail
+### The filmstrip is gone
 
-It keeps one job: moving the selection. Each item is a
-`<button data-action="select-slide">` carrying a thumbnail, a slide number and
-the pressed state. The layer nodes, span nodes and chrome it used to duplicate
-are gone, so a selected layer's outline is drawn once — on the stage, where it
-can be grabbed.
+S6 demoted the filmstrip to a rail with one job, the selection: a row of
+`<button data-action="select-slide">` thumbnails under the stage. S6 and S7
+then moved that job onto the stage as well, and the markup went with it.
+Nothing in `frontend/src/` emits `select-slide` today.
+
+The stage's own chrome does all of it, one node per column and always directly
+over the column it acts on:
+
+- **Selection is a press on the column.** `createDeckGestures` calls
+  `host.select(i)` on a press that did not become a drag, and a column's own
+  focus does the same, so the keyboard reaches every slide. Since S10 the
+  dock's `‹ 3 / 8 ›` stepper is the second way — see "The touch layout"
+  below.
+- **Reorder, number and delete** are `.carousel-studio__pane-row--top`
+  (`builder`, `studio/panels.js`): a grip (`data-action="rail-handle"`, with
+  the left and right arrow keys as its keyboard half), the slide number, and
+  Delete at the segment's own right edge.
+- **Add and duplicate** are `.carousel-studio__insert-zone`, one per seam plus
+  one at each end, straddling the seam it acts on.
+
+The layer nodes, span nodes and chrome the filmstrip used to duplicate are gone
+too, so a selected layer's outline is drawn once — on the stage, where it can
+be grabbed. The one strip still under the stage is `renderedStrip`, which shows
+the JPEGs of the last render and edits nothing.
 
 ### Pan and zoom need a modifier
 
@@ -918,6 +947,13 @@ asks for the crop instead — plain input scrolls the strip:
   this: the layer's own hit-test runs first, and only a press that misses the
   selected layer's box and handles falls through to the crop/pane gesture
   above.
+
+S10 **narrows** this rule; it does not cancel it. On a coarse pointer the strip
+does not scroll, so a plain drag has nothing to scroll and pans the crop
+instead — `onPointerDown` (`studio/gestures.js`) reads `isTouchLayout()` once
+per press and never takes the `"pane"` branch there. Everything above still
+holds on a fine pointer, which is every mouse and every pen. See "The touch
+layout" below.
 
 ### Click-to-select a layer directly
 
@@ -1059,13 +1095,13 @@ is `touch-action: pan-x` while there is slack, so a sideways finger still pans
 the strip.
 
 An actual vertical rail is drawn down the stage's left edge, filled to where the
-band sits and carrying the percentage; a drag repaints the rail, the filmstrip
-and the slider together, through one custom-property write and the background
-positions the band already lives on. The slider stays as the keyboard and
-assistive path, and says where the direct one is. The visibility condition is
-unchanged (`fitReport`'s `trimmedH > 1`): with no slack there is nothing to
-drag, the rail is not emitted at all, and the stage keeps its default scroll
-behaviour.
+band sits and carrying the percentage; a drag repaints the rail, the stage's
+own slide tiles and the slider together, through one custom-property write and
+the background positions the band already lives on. The slider stays as the
+keyboard and assistive path, and says where the direct one is. The visibility
+condition is unchanged (`fitReport`'s `trimmedH > 1`): with no slack there is
+nothing to drag, the rail is not emitted at all, and the stage keeps its
+default scroll behaviour.
 
 ### Adding, removing, duplicating and reordering slides
 
@@ -1165,7 +1201,9 @@ step size a user expects, with no debouncing of its own.
   shortcut has to work when nothing inside the studio holds focus) and bailing
   inside an input or textarea, so native text undo still wins in a layer's text
   field. Header buttons too, since a phone has no Ctrl. Both combinations are
-  registered in `ShortcutHelp`.
+  registered in `ShortcutHelp`. On a coarse pointer the dock carries the same
+  pair, and a two- or three-finger tap on the stage drives them — see "The
+  touch layout" below.
 
 Two confirm dialogs became toasts carrying an **Undo** button — `Toast` gained
 an optional `action`, spent on first press — because a confirm in front of a
@@ -1208,34 +1246,41 @@ outside both halves is a narrow fine-pointer window: it keeps the document flow
 it always had. This is where the studio parts from `MediaPage`, which is still
 tablet+ only.
 
-At 48em+, `.carousel-studio` becomes a three-row grid — toolbar
+Inside that shell `.carousel-studio` is a four-row grid — toolbar
 (`.carousel-studio__toolbar`: the mode toggle, the document-controls popover
 and the zoom bar, all one row), body (`.carousel-studio__builder`: the stage
-and the properties panel) and tray (`.carousel-studio__tray`: the rendered
-strip and the template gallery) — so none of the three can push
-`document.scrollingElement` taller. Below 64em the body row is one scroller
-(the properties card still stacks under the stage, exactly as it does today);
-at 64em+ the stage column and the properties rail each scroll on their own,
-which is what lets the stage claim the column's full height as its budget
-instead of a `vh` guess (see "Giving the stage room" above).
+and the properties panel), tray (`.carousel-studio__tray`: the rendered strip
+and the template gallery) and, since S10, the dock (`.carousel-studio__dock`)
+— so no row can push `document.scrollingElement` taller. Below 64em the body
+row is one scroller and the properties card stacks under the stage; at 64em+
+the stage column and the properties rail each scroll on their own, which is
+what lets the stage claim the column's full height as its budget instead of a
+`vh` guess (see "Giving the stage room" above). A coarse pointer rearranges
+the same four rows: the toolbar row is hidden, the tray row is empty, and both
+move into the sheet the dock opens.
 
 `carousel.css` had no `@media` rule at all before S6, and now honours both
-admin breakpoints: 48em trims the stage budget and the rail's frames, and
-below 64em the mode's own panel — the deck panel plus its layer lists, or the
-fit panel — becomes a bottom sheet with a backdrop. That is copied from
-`.editor-details-panel`, down to the state class on the layout root, the
-sibling backdrop, `85dvh` and the translate: `components/shared/` has no sheet
-primitive, and this was not the change to invent one in.
+admin breakpoints plus the pointer: 64em decides rail or stacked card, 48em
+trims the stage budget and the panes, and `(pointer: coarse)` is the whole
+touch layout. The properties panel is a **bottom sheet on a coarse pointer
+only** — not below a width. A narrow fine-pointer window gets the plain
+stacked card, which is what a mouse can reach without one. The sheet copies
+`.editor-details-panel` (`css/light/editor.css`), down to the `85dvh`, the
+sibling backdrop and the translate, with one difference: the state is the
+card's own `.collapsed` class, not a class on the layout root.
+`components/shared/` has no sheet primitive, and this was not the change to
+invent one in. See "The touch layout" below.
 
-Two of those numbers cannot live in the stylesheet alone — the page has to
-answer "sheet or rail?" *before* it renders, and the zoom control has to clamp
-what it writes — so `studio/layout.js` mirrors the 64em breakpoint and the
-zoom range into JS, for the reason `tagGestures.js` gives for its own
-`SWIPE_BREAKPOINT`: a breakpoint written twice is a breakpoint that will
-disagree with itself. The panel's open/closed choice is remembered
-(`point:carousel:props-open`) on a wide viewport only — a sheet over the stage
-always opens closed, exactly how `PostEditPage` treats the editor's Details
-rail.
+Three of those facts cannot live in the stylesheet alone — the page has to
+answer "rail or stacked card?" *before* it renders, it has to answer "is this a
+finger?" for more than the card, and the zoom control has to clamp what it
+writes — so `studio/layout.js` mirrors the 64em breakpoint, the
+`(pointer: coarse)` query and the zoom range into JS, for the reason
+`tagGestures.js` gives for its own `SWIPE_BREAKPOINT`: a breakpoint written
+twice is a breakpoint that will disagree with itself. The panel's open/closed
+choice is remembered (`point:carousel:props-open`) on a wide fine-pointer
+viewport only — a sheet over the stage always opens closed, exactly how
+`PostEditPage` treats the editor's Details rail.
 
 ### One toolbar, and most of `.carousel-studio__chip` retires
 
@@ -1249,6 +1294,10 @@ work" warning that used to sit beside the toggle moved onto each button's own
 **Document** popover, opened by a `.btn.btn-sm.btn-secondary` toggle
 (`data-action="toggle-doc-controls"`), and `stageBar`'s zoom buttons take the
 same `.btn.btn-sm.btn-secondary` treatment instead of their old chip look.
+
+S10 hides this row on a coarse pointer and emits its three controls a second
+time inside the properties sheet, each under its own heading. The markup is the
+same; only the placement changes. See "The touch layout" below.
 
 `.carousel-studio__chip` is not gone everywhere — it still styles the fit
 panel's count/strategy chips, the slide-fit chips, the delete-layer button and
@@ -1303,7 +1352,10 @@ Four gaps closed together, all downstream of the pointer session above:
   scopes the rule to that class alone; every other column keeps the general
   `pan-x pan-y` a deck frame has carried since S6/S7.1 (letting a plain finger
   scroll the strip, widened from `pan-y` once the strip itself could scroll
-  sideways).
+  sideways). S10 gives *every* column `touch-action: none` under
+  `(pointer: coarse)`, because the strip does not scroll there and the browser
+  has nothing left to pan. The armed classes stay: a touchscreen laptop reports
+  a fine primary pointer, misses that query and still needs them.
 - **A second finger on an armed layer starts a pinch.** `createDeckGestures`'
   `"layer"` drag kind now tracks a `pointers` Map the way the crop kind
   already did: `onLayerPointerAdd` opens a baseline (distance, angle, box) on
@@ -1318,19 +1370,177 @@ Four gaps closed together, all downstream of the pointer session above:
   same as a mouse, where this had been true but untested.
 - **Grab targets grow under a coarse pointer.** `HANDLE_GRAB_PX`,
   `ROTATE_HANDLE_OFFSET_PX` and `ROTATE_HANDLE_HIT_PX` (`studio/gestures.js`)
-  each gained a `_COARSE` twin (22, 48, 22), read behind `isCoarsePointer()` /
+  each gained a `_COARSE` twin (22, 48, 22), read behind
   `matchMedia("(pointer: coarse)")` the way `studio/layout.js` reads
-  `SHEET_BREAKPOINT`, and passed as an optional trailing parameter to
-  `hitLayer`/`rotateHandlePoint`/`hitRotateHandle` so every existing call and
-  test is unchanged. `carousel.css` grows the painted handles and the rail's
+  `SHEET_BREAKPOINT` — S10 replaced this module's private copy of that query
+  with `isTouchLayout()`, so one press answers it once (`ctx.touch`) for the
+  grab targets and the routing together — and passed as an optional trailing
+  parameter to `hitLayer`/`rotateHandlePoint`/`hitRotateHandle` so every
+  existing call and test is unchanged. `carousel.css` grows the painted handles and the rail's
   own controls (the resize handles, the rotate handle, the layer and pane
   actions) to a 44px target under the same `(pointer: coarse)` query — the
   touch-target size every platform's own guidance converges on.
 
-Tablet is the surface this earns: finger and stylus both get full editing on
-the stage. The phone is unchanged by any of it — it keeps the bottom sheet and
-stays a view-and-adjust surface, per the epic's own decision (see
-"Decisions").
+Tablet was the surface S8 earned: finger and stylus both got full editing on
+the stage, and S8 left the phone as it found it. S10 closed that gap — the
+layout below is keyed on the pointer, so every coarse pointer gets it,
+whatever the width. The Decisions row that scoped the phone out of S8 records
+S10 as its answer.
+
+## The touch layout
+
+S10. Any coarse pointer now gets a layout of its own, at every width: one
+slide fills the stage, the controls sit on the bottom edge, and the strip under
+them does not move. Nothing stored changed, and no painter changed —
+`geometry.js`, `document.js`, `render.js` and `preview.js` are untouched by the
+whole of S10.
+
+### The gate is a pointer, not a width
+
+`TOUCH_LAYOUT` (`studio/layout.js`) is `(pointer: coarse)`, and
+`isTouchLayout()` is the only reader of that query in JS — `studio/gestures.js`
+dropped its own copy of the string, so there is one query with one name.
+`carousel.css` asks it in its own blocks, and `light/layout.css` widens
+`.carousel-studio-main` with it.
+
+A width would select the wrong thing. A tablet and a touchscreen laptop have
+the same finger a phone has; a narrow desktop window does not have it at all.
+One case falls outside both halves of the shell query — a narrow fine-pointer
+window — and it keeps the document flow it always had.
+
+`isTouchLayout()` is **false** where there is no `matchMedia` to ask (a test,
+or SSR), while `isWideViewport()` is true in that same case. The asymmetry is
+deliberate: the rail is the layout that works without JS, and the touch layout
+is not — it locks the strip, docks the controls and steps the slide, and all
+three need JS.
+
+### One slide, and the strip still whole
+
+The stage stays `n` slides wide. Only the scroller changes: the
+`(pointer: coarse)` block sets `.carousel-studio__stage-scroll` to
+`overflow: hidden`, and `_scrollActiveIntoView(smooth)` (`index.js`) centres
+the active column in it after every render — last in `afterRender`, so it
+measures a column whose width the budget has already fixed.
+
+Rendering one slide instead was refused. Span layers cross the seams, the pane
+row divides the same `n` segments, and `geometry.js` resolves every box against
+deck space. A one-slide DOM would be a second consumer of that geometry —
+exactly the drift the Canvas/CSS pair exists to prevent.
+
+The height budget follows from the same fact. The stage's height fixes one
+column's width through the inline `aspect-ratio`, so fitting one column to the
+pane caps the budget at `paneW · h / w`, and the pane's own height caps it at
+`paneH`. `_touchStageBudget` takes `min(paneH, paneW · h / w)` — the larger cap
+would push the other dimension past a scroller that cannot be dragged back.
+See "Giving the stage room" above.
+
+`padding-inline: 1rem` on the locked scroller is load-bearing, not decoration:
+it is half an insert zone, and without it `overflow: hidden` clips the head and
+tail add-slide buttons. `_touchStageBudget` subtracts it again before it sizes
+a column, and the centring is what keeps both ends their room.
+
+### The dock
+
+`dock()` (`studio/panels.js`) emits `.carousel-studio__dock`, a
+`role="toolbar"` row on the bottom edge, inside the thumb arc. It is the fourth
+grid row, hidden on a fine pointer. The row reads burger, `‹ 3 / 8 ›`, undo,
+redo. With a draw session open it reads burger, Erase, undo, redo, Done: the
+stepper gives up its slot, because a session is pinned to the column it opened
+on and stepping away would draw on a slide the author cannot see. Every label
+is an icon or a glyph, so every button carries an `aria-label` too.
+
+The stepper is `_stepSlide(delta)` (`index.js`). It does not scroll the stage
+itself — the column it must centre belongs to the *next* render — so it arms
+`_stepSmooth` and `afterRender` calls `_scrollActiveIntoView` with it. A press
+on a column still selects that column, the way it has since S6; the stepper is
+the second way to move the selection. The `<output>` between the arrows is
+`aria-live="polite"`, and each arrow disables itself at its own end.
+
+The toolbar row is hidden under the same query, except when it carries the
+error banner. What it held moves into the sheet: the Panorama/Slides toggle,
+the Document controls (aspect, source, slide count) and the zoom bar, each
+under its own heading in `.carousel-studio__props-tools`. The tray goes with
+them — the rendered strip and the template gallery are emitted at the end of
+the sheet rather than in a row under the stage. Only one copy of those controls
+owns the element ids; the second copy is reached by class, so both are live
+with no second wiring.
+
+### The properties panel is a sheet
+
+The card is the same `.card` flipped by the same `.collapsed` class. Under
+`(pointer: coarse)` it is `position: fixed` on the bottom edge, `85dvh`,
+translated its own height down while collapsed, over
+`.carousel-studio__props-backdrop`. The burger flips the class and nothing
+else, so `_toggleProps` costs no rebuild — the same discipline the zoom control
+keeps by writing one custom property.
+
+Two things differ from the desktop card:
+
+- **The choice is not remembered.** `_toggleProps` returns before the
+  `localStorage` write on a coarse pointer, and `readPropsPref` ignores the key
+  there. Dismissing a sheet writes "closed" every time, and that must not
+  collapse the rail on the same user's desktop.
+- **Escape closes it.** `_onSheetKey` runs first in the `afterRender` keydown
+  chain and stands aside for an open dialog, a live draw session and an
+  already-handled event.
+
+A tap on the backdrop closes it too (`data-action="close-props"`), which is
+what a tap outside a sheet means on every platform.
+
+### A plain drag pans the crop
+
+S7.1 gated the crop behind Ctrl or Shift only because the strip needed a scroll
+gesture of its own. The touch layout has no strip to scroll, so a plain drag
+has nothing else to do there, and a finger has no modifier to hold.
+`onPointerDown` (`studio/gestures.js`) reads `isTouchLayout()` once per press
+and never takes the `"pane"` branch. This narrows "Pan and zoom need a
+modifier" above rather than cancelling it: the gate is unchanged on every fine
+pointer.
+
+### Ink is a layer type in the UI
+
+`LAYER_KINDS` (`studio/panels.js`) gains `ink`, beside Text, Image, Shape,
+Counter and Arrow, and the toolbar's `Draw` switch is retired. One vocabulary
+for one schema: `ink` is the sixth `LAYER_BUILDERS` entry, so the dropdown now
+names what the document holds.
+
+Picking it calls `_addLayer("ink", …)`, which starts the draw session and
+returns *before* `addLayer`. The session, not a default layer, is still what
+authors the layer — `_defaultLayer` never sees `ink`, and the session commits
+one finished `ink` layer when Done or Escape ends it. `addLayerChips("span")`
+filters `ink` out of the span list: a draw session is scoped to one slide, so a
+span ink layer has no session that could produce it. Erase and Done live in the
+dock while the session is open (`inkActions`, `studio/panels.js`).
+
+### Two- and three-finger taps
+
+`createMultiTapWatcher` (`studio/pointerSession.js`) reads a tap as `k`
+pointers down at once, every one released inside `tapMs` (`TAP_MS`, 300) and
+none moved past `DRAG_SLOP_PX`. A pinch cannot be read as a tap, because a
+pinch moves: the first pointer past the slop disarms the group until every
+pointer is up again. A hold cannot either, because the clock starts at the
+first press. The watcher claims no pointer and calls no `preventDefault` — it
+reads the events the controller is already handling, and reports only the
+count.
+
+`createDeckGestures` builds one watcher for the whole deck and sends 2 and 3 to
+`host.multiTap`. `_onMultiTap(count)` (`index.js`) routes them to one of two
+scopes:
+
+- **Inside a draw session**, to `_inkUndo` / `_inkRedo` — `past` and `future`
+  arrays of stroke-list copies held on the session itself, capped at
+  `INK_HISTORY_LIMIT` (40) and pushed by `_inkPushHistory`. Nothing reaches the
+  document: the session still commits once, as one layer. A document undo there
+  would drop the edit *before* the session rather than the stroke just drawn.
+- **Anywhere else on the stage**, to `_undo` / `_redo` — the document's own
+  ring (`studio/history.js`), the same one the dock's two buttons drive.
+
+The dock's buttons and the taps stay separate paths on purpose: the buttons are
+document history at every moment, the taps branch on whether a session is open.
+
+A second finger on a live ink stroke is not a stroke. `host.inkDrawAbort()`
+marks that drag aborted, every further press on that column is swallowed, and
+the drag ends on the *last* release rather than the first.
 
 ## Templates
 
@@ -1767,7 +1977,7 @@ S4's are all in the gallery rather than in the format:
 | The toolbar and `.carousel-studio__chip` | One toolbar row (mode toggle, a Document popover, the zoom bar); the toolbar's own controls move onto `.editor-mode-toggle` and `.btn.btn-sm` instead of `.carousel-studio__chip` | One class was doing six jobs — mode toggle, zoom, fit chips, slide-fit chips, delete-layer, template actions — which is why the studio did not read like the rest of the admin. The segmented control reuses `.editor-mode-toggle` rather than inventing a third segmented pattern. The chip stays everywhere S8 did not touch it — full retirement is a follow-up |
 | Where the layer property form renders | Spliced into the layer list directly under the selected row (`carousel-studio__layer-form-row`), not once after both lists | The form is what you are editing; putting it anywhere but next to the row that opened it meant scrolling away from the selection to reach it. The distinct row class keeps it out of `_setupLayerReorder`'s and `pointerReorder.js`'s row walks |
 | Shared pointer mechanics | Factored into `studio/pointerSession.js` before any touch/stylus behaviour changed, landed as its own change with no behaviour change | Same discipline `layerSpace` followed in S6: land the refactor first, so a second input policy extends one machine instead of spreading a branch across two copies of it |
-| Which touch surfaces are first class | Tablet — finger and stylus both get full editing on the stage. The phone keeps its existing bottom sheet and stays view-and-adjust | A fixed shell and direct manipulation need room a phone screen does not have; a tablet has it. Widening to the phone is a different, larger change than S8 scoped |
+| Which touch surfaces are first class | Tablet — finger and stylus both get full editing on the stage. The phone keeps its existing bottom sheet and stays view-and-adjust. **Answered by S10**, which makes every coarse pointer first class, the phone included | A fixed shell and direct manipulation need room a phone screen does not have; a tablet has it. Widening to the phone is a different, larger change than S8 scoped — and S10 is that change. It takes the room back a different way rather than finding more of it: the controls dock on the bottom edge, one slide fills the stage and the strip stops scrolling. The row stays because the reasoning is what S10 had to answer, not something it deleted |
 | Mode naming | **Panorama** / **Slides** on the chips; `split` / `deck` in the code, in this document and on disk | The stored values are the schema and changing them would mean a migration for a wording choice. The chips name what the user is choosing — one wide photo cut across every slide, versus a photo per slide — and the naming lives in `modeToggle` (`studio/panels.js`) and nowhere else, so there is one vocabulary in the code and one on screen, with a single translation point between them |
 | Per-slide sources in the picker | One `MediaPickerDialog`; the scope rides on the button — the properties panel's *Change this slide's photo* carries `data-slide`, the controls bar's *Use one photo for all slides* carries none | The renderer and schema have supported a multi-source deck since S2 (`renderDeck` dedups per path). What was missing was only the intent, and a per-call handler (`open(onConfirmOverride)`) already existed to carry it — a second dialog, or a mode flag on the studio, would be two code paths for one question. `specHash` includes `source`, so a swap re-encodes exactly the slide it touched, and framing survives either swap because a `crop` is fractions of its own source |
 | A removed slide's media row | Left for the *next* render's supersede cleanup, not deleted at removal | The row carries a `post_id`, so `ListOrphanedMedia` never flags it and only the supersede cleanup can collect it — and that cleanup reads the *saved* generation, so it collects the row on the next render without any new code. Deleting at removal would put the file beyond the reach of the Ctrl+Z that is otherwise sitting right there, for a row that costs nothing to keep until then |
@@ -1785,6 +1995,15 @@ S4's are all in the gallery rather than in the format:
 | The templates listing | `ListCarouselTemplates` selects `slug`, `name`, `created_at` and never `doc` | A template carries its images inline, so a gallery that listed envelopes would pull every asset of every template to draw a list of names — the same reasoning that kept the carousel document off the `posts` table. It is also why the gallery has no thumbnails |
 | Built-in templates | None in v1; the table is filled by import and by "save as template" | Authoring a set worth shipping is its own project, and there is a licensing edge: a bought template may generally be adapted for your own posts but not redistributed, so anything bundled later has to be originally authored or explicitly permissively licensed |
 | An imported deck's slug | Derived from the filename, then made unique against what is already stored (`freeSlug`) | The store's upsert is deliberate — it is what makes "save as template" idempotent — which means the caller that must *not* replace is the one that has to say so. Two exports of one deck carry one filename, and importing a revision must not silently overwrite the template the author already adapted |
+| What selects the touch layout | `(pointer: coarse)` — `TOUCH_LAYOUT` in `studio/layout.js` — never a width | The problem is a finger, not a narrow window. A tablet and a touchscreen laptop have the same problem a phone has, and a narrow desktop window does not have it at all. The studio already read this query for its grab targets, so the precedent was there; S10 made `isTouchLayout()` the single reader of it and deleted `gestures.js`'s private copy of the string |
+| One slide on a coarse pointer | The strip stays whole in the DOM. One slide is shown by locking the scroller (`overflow: hidden`) and scrolling it to the active column, never by rendering one slide | Span layers cross the seams, the pane row divides the same `n` segments, and the Canvas/CSS pair resolves every box against deck space. A one-slide DOM would be a second consumer of that geometry — the drift the pair exists to prevent. `geometry.js`, `document.js`, `render.js` and `preview.js` are untouched by S10 |
+| The modifier gate on a coarse pointer | Lifted. A plain drag pans the crop there, and `"pane"` is never the drag kind | S7.1 gated the crop behind Ctrl/Shift only because the strip needed a scroll gesture of its own. With the strip locked a plain drag has nothing left to do, and a finger has no modifier to hold. This **narrows** "Pan and zoom need a modifier" rather than cancelling it — every fine pointer keeps the gate |
+| What a multi-finger tap is | `k` pointers down at once, all released inside `TAP_MS` (300), none past `DRAG_SLOP_PX` | A pinch moves, so a tap and a pinch cannot be confused, and a hold takes too long because the clock starts at the first press. A tap misread as a pinch still costs nothing: `commitIfChanged` already no-ops when nothing moved. `createMultiTapWatcher` reports only the count; what 2 or 3 fingers *mean* stays the controller's policy |
+| What a tap undoes | One stroke inside a draw session; the document's own history everywhere else | Procreate's model inside the session. The session already commits as one document step, so a document undo there would drop the edit *before* the session rather than the stroke just drawn. The dock's undo/redo buttons stay document-only at every moment — two paths, not one branching ring |
+| Ink's session history | `past`/`future` arrays of shallow stroke-list copies on the session, capped at `INK_HISTORY_LIMIT` (40), pushed at `_inkDrawEnd` and `_inkEraseAt` | Mirrors `studio/history.js`'s model at session scale, which also makes an erase one step. Nothing reaches the document: the session still commits once, as one layer |
+| Ink in the object dropdown | `LAYER_KINDS` gains `ink`, and `_addLayer` starts the draw session for it instead of adding a layer. The toolbar's `Draw` switch retires | One vocabulary for one schema — the dropdown names what the document holds. The studio still authors no `ink` literal: the session is what produces the final box and strokes, and `_defaultLayer` never sees the type |
+| Ink is slide-scoped | `addLayerChips("span")` drops the `ink` option | A draw session is scoped to one slide. A span ink layer has no session that could produce it |
+| The properties panel on a coarse pointer | A bottom sheet, on the same `.collapsed` class the card already flips, with the dock's burger as its handle | `_toggleProps` is already a DOM-only class flip with no rebuild, so the sheet costs none either. The pattern is `.editor-details-panel`'s (`css/light/editor.css`), which `carousel.css` carried until S8 trimmed it. The open/closed choice is *not* remembered there: dismissing a sheet would otherwise collapse the rail on the same user's desktop |
 
 ### The carousel document
 
@@ -1890,12 +2109,14 @@ template defines N slides each with its own content, which needs the slide
 writers S6.5 added and the per-slide source S6.4 added, so `applyTemplate`
 builds on both instead of duplicating them. S7 landed after S4, out of numeric
 order for the same reason S6 did — it is a direct-manipulation pass over the
-stage S6 built, not a dependency of S5. S2, S3, S4, S6 and S7 are done; S5
-remains, and C5/C6's schema held for all five without a version bump, which is
-the evidence that they are extensions rather than rewrites — S6 added no stored
-field at all, S4 added a second *table* without touching the document, and S7's
-one addition (`box.rotate`) is additive and defaults to `0` on anything written
-before it existed.
+stage S6 built, not a dependency of S5. S8, S9 and S10 follow the same line,
+each one a pass over the surface rather than over the format. S2, S3, S4, S6,
+S7, S8, S9 and S10 are done; S5 remains, and C5/C6's schema held for all eight
+without a version bump, which is the evidence that they are extensions rather
+than rewrites — S6 added no stored field at all, S4 added a second *table*
+without touching the document, S7's one addition (`box.rotate`) is additive and
+defaults to `0` on anything written before it existed, S9 added a sixth layer
+type the same way, and S8 and S10 changed layout and input only.
 
 | Stage | Scope |
 |---|---|
@@ -1920,8 +2141,9 @@ before it existed.
 | **S5** | Production — caption composer, one-click push, brand kit scoped to 2–3 settings rows. The brand kit widens something that already exists rather than introducing it: an `image` layer added in the studio already defaults to the site's `logo_url` setting (S3), and S3 added no settings row of its own (see "Out of scope"). |
 | **S6** | The studio becomes one canvas: the stage is the editing surface, at a size worth editing on and with a bottom-sheet panel on a narrow viewport; undo/redo; slide add / remove / duplicate / reorder; Panorama/Slides chips and a per-slide source; the vertical anchor by direct drag; and preview/render parity for text and arrows. **Done** — see "The stage is the editor" above. Nothing stored changed: `document.js` gains only `addSlide`/`removeSlide`/`duplicateSlide`/`moveSlide`, `DOC_VERSION` stays 1, `geometry.js` is untouched, and `render.js`'s painting is unchanged (it only exports the constants `studio/preview.js` now imports instead of restating). New modules `studio/{history,layout}.js`; `gestures.js` gains `layerSpace`/`deckRect`/`snapLines`/`deckSeams` and `createAnchorGesture`; `preview.js` gains `ensurePreviewFont`, `textPlan`, `arrowPlan` and `paintSpanChrome`; outside the plugin, `utils/pointerReorder.js` gains an `axis` option and `Toast` an optional `action`. Tests in `frontend/test/carouselStudio{History,Layout,Gestures,Panels,Preview}.test.js`, `CarouselStudioPage.test.js`, `carouselDocument.test.js` and `toastAction.test.js`. |
 | **S7** | Direct manipulation on the stage: guard the wheel/drag pan-and-zoom behind Ctrl/Shift so a plain pointer can scroll the strip instead; a `box.rotate` field and a ninth handle to drive it; click-to-select a layer straight off the stage; and on-canvas text editing through a double-click into `contenteditable`. **Done** — see "Pan and zoom need a modifier", "Click-to-select a layer directly", "Rotation" and "On-canvas text editing" above. `document.js`'s `CarouselBox` gains `rotate`, wrapped by `wrapRotate` and folded into `specHash` with the rest of the box; `DOC_VERSION` stays 1. `geometry.js` is untouched — `layerFrame` and everything over it stay rotation-blind by design. `render.js` gains `paintDispatch`, the one point both `paintLayers` and `paintSpanLayers` now route a layer through, rotating the canvas about the box's own centre when `rotate` is non-zero and skipping `ctx.save`/`restore` entirely otherwise. `studio/gestures.js` gains the pane-scroll drag/wheel branch, the rotate-handle drag and hit test, and the stage's own click-to-select fallback; `index.js` gains `_enterTextEdit`/`_liveEditText`/`_exitTextEdit`; `preview.js`'s `paintDeckLayers`/`paintSpanLayers`/`paintChrome` gain the CSS `rotate()` twin and the ninth chrome handle, and `paintLayerContent` gains the `dataset.editing` guard. Panorama-mode layer authoring remains out of scope — see "What the studio does not yet offer". |
-| **S8** | The studio becomes an app: a fixed-height shell above 48em (the phone stays document flow), a three-row grid (toolbar/body/tray), one toolbar row, the property form spliced under its selected row, and touch/stylus as first-class input on the stage. **Done** — see "The studio is an app" above. `frontend/css/light/layout.css` gains `.carousel-studio-main`; `carousel.css` gains the three-row grid, the bottom-sheet panel below 64em and the `(pointer: coarse)` sizing block; `index.js` gains `_measureStageBudget`/`_toggleDocControls`/`docControlsOpen`; `studio/panels.js`'s `builder()` emits the one toolbar row, the Document popover, and splices `layerForm` under the selected row via a new `formHtml` argument to `layerRows`; `studio/pointerSession.js` (new) factors `createListenerGroup`/`claimPointer`/`releasePointer`/`resolveTouchClaim`/`commitIfChanged` out of `gestures.js`, which then gains the pinch (`onLayerPointerAdd`/`onLayerPinchMove`), the partial-release rebase, and the coarse-pointer constants. Alongside it, the Visual editor's own carousel card (`components/light/VisualEditor.js`, `css/light/editor.css`, `css/common/buttons.css`) picked up the slide-handle and button styling S7's card work had left unfinished. No stored field changed; `DOC_VERSION` stays 1; `geometry.js` is untouched. |
+| **S8** | The studio becomes an app: a fixed-height shell above 48em (the phone stays document flow), a three-row grid (toolbar/body/tray), one toolbar row, the property form spliced under its selected row, and touch/stylus as first-class input on the stage. **Done** — see "The studio is an app" above. `frontend/css/light/layout.css` gains `.carousel-studio-main`; `carousel.css` gains the three-row grid, the bottom-sheet panel below 64em and the `(pointer: coarse)` sizing block — S10 has since widened the shell query to any coarse pointer, added a fourth grid row for the dock, and moved the sheet from the width query onto the pointer one; `index.js` gains `_measureStageBudget`/`_toggleDocControls`/`docControlsOpen`; `studio/panels.js`'s `builder()` emits the one toolbar row, the Document popover, and splices `layerForm` under the selected row via a new `formHtml` argument to `layerRows`; `studio/pointerSession.js` (new) factors `createListenerGroup`/`claimPointer`/`releasePointer`/`resolveTouchClaim`/`commitIfChanged` out of `gestures.js`, which then gains the pinch (`onLayerPointerAdd`/`onLayerPinchMove`), the partial-release rebase, and the coarse-pointer constants. Alongside it, the Visual editor's own carousel card (`components/light/VisualEditor.js`, `css/light/editor.css`, `css/common/buttons.css`) picked up the slide-handle and button styling S7's card work had left unfinished. No stored field changed; `DOC_VERSION` stays 1; `geometry.js` is untouched. |
 | **S9** | The ink layer — draw a freehand mark on a slide with a stylus, mouse or finger, and erase a stroke while the session is open. Narrows the standing rejection of a true vector editor rather than cancelling it — see "Considered and rejected". **Done** — `document.js` gains `ink` as a sixth `LAYER_BUILDERS` entry: `strokes` is a list of `{w, pts}`, points normalized 0..1 inside the layer's own box, stroke width a fraction of the box's shorter side clamped `0.001..0.25`, capped at 2000 points per stroke and 200 strokes per layer; `DOC_VERSION` stays 1. `render.js` gains `paintInkLayer` in `LAYER_PAINTERS`, stroking each point list as a rounded path at canvas pixels; `studio/preview.js` gets the same plan over `layerRect`'s numbers for the live preview. `studio/gestures.js` gains the draw-and-erase pointer session over the existing `claimPointer`/`releasePointer` machinery `pointerSession.js` already factored out in S8, using `getCoalescedEvents` to keep a fast line smooth; `Ink` in the object dropdown (`studio/panels.js`) starts a session on the selected slide, Erase toggles the eraser inside that same session, and Escape or Done ends it and commits one `ink` layer through `addLayer`. S10 put the session behind the dropdown; before it, a `Draw` control in the toolbar did the same job. The committed layer's property form is colour and opacity only — no per-stroke editing once the layer exists. Tests in `frontend/test/carousel{Document,Render}.test.js` and `carouselStudio{Gestures,Panels,Preview}.test.js` and `CarouselStudioPage.test.js`. |
+| **S10** | The touch layout: every coarse pointer becomes a first-class editing surface, at any width — one slide maximized over a locked strip, an icon dock on the bottom edge, the properties panel as a sheet behind a burger, `ink` in the object dropdown, and two- and three-finger taps for undo and redo. **Done** — see "The touch layout" above. Nothing stored changed; `DOC_VERSION` stays 1; `geometry.js`, `document.js`, `render.js` and `preview.js` are untouched. `studio/layout.js` gains `TOUCH_LAYOUT` and `isTouchLayout`, and `readPropsPref` returns false on a coarse pointer; `carousel.css` widens the shell query to `@media (min-width: 48em), (pointer: coarse)` (mirrored by `.carousel-studio-main` in `frontend/css/light/layout.css`) and grows four `(pointer: coarse)` blocks — the locked scroller and the measured stage height, `touch-action: none` on every column, the dock and the swapped bars, and the sheet with its backdrop. `studio/panels.js` gains `dock()` (burger, stepper, undo/redo, and Erase/Done with a session open) and `inkActions()`, `LAYER_KINDS` gains `ink` while `addLayerChips("span")` filters it out, `drawToolControl` retires, and `builder()` takes a `touch` argument that places the props tools and the whole tray inside the sheet. `studio/pointerSession.js` gains `TAP_MS` and `createMultiTapWatcher`; `studio/gestures.js` drops its private `isCoarsePointer` for `isTouchLayout`, gates the `"pane"` drag kind off under touch, and adds the deck-wide tap watcher and the `inkDrawAbort` host hook. `index.js` gains `_touchStageBudget`, `_scrollActiveIntoView`, `_stepSlide`, `_onSheetKey`, `_onMultiTap`, `INK_HISTORY_LIMIT` with `_inkPushHistory`/`_inkUndo`/`_inkRedo`/`_inkDrawAbort`, and an `ink` branch in `_addLayer`; `utils/icons.js` gains `UNDO_SVG` and `REDO_SVG`. Tests in `frontend/test/carouselStudio{Layout,Panels,Gestures}.test.js` and `CarouselStudioPage.test.js`. **What it does not do:** the narrow fine-pointer window keeps its document flow, and Panorama-mode layer authoring is still out of scope — see "What the studio does not yet offer". |
 
 ## Out of scope
 
