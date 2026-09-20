@@ -590,6 +590,65 @@ describe('carousel studio panels', () => {
       assert.strictEqual(panel.split('data-action="ink-tool"').length - 1, 2);
     });
 
+    /**
+     * The touch layout (S10). The tray's contents are the one half of the
+     * studio that cannot be emitted twice and hidden in turn: a second copy
+     * carries the same ids and the same delegated actions. So the page hands
+     * the pointer answer down (`touch`) and `builder` places them once.
+     */
+    describe('the tray, on a coarse pointer', () => {
+      const trayProps = {
+        ...builderProps,
+        renderedPaths: ['/m/rendered-1.jpg'],
+        tray: '<div class="stub-gallery"></div>',
+      };
+      /** Where the tray row ends and the sheet's body begins, in one string. */
+      const rowOf = (out) => out.slice(out.indexOf('class="carousel-studio__tray"'));
+      const panelOf = (out) =>
+        out.slice(out.indexOf('carousel-studio__props-body'), out.indexOf('class="carousel-studio__tray"'));
+
+      test('a fine pointer keeps both in the tray row, under the stage', () => {
+        const out = str(builder(trayProps));
+        assert.match(rowOf(out), /carousel-studio__rendered/, 'the rendered strip');
+        assert.match(rowOf(out), /stub-gallery/, 'whatever the page added after it');
+        assert.doesNotMatch(panelOf(out), /carousel-studio__rendered/);
+        assert.doesNotMatch(panelOf(out), /stub-gallery/);
+      });
+
+      test('a coarse one moves both into the sheet, and leaves the row empty', () => {
+        const out = str(builder({ ...trayProps, touch: true }));
+        assert.match(panelOf(out), /carousel-studio__rendered/, 'the rendered strip');
+        assert.match(panelOf(out), /stub-gallery/, 'whatever the page added after it');
+        // The row itself stays in the markup — the shell's grid keeps its
+        // rows — but holds nothing; `carousel.css` hides it there.
+        assert.match(out, /<div class="carousel-studio__tray"><\/div>/);
+      });
+
+      test('exactly one copy, either way', () => {
+        for (const touch of [false, true]) {
+          const out = str(builder({ ...trayProps, touch }));
+          assert.strictEqual(
+            out.split('carousel-studio__rendered"').length - 1,
+            1,
+            `the rendered strip, touch=${touch}`,
+          );
+          assert.strictEqual(out.split('stub-gallery').length - 1, 1, `the tray, touch=${touch}`);
+        }
+      });
+
+      test('the backdrop follows the panel, so CSS can light it from the panel’s own class', () => {
+        // `.carousel-studio__props:not(.collapsed) + .carousel-studio__props-
+        // backdrop` (carousel.css) is the whole mechanism: one class, flipped
+        // by `_toggleProps`, drives the sheet and its backdrop together. CSS
+        // has no previous-sibling combinator, so the order is load-bearing.
+        const out = str(builder(builderProps));
+        assert.match(
+          out,
+          /<\/aside>\s*<div\s+class="carousel-studio__props-backdrop"\s+data-action="close-props"/,
+        );
+      });
+    });
+
     test('no id is emitted twice — one live node per id, or the page wires the wrong one', () => {
       // `index.js` reads `#carousel-n-out`, `#carousel-zoom-readout`,
       // `#carousel-doc-controls` and `#carousel-props` after every render.
@@ -598,11 +657,17 @@ describe('carousel studio panels', () => {
       // at all.
       const deck = toDeckDocument(doc3, 3000, 1000);
       for (const doc of [doc3, deck]) {
-        const out = str(builder({ ...builderProps, doc, deckIndex: 0 }));
-        const ids = [...out.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
-        const seen = new Set();
-        const twice = ids.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
-        assert.deepStrictEqual(twice, [], `duplicate ids: ${twice.join(', ')}`);
+        // Both pointers: the touch layout moves the tray into the sheet, and
+        // a move that copied instead would land `#carousel-render-btn` twice.
+        for (const touch of [false, true]) {
+          const out = str(
+            builder({ ...builderProps, doc, deckIndex: 0, touch, renderedPaths: ['/m/r-1.jpg'] }),
+          );
+          const ids = [...out.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+          const seen = new Set();
+          const twice = ids.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+          assert.deepStrictEqual(twice, [], `duplicate ids: ${twice.join(', ')} (touch=${touch})`);
+        }
       }
     });
 

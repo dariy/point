@@ -827,6 +827,12 @@ export default class CarouselStudioPage extends Component {
     "toggle-props"() {
       this._toggleProps();
     },
+    // The sheet's backdrop. A tap outside a sheet means "close it" on every
+    // platform, and on the touch layout the backdrop is the only part of the
+    // page still showing while the sheet is open.
+    "close-props"() {
+      this._toggleProps(false);
+    },
     "toggle-doc-controls"() {
       this._toggleDocControls();
     },
@@ -2777,6 +2783,30 @@ export default class CarouselStudioPage extends Component {
     this._endDrawSession();
   }
 
+  /**
+   * Escape closes the properties sheet — the touch layout's third way out,
+   * beside the burger and a tap on the backdrop.
+   *
+   * It is the weakest claim on Escape of the three, and it runs **first** for
+   * exactly that reason: a dialog and a draw session both clear the state this
+   * one reads when they act, so asked after them it would read "no session" and
+   * take a press that was never its own. Asked first, it steps aside and the
+   * owner still gets the press in the same dispatch.
+   *
+   * `defaultPrevented` is the second half of the same guard. Ending a session
+   * re-renders, which re-takes this listener (see `afterRender`), and a
+   * listener added mid-dispatch can be called for the very press that added
+   * it — the session is gone by then, and the sheet would close on a press it
+   * had already stood aside from. Whoever acted has prevented the default.
+   */
+  _onSheetKey(e) {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (!this.state.propsOpen || !isTouchLayout()) return;
+    if (this._dialogOpen() || this._drawSession) return;
+    e.preventDefault();
+    this._toggleProps(false);
+  }
+
   /** The post's own photos, in the order the post shows them — what a
    *  template's sourceless slides fill from.
    *
@@ -3126,6 +3156,11 @@ export default class CarouselStudioPage extends Component {
     card?.classList.toggle("collapsed", !open);
     card?.querySelector(".carousel-studio__props-header")
       ?.setAttribute("aria-expanded", String(open));
+    // The touch layout's sheet is not a remembered choice. `readPropsPref`
+    // ignores the key on a coarse pointer anyway (studio/layout.js), and
+    // writing "0" there — which is what dismissing a sheet would write, every
+    // time — would collapse the rail on the same user's desktop next visit.
+    if (isTouchLayout()) return;
     try {
       localStorage.setItem(PROPS_PREF_KEY, open ? "1" : "0");
     } catch {
@@ -3298,6 +3333,11 @@ export default class CarouselStudioPage extends Component {
       inkSession: this._drawSession,
       canUndo: this._history.canUndo,
       canRedo: this._history.canRedo,
+      // The pointer question, asked here rather than there: `panels.js` is a
+      // pure function of what it is handed. It decides one thing only — that
+      // the tray's contents sit at the end of the properties sheet instead of
+      // in a row under the stage, which no media query can do.
+      touch: isTouchLayout(),
     });
   }
 
@@ -3328,6 +3368,7 @@ export default class CarouselStudioPage extends Component {
     // Re-taken every render, released with it (see Component's resource
     // contract) — so navigating off the studio takes the shortcut with it.
     this.on(document, "keydown", (e) => {
+      this._onSheetKey(/** @type {KeyboardEvent} */ (e));
       this._onDialogKey(/** @type {KeyboardEvent} */ (e));
       this._onDrawKey(/** @type {KeyboardEvent} */ (e));
       this._onHistoryKey(/** @type {KeyboardEvent} */ (e));

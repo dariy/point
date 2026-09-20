@@ -4231,6 +4231,123 @@ describe('CarouselStudioPage', () => {
       });
     });
 
+    /**
+     * The properties sheet. On a coarse pointer the panel is a bottom sheet
+     * over the stage, opened by the dock's burger and closed three ways — the
+     * burger again, a tap on the backdrop, Escape. The sheet itself is CSS
+     * (`carousel.css`); what these pin is the one class the stylesheet reads,
+     * `.collapsed` on `#carousel-props`, and the fact that flipping it costs
+     * neither a rebuild nor a remembered preference.
+     */
+    describe('the properties sheet', () => {
+      const sheet = (el) => el.querySelector('#carousel-props');
+      const burger = (el) =>
+        el.querySelector('.carousel-studio__dock [data-action="toggle-props"]');
+      const shut = (el) => sheet(el).classList.contains('collapsed');
+
+      test('the burger flips the sheet, and remembers nothing', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        // `readPropsPref` returns false on a coarse pointer whatever is
+        // stored, so the sheet always arrives closed over the stage.
+        assert.ok(shut(el), 'the sheet opens closed');
+
+        click(burger(el));
+        assert.ok(!shut(el), 'the burger opened it');
+        assert.equal(
+          sheet(el).querySelector('.carousel-studio__props-header').getAttribute('aria-expanded'),
+          'true',
+        );
+
+        click(burger(el));
+        assert.ok(shut(el), 'and closed it again');
+
+        // The sheet is a gesture, not a preference. Writing "0" here — which
+        // is what every dismissal would write — would collapse the rail on the
+        // same user's desktop next visit.
+        assert.equal(
+          globalThis.localStorage.getItem('point:carousel:props-open'),
+          null,
+          'nothing was remembered',
+        );
+      });
+
+      test('a tap on the backdrop closes it', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        click(burger(el));
+        assert.ok(!shut(el), 'open');
+
+        click(el.querySelector('.carousel-studio__props-backdrop'));
+        assert.ok(shut(el), 'the backdrop closed it');
+      });
+
+      test('Escape closes it — but a draw session keeps the press', async () => {
+        goCoarse();
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        click(burger(el));
+        click(el.querySelector('[data-action="ink-tool"]'));
+        assert.ok(page._drawSession, 'a session is open');
+        assert.ok(!shut(el), 'and so is the sheet');
+
+        // `_onSheetKey` runs first in the chain and steps aside, so this press
+        // ends the session and leaves the sheet alone.
+        fire(document, 'keydown', { key: 'Escape' });
+        assert.equal(page._drawSession, null, 'the session took the press');
+        assert.ok(!shut(el), 'the sheet is untouched');
+
+        // With nothing else claiming it, the next press is the sheet's.
+        fire(document, 'keydown', { key: 'Escape' });
+        assert.ok(shut(el), 'the sheet closed');
+      });
+
+      test('a fine pointer keeps the card, and remembers the choice', async () => {
+        // No `goCoarse()`: the harness answers `matches: false` to every
+        // query, which is a narrow fine-pointer window — a card stacked under
+        // the stage, closed on arrival, with the tray row still under it.
+        const { routes, deps } = deck(3);
+        const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+        assert.ok(
+          el.querySelector('.carousel-studio__tray').querySelector('#carousel-templates-label'),
+          'the tray stays under the stage',
+        );
+        assert.ok(
+          !el.querySelector('.carousel-studio__props-body').querySelector('#carousel-templates-label'),
+          'and not in the card',
+        );
+
+        click(burger(el));
+        assert.ok(!shut(el), 'the burger opened the card');
+        assert.equal(
+          globalThis.localStorage.getItem('point:carousel:props-open'),
+          '1',
+          'off the touch layout the choice is a preference again',
+        );
+      });
+    });
+
+    test('the tray rides in the sheet on a coarse pointer, and under the stage on a fine one', async () => {
+      goCoarse();
+      const { routes, deps } = deck(3);
+      const el = await mount({ post: '42' }, routes, { renderDeps: deps });
+
+      // The gallery is the tray's own content, and it is in the panel body.
+      const body = el.querySelector('.carousel-studio__props-body');
+      assert.ok(body.querySelector('#carousel-templates-label'), 'the gallery is in the sheet');
+      assert.equal(
+        el.querySelector('.carousel-studio__tray').children.length,
+        0,
+        'the tray row is empty — carousel.css hides it there',
+      );
+    });
+
     test('a fine pointer still measures the column, not the pane', async () => {
       const { routes, deps } = deck(3);
       const el = await mount({ post: '42' }, routes, { renderDeps: deps });
