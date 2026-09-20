@@ -117,6 +117,7 @@ import {
   claimPointer,
   commitIfChanged,
   createListenerGroup,
+  createMultiTapWatcher,
   pastSlop,
   releasePointer,
   resolveTouchClaim,
@@ -677,6 +678,15 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   Drop whichever of the session's own strokes this column-fraction point
  *   touches, whole — the eraser never cuts one in half. Called on the press
  *   and on every coalesced move point of an `"erase"`-mode session.
+ * @property {() => void} [inkDrawAbort]
+ *   Throw away the stroke in progress instead of finishing it — a second
+ *   finger landed on a live `"ink-draw"` drag, so the first finger's mark was
+ *   the opening half of a two- or three-finger tap, not a stroke the user
+ *   wanted. The gesture calls this *instead of* `inkDrawEnd` for that drag.
+ * @property {(count: number) => void} [multiTap]
+ *   `count` fingers tapped the stage together — 2 or 3, the only counts this
+ *   module reports. What they do is the host's: inside an ink session they
+ *   step the session's own strokes, anywhere else the document's history.
  */
 
 /**
@@ -698,7 +708,7 @@ export function createDeckGestures(host) {
    *  drag ({ i, slide, j, frame, centerX, centerY, startX, startY, startAngle,
    *  startRotate, startBox, box, moved }), a `"pane"` scroll-by-hand
    *  ({ i, frame, startX, lastX, moved }), or an `"ink-draw"`/`"ink-erase"`
-   *  session stroke ({ i, frame }) — the stroke's own points and the
+   *  session stroke ({ i, frame, pointers, aborted }) — the stroke's own points and the
    *  session's strokes both live in `host`'s own state (`index.js`), not
    *  here, since they outlive any one press — where `i` is
    *  the column holding the pointer and `slide` the index the box commits to,
@@ -714,6 +724,17 @@ export function createDeckGestures(host) {
   let pending = null;
   let pendingTimer = null;
   let destroyed = false;
+  /** Two- and three-finger taps, read off the same pointer stream every
+   *  handler below already sees — one watcher for the whole deck, not one
+   *  per column, since the fingers of a tap need not land on the same one.
+   *  Only 2 and 3 have a meaning here; every other count is a tap the host
+   *  has nothing to do with, starting with the single tap that is already
+   *  every other gesture's own press. */
+  const multiTap = createMultiTapWatcher({
+    onTap: (count) => {
+      if (count === 2 || count === 3) host.multiTap?.(count);
+    },
+  });
 
   /** Clamp a crop against the pixels of slide `i`'s own source — a deck may
    *  name a different photo per slide, so the dimensions are asked for per
@@ -1029,15 +1050,32 @@ export function createDeckGestures(host) {
         e.preventDefault?.();
         claimPointer(e, frame, "is-drawing");
         const { fx, fy } = frameFraction(frame, e.clientX, e.clientY);
+        const pointers = new Set([e.pointerId]);
         if (session.mode === "erase") {
-          drag = { kind: "ink-erase", i, frame };
+          drag = { kind: "ink-erase", i, frame, pointers, aborted: false };
           host.inkEraseAt?.(fx, fy);
         } else {
-          drag = { kind: "ink-draw", i, frame };
+          drag = { kind: "ink-draw", i, frame, pointers, aborted: false };
           host.inkDrawStart?.(fx, fy);
         }
         return;
       }
+    }
+
+    // A second (or third) finger onto a live ink drag. It is never a second
+    // stroke: a session is one pointer's at a time, and a finger landing
+    // beside one already drawing is the rest of a two- or three-finger tap.
+    // So abort the stroke in progress — without this the fingers that came
+    // to undo a mark leave one first — and swallow every further press until
+    // the whole group lifts, so the third finger of a redo tap cannot start
+    // a fresh stroke of its own either. The tap itself is the watcher's to
+    // report, on the last release.
+    if (drag && (drag.kind === "ink-draw" || drag.kind === "ink-erase") && drag.i === i) {
+      drag.pointers.add(e.pointerId);
+      if (drag.kind === "ink-draw" && !drag.aborted) host.inkDrawAbort?.();
+      drag.aborted = true;
+      e.preventDefault?.();
+      return;
     }
 
     // A layer takes the press only when its own layer is selected and the press
@@ -1213,7 +1251,7 @@ export function createDeckGestures(host) {
    *  progress and repaints the draft; no state change, same as every other
    *  provisional paint in this module. */
   const onInkDrawMove = (e, frame) => {
-    if (!drag || drag.kind !== "ink-draw") return;
+    if (!drag || drag.kind !== "ink-draw" || drag.aborted) return;
     const events = e.getCoalescedEvents?.() || [e];
     for (const ev of events) {
       const { fx, fy } = frameFraction(frame, ev.clientX, ev.clientY);
@@ -1227,7 +1265,7 @@ export function createDeckGestures(host) {
    *  dispatched event lands on — a fast wipe must not skip a mark between
    *  two samples. */
   const onInkEraseMove = (e, frame) => {
-    if (!drag || drag.kind !== "ink-erase") return;
+    if (!drag || drag.kind !== "ink-erase" || drag.aborted) return;
     const events = e.getCoalescedEvents?.() || [e];
     for (const ev of events) {
       const { fx, fy } = frameFraction(frame, ev.clientX, ev.clientY);
@@ -1240,12 +1278,20 @@ export function createDeckGestures(host) {
    *  progress (`host.inkDrawEnd`), `"ink-erase"` has nothing left to do —
    *  every touch already erased live. Neither ever writes to the document:
    *  the session commits once, when it ends (`index.js`'s `_endDrawSession`),
-   *  not once per stroke. */
+   *  not once per stroke.
+   *
+   *  The drag ends when the *last* of its pointers lifts, not the first: a
+   *  drag a second finger aborted is still holding one or two fingers that
+   *  must not fall through to the crop gesture on their way up. An aborted
+   *  drag finalizes nothing — `host.inkDrawAbort` already threw the stroke
+   *  away. */
   const endInkDrag = (e, frame) => {
-    const kind = drag.kind;
     releasePointer(e, frame, "is-drawing");
+    drag.pointers.delete(e.pointerId);
+    if (drag.pointers.size) return;
+    const { kind, aborted } = drag;
     drag = null;
-    if (kind === "ink-draw") host.inkDrawEnd?.();
+    if (kind === "ink-draw" && !aborted) host.inkDrawEnd?.();
   };
 
   /** Every kind but `"crop"` dispatches the same way: only the column that
@@ -1428,11 +1474,15 @@ export function createDeckGestures(host) {
       count = Array.from(frames).length;
       for (const frame of Array.from(frames)) {
         const i = Number(frame.dataset.slice);
+        // The tap watcher is fed after the gesture handler, never before: a
+        // tap fires on the same `pointerup` that ends whatever drag the
+        // fingers also made, and the undo it asks for has to see the drag
+        // already settled.
         listeners.bind(frame, [
-          ["pointerdown", (e) => onPointerDown(e, frame, i), undefined],
-          ["pointermove", (e) => onPointerMove(e, frame, i), undefined],
-          ["pointerup", (e) => onPointerUp(e, frame, i), undefined],
-          ["pointercancel", (e) => onPointerUp(e, frame, i), undefined],
+          ["pointerdown", (e) => { onPointerDown(e, frame, i); multiTap.down(e); }, undefined],
+          ["pointermove", (e) => { onPointerMove(e, frame, i); multiTap.move(e); }, undefined],
+          ["pointerup", (e) => { onPointerUp(e, frame, i); multiTap.up(e); }, undefined],
+          ["pointercancel", (e) => { onPointerUp(e, frame, i); multiTap.cancel(e); }, undefined],
           ["dblclick", (e) => onDoubleClick(e, frame, i), undefined],
           // Not passive: a zoom over the strip must not also scroll the page.
           ["wheel", (e) => onWheel(e, i), { passive: false }],
@@ -1452,6 +1502,7 @@ export function createDeckGestures(host) {
       pendingTimer = null;
       pending = null;
       drag = null;
+      multiTap.reset();
     },
   };
 }

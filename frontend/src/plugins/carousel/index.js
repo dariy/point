@@ -179,6 +179,12 @@ const MIN_INK_BOX = 1 / 1080;
  *  whole. */
 const INK_ERASE_TOLERANCE_PX = 18;
 
+/** How many stroke lists one draw session's own ring holds, the current one
+ *  included — so it steps back over 39 marks, which is deeper than any one
+ *  session's worth of drawing. Smaller than the document ring's 60: a stroke
+ *  list is cheap, but a session is short, and nothing here survives it. */
+export const INK_HISTORY_LIMIT = 40;
+
 /** The tight box every stroke in an ink session fits inside, in the drawing
  *  column's own frame fractions — `Careful`'s "must not be empty": a single
  *  point or a dead-straight line still gets a real box to live in. */
@@ -720,6 +726,11 @@ export default class CarouselStudioPage extends Component {
       inkDrawMove: (fx, fy) => this._inkDrawMove(fx, fy),
       inkDrawEnd: () => this._inkDrawEnd(),
       inkEraseAt: (fx, fy) => this._inkEraseAt(fx, fy),
+      inkDrawAbort: () => this._inkDrawAbort(),
+      // Two and three fingers tapped together (S10). Inside a draw session
+      // they step the session's own strokes, anywhere else the document's
+      // history — see `_onMultiTap`.
+      multiTap: (count) => this._onMultiTap(count),
     });
     // Panorama direct manipulation, over the stage itself — the band is one
     // projection across the whole strip, so the whole strip is the surface.
@@ -1889,8 +1900,70 @@ export default class CarouselStudioPage extends Component {
       width: DEFAULT_INK_WIDTH,
       opacity: 1,
       strokes: /** @type {Array<{w: number, pts: Array<[number, number]>}>} */ ([]),
+      // The session's own undo ring (S10), the shape `studio/history.js`
+      // keeps at document scale: `past` holds the stroke lists this session
+      // has been through, the *current* one last, so the empty list it
+      // starts on is the floor an undo can never step past. Nothing here
+      // reaches the document — the session still commits once, as one layer,
+      // as one document step (`_endDrawSession`).
+      past: /** @type {Array<Array<*>>} */ ([[]]),
+      future: /** @type {Array<Array<*>>} */ ([]),
     };
     this.setState({ selectedLayer: null });
+  }
+
+  /** Record the stroke list as it now stands, at one of the session's two
+   *  commit points (`_inkDrawEnd`, `_inkEraseAt`) — a shallow copy, since
+   *  the list is rebuilt or appended to but a stroke already in it is never
+   *  edited again. A fresh mark abandons the redo tail, the same linear
+   *  model the document ring uses. */
+  _inkPushHistory() {
+    const session = this._drawSession;
+    if (!session) return;
+    session.future.length = 0;
+    session.past.push([...session.strokes]);
+    if (session.past.length > INK_HISTORY_LIMIT) session.past.shift();
+  }
+
+  /** Step back one mark inside the session — a two-finger tap, or what a
+   *  two-finger tap means while the ink tool is on. Nothing to undo past the
+   *  oldest list the ring still holds. */
+  _inkUndo() {
+    const session = this._drawSession;
+    if (!session || session.past.length <= 1) return;
+    session.future.push(session.past.pop());
+    session.strokes = [...session.past[session.past.length - 1]];
+    this._paintInkDraft(session.i);
+  }
+
+  /** And forward again — a three-finger tap. */
+  _inkRedo() {
+    const session = this._drawSession;
+    if (!session || !session.future.length) return;
+    const next = session.future.pop();
+    session.past.push(next);
+    session.strokes = [...next];
+    this._paintInkDraft(session.i);
+  }
+
+  /**
+   * Two or three fingers tapped the stage together (`studio/gestures.js`'s
+   * own watcher). Procreate's model: inside a draw session the pair steps one
+   * stroke, because the session is what the user is looking at and it commits
+   * as a single document step — so a document undo there would drop the edit
+   * made *before* the session rather than the mark just drawn. Anywhere else
+   * the same taps are the document's own undo and redo.
+   *
+   * @param {number} count  2 or 3; the gesture reports no other count
+   */
+  _onMultiTap(count) {
+    if (this._drawSession) {
+      if (count === 2) this._inkUndo();
+      else this._inkRedo();
+      return;
+    }
+    if (count === 2) this._undo();
+    else this._redo();
   }
 
   /** Toggle Erase — a mode inside the one session, not a session of its own
@@ -1914,6 +1987,10 @@ export default class CarouselStudioPage extends Component {
    * with less than its final shape, and this is the one type whose final
    * shape only the session, not a default, can provide. One `_setDoc` call,
    * so undo sees one step for the whole session.
+   *
+   * The session's own ring goes with it — a stroke list still sitting in
+   * `future` is discarded the way any redo tail is when the thing it belongs
+   * to moves on. What commits is `strokes`, the list the user is looking at.
    */
   _endDrawSession() {
     const session = this._drawSession;
@@ -1976,6 +2053,21 @@ export default class CarouselStudioPage extends Component {
     if (!session || !session.strokes.length) return;
     const stroke = session.strokes[session.strokes.length - 1];
     if (stroke.pts.length < 2) stroke.pts.push([stroke.pts[0][0], stroke.pts[0][1]]);
+    // After the dot fix, not before: the snapshot has to hold the stroke in
+    // its finished shape, since nothing edits a stroke once it is recorded.
+    this._inkPushHistory();
+    this._paintInkDraft(session.i);
+  }
+
+  /** Throw away the stroke in progress rather than finish it — a second
+   *  finger landed on a live draw drag, so the first finger's mark was the
+   *  opening half of a two- or three-finger tap (`studio/gestures.js`). The
+   *  ring is untouched: the stroke never reached it, so its top already
+   *  holds exactly the list this leaves behind. */
+  _inkDrawAbort() {
+    const session = this._drawSession;
+    if (!session || !session.strokes.length) return;
+    session.strokes.pop();
     this._paintInkDraft(session.i);
   }
 
@@ -1989,7 +2081,12 @@ export default class CarouselStudioPage extends Component {
     const [canvasW, canvasH] = canvasSize(this.state.doc.aspect);
     const before = session.strokes.length;
     session.strokes = session.strokes.filter((s) => !strokeTouchedAt(s, fx, fy, canvasW, canvasH));
-    if (session.strokes.length !== before) this._paintInkDraft(session.i);
+    // Only a wipe that actually dropped something is a step: dragging the
+    // eraser over bare canvas must not fill the ring with identical lists.
+    if (session.strokes.length !== before) {
+      this._inkPushHistory();
+      this._paintInkDraft(session.i);
+    }
   }
 
   /** The ink tool's own provisional layer, straight to the DOM — no state

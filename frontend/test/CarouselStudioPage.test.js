@@ -76,7 +76,7 @@ const POST = {
 };
 
 describe('CarouselStudioPage', () => {
-  let dom, CarouselStudioPage, page, calls;
+  let dom, CarouselStudioPage, page, calls, INK_HISTORY_LIMIT;
   const settle = () => new Promise((r) => setImmediate(r));
 
   async function mount(query, routes, props = {}) {
@@ -129,7 +129,7 @@ describe('CarouselStudioPage', () => {
     dom = setupDOM();
     setUser({ username: 'owner', is_admin: true });
     setSettings({ blog_title: 'Test blog' });
-    ({ default: CarouselStudioPage } = await import(
+    ({ default: CarouselStudioPage, INK_HISTORY_LIMIT } = await import(
       '../src/plugins/carousel/index.js'
     ));
   });
@@ -2293,6 +2293,24 @@ describe('CarouselStudioPage', () => {
         fire(frame, 'pointerup', { pointerId: 1, clientX: lx, clientY: ly, ...props });
       }
 
+      /** `k` fingers onto `frame` together, then off together, none of them
+       *  moving — the multi-finger tap S10 reads as an undo or a redo. The
+       *  fingers land 10px apart, which is well inside a column and well
+       *  outside each other. */
+      function tap(frame, k, cx = 60, cy = 125) {
+        const at = (id) => [cx + id * 10, cy];
+        for (let id = 1; id <= k; id++) {
+          const [x, y] = at(id);
+          fire(frame, 'pointerdown', {
+            pointerId: id, button: 0, pointerType: 'touch', clientX: x, clientY: y,
+          });
+        }
+        for (let id = 1; id <= k; id++) {
+          const [x, y] = at(id);
+          fire(frame, 'pointerup', { pointerId: id, clientX: x, clientY: y });
+        }
+      }
+
       test('adding each type puts one normalized layer inside the safe area', async () => {
         const el = await toDeck();
         for (const type of ['text', 'image', 'rect', 'counter', 'arrow']) {
@@ -3318,6 +3336,112 @@ describe('CarouselStudioPage', () => {
           click(el.querySelector('[data-action="mode"][data-mode="split"]'));
           await settle();
           assert.doesNotThrow(() => page.state.doc);
+        });
+      });
+
+      /**
+       * Two- and three-finger taps (S10). Procreate's model: inside a draw
+       * session the pair steps one stroke and the document never hears about
+       * it; anywhere else the same taps are the document's own undo and redo.
+       */
+      describe('two- and three-finger tap undo and redo', () => {
+        /** A session with two strokes already drawn on the armed column, and
+         *  the column the taps land on. */
+        async function withTwoStrokes() {
+          const el = await toDeck();
+          addLayer(el, 'ink');
+          await settle();
+          const frame = withFrameBox(stageCol(el, 0));
+          press(frame, 40, 50, [[100, 125]]);
+          press(frame, 60, 60, [[120, 150]]);
+          assert.equal(page._drawSession.strokes.length, 2, 'two strokes to step over');
+          return { el, frame };
+        }
+
+        test('a two-finger tap inside a session drops the last stroke, and the document never hears it', async () => {
+          const { el, frame } = await withTwoStrokes();
+          const before = page.state.doc;
+
+          tap(frame, 2);
+
+          assert.equal(page._drawSession.strokes.length, 1, 'one stroke stepped back');
+          assert.equal(page.state.doc, before, 'the document is the same reference');
+          assert.equal(page.state.doc.slides[0].layers.length, 0, 'and still carries no ink layer');
+
+          // And what commits is what is left, as one layer and one step.
+          fire(document, 'keydown', { key: 'Escape' });
+          await settle();
+          const layers = page.state.doc.slides[0].layers;
+          assert.equal(layers.length, 1);
+          assert.equal(layers[0].strokes.length, 1, 'the undone stroke stayed undone');
+          assert.ok(el, 'the page is still mounted');
+        });
+
+        test('a three-finger tap puts it back', async () => {
+          const { frame } = await withTwoStrokes();
+
+          tap(frame, 2);
+          assert.equal(page._drawSession.strokes.length, 1);
+          tap(frame, 3);
+          assert.equal(page._drawSession.strokes.length, 2, 'the stroke came forward again');
+
+          fire(document, 'keydown', { key: 'Escape' });
+          await settle();
+          assert.equal(page.state.doc.slides[0].layers[0].strokes.length, 2);
+        });
+
+        test('an erase is one step of its own', async () => {
+          const { el, frame } = await withTwoStrokes();
+          click(el.querySelector('[data-action="ink-erase"]'));
+          await settle();
+
+          // The first stroke's own midpoint, well inside its erase tolerance.
+          press(withFrameBox(stageCol(el, 0)), 70, 87, []);
+          assert.equal(page._drawSession.strokes.length, 1, 'the wipe dropped one');
+
+          tap(withFrameBox(stageCol(el, 0)), 2);
+          assert.equal(page._drawSession.strokes.length, 2, 'and the tap brought it back');
+          assert.ok(frame, 'the armed column was re-queried after the rebuild');
+        });
+
+        test('the session ring holds the cap, however much is drawn into it', async () => {
+          const el = await toDeck();
+          addLayer(el, 'ink');
+          await settle();
+          const frame = withFrameBox(stageCol(el, 0));
+          for (let n = 0; n < INK_HISTORY_LIMIT + 5; n++) {
+            press(frame, 40, 50, [[100, 125]]);
+          }
+
+          assert.equal(page._drawSession.strokes.length, INK_HISTORY_LIMIT + 5, 'every mark kept');
+          assert.equal(page._drawSession.past.length, INK_HISTORY_LIMIT, 'the ring stops at the cap');
+        });
+
+        test('a redo tail is abandoned by the next mark, the way the document ring does it', async () => {
+          const { frame } = await withTwoStrokes();
+          tap(frame, 2);
+          assert.equal(page._drawSession.future.length, 1);
+
+          press(frame, 80, 80, [[140, 170]]);
+          assert.equal(page._drawSession.future.length, 0, 'the new mark dropped the tail');
+          tap(frame, 3);
+          assert.equal(page._drawSession.strokes.length, 2, 'so a redo has nowhere to go');
+        });
+
+        test('outside a session the same taps step the document history', async () => {
+          const el = await toDeck();
+          addLayer(el, 'text');
+          await settle();
+          assert.equal(page.state.doc.slides[0].layers.length, 1);
+          assert.equal(page._drawSession, null, 'no session is open');
+
+          tap(withFrameBox(stageCol(el, 0)), 2);
+          await settle();
+          assert.equal(page.state.doc.slides[0].layers.length, 0, 'two fingers undid the layer');
+
+          tap(withFrameBox(stageCol(el, 0)), 3);
+          await settle();
+          assert.equal(page.state.doc.slides[0].layers.length, 1, 'three put it back');
         });
       });
     });
