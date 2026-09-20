@@ -16,6 +16,16 @@
  * for the crop instead. Pinch never needs it: a second finger is never a
  * scroll and is always the zoom, whatever the first finger was doing.
  *
+ * That gate is a fine pointer's. In the touch layout (S10) the strip does not
+ * scroll at all: `carousel.css` locks the scroller and the page moves it by
+ * script, one slide at a time. A plain drag has nothing left to scroll there,
+ * so `"pane"` is never the drag kind and a plain drag — finger, pen or mouse —
+ * pans the crop directly. Ctrl/Shift still reaches the crop too, so a hybrid
+ * device with a keyboard loses nothing. `isTouchLayout` (`studio/layout.js`) is
+ * the one name this module asks that question by, read once per press: two
+ * functions over one media query is exactly the drift `layout.js` exists to
+ * stop, and the widened grab targets below read the same query.
+ *
  * The same machine drives two fields. With no layer selected a column's
  * Ctrl/Shift-pointer pans and zooms the slide's `crop` (S2); a plain pointer
  * pans the strip. With a layer selected and the press landing on that layer
@@ -54,8 +64,12 @@
  * JS gesture is ever started for it, only a slop-threshold watch so a release
  * that turned out to be a scroll still doesn't select the tile it ended over
  * (`drag = null` once past `DRAG_SLOP_PX`, same as a `null`-returning abandon
- * anywhere else in this module). A second finger arriving before that happens
- * still claims the pinch, exactly as it does with the modifier held. That
+ * anywhere else in this module). The touch layout is where that watch resolves
+ * the other way: the tile is `touch-action: none` there and no scroller is left
+ * to hand the finger back to, so the first resolved direction — either axis —
+ * claims the crop instead of abandoning it. A second finger arriving before
+ * that happens still claims the pinch, exactly as it does with the modifier
+ * held. That
  * watch is keyed on `pointerType === "touch"` specifically, never on "not a
  * mouse" — a stylus starts to move because it meant to, so a pen claims the
  * gesture at the press the same as a mouse does, and never sits in the
@@ -97,6 +111,7 @@
  */
 
 import { clampPan, deckSlideFitCSS } from "../geometry.js";
+import { isTouchLayout } from "./layout.js";
 import {
   DRAG_SLOP_PX,
   claimPointer,
@@ -129,11 +144,11 @@ const ROTATE_HANDLE_OFFSET_PX = 24;
 const ROTATE_HANDLE_HIT_PX = 8;
 /** The same three constants, under a coarse (touch) pointer — a finger is not
  *  a mouse cursor, so the grab zones widen to a ~44px target. Mirrors
- *  `carousel.css`'s own `@media (pointer: coarse)` block the way
- *  `studio/layout.js` mirrors `SHEET_BREAKPOINT`: `ROTATE_HANDLE_OFFSET_PX_
- *  COARSE` is the one number both sides must actually agree on, since it also
- *  clears the rotate handle's widened hit circle from the resize band below
- *  it. */
+ *  `carousel.css`'s own `@media (pointer: coarse)` block, selected by the same
+ *  `isTouchLayout()` the press routing reads: one query, one name for it.
+ *  `ROTATE_HANDLE_OFFSET_PX_COARSE` is the one number both sides must actually
+ *  agree on, since it also clears the rotate handle's widened hit circle from
+ *  the resize band below it. */
 const HANDLE_GRAB_PX_COARSE = 22;
 const ROTATE_HANDLE_OFFSET_PX_COARSE = 48;
 const ROTATE_HANDLE_HIT_PX_COARSE = 22;
@@ -145,17 +160,6 @@ const SNAP_PX = 7;
  *  canvas width, matching `MIN_BOX` in `document.js`. Below it a layer is
  *  ungrabbable, so the preview clamp holds it here too. */
 const MIN_BOX = 1 / 1080;
-
-/** Whether the primary pointing device is coarse (a touchscreen) rather than
- *  fine (a mouse or a pen) — `matchMedia`'s own live read of the CSS feature
- *  `carousel.css` styles behind, so the two can never disagree. False where
- *  there is no `matchMedia` to ask (a test, or SSR): a hit-test tolerance
- *  widened without evidence is a mis-grab waiting to happen, so the default
- *  is the precise one. */
-function isCoarsePointer(win = globalThis.window) {
-  if (!win || typeof win.matchMedia !== "function") return false;
-  return win.matchMedia("(pointer: coarse)").matches;
-}
 
 /** `frame.getBoundingClientRect()`, or a zero box where there is no layout
  *  (a headless test frame that never opts into one). */
@@ -602,8 +606,12 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   `px` CSS pixels (positive moves it the way a positive `deltaX`/`deltaY`
  *   would). The un-modified default of a drag or a wheel over a column —
  *   `touch-action` already gives a finger this for free, so only the mouse
- *   drag and the wheel path call it. The host owns the scroller; this module
- *   never touches it directly, the same as every other DOM write.
+ *   drag and the wheel path call it. No drag calls it in the touch layout,
+ *   where the scroller is locked and a plain drag pans the crop instead; the
+ *   wheel path still does, and moves nothing there, which costs nothing and
+ *   keeps a device with both a wheel and a touchscreen behaving. The host owns
+ *   the scroller; this module never touches it directly, the same as every
+ *   other DOM write.
  * @property {() => {i: number, j: number, box: {x:number,y:number,w:number,h:number,rotate?:number},
  *   scope?: 'slide'|'span'}|null} [activeLayer]
  *   The selected layer — the slide index to commit it to, its index in that
@@ -884,14 +892,16 @@ export function createDeckGestures(host) {
   const onHandle = (e) => Boolean(e.target?.closest?.(".carousel-studio__rail-handle"));
 
   /** Everything a fresh press's rotate/layer/select attempts ask in common —
-   *  computed once, since all three read the same "what's active here". */
-  const pressContext = (frame, i) => {
+   *  computed once, since all three read the same "what's active here".
+   *  `touch` is the press's one touch-layout read, handed in by
+   *  `onPointerDown`: here it picks the widened `_COARSE` grab constants,
+   *  there it decides the drag kind. */
+  const pressContext = (frame, i, touch) => {
     const active = host.activeLayer?.();
     const span = active?.scope === "span";
     const rect = span ? deckRect(frameRect(frame), i, count) : frameRect(frame);
     const grabbable = active && (span || active.i === i);
-    const coarse = isCoarsePointer();
-    return { active, span, rect, grabbable, coarse };
+    return { active, span, rect, grabbable, touch };
   };
 
   /**
@@ -905,8 +915,8 @@ export function createDeckGestures(host) {
   const PRESS_KINDS = [
     // rotate: a press on the ninth handle, above the box's own top edge.
     (e, frame, i, ctx) => {
-      const hitPx = ctx.coarse ? ROTATE_HANDLE_HIT_PX_COARSE : ROTATE_HANDLE_HIT_PX;
-      const offsetPx = ctx.coarse ? ROTATE_HANDLE_OFFSET_PX_COARSE : ROTATE_HANDLE_OFFSET_PX;
+      const hitPx = ctx.touch ? ROTATE_HANDLE_HIT_PX_COARSE : ROTATE_HANDLE_HIT_PX;
+      const offsetPx = ctx.touch ? ROTATE_HANDLE_OFFSET_PX_COARSE : ROTATE_HANDLE_OFFSET_PX;
       if (
         !ctx.grabbable ||
         !hitRotateHandle(ctx.rect, ctx.active.box, e.clientX, e.clientY, hitPx, offsetPx)
@@ -937,7 +947,7 @@ export function createDeckGestures(host) {
     // layer: a press on the active layer's own box or one of its eight
     // move/resize handles.
     (e, frame, i, ctx) => {
-      const grabPx = ctx.coarse ? HANDLE_GRAB_PX_COARSE : HANDLE_GRAB_PX;
+      const grabPx = ctx.touch ? HANDLE_GRAB_PX_COARSE : HANDLE_GRAB_PX;
       const hit = ctx.grabbable ? hitLayer(ctx.rect, ctx.active.box, e.clientX, e.clientY, grabPx) : null;
       if (!hit) return false;
       drag = {
@@ -1004,6 +1014,11 @@ export function createDeckGestures(host) {
     const slide = host.slideAt(i);
     if (!slide) return;
 
+    // One read of the media query per press, for every branch below that cares
+    // — the grab tolerances, the drag kind, and the claim policy `onCropMove`
+    // applies to a finger that has not declared a direction yet.
+    const touch = isTouchLayout();
+
     // The ink tool's own session, scoped to one column by `host.drawSession`
     // (`index.js`): while it answers for this one, a press here draws or
     // erases instead of selecting, panning or cropping — every other column
@@ -1031,7 +1046,7 @@ export function createDeckGestures(host) {
     // is grabbable on its own column only; a span layer on every column it
     // reaches, because its box spans them all.
     if (!drag) {
-      const ctx = pressContext(frame, i);
+      const ctx = pressContext(frame, i, touch);
       if (PRESS_KINDS.some((attempt) => attempt(e, frame, i, ctx))) return;
     }
     if (drag && drag.kind === "layer") {
@@ -1046,11 +1061,13 @@ export function createDeckGestures(host) {
 
     if (!drag || drag.i !== i) {
       const modified = e.ctrlKey || e.shiftKey;
-      if (e.pointerType !== "touch" && !modified) {
+      if (!touch && e.pointerType !== "touch" && !modified) {
         // A mouse or pen with no modifier: drag the strip itself. A finger
         // gets this for free from `touch-action`; a mouse has no native
         // drag-to-scroll of its own, so this drives it through the host —
         // which owns the scroller, the same way it owns every other write.
+        // Never in the touch layout: the scroller is locked there, so a plain
+        // drag has nothing to scroll and pans the crop instead.
         drag = { kind: "pane", i, frame, lastX: e.clientX, startX: e.clientX, moved: false };
         claimPointer(e, frame, "is-dragging", { preventDefault: false });
         return;
@@ -1066,7 +1083,12 @@ export function createDeckGestures(host) {
         // just the finger `touch-action` is already panning the strip (and
         // the page) with; every other case — Ctrl/Shift held, or a mouse/pen
         // that already asked for the crop above — is decided immediately.
+        // The touch layout does not shorten this wait, it only changes how it
+        // ends: the tile is `touch-action: none` there, so `touchOwnsBoth`
+        // below turns the first resolved direction into a claim rather than a
+        // hand-back. Waiting is still what keeps a tap a tap.
         undecided: e.pointerType === "touch" && !modified,
+        touchOwnsBoth: touch,
       };
     }
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1113,14 +1135,24 @@ export function createDeckGestures(host) {
     // `!drag` the same way an abandoned gesture always has). Neither axis is
     // this gesture's own — the tile is `touch-action: pan-x pan-y` — so any
     // resolved direction hands the finger back.
+    //
+    // Both axes are its own in the touch layout: the tile is `touch-action:
+    // none` and the strip does not scroll, so there is no scroller left to
+    // hand anything back to. The direction resolving is then the claim, and
+    // this same move goes on to pan the crop from the press point.
     if (drag.undecided) {
       const claimed = resolveTouchClaim(
         e.clientX - drag.start.cx,
         e.clientY - drag.start.cy,
-        () => false,
+        () => drag.touchOwnsBoth,
       );
-      if (claimed === "abandon") drag = null;
-      return;
+      if (claimed === "abandon") {
+        drag = null;
+        return;
+      }
+      if (claimed !== "claim") return;
+      drag.undecided = false;
+      claimCrop(e, frame);
     }
 
     drag.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });

@@ -70,8 +70,8 @@ describe('carousel studio layout', () => {
     test('the gate is a pointer question, not a width one', () => {
       // Named here because the stylesheet selects the whole layout with it:
       // the fixed shell in carousel.css and light/layout.css, and the studio's
-      // own coarse-pointer block. `isCoarsePointer()` in studio/gestures.js
-      // reads the same string.
+      // own coarse-pointer block. studio/gestures.js imports this same
+      // `isTouchLayout` rather than asking the query a second way.
       assert.strictEqual(TOUCH_LAYOUT, '(pointer: coarse)');
     });
 
