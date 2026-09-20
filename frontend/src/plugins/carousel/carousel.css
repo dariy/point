@@ -1414,6 +1414,13 @@
   border-top: var(--border-width) solid var(--border-primary);
 }
 
+/* The sheet's backdrop. Nothing at all on a fine pointer, where the panel is a
+ * rail beside the stage or a card stacked under it and covers nothing to begin
+ * with; the coarse block near the end of the file gives it a box. */
+.carousel-studio__props-backdrop {
+  display: none;
+}
+
 .carousel-studio__props-tool > .editor-mode-toggle {
   /* Same correction the toolbar row makes: the shared toggle is styled for a
    * form column and carries a bottom margin meant to space a field below it. */
@@ -1633,6 +1640,120 @@
   }
 }
 
+/* ── Coarse pointer: the properties sheet ────────────────────────────────────
+ * What the dock's burger opens. The panel is a rail beside the stage at 64em+
+ * and a card stacked under it below that; on a finger it is a bottom sheet
+ * over the stage, so the stage itself keeps the whole shell between the header
+ * and the dock instead of sharing it with a panel.
+ *
+ * The same pattern the post editor's Details form takes below 64em
+ * (`.editor-details-panel`, `frontend/css/light/editor.css`) — 85dvh, fixed to
+ * the bottom edge, translated out of view, over a backdrop that fades with it
+ * — with one difference: the state is the card's own `.collapsed`, not a class
+ * on the layout root. `_toggleProps` (index.js) already flips that class with
+ * no rebuild, and the sheet, the backdrop and the header's chevron all read
+ * it, so there is no second state to keep in step.
+ *
+ * Both states carry the box, because the 64em block above sets `width` and
+ * `height` on the same card at the same specificity — a tablet matches both
+ * queries, and a sheet 20rem wide is not a sheet. The dialogs stay above it at
+ * `z-index: 1100` (the "Template dialogs" section at the end of this file).
+ *
+ * `.collapsed` also hides `.card-body` (`light/cards.css`), so a closed sheet
+ * is an empty box translated its own full height down — off the viewport
+ * either way, and the chevron the header shows is the one every other
+ * collapsed card shows. */
+@media (pointer: coarse) {
+  .carousel-studio__builder .carousel-studio__props,
+  .carousel-studio__builder .carousel-studio__props.collapsed {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 85dvh;
+    /* `.card` carries a bottom margin for the stacked layout it is built for
+       (`light/cards.css`), and `bottom: 0` anchors the *margin* box — so a
+       sheet that kept it would rest 24px above the edge, and the closed one
+       would leave exactly that much of its header showing. Measured at 390px
+       on an emulated iPhone before it was dropped. */
+    margin: 0;
+    /* Below 40em the admin strips card chrome — `.card { background: none }`
+       and a flush `.card-body` (`light/responsive.css`) — so a phone reads a
+       settings page as a flat list rather than a stack of boxes. A sheet is
+       the one card that cannot take that: it is over the stage, not in the
+       flow, and the stage shows straight through it. Given back here, to this
+       card only. */
+    background: var(--surface-card);
+    display: flex;
+    flex-direction: column;
+    /* The card's own corners clip the body's scroll; the body below does the
+       scrolling, so nothing is lost. */
+    overflow: hidden;
+    border: none;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(0);
+    transition: transform 0.25s ease;
+    z-index: 1001;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .carousel-studio__builder .carousel-studio__props.collapsed {
+    transform: translateY(100%);
+  }
+
+  /* The sheet is fixed, so its body is the only part that may scroll — and
+     that scroll stops here rather than walking the stage behind it, which is
+     locked and cannot take a gesture anyway. The padding comes back with the
+     background, and for the same reason: a flush edge belongs to a card that
+     is part of the page, not to a panel lying over it. */
+  .carousel-studio__props .carousel-studio__props-body {
+    flex: 1;
+    min-height: 0;
+    padding: var(--spacing-md);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .carousel-studio__props-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--color-black-alpha-50, rgba(0, 0, 0, 0.5));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 1000;
+  }
+
+  /* Lit by the sheet's own class, through the sibling combinator — which is
+     why `builder()` emits the backdrop straight after the panel. */
+  .carousel-studio__props:not(.collapsed) + .carousel-studio__props-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* The tray's contents are at the end of the sheet here — `builder()` places
+     them there and emits the tray row empty (studio/panels.js), since a second
+     copy would be a second `#carousel-render-btn` and a second set of the same
+     delegated actions. The empty row still takes the grid's gap, so hide it.
+     `:has` scopes that to the row after a builder that *has* a panel: a studio
+     with no photo yet shows the pick prompt instead, has no sheet to hold a
+     gallery, and keeps its tray row — which is the state an import is most
+     wanted in. */
+  .carousel-studio__builder:has(.carousel-studio__props) + .carousel-studio__tray {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  .carousel-studio__builder .carousel-studio__props,
+  .carousel-studio__props-backdrop {
+    transition: none;
+  }
+}
+
 /* ── Templates ─────────────────────────────────────────────────────────────
  * The gallery, and the report an import owes. Both sit below the builder as
  * siblings of it — a studio with no photo yet shows the pick prompt instead of
@@ -1732,8 +1853,9 @@
 
 /* ── Template dialogs ──────────────────────────────────────────────────────
  * Import and "save as template" reuse the admin modal chrome. The studio's
- * properties sheet sits at z-index 1001 below 64em, so a dialog opened over it
- * has to clear that or the sheet would cover the thing it opened. */
+ * properties sheet sits at z-index 1001 on a coarse pointer (the "properties
+ * sheet" block above), so a dialog opened over it has to clear that or the
+ * sheet would cover the thing it opened. */
 .carousel-studio__dialog {
   z-index: 1100;
 }

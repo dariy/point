@@ -430,6 +430,15 @@ function layerLabel(layer) {
  *   reads `deckIndex` for the same reason the deck panel does — it is the
  *   selection pinned inside the deck, in both modes.
  * @param {boolean} [o.canRedo]  can it step forward?
+ * @param {boolean} [o.touch]  is this the touch layout — a coarse pointer?
+ *   The one pointer question this function takes, because it is the one the
+ *   stylesheet cannot answer: the tray's contents move *into* the properties
+ *   sheet there, and no media query moves a node between two parents. Every
+ *   other half of the layout is emitted twice and hidden in turn (the toolbar
+ *   and the dock, the toolbar's controls and `propsTools`); this one cannot
+ *   be, because a second copy of the tray is a second `#carousel-render-btn`
+ *   and a second set of the same delegated actions. The page reads the query
+ *   (`isTouchLayout`, studio/layout.js) and hands the answer down.
  */
 export function builder({
   doc,
@@ -453,6 +462,7 @@ export function builder({
   inkSession = null,
   canUndo = false,
   canRedo = false,
+  touch = false,
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
@@ -738,6 +748,24 @@ export function builder({
       </div>
     </section>`;
 
+  // The tray's whole content — the rendered strip, and whatever the page adds
+  // after it (the template gallery and the import report). Built once and
+  // placed once: in the tray row under the stage on a fine pointer, at the end
+  // of the properties sheet on a coarse one, where the tray row is gone and
+  // the stage keeps the shell between the header and the dock.
+  const trayBody = html`${renderedStrip({ doc, renderedPaths })}${tray}`;
+
+  // The sheet's backdrop, and only ever that: `display: none` on a fine
+  // pointer, where the panel is a rail or a stacked card and covers nothing.
+  // It follows the panel in the markup because the stylesheet lights it from
+  // the panel's own `.collapsed` through the adjacent-sibling combinator, and
+  // CSS has no previous-sibling — so the one class `_toggleProps` already
+  // flips drives both halves, with no second state to keep in step.
+  const backdrop = html`<div
+    class="carousel-studio__props-backdrop"
+    data-action="close-props"
+  ></div>`;
+
   return html`
     <div class="carousel-studio__toolbar">
       ${error ? html`<p class="error-state" role="alert">${error}</p>` : ""}
@@ -808,14 +836,13 @@ export function builder({
               : layerPanel({ doc, index: deckIndex, selectedLayer, layerScope, logoUrl })
             : ""}
           ${propsTools}
+          ${touch ? trayBody : ""}
         </div>
       </aside>
+      ${backdrop}
     </div>
 
-    <div class="carousel-studio__tray">
-      ${renderedStrip({ doc, renderedPaths })}
-      ${tray}
-    </div>
+    <div class="carousel-studio__tray">${touch ? "" : trayBody}</div>
 
     ${dock({ canUndo, canRedo, busy, selected: deckIndex, n })}`;
 }
