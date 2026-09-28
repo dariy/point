@@ -1547,3 +1547,91 @@ func TestPostHandler_CreateUntitledPost(t *testing.T) {
 		t.Errorf("expected slug %q, got %v", today+"-2", second["slug"])
 	}
 }
+
+// TestPostHandler_GuestMediaMetadata pins the guest EXIF rule: no GPS key ever
+// reaches a guest, "all" yields only the six keys the viewer shows, "hide" and
+// "admin" yield no metadata, and an admin keeps the full blob.
+func TestPostHandler_GuestMediaMetadata(t *testing.T) {
+	ph, h := setupPostHandlerFull(t)
+	defer h.close()
+	ctx := nil_ctx()
+	userID := insertUser(h.repo)
+	m, err := h.mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("hello"), Filename: "geo.txt", MimeType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	full := `{"Make":"Fuji","Model":"X-T5","FNumber":"28/10","ExposureTime":"1/200","FocalLength":"35/1","ISOSpeedRatings":"400","LensModel":"XF35","GPSLatitude":48.1,"GPSLongitude":11.5}`
+	if _, err := h.repo.DB().Exec(`UPDATE media SET metadata=? WHERE id=?`, full, m.ID); err != nil {
+		t.Fatalf("set metadata: %v", err)
+	}
+	content := "![x](/" + strings.TrimPrefix(m.OriginalPath, "originals/") + ")"
+	post, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Geo", Slug: "geo-post", Content: content, Status: "published", Formatter: "markdown", AuthorID: userID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	_, _ = h.repo.DB().Exec(`UPDATE posts SET published_at=datetime('now') WHERE id=?`, post.ID)
+
+	fetch := func(admin, bySlug bool) []interface{} {
+		t.Helper()
+		c, rec := echoCtx(http.MethodGet, "/", "")
+		if admin {
+			c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+		}
+		if bySlug {
+			c.SetParamNames("slug")
+			c.SetParamValues("geo-post")
+			err = ph.GetPostBySlug(c)
+		} else {
+			c.SetParamNames("id")
+			c.SetParamValues(strconv.FormatInt(post.ID, 10))
+			err = ph.GetPostByID(c)
+		}
+		if err != nil {
+			t.Fatalf("fetch: %v", err)
+		}
+		var resp map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		media, _ := resp["media"].([]interface{})
+		if len(media) != 1 {
+			t.Fatalf("want 1 media item, got %v", resp["media"])
+		}
+		return media
+	}
+	metaOf := func(media []interface{}) (map[string]interface{}, bool) {
+		item := media[0].(map[string]interface{})
+		v, ok := item["metadata"]
+		md, _ := v.(map[string]interface{})
+		return md, ok
+	}
+
+	for _, vis := range []string{"hide", "admin", "all"} {
+		if err := h.settingsSvc.SetSetting(ctx, "exif_visibility", vis, "string"); err != nil {
+			t.Fatalf("SetSetting: %v", err)
+		}
+		for _, bySlug := range []bool{true, false} {
+			md, ok := metaOf(fetch(false, bySlug))
+			for k := range md {
+				if strings.HasPrefix(k, "GPS") {
+					t.Errorf("%s/slug=%v: guest got %s", vis, bySlug, k)
+				}
+			}
+			if vis != "all" {
+				if ok {
+					t.Errorf("%s/slug=%v: guest got metadata %v", vis, bySlug, md)
+				}
+				continue
+			}
+			if len(md) != 6 || md["LensModel"] != nil || md["Make"] != "Fuji" {
+				t.Errorf("all/slug=%v: guest metadata = %v", bySlug, md)
+			}
+		}
+		md, _ := metaOf(fetch(true, true))
+		if md["GPSLatitude"] != 48.1 || md["LensModel"] != "XF35" {
+			t.Errorf("%s: admin metadata = %v", vis, md)
+		}
+	}
+}
