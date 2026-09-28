@@ -71,6 +71,13 @@ Gotchas from production:
   block and silently breaks immersive slides. Article `srcset` is injected *after*
   bluemonday (`srcset.go`), deliberately outside the sanitizer policy — that is what
   stops an author writing their own `srcset` full of arbitrary URLs.
+- **GPS never leaves the server in a guest payload.** `media.metadata` keeps GPS for the
+  admin UI and location tagging. Every guest emitter of post media (`GetPostBySlug`,
+  `GetPostByID`, the preview-token route) passes it through `posts.go::guestMediaMetadata`:
+  with `exif_visibility` at `all` a guest gets only the six keys the viewer shows
+  (`EXIF_FIELDS` in `frontend/src/utils/exif.js`); with `hide` or `admin` a guest gets no
+  `metadata`. An authenticated response keeps the full blob. The GPS in the bytes of the
+  original is a separate issue.
 - **The engine names no CDN.** Cache headers are written for shared caches in general;
   which one sits in front of a deployment is the operator's business, not the engine's.
 - SVG uploads are currently allowlisted but served unsanitized same-origin — open
