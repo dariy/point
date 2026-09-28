@@ -57,6 +57,9 @@ func (s *SchedulerService) WithMetrics(m *metrics.Registry) *SchedulerService {
 func (s *SchedulerService) Start(ctx context.Context) {
 	slog.Info("starting background scheduler")
 
+	// One-time task: drop variants cut before decode applied EXIF orientation.
+	go s.purgeOrientedVariants(ctx)
+
 	// Hourly task: Session cleanup
 	go s.runHourly(ctx, "session cleanup", s.authService.CleanupExpiredSessions)
 
@@ -105,6 +108,19 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		_, err := s.systemService.RotateBackups(s.settingInt(ctx, "backup_keep", 7))
 		return err
 	})
+}
+
+// purgeOrientedVariants runs MediaService.PurgeOrientedVariants and logs the
+// outcome. The media service guards the one-time run with a setting.
+func (s *SchedulerService) purgeOrientedVariants(ctx context.Context) {
+	if s.mediaService == nil {
+		return
+	}
+	if n, err := s.mediaService.PurgeOrientedVariants(ctx); err != nil {
+		slog.Warn("orientation fix: variant purge failed", "error", err)
+	} else if n > 0 {
+		slog.Info("orientation fix: purged variants of rotated images", "media", n)
+	}
 }
 
 // settingInt reads an integer setting, falling back to def when unset or unparseable.

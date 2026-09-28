@@ -419,6 +419,15 @@ var schema = []struct{ name, sql string }{
 		"backfill_posts_fts",
 		`INSERT INTO posts_fts(posts_fts) VALUES ('rebuild')`,
 	},
+	{
+		// Decode did not apply EXIF orientation before, so a rotated photo
+		// stored its sensor size. SQLite reads every SET right-hand side from
+		// the old row, so this swaps the two columns.
+		"swap_dims_for_rotated_exif",
+		`UPDATE media SET width = height, height = width
+			WHERE json_valid(metadata)
+			AND json_extract(metadata, '$.Orientation') IN ('5', '6', '7', '8')`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

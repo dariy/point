@@ -18,6 +18,12 @@ by upload date (`/YYYY/MM/…`).
   Legacy `?thumb` still resolves (bare → 512, `?thumb=128` → 128), so old
   `posts.thumbnail_path` rows and published post content keep working with no data
   migration. Only `JPEG_QUALITY` is configurable; there is no dimension setting.
+- **EXIF orientation**: every decode applies the EXIF Orientation tag, so variants,
+  cards and `og:image` are upright, and the stored `width`/`height` are the displayed size.
+  The original file keeps its pixels and its tag. Migration `swap_dims_for_rotated_exif`
+  swaps the stored size of older rows with Orientation 5–8. At the first start after that
+  change, a one-time task (setting `media_orientation_variants_purged`) removes the old
+  variants of rows with Orientation 2–8 and rolls the generation token.
 - **Cache-busting**: `v` is one **global** generation token (`thumbnail_generation` in
   settings) — global because the frontend call sites that build a media URL hold a bare
   path string and nothing else. A variant whose `v` matches gets a long TTL; a stale or

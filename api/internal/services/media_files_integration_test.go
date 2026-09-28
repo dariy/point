@@ -5,6 +5,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"image"
@@ -1193,4 +1194,118 @@ func TestRebuildThumbnails_ReturnsWithoutDecodingTheLibrary(t *testing.T) {
 	if warmed != prewarmLimit {
 		t.Errorf("%d rows have a warm rung, want %d", warmed, prewarmLimit)
 	}
+}
+
+// jpegWithOrientation encodes a w×h JPEG and inserts a minimal EXIF APP1
+// segment that carries only the Orientation tag.
+func jpegWithOrientation(t *testing.T, w, h int, orientation uint16) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h)), nil); err != nil {
+		t.Fatal(err)
+	}
+	tiff := []byte{'I', 'I', 0x2a, 0, 8, 0, 0, 0, // header, IFD0 at offset 8
+		1, 0, // one entry
+		0x12, 0x01, 3, 0, 1, 0, 0, 0, byte(orientation), byte(orientation >> 8), 0, 0, // Orientation SHORT
+		0, 0, 0, 0} // no next IFD
+	payload := append([]byte("Exif\x00\x00"), tiff...)
+	seg := []byte{0xff, 0xe1, byte((len(payload) + 2) >> 8), byte(len(payload) + 2)}
+	seg = append(seg, payload...)
+	src := buf.Bytes()
+	out := append([]byte{}, src[:2]...)
+	out = append(out, seg...)
+	return append(out, src[2:]...)
+}
+
+// A phone photo stores landscape sensor pixels and Orientation 6. The stored
+// size and every variant must follow the displayed, portrait orientation.
+func TestUpload_EXIFOrientationRotatesVariantsAndDims(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 6),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if m.Width.Int64 != 400 || m.Height.Int64 != 800 {
+		t.Errorf("stored size = %dx%d, want 400x800", m.Width.Int64, m.Height.Int64)
+	}
+	path, err := svc.Variant(ctx, m, 512)
+	if err != nil {
+		t.Fatalf("Variant: %v", err)
+	}
+	if w, h := variantDims(t, path); w != 256 || h != 512 {
+		t.Errorf("rung 512 = %dx%d, want 256x512", w, h)
+	}
+}
+
+func TestOrientedMetadata(t *testing.T) {
+	for in, want := range map[string]bool{
+		`{"Orientation":"6"}`: true,
+		`{"Orientation":"2"}`: true,
+		`{"Orientation":"1"}`: false,
+		`{"Make":"X"}`:        false,
+		`not json`:            false,
+	} {
+		if got := orientedMetadata(sql.NullString{String: in, Valid: true}); got != want {
+			t.Errorf("orientedMetadata(%s) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// The one-time purge removes the rungs of a rotated image, rolls the
+// generation, and runs only once.
+func TestPurgeOrientedVariants_RunsOnce(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 6),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	rung := svc.variantFullPath(m.OriginalPath, 512)
+	if _, err := os.Stat(rung); err != nil {
+		t.Fatalf("eager rung missing: %v", err)
+	}
+	gen := svc.ThumbnailGeneration(ctx)
+
+	if n, err := svc.PurgeOrientedVariants(ctx); err != nil || n != 1 {
+		t.Fatalf("first purge = %d, %v; want 1, nil", n, err)
+	}
+	if _, err := os.Stat(rung); !os.IsNotExist(err) {
+		t.Errorf("rung still on disk after purge")
+	}
+	if svc.ThumbnailGeneration(ctx) == gen {
+		t.Errorf("generation token did not move")
+	}
+	if n, err := svc.PurgeOrientedVariants(ctx); err != nil || n != 0 {
+		t.Errorf("second purge = %d, %v; want 0, nil", n, err)
+	}
+}
+
+// The scheduler's start-up hook runs the purge and tolerates a missing media
+// service.
+func TestScheduler_PurgeOrientedVariants(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+	if _, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 8),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	}); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	(&SchedulerService{mediaService: svc}).purgeOrientedVariants(ctx)
+	if n, _ := svc.PurgeOrientedVariants(ctx); n != 0 {
+		t.Errorf("purge ran again after the scheduler hook: %d", n)
+	}
+	(&SchedulerService{}).purgeOrientedVariants(ctx)
 }

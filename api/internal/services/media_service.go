@@ -1225,6 +1225,65 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, er
 	return res, nil
 }
 
+// OrientationFixSetting records that the one-time purge of variants cut
+// before decode applied EXIF orientation has run.
+const OrientationFixSetting = "media_orientation_variants_purged"
+
+// PurgeOrientedVariants removes, once per install, every cached rung of an
+// image whose stored EXIF Orientation is 2 to 8. Those rungs were cut from
+// unrotated pixels; the next request regenerates them upright. When it removes
+// anything it also rolls the thumbnail generation and drops the rendered public
+// pages, because a variant URL that does not move is never re-fetched.
+func (s *MediaService) PurgeOrientedVariants(ctx context.Context) (int, error) {
+	if s.settingsService == nil {
+		return 0, nil
+	}
+	if done, _ := s.settingsService.GetSetting(ctx, OrientationFixSetting, ""); done == "true" {
+		return 0, nil
+	}
+	affected := 0
+	for offset := int64(0); ; offset += mediaScanPage {
+		rows, err := s.repo.ListMediaFiltered(ctx, "image", "", mediaScanPage, offset)
+		if err != nil {
+			return affected, err
+		}
+		for _, m := range rows {
+			if orientedMetadata(m.Metadata) {
+				s.removeAllVariants(m.OriginalPath)
+				affected++
+			}
+		}
+		if len(rows) < mediaScanPage {
+			break
+		}
+	}
+	if affected > 0 {
+		if err := s.settingsService.SetSetting(ctx, ThumbnailGenerationSetting, newGenerationToken(), "string"); err != nil {
+			return affected, err
+		}
+		if s.cache != nil {
+			if err := s.cache.InvalidatePublicPages(ctx); err != nil {
+				slog.Warn("orientation fix: public page cache not dropped", "error", err)
+			}
+		}
+	}
+	return affected, s.settingsService.SetSetting(ctx, OrientationFixSetting, "true", "boolean")
+}
+
+// orientedMetadata reports whether a media metadata blob carries an EXIF
+// Orientation other than 1 (formatEXIFValue stores it as a decimal string).
+func orientedMetadata(md sql.NullString) bool {
+	if !md.Valid || md.String == "" {
+		return false
+	}
+	var m map[string]interface{}
+	if json.Unmarshal([]byte(md.String), &m) != nil {
+		return false
+	}
+	o, _ := m["Orientation"].(string)
+	return len(o) == 1 && o[0] >= '2' && o[0] <= '8'
+}
+
 // newGenerationToken mints a token no earlier rebuild has used.
 //
 // Random rather than a counter or a timestamp: this token is the whole of the
@@ -1797,7 +1856,13 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 	return changed, nil
 }
 
-// safeImagingDecode wraps imaging.Decode to convert panics into errors.
+// safeImagingDecode wraps imaging.Decode to convert panics into errors, and
+// applies the EXIF Orientation tag. imaging leaves AutoOrientation off by
+// default, which cut every derived file from the raw sensor pixels: a phone
+// photo tagged Orientation 6 got sideways variants and swapped stored
+// dimensions while the browser showed the original upright. Every decode
+// path — upload, import, lazy variant, rebuild prewarm, Instagram import —
+// comes through here, so the bounds a caller reads are the displayed size.
 // The imaging library can panic on crafted TIFF files (CVE-2023-36308) and
 // there is no patched upstream version as of 2026-05.
 //
@@ -1816,7 +1881,7 @@ func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 			err = fmt.Errorf("image decode panic: %v", rec)
 		}
 	}()
-	return imaging.Decode(r)
+	return imaging.Decode(r, imaging.AutoOrientation(true))
 }
 
 // defaultMaxImageMegapixels is the pixel ceiling used when the operator has
