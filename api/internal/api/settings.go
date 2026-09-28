@@ -47,7 +47,6 @@ var publicSettingKeys = map[string]bool{
 	"timeline_mode":           true,
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
-	"transition_strategy":     true,
 	"exif_visibility":         true,
 	"nav_menu_mode":           true,
 	"nav_inline_max":          true,

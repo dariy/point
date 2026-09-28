@@ -220,42 +220,6 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
 );
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id);
 
--- Carousels
--- One Carousel Studio document per carousel block. Kept off the posts table
--- because sqlc expands SELECT * by byte offset, so a multi-KB JSON blob there
--- would load on every post-list query. doc is opaque JSON owned by the frontend
--- carousel plugin -- this layer stores and returns it verbatim.
---
--- block_key is the id the post's own markup gives the block --
--- `:::{.carousel-block #c-7f3a}` -- which is what lets a post hold several
--- independent carousels, each openable in the studio. The empty string is the
--- key of a block that has none yet: the row a pre-block-key install already has,
--- and the row an unkeyed save creates (see api.firstBlockKey). post_id alone was
--- UNIQUE until the rekey_carousels_by_block_key migration.
-CREATE TABLE IF NOT EXISTS carousels (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    block_key  TEXT NOT NULL DEFAULT '',
-    doc        TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(post_id, block_key)
-);
-
--- Carousel templates
--- A reusable carousel envelope, keyed by slug rather than by post: the same
--- opaque JSON as carousels.doc, owned by the frontend, stored and returned
--- verbatim. A template carries its assets inlined as data: URLs, so a row can
--- run to megabytes -- which is why the list query never selects doc.
-CREATE TABLE IF NOT EXISTS carousel_templates (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug       TEXT NOT NULL UNIQUE,
-    name       TEXT NOT NULL,
-    doc        TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 -- API Keys
 CREATE TABLE IF NOT EXISTS api_keys (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

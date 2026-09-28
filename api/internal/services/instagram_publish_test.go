@@ -265,7 +265,9 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		}
 	})
 
-	t.Run("Carousel Block Flattens Into The Post's Images", func(t *testing.T) {
+	// A carousel holds 10 children at most. The post has 12 images: the first
+	// 10 in content order go, the last 2 do not.
+	t.Run("Carousel Caps At Ten Images", func(t *testing.T) {
 		data := map[string]string{
 			"instagram_access_token": "test-token",
 			"instagram_user_id":      "ig-user-id",
@@ -303,33 +305,28 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		settingsSvc := mockSettings(data)
 		igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
 
+		var content []string
+		var media []models.Medium
+		for i := 1; i <= 12; i++ {
+			content = append(content, fmt.Sprintf("![p%d](/2026/06/p%02d.jpg)", i, i))
+			media = append(media, models.Medium{OriginalPath: fmt.Sprintf("originals/2026/06/p%02d.jpg", i)})
+		}
+
 		repo := &mockRepository{
 			MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
 				return models.Post{
 					ID:             id,
-					Title:          "Carousel Post",
-					Slug:           "carousel-post",
+					Title:          "Twelve Photos",
+					Slug:           "twelve-photos",
 					InstagramShare: true,
-					// A loose photo, a carousel block, another loose photo.
-					// Every image ships, in document order — the block used to
-					// win and drop the loose ones (decision C8, reversed).
-					// The repeat of slide1 at the end proves dedup survives.
-					Content: "![loose](/2026/06/loose1.jpg)\n\n" +
-						":::{.carousel-block}\n\n/2026/06/slide1.jpg\n\n/2026/06/slide2.jpg\n\n/2026/06/slide3.jpg\n\n:::\n\n" +
-						"![loose](/2026/06/loose2.jpg)\n\n![again](/2026/06/slide1.jpg)",
+					Content:        strings.Join(content, "\n"),
 				}, nil
 			},
-			// Echo whatever paths were asked for, so the test measures the
-			// selector, not a fixed fixture.
-			MockGetMediaByPaths: func(_ context.Context, paths []string) ([]models.Medium, error) {
-				out := make([]models.Medium, len(paths))
-				for i, p := range paths {
-					out[i] = models.Medium{OriginalPath: p}
-				}
-				return out, nil
+			MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
+				return media, nil
 			},
-			MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
-				return []models.Tag{{Name: "test"}}, nil
+			MockGetTagsForPost: func(_ context.Context, postID int64) ([]models.Tag, error) {
+				return nil, nil
 			},
 			MockUpdatePostInstagramStatus: func(_ context.Context, arg models.UpdatePostInstagramStatusParams) error {
 				if arg.InstagramStatus != "published" {
@@ -344,20 +341,11 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		want := []string{
-			ts.URL + "/2026/06/loose1.jpg",
-			ts.URL + "/2026/06/slide1.jpg",
-			ts.URL + "/2026/06/slide2.jpg",
-			ts.URL + "/2026/06/slide3.jpg",
-			ts.URL + "/2026/06/loose2.jpg",
+		if len(childURLs) != 10 {
+			t.Fatalf("expected 10 carousel children, got %d (%v)", len(childURLs), childURLs)
 		}
-		if len(childURLs) != len(want) {
-			t.Fatalf("expected %d carousel children, got %d (%v)", len(want), len(childURLs), childURLs)
-		}
-		for i, w := range want {
-			if childURLs[i] != w {
-				t.Errorf("slide %d: expected %s, got %s", i, w, childURLs[i])
-			}
+		if first, last := childURLs[0], childURLs[9]; first != ts.URL+"/2026/06/p01.jpg" || last != ts.URL+"/2026/06/p10.jpg" {
+			t.Errorf("expected p01..p10, got first %s, last %s", first, last)
 		}
 	})
 

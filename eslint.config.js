@@ -120,9 +120,8 @@ const rules = {
       // DOMParser.parseFromString is a Trusted Types sink too, and — the part
       // that costs an afternoon to discover — for *every* mime type, not only
       // text/html: under enforcement a plain string throws there even when the
-      // result is an inert XML document that never reaches the page. The
-      // carousel importers parse exactly such documents, so the parse goes
-      // through parseMarkup() in utils/helpers.js, where the policy is.
+      // result is an inert XML document that never reaches the page. So the
+      // parse goes through parseMarkup() in utils/helpers.js, where the policy is.
       selector: "CallExpression[callee.property.name='parseFromString']",
       message: "Use parseMarkup(text, mime) from utils/helpers.js — a bare parseFromString bypasses the Trusted Types policy and throws under enforcement."
     },
@@ -203,10 +202,7 @@ export default [
         FileReader: "readonly",
         FormData: "readonly",
         Blob: "readonly",
-        ReadableStream: "readonly",
-        DecompressionStream: "readonly",
         File: "readonly",
-        createImageBitmap: "readonly",
         crypto: "readonly",
         TextEncoder: "readonly",
         TextDecoder: "readonly",

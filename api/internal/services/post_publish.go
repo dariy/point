@@ -103,10 +103,6 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	}
 
 	// 2. Get images referenced in post content (by path, not post_id FK).
-	// Every image in the post ships, in document order — the slides inside a
-	// :::{.carousel-block} among them, as ordinary content paths. A post may
-	// carry several carousel blocks, so "the post's carousel" no longer names
-	// anything: this reverses decision C8 (docs/features/carousel-studio.md).
 	paths := ExtractMediaPaths(post.Content, "")
 	media, err := s.repo.GetMediaByPaths(ctx, paths)
 	if err != nil {
@@ -137,8 +133,8 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 			err = s.instagramService.WaitForContainerReady(ctx, creationID)
 		}
 	} else {
-		if len(images) > 20 {
-			images = images[:20]
+		if len(images) > 10 {
+			images = images[:10]
 		}
 		var childIDs []string
 		for _, img := range images {

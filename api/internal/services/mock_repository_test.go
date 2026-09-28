@@ -28,15 +28,6 @@ type mockRepository struct {
 	MockCreateSession             func(ctx context.Context, arg models.CreateSessionParams) (models.Session, error)
 	MockCreateTag                 func(ctx context.Context, arg models.CreateTagParams) (models.Tag, error)
 	MockCreateUser                func(ctx context.Context, arg models.CreateUserParams) (models.User, error)
-	MockGetCarouselByBlockKey     func(ctx context.Context, arg models.GetCarouselByBlockKeyParams) (models.Carousel, error)
-	MockListCarouselsByPostID     func(ctx context.Context, postID int64) ([]models.ListCarouselsByPostIDRow, error)
-	MockListAllCarouselBlockKeys  func(ctx context.Context) ([]models.ListAllCarouselBlockKeysRow, error)
-	MockUpsertCarousel            func(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error)
-	MockDeleteCarouselByBlockKey  func(ctx context.Context, arg models.DeleteCarouselByBlockKeyParams) error
-	MockListCarouselTemplates     func(ctx context.Context) ([]models.ListCarouselTemplatesRow, error)
-	MockGetCarouselTemplateBySlug func(ctx context.Context, slug string) (models.CarouselTemplate, error)
-	MockUpsertCarouselTemplate    func(ctx context.Context, arg models.UpsertCarouselTemplateParams) (models.CarouselTemplate, error)
-	MockDeleteCarouselTemplate    func(ctx context.Context, slug string) error
 	MockDeleteAPIKey              func(ctx context.Context, arg models.DeleteAPIKeyParams) error
 	MockDeleteExpiredSessions     func(ctx context.Context) error
 	MockDeleteMedia               func(ctx context.Context, id int64) error
@@ -73,7 +64,6 @@ type mockRepository struct {
 	MockListMedia                 func(ctx context.Context, arg models.ListMediaParams) ([]models.Medium, error)
 	MockListPosts                 func(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error)
 	MockListPostsByViews          func(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error)
-	MockListPostIDsAndContent     func(ctx context.Context) ([]models.ListPostIDsAndContentRow, error)
 	MockListSettings              func(ctx context.Context) ([]models.BlogSetting, error)
 	MockListTags                  func(ctx context.Context, includeEmptyFilter interface{}) ([]models.Tag, error)
 	MockListTrashedPosts          func(ctx context.Context, arg models.ListTrashedPostsParams) ([]models.Post, error)
@@ -195,69 +185,6 @@ type mockRepository struct {
 var _ repository.Repository = (*mockRepository)(nil)
 
 // Implementation of Querier methods
-
-func (m *mockRepository) GetCarouselByBlockKey(ctx context.Context, arg models.GetCarouselByBlockKeyParams) (models.Carousel, error) {
-	if m.MockGetCarouselByBlockKey != nil {
-		return m.MockGetCarouselByBlockKey(ctx, arg)
-	}
-	return models.Carousel{}, fmt.Errorf("GetCarouselByBlockKey not implemented")
-}
-
-func (m *mockRepository) ListCarouselsByPostID(ctx context.Context, postID int64) ([]models.ListCarouselsByPostIDRow, error) {
-	if m.MockListCarouselsByPostID != nil {
-		return m.MockListCarouselsByPostID(ctx, postID)
-	}
-	return nil, fmt.Errorf("ListCarouselsByPostID not implemented")
-}
-
-func (m *mockRepository) ListAllCarouselBlockKeys(ctx context.Context) ([]models.ListAllCarouselBlockKeysRow, error) {
-	if m.MockListAllCarouselBlockKeys != nil {
-		return m.MockListAllCarouselBlockKeys(ctx)
-	}
-	return nil, fmt.Errorf("ListAllCarouselBlockKeys not implemented")
-}
-
-func (m *mockRepository) UpsertCarousel(ctx context.Context, arg models.UpsertCarouselParams) (models.Carousel, error) {
-	if m.MockUpsertCarousel != nil {
-		return m.MockUpsertCarousel(ctx, arg)
-	}
-	return models.Carousel{}, fmt.Errorf("UpsertCarousel not implemented")
-}
-
-func (m *mockRepository) DeleteCarouselByBlockKey(ctx context.Context, arg models.DeleteCarouselByBlockKeyParams) error {
-	if m.MockDeleteCarouselByBlockKey != nil {
-		return m.MockDeleteCarouselByBlockKey(ctx, arg)
-	}
-	return fmt.Errorf("DeleteCarouselByBlockKey not implemented")
-}
-
-func (m *mockRepository) ListCarouselTemplates(ctx context.Context) ([]models.ListCarouselTemplatesRow, error) {
-	if m.MockListCarouselTemplates != nil {
-		return m.MockListCarouselTemplates(ctx)
-	}
-	return nil, fmt.Errorf("ListCarouselTemplates not implemented")
-}
-
-func (m *mockRepository) GetCarouselTemplateBySlug(ctx context.Context, slug string) (models.CarouselTemplate, error) {
-	if m.MockGetCarouselTemplateBySlug != nil {
-		return m.MockGetCarouselTemplateBySlug(ctx, slug)
-	}
-	return models.CarouselTemplate{}, fmt.Errorf("GetCarouselTemplateBySlug not implemented")
-}
-
-func (m *mockRepository) UpsertCarouselTemplate(ctx context.Context, arg models.UpsertCarouselTemplateParams) (models.CarouselTemplate, error) {
-	if m.MockUpsertCarouselTemplate != nil {
-		return m.MockUpsertCarouselTemplate(ctx, arg)
-	}
-	return models.CarouselTemplate{}, fmt.Errorf("UpsertCarouselTemplate not implemented")
-}
-
-func (m *mockRepository) DeleteCarouselTemplate(ctx context.Context, slug string) error {
-	if m.MockDeleteCarouselTemplate != nil {
-		return m.MockDeleteCarouselTemplate(ctx, slug)
-	}
-	return fmt.Errorf("DeleteCarouselTemplate not implemented")
-}
 
 func (m *mockRepository) AddPostViewCount(ctx context.Context, arg models.AddPostViewCountParams) error {
 	if m.MockAddPostViewCount != nil {
@@ -614,13 +541,6 @@ func (m *mockRepository) ListPosts(ctx context.Context, arg models.ListPostsPara
 		return m.MockListPosts(ctx, arg)
 	}
 	return nil, fmt.Errorf("ListPosts not implemented")
-}
-
-func (m *mockRepository) ListPostIDsAndContent(ctx context.Context) ([]models.ListPostIDsAndContentRow, error) {
-	if m.MockListPostIDsAndContent != nil {
-		return m.MockListPostIDsAndContent(ctx)
-	}
-	return nil, fmt.Errorf("ListPostIDsAndContent not implemented")
 }
 
 func (m *mockRepository) ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error) {

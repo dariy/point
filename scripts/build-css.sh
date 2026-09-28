@@ -75,7 +75,6 @@ bundle "$CSS_DIR"/light.css \
     "$CSS_DIR"/light/themes.css \
     "$CSS_DIR"/light/plugins.css \
     "$CSS_DIR"/light/exif.css \
-    "$CSS_DIR"/public/carousel-block.css \
     "$CSS_DIR"/light/responsive.css
 
 # Public bundle
@@ -100,7 +99,6 @@ bundle "$CSS_DIR"/main.css \
     "$CSS_DIR"/public/post-grid.css \
     "$CSS_DIR"/public/sidebar.css \
     "$CSS_DIR"/public/single-post.css \
-    "$CSS_DIR"/public/carousel-block.css \
     "$CSS_DIR"/public/tag-archive.css \
     "$CSS_DIR"/public/error-page.css \
     "$CSS_DIR"/public/map.css \
