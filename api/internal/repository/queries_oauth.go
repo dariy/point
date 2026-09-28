@@ -106,3 +106,12 @@ func (r *sqliteRepository) DeleteExpiredOAuthTokens(ctx context.Context, now tim
 		`DELETE FROM oauth_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`, utcStamp(now))
 	return err
 }
+
+// ExpireUnboundedOAuthTokens gives every never-expiring token (NULL expires_at)
+// the expiry expiresAt. It bounds refresh tokens issued before refresh tokens
+// had a TTL; new tokens always carry an expiry, so a second run matches no rows.
+func (r *sqliteRepository) ExpireUnboundedOAuthTokens(ctx context.Context, expiresAt time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE oauth_tokens SET expires_at = ? WHERE expires_at IS NULL`, utcStamp(expiresAt))
+	return err
+}

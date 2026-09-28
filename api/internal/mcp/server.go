@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -59,6 +60,10 @@ type Deps struct {
 
 type principalKey struct{}
 
+// refreshTokenTTL bounds an OAuth refresh token. Each refresh issues a new one
+// (rotation), so a client in use stays connected; a stolen token dies within it.
+const refreshTokenTTL = 30 * 24 * time.Hour
+
 // Register mounts the OAuth 2.1 discovery/token endpoints and the streamable MCP
 // endpoint at /mcp on e, all gated by the "mcp" plugin so the surface 404s when
 // disabled. The endpoint accepts point's API-key/session auth or an OAuth bearer.
@@ -67,9 +72,17 @@ func Register(e *echo.Echo, d Deps) {
 	if d.Repo != nil {
 		store = repoOAuthStore{d.Repo}
 	}
+	if d.Repo != nil {
+		// Refresh tokens issued before refreshTokenTTL existed never expire.
+		// Bound them once; later runs match no rows.
+		if err := d.Repo.ExpireUnboundedOAuthTokens(context.Background(), time.Now().Add(refreshTokenTTL)); err != nil {
+			slog.Error("mcp-oauth: bound legacy refresh tokens", "err", err)
+		}
+	}
 	provider := oauth.New(oauth.Config{
-		BaseURL: d.BaseURL,
-		Store:   store,
+		BaseURL:         d.BaseURL,
+		Store:           store,
+		RefreshTokenTTL: refreshTokenTTL,
 		// OAuth login validates against point's admin password: empty username
 		// resolves to the first/owner user, the same identity OAuth tokens act as.
 		ValidatePassword: func(ctx context.Context, pw string) bool {
