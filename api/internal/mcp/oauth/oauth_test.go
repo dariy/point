@@ -258,6 +258,54 @@ func TestLoginPageCSPAllowsRedirectOrigin(t *testing.T) {
 	}
 }
 
+// TestLoginPageNamesRedirectHost guards the consent fix: registration is open,
+// so the page must say where the code goes, and warn when that host is not
+// this machine. It must not show a client-chosen name.
+func TestLoginPageNamesRedirectHost(t *testing.T) {
+	_, challenge := pkcePair()
+	cases := []struct {
+		uri, host string
+		warn      bool
+	}{
+		{"https://attacker.example/cb", "attacker.example", true},
+		{"http://localhost:33418/callback", "localhost:33418", false},
+		{"http://127.0.0.1:9000/cb", "127.0.0.1:9000", false},
+		{"http://[::1]:9000/cb", "[::1]:9000", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			_, srv := newTestProvider(t, Config{})
+			clientID := registerClient(t, srv, tc.uri)
+			q := url.Values{
+				"response_type":         {"code"},
+				"client_id":             {clientID},
+				"redirect_uri":          {tc.uri},
+				"code_challenge":        {challenge},
+				"code_challenge_method": {"S256"},
+			}
+			resp, err := http.Get(srv.URL + "/oauth/authorize?" + q.Encode())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			body, _ := io.ReadAll(resp.Body)
+			if !strings.Contains(string(body), "Access goes to <strong>"+tc.host+"</strong>") {
+				t.Errorf("page does not name host %q", tc.host)
+			}
+			if got := strings.Contains(string(body), `class="warn"`); got != tc.warn {
+				t.Errorf("warning shown = %v, want %v", got, tc.warn)
+			}
+		})
+	}
+}
+
+func TestRedirectHostCustomScheme(t *testing.T) {
+	host, foreign := redirectHost("myapp:callback")
+	if host != "myapp:callback" || !foreign {
+		t.Errorf("redirectHost = %q, %v; want the whole URI, foreign", host, foreign)
+	}
+}
+
 func TestFormActionOrigin(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"https://claude.ai/api/mcp/auth_callback", "https://claude.ai"},
@@ -646,6 +694,17 @@ func TestTokenFromRefresh(t *testing.T) {
 		}
 	})
 
+	t.Run("refresh-token-carries-ttl", func(t *testing.T) {
+		p, srv := newTestProvider(t, Config{RefreshTokenTTL: 30 * 24 * time.Hour})
+		refresh := exchange(t, srv)["refresh_token"].(string)
+		p.mu.RLock()
+		exp := p.tokens[refresh].ExpiresAt
+		p.mu.RUnlock()
+		if d := time.Until(exp); d < 30*24*time.Hour-time.Minute || d > 30*24*time.Hour {
+			t.Errorf("refresh expires in %v, want about 30 days", d)
+		}
+	})
+
 	t.Run("expired-refresh-token", func(t *testing.T) {
 		p, srv := newTestProvider(t, Config{RefreshTokenTTL: time.Hour})
 		first := exchange(t, srv)
@@ -653,12 +712,15 @@ func TestTokenFromRefresh(t *testing.T) {
 		p.mu.Lock()
 		p.tokens[refresh].ExpiresAt = time.Now().Add(-time.Second)
 		p.mu.Unlock()
-		_, status := postToken(t, srv, url.Values{
+		out, status := postToken(t, srv, url.Values{
 			"grant_type":    {"refresh_token"},
 			"refresh_token": {refresh},
 		})
 		if status != http.StatusBadRequest {
 			t.Errorf("status = %d, want 400", status)
+		}
+		if out["error"] != "invalid_grant" {
+			t.Errorf("error = %v, want invalid_grant", out["error"])
 		}
 		p.mu.RLock()
 		_, still := p.tokens[refresh]

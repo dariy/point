@@ -115,6 +115,7 @@ type Repository interface {
 	GetOAuthToken(ctx context.Context, tokenHash string) (clientID string, expiresAt time.Time, found bool, err error)
 	DeleteOAuthToken(ctx context.Context, tokenHash string) error
 	DeleteExpiredOAuthTokens(ctx context.Context, now time.Time) error
+	ExpireUnboundedOAuthTokens(ctx context.Context, expiresAt time.Time) error
 
 	// System
 	GetSystemStats(ctx context.Context) (SystemStats, error)

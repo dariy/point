@@ -1252,6 +1252,10 @@ func (m *mockRepository) DeleteExpiredOAuthTokens(ctx context.Context, now time.
 	return fmt.Errorf("DeleteExpiredOAuthTokens not implemented")
 }
 
+func (m *mockRepository) ExpireUnboundedOAuthTokens(ctx context.Context, expiresAt time.Time) error {
+	return fmt.Errorf("ExpireUnboundedOAuthTokens not implemented")
+}
+
 func (m *mockRepository) GetSystemStats(ctx context.Context) (repository.SystemStats, error) {
 	if m.MockGetSystemStats != nil {
 		return m.MockGetSystemStats(ctx)

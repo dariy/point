@@ -574,6 +574,12 @@ type loginData struct {
 	CodeChallenge       string
 	CodeChallengeMethod string
 	Error               string
+	// RedirectHost and Foreign are derived from RedirectURI in renderLogin.
+	// They name where the code goes, because registration is open: anyone can
+	// register a callback on their own host and send the owner an authorize
+	// link. The page names no client, since the client picks its own name.
+	RedirectHost string
+	Foreign      bool
 }
 
 // loginTmpl asks for the owner's password and nothing else, so it carries a
@@ -592,6 +598,9 @@ var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 body{background:#0d0d0d;color:#e0e0e0;font-family:'Courier New',Courier,monospace;display:flex;align-items:center;justify-content:center;min-height:100vh}
 .card{background:#161616;border:1px solid #2a2a2a;border-radius:4px;padding:2.5rem 3rem;width:100%;max-width:380px}
 h1{color:#c9a96e;font-size:1.1rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2rem;text-align:center}
+.dest{font-size:.85rem;margin-bottom:1rem;text-align:center;word-break:break-all}
+.dest strong{color:#c9a96e}
+.warn{color:#e0b36e;border:1px solid #6b5220;border-radius:2px;font-size:.8rem;line-height:1.4;padding:.6rem .8rem;margin-bottom:1.5rem}
 label{display:block;font-size:.75rem;color:#888;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.4rem}
 input[type=password]{width:100%;background:#0d0d0d;border:1px solid #333;color:#e0e0e0;font-family:inherit;font-size:.95rem;padding:.6rem .8rem;border-radius:2px;outline:none;margin-bottom:1.5rem}
 input[type=password]:focus{border-color:#c9a96e}
@@ -603,6 +612,8 @@ button:hover{background:#d4b87a}
 <body>
 <div class="card">
 <h1>MCP Access</h1>
+<p class="dest">Access goes to <strong>{{.RedirectHost}}</strong></p>
+{{if .Foreign}}<p class="warn">This host is not on this computer. Continue only if you started this connection from {{.RedirectHost}}. If a link sent you here, stop.</p>{{end}}
 <form method="POST" action="/oauth/authorize">
 <input type="hidden" name="client_id" value="{{.ClientID}}">
 <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
@@ -631,7 +642,23 @@ func formActionOrigin(redirectURI string) string {
 	return u.Scheme + "://" + u.Host
 }
 
+// redirectHost returns the host an already-validated redirect URI sends the
+// code to, and whether that host is off this machine. A URI with no host (a
+// custom scheme) is shown whole and counts as foreign.
+func redirectHost(redirectURI string) (host string, foreign bool) {
+	u, err := url.Parse(redirectURI)
+	if err != nil || u.Host == "" {
+		return redirectURI, true
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return u.Host, false
+	}
+	return u.Host, true
+}
+
 func renderLogin(w http.ResponseWriter, data loginData) {
+	data.RedirectHost, data.Foreign = redirectHost(data.RedirectURI)
 	// This page needs its own CSP, overriding the site-wide one. The site policy
 	// says form-action 'self', and browsers enforce form-action against every hop
 	// of the redirect chain a form submission produces — so the 302 this form's

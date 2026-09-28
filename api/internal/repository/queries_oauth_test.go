@@ -118,6 +118,39 @@ func TestRepository_DeleteExpiredOAuthTokens(t *testing.T) {
 	}
 }
 
+func TestRepository_ExpireUnboundedOAuthTokens(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	live := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	if err := repo.SaveOAuthToken(ctx, "legacy", "c", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveOAuthToken(ctx, "live", "c", live); err != nil {
+		t.Fatal(err)
+	}
+	bound := time.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	if err := repo.ExpireUnboundedOAuthTokens(ctx, bound); err != nil {
+		t.Fatalf("ExpireUnboundedOAuthTokens: %v", err)
+	}
+	if _, got, _, _ := repo.GetOAuthToken(ctx, "legacy"); !got.Equal(bound) {
+		t.Errorf("legacy expiry = %v, want %v", got, bound)
+	}
+	if _, got, _, _ := repo.GetOAuthToken(ctx, "live"); !got.Equal(live) {
+		t.Errorf("live expiry changed to %v, want %v", got, live)
+	}
+	// The stored text must match what SaveOAuthToken writes, so the sweep's
+	// text comparison still orders it correctly.
+	var legacy, fresh string
+	_ = repo.SaveOAuthToken(ctx, "fresh", "c", bound)
+	_ = repo.DB().QueryRowContext(ctx, `SELECT expires_at FROM oauth_tokens WHERE token_hash='legacy'`).Scan(&legacy)
+	_ = repo.DB().QueryRowContext(ctx, `SELECT expires_at FROM oauth_tokens WHERE token_hash='fresh'`).Scan(&fresh)
+	if legacy != fresh {
+		t.Errorf("backfilled format %q differs from SaveOAuthToken format %q", legacy, fresh)
+	}
+}
+
 // TestRepository_OAuthTimestampsStoredUTC pins the on-disk format. Expiry is
 // compared as text by DeleteExpiredOAuthTokens, so a row written in local time
 // ("-0400 EDT") would sort wrongly against one written after a DST change

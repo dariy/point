@@ -51,6 +51,17 @@ surface admins must consciously enable from `/light/plugins`).
    is off as the session opens, and the call re-checks (a toggle can flip mid-session),
    answering `404: not found` exactly as its route would. Today this covers
    `point_analyze_media` (`ai-analysis`); every other tool lands on an ungated handler.
+7. **The sign-in page names where access goes.** Client registration is open, as MCP
+   requires, so any party can register a callback on its own host and send the owner an
+   authorize link. The page therefore states the redirect host ("Access goes to
+   host"), taken from the redirect URI that matched a registered URI. When the host is
+   not loopback (`localhost`, `127.0.0.1`, `[::1]`), the page also shows a warning:
+   continue only if you started the connection from that host. The page shows no client
+   name, because the client chooses its own name.
+8. **Refresh tokens expire after 30 days.** `mcp.Register` sets `RefreshTokenTTL`. Each
+   refresh issues a new refresh token, so a client in use stays connected. At startup,
+   refresh tokens stored with no expiry (issued before the TTL) get an expiry of now plus
+   30 days.
 
 ## Out of scope
 
