@@ -511,15 +511,11 @@ export function insertHTML(el, position, markup) {
  * `DOMParser.parseFromString` is a Trusted Types sink like the two above — and,
  * in Chromium, for **every** mime type, not only `text/html`. A plain string
  * there throws "This document requires 'TrustedHTML' assignment" even when what
- * comes back is an XML document that never touches the page, which is how the
- * carousel's PPTX and SVG importers found this: both parse files a user picked
- * off their disk, and both died at the first file under the enforcing CSP.
+ * comes back is an XML document that never touches the page.
  *
  * The parse happens here rather than at the call site so that the TrustedHTML
  * is minted and consumed inside one function — no caller is left holding a
- * value it could route to a real sink. Nothing parsed here is adopted into the
- * live DOM; the importers read the tree attribute by named attribute (see
- * `plugins/carousel/import/xml.js`).
+ * value it could route to a real sink.
  *
  * @param {string} text
  * @param {string} mime  'image/svg+xml', 'application/xml', …

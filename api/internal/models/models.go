@@ -34,24 +34,6 @@ type BlogSetting struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
-type Carousel struct {
-	ID        int64     `json:"id"`
-	PostID    int64     `json:"post_id"`
-	BlockKey  string    `json:"block_key"`
-	Doc       string    `json:"doc"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type CarouselTemplate struct {
-	ID        int64     `json:"id"`
-	Slug      string    `json:"slug"`
-	Name      string    `json:"name"`
-	Doc       string    `json:"doc"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 type MediaVisibilityLog struct {
 	ID        int64         `json:"id"`
 	MediaID   int64         `json:"media_id"`

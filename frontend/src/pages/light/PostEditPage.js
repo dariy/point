@@ -26,10 +26,10 @@ import {
 } from "../../store.js";
 import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG, MEDIA_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.js";
-import { parseNodes, serializeNodes, firstImagePath, dedupeCarouselKeys } from "../../utils/postNodes.js";
+import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNodes.js";
 import { attachWindowFileDrop } from "../../utils/windowFileDrop.js";
 import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.js";
 import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.js";
@@ -92,9 +92,6 @@ export default class PostEditPage extends Component {
     arrange() { this._toggleArrange(true); },
     "toggle-preview"() { this._toggleLivePreview(); },
     "preview-link"() { this._generatePreviewLink(); },
-    // Opens the carousel plugin's studio for this post. Param-less path — the
-    // post id rides in the query string (see the plugin's index.js).
-    "carousel-studio"() { this._openCarouselStudio(); },
     // Same tab, like every other public-site link in the admin. The editor is
     // the one place where leaving can cost something — edits typed inside the
     // autosave idle window are still only in the form — so flush them first
@@ -124,18 +121,9 @@ export default class PostEditPage extends Component {
       loading,
       menuOpen
     } = this.state;
-    let backUrl = "/light/posts";
-    try {
-      const stored = sessionStorage.getItem('point:admin:posts-list-url');
-      if (stored) backUrl = stored;
-    } catch {/* ignore */}
+    const titleText = isNew ? "New Post" : "Edit Post";
     if (loading) return adminLayoutTemplate({
-      // The title crumb is left out rather than filled with a placeholder
-      // like "Edit Post" — a placeholder swapping to the real title once the
-      // post loads reads as a jump, not a fill-in.
-      breadcrumbs: isNew
-        ? [{ label: "Posts", href: backUrl }, { label: "New Post" }]
-        : [{ label: "Posts", href: backUrl }],
+      title: titleText,
       content: html`<div class="loading-spinner" aria-label="Loading…"></div>`
     });
     const p = post || {};
@@ -162,7 +150,6 @@ export default class PostEditPage extends Component {
           `}
           <hr>
           ${pluginHost.isEnabled("ai-analysis") ? html`<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${raw(SPARKLE_SVG)} Analyze media</button>` : ''}
-          ${!isNew && pluginHost.isEnabled("carousel") ? html`<button class="menu-item" type="button" data-action="carousel-studio" id="carousel-studio-btn">${raw(MEDIA_SVG)} ${this._nodes.some(n => n.type === "carousel") ? "Edit Carousel" : "Carousel Studio"}</button>` : ''}
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${raw(LINK_SVG)} Preview link</button>
           <button class="menu-item" type="button" data-action="arrange">${raw(GRIP_SVG)} Arrange fields</button>
           ${this._isWide() ? html`<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
@@ -178,11 +165,13 @@ export default class PostEditPage extends Component {
         ${raw(SETTINGS_SVG)}
         <span class="btn-label">Details</span>
       </button>`;
+    let backUrl = "/light/posts";
+    try {
+      const stored = sessionStorage.getItem('point:admin:posts-list-url');
+      if (stored) backUrl = stored;
+    } catch {/* ignore */}
     return adminLayoutTemplate({
-      breadcrumbs: [
-        { label: "Posts", href: backUrl },
-        { label: isNew ? "New Post" : (p.title || "Untitled") },
-      ],
+      title: html`<a href="${backUrl}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
       actions: html`${detailsToggle}${actions}`,
       content: this._renderContent(),
       contentClass: "editor-full-width"
@@ -708,25 +697,6 @@ export default class PostEditPage extends Component {
   }
 
   /**
-   * Open Carousel Studio for one of this post's carousels, flushing pending
-   * edits first so text typed inside the autosave idle window isn't dropped —
-   * the studio loads the post's saved content, not the in-memory form state,
-   * and `block` addresses a fence in that content.
-   *
-   * @param {string} [block] the block's key, or its 1-based position among the
-   *   post's carousels when its fence carries no key yet (a carousel typed by
-   *   hand in Text mode). Omitted — the overflow menu — means the post's first
-   *   carousel, the studio's only address before blocks had keys.
-   */
-  async _openCarouselStudio(block) {
-    if (this.state.hasPendingEdits) await this._autosave();
-    if (!this.state.postId) return;
-    const query = new URLSearchParams({ post: String(this.state.postId) });
-    if (block) query.set("block", String(block));
-    navigate(`/light/carousel?${query}`);
-  }
-
-  /**
    * Move the post to Trash and leave the editor.
    *
    * `deleting` is what parks the autosave — a queued idle save would otherwise
@@ -947,7 +917,6 @@ export default class PostEditPage extends Component {
     this._visualEditorRef = this.mountChild(VisualEditor, "#visual-editor-mount", {
       nodes: this._nodes,
       mediaByPath: this._mediaByPath || {},
-      onEditCarousel: pluginHost.isEnabled("carousel") ? block => this._openCarouselStudio(block) : null,
       onChange: nodes => {
         this._nodes = nodes;
         this._visualEditorRef.setProps({
@@ -1015,7 +984,7 @@ export default class PostEditPage extends Component {
       }))
     };
     if (targetMode === "visual") {
-      this._nodes = dedupeCarouselKeys(parseNodes(data.content));
+      this._nodes = parseNodes(data.content);
       this.setState({
         editorMode: "visual",
         post
@@ -1039,7 +1008,7 @@ export default class PostEditPage extends Component {
           content: initialContent
         };
         if (this.state.editorMode === "visual") {
-          this._nodes = dedupeCarouselKeys(parseNodes(initialContent));
+          this._nodes = parseNodes(initialContent);
         }
         sessionStorage.removeItem("newPostInitialContent");
       }
@@ -1117,7 +1086,7 @@ export default class PostEditPage extends Component {
       const [post, igStatus] = await Promise.all([getPost(id), getInstagramStatus().catch(() => null)]);
       if (post.status) post.status = post.status.toLowerCase();
       this._tags = toTagNames(post.tags);
-      this._nodes = dedupeCarouselKeys(parseNodes(post.content));
+      this._nodes = parseNodes(post.content);
       this._mediaByPath = {};
       // Resolve exactly the paths this post references. This used to take the
       // first 200 media site-wide and hope: the listing is ordered by upload
@@ -1291,7 +1260,7 @@ export default class PostEditPage extends Component {
           slug: name
         }))
       };
-      if (this.state.editorMode === "visual") this._nodes = dedupeCarouselKeys(parseNodes(post.content));
+      if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
       setToast({
         message: "Analysis complete.",
         type: "success"
@@ -1317,7 +1286,7 @@ export default class PostEditPage extends Component {
           slug: name
         }))
       };
-      if (this.state.editorMode === "visual") this._nodes = dedupeCarouselKeys(parseNodes(post.content));
+      if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
       setToast({
         message: err.message || "Analysis failed.",
         type: "error"

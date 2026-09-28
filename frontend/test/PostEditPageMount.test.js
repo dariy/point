@@ -29,7 +29,6 @@ import {
 } from '../src/store.js';
 import { pluginHost } from '../src/core/pluginHost.js';
 import { clearPostReadCache } from '../src/api/posts.js';
-import { carouselFence } from '../src/utils/postNodes.js';
 
 const settle = () => new Promise(r => setImmediate(r));
 
@@ -167,23 +166,6 @@ describe('PostEditPage (mounted)', () => {
 
       assert.ok(page._nodes.some(n => n.type === 'image' && n.path === '/2024/08/harbour.jpg'));
       assert.deepEqual(page._tags, ['harbour']);
-    });
-
-    test('the title crumb is left out — not a placeholder like "Edit Post" — until the post loads', async () => {
-      dom.location.pathname = '/light/posts/7/edit';
-      const el = dom.document.createElement('div');
-      dom.document.body.appendChild(el);
-      page = new PostEditPage(el, { params: { id: '7' } });
-      page.mount();
-
-      const crumbs = () => [...el.querySelectorAll('.light-header h1 .breadcrumb-link, .light-header h1 .breadcrumb-current')]
-        .map(n => n.textContent.trim());
-      assert.deepStrictEqual(crumbs(), ['Posts'], 'no title crumb while the post is still loading');
-
-      await settle();
-      await settle();
-
-      assert.deepStrictEqual(crumbs(), ['Posts', 'Harbour lights'], 'fills in the real title once loaded');
     });
 
     test('a load failure leaves the editor for the list instead of showing a blank form', async () => {
@@ -427,807 +409,6 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(sent('PUT', '/api/posts/7').length, 1);
       assert.equal(wentTo(), '/posts/harbour-lights');
-    });
-
-    test('carousel-studio flushes a pending edit before navigating', async () => {
-      pluginHost.init([{ id: 'carousel', type: 'route', routes: ['/light/carousel'] }]);
-      await mountPage({ params: { id: '7' } });
-      page.state.hasPendingEdits = true;
-
-      await page._openCarouselStudio();
-      await settle();
-
-      assert.equal(sent('PUT', '/api/posts/7').length, 1);
-      assert.equal(wentTo(), '/light/carousel?post=7');
-    });
-  });
-
-  // ── Carousel Studio entry points ─────────────────────────────────────────
-
-  describe('the carousel plugin', () => {
-    beforeEach(() => {
-      pluginHost.init([{ id: 'carousel', type: 'route', routes: ['/light/carousel'] }]);
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg']),
-      });
-    });
-
-    test('the menu reads "Edit Carousel" once the post already has one', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      assert.equal(q('#carousel-studio-btn').textContent.trim(), 'Edit Carousel');
-    });
-
-    test('the menu reads "Carousel Studio" for a post without one', async () => {
-      routes['GET /api/posts/7'] = () => POST();
-      await mountPage({ params: { id: '7' } });
-
-      assert.equal(q('#carousel-studio-btn').textContent.trim(), 'Carousel Studio');
-    });
-
-    test('the visual editor card offers Edit in Studio and it flushes before navigating', async () => {
-      await mountPage({ params: { id: '7' } });
-      page.state.hasPendingEdits = true;
-
-      click(q('.ve-carousel-edit'));
-      await settle();
-
-      assert.equal(sent('PUT', '/api/posts/7').length, 1);
-      // The fence is keyless, so the card addresses it by position — the studio
-      // mints its key on the save that adopts it.
-      assert.equal(wentTo(), '/light/carousel?post=7&block=1');
-    });
-
-    test("a keyed card sends the studio that block's key", async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: carouselFence(['/2024/08/a.jpg'], 'c-7f3a'),
-      });
-      await mountPage({ params: { id: '7' } });
-
-      click(q('.ve-carousel-edit'));
-      await settle();
-
-      assert.equal(wentTo(), '/light/carousel?post=7&block=c-7f3a');
-    });
-
-    test('each card addresses its own carousel', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: [
-          carouselFence(['/2024/08/a.jpg']),
-          carouselFence(['/2024/08/b.jpg'], 'c-7f3a'),
-          carouselFence(['/2024/08/c.jpg']),
-        ].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-
-      const buttons = [...page.container.querySelectorAll('.ve-carousel-edit')];
-      assert.equal(buttons.length, 3);
-      // Position counts every carousel, keyed ones included, so an ordinal and
-      // the fence order the studio reads out of the content are the same list.
-      assert.deepEqual(buttons.map(b => b.dataset.block), ['1', 'c-7f3a', '3']);
-
-      click(buttons[2]);
-      await settle();
-      assert.equal(wentTo(), '/light/carousel?post=7&block=3');
-    });
-
-    test('the card has no Edit in Studio affordance with the plugin disabled', async () => {
-      pluginHost.init([]);
-      await mountPage({ params: { id: '7' } });
-
-      assert.equal(q('.ve-carousel-edit'), null);
-      assert.equal(q('#carousel-studio-btn'), null);
-    });
-
-    test('with the plugin disabled, the card still shows its thumbnails, ungroups, and reorders slides', async () => {
-      pluginHost.init([]);
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], 'c-7f3a'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const slides = () => [...page.container.querySelectorAll('.ve-slide')];
-
-      assert.equal(slides().length, 2, 'both slides still show a thumbnail');
-      assert.ok(slides()[0].querySelector('.ve-thumb'));
-
-      fire(slides()[0].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowRight' });
-      assert.deepEqual(page._nodes[0].paths, ['/2024/08/b.jpg', '/2024/08/a.jpg']);
-
-      click(q('.ve-carousel-ungroup'));
-      assert.deepEqual(page._nodes.map(n => n.type), ['image', 'image']);
-    });
-  });
-
-  // ── Selecting cards, grouping, ungrouping ────────────────────────────
-
-  /**
-   * Making a carousel out of the post's own photos, from the editor.
-   *
-   * The action is a selection plus one button, and the two things that make it
-   * safe are asserted here: the selection is keyed by node identity, so a
-   * structural change cannot silently retarget it, and both writes hand back an
-   * Undo carrying a snapshot of the list as it was.
-   */
-  describe('selecting cards and making a carousel', () => {
-    const PHOTOS = ['/2024/08/a.jpg', '/2024/08/b.jpg', '/2024/08/c.jpg'];
-
-    beforeEach(() => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: `${PHOTOS.join('\n\n')}\n\nCaption line.`,
-      });
-    });
-
-    const cards = () => [...page.container.querySelectorAll('.ve-card')];
-    const selected = () => cards().filter(c => c.classList.contains('is-selected')).map(c => c.dataset.index);
-    const bar = () => q('.ve-selection-bar');
-    const nodes = () => page._nodes;
-
-    test('the post parses into three photo cards and a text card', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      assert.deepEqual(nodes().map(n => n.type), ['image', 'image', 'image', 'text']);
-      assert.equal(bar().hidden, true, 'the bar is out of the way until something is picked');
-    });
-
-    test('a click selects a card and the bar reports the count', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-
-      assert.deepEqual(selected(), ['0']);
-      assert.equal(bar().hidden, false);
-      assert.equal(q('.ve-selection-count').textContent, '1 selected');
-    });
-
-    test('clicking a selected card again lets it go', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(cards()[0]);
-
-      assert.deepEqual(selected(), []);
-      assert.equal(bar().hidden, true);
-    });
-
-    test('shift-click takes the whole range from the anchor', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(cards()[2], { shiftKey: true });
-
-      assert.deepEqual(selected(), ['0', '1', '2']);
-      assert.equal(q('.ve-selection-count').textContent, '3 selected');
-    });
-
-    test('a text card is refused — it cannot become a slide', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[3]);
-
-      assert.deepEqual(selected(), []);
-    });
-
-    test('a shift-range skips a text card it spans', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: '/2024/08/a.jpg\n\nCaption line.\n\n/2024/08/b.jpg',
-      });
-      await mountPage({ params: { id: '7' } });
-      assert.deepEqual(nodes().map(n => n.type), ['image', 'text', 'image']);
-
-      click(cards()[0]);
-      click(cards()[2], { shiftKey: true });
-
-      assert.deepEqual(selected(), ['0', '2']);
-    });
-
-    test('shift-clicking a text card is refused like any other click on one', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(cards()[3], { shiftKey: true });
-
-      assert.deepEqual(selected(), ['0'], 'the range is not extended to a card that cannot hold slides');
-    });
-
-    test('a shift-mousedown on a card refuses the browser text smear, but not on the handle', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      assert.equal(
-        fire(cards()[0], 'mousedown', { shiftKey: true }).defaultPrevented, true,
-        'shift-clicking cards would otherwise paint a text selection across the page',
-      );
-      assert.equal(
-        fire(cards()[0].querySelector('.ve-handle'), 'mousedown', { shiftKey: true }).defaultPrevented, false,
-        'the handle is never a selection target, so its press is left to the reorder gesture',
-      );
-      assert.equal(
-        fire(cards()[0], 'mousedown', {}).defaultPrevented, false,
-        'an unmodified mousedown is left alone entirely',
-      );
-    });
-
-    test('clicking the list outside a card clears the selection', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(q('#ve-list'));
-
-      assert.deepEqual(selected(), []);
-      assert.equal(bar().hidden, true);
-    });
-
-    test('the Clear button drops the selection', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(q('.ve-selection-clear'));
-
-      assert.deepEqual(selected(), []);
-    });
-
-    test('clicking a thumbnail or a path still does its own job, not selection', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0].querySelector('.ve-thumb'));
-      assert.deepEqual(selected(), [], 'the thumbnail opens the lightbox');
-
-      click(cards()[0].querySelector('.ve-path'));
-      assert.deepEqual(selected(), [], 'the path starts an inline rename');
-      assert.ok(cards()[0].querySelector('.ve-rename-input'));
-    });
-
-    test('the selection follows the node, not its index, across a re-render', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[1]);
-      assert.deepEqual(selected(), ['1'], 'b.jpg');
-
-      // A text card inserted above shifts every photo down one. An index-keyed
-      // selection would now be painting a.jpg.
-      click(q('.ve-insert-zone[data-insert-at="0"] .ve-insert-text'));
-
-      assert.deepEqual(selected(), ['2']);
-      assert.equal(nodes()[2].path, '/2024/08/b.jpg');
-    });
-
-    test('the selection survives a bare setProps re-render', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      page._visualEditorRef.setProps({ nodes: page._nodes });
-
-      assert.deepEqual(selected(), ['0']);
-      assert.equal(bar().hidden, false);
-    });
-
-    test('Make carousel folds the selection into one keyed carousel, in place', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[1]);
-      click(cards()[2], { shiftKey: true });
-      click(q('.ve-make-carousel'));
-
-      assert.deepEqual(nodes().map(n => n.type), ['image', 'carousel', 'text']);
-      assert.equal(nodes()[0].path, '/2024/08/a.jpg');
-      assert.deepEqual(nodes()[1].paths, ['/2024/08/b.jpg', '/2024/08/c.jpg']);
-      assert.match(nodes()[1].key, /^c-[0-9a-f]{4}$/, 'editor-made carousels are studio-addressable');
-      assert.deepEqual(selected(), [], 'the cards it named are gone');
-    });
-
-    test('one photo makes a legal one-slide carousel', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(q('.ve-make-carousel'));
-
-      assert.equal(nodes()[0].type, 'carousel');
-      assert.deepEqual(nodes()[0].paths, ['/2024/08/a.jpg']);
-    });
-
-    test('grouping a photo into a carousel keeps that block\'s key', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: `${carouselFence(['/2024/08/a.jpg'], 'c-7f3a')}\n\n/2024/08/b.jpg`,
-      });
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(cards()[1], { shiftKey: true });
-      click(q('.ve-make-carousel'));
-
-      assert.equal(nodes().length, 1);
-      assert.equal(nodes()[0].key, 'c-7f3a', 'the block keeps its design document');
-      assert.deepEqual(nodes()[0].paths, ['/2024/08/a.jpg', '/2024/08/b.jpg']);
-    });
-
-    test('a lone carousel is not offered Make carousel — it would do nothing', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: carouselFence(['/2024/08/a.jpg'], 'c-7f3a'),
-      });
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-
-      assert.deepEqual(selected(), ['0'], 'a carousel card is still selectable');
-      assert.equal(q('.ve-make-carousel').hidden, true);
-    });
-
-    test('the toast Undo restores the exact pre-group list', async () => {
-      await mountPage({ params: { id: '7' } });
-      const before = [...nodes()];
-
-      click(cards()[0]);
-      click(cards()[1], { shiftKey: true });
-      click(q('.ve-make-carousel'));
-      assert.equal(nodes().length, 3);
-      assert.match(getToast().message, /Carousel created from 2 photos/);
-
-      getToast().action.onAction();
-
-      assert.deepEqual(nodes(), before);
-      assert.deepEqual(selected(), [], 'and nothing is left picked');
-    });
-
-    test('Ungroup turns a carousel back into image cards, in order', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], 'c-7f3a'),
-      });
-      await mountPage({ params: { id: '7' } });
-
-      click(q('.ve-carousel-ungroup'));
-
-      assert.deepEqual(nodes(), [
-        { type: 'image', path: '/2024/08/a.jpg' },
-        { type: 'image', path: '/2024/08/b.jpg' },
-      ]);
-      assert.match(getToast().message, /Carousel ungrouped into 2 photos/);
-    });
-
-    test("Ungroup's Undo puts the carousel back with its key", async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: `/2024/08/z.jpg\n\n${carouselFence(['/2024/08/a.jpg'], 'c-7f3a')}`,
-      });
-      await mountPage({ params: { id: '7' } });
-      const before = [...nodes()];
-
-      click(q('.ve-carousel-ungroup'));
-      assert.deepEqual(nodes().map(n => n.type), ['image', 'image']);
-
-      getToast().action.onAction();
-
-      assert.deepEqual(nodes(), before);
-      assert.equal(nodes()[1].key, 'c-7f3a');
-    });
-
-    test('a grouped post saves as a well-formed keyed fence', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      click(cards()[0]);
-      click(cards()[1], { shiftKey: true });
-      click(q('.ve-make-carousel'));
-      await page._save();
-      await settle();
-
-      const { content } = sent('PUT', '/api/posts/7').at(-1).body;
-      const key = nodes()[0].key;
-      assert.ok(
-        content.startsWith(carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'], key)),
-        `fence not well formed:\n${content}`,
-      );
-    });
-  });
-
-  // ── Reordering ────────────────────────────────────────────────────────────
-
-  /**
-   * Card reordering, which is pointer-driven (utils/pointerReorder.js) rather
-   * than HTML5 drag-and-drop.
-   *
-   * linkedom has no layout engine, so every element reports a zero rect and the
-   * gesture's midpoint test is meaningless here. That is exactly why the
-   * arithmetic lives in _moveNode(fromIdx, afterIdx): the pointer path and the
-   * arrow keys both reduce to that pair, and the pair is assertable. What is
-   * tested by hand is the keyboard half — a real path from a key to a new
-   * order — plus _moveNode's ±1 directly.
-   */
-  describe('reordering cards', () => {
-    const PHOTOS = ['/2024/08/a.jpg', '/2024/08/b.jpg', '/2024/08/c.jpg'];
-
-    beforeEach(() => {
-      routes['GET /api/posts/7'] = () => ({ ...POST(), content: PHOTOS.join('\n\n') });
-    });
-
-    const cards = () => [...page.container.querySelectorAll('.ve-card')];
-    const order = () => page._nodes.map(n => n.path || n.type);
-    const ve = () => page._visualEditorRef;
-
-    test('nothing in the editor is draggable — the gesture is pointer events', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      assert.equal(
-        page.container.querySelector('#ve-list [draggable]'), null,
-        'a draggable attribute would put HTML5 DnD back alongside the pointer gesture',
-      );
-    });
-
-    test('the handle is a focusable button that says what it moves', async () => {
-      await mountPage({ params: { id: '7' } });
-      const handle = cards()[0].querySelector('.ve-handle');
-
-      assert.equal(handle.tagName, 'BUTTON');
-      assert.equal(handle.getAttribute('type'), 'button');
-      assert.equal(handle.getAttribute('aria-label'), 'Move a.jpg');
-    });
-
-    test('ArrowDown on a focused handle moves the card one place later', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      const e = fire(cards()[0].querySelector('.ve-handle'), 'keydown', { key: 'ArrowDown' });
-
-      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
-      assert.equal(e.defaultPrevented, true, 'the arrows would otherwise scroll the page');
-    });
-
-    test('ArrowUp moves it back, and focus follows the card it moved', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      // linkedom's `focus()` does not move `activeElement`, so record the calls
-      // instead — what matters is that the rebuilt handle gets one. Without it
-      // the second press of a repeated arrow would land on a dead node.
-      const proto = dom.window.HTMLElement.prototype;
-      const realFocus = proto.focus;
-      const focused = [];
-      proto.focus = function focusSpy() { focused.push(this); };
-      try {
-        fire(cards()[2].querySelector('.ve-handle'), 'keydown', { key: 'ArrowUp' });
-      } finally {
-        proto.focus = realFocus;
-      }
-
-      assert.deepEqual(order(), ['/2024/08/a.jpg', '/2024/08/c.jpg', '/2024/08/b.jpg']);
-      assert.equal(focused.at(-1), cards()[1].querySelector('.ve-handle'));
-    });
-
-    test('ArrowUp onto the front of the list works — there is no card to land behind', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      fire(cards()[1].querySelector('.ve-handle'), 'keydown', { key: 'ArrowUp' });
-
-      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
-    });
-
-    test('an arrow off either end of the list does nothing at all', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      const up = fire(cards()[0].querySelector('.ve-handle'), 'keydown', { key: 'ArrowUp' });
-      const down = fire(cards()[2].querySelector('.ve-handle'), 'keydown', { key: 'ArrowDown' });
-
-      assert.deepEqual(order(), PHOTOS);
-      assert.equal(up.defaultPrevented, false, 'a refused move leaves the key to the page');
-      assert.equal(down.defaultPrevented, false);
-    });
-
-    test('an arrow away from a handle is left alone — a text card is being typed in', async () => {
-      routes['GET /api/posts/7'] = () => ({ ...POST(), content: 'Caption line.\n\n/2024/08/a.jpg' });
-      await mountPage({ params: { id: '7' } });
-
-      const e = fire(page.container.querySelector('.ve-text-area'), 'keydown', { key: 'ArrowDown' });
-
-      assert.deepEqual(order(), ['text', '/2024/08/a.jpg']);
-      assert.equal(e.defaultPrevented, false);
-    });
-
-    test('_moveNode lands the node behind its anchor, forwards and backwards', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      // Forwards: the anchor sits behind the moved node, so splicing it out
-      // first slides the anchor down one — insert AT the anchor's old index.
-      ve()._moveNode(0, 2);
-      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
-
-      // Backwards: nothing behind the anchor moved, so insert after it.
-      ve()._moveNode(2, 0);
-      assert.deepEqual(order(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
-    });
-
-    test('_moveNode with a null anchor puts the node at the front', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      ve()._moveNode(2, null);
-
-      assert.deepEqual(order(), ['/2024/08/c.jpg', '/2024/08/a.jpg', '/2024/08/b.jpg']);
-    });
-
-    test('a move that changes nothing is not a change', async () => {
-      await mountPage({ params: { id: '7' } });
-      const before = page._nodes;
-
-      ve()._moveNode(1, 0);      // already directly behind a.jpg
-      ve()._moveNode(0, null);   // already at the front
-      ve()._moveNode(1, 1);      // released over itself, which names itself as anchor
-
-      assert.equal(page._nodes, before, 'an identical list would still cost an autosave');
-    });
-
-    test('_moveNode refuses an index that is not a card', async () => {
-      await mountPage({ params: { id: '7' } });
-      const before = page._nodes;
-
-      ve()._moveNode(null, 1);
-      ve()._moveNode(9, 0);
-
-      assert.equal(page._nodes, before);
-    });
-  });
-
-  /**
-   * Reordering a carousel card's own slides, within its strip. Same pointer
-   * gesture as card reordering, a second container and axis, and its own
-   * index arithmetic in _moveSlide(nodeIdx, fromIdx, afterIdx) — the strip's
-   * counterpart to _moveNode().
-   */
-  describe('reordering slides within a carousel', () => {
-    const SLIDES = ['/2024/08/a.jpg', '/2024/08/b.jpg', '/2024/08/c.jpg'];
-
-    beforeEach(() => {
-      routes['GET /api/posts/7'] = () => ({ ...POST(), content: carouselFence(SLIDES) });
-    });
-
-    const slides = () => [...page.container.querySelectorAll('.ve-slide')];
-    const paths = () => page._nodes[0].paths;
-    const ve = () => page._visualEditorRef;
-
-    test('.ve-thumb is not the reorder item selector, so the ambiguity cannot come back', async () => {
-      await mountPage({ params: { id: '7' } });
-      const before = page._nodes;
-      const thumb = slides()[0].querySelector('.ve-thumb');
-
-      assert.equal(thumb.dataset.index, undefined, 'only .ve-slide carries the position');
-
-      // A drop naming the thumb as the moved item — the exact ambiguity a
-      // shared .ve-thumb selector used to create — has no index to read and
-      // moves nothing.
-      ve()._onReorderDrop({
-        item: thumb,
-        from: page.container.querySelector('.ve-carousel-strip'),
-        to: page.container.querySelector('.ve-carousel-strip'),
-        afterEl: null,
-      });
-
-      assert.equal(page._nodes, before);
-    });
-
-    test('the slide handle is a focusable button that says what it moves', async () => {
-      await mountPage({ params: { id: '7' } });
-      const handle = slides()[0].querySelector('.ve-slide-handle');
-
-      assert.equal(handle.tagName, 'BUTTON');
-      assert.equal(handle.getAttribute('type'), 'button');
-      assert.equal(handle.getAttribute('aria-label'), 'Move slide 1 of 3');
-    });
-
-    test('ArrowRight on a focused slide handle moves it one place later', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      const e = fire(slides()[0].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowRight' });
-
-      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
-      assert.equal(e.defaultPrevented, true, 'the arrows would otherwise scroll the strip');
-    });
-
-    test('ArrowLeft moves it back, and focus follows the slide it moved', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      const proto = dom.window.HTMLElement.prototype;
-      const realFocus = proto.focus;
-      const focused = [];
-      proto.focus = function focusSpy() { focused.push(this); };
-      try {
-        fire(slides()[2].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowLeft' });
-      } finally {
-        proto.focus = realFocus;
-      }
-
-      assert.deepEqual(paths(), ['/2024/08/a.jpg', '/2024/08/c.jpg', '/2024/08/b.jpg']);
-      assert.equal(focused.at(-1), slides()[1].querySelector('.ve-slide-handle'));
-    });
-
-    test('ArrowLeft onto the front of the strip works — there is no slide to land behind', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      fire(slides()[1].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowLeft' });
-
-      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
-    });
-
-    test('an arrow off either end of the strip does nothing at all', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      const left = fire(slides()[0].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowLeft' });
-      const right = fire(slides()[2].querySelector('.ve-slide-handle'), 'keydown', { key: 'ArrowRight' });
-
-      assert.deepEqual(paths(), SLIDES);
-      assert.equal(left.defaultPrevented, false, 'a refused move leaves the key to the page');
-      assert.equal(right.defaultPrevented, false);
-    });
-
-    test('the drop handler, given a synthetic drop within the same strip, reorders the paths', async () => {
-      await mountPage({ params: { id: '7' } });
-      const strip = page.container.querySelector('.ve-carousel-strip');
-
-      ve()._onReorderDrop({ item: slides()[0], from: strip, to: strip, afterEl: slides()[2] });
-
-      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
-    });
-
-    test('the drop handler moves a slide dropped into the list out of its carousel', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: [carouselFence(SLIDES), '/2024/08/z.jpg'].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const strip = page.container.querySelector('.ve-carousel-strip');
-      const list = page.container.querySelector('#ve-list');
-
-      ve()._onReorderDrop({ item: slides()[0], from: strip, to: list, afterEl: null });
-
-      assert.deepEqual(
-        page._nodes.map(n => (n.type === 'carousel' ? n.paths : n.path)),
-        ['/2024/08/a.jpg', ['/2024/08/b.jpg', '/2024/08/c.jpg'], '/2024/08/z.jpg'],
-        'the slide became a loose image at the front, and the carousel kept the rest',
-      );
-    });
-
-    test('the drop handler collapses a carousel whose last slide leaves for the list', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: [carouselFence(['/2024/08/a.jpg']), '/2024/08/z.jpg'].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const strip = page.container.querySelector('.ve-carousel-strip');
-      const list = page.container.querySelector('#ve-list');
-      const order = () => page._nodes.map(n => n.path || n.type);
-
-      ve()._onReorderDrop({ item: slides()[0], from: strip, to: list, afterEl: null });
-
-      assert.deepEqual(order(), ['/2024/08/a.jpg', '/2024/08/z.jpg'], 'no empty carousel card is left behind');
-    });
-
-    test('_moveSlide lands the slide behind its anchor, forwards and backwards', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      ve()._moveSlide(0, 0, 2);
-      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/c.jpg', '/2024/08/a.jpg']);
-
-      ve()._moveSlide(0, 2, 0);
-      assert.deepEqual(paths(), ['/2024/08/b.jpg', '/2024/08/a.jpg', '/2024/08/c.jpg']);
-    });
-
-    test('_moveSlide with a null anchor puts the slide at the front', async () => {
-      await mountPage({ params: { id: '7' } });
-
-      ve()._moveSlide(0, 2, null);
-
-      assert.deepEqual(paths(), ['/2024/08/c.jpg', '/2024/08/a.jpg', '/2024/08/b.jpg']);
-    });
-
-    test('a move that changes nothing is not a change', async () => {
-      await mountPage({ params: { id: '7' } });
-      const before = page._nodes;
-
-      ve()._moveSlide(0, 1, 0);   // already directly behind a.jpg
-      ve()._moveSlide(0, 0, null); // already at the front
-      ve()._moveSlide(0, 1, 1);   // released over itself
-
-      assert.equal(page._nodes, before, 'an identical list would still cost an autosave');
-    });
-
-    test('_moveSlide refuses an index that is not a slide, or a node that is not a carousel', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: [carouselFence(SLIDES), '/2024/08/d.jpg'].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const before = page._nodes;
-
-      ve()._moveSlide(0, null, 1);
-      ve()._moveSlide(0, 9, 0);
-      ve()._moveSlide(1, 0, null); // node 1 is the plain image card, not a carousel
-
-      assert.equal(page._nodes, before);
-    });
-  });
-
-  /**
-   * Crossing the boundary between the top-level list and a carousel's strip:
-   * a photo dragged in, a slide dragged out, a slide dragged into a different
-   * carousel. Each is one onChange() call, built out of A1's node operations
-   * (insertPathIntoCarousel, removePathFromCarousel) rather than duplicating
-   * their arithmetic here.
-   */
-  describe('dragging photos in and out of a carousel', () => {
-    const ve = () => page._visualEditorRef;
-    const nodeShapes = () => page._nodes.map(n => (n.type === 'carousel' ? n.paths : n.path || n.type));
-
-    test('a photo dropped into a strip joins that carousel, and leaves the list', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: ['/2024/08/x.jpg', carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg'])].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const card = page.container.querySelector('.ve-card:not(.ve-card--carousel)');
-      const strip = page.container.querySelector('.ve-carousel-strip');
-      const firstSlide = strip.querySelector('.ve-slide');
-
-      ve()._onReorderDrop({ item: card, from: page.container.querySelector('#ve-list'), to: strip, afterEl: firstSlide });
-
-      assert.deepEqual(
-        nodeShapes(),
-        [['/2024/08/a.jpg', '/2024/08/x.jpg', '/2024/08/b.jpg']],
-        'the photo left the list and landed behind the slide it was dropped on',
-      );
-    });
-
-    test('a text card dropped into a strip is refused — only a photo can join a carousel', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: ['Caption line.', carouselFence(['/2024/08/a.jpg'])].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const before = page._nodes;
-      const card = page.container.querySelector('.ve-card--text');
-      const strip = page.container.querySelector('.ve-carousel-strip');
-
-      ve()._onReorderDrop({ item: card, from: page.container.querySelector('#ve-list'), to: strip, afterEl: null });
-
-      assert.equal(page._nodes, before);
-    });
-
-    test('a slide dragged into a different carousel moves between them', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: [
-          carouselFence(['/2024/08/a.jpg', '/2024/08/b.jpg']),
-          carouselFence(['/2024/08/c.jpg']),
-        ].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const strips = [...page.container.querySelectorAll('.ve-carousel-strip')];
-      const firstSlide = strips[0].querySelector('.ve-slide');
-
-      ve()._onReorderDrop({ item: firstSlide, from: strips[0], to: strips[1], afterEl: null });
-
-      assert.deepEqual(
-        nodeShapes(),
-        [['/2024/08/b.jpg'], ['/2024/08/a.jpg', '/2024/08/c.jpg']],
-        'the slide left the first carousel and landed at the front of the second',
-      );
-    });
-
-    test('the last slide crossing into another carousel collapses its old one', async () => {
-      routes['GET /api/posts/7'] = () => ({
-        ...POST(),
-        content: [
-          carouselFence(['/2024/08/a.jpg']),
-          carouselFence(['/2024/08/c.jpg']),
-        ].join('\n\n'),
-      });
-      await mountPage({ params: { id: '7' } });
-      const strips = [...page.container.querySelectorAll('.ve-carousel-strip')];
-      const firstSlide = strips[0].querySelector('.ve-slide');
-
-      ve()._onReorderDrop({ item: firstSlide, from: strips[0], to: strips[1], afterEl: null });
-
-      assert.deepEqual(nodeShapes(), [['/2024/08/a.jpg', '/2024/08/c.jpg']]);
     });
   });
 
@@ -1485,6 +666,93 @@ describe('PostEditPage (mounted)', () => {
 
       await assert.rejects(() => page._handleRename('/2024/08/gone.jpg', 'x.jpg'));
       assert.equal(getToast().type, 'error');
+    });
+  });
+
+  // ── Reordering cards (HTML5 drag and drop) ────────────────────────────────
+
+  describe('reordering cards in the visual editor', () => {
+    /**
+     * linkedom lays nothing out, so each card gets a 100px row: card i spans
+     * top = 100 * i. The drop slot comes from these rects and the event's
+     * clientY, as it does in a browser.
+     */
+    function cardsInRows() {
+      const cards = [...page.container.querySelectorAll('#ve-list .ve-card')];
+      cards.forEach((card, i) => {
+        card.getBoundingClientRect = () =>
+          ({ top: 100 * i, height: 100, bottom: 100 * i + 100, left: 0, right: 0, width: 0 });
+      });
+      return cards;
+    }
+    const dataTransfer = () => ({ effectAllowed: '', dropEffect: '' });
+
+    test('a card dragged by its handle below the last card moves to the end', async () => {
+      await mountPage({ params: { id: '7' } });
+      assert.deepEqual(page._nodes.map(n => n.type), ['image', 'text']);
+      const [image] = cardsInRows();
+      const list = q('#ve-list');
+
+      fire(image.querySelector('.ve-handle'), 'mousedown');
+      assert.equal(image.getAttribute('draggable'), 'true');
+      fire(image, 'dragstart', { dataTransfer: dataTransfer() });
+      assert.ok(image.classList.contains('dragging'));
+
+      fire(list, 'dragover', { clientY: 250, dataTransfer: dataTransfer() });
+      assert.ok(q('.ve-drop-indicator'), 'a drop line shows where the card lands');
+
+      fire(list, 'drop', { clientY: 250, dataTransfer: dataTransfer() });
+
+      assert.deepEqual(page._nodes.map(n => n.type), ['text', 'image']);
+      assert.equal(q('.ve-drop-indicator'), null);
+    });
+
+    test('a card dragged above the first card moves to the top', async () => {
+      await mountPage({ params: { id: '7' } });
+      const [, text] = cardsInRows();
+      const list = q('#ve-list');
+
+      fire(text.querySelector('.ve-handle'), 'mousedown');
+      fire(text, 'dragstart', { dataTransfer: dataTransfer() });
+      fire(list, 'dragover', { clientY: -10, dataTransfer: dataTransfer() });
+      fire(list, 'drop', { clientY: -10, dataTransfer: dataTransfer() });
+
+      assert.deepEqual(page._nodes.map(n => n.type), ['text', 'image']);
+    });
+
+    test('the drop line follows the pointer, and leaving the list removes it', async () => {
+      await mountPage({ params: { id: '7' } });
+      const [image, text] = cardsInRows();
+      const list = q('#ve-list');
+
+      fire(image.querySelector('.ve-handle'), 'mousedown');
+      fire(image, 'dragstart', { dataTransfer: dataTransfer() });
+
+      fire(list, 'dragover', { clientY: 120, dataTransfer: dataTransfer() });
+      assert.equal(q('.ve-drop-indicator')?.nextElementSibling, text,
+        'between the two cards, the line sits in front of the second');
+
+      fire(list, 'dragleave', { relatedTarget: dom.document.body });
+      assert.equal(q('.ve-drop-indicator'), null);
+
+      fire(image, 'dragend');
+      assert.equal(image.getAttribute('draggable'), null);
+      assert.ok(!image.classList.contains('dragging'));
+      assert.deepEqual(page._nodes.map(n => n.type), ['image', 'text'], 'no drop, no move');
+    });
+
+    test('a drag that does not start on the handle moves nothing', async () => {
+      await mountPage({ params: { id: '7' } });
+      const [image] = cardsInRows();
+      const list = q('#ve-list');
+
+      fire(image.querySelector('.ve-path'), 'mousedown');
+      fire(image, 'dragstart', { dataTransfer: dataTransfer() });
+      const over = fire(list, 'dragover', { clientY: 250, dataTransfer: dataTransfer() });
+      fire(list, 'drop', { clientY: 250, dataTransfer: dataTransfer() });
+
+      assert.equal(over.defaultPrevented, false, 'the list does not accept the drop');
+      assert.deepEqual(page._nodes.map(n => n.type), ['image', 'text']);
     });
   });
 

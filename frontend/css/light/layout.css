@@ -430,41 +430,6 @@ body:has(.light-layout) {
     min-width: 0;
 }
 
-.header-breadcrumbs {
-    display: flex;
-    align-items: baseline;
-    gap: var(--spacing-xs);
-    overflow: hidden;
-}
-
-.breadcrumb-link {
-    color: var(--text-muted);
-    text-decoration: none;
-    font-weight: 400;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    max-width: 16rem;
-}
-
-.breadcrumb-link:hover {
-    color: var(--text-primary);
-    text-decoration: underline;
-}
-
-.breadcrumb-sep {
-    color: var(--text-muted);
-    flex-shrink: 0;
-}
-
-.breadcrumb-current {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
-
 .header-actions {
     display: flex;
     gap: var(--spacing-sm);
@@ -532,36 +497,6 @@ body:has(.light-layout) {
 .posts-list-main .light-content .filters,
 .posts-list-main .light-content #pagination-mount {
     flex-shrink: 0;
-}
-
-/* Carousel Studio: fixed-viewport layout at 48em+, or on any coarse pointer —
-   the studio's own three rows (toolbar/body/tray, carousel.css) fill the space
-   and scroll individually; the document itself does not. The comma is an OR,
-   and the second half is the touch layout (`TOUCH_LAYOUT`, carousel
-   studio/layout.js): a phone gets the fixed shell, because the touch layout
-   docks its controls on the bottom edge and a dock needs an edge to sit on.
-   This is where the studio parts from .media-page-main (light/media.css),
-   which is still tablet+ only. Keep this query identical to the
-   "studio owns the viewport" block in carousel.css — the two halves of one
-   layout. `flex: 0 0 auto` + `min-height: 0` clear the flex-item defaults that
-   otherwise make a height on .light-main inert — see .posts-list-main above
-   for the full note. */
-@media (min-width: 48em), (pointer: coarse) {
-    .carousel-studio-main {
-        flex: 0 0 auto;
-        min-height: 0;
-        /* lvh, not dvh — see .light-layout. */
-        height: 100vh;
-        height: 100lvh;
-        overflow: hidden;
-    }
-
-    .carousel-studio-main .light-content {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        min-height: 0;
-    }
 }
 
 /* Post list navigation arrows. Position only — visibility (including the

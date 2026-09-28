@@ -215,26 +215,6 @@ func registerPluginRoutes(e *echo.Echo, h *api.PluginsHandler, svcs *AppServices
 	pluginsGroup.PATCH("/:id", h.TogglePlugin, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 }
 
-// registerCarouselRoutes mounts the carousel plugin's document API and its
-// template store. The row address rides in ?post=<id>&block=<key> on every
-// document verb — one document per carousel block, so a post may hold several —
-// while the template routes take the slug in the path instead. RequirePlugin
-// runs before auth, so a disabled plugin 404s exactly like a route that was
-// never registered instead of falling through to the SPA shell.
-func registerCarouselRoutes(e *echo.Echo, h *api.CarouselHandler, svcs *AppServices) {
-	g := e.Group("/api/carousel",
-		api.RequirePlugin(svcs.Settings, "carousel"),
-		api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	g.GET("", h.GetCarousel)
-	g.PUT("", h.SaveCarousel)
-	g.DELETE("", h.DeleteCarousel)
-	// Templates belong to no post: the slug rides in the path instead.
-	g.GET("/templates", h.ListCarouselTemplates)
-	g.POST("/templates", h.SaveCarouselTemplate)
-	g.GET("/templates/:slug", h.GetCarouselTemplate)
-	g.DELETE("/templates/:slug", h.DeleteCarouselTemplate)
-}
-
 func registerInstagramRoutes(e *echo.Echo, h *api.InstagramHandler, svcs *AppServices) {
 	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "instagram"))
 	igGroup.GET("/connect", h.Connect)

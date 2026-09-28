@@ -103,12 +103,6 @@ SELECT p.*
 FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1;
 
--- name: ListPostIDsAndContent :many
--- Every post's id and content, deleted or not: a trashed post can still be
--- restored, so its fences stay live for the orphan-carousel sweep.
-SELECT id, content FROM posts
-ORDER BY id;
-
 -- name: CreatePost :one
 INSERT INTO posts (
     title, slug, content, excerpt, formatter, status, type, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
@@ -472,70 +466,6 @@ SELECT
     (SELECT id FROM posts WHERE deleted_at IS NULL AND status = 'published' ORDER BY view_count DESC LIMIT 1) as most_viewed_post_id
 FROM posts
 WHERE deleted_at IS NULL AND status = 'published';
-
--- CAROUSELS
--- One Carousel Studio document per carousel block, keyed (post_id, block_key):
--- a post may hold several independent carousels. doc is opaque JSON, stored and
--- returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
---
--- ListCarouselsByPostID names its columns and omits doc for the same reason
--- ListCarouselTemplates does: the caller wants to know which of a post's blocks
--- have a stored document, not to load every document to find out. Ordered by id,
--- so its first row is the post's oldest carousel -- which is what an unkeyed
--- request resolves to.
-
--- name: GetCarouselByBlockKey :one
-SELECT * FROM carousels
-WHERE post_id = ? AND block_key = ? LIMIT 1;
-
--- name: ListCarouselsByPostID :many
-SELECT block_key, created_at, updated_at FROM carousels
-WHERE post_id = ?
-ORDER BY id;
-
--- name: UpsertCarousel :one
-INSERT INTO carousels (post_id, block_key, doc, created_at, updated_at)
-VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT(post_id, block_key) DO UPDATE SET doc = excluded.doc, updated_at = CURRENT_TIMESTAMP
-RETURNING *;
-
--- name: DeleteCarouselByBlockKey :exec
-DELETE FROM carousels
-WHERE post_id = ? AND block_key = ?;
-
--- name: ListAllCarouselBlockKeys :many
--- Every stored carousel's address, for the orphan sweep to check against each
--- post's own content: a row whose (post_id, block_key) matches no fence there
--- is orphaned (see api/cmd/api/orphansweep.go).
-SELECT post_id, block_key FROM carousels
-ORDER BY post_id, block_key;
-
--- CAROUSEL TEMPLATES
--- A reusable carousel envelope, keyed by slug. doc is the same opaque JSON as
--- carousels.doc. ListCarouselTemplates deliberately names its columns and
--- omits doc: a template inlines its assets as data: URLs, so SELECT * here
--- would pull every asset of every template to draw a list of names.
-
--- name: ListCarouselTemplates :many
-SELECT slug, name, created_at FROM carousel_templates
-ORDER BY name;
-
--- name: GetCarouselTemplateBySlug :one
-SELECT * FROM carousel_templates
-WHERE slug = ? LIMIT 1;
-
--- name: UpsertCarouselTemplate :one
-INSERT INTO carousel_templates (slug, name, doc, created_at, updated_at)
-VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT(slug) DO UPDATE SET
-    name = excluded.name,
-    doc = excluded.doc,
-    updated_at = CURRENT_TIMESTAMP
-RETURNING *;
-
--- name: DeleteCarouselTemplate :exec
-DELETE FROM carousel_templates
-WHERE slug = ?;
 
 -- Queries for sqlc. Every entry here becomes a method on *models.Queries, which
 -- is embedded in sqliteRepository, so a name added here is also a name added to
