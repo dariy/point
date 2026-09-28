@@ -57,6 +57,18 @@ func (s *SchedulerService) WithMetrics(m *metrics.Registry) *SchedulerService {
 func (s *SchedulerService) Start(ctx context.Context) {
 	slog.Info("starting background scheduler")
 
+	// One-time task: drop variants cut before decode applied EXIF orientation.
+	go func() {
+		if s.mediaService == nil {
+			return
+		}
+		if n, err := s.mediaService.PurgeOrientedVariants(ctx); err != nil {
+			slog.Warn("orientation fix: variant purge failed", "error", err)
+		} else if n > 0 {
+			slog.Info("orientation fix: purged variants of rotated images", "media", n)
+		}
+	}()
+
 	// Hourly task: Session cleanup
 	go s.runHourly(ctx, "session cleanup", s.authService.CleanupExpiredSessions)
 
