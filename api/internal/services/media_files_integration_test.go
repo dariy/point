@@ -1290,3 +1290,22 @@ func TestPurgeOrientedVariants_RunsOnce(t *testing.T) {
 		t.Errorf("second purge = %d, %v; want 0, nil", n, err)
 	}
 }
+
+// The scheduler's start-up hook runs the purge and tolerates a missing media
+// service.
+func TestScheduler_PurgeOrientedVariants(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+	if _, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 8),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	}); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	(&SchedulerService{mediaService: svc}).purgeOrientedVariants(ctx)
+	if n, _ := svc.PurgeOrientedVariants(ctx); n != 0 {
+		t.Errorf("purge ran again after the scheduler hook: %d", n)
+	}
+	(&SchedulerService{}).purgeOrientedVariants(ctx)
+}
