@@ -1269,7 +1269,7 @@ func (s *MediaService) PurgeOrientedVariants(ctx context.Context) (int, error) {
 	}
 	affected := 0
 	for offset := int64(0); ; offset += mediaScanPage {
-		rows, err := s.repo.ListMediaFiltered(ctx, "image", "", mediaScanPage, offset)
+		rows, err := s.repo.ListMediaFiltered(ctx, "image", "", "", mediaScanPage, offset)
 		if err != nil {
 			return affected, err
 		}
