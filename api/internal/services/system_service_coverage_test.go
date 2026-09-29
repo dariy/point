@@ -2,6 +2,7 @@ package services
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -62,11 +63,20 @@ func TestCleanupPartialBackups_MissingDir(t *testing.T) {
 	s.CleanupPartialBackups()
 }
 
+// TestAddFileToTar_MissingSource: a vanished source is skipped (ok=false) with
+// no error and no header written, so the archive stays valid.
 func TestAddFileToTar_MissingSource(t *testing.T) {
-	tw := tar.NewWriter(io.Discard)
-	defer func() { _ = tw.Close() }()
-	if err := addFileToTar(tw, filepath.Join(t.TempDir(), "does-not-exist"), "x"); err == nil {
-		t.Fatal("addFileToTar with a missing source should error")
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	ok, err := addFileToTar(tw, filepath.Join(t.TempDir(), "does-not-exist"), "x")
+	if err != nil || ok {
+		t.Fatalf("addFileToTar(missing) = %v, %v; want false, nil", ok, err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("archive broken after a skip: %v", err)
+	}
+	if _, err := tar.NewReader(&buf).Next(); err != io.EOF {
+		t.Fatalf("want an empty archive, got err=%v", err)
 	}
 }
 
@@ -161,7 +171,7 @@ func TestValidateArchive_MissingFile(t *testing.T) {
 func TestCreateTarGz_UnwritableDest(t *testing.T) {
 	s := NewSystemService(nil, t.TempDir(), "")
 	dest := filepath.Join(t.TempDir(), "no-such-dir", "out.tar.gz")
-	if _, err := s.createTarGz(context.Background(), dest); err == nil {
+	if _, _, err := s.createTarGz(context.Background(), dest); err == nil {
 		t.Fatal("createTarGz to an uncreatable path should error")
 	}
 }
