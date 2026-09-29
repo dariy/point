@@ -239,7 +239,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	// one who pays for it. A failure is not fatal: the media route regenerates
 	// any missing rung on request.
 	if decoded != nil {
-		if err := s.writeLadder(ctx, originalRelPath, decoded, ""); err != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(p.Content), ""); err != nil {
 			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
 		}
 	}
@@ -377,7 +377,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	// Same eager ladder as UploadFile, off the decode already done above.
 	if decoded != nil {
-		if err := s.writeLadder(ctx, originalRelPath, decoded, ""); err != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(content), ""); err != nil {
 			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
 		}
 	}
@@ -1102,7 +1102,7 @@ func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull st
 	if err != nil {
 		return nil, err
 	}
-	return src, s.writeLadder(ctx, originalPath, src, srcFull)
+	return src, s.writeLadder(ctx, originalPath, src, extractICC(data), srcFull)
 }
 
 // backfillDimensions stores the decoded size on an image row that has none.
@@ -1128,7 +1128,10 @@ func (s *MediaService) backfillDimensions(ctx context.Context, media models.Medi
 // srcFull is the source's path for the freshness check; pass "" when the
 // source has no settled file yet (an upload writes its original after this
 // runs) to write every rung unconditionally.
-func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, srcFull string) error {
+//
+// icc is the source's ICC profile from extractICC, or nil. Every rung carries
+// it, so a Display P3 or Adobe RGB photo keeps its colour in grids and cards.
+func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, icc []byte, srcFull string) error {
 	bounds := src.Bounds()
 	longest := maxInt(bounds.Dx(), bounds.Dy())
 	quality := imaging.JPEGQuality(s.jpegQuality(ctx))
@@ -1152,7 +1155,7 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 			fail(err)
 			continue
 		}
-		if err := imaging.Save(imaging.Fit(src, size, size, imaging.Lanczos), full, quality); err != nil {
+		if err := saveJPEGWithICC(imaging.Fit(src, size, size, imaging.Lanczos), full, icc, quality); err != nil {
 			fail(err)
 		}
 	}
