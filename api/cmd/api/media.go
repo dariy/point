@@ -5,6 +5,7 @@ package main
 // registered in routes.go.
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"mime"
@@ -148,6 +149,16 @@ const publicVariantCacheControl = "public, max-age=86400, s-maxage=31536000"
 // own cache key and misses to the origin — which is a rate-limiting problem,
 // not a caching one.
 const notFoundCacheControl = "public, max-age=30, s-maxage=60"
+
+// stripGPS reports whether served originals must carry no GPS position. The
+// setting is on when its row is absent.
+func stripGPS(ctx context.Context, settings *services.SettingsService) bool {
+	if settings == nil {
+		return true
+	}
+	v, err := settings.GetSetting(ctx, services.StripGPSPublicSetting, "true")
+	return err != nil || v != "false"
+}
 
 // serveSimplifiedMedia handles /YYYY/MM/filename for media files.
 //
@@ -296,6 +307,21 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 		if _, err := os.Stat(origFile); err == nil {
 			neutralizeSVG(c, origFile)
 
+			// The GPS rule does not depend on the requester, so a shared cache
+			// holds one version of the URL. A copy that cannot be written is
+			// not a reason to serve the position: fail closed.
+			if stripGPS(ctx, settings) {
+				noGPS, stripErr := mediaSvc.NoGPSOriginal(ctx, media)
+				if stripErr != nil {
+					log.Printf("strip GPS from %s: %v", media.OriginalPath, stripErr)
+					c.Response().Header().Set("Cache-Control", notFoundCacheControl)
+					return echo.NewHTTPError(http.StatusInternalServerError, "media unavailable")
+				}
+				if noGPS != "" {
+					return c.File(noGPS)
+				}
+			}
+
 			s3Enabled := c.Request().Header.Get("X-Point-Direct-S3") == "1"
 			if s3Enabled && s3Presigner != nil {
 				relPath, err := filepath.Rel(storagePath, origFile)
@@ -329,6 +355,12 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 				// Security: double-check the globbed file prefix.
 				if strings.HasPrefix(matchFile, filepath.Join(storagePath, "media", "originals")) {
 					neutralizeSVG(c, matchFile)
+					if stripGPS(ctx, settings) && strings.EqualFold(media.MimeType, "image/jpeg") {
+						// The record names another file than the one found, so
+						// no GPS-free copy maps to it. Do not serve the position.
+						c.Response().Header().Set("Cache-Control", notFoundCacheControl)
+						return echo.NewHTTPError(http.StatusNotFound, "media not found")
+					}
 					return c.File(matchFile)
 				}
 			}
