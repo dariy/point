@@ -82,8 +82,18 @@ Gotchas from production:
   `GetPostByID`, the preview-token route) passes it through `posts.go::guestMediaMetadata`:
   with `exif_visibility` at `all` a guest gets only the six keys the viewer shows
   (`EXIF_FIELDS` in `frontend/src/utils/exif.js`); with `hide` or `admin` a guest gets no
-  `metadata`. An authenticated response keeps the full blob. The GPS in the bytes of the
-  original is a separate issue.
+  `metadata`. An authenticated response keeps the full blob.
+- **Served originals carry no GPS by default.** With `strip_gps_public` on (the default;
+  Settings → Display), the media route serves an original JPEG from a copy with an empty
+  GPS IFD and with the `exif:GPS*` properties of its XMP packets blanked
+  (`services/gps_strip.go::NoGPSOriginal`). The copy is cleaned in place and keeps every
+  byte offset, so the gain map of an Ultra HDR photo survives and is cleaned too. The copy lives under
+  `media/variants/nogps/`, is written on the first request and again when the original is
+  newer. The original on disk does not change. The rule applies to every requester, so a
+  shared cache holds one version of each URL, and a JPEG original is never presigned to
+  S3 while the rule is on. If the copy cannot be written, the route returns an error and
+  does not serve the original. Only JPEG is stripped today: PNG, WebP, HEIC, TIFF and raw
+  originals, and video, are served unchanged. Thumbnail variants carry no metadata.
 - **The engine names no CDN.** Cache headers are written for shared caches in general;
   which one sits in front of a deployment is the operator's business, not the engine's.
 - SVG uploads are currently allowlisted but served unsanitized same-origin — open

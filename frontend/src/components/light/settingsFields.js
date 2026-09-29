@@ -42,6 +42,7 @@ export const LABEL_OVERRIDES = {
   remark_email_from: "Login email sender address",
   remark_telegram_token: "Telegram Bot Token",
   remark_telegram_chan: "Telegram Channel ID",
+  strip_gps_public: "Remove GPS from served originals",
 };
 
 export const NUMERIC_KEYS = new Set([
@@ -74,6 +75,8 @@ export const DEFAULT_ON_KEYS = new Set([
   "remark_smtp_tls",
   // The header treats an absent show_title_dropdown as on (SiteCrumb).
   "show_title_dropdown",
+  // The media route reads an absent strip_gps_public as on (stripGPS).
+  "strip_gps_public",
 ]);
 
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
@@ -84,7 +87,8 @@ export function isToggleKey(key) {
     key.includes("_anon") ||
     key.includes("_tls") ||
     key === "remark_simple_view" ||
-    key === "remark_no_footer"
+    key === "remark_no_footer" ||
+    key === "strip_gps_public"
   );
 }
 

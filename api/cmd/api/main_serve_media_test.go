@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -840,5 +841,99 @@ func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
 	}
 	if !strings.Contains(presignedURL, filename) {
 		t.Errorf("presigned URL should contain filename, got %s", presignedURL)
+	}
+}
+
+// geotagOriginal inserts an XMP packet with a GPS position into the JPEG at p,
+// marks its media row as a JPEG, and returns the new file bytes.
+func geotagOriginal(t *testing.T, repo repository.Repository, p, origPath string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte("http://ns.adobe.com/xap/1.0/\x00" +
+		`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description exif:GPSLatitude="47,1.5N"/></rdf:RDF></x:xmpmeta>`)
+	n := len(payload) + 2
+	out := append([]byte{}, b[:2]...)
+	out = append(out, 0xFF, 0xE1, byte(n>>8), byte(n))
+	out = append(out, payload...)
+	out = append(out, b[2:]...)
+	if err := os.WriteFile(p, out, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DB().Exec(`UPDATE media SET mime_type='image/jpeg' WHERE original_path=?`, origPath); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestServeSimplifiedMedia_OriginalWithoutGPS(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	orig := geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "exif:GPS") {
+		t.Error("served original carries GPS")
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("Cache-Control = %q, want %q", cc, immutableCacheControl)
+	}
+	if after, _ := os.ReadFile(p); !bytes.Equal(after, orig) {
+		t.Error("the original on disk changed")
+	}
+
+	// An authenticated request gets the same bytes: shared caches hold one
+	// version of the URL.
+	auth := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", true)
+	if !bytes.Equal(auth.Body.Bytes(), rec.Body.Bytes()) {
+		t.Error("authenticated response differs from the guest response")
+	}
+}
+
+func TestServeSimplifiedMedia_OriginalGPSSettingOff(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	orig := geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+	if err := services.NewSettingsService(repo).SetSetting(context.Background(), services.StripGPSPublicSetting, "false", "string"); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), orig) {
+		t.Error("with the setting off, the route must serve the original bytes")
+	}
+}
+
+// A copy that cannot be written is an error, never the original's GPS.
+func TestServeSimplifiedMedia_OriginalGPSCopyFails(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+	if err := os.WriteFile(filepath.Join(storage, "media", services.VariantsRoot), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "exif:GPS") {
+		t.Error("served the original's GPS")
+	}
+}
+
+func TestStripGPS_NilSettings(t *testing.T) {
+	if !stripGPS(context.Background(), nil) {
+		t.Error("nil settings must mean on")
 	}
 }
