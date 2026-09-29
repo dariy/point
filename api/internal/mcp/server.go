@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,6 +92,10 @@ func Register(e *echo.Echo, d Deps) {
 			return err == nil
 		},
 	})
+	// A credential change must reach the memory tier too, not only the rows.
+	if d.Auth != nil {
+		d.Auth.SetOAuthRevoker(provider.RevokeAll)
+	}
 	oauthMux := http.NewServeMux()
 	provider.Register(oauthMux)
 	oauthH := echo.WrapHandler(oauthMux)
@@ -119,6 +125,12 @@ func Register(e *echo.Echo, d Deps) {
 	e.GET("/oauth/authorize", oauthH, gate)
 	e.POST("/oauth/authorize", oauthH, gate, oauthLoginLimiter)
 	e.POST("/oauth/token", oauthH, gate)
+
+	if d.Repo != nil {
+		owner := []echo.MiddlewareFunc{api.AuthMiddleware(d.Auth, d.ApiKey), api.SessionOnlyMiddleware, gate}
+		e.GET("/api/auth/oauth-clients", d.listOAuthClients, owner...)
+		e.DELETE("/api/auth/oauth-clients/:id", revokeOAuthClient(provider), owner...)
+	}
 
 	// One server is built per session; strip request-context cancellation (the
 	// `initialize` request is done by the time a `tools/call` runs) while keeping
@@ -185,4 +197,55 @@ func (d Deps) authMiddleware(provider *oauth.Provider) echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// oauthClientResponse is one connected app in the API Keys panel. The redirect
+// hosts name where the app sends its authorization codes.
+type oauthClientResponse struct {
+	ClientID      string    `json:"client_id"`
+	RedirectHosts []string  `json:"redirect_hosts"`
+	RegisteredAt  time.Time `json:"registered_at"`
+	LiveTokens    int       `json:"live_tokens"`
+}
+
+// listOAuthClients answers GET /api/auth/oauth-clients.
+func (d Deps) listOAuthClients(c echo.Context) error {
+	clients, err := d.Repo.ListOAuthClients(c.Request().Context(), time.Now())
+	if err != nil {
+		return err
+	}
+	out := make([]oauthClientResponse, 0, len(clients))
+	for _, cl := range clients {
+		hosts := []string{}
+		for _, u := range cl.RedirectURIs {
+			if h := redirectHost(u); h != "" && !slices.Contains(hosts, h) {
+				hosts = append(hosts, h)
+			}
+		}
+		out = append(out, oauthClientResponse{
+			ClientID: cl.ClientID, RedirectHosts: hosts,
+			RegisteredAt: cl.RegisteredAt, LiveTokens: cl.LiveTokens,
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"clients": out})
+}
+
+// revokeOAuthClient answers DELETE /api/auth/oauth-clients/:id. The provider
+// clears its memory tier and the Store together, so the revoke is immediate.
+func revokeOAuthClient(provider *oauth.Provider) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if err := provider.RevokeClient(c.Request().Context(), c.Param("id")); err != nil {
+			return err
+		}
+		return c.NoContent(http.StatusNoContent)
+	}
+}
+
+// redirectHost returns the host of a redirect URI, or "" when it does not parse.
+func redirectHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }

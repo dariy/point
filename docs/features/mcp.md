@@ -62,6 +62,23 @@ surface admins must consciously enable from `/light/plugins`).
    refresh issues a new refresh token, so a client in use stays connected. At startup,
    refresh tokens stored with no expiry (issued before the TTL) get an expiry of now plus
    30 days.
+9. **A credential change revokes every OAuth token.** A password change, a password
+   reset, "log out all other devices" and the offline `point reset-password` CLI delete
+   every row in `oauth_tokens`. Registered clients stay, so a client can sign in again
+   with the new password. `mcp.Register` installs `Provider.RevokeAll` as the
+   `AuthService` revoker, so the server clears its memory tier at the same time.
+10. **The owner can revoke one connected app.** The API Keys panel lists the OAuth
+    clients (`GET /api/auth/oauth-clients`: redirect hosts, registration time, live
+    tokens) with a Revoke button (`DELETE /api/auth/oauth-clients/:id`). A revoke deletes
+    the client and its tokens in both tiers; the client must register again. The routes
+    need a session cookie and 404 when the `mcp` plugin is off.
+11. **The memory tier trusts a cached token for at most one minute.** The provider
+    caches tokens in memory (`lookupToken`). After `tokenCacheTTL` (one minute), it reads
+    the Store again, and a token that is gone from the Store is gone from memory too.
+    This is how a revoke from the offline CLI, which cannot reach the server's memory,
+    takes effect: in at most one minute. A revoke through the provider is immediate. A
+    token whose Store write failed (`MemOnly`) is known only to memory, so it is not
+    read again; it dies with the process or with `RevokeAll`.
 
 ## Out of scope
 

@@ -35,3 +35,11 @@ func (s repoOAuthStore) DeleteToken(ctx context.Context, tokenHash string) error
 func (s repoOAuthStore) DeleteExpiredTokens(ctx context.Context, now time.Time) error {
 	return s.repo.DeleteExpiredOAuthTokens(ctx, now)
 }
+
+func (s repoOAuthStore) DeleteAllTokens(ctx context.Context) error {
+	return s.repo.DeleteAllOAuthTokens(ctx)
+}
+
+func (s repoOAuthStore) DeleteClient(ctx context.Context, clientID string) error {
+	return s.repo.DeleteOAuthClient(ctx, clientID)
+}

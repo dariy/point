@@ -116,6 +116,9 @@ type Repository interface {
 	DeleteOAuthToken(ctx context.Context, tokenHash string) error
 	DeleteExpiredOAuthTokens(ctx context.Context, now time.Time) error
 	ExpireUnboundedOAuthTokens(ctx context.Context, expiresAt time.Time) error
+	ListOAuthClients(ctx context.Context, now time.Time) ([]OAuthClientSummary, error)
+	DeleteOAuthClient(ctx context.Context, clientID string) error
+	DeleteAllOAuthTokens(ctx context.Context) error
 
 	// System
 	GetSystemStats(ctx context.Context) (SystemStats, error)

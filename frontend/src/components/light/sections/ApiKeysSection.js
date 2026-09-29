@@ -2,10 +2,13 @@
  * ApiKeysSection — the API-keys block for the `api-keys` plugin. Self-loads the
  * key list and handles create (shows the secret once) / delete. Extracted from
  * SecurityPage into the plugin settings drawer.
+ *
+ * It also lists the MCP OAuth clients (connected apps), each with a Revoke
+ * button. That list is empty and hidden when the mcp plugin is off.
  */
 
 import { Component } from "../../Component.js";
-import { getApiKeys, createApiKey, deleteApiKey } from "../../../api/auth.js";
+import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.js";
 import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";
@@ -14,11 +17,11 @@ import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 export class ApiKeysSection extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, apiKeys: [] };
+    this.state = { loading: true, apiKeys: [], oauthClients: [] };
   }
 
   render() {
-    const { loading, apiKeys } = this.state;
+    const { loading, apiKeys, oauthClients } = this.state;
 
     const list = loading
       ? html`<p class="empty-state">Loading…</p>`
@@ -58,13 +61,48 @@ export class ApiKeysSection extends Component {
         <span class="section-actions-spacer"></span>
         <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create API Key</button>
       </div>
-      ${list}`;
+      ${list}
+      ${this._renderOAuthClients(oauthClients)}`;
+  }
+
+  _renderOAuthClients(clients) {
+    if (!clients.length) return "";
+    return html`
+      <h3 class="section-subhead">Connected apps</h3>
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Redirects to</th>
+              <th>Connected</th>
+              <th>Live tokens</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${clients.map(
+              (c) => html`
+              <tr>
+                <td><strong>${(c.redirect_hosts || []).join(", ") || "—"}</strong></td>
+                <td>${formatDateShort(c.registered_at)}</td>
+                <td>${c.live_tokens}</td>
+                <td class="text-right">
+                  <button class="btn btn-sm btn-danger revoke-oauth-client-btn" data-id="${c.client_id}" title="Revoke">Revoke</button>
+                </td>
+              </tr>`,
+            )}
+          </tbody>
+        </table>
+      </div>`;
   }
 
   afterRender() {
     this.$("#create-api-key-btn")?.addEventListener("click", () => this._handleCreate());
     this.$$(".delete-api-key-btn").forEach((btn) => {
       btn.addEventListener("click", () => this._handleDelete(btn.dataset.id));
+    });
+    this.$$(".revoke-oauth-client-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this._handleRevokeClient(btn.dataset.id));
     });
   }
 
@@ -74,8 +112,12 @@ export class ApiKeysSection extends Component {
   }
 
   async _load() {
-    const apiKeys = await getApiKeys().catch(() => ({ api_keys: [] }));
-    this.setState({ loading: false, apiKeys: apiKeys.api_keys || [] });
+    const [apiKeys, oauth] = await Promise.all([
+      getApiKeys().catch(() => ({ api_keys: [] })),
+      // 404 while the mcp plugin is off: no connected apps to show.
+      getOAuthClients().catch(() => ({ clients: [] })),
+    ]);
+    this.setState({ loading: false, apiKeys: apiKeys.api_keys || [], oauthClients: oauth.clients || [] });
   }
 
   _handleCreate() {
@@ -114,6 +156,23 @@ export class ApiKeysSection extends Component {
           this._load();
         } catch (err) {
           setToast({ message: err.message || "Failed to delete API key.", type: "error" });
+        }
+      },
+    });
+  }
+
+  _handleRevokeClient(clientId) {
+    showConfirm({
+      title: "Revoke Connected App",
+      message: "Revoke this app? Its tokens stop working now, and it must sign in again to reconnect.",
+      confirmText: "Revoke",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          await revokeOAuthClient(clientId);
+          this._load();
+        } catch (err) {
+          setToast({ message: err.message || "Failed to revoke the app.", type: "error" });
         }
       },
     });
