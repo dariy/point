@@ -199,3 +199,24 @@ func TestRepository_GetStorageStats(t *testing.T) {
 		t.Errorf("wrong counts: %+v", stats)
 	}
 }
+
+func TestRepository_SetMediaDimensions(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (1, 'a.webp', 'p1', 'image', 'image/webp', 10, 'c1')`)
+
+	if err := repo.SetMediaDimensions(ctx, 1, 600, 400); err != nil {
+		t.Fatalf("SetMediaDimensions failed: %v", err)
+	}
+	var w, h int64
+	if err := repo.DB().QueryRow(`SELECT width, height FROM media WHERE id = 1`).Scan(&w, &h); err != nil {
+		t.Fatal(err)
+	}
+	if w != 600 || h != 400 {
+		t.Errorf("size = %dx%d, want 600x400", w, h)
+	}
+}
