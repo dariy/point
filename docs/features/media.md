@@ -18,6 +18,11 @@ by upload date (`/YYYY/MM/…`).
   Legacy `?thumb` still resolves (bare → 512, `?thumb=128` → 128), so old
   `posts.thumbnail_path` rows and published post content keep working with no data
   migration. Only `JPEG_QUALITY` is configurable; there is no dimension setting.
+- **Decoded inputs**: JPEG, PNG, GIF, BMP, TIFF (from `imaging`) and WebP, lossy and
+  lossless (pure-Go `golang.org/x/image/webp`). A decoded input gets a stored
+  `width`/`height`, the JPEG ladder and the pixel guard. A WebP row stored before WebP
+  decode existed has no size; the first variant request stores it
+  (`MediaService.backfillDimensions`).
 - **EXIF orientation**: every decode applies the EXIF Orientation tag, so variants,
   cards and `og:image` are upright, and the stored `width`/`height` are the displayed size.
   The original file keeps its pixels and its tag. Migration `swap_dims_for_rotated_exif`

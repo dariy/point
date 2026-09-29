@@ -40,6 +40,13 @@ LIMIT ? OFFSET ?`
 	return items, rows.Err()
 }
 
+// SetMediaDimensions stores the pixel size of a media row. It fills in rows
+// that were stored before a decoder existed for their format.
+func (r *sqliteRepository) SetMediaDimensions(ctx context.Context, id, width, height int64) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE media SET width = ?, height = ? WHERE id = ?`, width, height, id)
+	return err
+}
+
 // CountOrphanedMedia counts media with no associated post.
 func (r *sqliteRepository) CountOrphanedMedia(ctx context.Context) (int64, error) {
 	const q = `SELECT COUNT(*) FROM media WHERE post_id IS NULL`
