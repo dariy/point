@@ -22,7 +22,7 @@ import { html } from "./helpers.js";
  * absent. Mirrors services.VariantSizes. Prefer thumbLadder(), which asks the
  * server's copy first.
  */
-export const THUMB_SIZES = [128, 256, 512, 1024];
+export const THUMB_SIZES = [128, 256, 512, 1024, 1600, 2048];
 
 /**
  * The rung a bare `?thumb` resolves to server-side (services.DefaultVariantSize),
