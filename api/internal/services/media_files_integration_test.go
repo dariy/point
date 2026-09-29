@@ -812,7 +812,7 @@ func TestVariant_OneRequestBuildsWholeLadder(t *testing.T) {
 	ctx := context.Background()
 
 	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2000, 1500)), nil)
+	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2400, 1800)), nil)
 	m, err := svc.UploadFile(ctx, UploadFileParams{
 		Content:  buf.Bytes(),
 		Filename: "wide.jpg",
@@ -1006,7 +1006,7 @@ func TestRebuildThumbnails_RollsTokenAndPurges(t *testing.T) {
 	svc.WithCache(NewCacheService(storage))
 	ctx := context.Background()
 
-	m := uploadTestImage(t, svc, "wide.jpg", 1600, 1200)
+	m := uploadTestImage(t, svc, "wide.jpg", 2400, 1800)
 	before := svc.ThumbnailGeneration(ctx)
 
 	// A rendered public page, holding variant URLs stamped with `before`.
@@ -1025,8 +1025,8 @@ func TestRebuildThumbnails_RollsTokenAndPurges(t *testing.T) {
 	if got := svc.ThumbnailGeneration(ctx); got != res.Generation {
 		t.Errorf("stored generation = %q, want %q", got, res.Generation)
 	}
-	if res.Purged != len(VariantSizes) {
-		t.Errorf("purged %d files, want %d (one per rung of an upload)", res.Purged, len(VariantSizes))
+	if res.Purged != uploadRungs() {
+		t.Errorf("purged %d files, want %d (one per rung of an upload)", res.Purged, uploadRungs())
 	}
 	if _, err := svc.cache.Get(ctx, "homepage_p1_pp20.json"); err == nil {
 		t.Error("public page cache survived the rebuild; it still serves the old generation token")
@@ -1059,8 +1059,8 @@ func TestPurgeVariants_LeavesOriginalsAndPosterRoot(t *testing.T) {
 		t.Fatalf("write poster: %v", err)
 	}
 
-	if n := svc.purgeVariants(); n != len(VariantSizes) {
-		t.Errorf("purged %d, want %d", n, len(VariantSizes))
+	if n := svc.purgeVariants(); n != uploadRungs() {
+		t.Errorf("purged %d, want %d", n, uploadRungs())
 	}
 
 	for _, size := range VariantSizes {
@@ -1308,4 +1308,44 @@ func TestScheduler_PurgeOrientedVariants(t *testing.T) {
 		t.Errorf("purge ran again after the scheduler hook: %d", n)
 	}
 	(&SchedulerService{}).purgeOrientedVariants(ctx)
+}
+
+// uploadRungs is how many rungs an upload writes for a source larger than
+// every rung: the ones up to UploadMaxVariantSize.
+func uploadRungs() int {
+	n := 0
+	for _, size := range VariantSizes {
+		if size <= UploadMaxVariantSize {
+			n++
+		}
+	}
+	return n
+}
+
+// Upload writes the rungs up to UploadMaxVariantSize only. The larger rungs
+// wait for their first request, which writes them.
+func TestUpload_DefersLargeRungs(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	defer func() { _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	m := uploadTestImage(t, svc, "big.jpg", 2400, 1800)
+	for _, size := range VariantSizes {
+		_, err := os.Stat(filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size)))
+		if size <= UploadMaxVariantSize && err != nil {
+			t.Errorf("rung %d missing after upload: %v", size, err)
+		}
+		if size > UploadMaxVariantSize && err == nil {
+			t.Errorf("rung %d written at upload, want it deferred", size)
+		}
+	}
+
+	if _, err := svc.Variant(ctx, m, 2048); err != nil {
+		t.Fatalf("Variant(2048): %v", err)
+	}
+	for _, size := range []int{1600, 2048} {
+		if _, err := os.Stat(filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size))); err != nil {
+			t.Errorf("rung %d missing after first request: %v", size, err)
+		}
+	}
 }

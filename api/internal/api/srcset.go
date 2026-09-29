@@ -49,6 +49,13 @@ var articleImgTagRe = regexp.MustCompile(`(?i)<img\b([^>]*?)\s*/?>`)
 // `srcset="…"` on a second pass.
 var articleImgSrcRe = regexp.MustCompile(`(?i)\ssrc="([^"]*)"`)
 
+// articleImgWidthRe and articleImgHeightRe find an author's own size
+// attributes, which win over the stored size. They run on lowercased attrs.
+var (
+	articleImgWidthRe  = regexp.MustCompile(`\swidth=`)
+	articleImgHeightRe = regexp.MustCompile(`\sheight=`)
+)
+
 // imageDims is a source image's intrinsic size, which is what makes the
 // descriptors real pixel widths rather than guesses.
 type imageDims struct {
@@ -97,10 +104,10 @@ func articleImageDims(media []models.Medium) map[string]imageDims {
 // second URL for the same bytes and a second cache entry.
 //
 // The ORIGINAL always takes the top slot, at its real intrinsic width. The
-// ladder stops at 1024, and an article image is the one place that is not
-// enough — a figure broken out to 1200px on a retina display wants 2400, and
-// capping at 1024 would make this change a visible regression against the
-// bare <img src> it replaces.
+// 1600 and 2048 rungs cover a phone at DPR 3 and a retina laptop, but a figure
+// broken out to 1200px on a retina display wants 2400, and capping the list at
+// the top rung would be a visible regression against the bare <img src> it
+// replaces.
 func articleSrcset(barePath string, d imageDims, gen string) string {
 	longest := d.width
 	if d.height > longest {
@@ -145,9 +152,6 @@ func injectArticleSrcsetDims(doc string, dims map[string]imageDims, gen string) 
 	}
 	return articleImgTagRe.ReplaceAllStringFunc(doc, func(tag string) string {
 		attrs := articleImgTagRe.FindStringSubmatch(tag)[1]
-		if strings.Contains(strings.ToLower(attrs), "srcset=") {
-			return tag
-		}
 		m := articleImgSrcRe.FindStringSubmatch(attrs)
 		if m == nil {
 			return tag
@@ -162,12 +166,23 @@ func injectArticleSrcsetDims(doc string, dims map[string]imageDims, gen string) 
 		if !ok {
 			return tag
 		}
-		srcset := articleSrcset(src, d, gen)
-		if srcset == "" {
+		lower := strings.ToLower(attrs)
+		extra := ""
+		// width and height reserve the box before a lazy image loads, so the
+		// layout does not move. reset.css sets `height: auto`, so a narrow
+		// column still scales the image down.
+		if !articleImgWidthRe.MatchString(lower) && !articleImgHeightRe.MatchString(lower) {
+			extra += ` width="` + strconv.Itoa(d.width) + `" height="` + strconv.Itoa(d.height) + `"`
+		}
+		if !strings.Contains(lower, "srcset=") {
+			if srcset := articleSrcset(src, d, gen); srcset != "" {
+				extra += ` srcset="` + stdhtml.EscapeString(srcset) + `"` +
+					` sizes="` + articleImageSizes + `"`
+			}
+		}
+		if extra == "" {
 			return tag
 		}
-		return "<img" + attrs +
-			` srcset="` + stdhtml.EscapeString(srcset) + `"` +
-			` sizes="` + articleImageSizes + `">`
+		return "<img" + attrs + extra + ">"
 	})
 }

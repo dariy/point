@@ -10,9 +10,12 @@ by upload date (`/YYYY/MM/…`).
   (`media_mime.go`), size limit (`MAX_UPLOAD_SIZE_MB`), and **SHA256 dedup** — the same
   bytes uploaded twice resolve to one stored file (this is what makes Instagram import
   re-runs cheap).
-- **Thumbnails**: a fixed ladder of four rungs — 128/256/512/1024 px on the **longest
-  side**, aspect-preserving (`imaging.Fit`), JPEG only (the binary is CGO-free, so no
-  WebP/AVIF encoder). Written eagerly at upload and lazily on first request, to
+- **Thumbnails**: a fixed ladder of six rungs — 128/256/512/1024/1600/2048 px on the
+  **longest side**, aspect-preserving (`imaging.Fit`), JPEG only (the binary is CGO-free,
+  so no WebP/AVIF encoder). Upload and import write the rungs up to 1024
+  (`UploadMaxVariantSize`). The first request for any missing rung writes every missing
+  rung, and the rebuild prewarm does the same, so 1600 and 2048 appear then. A rung at
+  or above the longest side is never written. Files go to
   `media/variants/<size>/YYYY/MM/<base>.jpg`. Requested as
   `/YYYY/MM/<file>?s=<size>&v=<gen>`; `s` must be a rung or the request is a 400.
   Legacy `?thumb` still resolves (bare → 512, `?thumb=128` → 128), so old
@@ -83,6 +86,10 @@ Gotchas from production:
 - **Originals are immutable-ish**: EXIF edits keep the original values recoverable.
   A variant is never served as the `src` of an article image either — `src` stays on the
   bare original so the lightbox and `extractMedia`'s `src` capture still open full size.
+- **1600 and 2048 are not written at upload**: only article bodies use them (a phone at
+  DPR 3, a retina laptop), and they are the slowest rungs to encode, so upload stays fast.
+  Article `<img>` tags also get `width`/`height` from the stored size when they have none
+  (`srcset.go::injectArticleSrcsetDims`), so a lazy image does not move the layout.
 - **`<img srcset>`, never `<picture>`**: `postMedia.js` splits server-rendered HTML with
   a regex whose `VOID_TAGS` list has no `picture`, so a `<picture>` is misread as a text
   block and silently breaks immersive slides. Article `srcset` is injected *after*

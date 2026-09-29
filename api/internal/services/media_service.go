@@ -239,7 +239,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	// one who pays for it. A failure is not fatal: the media route regenerates
 	// any missing rung on request.
 	if decoded != nil {
-		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(p.Content), ""); err != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(p.Content), "", UploadMaxVariantSize); err != nil {
 			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
 		}
 	}
@@ -377,7 +377,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	// Same eager ladder as UploadFile, off the decode already done above.
 	if decoded != nil {
-		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(content), ""); err != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(content), "", UploadMaxVariantSize); err != nil {
 			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
 		}
 	}
@@ -872,11 +872,19 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 // a derived JPEG, ascending. Aspect ratio is preserved (imaging.Fit), so a
 // portrait source at rung 512 is 512 tall and narrower than that.
 //
-// Four rungs cover the whole product: 128 for dense grids and list rows, 256
-// for atlas chips, 512 for cards and the legacy bare `?thumb`, 1024 for article
-// bodies, retina cards and social cards. JPEG only — the binary is CGO-free and
+// 128 is for dense grids and list rows, 256 for atlas chips, 512 for cards and
+// the legacy bare `?thumb`, 1024 for retina cards and social cards. 1600 and
+// 2048 are for article bodies on phones at DPR 3 and retina laptops, which
+// otherwise download the original. Upload writes the rungs up to
+// UploadMaxVariantSize only; the larger ones are written on the first request
+// or by the rebuild prewarm (see writeLadder). JPEG only — the binary is CGO-free and
 // disintegration/imaging cannot encode WebP or AVIF without a cgo dependency.
-var VariantSizes = []int{128, 256, 512, 1024}
+var VariantSizes = []int{128, 256, 512, 1024, 1600, 2048}
+
+// UploadMaxVariantSize is the largest rung that upload and import write
+// eagerly. The rungs above it are large to encode and only article bodies use
+// them, so they wait for the first request.
+const UploadMaxVariantSize = 1024
 
 // DefaultVariantSize is the rung a bare `?thumb` resolves to. Existing
 // posts.thumbnail_path rows and published post content carry `?thumb` with no
@@ -1102,7 +1110,7 @@ func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull st
 	if err != nil {
 		return nil, err
 	}
-	return src, s.writeLadder(ctx, originalPath, src, extractICC(data), srcFull)
+	return src, s.writeLadder(ctx, originalPath, src, extractICC(data), srcFull, 0)
 }
 
 // backfillDimensions stores the decoded size on an image row that has none.
@@ -1131,7 +1139,9 @@ func (s *MediaService) backfillDimensions(ctx context.Context, media models.Medi
 //
 // icc is the source's ICC profile from extractICC, or nil. Every rung carries
 // it, so a Display P3 or Adobe RGB photo keeps its colour in grids and cards.
-func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, icc []byte, srcFull string) error {
+//
+// maxRung, when above 0, skips every rung larger than it; 0 writes them all.
+func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, icc []byte, srcFull string, maxRung int) error {
 	bounds := src.Bounds()
 	longest := maxInt(bounds.Dx(), bounds.Dy())
 	quality := imaging.JPEGQuality(s.jpegQuality(ctx))
@@ -1144,7 +1154,7 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 	}
 
 	for _, size := range VariantSizes {
-		if size >= longest {
+		if size >= longest || (maxRung > 0 && size > maxRung) {
 			continue
 		}
 		full := s.variantFullPath(originalPath, size)

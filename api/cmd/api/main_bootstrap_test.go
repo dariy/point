@@ -44,7 +44,7 @@ func assertBootstrap(t *testing.T, rec *httptest.ResponseRecorder, wantGen strin
 	}
 	// The ladder ships too, so the client picks rungs from the server's list
 	// instead of a copy that can drift.
-	if !strings.Contains(script, `"sizes":[128,256,512,1024]`) {
+	if !strings.Contains(script, `"sizes":[128,256,512,1024,1600,2048]`) {
 		t.Errorf("bootstrap script has no ladder: %s", script)
 	}
 	if n := strings.Count(body, "window.__MEDIA__="); n != 1 {
