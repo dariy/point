@@ -26,6 +26,16 @@ by upload date (`/YYYY/MM/…`).
   `width`/`height`, the JPEG ladder and the pixel guard. A WebP row stored before WebP
   decode existed has no size; the first variant request stores it
   (`MediaService.backfillDimensions`).
+- **AVIF and HEIC**: AVIF decodes through `gen2brain/avif` (WASM on wazero), HEIC
+  through the pure-Go `gen2brain/h265`. A 24 MP AVIF takes 3–5 s to decode, so these
+  uploads do not wait for it: the upload reads the size from the header (the pixel guard
+  runs there too), stores the row, and a background goroutine builds the ladder
+  (`api/internal/services/media_deferred.go`). A HEIC or HEIF upload becomes a JPEG: the
+  goroutine writes a full-size JPEG (quality 92) with the ICC profile and the EXIF
+  (Orientation set to 1, because the decode applies `irot`/`imir`), then points the row at
+  it. The HEIC file stays beside the JPEG, with the same stem, as the archival original;
+  delete and rename take it along. The row keeps the HEIC checksum, so a second upload of
+  the same file finds it.
 - **EXIF orientation**: every decode applies the EXIF Orientation tag, so variants,
   cards and `og:image` are upright, and the stored `width`/`height` are the displayed size.
   The original file keeps its pixels and its tag. Migration `swap_dims_for_rotated_exif`

@@ -47,6 +47,15 @@ func (r *sqliteRepository) SetMediaDimensions(ctx context.Context, id, width, he
 	return err
 }
 
+// ReplaceMediaOriginal points a media row at a new original file. The HEIC
+// conversion uses it to swap the row to its JPEG after a deferred decode.
+func (r *sqliteRepository) ReplaceMediaOriginal(ctx context.Context, id int64, filename, originalPath, mimeType string, fileSize int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE media SET filename = ?, original_path = ?, mime_type = ?, file_size = ? WHERE id = ?`,
+		filename, originalPath, mimeType, fileSize, id)
+	return err
+}
+
 // CountOrphanedMedia counts media with no associated post.
 func (r *sqliteRepository) CountOrphanedMedia(ctx context.Context) (int64, error) {
 	const q = `SELECT COUNT(*) FROM media WHERE post_id IS NULL`

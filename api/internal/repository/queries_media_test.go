@@ -220,3 +220,25 @@ func TestRepository_SetMediaDimensions(t *testing.T) {
 		t.Errorf("size = %dx%d, want 600x400", w, h)
 	}
 }
+
+func TestRepository_ReplaceMediaOriginal(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (1, 'a.heic', 'originals/a.heic', 'image', 'image/heic', 10, 'c1')`)
+
+	if err := repo.ReplaceMediaOriginal(ctx, 1, "a.jpg", "originals/a.jpg", "image/jpeg", 20); err != nil {
+		t.Fatalf("ReplaceMediaOriginal failed: %v", err)
+	}
+	var name, path, mt, sum string
+	var size int64
+	if err := repo.DB().QueryRow(`SELECT filename, original_path, mime_type, file_size, checksum FROM media WHERE id = 1`).Scan(&name, &path, &mt, &size, &sum); err != nil {
+		t.Fatal(err)
+	}
+	if name != "a.jpg" || path != "originals/a.jpg" || mt != "image/jpeg" || size != 20 || sum != "c1" {
+		t.Errorf("row = %s %s %s %d %s", name, path, mt, size, sum)
+	}
+}

@@ -25,7 +25,8 @@ const iccChunkMax = 65535 - 2 - 14
 var iccMarker = []byte("ICC_PROFILE\x00")
 
 // extractICC returns the ICC profile embedded in a JPEG (APP2 ICC_PROFILE
-// segments, joined in sequence order) or a PNG (iCCP chunk). It returns nil
+// segments, joined in sequence order), a PNG (iCCP chunk), or an AVIF or HEIC
+// file (colr box). It returns nil
 // when the source has no profile, the profile is malformed, or it is sRGB:
 // browsers assume sRGB, so a variant needs no profile to render it correctly.
 func extractICC(data []byte) []byte {
@@ -35,6 +36,8 @@ func extractICC(data []byte) []byte {
 		icc = jpegICC(data)
 	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
 		icc = pngICC(data)
+	case len(data) >= 12 && bytes.Equal(data[4:8], []byte("ftyp")):
+		icc = isobmffICC(data)
 	}
 	if len(icc) < 132 || isSRGBProfile(icc) {
 		return nil
@@ -90,6 +93,38 @@ func jpegICC(data []byte) []byte {
 		out = append(out, c...)
 	}
 	return out
+}
+
+// isobmffICC finds the first colr box of type prof or rICC in an AVIF or HEIC
+// file. A colr box of type nclx carries no profile and is skipped. The search
+// is a byte scan rather than a walk of meta/iprp/ipco: a false match inside
+// coded data must also pass the box size check and the ICC header check.
+func isobmffICC(data []byte) []byte {
+	for off := 0; ; {
+		i := bytes.Index(data[off:], []byte("colr"))
+		if i < 0 {
+			return nil
+		}
+		at := off + i
+		off = at + 4
+		if at < 4 || at+8 > len(data) {
+			continue
+		}
+		kind := string(data[at+4 : at+8])
+		if kind != "prof" && kind != "rICC" {
+			continue
+		}
+		size := int(binary.BigEndian.Uint32(data[at-4:]))
+		end := at - 4 + size
+		if size < 12 || end > len(data) || end-(at+8) > iccMaxBytes {
+			continue
+		}
+		icc := data[at+8 : end]
+		if len(icc) < 132 || int(binary.BigEndian.Uint32(icc)) != len(icc) || string(icc[36:40]) != "acsp" {
+			continue
+		}
+		return icc
+	}
 }
 
 // pngICC inflates the iCCP chunk: a Latin-1 name, a NUL, a compression method
