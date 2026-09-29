@@ -28,6 +28,20 @@ the live WAL-mode `point.db` byte-for-byte (which can capture a torn database), 
 archive tars a `VACUUM INTO` snapshot in its place and omits the `-wal`/`-shm`
 sidecars.
 
+The archive **leaves out derived data** that the engine rebuilds: `media/variants/`
+(resized images, regenerated on the first request after a restore) and the page
+cache `cache/` (refilled as pages are served). The `backups/` directory is also left
+out. gzip runs at `BestSpeed`, because the archive is mostly JPEGs that do not
+compress. The format stays `.tar.gz`, so restore, move in and `BACKUP_HOOK` do not
+change.
+
+A file that **vanishes or cannot be read** during the walk (a cache eviction, a
+thumbnail rebuild, a log rotation) is skipped before its tar header is written, so
+the archive stays valid. Each skip is logged. A run with skips still publishes the
+archive, and the `backup archive` task in `/api/system/health` records the skipped
+count as its last error. An error while copying a file that did open fails the
+backup.
+
 Each archive gets a **SHA-256 checksum** computed in the same write pass and stored
 as a `<archive>.sha256` sidecar (`sha256sum` format). It surfaces in the backups
 list, is advertised on download via the `X-Archive-SHA256` response header, and is

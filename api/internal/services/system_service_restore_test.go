@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -286,5 +287,115 @@ func TestExtractTarGz_ExtractsSafeEntries(t *testing.T) {
 	}
 	if string(got) != "hello" {
 		t.Fatalf("content = %q, want hello", got)
+	}
+}
+
+// tarNames lists the entry names of a .tar.gz archive.
+func tarNames(t *testing.T, archive string) []string {
+	t.Helper()
+	f, err := os.Open(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gz)
+	var names []string
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return names
+		}
+		if err != nil {
+			t.Fatalf("read archive: %v", err)
+		}
+		names = append(names, h.Name)
+	}
+}
+
+// TestCreateBackup_SkipsUnreadableFile: a file that cannot be opened (mode 000
+// here; a vanished file behaves the same) is skipped and counted, and the
+// backup still succeeds with every other file intact.
+func TestCreateBackup_SkipsUnreadableFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-000 file")
+	}
+	dataPath := t.TempDir()
+	mustWrite := func(rel, body string) {
+		p := filepath.Join(dataPath, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite("media/originals/a.jpg", "a")
+	mustWrite("locked.txt", "secret")
+	mustWrite("media/originals/z.jpg", "z")
+	locked := filepath.Join(dataPath, "locked.txt")
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o644) })
+
+	health := NewHealthRegistry()
+	s := NewSystemService(nil, dataPath, "").WithHealth(health)
+	name, _, err := s.CreateBackup(context.Background())
+	if err != nil {
+		t.Fatalf("CreateBackup with an unreadable file: %v", err)
+	}
+	names := strings.Join(tarNames(t, filepath.Join(dataPath, "backups", name)), ",")
+	if strings.Contains(names, "locked.txt") {
+		t.Errorf("unreadable file has an entry: %s", names)
+	}
+	for _, want := range []string{"media/originals/a.jpg", "media/originals/z.jpg"} {
+		if !strings.Contains(names, want) {
+			t.Errorf("archive lacks %s: %s", want, names)
+		}
+	}
+	snap := health.Snapshot()
+	if len(snap) != 1 || !strings.Contains(snap[0].LastError, "1 file(s) skipped") {
+		t.Errorf("health record does not carry the skipped count: %+v", snap)
+	}
+}
+
+// TestCreateBackup_ExcludesDerivedData: media variants and the page cache are
+// rebuilt by the engine, so the archive leaves them out.
+func TestCreateBackup_ExcludesDerivedData(t *testing.T) {
+	dataPath := t.TempDir()
+	for _, rel := range []string{
+		"media/originals/a.jpg",
+		"media/variants/800/a.jpg",
+		"cache/page-abc",
+	} {
+		p := filepath.Join(dataPath, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	health := NewHealthRegistry()
+	s := NewSystemService(nil, dataPath, "").WithHealth(health)
+	name, _, err := s.CreateBackup(context.Background())
+	if err != nil {
+		t.Fatalf("CreateBackup: %v", err)
+	}
+	names := tarNames(t, filepath.Join(dataPath, "backups", name))
+	for _, n := range names {
+		if strings.HasPrefix(n, "media/variants") || strings.HasPrefix(n, "cache") {
+			t.Errorf("archive has derived entry %q", n)
+		}
+	}
+	if !strings.Contains(strings.Join(names, ","), "media/originals/a.jpg") {
+		t.Errorf("archive lacks the original: %v", names)
+	}
+	if snap := health.Snapshot(); len(snap) != 1 || !snap[0].Healthy() {
+		t.Errorf("clean backup not recorded healthy: %+v", snap)
 	}
 }

@@ -36,6 +36,11 @@ var ErrBackupInProgress = kindSentinel(ErrConflict, "a backup is already in prog
 // its "last run" tracks the last backup, not a fixed daily tick.
 const healthTaskBackupHook = "backup off-host copy"
 
+// healthTaskBackupArchive is the HealthRegistry key for archive creation. A
+// run that skipped files is recorded as a failure whose message carries the
+// skipped count, so the admin sees it; the archive itself is still published.
+const healthTaskBackupArchive = "backup archive"
+
 type SystemService struct {
 	repo     repository.Repository
 	dataPath string
@@ -136,10 +141,17 @@ func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error)
 
 	// Build into the partial file, then atomically publish the final name so the
 	// archive is only ever listed/downloaded once it is complete and consistent.
-	sum, err := s.createTarGz(ctx, partialPath)
+	sum, skipped, err := s.createTarGz(ctx, partialPath)
 	if err != nil {
 		_ = os.Remove(partialPath)
+		s.health.Record(healthTaskBackupArchive, fmt.Errorf("backup failed: %w", err))
 		return "", 0, fmt.Errorf("backup failed: %w", err)
+	}
+	if skipped > 0 {
+		slog.Warn("backup finished with skipped files", "archive", backupName, "skipped", skipped)
+		s.health.Record(healthTaskBackupArchive, fmt.Errorf("archive %s complete, %d file(s) skipped (see log)", backupName, skipped))
+	} else {
+		s.health.Record(healthTaskBackupArchive, nil)
 	}
 
 	// Write the checksum sidecar (`sha256sum` format) before the rename so the
@@ -393,11 +405,12 @@ func humanizeBytes(n int64) string {
 }
 
 // createTarGz writes the data-directory archive to destPath and returns the
-// SHA-256 (hex) of the resulting .tar.gz, computed in the same write pass.
-func (s *SystemService) createTarGz(ctx context.Context, destPath string) (string, error) {
+// SHA-256 (hex) of the resulting .tar.gz, computed in the same write pass, and
+// the number of paths skipped because they vanished or could not be read.
+func (s *SystemService) createTarGz(ctx context.Context, destPath string) (sum string, skipped int, err error) {
 	f, err := os.Create(destPath)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	defer func() {
 		_ = f.Close()
@@ -405,7 +418,12 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (strin
 
 	// Hash the compressed archive bytes as they are written (no extra read pass).
 	hasher := sha256.New()
-	gz := gzip.NewWriter(io.MultiWriter(f, hasher))
+	// BestSpeed: the archive is mostly JPEGs, which gzip barely shrinks, so a
+	// higher level only costs CPU time.
+	gz, err := gzip.NewWriterLevel(io.MultiWriter(f, hasher), gzip.BestSpeed)
+	if err != nil {
+		return "", 0, err
+	}
 	tw := tar.NewWriter(gz)
 
 	// Take a consistent snapshot of the live SQLite database rather than copying
@@ -420,7 +438,7 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (strin
 			if rel, err := filepath.Rel(s.dataPath, absDB); err == nil && !strings.HasPrefix(rel, "..") {
 				tmp, err := os.CreateTemp("", "point-db-snapshot-*.db")
 				if err != nil {
-					return "", err
+					return "", 0, err
 				}
 				tmpPath := tmp.Name()
 				_ = tmp.Close()
@@ -428,7 +446,7 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (strin
 				_ = os.Remove(tmpPath)
 				if err := s.repo.BackupDB(ctx, tmpPath); err != nil {
 					_ = os.Remove(tmpPath)
-					return "", fmt.Errorf("db snapshot: %w", err)
+					return "", 0, fmt.Errorf("db snapshot: %w", err)
 				}
 				defer func() { _ = os.Remove(tmpPath) }()
 				dbSnapshot = tmpPath
@@ -440,10 +458,24 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (strin
 		}
 	}
 
-	// Walk the data directory, excluding the backups dir itself.
+	// Derived trees the engine rebuilds on demand stay out of the archive:
+	// media variants regenerate on request and the page cache refills.
+	excludeDirs := map[string]bool{
+		filepath.Join("media", VariantsRoot): true,
+		"cache":                              true,
+	}
+
+	// Walk the data directory, excluding the backups dir itself. A file that
+	// vanishes or cannot be read during the walk is skipped and counted; it must
+	// not fail the whole backup.
 	if err := filepath.Walk(s.dataPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // skip unreadable files
+			skipped++
+			slog.Warn("backup: skipped unreadable path", "path", path, "err", err)
+			if info != nil && info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		// Skip the backups directory to avoid recursive backup-of-backup
@@ -460,72 +492,83 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (strin
 		if err != nil {
 			return nil
 		}
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return nil
-		}
-		header.Name = relPath
-
-		if err := tw.WriteHeader(header); err != nil {
-			return err
+		if info.IsDir() && excludeDirs[relPath] {
+			return filepath.SkipDir
 		}
 
-		if !info.IsDir() {
-			src, err := os.Open(path)
+		if !info.Mode().IsRegular() {
+			header, err := tar.FileInfoHeader(info, "")
 			if err != nil {
 				return nil
 			}
-			defer func() {
-				_ = src.Close()
-			}()
-			_, _ = io.Copy(tw, src)
+			header.Name = relPath
+			return tw.WriteHeader(header)
 		}
 
+		ok, err := addFileToTar(tw, path, relPath)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			skipped++
+		}
 		return nil
 	}); err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	// Add the consistent DB snapshot under the live DB's relative name.
 	if dbSnapshot != "" {
-		if err := addFileToTar(tw, dbSnapshot, dbTarName); err != nil {
-			return "", err
+		ok, err := addFileToTar(tw, dbSnapshot, dbTarName)
+		if err != nil {
+			return "", 0, err
+		}
+		if !ok {
+			return "", 0, fmt.Errorf("db snapshot vanished before archiving")
 		}
 	}
 
 	// Finalize the streams before reading the digest so every compressed byte has
 	// been flushed through the hasher.
 	if err := tw.Close(); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if err := gz.Close(); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return hex.EncodeToString(hasher.Sum(nil)), nil
+	return hex.EncodeToString(hasher.Sum(nil)), skipped, nil
 }
 
 // addFileToTar writes a single on-disk file into tw under the given tar name.
-func addFileToTar(tw *tar.Writer, srcPath, tarName string) error {
-	info, err := os.Stat(srcPath)
+// The file is opened first and stat-ed through the handle, so the header always
+// matches the bytes copied. It returns ok=false, with nothing written, when the
+// file cannot be opened (it vanished or is unreadable); the caller counts the
+// skip. A failure after the header is written corrupts the archive, so it is
+// returned as an error.
+func addFileToTar(tw *tar.Writer, srcPath, tarName string) (bool, error) {
+	src, err := os.Open(srcPath)
 	if err != nil {
-		return err
+		slog.Warn("backup: skipped file", "path", srcPath, "err", err)
+		return false, nil
+	}
+	defer func() { _ = src.Close() }()
+	info, err := src.Stat()
+	if err != nil {
+		slog.Warn("backup: skipped file", "path", srcPath, "err", err)
+		return false, nil
 	}
 	header, err := tar.FileInfoHeader(info, "")
 	if err != nil {
-		return err
+		return false, err
 	}
 	header.Name = tarName
 	if err := tw.WriteHeader(header); err != nil {
-		return err
+		return false, err
 	}
-	src, err := os.Open(srcPath)
-	if err != nil {
-		return err
+	if _, err := io.CopyN(tw, src, info.Size()); err != nil {
+		return false, fmt.Errorf("copy %s: %w", tarName, err)
 	}
-	defer func() { _ = src.Close() }()
-	_, err = io.Copy(tw, src)
-	return err
+	return true, nil
 }
 
 // pendingRestoreMarker is the file (inside the backups dir, so it's never itself
