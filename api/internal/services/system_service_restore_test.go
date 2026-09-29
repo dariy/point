@@ -399,3 +399,40 @@ func TestCreateBackup_ExcludesDerivedData(t *testing.T) {
 		t.Errorf("clean backup not recorded healthy: %+v", snap)
 	}
 }
+
+// TestCreateBackup_SkipsUnreadableDir: a walk error (a mode-000 directory) is
+// counted and the subtree skipped; a symlink is stored as a header-only entry.
+func TestCreateBackup_SkipsUnreadableDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-000 directory")
+	}
+	dataPath := t.TempDir()
+	locked := filepath.Join(dataPath, "locked")
+	if err := os.MkdirAll(locked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("locked", filepath.Join(dataPath, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+	health := NewHealthRegistry()
+	s := NewSystemService(nil, dataPath, "").WithHealth(health)
+	name, _, err := s.CreateBackup(context.Background())
+	if err != nil {
+		t.Fatalf("CreateBackup with an unreadable dir: %v", err)
+	}
+	names := strings.Join(tarNames(t, filepath.Join(dataPath, "backups", name)), ",")
+	if strings.Contains(names, "locked/f") || !strings.Contains(names, "link") {
+		t.Errorf("unexpected entries: %s", names)
+	}
+	if snap := health.Snapshot(); len(snap) != 1 || !strings.Contains(snap[0].LastError, "1 file(s) skipped") {
+		t.Errorf("health record does not carry the skipped count: %+v", snap)
+	}
+}
