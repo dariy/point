@@ -239,7 +239,7 @@ func TestExtractICC_Malformed(t *testing.T) {
 	}
 
 	// Fill bytes and a restart marker before the profile are skipped.
-	padded := append(append([]byte{0xFF, 0xD8, 0xFF, 0xFF, 0x01}, good[2:]...))
+	padded := append([]byte{0xFF, 0xD8, 0xFF, 0xFF, 0x01}, good[2:]...)
 	if got := extractICC(padded); !bytes.Equal(got, p3) {
 		t.Error("fill byte or TEM marker broke the scan")
 	}
