@@ -29,6 +29,12 @@ by upload date (`/YYYY/MM/…`).
   swaps the stored size of older rows with Orientation 5–8. At the first start after that
   change, a one-time task (setting `media_orientation_variants_purged`) removes the old
   variants of rows with Orientation 2–8 and rolls the generation token.
+- **ICC colour profile**: every ladder rung carries the ICC profile of its source, as
+  APP2 `ICC_PROFILE` segments of 65,519 bytes or less (`services/icc.go`). The profile
+  comes from JPEG APP2 segments or a PNG `iCCP` chunk. A Display P3 or Adobe RGB photo
+  thus keeps its colour in grids, cards and `og:image`. A source with no profile or with
+  an sRGB profile gets no APP2 segment: browsers assume sRGB. Video posters stay sRGB.
+  Rungs written before this change have no profile; "Rebuild thumbnails" writes them again.
 - **Cache-busting**: `v` is one **global** generation token (`thumbnail_generation` in
   settings) — global because the frontend call sites that build a media URL hold a bare
   path string and nothing else. A variant whose `v` matches gets a long TTL; a stale or
