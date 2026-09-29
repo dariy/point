@@ -25,7 +25,9 @@ Single-admin authentication with several credential surfaces. Services:
   - **Offline CLI**: `point reset-password` (`api/cmd/api/resetpassword.go`) for
     operators locked out without SMTP — runs against the DB directly.
 - **MCP OAuth 2.1** is a separate surface with its own provider but validates the same
-  admin credential (see [mcp.md](mcp.md)).
+  admin credential (see [mcp.md](mcp.md)). A password change, a password reset (web or
+  CLI) and "log out all other devices" revoke every OAuth token too. The API Keys panel
+  lists the connected OAuth apps and revokes one at a time.
 - **Guest filtering is server-side everywhere** — see
   [hidden-visibility.md](hidden-visibility.md); admin routes sit behind
   `AuthMiddleware`, public reads behind `OptionalAuthMiddleware`.

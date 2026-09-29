@@ -323,3 +323,31 @@ export function revokeApiKey(id) {
 export function deleteApiKey(id) {
   return api.delete(`/api/auth/api-keys/${id}`);
 }
+
+// ── Connected OAuth apps (MCP) ────────────────────────────────────────────────
+
+/**
+ * A connected MCP OAuth client — oauthClientResponse in api/internal/mcp/server.go.
+ * @typedef {object} OAuthClient
+ * @property {string} client_id
+ * @property {string[]} redirect_hosts  where the app receives its codes
+ * @property {string} registered_at
+ * @property {number} live_tokens
+ */
+
+/**
+ * List connected OAuth clients. 404 when the mcp plugin is off.
+ * @returns {Promise<{ clients: OAuthClient[] }>}
+ */
+export function getOAuthClients() {
+  return api.get('/api/auth/oauth-clients');
+}
+
+/**
+ * Revoke a connected OAuth client and every token issued to it.
+ * @param {string} clientId
+ * @returns {Promise<void>}
+ */
+export function revokeOAuthClient(clientId) {
+  return api.delete(`/api/auth/oauth-clients/${encodeURIComponent(clientId)}`);
+}

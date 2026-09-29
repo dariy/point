@@ -1365,3 +1365,15 @@ func (m *mockRepository) SetPostMediaURL(ctx context.Context, postID int64, medi
 func (m *mockRepository) BackfillPostMediaURLs(ctx context.Context) error {
 	return nil
 }
+
+func (m *mockRepository) ListOAuthClients(ctx context.Context, now time.Time) ([]repository.OAuthClientSummary, error) {
+	return nil, fmt.Errorf("ListOAuthClients not implemented")
+}
+
+func (m *mockRepository) DeleteOAuthClient(ctx context.Context, clientID string) error {
+	return fmt.Errorf("DeleteOAuthClient not implemented")
+}
+
+func (m *mockRepository) DeleteAllOAuthTokens(ctx context.Context) error {
+	return nil
+}

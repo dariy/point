@@ -1223,3 +1223,137 @@ func TestStoreNeverSeesRawTokens(t *testing.T) {
 		t.Fatal("token not stored under its hash")
 	}
 }
+
+func (s *fakeStore) DeleteAllTokens(_ context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clear(s.tokens)
+	return nil
+}
+
+func (s *fakeStore) DeleteClient(_ context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.clients, clientID)
+	for k, v := range s.tokens {
+		if v.clientID == clientID {
+			delete(s.tokens, k)
+		}
+	}
+	return nil
+}
+
+// --- revocation ---
+
+// issuePair runs the full authorization-code flow and returns the client id and
+// the issued access and refresh tokens.
+func issuePair(t *testing.T, srv *httptest.Server) (clientID, access, refresh string) {
+	t.Helper()
+	verifier, challenge := pkcePair()
+	clientID, code := getCode(t, srv, challenge)
+	out, status := postToken(t, srv, url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://app.test/cb"},
+		"code_verifier": {verifier},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("token exchange failed: %d", status)
+	}
+	return clientID, out["access_token"].(string), out["refresh_token"].(string)
+}
+
+// TestRevokeAll: after a credential change, no issued token works, in memory or
+// in the Store, and the refresh grant answers invalid_grant.
+func TestRevokeAll(t *testing.T) {
+	store := newFakeStore()
+	p, srv := newTestProvider(t, Config{Store: store})
+	clientID, access, refresh := issuePair(t, srv)
+
+	if err := p.RevokeAll(t.Context()); err != nil {
+		t.Fatalf("RevokeAll: %v", err)
+	}
+	if p.ValidateToken(t.Context(), access) {
+		t.Error("access token still valid after RevokeAll")
+	}
+	if len(store.tokens) != 0 {
+		t.Errorf("store keeps %d tokens after RevokeAll", len(store.tokens))
+	}
+	out, status := postToken(t, srv, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh}})
+	if status != http.StatusBadRequest || out["error"] != "invalid_grant" {
+		t.Errorf("refresh after RevokeAll = %d %v, want 400 invalid_grant", status, out["error"])
+	}
+	// The client stays registered, so it can sign in again.
+	if _, ok := p.lookupClient(t.Context(), clientID); !ok {
+		t.Error("RevokeAll removed the client registration")
+	}
+}
+
+// TestRevokeClient removes one client and its tokens and leaves the others.
+func TestRevokeClient(t *testing.T) {
+	store := newFakeStore()
+	p, srv := newTestProvider(t, Config{Store: store})
+	gone, goneAccess, _ := issuePair(t, srv)
+	_, keptAccess, _ := issuePair(t, srv)
+
+	if err := p.RevokeClient(t.Context(), gone); err != nil {
+		t.Fatalf("RevokeClient: %v", err)
+	}
+	if p.ValidateToken(t.Context(), goneAccess) {
+		t.Error("revoked client's token still valid")
+	}
+	if !p.ValidateToken(t.Context(), keptAccess) {
+		t.Error("another client's token was revoked")
+	}
+	if _, ok := p.lookupClient(t.Context(), gone); ok {
+		t.Error("revoked client still resolves")
+	}
+	if _, ok := store.clients[gone]; ok {
+		t.Error("revoked client still in store")
+	}
+}
+
+// TestCachedTokenRereadsStore: a revoke that bypasses the provider (the offline
+// reset-password CLI) takes effect when the cached copy is older than
+// tokenCacheTTL.
+func TestCachedTokenRereadsStore(t *testing.T) {
+	store := newFakeStore()
+	p, srv := newTestProvider(t, Config{Store: store})
+	_, access, _ := issuePair(t, srv)
+
+	if err := store.DeleteAllTokens(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !p.ValidateToken(t.Context(), access) {
+		t.Fatal("a fresh cache entry should still be trusted")
+	}
+	p.mu.Lock()
+	p.tokens[access].CachedAt = time.Now().Add(-tokenCacheTTL - time.Second)
+	p.mu.Unlock()
+	if p.ValidateToken(t.Context(), access) {
+		t.Error("stale cache entry trusted after the store revoked the token")
+	}
+	p.mu.RLock()
+	_, still := p.tokens[access]
+	p.mu.RUnlock()
+	if still {
+		t.Error("revoked token left in the memory tier")
+	}
+}
+
+// TestMemOnlyTokenSkipsReread: a token whose Store write failed is not in the
+// Store, so the re-read must not reject it.
+func TestMemOnlyTokenSkipsReread(t *testing.T) {
+	store := newFakeStore()
+	store.failSaves = true
+	p, srv := newTestProvider(t, Config{Store: store})
+	_, access, _ := issuePair(t, srv)
+
+	p.mu.Lock()
+	p.tokens[access].CachedAt = time.Now().Add(-tokenCacheTTL - time.Second)
+	p.mu.Unlock()
+	if !p.ValidateToken(t.Context(), access) {
+		t.Error("memory-only token rejected after the cache TTL")
+	}
+}

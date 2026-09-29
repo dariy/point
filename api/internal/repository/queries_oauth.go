@@ -115,3 +115,64 @@ func (r *sqliteRepository) ExpireUnboundedOAuthTokens(ctx context.Context, expir
 		`UPDATE oauth_tokens SET expires_at = ? WHERE expires_at IS NULL`, utcStamp(expiresAt))
 	return err
 }
+
+// OAuthClientSummary is one registered client as the owner sees it in the
+// connected-apps list. LiveTokens counts tokens that are not yet expired.
+type OAuthClientSummary struct {
+	ClientID     string
+	RedirectURIs []string
+	RegisteredAt time.Time
+	LiveTokens   int
+}
+
+// ListOAuthClients returns every registered client, newest first, with its
+// count of live tokens at now.
+func (r *sqliteRepository) ListOAuthClients(ctx context.Context, now time.Time) ([]OAuthClientSummary, error) {
+	rows, err := r.db.QueryContext(ctx, `
+SELECT c.client_id, c.redirect_uris, c.registered_at,
+       (SELECT COUNT(*) FROM oauth_tokens t
+         WHERE t.client_id = c.client_id AND (t.expires_at IS NULL OR t.expires_at > ?))
+FROM oauth_clients c
+ORDER BY c.registered_at DESC, c.client_id`, utcStamp(now))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []OAuthClientSummary
+	for rows.Next() {
+		var s OAuthClientSummary
+		var raw string
+		if err := rows.Scan(&s.ClientID, &raw, &s.RegisteredAt, &s.LiveTokens); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(raw), &s.RedirectURIs); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// DeleteOAuthClient removes a client and every token issued to it. The client
+// must register again before it can authorize.
+func (r *sqliteRepository) DeleteOAuthClient(ctx context.Context, clientID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_tokens WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_clients WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeleteAllOAuthTokens revokes every OAuth token. A credential change calls it.
+// Clients stay registered, so a client can sign in again with the new password.
+func (r *sqliteRepository) DeleteAllOAuthTokens(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM oauth_tokens`)
+	return err
+}

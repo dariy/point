@@ -49,6 +49,10 @@ type Store interface {
 	LoadToken(ctx context.Context, tokenHash string) (clientID string, expiresAt time.Time, found bool, err error)
 	DeleteToken(ctx context.Context, tokenHash string) error
 	DeleteExpiredTokens(ctx context.Context, now time.Time) error
+	// DeleteAllTokens revokes every token of every client.
+	DeleteAllTokens(ctx context.Context) error
+	// DeleteClient removes a client and every token issued to it.
+	DeleteClient(ctx context.Context, clientID string) error
 }
 
 type clientRecord struct {
@@ -68,7 +72,19 @@ type codeRecord struct {
 type tokenRecord struct {
 	ClientID  string
 	ExpiresAt time.Time // zero = never expires
+	// CachedAt is when the memory tier last read or wrote this record. After
+	// tokenCacheTTL, lookupToken reads the Store again (see tokenCacheTTL).
+	CachedAt time.Time
+	// MemOnly marks a token whose Store write failed. The Store does not know
+	// it, so lookupToken must not read the Store again for it.
+	MemOnly bool
 }
+
+// tokenCacheTTL is how long the memory tier trusts a cached token without a
+// read of the Store. A revoke that the provider cannot see (the offline
+// reset-password CLI deletes rows in the database directly) therefore takes
+// effect in at most this time. A revoke through the provider is immediate.
+const tokenCacheTTL = time.Minute
 
 // Provider is a self-contained in-memory OAuth 2.1 authorization server.
 type Provider struct {
@@ -172,7 +188,7 @@ func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord,
 	p.mu.RLock()
 	rec, ok := p.tokens[token]
 	p.mu.RUnlock()
-	if ok {
+	if ok && (p.cfg.Store == nil || rec.MemOnly || time.Since(rec.CachedAt) < tokenCacheTTL) {
 		return rec, true
 	}
 	if p.cfg.Store == nil || token == "" {
@@ -184,9 +200,15 @@ func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord,
 		return nil, false
 	}
 	if !found {
+		// Revoked or swept in the Store: the cached copy must go too.
+		if ok {
+			p.mu.Lock()
+			delete(p.tokens, token)
+			p.mu.Unlock()
+		}
 		return nil, false
 	}
-	rec = &tokenRecord{ClientID: clientID, ExpiresAt: expiresAt}
+	rec = &tokenRecord{ClientID: clientID, ExpiresAt: expiresAt, CachedAt: time.Now()}
 	p.mu.Lock()
 	p.tokens[token] = rec
 	p.mu.Unlock()
@@ -198,15 +220,51 @@ func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord,
 // process, which degrades to the old in-memory-only behaviour instead of
 // failing an authorization that has otherwise succeeded.
 func (p *Provider) saveToken(ctx context.Context, token string, rec *tokenRecord) {
+	rec.CachedAt = time.Now()
+	if p.cfg.Store != nil {
+		if err := p.cfg.Store.SaveToken(ctx, hashToken(token), rec.ClientID, rec.ExpiresAt); err != nil {
+			slog.Error("mcp-oauth: persist token", "client_id", rec.ClientID, "err", err)
+			rec.MemOnly = true
+		}
+	}
 	p.mu.Lock()
 	p.tokens[token] = rec
 	p.mu.Unlock()
+}
+
+// RevokeAll revokes every issued token in both tiers. Registered clients stay,
+// so a client can authorize again. A credential change calls it.
+func (p *Provider) RevokeAll(ctx context.Context) error {
+	p.mu.Lock()
+	clear(p.tokens)
+	clear(p.codes)
+	p.mu.Unlock()
 	if p.cfg.Store == nil {
-		return
+		return nil
 	}
-	if err := p.cfg.Store.SaveToken(ctx, hashToken(token), rec.ClientID, rec.ExpiresAt); err != nil {
-		slog.Error("mcp-oauth: persist token", "client_id", rec.ClientID, "err", err)
+	return p.cfg.Store.DeleteAllTokens(ctx)
+}
+
+// RevokeClient removes one client, its codes and its tokens from both tiers.
+// The client must register again before it can authorize.
+func (p *Provider) RevokeClient(ctx context.Context, clientID string) error {
+	p.mu.Lock()
+	delete(p.clients, clientID)
+	for k, c := range p.codes {
+		if c.ClientID == clientID {
+			delete(p.codes, k)
+		}
 	}
+	for k, t := range p.tokens {
+		if t.ClientID == clientID {
+			delete(p.tokens, k)
+		}
+	}
+	p.mu.Unlock()
+	if p.cfg.Store == nil {
+		return nil
+	}
+	return p.cfg.Store.DeleteClient(ctx, clientID)
 }
 
 // dropToken removes a token from both tiers (refresh rotation, expiry).
