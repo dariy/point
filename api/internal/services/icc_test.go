@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"os"
 	"testing"
+	"unicode/utf16"
 )
 
 // testICC builds a minimal ICC profile whose v2 'desc' tag reads name, padded
@@ -162,4 +163,113 @@ func TestVariant_ICCProfile(t *testing.T) {
 	svc.removeAllVariants(tagged.OriginalPath)
 	svc.removeAllVariants(plain.OriginalPath)
 	check("lazy")
+}
+
+// testICCv4 builds a profile whose description is a v4 'mluc' tag.
+func testICCv4(name string) []byte {
+	u := utf16.Encode([]rune(name))
+	mluc := make([]byte, 28+2*len(u))
+	copy(mluc, "mluc")
+	binary.BigEndian.PutUint32(mluc[8:], 1)
+	binary.BigEndian.PutUint32(mluc[12:], 12)
+	binary.BigEndian.PutUint32(mluc[20:], uint32(2*len(u)))
+	binary.BigEndian.PutUint32(mluc[24:], 28)
+	for i, c := range u {
+		binary.BigEndian.PutUint16(mluc[28+2*i:], c)
+	}
+	icc := testICC("x", 200)
+	off := 200
+	icc = append(icc[:off], mluc...)
+	binary.BigEndian.PutUint32(icc[136:], uint32(off))
+	binary.BigEndian.PutUint32(icc[140:], uint32(len(mluc)))
+	return icc
+}
+
+func TestICC_SRGBProfileV4(t *testing.T) {
+	if !isSRGBProfile(testICCv4("sRGB IEC61966-2.1")) {
+		t.Error("v4 sRGB profile not detected")
+	}
+	if isSRGBProfile(testICCv4("Display P3")) {
+		t.Error("v4 Display P3 profile read as sRGB")
+	}
+	if profileText([]byte("mluc\x00\x00\x00\x00")) != "" || profileText([]byte("XYZ \x00\x00\x00\x00")) != "" {
+		t.Error("short or unknown tag gave text")
+	}
+	// A tag table that points past the end is not sRGB.
+	bad := testICC("sRGB", 300)
+	binary.BigEndian.PutUint32(bad[136:], 10_000)
+	if isSRGBProfile(bad) {
+		t.Error("out-of-range desc read as sRGB")
+	}
+	// No desc tag at all.
+	none := testICC("sRGB", 300)
+	copy(none[132:], "cprt")
+	if isSRGBProfile(none) {
+		t.Error("profile without desc read as sRGB")
+	}
+}
+
+func TestExtractICC_Malformed(t *testing.T) {
+	p3 := testICC("Display P3", 3000)
+	good := jpegWithICC(t, 8, 8, p3)
+	seg := iccSegments(p3)
+
+	cases := map[string][]byte{
+		"not an image":   []byte("hello"),
+		"truncated":      good[:40],
+		"junk after SOI": append([]byte{0xFF, 0xD8, 0x00}, good[2:]...),
+	}
+	// Sequence 2 of 1.
+	bad := append([]byte{}, good...)
+	bad[2+4+12] = 2
+	cases["bad sequence"] = bad
+	// Declares 2 chunks, has 1.
+	bad = append([]byte{}, good...)
+	bad[2+4+13] = 2
+	cases["missing chunk"] = bad
+	// Two copies of chunk 1 of 2.
+	dup := append([]byte{}, seg...)
+	dup[4+13] = 2
+	cases["duplicate chunk"] = append(append(append([]byte{0xFF, 0xD8}, dup...), dup...), good[2+len(seg):]...)
+
+	for name, data := range cases {
+		if got := extractICC(data); got != nil {
+			t.Errorf("%s: got %d bytes, want nil", name, len(got))
+		}
+	}
+
+	// Fill bytes and a restart marker before the profile are skipped.
+	padded := append(append([]byte{0xFF, 0xD8, 0xFF, 0xFF, 0x01}, good[2:]...))
+	if got := extractICC(padded); !bytes.Equal(got, p3) {
+		t.Error("fill byte or TEM marker broke the scan")
+	}
+
+	if iccSegments(make([]byte, 256*iccChunkMax)) != nil {
+		t.Error("profile over 255 segments was written")
+	}
+}
+
+func TestExtractICC_PNGMalformed(t *testing.T) {
+	chunk := func(typ string, body []byte) []byte {
+		c := binary.BigEndian.AppendUint32(nil, uint32(len(body)))
+		c = append(append(c, typ...), body...)
+		return binary.BigEndian.AppendUint32(c, 0)
+	}
+	sig := []byte("\x89PNG\r\n\x1a\n")
+	for name, body := range map[string][]byte{
+		"no NUL":     []byte("ICC"),
+		"bad method": []byte("ICC\x00\x01xx"),
+		"bad zlib":   []byte("ICC\x00\x00notzlib"),
+	} {
+		if got := pngICC(append(append([]byte{}, sig...), chunk("iCCP", body)...)); got != nil {
+			t.Errorf("%s: got %d bytes, want nil", name, len(got))
+		}
+	}
+	if got := pngICC(append(append([]byte{}, sig...), chunk("IDAT", nil)...)); got != nil {
+		t.Error("IDAT before iCCP gave a profile")
+	}
+	trunc := append(append([]byte{}, sig...), 0, 0, 0xFF, 0xFF, 'i', 'C', 'C', 'P')
+	if got := pngICC(append(trunc, make([]byte, 8)...)); got != nil {
+		t.Error("truncated chunk gave a profile")
+	}
 }
