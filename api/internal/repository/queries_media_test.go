@@ -86,7 +86,7 @@ func TestRepository_MediaFolders(t *testing.T) {
 	}
 
 	// ListMediaFiltered no filter
-	items, err := repo.ListMediaFiltered(ctx, "", "", 10, 0)
+	items, err := repo.ListMediaFiltered(ctx, "", "", "", 10, 0)
 	if err != nil {
 		t.Fatalf("ListMediaFiltered failed: %v", err)
 	}
@@ -95,13 +95,13 @@ func TestRepository_MediaFolders(t *testing.T) {
 	}
 
 	// ListMediaFiltered with folder
-	items2, _ := repo.ListMediaFiltered(ctx, "", "2024/06", 10, 0)
+	items2, _ := repo.ListMediaFiltered(ctx, "", "2024/06", "", 10, 0)
 	if len(items2) != 1 {
 		t.Errorf("expected 1 item with folder filter, got %d", len(items2))
 	}
 
 	// CountMediaFiltered
-	count, err := repo.CountMediaFiltered(ctx, "", "")
+	count, err := repo.CountMediaFiltered(ctx, "", "", "")
 	if err != nil || count != 1 {
 		t.Errorf("CountMediaFiltered: err=%v count=%d", err, count)
 	}
