@@ -117,6 +117,7 @@ type mockRepository struct {
 	MockDeleteTagLocation                    func(ctx context.Context, tagID int64) error
 	MockListOrphanedMedia                    func(ctx context.Context, limit, offset int64) ([]models.Medium, error)
 	MockCountOrphanedMedia                   func(ctx context.Context) (int64, error)
+	MockSetMediaDimensions                   func(ctx context.Context, id, width, height int64) error
 	MockGetMediaByIDs                        func(ctx context.Context, ids []int64) ([]models.Medium, error)
 	MockDeleteMediaByIDs                     func(ctx context.Context, ids []int64) error
 	MockListOrphanedMediaByPage              func(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
@@ -871,6 +872,13 @@ func (m *mockRepository) ListOrphanedMedia(ctx context.Context, limit, offset in
 		return m.MockListOrphanedMedia(ctx, limit, offset)
 	}
 	return nil, fmt.Errorf("ListOrphanedMedia not implemented")
+}
+
+func (m *mockRepository) SetMediaDimensions(ctx context.Context, id, width, height int64) error {
+	if m.MockSetMediaDimensions != nil {
+		return m.MockSetMediaDimensions(ctx, id, width, height)
+	}
+	return fmt.Errorf("SetMediaDimensions not implemented")
 }
 
 func (m *mockRepository) CountOrphanedMedia(ctx context.Context) (int64, error) {

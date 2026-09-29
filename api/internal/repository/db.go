@@ -52,6 +52,7 @@ type Repository interface {
 	// Media
 	ListOrphanedMedia(ctx context.Context, limit, offset int64) ([]models.Medium, error)
 	CountOrphanedMedia(ctx context.Context) (int64, error)
+	SetMediaDimensions(ctx context.Context, id, width, height int64) error
 	GetMediaByIDs(ctx context.Context, ids []int64) ([]models.Medium, error)
 	DeleteMediaByIDs(ctx context.Context, ids []int64) error
 	ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)

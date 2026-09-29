@@ -33,6 +33,10 @@ import (
 	"point-api/internal/repository"
 
 	"github.com/disintegration/imaging"
+	// Registers WebP with image.Decode and image.DecodeConfig. imaging
+	// registers JPEG, PNG, GIF, BMP and TIFF only, so without this a WebP
+	// upload stores no size and no ladder. Pure Go: the binary stays CGO-free.
+	_ "golang.org/x/image/webp"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
@@ -1065,7 +1069,11 @@ func (s *MediaService) Variant(ctx context.Context, media models.Medium, size in
 
 	key := strconv.FormatInt(media.ID, 10)
 	if _, err, _ := s.variantFlight.Do(key, func() (any, error) {
-		return nil, s.buildLadder(ctx, media.OriginalPath, srcFull)
+		src, err := s.buildLadder(ctx, media.OriginalPath, srcFull)
+		if err == nil {
+			s.backfillDimensions(ctx, media, src)
+		}
+		return nil, err
 	}); err != nil {
 		return "", err
 	}
@@ -1083,16 +1091,33 @@ func (s *MediaService) Variant(ctx context.Context, media models.Medium, size in
 }
 
 // buildLadder decodes a source once and writes every rung derived from it.
-func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull string) error {
+// It returns the decoded source so the caller can read its size.
+func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull string) (image.Image, error) {
 	data, err := os.ReadFile(srcFull)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	src, err := s.decodeImage(ctx, data)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return s.writeLadder(ctx, originalPath, src, srcFull)
+	return src, s.writeLadder(ctx, originalPath, src, srcFull)
+}
+
+// backfillDimensions stores the decoded size on an image row that has none.
+// Rows uploaded before a decoder existed for their format (WebP) carry no
+// width or height; the first lazy variant decode fills them in.
+func (s *MediaService) backfillDimensions(ctx context.Context, media models.Medium, src image.Image) {
+	if !strings.EqualFold(media.FileType, "image") || (media.Width.Valid && media.Width.Int64 > 0) {
+		return
+	}
+	b := src.Bounds()
+	if b.Dx() <= 0 || b.Dy() <= 0 {
+		return
+	}
+	if err := s.repo.SetMediaDimensions(ctx, media.ID, int64(b.Dx()), int64(b.Dy())); err != nil {
+		slog.Warn("media dimensions backfill failed", "media_id", media.ID, "error", err)
+	}
 }
 
 // writeLadder writes every missing or stale rung from an already-decoded
