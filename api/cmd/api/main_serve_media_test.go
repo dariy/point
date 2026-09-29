@@ -913,3 +913,27 @@ func TestServeSimplifiedMedia_OriginalGPSSettingOff(t *testing.T) {
 		t.Error("with the setting off, the route must serve the original bytes")
 	}
 }
+
+// A copy that cannot be written is an error, never the original's GPS.
+func TestServeSimplifiedMedia_OriginalGPSCopyFails(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+	if err := os.WriteFile(filepath.Join(storage, "media", services.VariantsRoot), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "exif:GPS") {
+		t.Error("served the original's GPS")
+	}
+}
+
+func TestStripGPS_NilSettings(t *testing.T) {
+	if !stripGPS(context.Background(), nil) {
+		t.Error("nil settings must mean on")
+	}
+}

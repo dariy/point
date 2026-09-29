@@ -177,3 +177,120 @@ func TestNoGPSOriginal(t *testing.T) {
 		t.Errorf("PNG: got %q, %v; want \"\", nil", p, err)
 	}
 }
+
+// Malformed input never panics and never grows or shrinks the bytes.
+func TestBlankJPEGGPS_Malformed(t *testing.T) {
+	if err := blankJPEGGPS([]byte("GIF89a")); err == nil {
+		t.Error("non-JPEG: want an error")
+	}
+	cases := map[string][]byte{
+		"truncated segment": {0xFF, 0xD8, 0xFF, 0xE1, 0x40, 0x00, 'E'},
+		"zero length":       {0xFF, 0xD8, 0xFF, 0xE1, 0x00, 0x00, 0, 0},
+		"not a marker":      {0xFF, 0xD8, 0x12, 0x34, 0, 0},
+		"fill and RST":      {0xFF, 0xD8, 0xFF, 0xFF, 0xD0, 0xFF, 0xD9, 0, 0},
+		"bad byte order":    app1(append([]byte("Exif\x00\x00XX"), make([]byte, 16)...)),
+		"short tiff":        app1([]byte("Exif\x00\x00II")),
+		"ifd0 out of range": app1(append([]byte("Exif\x00\x00II*\x00\xFF\x00\x00\x00"), make([]byte, 8)...)),
+	}
+	for name, in := range cases {
+		out := append([]byte{}, in...)
+		if err := blankJPEGGPS(out); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		if len(out) != len(in) {
+			t.Errorf("%s: length changed", name)
+		}
+	}
+}
+
+// app1 wraps payload in an APP1 segment after SOI.
+func app1(payload []byte) []byte {
+	n := len(payload) + 2
+	out := []byte{0xFF, 0xD8, 0xFF, 0xE1, byte(n >> 8), byte(n)}
+	return append(out, payload...)
+}
+
+// A big-endian TIFF block with a GPS IFD whose entry points outside the block:
+// the entry is cleared, and nothing out of range is touched.
+func TestBlankTIFFGPS_BigEndian(t *testing.T) {
+	tiff := make([]byte, 64)
+	copy(tiff, "MM\x00\x2A")
+	be := binary.BigEndian
+	be.PutUint32(tiff[4:], 8)
+	be.PutUint16(tiff[8:], 1) // IFD0: one entry, the GPS pointer
+	be.PutUint16(tiff[10:], gpsIFDTag)
+	be.PutUint16(tiff[12:], 4)
+	be.PutUint32(tiff[14:], 1)
+	be.PutUint32(tiff[18:], 26)
+	be.PutUint16(tiff[26:], 2) // GPS IFD: two entries
+	be.PutUint16(tiff[28:], 2) // GPSLatitudeRef, inline
+	be.PutUint16(tiff[30:], 5)
+	be.PutUint32(tiff[32:], 3) // 3 rationals at a bad offset
+	be.PutUint32(tiff[36:], 1000)
+	be.PutUint16(tiff[40:], 3) // second entry runs past the block
+	blankTIFFGPS(tiff[:48])
+	if be.Uint16(tiff[26:]) != 0 {
+		t.Error("GPS IFD entry count not zeroed")
+	}
+	for _, b := range tiff[28:40] {
+		if b != 0 {
+			t.Fatal("GPS entry not cleared")
+		}
+	}
+}
+
+func TestNoGPSOriginal_Errors(t *testing.T) {
+	storage := t.TempDir()
+	svc := &MediaService{cfg: &config.Config{StoragePath: storage}}
+	ctx := context.Background()
+	if _, err := svc.NoGPSOriginal(ctx, models.Medium{OriginalPath: "../../etc/x.jpg", MimeType: "image/jpeg"}); err == nil {
+		t.Error("path outside the media root: want an error")
+	}
+	if _, err := svc.NoGPSOriginal(ctx, models.Medium{OriginalPath: "originals/2026/09/missing.jpg", MimeType: "image/jpeg"}); err == nil {
+		t.Error("missing original: want an error")
+	}
+	// The copy directory cannot be created: a file sits where it must go.
+	rel := "originals/2026/09/a.jpg"
+	src := filepath.Join(storage, "media", rel)
+	if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, geotaggedJPEG(t), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storage, "media", VariantsRoot), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.NoGPSOriginal(ctx, models.Medium{OriginalPath: rel, MimeType: "image/jpeg"}); err == nil {
+		t.Error("unwritable copy: want an error")
+	}
+}
+
+// A fresh copy is served again without a rewrite.
+func TestNoGPSOriginal_ReusesFreshCopy(t *testing.T) {
+	storage := t.TempDir()
+	svc := &MediaService{cfg: &config.Config{StoragePath: storage}}
+	rel := "originals/2026/09/b.jpg"
+	src := filepath.Join(storage, "media", rel)
+	if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, geotaggedJPEG(t), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := models.Medium{OriginalPath: rel, MimeType: "image/jpeg"}
+	first, err := svc.NoGPSOriginal(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(first, []byte("marker"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.NoGPSOriginal(context.Background(), m)
+	if err != nil || second != first {
+		t.Fatalf("second call: %q, %v", second, err)
+	}
+	if b, _ := os.ReadFile(second); string(b) != "marker" {
+		t.Error("a fresh copy was rewritten")
+	}
+}
