@@ -100,16 +100,16 @@ Gotchas from production:
 ### Server video path
 
 Without ffmpeg, a video is served as it was uploaded, so an iPhone HEVC `.mov` does not
-play in Firefox or on some Chrome platforms. A poster exists only when an admin browser
-draws a frame (`SaveVideoPoster`). This is the design for the rest. The epic
+play in Firefox or on some Chrome platforms. This is the design for the rest. The epic
 p-zm2s holds the work.
 
 - **Transcode: done.** See "Video transcode" under "What is implemented". A backup leaves
   the transcode out, like every other derived file; a backfill job to write it again
   after a restore is p-zm2s.7.
-- **Posters come from the server when it can.** The same job chain writes a frame at 10 %
-  of the duration through `storePoster`, but only when no poster exists. A poster from the
-  admin browser always wins, and the browser capture stays as the path for slim.
+- **Server poster: done.** With ffmpeg, an upload also enqueues a `video.poster` job
+  (`media_video.go::WriteServerPoster`). It writes a frame at 10 % of the duration through
+  `storePoster`, but only when no poster exists. A poster from the admin browser always
+  wins and replaces a server poster. Slim keeps only the browser capture.
 - **Slim does less, and says so.** A slim install serves the original. A pure-Go scan of the
   MP4/MOV sample description finds `hvc1`/`hev1`, and the admin UI shows a note that this
   video does not play in every browser.

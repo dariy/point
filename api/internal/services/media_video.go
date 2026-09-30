@@ -18,6 +18,14 @@ import (
 // uploaded video.
 const JobKindVideoTranscode = "video.transcode"
 
+// JobKindVideoPoster is the job kind that writes a server poster for a video
+// that has none.
+const JobKindVideoPoster = "video.poster"
+
+// posterOffset is the point of the video, as a fraction of its duration, that
+// the server poster shows. The first frame is often black.
+const posterOffset = 0.10
+
 // videoDir is the subtree of VariantsRoot that holds the transcodes. Like every
 // derived file, a backup leaves it out.
 const videoDir = "video"
@@ -46,7 +54,8 @@ func (s *MediaService) WithVideo(jobs *JobService, ff *FFmpeg) *MediaService {
 	s.jobs, s.ffmpeg = jobs, ff
 	s.videoTimeout, s.videoThreads = defaultVideoTimeout, defaultVideoThreads
 	if jobs != nil {
-		jobs.Register(JobKindVideoTranscode, s.runVideoTranscodeJob)
+		jobs.Register(JobKindVideoTranscode, s.videoJob(s.TranscodeVideo))
+		jobs.Register(JobKindVideoPoster, s.videoJob(s.WriteServerPoster))
 	}
 	return s
 }
@@ -60,22 +69,69 @@ func (s *MediaService) enqueueTranscode(ctx context.Context, media models.Medium
 	if _, err := s.jobs.Enqueue(ctx, JobKindVideoTranscode, videoTranscodePayload{MediaID: media.ID}); err != nil {
 		slog.Warn("video transcode: enqueue failed", "media_id", media.ID, "error", err)
 	}
+	if _, err := s.jobs.Enqueue(ctx, JobKindVideoPoster, videoTranscodePayload{MediaID: media.ID}); err != nil {
+		slog.Warn("video poster: enqueue failed", "media_id", media.ID, "error", err)
+	}
 }
 
-func (s *MediaService) runVideoTranscodeJob(ctx context.Context, raw json.RawMessage) error {
-	var p videoTranscodePayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return fmt.Errorf("decode payload: %w", err)
+// WriteServerPoster stores a frame at 10 % of the duration as the poster of a
+// video item. It does nothing when the item already has a poster: a poster
+// from the browser always wins, and it replaces a server poster later.
+func (s *MediaService) WriteServerPoster(ctx context.Context, media models.Medium) error {
+	if !s.ffmpeg.Available() {
+		return ErrFFmpegMissing
 	}
-	media, err := s.getMedia(ctx, p.MediaID)
-	if errors.Is(err, ErrMediaNotFound) {
-		// The media item was deleted after the upload. Nothing to do.
+	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != "" {
 		return nil
 	}
+	base := s.mediaBase()
+	src := filepath.Clean(filepath.Join(base, media.OriginalPath))
+	if !strings.HasPrefix(src, base+string(filepath.Separator)) {
+		return fmt.Errorf("invalid media path")
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.videoTimeout)
+	defer cancel()
+	probe, err := s.ffmpeg.Probe(ctx, src)
 	if err != nil {
 		return err
 	}
-	return s.TranscodeVideo(ctx, media)
+	frame, err := s.ffmpeg.Frame(ctx, src, probe.Duration*posterOffset)
+	if err != nil {
+		return err
+	}
+	// A browser poster can arrive while ffmpeg runs. Read the row again so it
+	// is not overwritten.
+	current, err := s.getMedia(ctx, media.ID)
+	if err != nil {
+		return err
+	}
+	if current.ThumbnailPath.Valid && current.ThumbnailPath.String != "" {
+		return nil
+	}
+	if _, err := s.storePoster(ctx, current, frame); err != nil {
+		return err
+	}
+	slog.Info("video poster: done", "media_id", media.ID)
+	return nil
+}
+
+// videoJob returns a job handler that loads the media item of the payload and
+// runs fn on it. A media item deleted after the upload leaves nothing to do.
+func (s *MediaService) videoJob(fn func(context.Context, models.Medium) error) JobHandler {
+	return func(ctx context.Context, raw json.RawMessage) error {
+		var p videoTranscodePayload
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return fmt.Errorf("decode payload: %w", err)
+		}
+		media, err := s.getMedia(ctx, p.MediaID)
+		if errors.Is(err, ErrMediaNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fn(ctx, media)
+	}
 }
 
 // TranscodeVideo writes the MP4 of a video item. An H.264/AAC source gets a
