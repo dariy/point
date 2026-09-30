@@ -408,6 +408,7 @@ export class MediaBrowser extends Component {
           <div class="media-item-meta">
             ${formatFileSize(m.file_size)} · ${formatDateShort(m.uploaded_at)}
           </div>
+          ${m.hevc_note ? html`<div class="media-item-note" title="Most browsers cannot play HEVC. This install has no ffmpeg to convert it to H.264.">HEVC: may not play in browsers</div>` : ""}
         </div>
         ${actions}
         ${exifPanel}

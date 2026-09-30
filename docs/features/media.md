@@ -110,9 +110,11 @@ p-zm2s holds the work.
   (`media_video.go::WriteServerPoster`). It writes a frame at 10 % of the duration through
   `storePoster`, but only when no poster exists. A poster from the admin browser always
   wins and replaces a server poster. Slim keeps only the browser capture.
-- **Slim does less, and says so.** A slim install serves the original. A pure-Go scan of the
-  MP4/MOV sample description finds `hvc1`/`hev1`, and the admin UI shows a note that this
-  video does not play in every browser.
+- **Slim does less, and says so: done.** A slim install serves the original. At upload, a
+  pure-Go scan of the MP4/MOV sample description (`media_hevc.go::IsHEVCVideo`) finds
+  `hvc1`/`hev1` and writes `VideoCodec: hevc` to the media metadata. When no transcode
+  exists, the admin media API sets `hevc_note`, and the media library shows "HEVC: may not
+  play in browsers" on the item. A video uploaded before this change has no such metadata.
 - **One durable job store for all background side effects.** A SQLite table `jobs`: `id`,
   `kind`, `payload` (JSON), `state` (`queued`, `running`, `done`, `failed`), `attempts`,
   `max_attempts`, `next_run_at`, `last_error`, `created_at`, `updated_at`. One worker

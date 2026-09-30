@@ -1063,3 +1063,8 @@ select.mb-type-filter:hover {
         gap: var(--spacing-sm);
     }
 }
+
+.media-item-note {
+    font-size: var(--font-size-xs);
+    color: var(--color-warning);
+}
