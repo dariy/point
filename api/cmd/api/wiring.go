@@ -72,8 +72,10 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		WithCache(cacheService).
 		WithMetrics(metricsRegistry).
 		WithJobs(jobService)
+	ffmpeg := services.DetectFFmpeg()
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService).
-		WithCache(cacheService)
+		WithCache(cacheService).
+		WithVideo(jobService, ffmpeg)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL).
 		WithBackupHook(cfg.BackupHook, time.Duration(cfg.BackupHookTimeoutSeconds)*time.Second).
 		WithHealth(healthRegistry)
@@ -105,7 +107,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Cache:       cacheService,
 		Scheduler:   schedulerService,
 		Jobs:        jobService,
-		FFmpeg:      services.DetectFFmpeg(),
+		FFmpeg:      ffmpeg,
 		Health:      healthRegistry,
 		Theme:       themeService,
 		Timeline:    timelineService,

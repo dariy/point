@@ -937,3 +937,44 @@ func TestStripGPS_NilSettings(t *testing.T) {
 		t.Error("nil settings must mean on")
 	}
 }
+
+// TestServeSimplifiedMedia_VideoTranscode: the original is served until the
+// transcode exists, then the transcode is served.
+func TestServeSimplifiedMedia_VideoTranscode(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	ctx := context.Background()
+	m, err := repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:     "clip.mov",
+		OriginalPath: "originals/2024/01/clip.mov",
+		FileType:     "video",
+		MimeType:     "video/quicktime",
+		Checksum:     "mov-chk",
+		UploadedAt:   time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("CreateMedia: %v", err)
+	}
+	if _, err := repo.DB().ExecContext(ctx, `UPDATE media SET is_public=1 WHERE id=?`, m.ID); err != nil {
+		t.Fatalf("set is_public: %v", err)
+	}
+	makeMediaFile(t, storage, "2024", "01", "clip.mov")
+
+	if rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "clip.mov", false); rec.Body.String() != "fake-content" {
+		t.Fatalf("before the transcode: got %q, want the original", rec.Body.String())
+	}
+
+	mp4 := filepath.Join(storage, "media", services.VideoTranscodeRelPath(m.OriginalPath))
+	if err := os.MkdirAll(filepath.Dir(mp4), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mp4, []byte("transcoded"), 0o644); err != nil { //nolint:gosec // test file
+		t.Fatal(err)
+	}
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "clip.mov", false)
+	if rec.Body.String() != "transcoded" {
+		t.Fatalf("after the transcode: got %q", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "video/mp4" {
+		t.Errorf("Content-Type = %q, want video/mp4", ct)
+	}
+}

@@ -68,6 +68,17 @@ by upload date (`/YYYY/MM/…`).
 - **Drag-and-drop creation**: dropping an image anywhere in the admin uploads it and
   opens a new post pre-populated with that media; the Web Share Target (PWA) feeds the
   same flow from a phone's share sheet.
+- **Video transcode** (full image, or any install with ffmpeg and ffprobe on the path;
+  `FFMPEG_PATH` overrides the lookup): an uploaded video adds a `video.transcode` job to
+  the job store (`media_video.go`). The upload returns at once. The job writes an MP4
+  with H.264 High, `yuv420p`, CRF 23, the long side at most 1920 (never upscaled), AAC
+  128 kb/s stereo and `-movflags +faststart`. A source that is already H.264 with AAC
+  (or no audio) gets a remux (`-c copy`). The output has no global metadata. It goes to
+  `media/variants/video/<YYYY>/<MM>/<name>.mp4`, through a temporary file and a rename.
+  The original does not change. The media route serves the original until the MP4
+  exists, then serves the MP4 at the same URL. A failed job keeps the original in
+  service. ffmpeg runs with `-threads 2` and a 30 min timeout; the single job worker
+  runs one video at a time. Without ffmpeg (the slim image) no job is added.
 
 ## Media visibility
 
@@ -88,25 +99,14 @@ Gotchas from production:
 
 ### Server video path
 
-Today a video is served as it was uploaded. The runtime has no video decoder, so an iPhone
-HEVC `.mov` does not play in Firefox or on some Chrome platforms, and a poster exists only
-when an admin browser draws a frame (`SaveVideoPoster`). This is the design. The epic
+Without ffmpeg, a video is served as it was uploaded, so an iPhone HEVC `.mov` does not
+play in Firefox or on some Chrome platforms. A poster exists only when an admin browser
+draws a frame (`SaveVideoPoster`). This is the design for the rest. The epic
 p-zm2s holds the work.
 
-- **The full flavor ships ffmpeg. The slim flavor does not.** `build/Dockerfile` adds
-  `ffmpeg` to the runtime `apk add` only when `IS_SLIM=false`. The server finds ffmpeg and
-  ffprobe with `exec.LookPath` at startup (the env var `FFMPEG_PATH` overrides it), so a
-  bare-metal install gets the video path when it has ffmpeg. The binary stays CGO-free:
-  ffmpeg is a child process, not a linked library.
-- **Target: H.264 and AAC in MP4.** H.264 High profile, `yuv420p`, CRF 23, the long side
-  at most 1920 (never upscaled), AAC 128 kb/s stereo, `-movflags +faststart`. A source
-  that is already H.264 and AAC gets a remux only (`-c copy`), which takes seconds.
-- **When: after the upload, as a job.** The upload returns at once. The original is served
-  until the transcode is done, then the media route serves the transcode. A failed job
-  keeps the original in service.
-- **Where the output lives:** `media/variants/video/<YYYY>/<MM>/<name>.mp4`, under
-  `VariantsRoot`. The original does not change. A backup leaves the transcode out, like
-  every other derived file; after a restore, the backfill job writes it again.
+- **Transcode: done.** See "Video transcode" under "What is implemented". A backup leaves
+  the transcode out, like every other derived file; a backfill job to write it again
+  after a restore is p-zm2s.7.
 - **Posters come from the server when it can.** The same job chain writes a frame at 10 %
   of the duration through `storePoster`, but only when no poster exists. A poster from the
   admin browser always wins, and the browser capture stays as the path for slim.
