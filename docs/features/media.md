@@ -84,6 +84,45 @@ Gotchas from production:
   feature pages lose their media.
 - Batch recalcs have a known N+1.
 
+## Not yet implemented
+
+### Server video path
+
+Today a video is served as it was uploaded. The runtime has no video decoder, so an iPhone
+HEVC `.mov` does not play in Firefox or on some Chrome platforms, and a poster exists only
+when an admin browser draws a frame (`SaveVideoPoster`). This is the design. The epic
+p-zm2s holds the work.
+
+- **The full flavor ships ffmpeg. The slim flavor does not.** `build/Dockerfile` adds
+  `ffmpeg` to the runtime `apk add` only when `IS_SLIM=false`. The server finds ffmpeg and
+  ffprobe with `exec.LookPath` at startup (the env var `FFMPEG_PATH` overrides it), so a
+  bare-metal install gets the video path when it has ffmpeg. The binary stays CGO-free:
+  ffmpeg is a child process, not a linked library.
+- **Target: H.264 and AAC in MP4.** H.264 High profile, `yuv420p`, CRF 23, the long side
+  at most 1920 (never upscaled), AAC 128 kb/s stereo, `-movflags +faststart`. A source
+  that is already H.264 and AAC gets a remux only (`-c copy`), which takes seconds.
+- **When: after the upload, as a job.** The upload returns at once. The original is served
+  until the transcode is done, then the media route serves the transcode. A failed job
+  keeps the original in service.
+- **Where the output lives:** `media/variants/video/<YYYY>/<MM>/<name>.mp4`, under
+  `VariantsRoot`. The original does not change. A backup leaves the transcode out, like
+  every other derived file; after a restore, the backfill job writes it again.
+- **Posters come from the server when it can.** The same job chain writes a frame at 10 %
+  of the duration through `storePoster`, but only when no poster exists. A poster from the
+  admin browser always wins, and the browser capture stays as the path for slim.
+- **Slim does less, and says so.** A slim install serves the original. A pure-Go scan of the
+  MP4/MOV sample description finds `hvc1`/`hev1`, and the admin UI shows a note that this
+  video does not play in every browser.
+- **One durable job store for all background side effects.** A SQLite table `jobs`: `id`,
+  `kind`, `payload` (JSON), `state` (`queued`, `running`, `done`, `failed`), `attempts`,
+  `max_attempts`, `next_run_at`, `last_error`, `created_at`, `updated_at`. One worker
+  goroutine drains it, woken by a channel on enqueue and by a poll tick. It recovers
+  panics with `utils.SafeGo`. At startup, a `running` row goes back to `queued`, so a
+  restart loses no work. A failure retries with exponential backoff until `max_attempts`.
+  The kinds are `video.transcode`, `video.poster`, `instagram.crosspost`, and later the
+  federation outbox. Video jobs run one at a time, and ffmpeg gets a timeout and a thread
+  limit, so a transcode cannot starve the web server.
+
 ## Key decisions
 
 - **Content-addressed dedup at the service layer** rather than per-caller checks.
