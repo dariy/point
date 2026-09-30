@@ -65,7 +65,10 @@ export function getStats() {
 /**
  * Background-job health: last run / last success / last error per job.
  * Per process — a restart clears it.
- * @returns {Promise<{tasks: TaskHealth[], degraded: number, uptime: number}>}
+ * `backup` reads the disk, so it survives a restart: managed is BACKUP_MANAGED,
+ * enabled is whether scheduled backups run, last_backup the newest archive.
+ * @returns {Promise<{tasks: TaskHealth[], degraded: number, uptime: number,
+ *   backup?: {managed: boolean, enabled: boolean, last_backup?: string}}>}
  */
 export function getHealth() {
   return api.get('/api/system/health');

@@ -49,6 +49,32 @@ recomputed on upload. This is an **integrity** check (detects corruption/truncat
 not an authenticity one — a bare checksum proves nothing about a hostile archive;
 password re-entry and tar-traversal hardening cover that.
 
+## Schedule and managed mode (`BACKUP_MANAGED`)
+
+A daily task at 03:00 creates a backup when one is due (`backup_interval_days`),
+then keeps the newest `backup_keep` archives (0 = keep all). Setup seeds
+`enable_backup=true`, so a new install backs up from the first night. The admin
+can turn the toggle off in the Backups settings.
+
+A host that sells backups sets `BACKUP_MANAGED=true`. Then:
+
+- The scheduler ignores `enable_backup=false`. Scheduled backups always run.
+- Retention is at least 7 archives. A lower `backup_keep` is raised to 7; 0 stays
+  "keep all".
+- The Backups settings show "managed by your host" in place of the toggle.
+
+Unset (the default), the toggle and `backup_keep` apply as written.
+
+`GET /api/system/health` has a `backup` block for a host's dead-man check. It
+accepts an API key, so no admin session is necessary:
+
+```json
+"backup": {"managed": true, "enabled": true, "last_backup": "2026-09-30T03:00:12Z"}
+```
+
+`last_backup` is the modification time of the newest archive on disk. A restart
+does not clear it. It is absent when there is no archive.
+
 ## Move out / move in
 
 The backups list also supports getting an archive off the box and bringing one in.

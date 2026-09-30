@@ -56,6 +56,37 @@ type SystemService struct {
 	backupHook        string
 	backupHookTimeout time.Duration
 	health            *HealthRegistry
+
+	// managed is BACKUP_MANAGED: scheduled backups are pinned on and
+	// retention has a floor. See BackupEnabled / BackupKeep.
+	managed bool
+}
+
+// ManagedMinBackupKeep is the retention floor under BACKUP_MANAGED.
+const ManagedMinBackupKeep = 7
+
+// WithManagedBackups sets BACKUP_MANAGED.
+func (s *SystemService) WithManagedBackups(managed bool) *SystemService {
+	s.managed = managed
+	return s
+}
+
+// BackupManaged reports whether the host pins backups on (BACKUP_MANAGED).
+func (s *SystemService) BackupManaged() bool { return s.managed }
+
+// BackupEnabled returns whether scheduled backups run, given the
+// enable_backup setting value. Managed mode ignores the setting.
+func (s *SystemService) BackupEnabled(setting string) bool {
+	return s.managed || setting == "true"
+}
+
+// BackupKeep returns the retention to apply for the backup_keep setting.
+// Managed mode raises it to ManagedMinBackupKeep; 0 (keep all) stays 0.
+func (s *SystemService) BackupKeep(keep int) int {
+	if s.managed && keep > 0 && keep < ManagedMinBackupKeep {
+		return ManagedMinBackupKeep
+	}
+	return keep
 }
 
 func NewSystemService(repo repository.Repository, dataPath, dbPath string) *SystemService {
@@ -311,9 +342,10 @@ func (s *SystemService) RotateBackups(keep int) (int, error) {
 	return deleted, nil
 }
 
-// lastBackupTime returns the modtime of the most recent .tar.gz backup, or the
-// zero time when there are none.
-func (s *SystemService) lastBackupTime() time.Time {
+// LastBackupTime returns the modtime of the most recent .tar.gz backup, or the
+// zero time when there are none. It reads the disk, so a restart does not
+// reset it.
+func (s *SystemService) LastBackupTime() time.Time {
 	backupDir := filepath.Join(s.dataPath, "backups")
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
@@ -343,7 +375,7 @@ func (s *SystemService) BackupDue(intervalDays int) bool {
 	if intervalDays <= 1 {
 		return true
 	}
-	last := s.lastBackupTime()
+	last := s.LastBackupTime()
 	if last.IsZero() {
 		return true
 	}

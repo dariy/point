@@ -160,6 +160,10 @@ func TestSetup_Success(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	// A fresh install backs up by default (p-hosting-ready-vyok.2).
+	if v, _ := h.settingsSvc.GetSetting(context.Background(), "enable_backup", ""); v != "true" {
+		t.Errorf("enable_backup = %q, want true", v)
+	}
 }
 
 // Setup logs the new owner in: the response carries a usable session cookie, so

@@ -154,6 +154,12 @@ type Config struct {
 	// duration). Default 3600. A legitimately slow upload that trips this is
 	// reported as a failure — raise it rather than leave the alert firing.
 	BackupHookTimeoutSeconds int `mapstructure:"BACKUP_HOOK_TIMEOUT_SECONDS"`
+	// BackupManaged pins scheduled backups on for a host that sells them.
+	// When true, the scheduler ignores enable_backup=false, retention never
+	// drops below services.ManagedMinBackupKeep, and the Backups settings show
+	// the schedule as managed by the host. Default false: a self-hoster keeps
+	// full control of the toggle.
+	BackupManaged bool `mapstructure:"BACKUP_MANAGED"`
 }
 
 // ParseTrustedProxies turns a TRUSTED_PROXIES value — a comma-separated list of
@@ -241,6 +247,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("TRUSTED_PROXIES", "")
 	v.SetDefault("BACKUP_HOOK", "")
 	v.SetDefault("BACKUP_HOOK_TIMEOUT_SECONDS", 3600)
+	v.SetDefault("BACKUP_MANAGED", false)
 
 	err = v.ReadInConfig()
 	if err != nil {

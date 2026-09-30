@@ -78,6 +78,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		WithVideo(jobService, ffmpeg)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL).
 		WithBackupHook(cfg.BackupHook, time.Duration(cfg.BackupHookTimeoutSeconds)*time.Second).
+		WithManagedBackups(cfg.BackupManaged).
 		WithHealth(healthRegistry)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
 	systemService.CleanupPartialBackups()

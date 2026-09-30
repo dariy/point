@@ -186,7 +186,24 @@ func (h *SystemHandler) GetHealth(c echo.Context) error {
 		// capabilities lists optional tools the server found at startup.
 		// The slim image has no ffmpeg, so it serves video originals as is.
 		"capabilities": map[string]any{"ffmpeg": h.ffmpeg.Available()},
+		"backup":       h.backupHealth(c.Request().Context()),
 	})
+}
+
+// backupHealth is the backup block of GetHealth: whether the host manages
+// backups, whether scheduled backups run, and the newest archive time. A
+// host's dead-man check reads last_backup with an API key; it comes from the
+// disk, so it survives a restart, unlike the task entries above.
+func (h *SystemHandler) backupHealth(ctx context.Context) map[string]any {
+	setting, _ := h.settingsService.GetSetting(ctx, "enable_backup", "true")
+	out := map[string]any{
+		"managed": h.systemService.BackupManaged(),
+		"enabled": h.systemService.BackupEnabled(setting),
+	}
+	if last := h.systemService.LastBackupTime(); !last.IsZero() {
+		out["last_backup"] = last
+	}
+	return out
 }
 
 var startTime = time.Now()
@@ -509,6 +526,8 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 			keep = n
 		}
 	}
+
+	keep = h.systemService.BackupKeep(keep)
 
 	// Run in the background: a multi-GB archive can take minutes — far longer than
 	// a request should stay open. Progress is observable via ListBackups (the

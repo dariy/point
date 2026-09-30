@@ -107,10 +107,11 @@ func (s *SchedulerService) Start(ctx context.Context) {
 
 	// Daily task: Backups (checked at 3 AM). The cadence (backup_interval_days)
 	// and retention (backup_keep) are admin settings; the check runs daily but
-	// only creates a backup when one is due, then prunes old ones.
+	// only creates a backup when one is due, then prunes old ones. BACKUP_MANAGED
+// overrides the toggle and puts a floor under retention.
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
 		enabled, _ := s.settingsService.GetSetting(ctx, "enable_backup", "true")
-		if enabled != "true" {
+		if !s.systemService.BackupEnabled(enabled) {
 			return nil
 		}
 		if !s.systemService.BackupDue(s.settingInt(ctx, "backup_interval_days", 1)) {
@@ -119,7 +120,7 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		if _, _, err := s.systemService.CreateBackup(ctx); err != nil {
 			return err
 		}
-		_, err := s.systemService.RotateBackups(s.settingInt(ctx, "backup_keep", 7))
+		_, err := s.systemService.RotateBackups(s.systemService.BackupKeep(s.settingInt(ctx, "backup_keep", 7)))
 		return err
 	})
 }
