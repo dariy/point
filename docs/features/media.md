@@ -11,7 +11,7 @@ by upload date (`/YYYY/MM/…`).
   bytes uploaded twice resolve to one stored file (this is what makes Instagram import
   re-runs cheap).
 - **Thumbnails**: a fixed ladder of six rungs — 128/256/512/1024/1600/2048 px on the
-  **longest side**, aspect-preserving (`imaging.Fit`), JPEG only (the binary is CGO-free,
+  **longest side**, aspect-preserving (`fitImage`, Catmull-Rom from `golang.org/x/image/draw`), JPEG only (the binary is CGO-free,
   so no WebP/AVIF encoder). Upload and import write the rungs up to 1024
   (`UploadMaxVariantSize`). The first request for any missing rung writes every missing
   rung, and the rebuild prewarm does the same, so 1600 and 2048 appear then. A rung at
@@ -21,7 +21,7 @@ by upload date (`/YYYY/MM/…`).
   Legacy `?thumb` still resolves (bare → 512, `?thumb=128` → 128), so old
   `posts.thumbnail_path` rows and published post content keep working with no data
   migration. Only `JPEG_QUALITY` is configurable; there is no dimension setting.
-- **Decoded inputs**: JPEG, PNG, GIF, BMP, TIFF (from `imaging`) and WebP, lossy and
+- **Decoded inputs**: JPEG, PNG, GIF, BMP, TIFF (standard library and `golang.org/x/image`) and WebP, lossy and
   lossless (pure-Go `golang.org/x/image/webp`). A decoded input gets a stored
   `width`/`height`, the JPEG ladder and the pixel guard. A WebP row stored before WebP
   decode existed has no size; the first variant request stores it

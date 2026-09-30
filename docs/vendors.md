@@ -70,7 +70,7 @@ Direct dependencies from `api/go.mod`, grouped by purpose:
 - [`gorilla/css`](https://github.com/gorilla/css) — CSS tokenizer, used by `SanitizePostCSS` to validate per-post custom CSS (see [Themes](./features/themes.md)).
 
 **Media & EXIF**
-- [`disintegration/imaging`](https://github.com/disintegration/imaging) — image decoding, resizing (`imaging.Fill`/Lanczos), thumbnail generation.
+- [`golang.org/x/image`](https://pkg.go.dev/golang.org/x/image) — BMP, TIFF and WebP decode, and Catmull-Rom resizing (`x/image/draw`) for the thumbnail ladder.
 - [`dsoprea/go-exif/v3`](https://github.com/dsoprea/go-exif), `dsoprea/go-jpeg-image-structure/v2`, `dsoprea/go-iptc`, `dsoprea/go-photoshop-info-format`, `dsoprea/go-utility/v2` — EXIF/IPTC read and rewrite (`api/internal/services/exif_writer.go`).
 - [`rwcarlsen/goexif`](https://github.com/rwcarlsen/goexif) — secondary EXIF reader used alongside dsoprea's.
 

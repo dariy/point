@@ -840,7 +840,7 @@ func TestVariant_OneRequestBuildsWholeLadder(t *testing.T) {
 	}
 }
 
-// A source smaller than a rung gets no file for it: imaging.Fit does not
+// A source smaller than a rung gets no file for it: fitImage does not
 // upscale, so the rungs above it would be byte-identical copies. Callers fall
 // back to the original.
 func TestVariant_SkipsRungsAboveSource(t *testing.T) {
