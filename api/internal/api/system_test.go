@@ -1167,4 +1167,30 @@ func TestSystemHandler_ListAndRetryJobs(t *testing.T) {
 	if err := retry("x"); !errors.As(err, &he) || he.Code != http.StatusBadRequest {
 		t.Fatalf("bad id: %v", err)
 	}
+
+	// Clear failed removes only failed rows.
+	if err := h.repo.FinishJob(ctx, id, services.JobFailed, "boom", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := jobs.Enqueue(ctx, "k", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	c = e.NewContext(httptest.NewRequest(http.MethodPost, "/api/system/jobs/clear-failed", nil), rec)
+	if err := h.ClearFailedJobs(c); err != nil {
+		t.Fatalf("ClearFailedJobs: %v", err)
+	}
+	var cleared struct {
+		Deleted int64 `json:"deleted"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &cleared); err != nil || cleared.Deleted != 1 {
+		t.Fatalf("clear resp = %s, %v", rec.Body.String(), err)
+	}
+	if _, err := h.repo.GetJob(ctx, id); err == nil {
+		t.Fatal("failed job remains")
+	}
+	if _, err := h.repo.GetJob(ctx, queued); err != nil {
+		t.Fatalf("queued job gone: %v", err)
+	}
 }

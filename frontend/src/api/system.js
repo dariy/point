@@ -102,6 +102,14 @@ export function retryJob(id) {
 }
 
 /**
+ * Remove every failed job. Only this manual action removes failed jobs.
+ * @returns {Promise<{ deleted: number }>}
+ */
+export function clearFailedJobs() {
+  return api.post("/api/system/jobs/clear-failed");
+}
+
+/**
  * The last `lines` lines of the server log (100 by default, at most 1000).
  * @param {{ lines?: number }} [params]
  * @returns {Promise<string[]>}

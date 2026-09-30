@@ -107,6 +107,19 @@ func (h *SystemHandler) RetryJob(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"status": "queued"})
 }
 
+// ClearFailedJobs removes every failed job and returns the count. It is the
+// only path that removes failed jobs; the daily prune leaves them.
+func (h *SystemHandler) ClearFailedJobs(c echo.Context) error {
+	if h.jobs == nil {
+		return c.JSON(http.StatusOK, map[string]any{"deleted": 0})
+	}
+	n, err := h.jobs.ClearFailed(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not clear failed jobs")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"deleted": n})
+}
+
 // WithStorageQuotaMB attaches the operator-configured storage allowance. A
 // setter for the same reason as WithHealth, and because 0 (unlimited) is the
 // right behaviour for every caller that does not set one.

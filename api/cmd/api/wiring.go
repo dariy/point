@@ -79,7 +79,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	systemService.CleanupPartialBackups()
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry).WithJobs(jobService)
 
 	s3Presigner, err := services.NewS3Presigner(
 		os.Getenv("S3_ENDPOINT"),

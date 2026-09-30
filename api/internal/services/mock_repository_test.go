@@ -1425,3 +1425,11 @@ func (m *mockRepository) CountJobsByState(ctx context.Context) (map[string]int64
 func (m *mockRepository) RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error) {
 	return false, fmt.Errorf("RetryFailedJob not implemented")
 }
+
+func (m *mockRepository) DeleteDoneJobsBefore(ctx context.Context, before time.Time) (int64, error) {
+	return 0, fmt.Errorf("DeleteDoneJobsBefore not implemented")
+}
+
+func (m *mockRepository) DeleteFailedJobs(ctx context.Context) (int64, error) {
+	return 0, fmt.Errorf("DeleteFailedJobs not implemented")
+}
