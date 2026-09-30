@@ -1194,3 +1194,20 @@ func TestSystemHandler_ListAndRetryJobs(t *testing.T) {
 		t.Fatalf("queued job gone: %v", err)
 	}
 }
+
+func TestSystemHandler_ClearFailedJobsNoStoreAndError(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	if err := h.ClearFailedJobs(e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), rec)); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("no store: %v, %d", err, rec.Code)
+	}
+	h = h.WithJobs(services.NewJobService(h.repo))
+	_ = h.repo.Close()
+	var he *echo.HTTPError
+	err := h.ClearFailedJobs(e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder()))
+	if !errors.As(err, &he) || he.Code != http.StatusInternalServerError {
+		t.Fatalf("closed DB: %v", err)
+	}
+}

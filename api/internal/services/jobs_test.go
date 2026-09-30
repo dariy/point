@@ -236,3 +236,11 @@ func TestSchedulerPruneJobs(t *testing.T) {
 		t.Fatal("old done job remains after the scheduler prune")
 	}
 }
+
+func TestSchedulerPruneJobsError(t *testing.T) {
+	s, _ := newTestJobs(t)
+	_ = s.repo.Close()
+	if err := (&SchedulerService{}).WithJobs(s).pruneJobs(context.Background()); err == nil {
+		t.Fatal("pruneJobs on a closed DB: no error")
+	}
+}

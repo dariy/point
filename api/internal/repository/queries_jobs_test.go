@@ -133,3 +133,15 @@ func TestRepository_JobsDelete(t *testing.T) {
 		t.Fatal("failed rows remain after clear")
 	}
 }
+
+func TestRepository_JobsDeleteErrors(t *testing.T) {
+	repo := setupTestDB(t)
+	_ = repo.Close()
+	ctx := context.Background()
+	if _, err := repo.DeleteDoneJobsBefore(ctx, time.Now()); err == nil {
+		t.Fatal("DeleteDoneJobsBefore on a closed DB: no error")
+	}
+	if _, err := repo.DeleteFailedJobs(ctx); err == nil {
+		t.Fatal("DeleteFailedJobs on a closed DB: no error")
+	}
+}
