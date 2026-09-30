@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -57,6 +58,10 @@ type MediaService struct {
 	// variantFlight collapses concurrent ladder generation per media ID. See
 	// Variant for why the global decode semaphore is not enough on its own.
 	variantFlight singleflight.Group
+
+	// deferred counts the background AVIF and HEIC decodes in flight. See
+	// media_deferred.go.
+	deferred sync.WaitGroup
 
 	// prewarming is held for the life of a background prewarm so a second
 	// rebuild does not start a duplicate one. See startPrewarm.
@@ -199,7 +204,17 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	if strings.HasPrefix(p.MimeType, "image/") {
 		fileType = "image"
 		// Load image for dimensions and the thumbnail ladder
-		src, err := s.decodeImage(ctx, p.Content)
+		var src image.Image
+		var err error
+		if isDeferredDecode(p.MimeType) {
+			// The decode runs after the row exists. See media_deferred.go.
+			var w, h int64
+			w, h, err = s.deferredHeader(p.Content)
+			width = sql.NullInt64{Int64: w, Valid: w > 0}
+			height = sql.NullInt64{Int64: h, Valid: h > 0}
+		} else {
+			src, err = s.decodeImage(ctx, p.Content)
+		}
 		if errors.Is(err, ErrTooLarge) {
 			// Other decode failures are tolerated below — the file is stored
 			// without dimensions or a thumbnail. "Too many pixels" is not a
@@ -208,7 +223,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			// never learn why.
 			return models.Medium{}, err
 		}
-		if err == nil {
+		if err == nil && src != nil {
 			decoded = src
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -278,6 +293,10 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	// failures (e.g. no network, no place name) must not fail the upload.
 	s.tagPostFromGPS(ctx, p.PostID, metadata)
 
+	if fileType == "image" && isDeferredDecode(p.MimeType) {
+		s.startDeferred(media, p.Content)
+	}
+
 	return media, nil
 }
 
@@ -337,7 +356,17 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	if strings.HasPrefix(mimeType, "image/") {
 		fileType = "image"
-		src, err := s.decodeImage(ctx, content)
+		var src image.Image
+		var err error
+		if isDeferredDecode(mimeType) {
+			// The decode runs after the row exists. See media_deferred.go.
+			var w, h int64
+			w, h, err = s.deferredHeader(content)
+			width = sql.NullInt64{Int64: w, Valid: w > 0}
+			height = sql.NullInt64{Int64: h, Valid: h > 0}
+		} else {
+			src, err = s.decodeImage(ctx, content)
+		}
 		if errors.Is(err, ErrTooLarge) {
 			// Other decode failures are tolerated below — the file is stored
 			// without dimensions or a thumbnail. "Too many pixels" is not a
@@ -346,7 +375,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 			// never learn why.
 			return models.Medium{}, err
 		}
-		if err == nil {
+		if err == nil && src != nil {
 			decoded = src
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -381,7 +410,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		}
 	}
 
-	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
+	media, err := s.repo.CreateMedia(ctx, models.CreateMediaParams{
 		Filename:         filename,
 		OriginalPath:     originalRelPath,
 		ThumbnailPath:    sql.NullString{},
@@ -398,6 +427,10 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		OriginalMetadata: metadataJSON,
 		UploadedAt:       now,
 	})
+	if err == nil && fileType == "image" && isDeferredDecode(mimeType) {
+		s.startDeferred(media, content)
+	}
+	return media, err
 }
 
 func (s *MediaService) GetMediaByID(ctx context.Context, id int64) (models.Medium, error) {
@@ -631,6 +664,7 @@ func (s *MediaService) DeleteMedia(ctx context.Context, id int64) error {
 	// Delete files
 	originalFull := filepath.Join(s.cfg.StoragePath, "media", media.OriginalPath)
 	_ = os.Remove(originalFull)
+	s.removeHEIFArchive(media)
 
 	if media.ThumbnailPath.Valid {
 		thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", media.ThumbnailPath.String)
@@ -652,6 +686,7 @@ func (s *MediaService) BulkDeleteMedia(ctx context.Context, ids []int64) (int, e
 	for _, m := range records {
 		originalFull := filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath)
 		_ = os.Remove(originalFull)
+		s.removeHEIFArchive(m)
 		if m.ThumbnailPath.Valid {
 			thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String)
 			_ = os.Remove(thumbnailFull)
@@ -688,6 +723,7 @@ func (s *MediaService) CleanupOrphaned(ctx context.Context) (int, int64, error) 
 		ids = append(ids, m.ID)
 		freed += m.FileSize
 		_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath))
+		s.removeHEIFArchive(m)
 		if m.ThumbnailPath.Valid {
 			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
 		}
@@ -747,8 +783,14 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 	newOrigRel := filepath.Join(newRelDir, newBase)
 	newOrigFull := filepath.Join(s.cfg.StoragePath, "media", newOrigRel)
 
+	archive := s.heifArchive(m)
 	if err := os.Rename(oldOrigFull, newOrigFull); err != nil {
 		return models.Medium{}, fmt.Errorf("rename file: %w", err)
+	}
+	// The archival HEIC beside a converted JPEG follows it.
+	if archive != "" {
+		newArchive := strings.TrimSuffix(newOrigRel, filepath.Ext(newOrigRel)) + filepath.Ext(archive)
+		_ = os.Rename(filepath.Join(s.cfg.StoragePath, "media", archive), filepath.Join(s.cfg.StoragePath, "media", newArchive))
 	}
 
 	// Drop the ladder rather than renaming four files: a rung is keyed on the
@@ -1983,20 +2025,8 @@ func (s *MediaService) maxImagePixels() int64 {
 // This lives here rather than in the HTTP handler because the Instagram
 // importer reaches the same decode with images the operator never chose.
 func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Image, error) {
-	if limit := s.maxImagePixels(); limit > 0 {
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-		if err != nil {
-			// Unreadable header. Fall through to the full decode, which
-			// produces the caller's usual decode error rather than a
-			// misleading "too large".
-			slog.Debug("image header unreadable, skipping pixel guard", "error", err)
-		} else if cfg.Width > 0 && cfg.Height > 0 {
-			if px := int64(cfg.Width) * int64(cfg.Height); px > limit {
-				return nil, wrapKind(ErrTooLarge, fmt.Errorf(
-					"image too large: %d megapixels (%dx%d), limit %d megapixels",
-					(px+999_999)/1_000_000, cfg.Width, cfg.Height, limit/1_000_000))
-			}
-		}
+	if _, err := s.checkPixels(data); err != nil {
+		return nil, err
 	}
 
 	if decodeObserver != nil {
@@ -2010,5 +2040,34 @@ func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Imag
 		return nil, ctx.Err()
 	}
 
+	if isHEIFData(data) {
+		return safeHEIFDecode(bytes.NewReader(data))
+	}
 	return safeImagingDecode(bytes.NewReader(data))
+}
+
+// checkPixels is the pixel guard of decodeImage. It reads only the header and
+// returns the header's config, which is zero when the header is unreadable.
+// The deferred AVIF and HEIC path calls it on its own, so the upload refuses
+// an oversized image before the slow decode starts.
+func (s *MediaService) checkPixels(data []byte) (image.Config, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if limit := s.maxImagePixels(); limit > 0 {
+		if err != nil {
+			// Unreadable header. Fall through to the full decode, which
+			// produces the caller's usual decode error rather than a
+			// misleading "too large".
+			slog.Debug("image header unreadable, skipping pixel guard", "error", err)
+		} else if cfg.Width > 0 && cfg.Height > 0 {
+			if px := int64(cfg.Width) * int64(cfg.Height); px > limit {
+				return image.Config{}, wrapKind(ErrTooLarge, fmt.Errorf(
+					"image too large: %d megapixels (%dx%d), limit %d megapixels",
+					(px+999_999)/1_000_000, cfg.Width, cfg.Height, limit/1_000_000))
+			}
+		}
+	}
+	if err != nil {
+		return image.Config{}, nil
+	}
+	return cfg, nil
 }
