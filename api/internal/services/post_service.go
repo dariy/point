@@ -42,6 +42,8 @@ type PostService struct {
 	// metrics counts view-count flush losses. Nil is valid and counts nothing,
 	// which is what METRICS_ENABLED=false leaves here.
 	metrics *metrics.Registry
+	// jobs runs cross-posts durably. Nil falls back to a plain goroutine.
+	jobs *JobService
 }
 
 // WithMetrics attaches the metrics registry. The only thing counted here is a
