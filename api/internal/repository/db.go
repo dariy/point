@@ -124,6 +124,13 @@ type Repository interface {
 
 	// System
 	GetSystemStats(ctx context.Context) (SystemStats, error)
+
+	// Jobs (services.JobService)
+	InsertJob(ctx context.Context, kind, payload string, maxAttempts int64, runAt time.Time) (int64, error)
+	ClaimDueJob(ctx context.Context, now time.Time) (*Job, error)
+	FinishJob(ctx context.Context, id int64, state, lastError string, nextRunAt time.Time) error
+	RequeueRunningJobs(ctx context.Context) (int64, error)
+	GetJob(ctx context.Context, id int64) (Job, error)
 	BackupDB(ctx context.Context, destPath string) error
 
 	// Tags

@@ -28,6 +28,7 @@ type AppServices struct {
 	System      *services.SystemService
 	Cache       *services.CacheService
 	Scheduler   *services.SchedulerService
+	Jobs        *services.JobService
 	Health      *services.HealthRegistry
 	Theme       *services.ThemeService
 	Timeline    *services.TimelineService
@@ -99,6 +100,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		System:      systemService,
 		Cache:       cacheService,
 		Scheduler:   schedulerService,
+		Jobs:        services.NewJobService(repo),
 		Health:      healthRegistry,
 		Theme:       themeService,
 		Timeline:    timelineService,

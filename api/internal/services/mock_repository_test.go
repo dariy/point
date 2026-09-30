@@ -1393,3 +1393,23 @@ func (m *mockRepository) DeleteOAuthClient(ctx context.Context, clientID string)
 func (m *mockRepository) DeleteAllOAuthTokens(ctx context.Context) error {
 	return nil
 }
+
+func (m *mockRepository) InsertJob(ctx context.Context, kind, payload string, maxAttempts int64, runAt time.Time) (int64, error) {
+	return 0, fmt.Errorf("InsertJob not implemented")
+}
+
+func (m *mockRepository) ClaimDueJob(ctx context.Context, now time.Time) (*repository.Job, error) {
+	return nil, fmt.Errorf("ClaimDueJob not implemented")
+}
+
+func (m *mockRepository) FinishJob(ctx context.Context, id int64, state, lastError string, nextRunAt time.Time) error {
+	return fmt.Errorf("FinishJob not implemented")
+}
+
+func (m *mockRepository) RequeueRunningJobs(ctx context.Context) (int64, error) {
+	return 0, fmt.Errorf("RequeueRunningJobs not implemented")
+}
+
+func (m *mockRepository) GetJob(ctx context.Context, id int64) (repository.Job, error) {
+	return repository.Job{}, fmt.Errorf("GetJob not implemented")
+}
