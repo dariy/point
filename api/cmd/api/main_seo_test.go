@@ -215,8 +215,8 @@ func TestPrerenderWithholdsHiddenTags(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := get(tc.path)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("GET %s = %d, want 200 (the SPA still renders)", tc.path, rec.Code)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("GET %s = %d, want 404 (the SPA still renders its shell)", tc.path, rec.Code)
 			}
 			body := rec.Body.String()
 			mustNotContain(t, body, "og:title", "<link rel=\"canonical\"")
@@ -536,5 +536,51 @@ func TestPrerenderForwardedProtoIsReadAsAnEnum(t *testing.T) {
 			mustContain(t, body, `<link rel="canonical" href="`+tc.want+`">`)
 			mustNotContain(t, body, "onload", "javascript:", "https, http")
 		})
+	}
+}
+
+// Known client routes answer 200; a path outside the route table, or a slug
+// that resolves to nothing public, answers 404 with the shell all the same.
+func TestShellStatusFollowsTheRouteTable(t *testing.T) {
+	env, get := seoFixture(t)
+	if _, err := env.repo.CreatePost(context.Background(), models.CreatePostParams{
+		Title: "Live", Slug: "live", AuthorID: 1, Status: "published", Content: "x",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]int{
+		"/":                          http.StatusOK,
+		"/posts/live":                http.StatusOK,
+		"/posts/live/":               http.StatusOK,
+		"/tags":                      http.StatusOK,
+		"/map":                       http.StatusOK,
+		"/search":                    http.StatusOK,
+		"/preview/abc":               http.StatusOK,
+		"/light":                     http.StatusOK,
+		"/light/anything":            http.StatusOK,
+		"/setup":                     http.StatusOK,
+		"/posts/missing":             http.StatusNotFound,
+		"/posts/live/extra":          http.StatusNotFound,
+		"/.env":                      http.StatusNotFound,
+		"/.env.backup":               http.StatusNotFound,
+		"/definitely-not-a-page-xyz": http.StatusNotFound,
+		"/welcome/healthz":           http.StatusNotFound,
+	} {
+		rec := get(path)
+		if rec.Code != want {
+			t.Errorf("GET %s = %d, want %d", path, rec.Code, want)
+		}
+		mustContain(t, rec.Body.String(), "<title>")
+	}
+}
+
+// A signed-in viewer may open a draft by its slug; the SPA shows it to them, so
+// the status must not call it missing.
+func TestShellStatusKeepsSlugsForSignedInViewers(t *testing.T) {
+	if got := shellStatus("/posts/draft", seoMeta{}, true); got != http.StatusOK {
+		t.Errorf("signed-in /posts/draft = %d, want 200", got)
+	}
+	if got := shellStatus("/nope", seoMeta{}, true); got != http.StatusNotFound {
+		t.Errorf("signed-in /nope = %d, want 404", got)
 	}
 }

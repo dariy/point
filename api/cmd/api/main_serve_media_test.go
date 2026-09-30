@@ -125,9 +125,16 @@ func TestServeSimplifiedMedia_SPAFallback_NoIndex(t *testing.T) {
 
 func TestServeSimplifiedMedia_SPAFallback_WithIndex(t *testing.T) {
 	repo, storage := newMediaRepo(t)
-	rec := serveMediaRequest(t, storage, "<html><head></head><body>SPA</body></html>", repo, "not-a-year", "01", "photo.jpg", false)
+	const shell = "<html><head></head><body>SPA</body></html>"
+	// An admin route with three segments is a page.
+	rec := serveMediaRequest(t, storage, shell, repo, "light", "tags", "travel", false)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200 (serve index.html), got %d", rec.Code)
+	}
+	// Any other non-date path is not a page: the shell with 404.
+	rec = serveMediaRequest(t, storage, shell, repo, "not-a-year", "01", "photo.jpg", false)
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "SPA") {
+		t.Errorf("expected 404 with the shell, got %d", rec.Code)
 	}
 }
 
