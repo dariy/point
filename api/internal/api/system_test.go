@@ -949,7 +949,7 @@ func TestSystemHandler_GetHealth(t *testing.T) {
 	registry := services.NewHealthRegistry()
 	registry.Record("daily backup", nil)
 	registry.Record("session cleanup", errors.New("db is gone"))
-	h = h.WithHealth(registry)
+	h = h.WithHealth(registry).WithFFmpeg(&services.FFmpeg{FFmpegPath: "/x/ffmpeg", FFprobePath: "/x/ffprobe"})
 
 	e := echo.New()
 	rec := httptest.NewRecorder()
@@ -998,6 +998,9 @@ func TestSystemHandler_GetHealth(t *testing.T) {
 	if resp.Tasks[1].LastRun == "" {
 		t.Error("failed task should still report last_run")
 	}
+	if !strings.Contains(rec.Body.String(), `"capabilities":{"ffmpeg":true}`) {
+		t.Errorf("expected ffmpeg present with WithFFmpeg, got %s", rec.Body.String())
+	}
 }
 
 // No registry attached (or nothing has run yet) must be an empty report, not
@@ -1017,6 +1020,9 @@ func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"tasks":[]`) {
 		t.Errorf("expected an empty task list, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"capabilities":{"ffmpeg":false}`) {
+		t.Errorf("expected ffmpeg absent without WithFFmpeg, got %s", rec.Body.String())
 	}
 }
 

@@ -68,6 +68,11 @@ RUN sh ./scripts/build-css.sh
 FROM docker.io/library/alpine:3.24
 
 WORKDIR /app
+ARG IS_SLIM=false
+
+# The full flavour ships ffmpeg for the server video path (transcode, posters).
+# The slim flavour leaves it out and serves video originals as uploaded.
+RUN if [ "$IS_SLIM" != "true" ]; then apk add --no-cache ffmpeg; fi
 
 # Install only necessary runtime dependencies and create user in one layer
 RUN apk add --no-cache \
@@ -94,7 +99,6 @@ COPY --chown=appuser:appuser --from=remark42 /srv /app/remark42
 # __BUILD_VERSION__ placeholder; the server substitutes APP_VERSION into it at
 # serve time (see cmd/api/main.go), so the shipped file is never mutated.
 ARG BUILD_VERSION=dev
-ARG IS_SLIM=false
 ENV IS_SLIM=${IS_SLIM}
 ENV APP_VERSION=${BUILD_VERSION}
 ENV DATABASE_URL=/data/point.db
