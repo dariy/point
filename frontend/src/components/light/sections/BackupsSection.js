@@ -9,7 +9,7 @@
  */
 
 import { Component } from "../../Component.js";
-import { listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer } from "../../../api/system.js";
+import { getHealth, listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer } from "../../../api/system.js";
 import { sha256 } from "../../../api/auth.js";
 import { getAllSettings, updateSettings } from "../../../api/settings.js";
 import { setToast } from "../../../store.js";
@@ -33,24 +33,31 @@ export class BackupsSection extends Component {
       uploadPct: 0,
       // Backup automation settings (loaded alongside the list).
       enableBackup: true,
+      // BACKUP_MANAGED: the host pins backups on, so the toggle is replaced.
+      managed: false,
       intervalDays: 1,
       keep: 7
     };
   }
   _renderSettings() {
     const {
-      enableBackup,
+      enableBackup: enableSetting,
+      managed,
       intervalDays,
       keep
     } = this.state;
+    const enableBackup = managed || enableSetting;
+    const enableRow = managed ? html`
+        <p class="backup-setting-row backup-setting-hint">Automatic backups are managed by your host and stay on.</p>` : html`
+        <label class="backup-setting-row">
+          <input type="checkbox" id="bk-enable"${enableBackup ? " checked" : ""}>
+          <span>Automatic backups</span>
+        </label>`;
     const preset = [1, 7, 30].includes(intervalDays);
     const opt = (v, label) => html`<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
     return html`
       <div class="backup-settings">
-        <label class="backup-setting-row">
-          <input type="checkbox" id="bk-enable"${enableBackup ? " checked" : ""}>
-          <span>Automatic backups</span>
-        </label>
+        ${raw(enableRow)}
         <div class="backup-setting-row">
           <label for="bk-freq">Frequency</label>
           <select id="bk-freq" class="filter-select"${enableBackup ? "" : " disabled"}>
@@ -65,7 +72,7 @@ export class BackupsSection extends Component {
         <div class="backup-setting-row">
           <label for="bk-keep">Keep last</label>
           <input type="number" id="bk-keep" class="form-input backup-num" min="0" step="1" value="${keep}">
-          <span class="backup-setting-hint">backups (0 = keep all)</span>
+          <span class="backup-setting-hint">backups (0 = keep all${managed ? raw(", at least 7 when managed") : ""})</span>
         </div>
       </div>`;
   }
@@ -324,11 +331,12 @@ export class BackupsSection extends Component {
   }
   async _load() {
     try {
-      const [backups, settings] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => /** @type {Settings} */ ({}))]);
+      const [backups, settings, health] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => /** @type {Settings} */ ({})), getHealth().catch(() => null)]);
       this.setState({
         loading: false,
         backups: Array.isArray(backups) ? backups : [],
         enableBackup: (settings.enable_backup ?? "true") === "true",
+        managed: health?.backup?.managed === true,
         intervalDays: parseInt(settings.backup_interval_days, 10) || 1,
         keep: settings.backup_keep != null ? parseInt(settings.backup_keep, 10) || 0 : 7
       });

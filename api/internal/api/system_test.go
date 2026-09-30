@@ -1003,6 +1003,46 @@ func TestSystemHandler_GetHealth(t *testing.T) {
 	}
 }
 
+// The backup block lets a host's dead-man check read the newest archive time
+// with an API key. It comes from the disk, and managed mode reports backups as
+// enabled even when the admin switched them off.
+func TestSystemHandler_GetHealth_Backup(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	h.systemService.WithManagedBackups(true)
+	ctx := context.Background()
+	if err := h.settingsService.SetSetting(ctx, "enable_backup", "false", "boolean"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(h.dataPath, "backups")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "backup_x.tar.gz"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/health", nil), rec)
+	if err := h.GetHealth(c); err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	var resp struct {
+		Backup struct {
+			Managed    bool   `json:"managed"`
+			Enabled    bool   `json:"enabled"`
+			LastBackup string `json:"last_backup"`
+		} `json:"backup"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Backup.Managed || !resp.Backup.Enabled || resp.Backup.LastBackup == "" {
+		t.Errorf("backup = %+v, want managed, enabled, last_backup set", resp.Backup)
+	}
+}
+
 // No registry attached (or nothing has run yet) must be an empty report, not
 // an error and not a crash.
 func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
