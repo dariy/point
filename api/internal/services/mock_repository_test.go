@@ -1413,3 +1413,15 @@ func (m *mockRepository) RequeueRunningJobs(ctx context.Context) (int64, error) 
 func (m *mockRepository) GetJob(ctx context.Context, id int64) (repository.Job, error) {
 	return repository.Job{}, fmt.Errorf("GetJob not implemented")
 }
+
+func (m *mockRepository) ListJobs(ctx context.Context, states []string, limit int) ([]repository.Job, error) {
+	return nil, fmt.Errorf("ListJobs not implemented")
+}
+
+func (m *mockRepository) CountJobsByState(ctx context.Context) (map[string]int64, error) {
+	return nil, fmt.Errorf("CountJobsByState not implemented")
+}
+
+func (m *mockRepository) RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error) {
+	return false, fmt.Errorf("RetryFailedJob not implemented")
+}

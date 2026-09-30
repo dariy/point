@@ -3,9 +3,11 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -174,4 +176,89 @@ func (s *JobService) backoff(attempts int64) time.Duration {
 		d *= 2
 	}
 	return min(d, maxJobBackoff)
+}
+
+// ErrJobNotFailed is returned by Retry when no failed job has the id.
+var ErrJobNotFailed = errors.New("no failed job with that id")
+
+// JobView is one job as the admin UI shows it. The payload is left out on
+// purpose: the view names the kind and the ids only (see JobRefs).
+type JobView struct {
+	ID          int64            `json:"id"`
+	Kind        string           `json:"kind"`
+	Refs        map[string]int64 `json:"refs,omitempty"`
+	State       string           `json:"state"`
+	Attempts    int64            `json:"attempts"`
+	MaxAttempts int64            `json:"max_attempts"`
+	NextRunAt   time.Time        `json:"next_run_at"`
+	LastError   string           `json:"last_error,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+}
+
+// JobRefs keeps only the integer id fields (keys that end in "id") of a
+// payload. Any other value in the payload is not shown.
+func JobRefs(payload string) map[string]int64 {
+	var m map[string]any
+	if json.Unmarshal([]byte(payload), &m) != nil {
+		return nil
+	}
+	out := map[string]int64{}
+	for k, v := range m {
+		f, ok := v.(float64)
+		if !ok || !strings.HasSuffix(strings.ToLower(k), "id") {
+			continue
+		}
+		out[k] = int64(f)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// List returns queued, running and failed jobs, newest first.
+func (s *JobService) List(ctx context.Context, limit int) ([]JobView, error) {
+	rows, err := s.repo.ListJobs(ctx, []string{JobQueued, JobRunning, JobFailed}, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]JobView, 0, len(rows))
+	for _, j := range rows {
+		out = append(out, JobView{
+			ID: j.ID, Kind: j.Kind, Refs: JobRefs(j.Payload), State: j.State,
+			Attempts: j.Attempts, MaxAttempts: j.MaxAttempts,
+			NextRunAt: time.Unix(j.NextRunAt, 0).UTC(), LastError: j.LastError,
+			CreatedAt: time.Unix(j.CreatedAt, 0).UTC(), UpdatedAt: time.Unix(j.UpdatedAt, 0).UTC(),
+		})
+	}
+	return out, nil
+}
+
+// Counts returns the number of jobs in each state. Every state is present.
+func (s *JobService) Counts(ctx context.Context) (map[string]int64, error) {
+	c, err := s.repo.CountJobsByState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, st := range []string{JobQueued, JobRunning, JobDone, JobFailed} {
+		if _, ok := c[st]; !ok {
+			c[st] = 0
+		}
+	}
+	return c, nil
+}
+
+// Retry sets a failed job back to queued with zero attempts, due now, and
+// wakes the worker.
+func (s *JobService) Retry(ctx context.Context, id int64) error {
+	ok, err := s.repo.RetryFailedJob(ctx, id, s.now())
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrJobNotFailed
+	}
+	s.signal()
+	return nil
 }

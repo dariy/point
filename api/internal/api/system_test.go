@@ -10,10 +10,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"point-api/internal/config"
+	"point-api/internal/migrations"
 	"point-api/internal/models"
 	"point-api/internal/services"
 
@@ -1106,4 +1109,62 @@ func makeMinimalJPEGWithComment(t *testing.T, comment string) []byte {
 	out = append(out, seg...)
 	out = append(out, base[2:]...)
 	return out
+}
+
+func TestSystemHandler_ListAndRetryJobs(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := migrations.Run(ctx, h.repo); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	jobs := services.NewJobService(h.repo)
+	h = h.WithJobs(jobs)
+	id, err := jobs.Enqueue(ctx, "k", map[string]any{"post_id": 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.repo.FinishJob(ctx, id, services.JobFailed, "boom", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/jobs", nil), rec)
+	if err := h.ListJobs(c); err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	var resp struct {
+		Counts map[string]int64 `json:"counts"`
+		Jobs   []map[string]any `json:"jobs"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Counts["failed"] != 1 || len(resp.Jobs) != 1 || resp.Jobs[0]["last_error"] != "boom" {
+		t.Fatalf("resp = %+v", resp)
+	}
+	if _, ok := resp.Jobs[0]["payload"]; ok {
+		t.Fatal("raw payload is in the response")
+	}
+
+	retry := func(idStr string) error {
+		c := e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder())
+		c.SetParamNames("id")
+		c.SetParamValues(idStr)
+		return h.RetryJob(c)
+	}
+	if err := retry(strconv.FormatInt(id, 10)); err != nil {
+		t.Fatalf("RetryJob: %v", err)
+	}
+	if j, _ := h.repo.GetJob(ctx, id); j.State != services.JobQueued {
+		t.Fatalf("state = %q", j.State)
+	}
+	var he *echo.HTTPError
+	if err := retry(strconv.FormatInt(id, 10)); !errors.As(err, &he) || he.Code != http.StatusNotFound {
+		t.Fatalf("second retry: %v", err)
+	}
+	if err := retry("x"); !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+		t.Fatalf("bad id: %v", err)
+	}
 }

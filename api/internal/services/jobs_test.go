@@ -125,3 +125,55 @@ func TestJobEnqueueWakesWorker(t *testing.T) {
 		t.Fatal("enqueue did not wake the worker")
 	}
 }
+
+func TestJobRetryRequeuesFailedJob(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newTestJobs(t)
+	fail := true
+	s.Register("k", func(context.Context, json.RawMessage) error {
+		if fail {
+			return errors.New("boom")
+		}
+		return nil
+	})
+	id, _ := s.Enqueue(ctx, "k", map[string]any{"post_id": 7, "caption": "secret"})
+	if err := s.Retry(ctx, id); !errors.Is(err, ErrJobNotFailed) {
+		t.Fatalf("retry of a queued job: err = %v", err)
+	}
+	// Force the job to failed.
+	if err := s.repo.FinishJob(ctx, id, JobFailed, "boom", s.now()); err != nil {
+		t.Fatal(err)
+	}
+
+	jobs, err := s.List(ctx, 10)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("list: %v %+v", err, jobs)
+	}
+	if got := jobs[0].Refs; len(got) != 1 || got["post_id"] != 7 {
+		t.Fatalf("refs = %v, want only post_id", got)
+	}
+	counts, _ := s.Counts(ctx)
+	if counts[JobFailed] != 1 || counts[JobQueued] != 0 {
+		t.Fatalf("counts = %v", counts)
+	}
+
+	fail = false
+	if err := s.Retry(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	j, _ := s.repo.GetJob(ctx, id)
+	if j.State != JobQueued || j.Attempts != 0 {
+		t.Fatalf("after retry: %+v", j)
+	}
+	select {
+	case <-s.wake:
+	default:
+		t.Fatal("retry did not wake the worker")
+	}
+	if ran, err := s.RunOnce(ctx); err != nil || !ran {
+		t.Fatalf("run after retry: ran=%v err=%v", ran, err)
+	}
+	if j, _ := s.repo.GetJob(ctx, id); j.State != JobDone {
+		t.Fatalf("state = %q, want done", j.State)
+	}
+}

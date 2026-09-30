@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 )
@@ -80,4 +81,63 @@ func (r *sqliteRepository) RequeueRunningJobs(ctx context.Context) (int64, error
 
 func (r *sqliteRepository) GetJob(ctx context.Context, id int64) (Job, error) {
 	return scanJob(r.db.QueryRowContext(ctx, `SELECT `+jobColumns+` FROM jobs WHERE id = ?`, id))
+}
+
+// ListJobs returns jobs in the given states, newest first, at most limit rows.
+func (r *sqliteRepository) ListJobs(ctx context.Context, states []string, limit int) ([]Job, error) {
+	if len(states) == 0 {
+		return nil, nil
+	}
+	raw, err := json.Marshal(states)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+jobColumns+` FROM jobs WHERE state IN (SELECT value FROM json_each(?)) ORDER BY id DESC LIMIT ?`,
+		string(raw), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// CountJobsByState returns the number of jobs in each state.
+func (r *sqliteRepository) CountJobsByState(ctx context.Context) (map[string]int64, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT state, COUNT(*) FROM jobs GROUP BY state`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]int64{}
+	for rows.Next() {
+		var s string
+		var n int64
+		if err := rows.Scan(&s, &n); err != nil {
+			return nil, err
+		}
+		out[s] = n
+	}
+	return out, rows.Err()
+}
+
+// RetryFailedJob sets a failed job back to queued with no attempts, due at
+// runAt. It reports false when no failed job has that id.
+func (r *sqliteRepository) RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE jobs SET state = 'queued', attempts = 0, next_run_at = ?, updated_at = ? WHERE id = ? AND state = 'failed'`,
+		runAt.Unix(), time.Now().Unix(), id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
