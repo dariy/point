@@ -239,6 +239,11 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		metadata = s.extractEXIF(bytes.NewReader(p.Content))
 	} else if strings.HasPrefix(p.MimeType, "video/") {
 		fileType = "video"
+		// A slim install has no ffmpeg to transcode HEVC, and most browsers
+		// cannot play it. Record the codec so the admin UI can say so.
+		if IsHEVCVideo(p.Content) {
+			metadata = map[string]interface{}{VideoCodecMetaKey: "hevc"}
+		}
 	} else if strings.HasPrefix(p.MimeType, "audio/") {
 		fileType = "audio"
 	}
