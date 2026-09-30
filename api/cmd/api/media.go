@@ -363,7 +363,7 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 				// Security: double-check the globbed file prefix.
 				if strings.HasPrefix(matchFile, filepath.Join(storagePath, "media", "originals")) {
 					neutralizeSVG(c, matchFile)
-					if stripGPS(ctx, settings) && strings.EqualFold(media.MimeType, "image/jpeg") {
+					if stripGPS(ctx, settings) && services.StripsGPS(media.MimeType) {
 						// The record names another file than the one found, so
 						// no GPS-free copy maps to it. Do not serve the position.
 						c.Response().Header().Set("Cache-Control", notFoundCacheControl)
