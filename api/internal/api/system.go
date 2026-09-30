@@ -52,6 +52,9 @@ type SystemHandler struct {
 	// jobs is the durable job store shown by ListJobs. Nil is valid: the
 	// endpoint then reports no jobs.
 	jobs *services.JobService
+	// ffmpeg is the detected video toolchain reported by GetHealth. Nil is
+	// valid: the endpoint then reports ffmpeg as absent.
+	ffmpeg *services.FFmpeg
 	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
 	// reported by GetStats. 0 means unlimited and is omitted from the response.
 	storageQuotaMB int
@@ -67,6 +70,12 @@ func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 // WithJobs attaches the durable job store for ListJobs and RetryJob.
 func (h *SystemHandler) WithJobs(j *services.JobService) *SystemHandler {
 	h.jobs = j
+	return h
+}
+
+// WithFFmpeg attaches the detected ffmpeg/ffprobe pair for GetHealth.
+func (h *SystemHandler) WithFFmpeg(f *services.FFmpeg) *SystemHandler {
+	h.ffmpeg = f
 	return h
 }
 
@@ -174,6 +183,9 @@ func (h *SystemHandler) GetHealth(c echo.Context) error {
 		"tasks":    out,
 		"degraded": degraded,
 		"uptime":   int64(time.Since(startTime).Seconds()),
+		// capabilities lists optional tools the server found at startup.
+		// The slim image has no ffmpeg, so it serves video originals as is.
+		"capabilities": map[string]any{"ffmpeg": h.ffmpeg.Available()},
 	})
 }
 

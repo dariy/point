@@ -19,17 +19,19 @@ import (
 )
 
 type AppServices struct {
-	Settings    *services.SettingsService
-	Auth        *services.AuthService
-	ApiKey      *services.ApiKeyService
-	Tag         *services.TagService
-	Post        *services.PostService
-	Media       *services.MediaService
-	System      *services.SystemService
-	Cache       *services.CacheService
-	Scheduler   *services.SchedulerService
-	Jobs        *services.JobService
-	Health      *services.HealthRegistry
+	Settings  *services.SettingsService
+	Auth      *services.AuthService
+	ApiKey    *services.ApiKeyService
+	Tag       *services.TagService
+	Post      *services.PostService
+	Media     *services.MediaService
+	System    *services.SystemService
+	Cache     *services.CacheService
+	Scheduler *services.SchedulerService
+	Jobs      *services.JobService
+	Health    *services.HealthRegistry
+	// FFmpeg is the detected ffmpeg/ffprobe pair. Not available in the slim image.
+	FFmpeg      *services.FFmpeg
 	Theme       *services.ThemeService
 	Timeline    *services.TimelineService
 	Instagram   *services.InstagramService
@@ -103,6 +105,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Cache:       cacheService,
 		Scheduler:   schedulerService,
 		Jobs:        jobService,
+		FFmpeg:      services.DetectFFmpeg(),
 		Health:      healthRegistry,
 		Theme:       themeService,
 		Timeline:    timelineService,
@@ -171,7 +174,7 @@ func initHandlers(cfg config.Config, repo repository.Repository, svcs *AppServic
 		Settings:  api.NewSettingsHandler(svcs.Settings, remarkSupervisor),
 		Plugins:   api.NewPluginsHandler(svcs.Settings),
 		Theme:     api.NewThemeHandler(svcs.Theme),
-		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithJobs(svcs.Jobs).WithStorageQuotaMB(cfg.StorageQuotaMB),
+		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithJobs(svcs.Jobs).WithFFmpeg(svcs.FFmpeg).WithStorageQuotaMB(cfg.StorageQuotaMB),
 		Feeds:     api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache),
 		Pages:     api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache),
 		Timeline:  api.NewTimelineHandler(svcs.Timeline, svcs.Settings),

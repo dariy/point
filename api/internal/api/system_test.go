@@ -1018,6 +1018,9 @@ func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"tasks":[]`) {
 		t.Errorf("expected an empty task list, got %s", rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"capabilities":{"ffmpeg":false}`) {
+		t.Errorf("expected ffmpeg absent without WithFFmpeg, got %s", rec.Body.String())
+	}
 }
 
 // Bulk import now runs on a worker pool. Results must still be complete and
