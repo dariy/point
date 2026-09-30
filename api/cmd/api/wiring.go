@@ -64,10 +64,12 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		WithBudgetMB(cfg.PageCacheBudgetMB).
 		WithMetrics(metricsRegistry)
 	tagService.WithCache(cacheService)
+	jobService := services.NewJobService(repo)
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).
 		WithHealth(healthRegistry).
 		WithCache(cacheService).
-		WithMetrics(metricsRegistry)
+		WithMetrics(metricsRegistry).
+		WithJobs(jobService)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService).
 		WithCache(cacheService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL).
@@ -100,7 +102,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		System:      systemService,
 		Cache:       cacheService,
 		Scheduler:   schedulerService,
-		Jobs:        services.NewJobService(repo),
+		Jobs:        jobService,
 		Health:      healthRegistry,
 		Theme:       themeService,
 		Timeline:    timelineService,
