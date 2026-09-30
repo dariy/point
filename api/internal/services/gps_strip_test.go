@@ -172,9 +172,9 @@ func TestNoGPSOriginal(t *testing.T) {
 		t.Error("the original on disk changed")
 	}
 
-	png := models.Medium{OriginalPath: "originals/2026/09/x.png", MimeType: "image/png"}
-	if p, err := svc.NoGPSOriginal(context.Background(), png); p != "" || err != nil {
-		t.Errorf("PNG: got %q, %v; want \"\", nil", p, err)
+	gif := models.Medium{OriginalPath: "originals/2026/09/x.gif", MimeType: "image/gif"}
+	if p, err := svc.NoGPSOriginal(context.Background(), gif); p != "" || err != nil {
+		t.Errorf("GIF: got %q, %v; want \"\", nil", p, err)
 	}
 }
 

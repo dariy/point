@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,19 +29,39 @@ func NoGPSRelPath(originalPath string) string {
 	return filepath.Join(VariantsRoot, noGPSDir, strings.TrimPrefix(originalPath, "originals/"))
 }
 
-// xmpGPS matches the GPS properties of the EXIF schema in an XMP packet, both
-// as attributes (exif:GPSLatitude="…") and as simple elements
-// (<exif:GPSLatitude>…</exif:GPSLatitude>). Lightroom writes both forms.
-var xmpGPS = regexp.MustCompile(`\s+exif:GPS\w+\s*=\s*("[^"]*"|'[^']*')|<exif:GPS\w+\s*/>|(?s)<exif:GPS\w+[^>]*>.*?</exif:GPS\w+>`)
+// xmpGPS matches the GPS properties of an XMP packet in any namespace, both as
+// attributes (exif:GPSLatitude="…") and as elements
+// (<exif:GPSLatitude>…</exif:GPSLatitude>). Lightroom writes both forms. The
+// "gps" prefix of the local name matches without case, so vendor properties
+// such as drone-dji:GpsLatitude match too.
+var xmpGPS = regexp.MustCompile(`\s+[\w.-]+:(?i:gps)\w*\s*=\s*("[^"]*"|'[^']*')|<[\w.-]+:(?i:gps)\w*\s*/>|(?s)<[\w.-]+:(?i:gps)\w*[^>]*>.*?</[\w.-]+:(?i:gps)\w*>`)
+
+// gpsBlankers maps a MIME type to the function that removes the GPS position
+// from bytes of that format in place, without a change of length.
+var gpsBlankers = map[string]func([]byte) error{
+	"image/jpeg": blankJPEGGPS,
+	"image/png":  blankPNGGPS,
+	"image/webp": blankWebPGPS,
+	"image/tiff": blankTIFFFileGPS,
+	"image/heic": blankISOBMFFGPS,
+	"image/heif": blankISOBMFFGPS,
+	"image/avif": blankISOBMFFGPS,
+}
+
+// StripsGPS reports whether NoGPSOriginal cleans originals of the MIME type.
+func StripsGPS(mimeType string) bool {
+	return gpsBlankers[strings.ToLower(mimeType)] != nil
+}
 
 // NoGPSOriginal returns the absolute path of a copy of the media item's
 // original without its GPS position, and writes the copy on the first request.
 // The original on disk does not change.
 //
-// Only JPEG is stripped. For another format it returns "" and a nil error, and
-// the caller serves the original.
+// JPEG, PNG, WebP, TIFF, HEIC/HEIF and AVIF are stripped. For another format
+// it returns "" and a nil error, and the caller serves the original.
 func (s *MediaService) NoGPSOriginal(ctx context.Context, media models.Medium) (string, error) {
-	if !strings.EqualFold(media.MimeType, "image/jpeg") {
+	blank := gpsBlankers[strings.ToLower(media.MimeType)]
+	if blank == nil {
 		return "", nil
 	}
 	base := s.mediaBase()
@@ -56,21 +77,21 @@ func (s *MediaService) NoGPSOriginal(ctx context.Context, media models.Medium) (
 		return dstFull, nil
 	}
 	if _, err, _ := s.variantFlight.Do("nogps:"+media.OriginalPath, func() (any, error) {
-		return nil, writeNoGPSCopy(srcFull, dstFull)
+		return nil, writeNoGPSCopy(srcFull, dstFull, blank)
 	}); err != nil {
 		return "", err
 	}
 	return dstFull, nil
 }
 
-// writeNoGPSCopy writes the JPEG at src to dst without the GPS IFD entries and
-// without the GPS properties of its XMP packets.
-func writeNoGPSCopy(src, dst string) error {
+// writeNoGPSCopy writes the image at src to dst without the GPS IFD entries and
+// without the GPS properties of its XMP packets. blank cleans the bytes.
+func writeNoGPSCopy(src, dst string, blank func([]byte) error) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
-		return fmt.Errorf("read jpeg: %w", err)
+		return fmt.Errorf("read original: %w", err)
 	}
-	if err := blankJPEGGPS(data); err != nil {
+	if err := blank(data); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
@@ -154,12 +175,16 @@ var exifHeader = []byte("Exif\x00\x00")
 // gpsIFDTag is the IFD0 tag whose value is the offset of the GPS IFD.
 const gpsIFDTag = 0x8825
 
+// xmpTag is the IFD0 tag that holds an XMP packet in a TIFF file.
+const xmpTag = 700
+
 // tiffTypeSize is the byte size of one value of each TIFF field type.
 var tiffTypeSize = map[uint16]int{1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
 // blankTIFFGPS finds the GPS IFD of a TIFF block, zeroes the values its entries
-// point to, and sets its entry count to zero. A malformed block is left as it
-// is where it cannot be read.
+// point to, and sets its entry count to zero. It also blanks the GPS properties
+// of an XMP packet in IFD0. A malformed block is left as it is where it cannot
+// be read.
 func blankTIFFGPS(t []byte) {
 	if len(t) < 8 {
 		return
@@ -184,8 +209,15 @@ func blankTIFFGPS(t []byte) {
 		if e+12 > len(t) {
 			return
 		}
-		if bo.Uint16(t[e:]) == gpsIFDTag {
+		switch bo.Uint16(t[e:]) {
+		case gpsIFDTag:
 			gps = int(bo.Uint32(t[e+8:]))
+		case xmpTag:
+			if size := int(bo.Uint32(t[e+4:])); size > 4 {
+				if off := int(bo.Uint32(t[e+8:])); off >= 8 && off+size <= len(t) {
+					blankXMPGPS(t[off : off+size])
+				}
+			}
 		}
 	}
 	if gps < 8 || gps+2 > len(t) {
@@ -216,4 +248,279 @@ func blankXMPGPS(seg []byte) {
 			seg[i] = ' '
 		}
 	}
+}
+
+// blankTIFFFileGPS removes the GPS position from the bytes of a TIFF file in
+// place. The file is one TIFF block, so its offsets start at byte 0.
+func blankTIFFFileGPS(data []byte) error {
+	if len(data) < 8 || (string(data[:4]) != "II*\x00" && string(data[:4]) != "MM\x00*") {
+		return fmt.Errorf("not a tiff")
+	}
+	blankTIFFGPS(data)
+	return nil
+}
+
+// blankPNGGPS removes the GPS position from PNG bytes in place. It cleans the
+// eXIf chunk and the XMP of uncompressed text chunks, and writes the CRC of
+// each changed chunk again. A compressed zTXt or iTXt chunk stays as it is.
+func blankPNGGPS(data []byte) error {
+	if len(data) < 8 || string(data[:8]) != "\x89PNG\r\n\x1a\n" {
+		return fmt.Errorf("not a png")
+	}
+	for p := 8; p+12 <= len(data); {
+		n := int(binary.BigEndian.Uint32(data[p:]))
+		end := p + 12 + n
+		if n < 0 || end > len(data) {
+			break
+		}
+		typ := string(data[p+4 : p+8])
+		body := data[p+8 : p+8+n]
+		before := crc32.ChecksumIEEE(data[p+4 : p+8+n])
+		switch typ {
+		case "eXIf":
+			blankTIFFGPS(body)
+		case "iTXt", "tEXt":
+			blankXMPGPS(body)
+		}
+		if sum := crc32.ChecksumIEEE(data[p+4 : p+8+n]); sum != before {
+			binary.BigEndian.PutUint32(data[p+8+n:], sum)
+		}
+		if typ == "IEND" {
+			break
+		}
+		p = end
+	}
+	return nil
+}
+
+// blankWebPGPS removes the GPS position from WebP bytes in place. It cleans
+// the EXIF and XMP chunks of the RIFF container.
+func blankWebPGPS(data []byte) error {
+	if len(data) < 12 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
+		return fmt.Errorf("not a webp")
+	}
+	for p := 12; p+8 <= len(data); {
+		n := int(binary.LittleEndian.Uint32(data[p+4:]))
+		end := p + 8 + n
+		if n < 0 || end > len(data) {
+			break
+		}
+		body := data[p+8 : end]
+		switch string(data[p : p+4]) {
+		case "EXIF":
+			blankTIFFGPS(bytes.TrimPrefix(body, exifHeader))
+		case "XMP ":
+			blankXMPGPS(body)
+		}
+		p = end + n%2
+	}
+	return nil
+}
+
+// isoBox is one box of an ISO base media file: its type and the byte range of
+// its payload.
+type isoBox struct {
+	typ        string
+	start, end int
+}
+
+// isoBoxes lists the boxes in data[start:end]. It stops at the first box that
+// does not fit.
+func isoBoxes(data []byte, start, end int) []isoBox {
+	var boxes []isoBox
+	for p := start; p+8 <= end; {
+		size := int(binary.BigEndian.Uint32(data[p:]))
+		hdr := 8
+		switch size {
+		case 0:
+			size = end - p
+		case 1:
+			if p+16 > end {
+				return boxes
+			}
+			big := binary.BigEndian.Uint64(data[p+8:])
+			if big > uint64(end-p) {
+				return boxes
+			}
+			size, hdr = int(big), 16
+		}
+		if size < hdr || p+size > end {
+			return boxes
+		}
+		boxes = append(boxes, isoBox{string(data[p+4 : p+8]), p + hdr, p + size})
+		p += size
+	}
+	return boxes
+}
+
+// beUint reads a big-endian unsigned integer of n bytes (0, 4 or 8) at p.
+func beUint(data []byte, p, n int) (uint64, bool) {
+	if p < 0 || p+n > len(data) {
+		return 0, false
+	}
+	switch n {
+	case 0:
+		return 0, true
+	case 4:
+		return uint64(binary.BigEndian.Uint32(data[p:])), true
+	case 8:
+		return binary.BigEndian.Uint64(data[p:]), true
+	}
+	return 0, false
+}
+
+// blankISOBMFFGPS removes the GPS position from HEIC, HEIF or AVIF bytes in
+// place. It reads the item list of the top-level meta box, then cleans the
+// Exif item and each XMP item (a mime item). Only items stored as one extent
+// in the file are cleaned.
+func blankISOBMFFGPS(data []byte) error {
+	top := isoBoxes(data, 0, len(data))
+	if len(top) == 0 || top[0].typ != "ftyp" {
+		return fmt.Errorf("not an iso media file")
+	}
+	for _, meta := range top {
+		if meta.typ != "meta" || meta.start+4 > meta.end {
+			continue
+		}
+		kinds := map[uint32]string{}
+		var iloc isoBox
+		for _, b := range isoBoxes(data, meta.start+4, meta.end) {
+			switch b.typ {
+			case "iinf":
+				parseIINF(data, b, kinds)
+			case "iloc":
+				iloc = b
+			}
+		}
+		for id, r := range parseILOC(data, iloc) {
+			item := data[r[0]:r[1]]
+			switch kinds[id] {
+			case "Exif":
+				// The payload starts with the offset of the TIFF header.
+				if len(item) >= 4 {
+					if off := int(binary.BigEndian.Uint32(item)); off >= 0 && 4+off < len(item) {
+						blankTIFFGPS(item[4+off:])
+					}
+				}
+			case "mime":
+				blankXMPGPS(item)
+			}
+		}
+	}
+	return nil
+}
+
+// parseIINF records the item type of each entry of an iinf box in kinds.
+func parseIINF(data []byte, b isoBox, kinds map[uint32]string) {
+	p := b.start + 4
+	if b.start+4 > b.end {
+		return
+	}
+	if data[b.start] == 0 {
+		p += 2
+	} else {
+		p += 4
+	}
+	for _, e := range isoBoxes(data, p, b.end) {
+		if e.typ != "infe" || e.start+4 > e.end {
+			continue
+		}
+		q := e.start + 4
+		var id uint32
+		switch data[e.start] {
+		case 2:
+			if q+8 > e.end {
+				continue
+			}
+			id = uint32(binary.BigEndian.Uint16(data[q:]))
+			q += 2
+		case 3:
+			if q+10 > e.end {
+				continue
+			}
+			id = binary.BigEndian.Uint32(data[q:])
+			q += 4
+		default:
+			continue
+		}
+		kinds[id] = string(data[q+2 : q+6])
+	}
+}
+
+// parseILOC returns the byte range of each item of an iloc box that is stored
+// as one extent at a file offset.
+func parseILOC(data []byte, b isoBox) map[uint32][2]int {
+	out := map[uint32][2]int{}
+	if b.start+8 > b.end {
+		return out
+	}
+	version := data[b.start]
+	p := b.start + 4
+	offSize, lenSize := int(data[p]>>4), int(data[p]&15)
+	baseSize, idxSize := int(data[p+1]>>4), int(data[p+1]&15)
+	if version == 0 {
+		idxSize = 0
+	}
+	p += 2
+	if p+4 > b.end {
+		return out
+	}
+	var count int
+	if version < 2 {
+		count = int(binary.BigEndian.Uint16(data[p:]))
+		p += 2
+	} else {
+		count = int(binary.BigEndian.Uint32(data[p:]))
+		p += 4
+	}
+	for i := 0; i < count; i++ {
+		var id uint32
+		if version < 2 {
+			if p+2 > b.end {
+				return out
+			}
+			id = uint32(binary.BigEndian.Uint16(data[p:]))
+			p += 2
+		} else {
+			if p+4 > b.end {
+				return out
+			}
+			id = binary.BigEndian.Uint32(data[p:])
+			p += 4
+		}
+		method := 0
+		if version > 0 {
+			if p+2 > b.end {
+				return out
+			}
+			method = int(data[p+1] & 15)
+			p += 2
+		}
+		p += 2 // data_reference_index
+		base, ok := beUint(data, p, baseSize)
+		p += baseSize
+		if !ok || p+2 > b.end {
+			return out
+		}
+		extents := int(binary.BigEndian.Uint16(data[p:]))
+		p += 2
+		var off, length uint64
+		for j := 0; j < extents; j++ {
+			p += idxSize
+			o, ok1 := beUint(data, p, offSize)
+			p += offSize
+			l, ok2 := beUint(data, p, lenSize)
+			p += lenSize
+			if !ok1 || !ok2 || p > b.end {
+				return out
+			}
+			off, length = o, l
+		}
+		start := base + off
+		if method != 0 || extents != 1 || length == 0 || start > uint64(len(data)) || length > uint64(len(data))-start {
+			continue
+		}
+		out[id] = [2]int{int(start), int(start + length)}
+	}
+	return out
 }

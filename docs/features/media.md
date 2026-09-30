@@ -157,16 +157,19 @@ p-zm2s holds the work.
   (`EXIF_FIELDS` in `frontend/src/utils/exif.js`); with `hide` or `admin` a guest gets no
   `metadata`. An authenticated response keeps the full blob.
 - **Served originals carry no GPS by default.** With `strip_gps_public` on (the default;
-  Settings → Display), the media route serves an original JPEG from a copy with an empty
-  GPS IFD and with the `exif:GPS*` properties of its XMP packets blanked
+  Settings → Display), the media route serves an original JPEG, PNG, WebP, TIFF, HEIC/HEIF or
+  AVIF from a copy with an empty GPS IFD and with the GPS properties of its XMP packets
+  blanked. The XMP match covers every namespace, so vendor properties such as
+  `drone-dji:GpsLatitude` are blanked too
   (`services/gps_strip.go::NoGPSOriginal`). The copy is cleaned in place and keeps every
   byte offset, so the gain map of an Ultra HDR photo survives and is cleaned too. The copy lives under
   `media/variants/nogps/`, is written on the first request and again when the original is
   newer. The original on disk does not change. The rule applies to every requester, so a
-  shared cache holds one version of each URL, and a JPEG original is never presigned to
-  S3 while the rule is on. If the copy cannot be written, the route returns an error and
-  does not serve the original. Only JPEG is stripped today: PNG, WebP, HEIC, TIFF and raw
-  originals, and video, are served unchanged. Thumbnail variants carry no metadata.
+  shared cache holds one version of each URL, and an original of these formats is never
+  presigned to S3 while the rule is on. If the copy cannot be written, the route returns an error and
+  does not serve the original. A PNG chunk that changes gets a new CRC. Compressed PNG text
+  chunks (`zTXt`, compressed `iTXt`) and HEIF items split over more than one extent are not
+  cleaned. GIF, BMP and raw originals, and video, are served unchanged. Thumbnail variants carry no metadata.
 - **The engine names no CDN.** Cache headers are written for shared caches in general;
   which one sits in front of a deployment is the operator's business, not the engine's.
 - SVG uploads are currently allowlisted but served unsanitized same-origin — open
