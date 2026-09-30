@@ -77,3 +77,71 @@ func TestRepository_Jobs(t *testing.T) {
 		t.Fatalf("after retry: %+v", got)
 	}
 }
+
+func TestRepository_JobsDelete(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+	if _, err := repo.DB().ExecContext(ctx, `CREATE TABLE IF NOT EXISTS jobs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}',
+		state TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0,
+		max_attempts INTEGER NOT NULL DEFAULT 5, next_run_at INTEGER NOT NULL,
+		last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	// One old and one new row in each state.
+	cutoff := time.Unix(1_700_000_000, 0)
+	ids := map[string]int64{}
+	for _, st := range []string{"queued", "running", "done", "failed"} {
+		for _, age := range []string{"old", "new"} {
+			at := cutoff.Add(time.Hour)
+			if age == "old" {
+				at = cutoff.Add(-time.Hour)
+			}
+			res, err := repo.DB().ExecContext(ctx,
+				`INSERT INTO jobs (kind, state, next_run_at, created_at, updated_at) VALUES ('k', ?, 0, ?, ?)`,
+				st, at.Unix(), at.Unix())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids[st+"/"+age], _ = res.LastInsertId()
+		}
+	}
+	exists := func(key string) bool {
+		_, err := repo.GetJob(ctx, ids[key])
+		return err == nil
+	}
+
+	if n, err := repo.DeleteDoneJobsBefore(ctx, cutoff); err != nil || n != 1 {
+		t.Fatalf("DeleteDoneJobsBefore = %d, %v", n, err)
+	}
+	for key := range ids {
+		if want := key != "done/old"; exists(key) != want {
+			t.Fatalf("after prune: %s exists = %v", key, !want)
+		}
+	}
+
+	if n, err := repo.DeleteFailedJobs(ctx); err != nil || n != 2 {
+		t.Fatalf("DeleteFailedJobs = %d, %v", n, err)
+	}
+	for _, key := range []string{"queued/old", "queued/new", "running/old", "running/new", "done/new"} {
+		if !exists(key) {
+			t.Fatalf("after clear: %s is gone", key)
+		}
+	}
+	if exists("failed/old") || exists("failed/new") {
+		t.Fatal("failed rows remain after clear")
+	}
+}
+
+func TestRepository_JobsDeleteErrors(t *testing.T) {
+	repo := setupTestDB(t)
+	_ = repo.Close()
+	ctx := context.Background()
+	if _, err := repo.DeleteDoneJobsBefore(ctx, time.Now()); err == nil {
+		t.Fatal("DeleteDoneJobsBefore on a closed DB: no error")
+	}
+	if _, err := repo.DeleteFailedJobs(ctx); err == nil {
+		t.Fatal("DeleteFailedJobs on a closed DB: no error")
+	}
+}

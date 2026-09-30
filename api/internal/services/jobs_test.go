@@ -177,3 +177,70 @@ func TestJobRetryRequeuesFailedJob(t *testing.T) {
 		t.Fatalf("state = %q, want done", j.State)
 	}
 }
+
+func TestJobPruneDoneKeepsFailed(t *testing.T) {
+	ctx := context.Background()
+	s, now := newTestJobs(t)
+	old := now.Add(-JobDoneRetention - time.Hour).Unix()
+	recent := now.Add(-time.Hour).Unix()
+	ids := map[string]int64{}
+	for _, c := range []struct {
+		key, state string
+		at         int64
+	}{
+		{"done-old", JobDone, old}, {"done-recent", JobDone, recent},
+		{"failed-old", JobFailed, old}, {"queued-old", JobQueued, old}, {"running-old", JobRunning, old},
+	} {
+		id, err := s.Enqueue(ctx, "k", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.repo.DB().ExecContext(ctx, `UPDATE jobs SET state = ?, updated_at = ? WHERE id = ?`, c.state, c.at, id); err != nil {
+			t.Fatal(err)
+		}
+		ids[c.key] = id
+	}
+	if n, err := s.PruneDone(ctx); err != nil || n != 1 {
+		t.Fatalf("PruneDone = %d, %v", n, err)
+	}
+	for key, id := range ids {
+		_, err := s.repo.GetJob(ctx, id)
+		if gone := err != nil; gone != (key == "done-old") {
+			t.Fatalf("%s gone = %v", key, gone)
+		}
+	}
+	if n, err := s.ClearFailed(ctx); err != nil || n != 1 {
+		t.Fatalf("ClearFailed = %d, %v", n, err)
+	}
+	if _, err := s.repo.GetJob(ctx, ids["failed-old"]); err == nil {
+		t.Fatal("failed job remains after ClearFailed")
+	}
+}
+
+func TestSchedulerPruneJobs(t *testing.T) {
+	ctx := context.Background()
+	s, now := newTestJobs(t)
+	id, err := s.Enqueue(ctx, "k", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.repo.DB().ExecContext(ctx, `UPDATE jobs SET state = 'done', updated_at = ? WHERE id = ?`,
+		now.Add(-JobDoneRetention-time.Hour).Unix(), id); err != nil {
+		t.Fatal(err)
+	}
+	sched := (&SchedulerService{}).WithJobs(s)
+	if err := sched.pruneJobs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.repo.GetJob(ctx, id); err == nil {
+		t.Fatal("old done job remains after the scheduler prune")
+	}
+}
+
+func TestSchedulerPruneJobsError(t *testing.T) {
+	s, _ := newTestJobs(t)
+	_ = s.repo.Close()
+	if err := (&SchedulerService{}).WithJobs(s).pruneJobs(context.Background()); err == nil {
+		t.Fatal("pruneJobs on a closed DB: no error")
+	}
+}

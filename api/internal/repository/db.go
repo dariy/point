@@ -134,6 +134,8 @@ type Repository interface {
 	ListJobs(ctx context.Context, states []string, limit int) ([]Job, error)
 	CountJobsByState(ctx context.Context) (map[string]int64, error)
 	RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error)
+	DeleteDoneJobsBefore(ctx context.Context, before time.Time) (int64, error)
+	DeleteFailedJobs(ctx context.Context) (int64, error)
 	BackupDB(ctx context.Context, destPath string) error
 
 	// Tags

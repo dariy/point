@@ -262,3 +262,17 @@ func (s *JobService) Retry(ctx context.Context, id int64) error {
 	s.signal()
 	return nil
 }
+
+// JobDoneRetention is how long a done job stays before PruneDone removes it.
+const JobDoneRetention = 7 * 24 * time.Hour
+
+// PruneDone removes done jobs older than JobDoneRetention. Failed jobs stay:
+// they are evidence, and only ClearFailed removes them.
+func (s *JobService) PruneDone(ctx context.Context) (int64, error) {
+	return s.repo.DeleteDoneJobsBefore(ctx, s.now().Add(-JobDoneRetention))
+}
+
+// ClearFailed removes every failed job. It is the operator's manual cleanup.
+func (s *JobService) ClearFailed(ctx context.Context) (int64, error) {
+	return s.repo.DeleteFailedJobs(ctx)
+}

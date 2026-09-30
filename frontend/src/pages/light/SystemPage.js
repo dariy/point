@@ -8,6 +8,7 @@
  */
 
 import { Component } from "../../components/Component.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import {
   adminLayoutTemplate,
   setupAdminLayout,
@@ -21,6 +22,7 @@ import {
   getHealth,
   getJobs,
   retryJob,
+  clearFailedJobs,
 } from "../../api/system.js";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
@@ -235,7 +237,12 @@ export default class SystemPage extends Component {
 
     return html`
       <section class="card system-full-width">
-        <div class="card-header"><h2>Job Queue</h2></div>
+        <div class="card-header">
+          <h2>Job Queue</h2>
+          ${counts.failed > 0
+            ? html`<button type="button" class="btn btn-danger btn-sm" id="clear-failed-jobs-btn">Clear failed</button>`
+            : ""}
+        </div>
         <div class="card-body">
           <p>${countLine}</p>
           ${body}
@@ -338,6 +345,9 @@ export default class SystemPage extends Component {
     this.container
       .querySelector("#audit-links-btn")
       ?.addEventListener("click", () => this._handleAuditLinks());
+    this.container
+      .querySelector("#clear-failed-jobs-btn")
+      ?.addEventListener("click", () => this._confirmClearFailedJobs());
     this.container.querySelectorAll("[data-retry-job]").forEach((btn) =>
       btn.addEventListener("click", () =>
         this._handleRetryJob(Number(btn.getAttribute("data-retry-job"))),
@@ -406,6 +416,32 @@ export default class SystemPage extends Component {
     } catch (err) {
       setToast({ message: "Could not retry job: " + (err.message || err), type: "error" });
     }
+  }
+
+  _confirmClearFailedJobs() {
+    const n = this.state.jobs?.counts?.failed || 0;
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title: "Clear failed jobs",
+      message: `Remove ${n} failed job${n === 1 ? "" : "s"}? Their errors are lost.`,
+      confirmText: "Clear failed",
+      variant: "danger",
+      onConfirm: () => { dialog.unmount(); mount.remove(); this._handleClearFailedJobs(); },
+      onCancel: () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
+  }
+
+  async _handleClearFailedJobs() {
+    try {
+      const { deleted } = await clearFailedJobs();
+      setToast({ message: `Removed ${deleted} failed job${deleted === 1 ? "" : "s"}.`, type: "success" });
+    } catch (err) {
+      setToast({ message: "Could not clear failed jobs: " + (err.message || err), type: "error" });
+    }
+    const jobs = await getJobs().catch(() => this.state.jobs);
+    this.setState({ jobs });
   }
 
   async _handleClearCache() {

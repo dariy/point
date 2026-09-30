@@ -141,3 +141,23 @@ func (r *sqliteRepository) RetryFailedJob(ctx context.Context, id int64, runAt t
 	n, err := res.RowsAffected()
 	return n > 0, err
 }
+
+// DeleteDoneJobsBefore removes done jobs last updated before the given time.
+// It never touches queued, running or failed rows.
+func (r *sqliteRepository) DeleteDoneJobsBefore(ctx context.Context, before time.Time) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM jobs WHERE state = 'done' AND updated_at < ?`, before.Unix())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// DeleteFailedJobs removes every failed job. Only the operator calls this.
+func (r *sqliteRepository) DeleteFailedJobs(ctx context.Context) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM jobs WHERE state = 'failed'`)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

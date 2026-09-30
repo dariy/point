@@ -26,6 +26,8 @@ type SchedulerService struct {
 	// metrics counts recovered panics. Task runs and failures are not counted
 	// here: they are already in health, and the exposition reads that.
 	metrics *metrics.Registry
+	// jobs is the durable job store. Nil skips the daily prune.
+	jobs *JobService
 }
 
 func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService, instagramService *InstagramService) *SchedulerService {
@@ -51,6 +53,12 @@ func (s *SchedulerService) WithHealth(h *HealthRegistry) *SchedulerService {
 // nothing but a log line says the tick was lost.
 func (s *SchedulerService) WithMetrics(m *metrics.Registry) *SchedulerService {
 	s.metrics = m
+	return s
+}
+
+// WithJobs attaches the job store so the daily task prunes old done jobs.
+func (s *SchedulerService) WithJobs(j *JobService) *SchedulerService {
+	s.jobs = j
 	return s
 }
 
@@ -91,6 +99,12 @@ func (s *SchedulerService) Start(ctx context.Context) {
 	// Daily task: Instagram token refresh (at 4 AM)
 	go s.runDaily(ctx, "instagram token refresh", 4, s.refreshInstagramTokenIfNeeded)
 
+	// Daily task: remove done jobs older than JobDoneRetention (at 5 AM).
+	// Failed jobs stay until the operator clears them.
+	if s.jobs != nil {
+		go s.runDaily(ctx, "job prune", 5, s.pruneJobs)
+	}
+
 	// Daily task: Backups (checked at 3 AM). The cadence (backup_interval_days)
 	// and retention (backup_keep) are admin settings; the check runs daily but
 	// only creates a backup when one is due, then prunes old ones.
@@ -108,6 +122,18 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		_, err := s.systemService.RotateBackups(s.settingInt(ctx, "backup_keep", 7))
 		return err
 	})
+}
+
+// pruneJobs removes old done jobs and logs how many.
+func (s *SchedulerService) pruneJobs(ctx context.Context) error {
+	n, err := s.jobs.PruneDone(ctx)
+	if err != nil {
+		return fmt.Errorf("job prune: %w", err)
+	}
+	if n > 0 {
+		slog.Info("scheduler: pruned done jobs", "count", n)
+	}
+	return nil
 }
 
 // purgeOrientedVariants runs MediaService.PurgeOrientedVariants and logs the
