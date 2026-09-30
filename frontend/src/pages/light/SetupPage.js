@@ -123,6 +123,9 @@ export default class SetupPage extends Component {
           author_name,
           email,
           name: await sha256(password),
+          // Managed installs require the one-time token from the setup link
+          // (/setup?token=…). Self-hosted installs ignore it.
+          token: new URLSearchParams(window.location.search).get('token') || '',
         });
 
         // Full document load rather than an SPA navigate: the app bootstrapped
