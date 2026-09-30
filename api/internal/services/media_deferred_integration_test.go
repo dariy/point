@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"point-api/internal/models"
 )
 
 // The fixtures are small gradients with a non-sRGB test ICC profile.
@@ -171,5 +173,66 @@ func TestExtractICC_ISOBMFF(t *testing.T) {
 	bad := append([]byte("\x00\x00\x00\x18ftypheic\x00\x00\x00\x00"), []byte("\x00\x00\xff\xffcolrprof")...)
 	if extractICC(bad) != nil {
 		t.Error("truncated colr box gave a profile")
+	}
+}
+
+// The error paths of the deferred decode leave the row as it was.
+func TestDeferred_ErrorPaths(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	ctx := context.Background()
+
+	data, err := os.ReadFile(filepath.Join("testdata", "small.heic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := safeHEIFDecode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	heic := models.Medium{ID: 1, Filename: "x.heic", OriginalPath: "originals/x.heic", MimeType: "image/heic"}
+
+	if err := svc.finishDeferred(ctx, heic, []byte("not an image")); err == nil {
+		t.Error("finishDeferred on garbage: want an error")
+	}
+
+	escape := heic
+	escape.OriginalPath = "../../x.heic"
+	if err := svc.convertHEIF(ctx, escape, data, src, nil); err == nil || !strings.Contains(err.Error(), "invalid media path") {
+		t.Errorf("convertHEIF outside the media root = %v, want invalid media path", err)
+	}
+
+	jpg := filepath.Join(svc.mediaBase(), "originals", "x.jpg")
+	if err := os.MkdirAll(filepath.Dir(jpg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(jpg, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.convertHEIF(ctx, heic, data, src, nil); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("convertHEIF over an existing JPEG = %v, want already exists", err)
+	}
+}
+
+func TestSafeHEIFDecode_Truncated(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "small.heic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := safeHEIFDecode(bytes.NewReader(data[:len(data)/2])); err == nil {
+		t.Error("truncated HEIC: want an error")
+	}
+}
+
+func TestWithHEIFExif_Errors(t *testing.T) {
+	if _, err := withHEIFExif([]byte{0xFF, 0xD8}, []byte("no exif here")); err == nil {
+		t.Error("HEIC without EXIF: want an error")
+	}
+	data, err := os.ReadFile(filepath.Join("testdata", "small.heic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := withHEIFExif([]byte("not a jpeg"), data); err == nil {
+		t.Error("output that is not a JPEG: want an error")
 	}
 }
