@@ -180,6 +180,8 @@ func main() {
 
 	// Start background scheduler (goroutines honor ctx cancellation)
 	svcs.Scheduler.Start(ctx)
+	// Durable job worker; job kinds register before this line.
+	svcs.Jobs.Start(ctx)
 
 	// Prometheus exposition on a listener of its own, or nil when
 	// METRICS_ENABLED is off — which is the default, and then nothing below
