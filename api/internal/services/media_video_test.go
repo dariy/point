@@ -5,6 +5,8 @@ package services
 import (
 	"bytes"
 	"context"
+	"image"
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -297,5 +299,58 @@ func TestVideoPosterJob(t *testing.T) {
 	// A job for a deleted item finishes without work.
 	if err := svc.runVideoPosterJob(ctx, []byte(`{"media_id":9999}`)); err != nil {
 		t.Errorf("job for a deleted item: %v", err)
+	}
+}
+
+// TestVideoPosterJob_Stub runs the poster job where ffmpeg is absent: the
+// ffmpeg stub prints a JPEG, or fails when that file is missing.
+func TestVideoPosterJob_Stub(t *testing.T) {
+	ff := stubVideoFFmpeg(t, hevcProbe, false)
+	frame := filepath.Join(t.TempDir(), "frame.jpg")
+	stub := "#!/bin/sh\ncat '" + frame + "' || { echo broken >&2; exit 1; }\n"
+	if err := os.WriteFile(ff.FFmpegPath, []byte(stub), 0o700); err != nil { //nolint:gosec // test stub must be executable
+		t.Fatal(err)
+	}
+	svc, _, _ := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	media, err := svc.UploadFile(ctx, UploadFileParams{Filename: "a.mov", Content: []byte("mov"), MimeType: "video/quicktime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte(`{"media_id":` + strconv.FormatInt(media.ID, 10) + `}`)
+
+	if err := svc.runVideoPosterJob(ctx, payload); err == nil || !strings.Contains(err.Error(), "broken") {
+		t.Fatalf("err = %v, want the ffmpeg output", err)
+	}
+	if err := os.WriteFile(frame, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.runVideoPosterJob(ctx, payload); err == nil || !strings.Contains(err.Error(), "no frame") {
+		t.Fatalf("err = %v, want no frame", err)
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 9)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(frame, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.runVideoPosterJob(ctx, payload); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.getMedia(ctx, media.ID)
+	if err != nil || !got.ThumbnailPath.Valid {
+		t.Fatalf("no server poster: %+v, %v", got.ThumbnailPath, err)
+	}
+	// With a poster in place, ffmpeg does not run: the failing stub is not reached.
+	_ = os.Remove(frame)
+	if err := svc.WriteServerPoster(ctx, got); err != nil {
+		t.Errorf("poster present: %v", err)
+	}
+	if err := svc.runVideoPosterJob(ctx, []byte(`{`)); err == nil {
+		t.Error("a bad payload returned no error")
+	}
+	if err := (&MediaService{}).WriteServerPoster(ctx, got); err != ErrFFmpegMissing { //nolint:errorlint // sentinel
+		t.Errorf("no ffmpeg: err = %v", err)
 	}
 }
