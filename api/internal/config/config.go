@@ -58,6 +58,12 @@ type Config struct {
 	// eviction.
 	PageCacheBudgetMB int `mapstructure:"PAGE_CACHE_BUDGET_MB"`
 
+	// SetupToken, when set, is required by POST /api/setup: the first-run
+	// wizard only creates the owner for a request that carries it. Managed
+	// hosting sets it so a stranger who finds the hostname first cannot claim
+	// the install. Unset keeps the open wizard for self-hosters.
+	SetupToken string `mapstructure:"SETUP_TOKEN"`
+
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
@@ -213,6 +219,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("PAGE_CACHE_BUDGET_MB", 64)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")
+	v.SetDefault("SETUP_TOKEN", "")
 	v.SetDefault("SMTP_HOST", "")
 	v.SetDefault("SMTP_PORT", 587)
 	v.SetDefault("SMTP_USERNAME", "")
