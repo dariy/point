@@ -152,3 +152,83 @@ func TestVideoTranscode_NoFFmpegEnqueuesNothing(t *testing.T) {
 		t.Error("a job was enqueued without ffmpeg")
 	}
 }
+
+// stubVideoFFmpeg writes an ffprobe stub that reports probeJSON and an ffmpeg
+// stub that writes "mp4" to its last argument, or fails when fail is set. The
+// job path then runs where ffmpeg is absent.
+func stubVideoFFmpeg(t *testing.T, probeJSON string, fail bool) *FFmpeg {
+	t.Helper()
+	dir := t.TempDir()
+	ffmpeg := "#!/bin/sh\nfor a; do last=$a; done\nprintf mp4 > \"$last\"\n"
+	if fail {
+		ffmpeg = "#!/bin/sh\necho broken >&2\nexit 1\n"
+	}
+	probe := "#!/bin/sh\ncat <<'JSON'\n" + probeJSON + "\nJSON\n"
+	for name, body := range map[string]string{"ffmpeg": ffmpeg, "ffprobe": probe} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o700); err != nil { //nolint:gosec // test stub must be executable
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("FFMPEG_PATH", filepath.Join(dir, "ffmpeg"))
+	return DetectFFmpeg()
+}
+
+const hevcProbe = `{"streams":[{"codec_type":"video","codec_name":"hevc","width":3840,"height":2160},{"codec_type":"audio","codec_name":"aac"}],"format":{"duration":"2.0"}}`
+
+func TestVideoTranscodeJob_Stub(t *testing.T) {
+	ff := stubVideoFFmpeg(t, hevcProbe, false)
+	svc, jobs, _ := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	media, err := svc.UploadFile(ctx, UploadFileParams{Filename: "a.mov", Content: []byte("mov"), MimeType: "video/quicktime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ran, err := jobs.RunOnce(ctx); err != nil || !ran {
+		t.Fatalf("RunOnce = %v, %v", ran, err)
+	}
+	out := svc.TranscodedVideo(media)
+	if out == "" {
+		t.Fatal("no transcode after the job")
+	}
+	// A fresh transcode is not written again.
+	if err := svc.TranscodeVideo(ctx, media); err != nil {
+		t.Fatal(err)
+	}
+	// Rename moves the transcode; delete removes it.
+	renamed, err := svc.RenameMedia(ctx, media.ID, "b.mov")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.TranscodedVideo(renamed) == "" {
+		t.Error("the transcode did not follow the rename")
+	}
+	if err := svc.DeleteMedia(ctx, media.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(svc.mediaBase(), VideoTranscodeRelPath(renamed.OriginalPath))); !os.IsNotExist(err) {
+		t.Error("delete left the transcode")
+	}
+}
+
+func TestVideoTranscodeJob_StubFailureAndGone(t *testing.T) {
+	ff := stubVideoFFmpeg(t, hevcProbe, true)
+	svc, _, _ := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	media, err := svc.UploadFile(ctx, UploadFileParams{Filename: "a.mov", Content: []byte("mov"), MimeType: "video/quicktime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.TranscodeVideo(ctx, media); err == nil || !strings.Contains(err.Error(), "broken") {
+		t.Fatalf("err = %v, want the ffmpeg output", err)
+	}
+	if svc.TranscodedVideo(media) != "" {
+		t.Error("a failed transcode is served")
+	}
+	// A job for a deleted item finishes without work.
+	if err := svc.runVideoTranscodeJob(ctx, []byte(`{"media_id":9999}`)); err != nil {
+		t.Errorf("job for a deleted item: %v", err)
+	}
+	if err := svc.runVideoTranscodeJob(ctx, []byte(`{`)); err == nil {
+		t.Error("a bad payload returned no error")
+	}
+}
