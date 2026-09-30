@@ -548,8 +548,8 @@ func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": fmt.Sprintf(
-			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background.",
-			res.Purged+res.Legacy, res.Prewarming),
+			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background. Queued %d video jobs.",
+			res.Purged+res.Legacy, res.Prewarming, res.VideoJobs),
 		"stats": res,
 	})
 }

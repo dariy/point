@@ -60,18 +60,62 @@ func (s *MediaService) WithVideo(jobs *JobService, ff *FFmpeg) *MediaService {
 	return s
 }
 
-// enqueueTranscode adds a transcode job for a video. A failure to enqueue is
-// logged: the original stays in service.
+// enqueueTranscode adds a transcode job and a poster job for a video. A failure
+// to enqueue is logged: the original stays in service.
 func (s *MediaService) enqueueTranscode(ctx context.Context, media models.Medium) {
-	if s.jobs == nil || !s.ffmpeg.Available() || !strings.EqualFold(media.FileType, "video") {
+	if !s.canRunVideoJobs(media) {
 		return
 	}
-	if _, err := s.jobs.Enqueue(ctx, JobKindVideoTranscode, videoTranscodePayload{MediaID: media.ID}); err != nil {
-		slog.Warn("video transcode: enqueue failed", "media_id", media.ID, "error", err)
+	s.enqueueVideoJob(ctx, JobKindVideoTranscode, media.ID)
+	s.enqueueVideoJob(ctx, JobKindVideoPoster, media.ID)
+}
+
+func (s *MediaService) canRunVideoJobs(media models.Medium) bool {
+	return s.jobs != nil && s.ffmpeg.Available() && strings.EqualFold(media.FileType, "video")
+}
+
+func (s *MediaService) enqueueVideoJob(ctx context.Context, kind string, id int64) bool {
+	if _, err := s.jobs.Enqueue(ctx, kind, videoTranscodePayload{MediaID: id}); err != nil {
+		slog.Warn("video job: enqueue failed", "kind", kind, "media_id", id, "error", err)
+		return false
 	}
-	if _, err := s.jobs.Enqueue(ctx, JobKindVideoPoster, videoTranscodePayload{MediaID: media.ID}); err != nil {
-		slog.Warn("video poster: enqueue failed", "media_id", media.ID, "error", err)
+	return true
+}
+
+// BackfillVideos enqueues a transcode job for each video with no fresh
+// transcode, and a poster job for each video with no poster. A backup leaves
+// the transcodes out, so after a restore this writes them again. It is safe to
+// run again: an item with its output is skipped, and both jobs do nothing when
+// the output exists. It returns the number of jobs enqueued.
+func (s *MediaService) BackfillVideos(ctx context.Context) (int, error) {
+	if s.jobs == nil || !s.ffmpeg.Available() {
+		return 0, nil
 	}
+	queued := 0
+	for offset := int64(0); ; offset += mediaScanPage {
+		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", "", mediaScanPage, offset)
+		if err != nil {
+			return queued, err
+		}
+		for _, m := range rows {
+			if !s.canRunVideoJobs(m) {
+				continue
+			}
+			if s.TranscodedVideo(m) == "" && s.enqueueVideoJob(ctx, JobKindVideoTranscode, m.ID) {
+				queued++
+			}
+			if (!m.ThumbnailPath.Valid || m.ThumbnailPath.String == "") && s.enqueueVideoJob(ctx, JobKindVideoPoster, m.ID) {
+				queued++
+			}
+		}
+		if len(rows) < mediaScanPage {
+			break
+		}
+	}
+	if queued > 0 {
+		slog.Info("video backfill: jobs enqueued", "count", queued)
+	}
+	return queued, nil
 }
 
 // WriteServerPoster stores a frame at 10 % of the duration as the poster of a

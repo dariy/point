@@ -365,3 +365,54 @@ func TestVideoPosterJob_Stub(t *testing.T) {
 		t.Errorf("no ffmpeg: err = %v", err)
 	}
 }
+
+// TestBackfillVideos enqueues only the missing outputs, and after the transcode
+// is lost (a backup restore) it enqueues the transcode again.
+func TestBackfillVideos(t *testing.T) {
+	ff := stubVideoFFmpeg(t, hevcProbe, false)
+	svc, jobs, _ := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	media, err := svc.UploadFile(ctx, UploadFileParams{Filename: "a.mov", Content: []byte("mov"), MimeType: "video/quicktime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A poster is in place, so the poster jobs do nothing and the stub is not
+	// asked for a frame.
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 4, 4)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveVideoPoster(ctx, media.ID, buf.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	drain := func() {
+		for {
+			ran, err := jobs.RunOnce(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ran {
+				return
+			}
+		}
+	}
+	drain()
+	if svc.TranscodedVideo(media) == "" {
+		t.Fatal("no transcode after the upload jobs")
+	}
+
+	if n, err := svc.BackfillVideos(ctx); err != nil || n != 0 {
+		t.Fatalf("backfill with all outputs = %d, %v; want 0", n, err)
+	}
+
+	if err := os.Remove(svc.TranscodedVideo(media)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.BackfillVideos(ctx); err != nil || n != 1 {
+		t.Fatalf("backfill after restore = %d, %v; want 1", n, err)
+	}
+	drain()
+	if svc.TranscodedVideo(media) == "" {
+		t.Error("the backfill did not write the transcode again")
+	}
+}

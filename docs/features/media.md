@@ -79,6 +79,10 @@ by upload date (`/YYYY/MM/…`).
   exists, then serves the MP4 at the same URL. A failed job keeps the original in
   service. ffmpeg runs with `-threads 2` and a 30 min timeout; the single job worker
   runs one video at a time. Without ffmpeg (the slim image) no job is added.
+- **Video backfill**: "Rebuild thumbnails" also runs `MediaService.BackfillVideos`. It adds
+  a `video.transcode` job for each video with no fresh MP4, and a `video.poster` job for
+  each video with no poster. A video that has both is skipped, so it is safe to run
+  again. After a backup restore, run it to write the transcodes again.
 
 ## Media visibility
 
@@ -104,8 +108,8 @@ play in Firefox or on some Chrome platforms. This is the design for the rest. Th
 p-zm2s holds the work.
 
 - **Transcode: done.** See "Video transcode" under "What is implemented". A backup leaves
-  the transcode out, like every other derived file; a backfill job to write it again
-  after a restore is p-zm2s.7.
+  the transcode out, like every other derived file; "Rebuild thumbnails" writes it again
+  (see "Video backfill").
 - **Server poster: done.** With ffmpeg, an upload also enqueues a `video.poster` job
   (`media_video.go::WriteServerPoster`). It writes a frame at 10 % of the duration through
   `storePoster`, but only when no poster exists. A poster from the admin browser always

@@ -1269,6 +1269,7 @@ type RebuildResult struct {
 	Purged     int    `json:"purged"`
 	Legacy     int    `json:"legacy"`
 	Prewarming int    `json:"prewarming"`
+	VideoJobs  int    `json:"video_jobs"`
 }
 
 // RebuildThumbnails invalidates every derived image on the site.
@@ -1322,6 +1323,13 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, er
 	}
 
 	res.Prewarming = s.startPrewarm(ctx)
+
+	// Transcodes are derived files too, and a backup leaves them out.
+	videoJobs, err := s.BackfillVideos(ctx)
+	if err != nil {
+		slog.Warn("thumbnail rebuild: video backfill stopped", "error", err)
+	}
+	res.VideoJobs = videoJobs
 	return res, nil
 }
 
