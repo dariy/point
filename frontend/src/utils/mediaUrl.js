@@ -95,7 +95,7 @@ export function thumbUrl(path, size = DEFAULT_THUMB_SIZE) {
  *
  * With `width`/`height` the descriptors are exact. A rung caps the longest side,
  * so a WxH source at rung R is trunc(R * W/max(W,H)) wide — truncated, not
- * rounded, because imaging.Fit derives the short side with a Go int() conversion
+ * rounded, because fitSize (api/internal/services/imgproc.go) derives the short side with a Go int() conversion
  * and a descriptor one pixel over is a descriptor that is wrong. Rungs at or
  * above the longest side are never written — the server falls back to the
  * original for those — so they are dropped from the candidate list and the

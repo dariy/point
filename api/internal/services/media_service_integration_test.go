@@ -835,7 +835,7 @@ func TestSafeImagingDecode_GarbageBytes(t *testing.T) {
 }
 
 func TestSafeImagingDecode_PanicRecovery(t *testing.T) {
-	// An empty reader causes imaging.Decode to return an error (EOF).
+	// An empty reader causes the decoder to return an error (EOF).
 	// This exercises the defer/recover path without requiring a crafted exploit file.
 	_, err := safeImagingDecode(bytes.NewReader(nil))
 	if err == nil {

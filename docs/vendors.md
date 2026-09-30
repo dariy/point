@@ -70,7 +70,7 @@ Direct dependencies from `api/go.mod`, grouped by purpose:
 - [`gorilla/css`](https://github.com/gorilla/css) — CSS tokenizer, used by `SanitizePostCSS` to validate per-post custom CSS (see [Themes](./features/themes.md)).
 
 **Media & EXIF**
-- [`disintegration/imaging`](https://github.com/disintegration/imaging) — image decoding, resizing (`imaging.Fill`/Lanczos), thumbnail generation.
+- [`golang.org/x/image`](https://pkg.go.dev/golang.org/x/image) — BMP, TIFF and WebP decode, and Catmull-Rom resizing (`x/image/draw`) for the thumbnail ladder.
 - [`gen2brain/avif`](https://github.com/gen2brain/avif) — AVIF decode. libavif and dav1d compiled to WASM, run on [`tetratelabs/wazero`](https://github.com/tetratelabs/wazero); no cgo. Licence check (2026-09-29): the module is MIT; the embedded libavif, dav1d and aom are BSD-2-Clause (aom also carries the AOMedia patent licence); wazero is Apache-2.0. If a `libavif` shared library is installed on the host, the module loads it through purego instead of the WASM; the container image has none. Adds about 6 MB to the binary.
 - [`gen2brain/h265`](https://github.com/gen2brain/h265) — HEIC decode, pure Go, no dependencies. Licence check (2026-09-29): MIT. Chosen over `gen2brain/heic` v0.7.x, whose embedded Rust `heic` crate is AGPL-3.0-only, and over libheif/libde265 (LGPL).
 - [`dsoprea/go-exif/v3`](https://github.com/dsoprea/go-exif), `dsoprea/go-jpeg-image-structure/v2`, `dsoprea/go-iptc`, `dsoprea/go-photoshop-info-format`, `dsoprea/go-utility/v2` — EXIF/IPTC read and rewrite (`api/internal/services/exif_writer.go`).

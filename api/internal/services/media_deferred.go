@@ -16,7 +16,6 @@ import (
 
 	"point-api/internal/models"
 
-	"github.com/disintegration/imaging"
 	exif "github.com/dsoprea/go-exif/v3"
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
 	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
@@ -140,7 +139,7 @@ func (s *MediaService) convertHEIF(ctx context.Context, media models.Medium, con
 	}
 
 	var buf bytes.Buffer
-	if err := imaging.Encode(&buf, src, imaging.JPEG, imaging.JPEGQuality(heicJPEGQuality)); err != nil {
+	if err := encodeJPEG(&buf, src, heicJPEGQuality); err != nil {
 		return err
 	}
 	enc := buf.Bytes()

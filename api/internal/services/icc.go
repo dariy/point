@@ -9,8 +9,6 @@ import (
 	"os"
 	"strings"
 	"unicode/utf16"
-
-	"github.com/disintegration/imaging"
 )
 
 // iccMaxBytes bounds a profile read from an upload. Real display profiles are
@@ -231,12 +229,12 @@ func iccSegments(icc []byte) []byte {
 // saveJPEGWithICC writes img as a JPEG. A non-nil icc is embedded as APP2
 // segments directly after SOI, so the browser renders the variant in the
 // source's colour space rather than as sRGB.
-func saveJPEGWithICC(img image.Image, path string, icc []byte, opts ...imaging.EncodeOption) error {
+func saveJPEGWithICC(img image.Image, path string, icc []byte, quality int) error {
 	if len(icc) == 0 {
-		return imaging.Save(img, path, opts...)
+		return saveJPEG(img, path, quality)
 	}
 	var buf bytes.Buffer
-	if err := imaging.Encode(&buf, img, imaging.JPEG, opts...); err != nil {
+	if err := encodeJPEG(&buf, img, quality); err != nil {
 		return err
 	}
 	enc := buf.Bytes()
