@@ -562,10 +562,40 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 			csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
 			c.Response().Header().Set("Content-Security-Policy", csp)
 
-			return c.HTML(http.StatusOK, htmlStr)
+			return c.HTML(shellStatus(path, meta, hasSession(c)), htmlStr)
 		}
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"detail": "Frontend not available — build the frontend first",
 		})
 	}, visibilityCache)
+}
+
+// shellStatus picks the HTTP status for a shell document. The shell renders in
+// every case (the SPA shows its own not-found view), but a path outside the
+// client route table in app.js answers 404, so crawlers, scanners and status
+// probes can tell a missing page from a live one. A post or tag slug that
+// shellMeta could not describe to a guest is missing to that guest too. A
+// signed-in viewer keeps 200 there: the SPA can still show a draft to them.
+// The 404 keeps visibilityCache's short `max-age=60`, so the edge does not
+// hold it long.
+func shellStatus(path string, meta seoMeta, signedIn bool) int {
+	p := strings.TrimRight(path, "/")
+	if p == "" || isAdminPath(p) {
+		return http.StatusOK
+	}
+	switch p {
+	case "/tags", "/map", "/search":
+		return http.StatusOK
+	}
+	for _, prefix := range []string{"/posts/", "/tags/", "/preview/"} {
+		rest, ok := strings.CutPrefix(p, prefix)
+		if !ok || rest == "" || strings.Contains(rest, "/") {
+			continue
+		}
+		if prefix == "/preview/" || signedIn || meta != (seoMeta{}) {
+			return http.StatusOK
+		}
+		return http.StatusNotFound
+	}
+	return http.StatusNotFound
 }

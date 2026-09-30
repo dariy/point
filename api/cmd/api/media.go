@@ -198,7 +198,9 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
 				c.Response().Header().Set("Content-Security-Policy", csp)
 
-				return c.HTML(http.StatusOK, htmlStr)
+				// Only admin routes (/light/tags/<slug>, …) have three
+				// segments; any other path here is not a page.
+				return c.HTML(shellStatus(c.Request().URL.Path, seoMeta{}, hasSession(c)), htmlStr)
 			}
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{
 				"detail": "Frontend not available — build the frontend first",

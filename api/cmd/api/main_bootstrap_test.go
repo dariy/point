@@ -97,19 +97,23 @@ func TestBootstrapScriptOnEveryInjectionSite(t *testing.T) {
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
 
-	sites := map[string]string{
-		"SPA fallback":      "/",
-		"crawler prerender": "/posts/prerendered",
-		"admin shell":       "/light/media",
-		"media-route SPA":   "/notayear/nn/thing",
+	sites := map[string]struct {
+		path string
+		code int
+	}{
+		"SPA fallback":      {"/", http.StatusOK},
+		"crawler prerender": {"/posts/prerendered", http.StatusOK},
+		"admin shell":       {"/light/media", http.StatusOK},
+		"media-route SPA":   {"/light/tags/travel", http.StatusOK},
+		"unknown path":      {"/notayear/nn/thing", http.StatusNotFound},
 	}
-	for name, path := range sites {
+	for name, site := range sites {
 		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req := httptest.NewRequest(http.MethodGet, site.path, nil)
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("GET %s = %d, want 200", path, rec.Code)
+			if rec.Code != site.code {
+				t.Fatalf("GET %s = %d, want %d", site.path, rec.Code, site.code)
 			}
 			assertBootstrap(t, rec, services.DefaultThumbnailGeneration)
 		})

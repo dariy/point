@@ -132,7 +132,11 @@ func (m seoMeta) rewriteShell(shell string) string {
 // carry. It returns the zero value for every route it does not know, for an
 // entity it cannot find, and for anything the public may not see.
 func shellMeta(c echo.Context, svcs *AppServices) seoMeta {
+	// The client router ignores a trailing slash; so does the lookup.
 	path := c.Request().URL.Path
+	if len(path) > 1 {
+		path = strings.TrimRight(path, "/")
+	}
 	// The admin section describes nothing to the outside world, and its pages
 	// name their own tabs client-side.
 	if isAdminPath(path) {
