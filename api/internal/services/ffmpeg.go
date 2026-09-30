@@ -112,3 +112,54 @@ func (f *FFmpeg) Probe(ctx context.Context, path string) (*VideoProbe, error) {
 	p.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64)
 	return p, nil
 }
+
+// videoMaxSide is the longest side of a transcode. A smaller source is not
+// scaled up.
+const videoMaxSide = 1920
+
+// NeedsReencode reports whether a source must be encoded again. A source with
+// H.264 video and AAC audio (or no audio) plays in every browser, so a remux
+// into MP4 is enough.
+func (p *VideoProbe) NeedsReencode() bool {
+	return p.VideoCodec != "h264" || (p.AudioCodec != "" && p.AudioCodec != "aac")
+}
+
+// transcodeArgs returns the ffmpeg arguments that write src to dst as an MP4
+// with H.264 High and AAC. With reencode false, the streams are copied. The
+// output has no global metadata, so a location tag in the source is not served.
+func transcodeArgs(src, dst string, reencode bool, threads int) []string {
+	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+		"-threads", strconv.Itoa(threads),
+		"-i", src,
+		"-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1",
+	}
+	if reencode {
+		// Scale the long side down to videoMaxSide; -2 keeps the other side even.
+		scale := fmt.Sprintf("scale='if(gte(iw,ih),min(%[1]d,iw),-2)':'if(gte(iw,ih),-2,min(%[1]d,ih))'", videoMaxSide)
+		args = append(args,
+			"-vf", scale,
+			"-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p", "-crf", "23", "-preset", "medium",
+			"-c:a", "aac", "-b:a", "128k", "-ac", "2",
+		)
+	} else {
+		args = append(args, "-c", "copy")
+	}
+	return append(args, "-movflags", "+faststart", "-f", "mp4", dst)
+}
+
+// Transcode writes src to dst as an MP4 that plays in every browser. See
+// transcodeArgs. ctx bounds the run; threads limits the encoder threads.
+func (f *FFmpeg) Transcode(ctx context.Context, src, dst string, reencode bool, threads int) error {
+	if !f.Available() {
+		return ErrFFmpegMissing
+	}
+	cmd := exec.CommandContext(ctx, f.FFmpegPath, transcodeArgs(src, dst, reencode, threads)...) //nolint:gosec // detected binary; paths come from media rows
+	if out, err := cmd.CombinedOutput(); err != nil {
+		msg := string(out)
+		if len(msg) > 500 {
+			msg = msg[len(msg)-500:]
+		}
+		return fmt.Errorf("ffmpeg %s: %w: %s", filepath.Base(src), err, msg)
+	}
+	return nil
+}

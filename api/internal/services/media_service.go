@@ -66,6 +66,12 @@ type MediaService struct {
 	// prewarming is held for the life of a background prewarm so a second
 	// rebuild does not start a duplicate one. See startPrewarm.
 	prewarming atomic.Bool
+
+	// jobs and ffmpeg run the video transcode. See media_video.go.
+	jobs         *JobService
+	ffmpeg       *FFmpeg
+	videoTimeout time.Duration
+	videoThreads int
 }
 
 // WithCache attaches the public page cache so a rebuild can drop it. Without
@@ -296,6 +302,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	if fileType == "image" && isDeferredDecode(p.MimeType) {
 		s.startDeferred(media, p.Content)
 	}
+	s.enqueueTranscode(ctx, media)
 
 	return media, nil
 }
@@ -796,6 +803,8 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 	// Drop the ladder rather than renaming four files: a rung is keyed on the
 	// original's path, so the old names are now orphans, and regenerating one
 	// costs a single decode on next request.
+	// The transcode of a video follows it; the other variants are cut again.
+	_ = os.Rename(filepath.Join(s.mediaBase(), VideoTranscodeRelPath(m.OriginalPath)), filepath.Join(s.mediaBase(), VideoTranscodeRelPath(newOrigRel)))
 	s.removeAllVariants(m.OriginalPath)
 
 	// A video poster does have to move. It is client-captured and there is no
@@ -1227,6 +1236,7 @@ func (s *MediaService) removeAllVariants(originalPath string) {
 	for _, size := range VariantSizes {
 		_ = os.Remove(s.variantFullPath(originalPath, size))
 	}
+	_ = os.Remove(filepath.Join(s.mediaBase(), VideoTranscodeRelPath(originalPath)))
 }
 
 // prewarmLimit bounds the eager regeneration a rebuild kicks off: the N most

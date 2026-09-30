@@ -294,6 +294,14 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 			return c.File(servedVariant)
 		}
 
+		// A video is served as its browser-safe transcode once the job wrote
+		// it. Until then, or when the job failed, the original is served.
+		if variantSize == 0 {
+			if mp4 := mediaSvc.TranscodedVideo(media); mp4 != "" {
+				return c.File(mp4)
+			}
+		}
+
 		// Serve original — try exact path first, then checksum-glob fallback.
 		origDir := filepath.Join(storagePath, "media", "originals", year, month)
 		origFile := filepath.Clean(filepath.Join(origDir, filepath.Base(filename)))
