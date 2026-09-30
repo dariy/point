@@ -4,6 +4,16 @@ import { api } from '../../api/client.js';
 import { sha256 } from '../../api/auth.js';
 import { APP_LOGO_SVG } from '../../utils/icons.js';
 
+/**
+ * The one-time setup token from the setup link (`/setup?token=…`). Managed
+ * installs require it (SETUP_TOKEN); self-hosted installs ignore it.
+ * @param {string} search - a `location.search` string
+ * @returns {string} the token, or '' when the link has none
+ */
+export function setupTokenFrom(search) {
+  return new URLSearchParams(search).get('token') || '';
+}
+
 export default class SetupPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -123,9 +133,7 @@ export default class SetupPage extends Component {
           author_name,
           email,
           name: await sha256(password),
-          // Managed installs require the one-time token from the setup link
-          // (/setup?token=…). Self-hosted installs ignore it.
-          token: new URLSearchParams(window.location.search).get('token') || '',
+          token: setupTokenFrom(window.location.search),
         });
 
         // Full document load rather than an SPA navigate: the app bootstrapped
