@@ -72,6 +72,36 @@ export function getHealth() {
 }
 
 /**
+ * @typedef {Object} JobView
+ * @property {number} id
+ * @property {string} kind
+ * @property {Record<string, number>} [refs] ids from the payload; the raw payload is not sent
+ * @property {'queued'|'running'|'done'|'failed'} state
+ * @property {number} attempts
+ * @property {number} max_attempts
+ * @property {string} next_run_at
+ * @property {string} [last_error]
+ */
+
+/**
+ * The durable job queue: a count per state, and the queued, running and
+ * failed jobs (newest first).
+ * @returns {Promise<{counts: Record<string, number>, jobs: JobView[]}>}
+ */
+export function getJobs() {
+  return api.get('/api/system/jobs');
+}
+
+/**
+ * Set a failed job back to queued so that it runs again.
+ * @param {number} id
+ * @returns {Promise<{ status: string }>}
+ */
+export function retryJob(id) {
+  return api.post(`/api/system/jobs/${id}/retry`);
+}
+
+/**
  * The last `lines` lines of the server log (100 by default, at most 1000).
  * @param {{ lines?: number }} [params]
  * @returns {Promise<string[]>}

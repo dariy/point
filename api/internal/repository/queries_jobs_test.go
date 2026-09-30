@@ -51,4 +51,29 @@ func TestRepository_Jobs(t *testing.T) {
 	if got, _ := repo.GetJob(ctx, later); got.State != "queued" {
 		t.Fatalf("later job state %q", got.State)
 	}
+
+	// The admin view: list by state, count per state, retry a failed job.
+	if err := repo.FinishJob(ctx, due, "failed", "boom", now); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := repo.ListJobs(ctx, []string{"failed"}, 10)
+	if err != nil || len(listed) != 1 || listed[0].ID != due {
+		t.Fatalf("ListJobs failed = %+v, %v", listed, err)
+	}
+	if none, err := repo.ListJobs(ctx, nil, 10); err != nil || none != nil {
+		t.Fatalf("ListJobs no states = %+v, %v", none, err)
+	}
+	counts, err := repo.CountJobsByState(ctx)
+	if err != nil || counts["failed"] != 1 || counts["queued"] != 1 {
+		t.Fatalf("CountJobsByState = %v, %v", counts, err)
+	}
+	if ok, err := repo.RetryFailedJob(ctx, later, now); err != nil || ok {
+		t.Fatalf("retry of a queued job: ok=%v err=%v", ok, err)
+	}
+	if ok, err := repo.RetryFailedJob(ctx, due, now); err != nil || !ok {
+		t.Fatalf("retry: ok=%v err=%v", ok, err)
+	}
+	if got, _ := repo.GetJob(ctx, due); got.State != "queued" || got.Attempts != 0 {
+		t.Fatalf("after retry: %+v", got)
+	}
 }

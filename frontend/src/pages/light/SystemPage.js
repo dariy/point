@@ -19,6 +19,8 @@ import {
   getDiskInfo,
   auditPostLinks,
   getHealth,
+  getJobs,
+  retryJob,
 } from "../../api/system.js";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
@@ -52,7 +54,7 @@ export default class SystemPage extends Component {
   }
 
   _renderContent() {
-    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health } =
+    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health, jobs } =
       this.state;
 
     if (loading)
@@ -62,6 +64,7 @@ export default class SystemPage extends Component {
 
     const diskSection = diskInfo ? this._renderDiskSection(diskInfo) : "";
     const healthSection = this._renderHealthSection(health);
+    const jobsSection = this._renderJobsSection(jobs);
 
     return html`
       <div class="system-grid">
@@ -87,6 +90,7 @@ export default class SystemPage extends Component {
         ${diskSection}
 
         ${healthSection}
+        ${jobsSection}
 
         <section class="card system-full-width">
           <div class="card-header"><h2>Content Health</h2></div>
@@ -184,6 +188,78 @@ export default class SystemPage extends Component {
   }
 
   /**
+   * The durable job queue. Unlike the health section it survives a restart:
+   * a job in backoff or failed after max_attempts is visible here.
+   * @param {Awaited<ReturnType<typeof getJobs>>|null} jobs
+   */
+  _renderJobsSection(jobs) {
+    if (!jobs) return "";
+    const counts = jobs.counts || {};
+    const countLine = ["queued", "running", "failed", "done"]
+      .map((st) => `${st} ${counts[st] || 0}`)
+      .join(" · ");
+
+    const rows = (jobs.jobs || []).map((j) => {
+      const refs = Object.entries(j.refs || {})
+        .map(([k, v]) => `${k} ${v}`)
+        .join(", ");
+      const badge =
+        j.state === "failed"
+          ? html`<span class="badge badge-danger">Failed</span>`
+          : html`<span class="badge">${j.state}</span>`;
+      const err = j.last_error
+        ? html`<div class="job-health-error">${j.last_error}</div>`
+        : "";
+      const retry =
+        j.state === "failed"
+          ? html`<button type="button" class="btn btn-secondary btn-sm" data-retry-job="${j.id}">Retry</button>`
+          : "";
+      return html`
+        <tr>
+          <td>${j.kind}${refs ? html` <small>(${refs})</small>` : ""}${err}</td>
+          <td>${badge}</td>
+          <td>${j.attempts} / ${j.max_attempts}</td>
+          <td>${j.state === "queued" ? this._until(j.next_run_at) : "—"}</td>
+          <td>${retry}</td>
+        </tr>`;
+    });
+
+    const body = rows.length
+      ? html`<table class="table">
+           <thead>
+             <tr><th>Job</th><th>State</th><th>Attempts</th><th>Next run</th><th></th></tr>
+           </thead>
+           <tbody>${rows}</tbody>
+         </table>`
+      : html`<p>No queued, running or failed jobs.</p>`;
+
+    return html`
+      <section class="card system-full-width">
+        <div class="card-header"><h2>Job Queue</h2></div>
+        <div class="card-body">
+          <p>${countLine}</p>
+          ${body}
+        </div>
+      </section>`;
+  }
+
+  /**
+   * Render an ISO timestamp as a coarse time from now; a past time is "now".
+   * @param {string|undefined} iso
+   */
+  _until(iso) {
+    if (!iso) return "—";
+    const then = Date.parse(iso);
+    if (Number.isNaN(then)) return "—";
+    const secs = Math.round((then - Date.now()) / 1000);
+    if (secs <= 0) return "now";
+    if (secs < 60) return `in ${secs}s`;
+    if (secs < 3600) return `in ${Math.round(secs / 60)}m`;
+    if (secs < 86400) return `in ${Math.round(secs / 3600)}h`;
+    return `in ${Math.round(secs / 86400)}d`;
+  }
+
+  /**
    * Render an ISO timestamp as a coarse relative age. Returns an em dash for a
    * missing value — "never run" must not render as an epoch date.
    * @param {string|undefined} iso
@@ -262,6 +338,11 @@ export default class SystemPage extends Component {
     this.container
       .querySelector("#audit-links-btn")
       ?.addEventListener("click", () => this._handleAuditLinks());
+    this.container.querySelectorAll("[data-retry-job]").forEach((btn) =>
+      btn.addEventListener("click", () =>
+        this._handleRetryJob(Number(btn.getAttribute("data-retry-job"))),
+      ),
+    );
 
     // Collapse/expand the Database Migrations card (persisted across re-renders).
     const header = this.container.querySelector('[data-collapsible="migrations"] .card-header');
@@ -291,16 +372,18 @@ export default class SystemPage extends Component {
     try {
       // Health is best-effort: an older server without the endpoint, or a
       // transient failure, must not blank the whole page.
-      const [migrations, diskInfo, health] = await Promise.all([
+      const [migrations, diskInfo, health, jobs] = await Promise.all([
         getMigrations(),
         getDiskInfo(),
         getHealth().catch(() => null),
+        getJobs().catch(() => null),
       ]);
       this.setState({
         loading: false,
         migrations: Array.isArray(migrations) ? migrations : [],
         diskInfo,
         health,
+        jobs,
         error: null,
       });
     } catch (err) {
@@ -311,6 +394,17 @@ export default class SystemPage extends Component {
           "Could not load system information: " +
           (err.message || err.toString() || JSON.stringify(err)),
       });
+    }
+  }
+
+  async _handleRetryJob(id) {
+    try {
+      await retryJob(id);
+      setToast({ message: "Job queued again.", type: "success" });
+      const jobs = await getJobs().catch(() => this.state.jobs);
+      this.setState({ jobs });
+    } catch (err) {
+      setToast({ message: "Could not retry job: " + (err.message || err), type: "error" });
     }
   }
 

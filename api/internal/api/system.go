@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -48,6 +49,9 @@ type SystemHandler struct {
 	// health is the background-job outcome registry surfaced by GetHealth.
 	// Nil is valid: the endpoint then reports no jobs.
 	health *services.HealthRegistry
+	// jobs is the durable job store shown by ListJobs. Nil is valid: the
+	// endpoint then reports no jobs.
+	jobs *services.JobService
 	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
 	// reported by GetStats. 0 means unlimited and is omitted from the response.
 	storageQuotaMB int
@@ -58,6 +62,49 @@ type SystemHandler struct {
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
 	return h
+}
+
+// WithJobs attaches the durable job store for ListJobs and RetryJob.
+func (h *SystemHandler) WithJobs(j *services.JobService) *SystemHandler {
+	h.jobs = j
+	return h
+}
+
+// ListJobs reports the jobs table: a count per state, and the queued,
+// running and failed jobs (newest first, at most 100). Each job shows its
+// kind and the ids in its payload, not the raw payload.
+func (h *SystemHandler) ListJobs(c echo.Context) error {
+	if h.jobs == nil {
+		return c.JSON(http.StatusOK, map[string]any{"counts": map[string]int64{}, "jobs": []services.JobView{}})
+	}
+	ctx := c.Request().Context()
+	counts, err := h.jobs.Counts(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not count jobs")
+	}
+	jobs, err := h.jobs.List(ctx, 100)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not list jobs")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"counts": counts, "jobs": jobs})
+}
+
+// RetryJob sets a failed job back to queued so that the worker runs it again.
+func (h *SystemHandler) RetryJob(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid job id")
+	}
+	if h.jobs == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "No job store")
+	}
+	if err := h.jobs.Retry(c.Request().Context(), id); err != nil {
+		if errors.Is(err, services.ErrJobNotFailed) {
+			return echo.NewHTTPError(http.StatusNotFound, "No failed job with that id")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not retry job")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"status": "queued"})
 }
 
 // WithStorageQuotaMB attaches the operator-configured storage allowance. A

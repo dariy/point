@@ -178,6 +178,12 @@ row keeps `last_error = "panic: …"` and goes back to `queued` with an exponent
 (30 s × 2ⁿ, at most 6 h) until `max_attempts`, then goes to `failed`. At startup, rows in
 `running` go back to `queued`, because the process that ran them stopped.
 
+The admin System page has a **Job Queue** card (`GET /api/system/jobs`). It shows the count
+of jobs in each state and lists the queued, running and failed jobs: kind, the ids from the
+payload, attempts / max, next run and the last error. The raw payload is not shown. A failed
+job has a **Retry** button (`POST /api/system/jobs/:id/retry`): the job goes back to `queued`
+with zero attempts, due now, and the worker wakes. Old `done` rows are not pruned yet.
+
 `safeImagingDecode` (`api/internal/services/media_service.go`) already turned decode
 panics from crafted images into a returned error; it now also logs them at `warn` with a
 stack, so a caller that swallows the error does not make the panic invisible.

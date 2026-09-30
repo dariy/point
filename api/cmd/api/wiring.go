@@ -171,7 +171,7 @@ func initHandlers(cfg config.Config, repo repository.Repository, svcs *AppServic
 		Settings:  api.NewSettingsHandler(svcs.Settings, remarkSupervisor),
 		Plugins:   api.NewPluginsHandler(svcs.Settings),
 		Theme:     api.NewThemeHandler(svcs.Theme),
-		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithStorageQuotaMB(cfg.StorageQuotaMB),
+		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithJobs(svcs.Jobs).WithStorageQuotaMB(cfg.StorageQuotaMB),
 		Feeds:     api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache),
 		Pages:     api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache),
 		Timeline:  api.NewTimelineHandler(svcs.Timeline, svcs.Settings),

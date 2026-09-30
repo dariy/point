@@ -131,6 +131,9 @@ type Repository interface {
 	FinishJob(ctx context.Context, id int64, state, lastError string, nextRunAt time.Time) error
 	RequeueRunningJobs(ctx context.Context) (int64, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
+	ListJobs(ctx context.Context, states []string, limit int) ([]Job, error)
+	CountJobsByState(ctx context.Context) (map[string]int64, error)
+	RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error)
 	BackupDB(ctx context.Context, destPath string) error
 
 	// Tags
