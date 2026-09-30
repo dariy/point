@@ -32,8 +32,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 
-	"github.com/disintegration/imaging"
-	// Registers WebP with image.Decode and image.DecodeConfig. imaging
+	// Registers WebP with image.Decode and image.DecodeConfig. imgproc.go
 	// registers JPEG, PNG, GIF, BMP and TIFF only, so without this a WebP
 	// upload stores no size and no ladder. Pure Go: the binary stays CGO-free.
 	_ "golang.org/x/image/webp"
@@ -846,8 +845,8 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 	if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
 		return models.Medium{}, err
 	}
-	thumb := imaging.Fit(src, posterMaxSide, posterMaxSide, imaging.Lanczos)
-	if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
+	thumb := fitImage(src, posterMaxSide, posterMaxSide)
+	if err := saveJPEGWithICC(thumb, thumbFull, nil, s.jpegQuality(ctx)); err != nil {
 		return models.Medium{}, err
 	}
 
@@ -869,7 +868,7 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 }
 
 // VariantSizes is the thumbnail ladder: the cap applied to the LONGEST side of
-// a derived JPEG, ascending. Aspect ratio is preserved (imaging.Fit), so a
+// a derived JPEG, ascending. Aspect ratio is preserved (fitImage), so a
 // portrait source at rung 512 is 512 tall and narrower than that.
 //
 // 128 is for dense grids and list rows, 256 for atlas chips, 512 for cards and
@@ -877,8 +876,8 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 // 2048 are for article bodies on phones at DPR 3 and retina laptops, which
 // otherwise download the original. Upload writes the rungs up to
 // UploadMaxVariantSize only; the larger ones are written on the first request
-// or by the rebuild prewarm (see writeLadder). JPEG only — the binary is CGO-free and
-// disintegration/imaging cannot encode WebP or AVIF without a cgo dependency.
+// or by the rebuild prewarm (see writeLadder). JPEG only — the binary is CGO-free, and
+// no pure-Go WebP or AVIF encoder is good enough.
 var VariantSizes = []int{128, 256, 512, 1024, 1600, 2048}
 
 // UploadMaxVariantSize is the largest rung that upload and import write
@@ -1047,7 +1046,7 @@ func variantIsFresh(variantFull, srcFull string) bool {
 // pattern that matters more than the process-wide decode semaphore, which
 // bounds the machine but not the duplication.
 //
-// Rungs at or above the source's longest side are never written: imaging.Fit
+// Rungs at or above the source's longest side are never written: fitImage
 // does not upscale, so they would be byte-identical copies of one another. The
 // caller gets ErrVariantNotNeeded and serves the original instead. A video
 // falls back to its poster frame rather than the original, which is a media
@@ -1144,7 +1143,7 @@ func (s *MediaService) backfillDimensions(ctx context.Context, media models.Medi
 func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, icc []byte, srcFull string, maxRung int) error {
 	bounds := src.Bounds()
 	longest := maxInt(bounds.Dx(), bounds.Dy())
-	quality := imaging.JPEGQuality(s.jpegQuality(ctx))
+	quality := s.jpegQuality(ctx)
 
 	var firstErr error
 	fail := func(err error) {
@@ -1153,6 +1152,7 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 		}
 	}
 
+	var sizes []int
 	for _, size := range VariantSizes {
 		if size >= longest || (maxRung > 0 && size > maxRung) {
 			continue
@@ -1165,7 +1165,11 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 			fail(err)
 			continue
 		}
-		if err := saveJPEGWithICC(imaging.Fit(src, size, size, imaging.Lanczos), full, icc, quality); err != nil {
+		sizes = append(sizes, size)
+	}
+	rungs := fitLadder(src, sizes)
+	for _, size := range sizes {
+		if err := saveJPEGWithICC(rungs[size], s.variantFullPath(originalPath, size), icc, quality); err != nil {
 			fail(err)
 		}
 	}
@@ -1481,7 +1485,7 @@ var (
 	// serve or derive a variant from.
 	ErrNoPoster = kindSentinel(ErrNotFound, "video has no poster frame")
 	// The requested rung is at or above the source's longest side, so it was
-	// never written: imaging.Fit does not upscale. Callers serve the source.
+	// never written: fitImage does not upscale. Callers serve the source.
 	ErrVariantNotNeeded = kindSentinel(ErrNotFound, "source is smaller than the requested size")
 	// The analysis upstream answered, but not with something we can use.
 	ErrResponseUnusable = kindSentinel(ErrUpstream, "the response cannot be used")
@@ -1895,15 +1899,15 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 	return changed, nil
 }
 
-// safeImagingDecode wraps imaging.Decode to convert panics into errors, and
-// applies the EXIF Orientation tag. imaging leaves AutoOrientation off by
-// default, which cut every derived file from the raw sensor pixels: a phone
+// safeImagingDecode wraps decodeOriented to convert panics into errors. The
+// decode applies the EXIF Orientation tag. Without it every derived file was
+// cut from the raw sensor pixels: a phone
 // photo tagged Orientation 6 got sideways variants and swapped stored
 // dimensions while the browser showed the original upright. Every decode
 // path — upload, import, lazy variant, rebuild prewarm, Instagram import —
 // comes through here, so the bounds a caller reads are the displayed size.
-// The imaging library can panic on crafted TIFF files (CVE-2023-36308) and
-// there is no patched upstream version as of 2026-05.
+// A decoder can panic on a crafted file (CVE-2023-36308 was one in the TIFF
+// path of the old imaging library), so every decode keeps this guard.
 //
 // It bounds nothing on its own. Production callers go through
 // MediaService.decodeImage, which adds the pixel guard and the concurrency
@@ -1920,7 +1924,7 @@ func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 			err = fmt.Errorf("image decode panic: %v", rec)
 		}
 	}()
-	return imaging.Decode(r, imaging.AutoOrientation(true))
+	return decodeOriented(r)
 }
 
 // defaultMaxImageMegapixels is the pixel ceiling used when the operator has
