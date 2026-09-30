@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -162,4 +163,36 @@ func (f *FFmpeg) Transcode(ctx context.Context, src, dst string, reencode bool, 
 		return fmt.Errorf("ffmpeg %s: %w: %s", filepath.Base(src), err, msg)
 	}
 	return nil
+}
+
+// posterArgs returns the ffmpeg arguments that write one JPEG frame at the
+// offset at (seconds) of src to stdout.
+func posterArgs(src string, at float64) []string {
+	return []string{"-nostdin", "-hide_banner", "-loglevel", "error",
+		"-ss", strconv.FormatFloat(at, 'f', 3, 64),
+		"-i", src,
+		"-frames:v", "1", "-map_metadata", "-1", "-q:v", "2",
+		"-f", "image2pipe", "-c:v", "mjpeg", "pipe:1",
+	}
+}
+
+// Frame returns one JPEG frame of src at the offset at (seconds).
+func (f *FFmpeg) Frame(ctx context.Context, src string, at float64) ([]byte, error) {
+	if !f.Available() {
+		return nil, ErrFFmpegMissing
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, f.FFmpegPath, posterArgs(src, at)...) //nolint:gosec // detected binary; paths come from media rows
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		msg := stderr.String()
+		if len(msg) > 500 {
+			msg = msg[len(msg)-500:]
+		}
+		return nil, fmt.Errorf("ffmpeg frame %s: %w: %s", filepath.Base(src), err, msg)
+	}
+	if stdout.Len() == 0 {
+		return nil, fmt.Errorf("ffmpeg frame %s: no frame at %.3fs", filepath.Base(src), at)
+	}
+	return stdout.Bytes(), nil
 }

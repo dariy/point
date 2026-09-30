@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -230,5 +231,71 @@ func TestVideoTranscodeJob_StubFailureAndGone(t *testing.T) {
 	}
 	if err := svc.runVideoTranscodeJob(ctx, []byte(`{`)); err == nil {
 		t.Error("a bad payload returned no error")
+	}
+}
+
+func TestPosterArgs(t *testing.T) {
+	got := strings.Join(posterArgs("in.mov", 1.5), " ")
+	for _, want := range []string{"-ss 1.500", "-i in.mov", "-frames:v 1", "pipe:1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("poster args miss %q: %s", want, got)
+		}
+	}
+}
+
+func TestVideoPosterJob(t *testing.T) {
+	t.Setenv("FFMPEG_PATH", "")
+	ff := DetectFFmpeg()
+	if !ff.Available() {
+		t.Skip("ffmpeg/ffprobe not installed")
+	}
+	svc, _, tmp := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	content := encodeFixture(t, ff, "clip.mp4", "libx264", "aac")
+	media, err := svc.UploadFile(ctx, UploadFileParams{Filename: "clip.mp4", Content: content, MimeType: "video/mp4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.runVideoPosterJob(ctx, []byte(`{"media_id":`+strconv.FormatInt(media.ID, 10)+`}`)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.getMedia(ctx, media.ID)
+	if err != nil || !got.ThumbnailPath.Valid {
+		t.Fatalf("no server poster: %+v, %v", got.ThumbnailPath, err)
+	}
+	full := filepath.Join(tmp, "media", got.ThumbnailPath.String)
+	server, err := os.ReadFile(full) //nolint:gosec // test temp file
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// With a poster in place, the job does nothing.
+	if err := svc.WriteServerPoster(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+
+	// A browser poster later replaces the server poster.
+	browser, err := svc.SaveVideoPoster(ctx, media.ID, server[:0:0])
+	if err == nil {
+		t.Fatal("empty poster accepted")
+	}
+	frame, err := ff.Frame(ctx, filepath.Join(tmp, "media", media.OriginalPath), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if browser, err = svc.SaveVideoPoster(ctx, media.ID, frame); err != nil || !browser.ThumbnailPath.Valid {
+		t.Fatalf("browser poster: %+v, %v", browser.ThumbnailPath, err)
+	}
+	if err := svc.WriteServerPoster(ctx, browser); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(full) //nolint:gosec // test temp file
+	if bytes.Equal(after, server) {
+		t.Error("the browser poster did not replace the server poster")
+	}
+
+	// A job for a deleted item finishes without work.
+	if err := svc.runVideoPosterJob(ctx, []byte(`{"media_id":9999}`)); err != nil {
+		t.Errorf("job for a deleted item: %v", err)
 	}
 }

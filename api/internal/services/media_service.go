@@ -848,9 +848,9 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 
 // SaveVideoPoster stores a client-captured frame as a video's thumbnail.
 //
-// The runtime image ships no ffmpeg (and the binary is CGO-free), so there is
-// no server-side video decoder: the admin browser draws a frame off a <video>
-// element onto a canvas and posts the resulting JPEG here. The frame lands on
+// The admin browser draws a frame off a <video> element onto a canvas and
+// posts the resulting JPEG here. It is the only poster source on the slim
+// image, and it replaces a server poster (WriteServerPoster). The frame lands on
 // the same media/thumbnails/YYYY/MM/ path an image upload would use, so every
 // existing consumer of ?thumb picks it up with no further changes.
 func (s *MediaService) SaveVideoPoster(ctx context.Context, id int64, poster []byte) (models.Medium, error) {
