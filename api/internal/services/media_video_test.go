@@ -228,10 +228,10 @@ func TestVideoTranscodeJob_StubFailureAndGone(t *testing.T) {
 		t.Error("a failed transcode is served")
 	}
 	// A job for a deleted item finishes without work.
-	if err := svc.runVideoTranscodeJob(ctx, []byte(`{"media_id":9999}`)); err != nil {
+	if err := svc.videoJob(svc.TranscodeVideo)(ctx, []byte(`{"media_id":9999}`)); err != nil {
 		t.Errorf("job for a deleted item: %v", err)
 	}
-	if err := svc.runVideoTranscodeJob(ctx, []byte(`{`)); err == nil {
+	if err := svc.videoJob(svc.TranscodeVideo)(ctx, []byte(`{`)); err == nil {
 		t.Error("a bad payload returned no error")
 	}
 }
@@ -258,7 +258,7 @@ func TestVideoPosterJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.runVideoPosterJob(ctx, []byte(`{"media_id":`+strconv.FormatInt(media.ID, 10)+`}`)); err != nil {
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, []byte(`{"media_id":`+strconv.FormatInt(media.ID, 10)+`}`)); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.getMedia(ctx, media.ID)
@@ -297,7 +297,7 @@ func TestVideoPosterJob(t *testing.T) {
 	}
 
 	// A job for a deleted item finishes without work.
-	if err := svc.runVideoPosterJob(ctx, []byte(`{"media_id":9999}`)); err != nil {
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, []byte(`{"media_id":9999}`)); err != nil {
 		t.Errorf("job for a deleted item: %v", err)
 	}
 }
@@ -319,13 +319,24 @@ func TestVideoPosterJob_Stub(t *testing.T) {
 	}
 	payload := []byte(`{"media_id":` + strconv.FormatInt(media.ID, 10) + `}`)
 
-	if err := svc.runVideoPosterJob(ctx, payload); err == nil || !strings.Contains(err.Error(), "broken") {
+	probe := filepath.Join(filepath.Dir(ff.FFmpegPath), "ffprobe")
+	goodProbe, _ := os.ReadFile(probe) //nolint:gosec // test stub
+	if err := os.WriteFile(probe, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil { //nolint:gosec // test stub must be executable
+		t.Fatal(err)
+	}
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, payload); err == nil {
+		t.Fatal("a probe failure returned no error")
+	}
+	if err := os.WriteFile(probe, goodProbe, 0o700); err != nil { //nolint:gosec // test stub must be executable
+		t.Fatal(err)
+	}
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, payload); err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Fatalf("err = %v, want the ffmpeg output", err)
 	}
 	if err := os.WriteFile(frame, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.runVideoPosterJob(ctx, payload); err == nil || !strings.Contains(err.Error(), "no frame") {
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, payload); err == nil || !strings.Contains(err.Error(), "no frame") {
 		t.Fatalf("err = %v, want no frame", err)
 	}
 	var buf bytes.Buffer
@@ -335,7 +346,7 @@ func TestVideoPosterJob_Stub(t *testing.T) {
 	if err := os.WriteFile(frame, buf.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.runVideoPosterJob(ctx, payload); err != nil {
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, payload); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.getMedia(ctx, media.ID)
@@ -347,7 +358,7 @@ func TestVideoPosterJob_Stub(t *testing.T) {
 	if err := svc.WriteServerPoster(ctx, got); err != nil {
 		t.Errorf("poster present: %v", err)
 	}
-	if err := svc.runVideoPosterJob(ctx, []byte(`{`)); err == nil {
+	if err := svc.videoJob(svc.WriteServerPoster)(ctx, []byte(`{`)); err == nil {
 		t.Error("a bad payload returned no error")
 	}
 	if err := (&MediaService{}).WriteServerPoster(ctx, got); err != ErrFFmpegMissing { //nolint:errorlint // sentinel

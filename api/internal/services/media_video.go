@@ -54,8 +54,8 @@ func (s *MediaService) WithVideo(jobs *JobService, ff *FFmpeg) *MediaService {
 	s.jobs, s.ffmpeg = jobs, ff
 	s.videoTimeout, s.videoThreads = defaultVideoTimeout, defaultVideoThreads
 	if jobs != nil {
-		jobs.Register(JobKindVideoTranscode, s.runVideoTranscodeJob)
-		jobs.Register(JobKindVideoPoster, s.runVideoPosterJob)
+		jobs.Register(JobKindVideoTranscode, s.videoJob(s.TranscodeVideo))
+		jobs.Register(JobKindVideoPoster, s.videoJob(s.WriteServerPoster))
 	}
 	return s
 }
@@ -72,21 +72,6 @@ func (s *MediaService) enqueueTranscode(ctx context.Context, media models.Medium
 	if _, err := s.jobs.Enqueue(ctx, JobKindVideoPoster, videoTranscodePayload{MediaID: media.ID}); err != nil {
 		slog.Warn("video poster: enqueue failed", "media_id", media.ID, "error", err)
 	}
-}
-
-func (s *MediaService) runVideoPosterJob(ctx context.Context, raw json.RawMessage) error {
-	var p videoTranscodePayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return fmt.Errorf("decode payload: %w", err)
-	}
-	media, err := s.getMedia(ctx, p.MediaID)
-	if errors.Is(err, ErrMediaNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	return s.WriteServerPoster(ctx, media)
 }
 
 // WriteServerPoster stores a frame at 10 % of the duration as the poster of a
@@ -130,20 +115,23 @@ func (s *MediaService) WriteServerPoster(ctx context.Context, media models.Mediu
 	return nil
 }
 
-func (s *MediaService) runVideoTranscodeJob(ctx context.Context, raw json.RawMessage) error {
-	var p videoTranscodePayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return fmt.Errorf("decode payload: %w", err)
+// videoJob returns a job handler that loads the media item of the payload and
+// runs fn on it. A media item deleted after the upload leaves nothing to do.
+func (s *MediaService) videoJob(fn func(context.Context, models.Medium) error) JobHandler {
+	return func(ctx context.Context, raw json.RawMessage) error {
+		var p videoTranscodePayload
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return fmt.Errorf("decode payload: %w", err)
+		}
+		media, err := s.getMedia(ctx, p.MediaID)
+		if errors.Is(err, ErrMediaNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fn(ctx, media)
 	}
-	media, err := s.getMedia(ctx, p.MediaID)
-	if errors.Is(err, ErrMediaNotFound) {
-		// The media item was deleted after the upload. Nothing to do.
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	return s.TranscodeVideo(ctx, media)
 }
 
 // TranscodeVideo writes the MP4 of a video item. An H.264/AAC source gets a
