@@ -17,12 +17,12 @@ import { Component } from '../../components/Component.js';
 
 import { getTagsGraph } from '../../api/pages.ts';
 import { getNavTags, getSettings } from '../../store.js';
-import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
-import { SEARCH_SVG } from '../../utils/icons.js';
-import { setPageTitle } from '../../utils/documentTitle.js';
+import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.ts';
+import { SEARCH_SVG } from '../../utils/icons.ts';
+import { setPageTitle } from '../../utils/documentTitle.ts';
 import { TagGraph } from "./tagGraph.js";
 import { pluginHost } from '../../core/pluginHost.js';
-import { ViewContext } from '../../utils/viewContext.js';
+import { ViewContext } from '../../utils/viewContext.ts';
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

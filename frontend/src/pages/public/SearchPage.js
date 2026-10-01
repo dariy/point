@@ -17,11 +17,11 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
 import { getNavTags, getSettings, setPagination } from '../../store.js';
-import { html, setHTML } from '../../utils/helpers.js';
+import { html, setHTML } from '../../utils/helpers.ts';
 import { GridPager } from '../../core/gridPager.js';
-import { ViewContext } from '../../utils/viewContext.js';
-import { setPageTitle } from '../../utils/documentTitle.js';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.js';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { setPageTitle } from '../../utils/documentTitle.ts';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

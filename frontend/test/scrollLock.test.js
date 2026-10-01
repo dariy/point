@@ -22,7 +22,7 @@ let lock;
 
 beforeEach(async () => {
   dom = setupDOM();
-  lock ??= await import('../src/utils/scrollLock.js');
+  lock ??= await import('../src/utils/scrollLock.ts');
 });
 afterEach(() => {
   dom.cleanup();

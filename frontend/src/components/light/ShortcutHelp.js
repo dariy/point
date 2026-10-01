@@ -1,6 +1,6 @@
 import { Component } from '../Component.js';
-import { html } from '../../utils/helpers.js';
-import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
+import { html } from '../../utils/helpers.ts';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 
 const SHORTCUTS = [
   { group: 'Global', items: [

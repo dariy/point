@@ -5,12 +5,12 @@
  */
 
 import { Component } from "../../Component.js";
-import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.js";
-import { syncQueue } from "../../../utils/sync.js";
+import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.ts";
+import { syncQueue } from "../../../utils/sync.ts";
 import { setToast } from "../../../store.js";
-import { html, raw } from "../../../utils/helpers.js";
-import { formatDateShort } from "../../../utils/formatters.js";
-import { WARNING_SVG } from "../../../utils/icons.js";
+import { html, raw } from "../../../utils/helpers.ts";
+import { formatDateShort } from "../../../utils/formatters.ts";
+import { WARNING_SVG } from "../../../utils/icons.ts";
 
 export class SyncQueueSection extends Component {
   constructor(container, props = {}) {

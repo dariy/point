@@ -1,4 +1,4 @@
-import { html, setHTML } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.ts";
 /**
  * NotificationLogButton — floating action button for the notification log.
  *
@@ -16,7 +16,7 @@ import { Component } from '../Component.js';
 import { getRoute, getToastLog, onRoute, onToastLog, setToastLog } from '../../store.js';
 import { Modal } from './Modal.js';
 
-import { getRecentEntries } from '../../utils/notificationLog.js';
+import { getRecentEntries } from '../../utils/notificationLog.ts';
 const TYPE_LABELS = {
   success: '✓',
   error: '✕',

@@ -111,7 +111,7 @@ fi
 # ── 4. Prism's own writer stays uncalled ─────────────────────────────────────
 # highlightElement writes the highlighted markup itself. Point uses
 # Prism.highlight(), the string-returning form, and hands the result to
-# setHTML(); utils/prismManual.js switches off the automatic pass that would
+# setHTML(); utils/prismManual.ts switches off the automatic pass that would
 # otherwise call highlightElement on load.
 hits=$(grep -rn 'highlightElement\|highlightAll' "$SRC" 2>/dev/null | grep -v '^\S*:[0-9]*: *[*/]' || true)
 if [ -n "$hits" ]; then
@@ -120,8 +120,8 @@ if [ -n "$hits" ]; then
         "which the enforcing policy refuses. Use Prism.highlight() and write the" \
         "result with setHTML() instead." "$hits"
 fi
-if ! grep -q 'manual' "$SRC/utils/prismManual.js" 2>/dev/null; then
-    report "utils/prismManual.js no longer sets Prism.manual" \
+if ! grep -q 'manual' "$SRC/utils/prismManual.ts" 2>/dev/null; then
+    report "utils/prismManual.ts no longer sets Prism.manual" \
         "prism-core calls highlightAll() on itself at load without it."
 fi
 

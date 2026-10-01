@@ -1,7 +1,7 @@
-import { raw } from "../../utils/helpers.js";
-import { html, setHTML } from "../../utils/helpers.js";
-import { sharePost } from '../../utils/helpers.js';
-import { SHARE_SVG } from '../../utils/icons.js';
+import { raw } from "../../utils/helpers.ts";
+import { html, setHTML } from "../../utils/helpers.ts";
+import { sharePost } from '../../utils/helpers.ts';
+import { SHARE_SVG } from '../../utils/icons.ts';
 
 // Floating share button for the MediaViewer (immersive viewer + lightbox).
 // Mounted into the `.media-viewer-wrapper` via the `immersive-share` slot;

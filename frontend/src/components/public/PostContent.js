@@ -6,19 +6,19 @@
  */
 
 import { Component } from "../Component.js";
-import { html, navigate, raw, setHTML } from "../../utils/helpers.js";
-import { formatDate } from "../../utils/formatters.js";
-import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
-import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
+import { html, navigate, raw, setHTML } from "../../utils/helpers.ts";
+import { formatDate } from "../../utils/formatters.ts";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
+import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.ts";
 import { getNavTags, getSettings, getUser } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getPostPageLocation } from "../../api/posts.ts";
-import { ViewContext } from "../../utils/viewContext.js";
-import { cachedPerPage } from "../../utils/gridFit.js";
-import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
-import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
+import { ViewContext } from "../../utils/viewContext.ts";
+import { cachedPerPage } from "../../utils/gridFit.ts";
+import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.ts";
+import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.ts";
 // Sets Prism.manual before prism-core is imported below — see that file.
-import "../../utils/prismManual.js";
+import "../../utils/prismManual.ts";
 
 const _prismLoading = new Map();
 const _LANG_DEPS = {
@@ -32,7 +32,7 @@ const _LANG_DEPS = {
 };
 
 async function _ensurePrismCore() {
-  // Not `if (window.Prism)`: prismManual.js has already put a stub there to
+  // Not `if (window.Prism)`: prismManual.ts has already put a stub there to
   // switch the automatic pass off. The real thing is the one with highlight().
   if (window.Prism?.highlight) return;
   await import("/assets/vendor/prismjs/prism-core.js");

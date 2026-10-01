@@ -9,8 +9,8 @@
  *   - Global 401 → 'api:unauthorized' event (router can redirect to login)
  */
 
-import { enqueue } from '../utils/mutationQueue.js';
-import { revelioHeaders } from '../utils/revelio.js';
+import { enqueue } from '../utils/mutationQueue.ts';
+import { revelioHeaders } from '../utils/revelio.ts';
 
 export interface ApiError {
   /** HTTP status code */
@@ -44,7 +44,7 @@ class ApiClient {
       credentials: 'include',
       headers: {
         Accept: 'application/json',
-        // Owner browsing as a guest — see utils/revelio.js. Merged before the
+        // Owner browsing as a guest — see utils/revelio.ts. Merged before the
         // caller's own headers so an explicit one still wins.
         ...revelioHeaders(),
         ...init.headers,
@@ -173,7 +173,7 @@ class ApiClient {
   upload<T = unknown>(path: string, formData: FormData): Promise<T> {
     if (!navigator.onLine && path.startsWith('/api/')) {
       // For uploads, we expect a single 'file' field for now in offline mode
-      const file = formData.get('file');
+      const file = formData.get('file') as File;
       return enqueue('POST', path, {}, file);
     }
     return this.request(path, {

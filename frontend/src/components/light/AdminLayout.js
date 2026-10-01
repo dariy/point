@@ -15,12 +15,12 @@ import {
   onOfflineStatus,
   setUser,
 } from "../../store.js";
-import { syncQueue } from "../../utils/sync.js";
-import { setupHeaderCompact } from "../../utils/headerCompact.js";
-import { html, insertHTML, navigate, raw } from "../../utils/helpers.js";
-import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
+import { syncQueue } from "../../utils/sync.ts";
+import { setupHeaderCompact } from "../../utils/headerCompact.ts";
+import { html, insertHTML, navigate, raw } from "../../utils/helpers.ts";
+import { EXTERNAL_LINK_SVG } from "../../utils/icons.ts";
 
-/** @typedef {import('../../utils/helpers.js').Slot} Slot */
+/** @typedef {import('../../utils/helpers.ts').Slot} Slot */
 
 /**
  * Shared markup for admin pages, for use inside component.render().
@@ -30,7 +30,7 @@ import { EXTERNAL_LINK_SVG } from "../../utils/icons.js";
  * wants markup there says so with the tag.
  *
  * @param {{ title?: Slot, actions?: Slot, banner?: Slot, content?: Slot, contentClass?: string }} slots
- * @returns {import('../../utils/helpers.js').RawHtml}
+ * @returns {import('../../utils/helpers.ts').RawHtml}
  */
 export function adminLayoutTemplate({
   title = "Admin",

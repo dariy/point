@@ -5,7 +5,7 @@
  */
 
 import { api } from './client.ts';
-import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.js';
+import { captureVideoPoster, isVideoFile } from '../utils/videoPoster.ts';
 
 /** A media library record — mediaToResponse in api/internal/api/mappers.go. */
 export interface Media {

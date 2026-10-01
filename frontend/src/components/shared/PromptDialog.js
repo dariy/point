@@ -4,11 +4,11 @@
 
 import { Component } from '../Component.js';
 import { Modal } from './Modal.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 
 /**
  * @typedef {object} PromptDialogProps
- * @property {import('../../utils/helpers.js').Slot} [title]
+ * @property {import('../../utils/helpers.ts').Slot} [title]
  * @property {string} [message]  Body text; each line becomes a paragraph.
  * @property {string} [defaultValue]  Initial value of the input.
  * @property {string} [inputType]  'text' (the default) or 'password'.

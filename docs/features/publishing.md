@@ -13,7 +13,7 @@ cross-posting). The editor is `frontend/src/pages/light/PostEditPage.js`.
   rendered server-side; fenced code blocks highlighted via Chroma. A raw **HTML**
   formatter is available for full layout control.
 - **Text / Visual editor modes**: the Visual mode is a node model
-  (`parseNodes`/`serializeNodes` in `frontend/src/utils/postNodes.js`) over image
+  (`parseNodes`/`serializeNodes` in `frontend/src/utils/postNodes.ts`) over image
   sequences + text blocks — deliberately not a WYSIWYG rewrite; media references
   serialize as bare paths matched by `IMAGE_PATH_RE`.
 - **Per-post custom CSS** (via the `custom-css` plugin): a CSS textarea in the editor;
@@ -29,7 +29,7 @@ cross-posting). The editor is `frontend/src/pages/light/PostEditPage.js`.
   (/light/settings → Posts), defaults to `YYYY-MM-DD`, and is rendered by
   `FormatTitleDate` (`api/internal/services/post_title.go`) — tokens `YYYY YY MMMM MMM
   MM DDDD DDD DD HH mm ss`, `[brackets]` for literal words. `formatTitleDate`
-  (`frontend/src/utils/formatters.js`) mirrors it so the editor's title placeholder
+  (`frontend/src/utils/formatters.ts`) mirrors it so the editor's title placeholder
   previews what the backend will assign; the two token tables must stay in sync.
   Same-day untitled posts would derive the same slug, so `CreatePost` suffixes
   `-2`, `-3`… rather than returning a conflict the author can't act on.

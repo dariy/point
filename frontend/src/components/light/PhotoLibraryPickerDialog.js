@@ -1,5 +1,5 @@
 
-import { html, setHTML } from "../../utils/helpers.js";
+import { html, setHTML } from "../../utils/helpers.ts";
 /**
  * PhotoLibraryPickerDialog — browse the external photo library and selectively
  * import photos into site media.
@@ -19,7 +19,7 @@ import { html, setHTML } from "../../utils/helpers.js";
 
 import { Component } from '../Component.js';
 import { setToast } from '../../store.js';
-import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.ts';
 /**

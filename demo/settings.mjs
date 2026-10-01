@@ -42,7 +42,7 @@ export const REPLACE_SETTINGS = {
  *
  * `footer_copyright` credits picsum.photos, where the demo's photographs come
  * from (see README, Content licensing). `{{author_name}}` and `{{engine}}` are
- * tokens and `[text](url)` is a link (utils/copyright.js); everything else is
+ * tokens and `[text](url)` is a link (utils/copyright.ts); everything else is
  * literal text and is escaped — raw HTML here renders as visible markup.
  *
  * The managed-hosting link is the demo's only outbound pointer to point.photos,

@@ -10,7 +10,7 @@
  *   edges:  hierarchy (tag→tag parent/child) | membership (post→tag)
  */
 
-import { tagKind } from '../../utils/tagLinks.js';
+import { tagKind } from '../../utils/tagLinks.ts';
 
 /**
  * The payload the graph is built from — GET /api/pages/graph, or the Atlas's

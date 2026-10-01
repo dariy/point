@@ -112,7 +112,7 @@ describe('PublicFooter revelio toggle', () => {
     global.window.localStorage = global.localStorage;
     ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.js'));
     ({ setUser } = await import('../src/store.js'));
-    ({ setRevelio } = await import('../src/utils/revelio.js'));
+    ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });
 
   // render() returns the RawHtml html`` produces; assert.match wants a primitive.

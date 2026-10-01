@@ -1,4 +1,4 @@
-import { html, setHTML } from "../utils/helpers.js";
+import { html, setHTML } from "../utils/helpers.ts";
 /**
  * GridPager — the gesture layer for a paginated post grid.
  *
@@ -35,10 +35,10 @@ import { PostCard } from '../components/public/PostCard.js';
 import { Pagination } from '../components/shared/Pagination.js';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
 import { getSettings } from '../store.js';
-import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gridFit.js';
-import { thumbSrcset } from '../utils/mediaUrl.js';
-import { dropBrokenImages } from '../utils/helpers.js';
-import { flipGrid } from '../utils/gridFlip.js';
+import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gridFit.ts';
+import { thumbSrcset } from '../utils/mediaUrl.ts';
+import { dropBrokenImages } from '../utils/helpers.ts';
+import { flipGrid } from '../utils/gridFlip.ts';
 
 /** @typedef {import('../api/posts.ts').Post} Post */
 /** @typedef {import('../components/public/PostCard.js').PostCardProps} PostCardProps */
@@ -53,7 +53,7 @@ export class GridPager {
    * @param {() => boolean} opts.isAlive               false once the host unmounted
    * @param {(post:Post, page:number) => Partial<PostCardProps>} [opts.cardProps]  extra
    *   PostCard props
-   * @param {import('../utils/helpers.js').RawHtml} [opts.emptyHtml]  ghost
+   * @param {import('../utils/helpers.ts').RawHtml} [opts.emptyHtml]  ghost
    *   markup for an empty page, built with html``
    * @param {boolean} [opts.zoom=true]                 offer pinch/slider zoom
    */
@@ -375,7 +375,7 @@ export class GridPager {
     if (!grid) return;
     // CSS-only: pins columns + rows + squares cards, no remount. Both halves of
     // the new geometry go inside the FLIP so the cards glide into it rather
-    // than cutting to it — see utils/gridFlip.js.
+    // than cutting to it — see utils/gridFlip.ts.
     flipGrid(/** @type {HTMLElement} */ (grid), () => {
       stepZoom(grid, delta);
       this._trimToCapacity(grid);

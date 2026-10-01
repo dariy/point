@@ -1,6 +1,6 @@
 import { Component } from '../Component.js';
 import { getTag } from '../../api/tags.ts';
-import { html, navigate } from '../../utils/helpers.js';
+import { html, navigate } from '../../utils/helpers.ts';
 
 /**
  * @typedef {object} TagFamilyPopoverProps

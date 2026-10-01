@@ -1,5 +1,5 @@
-import { syncQueue } from "../../utils/sync.js";
-import { getMeta } from "../../utils/offlineStore.js";
+import { syncQueue } from "../../utils/sync.ts";
+import { getMeta } from "../../utils/offlineStore.ts";
 import { setOfflineStatus } from "../../store.js";
 
 export async function mount() {

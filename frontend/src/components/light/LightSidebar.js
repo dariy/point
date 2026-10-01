@@ -4,14 +4,14 @@
 
 import { Component } from '../Component.js';
 import { getAppVersion, getTheme, onAppVersion, onPluginToggled, setTheme } from '../../store.js';
-import { html, raw } from '../../utils/helpers.js';
-import { DEBUG } from '../../utils/debug.js';
+import { html, raw } from '../../utils/helpers.ts';
+import { DEBUG } from '../../utils/debug.ts';
 import { pluginHost } from '../../core/pluginHost.js';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
   THEMES_SVG, MENU_SVG, PLUS_SVG, CHEVRON_SVG, PLUGINS_SVG, COMMENTS_SVG,
-} from '../../utils/icons.js';
+} from '../../utils/icons.ts';
 
 const WRITE_ITEMS = [
   { href: '/light',          label: 'Home',      icon: DASHBOARD_SVG },

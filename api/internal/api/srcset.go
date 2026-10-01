@@ -24,7 +24,7 @@ import (
 //
 // `src` is left pointing at the bare original on purpose. PostContent.js and
 // MediaViewer.js build the lightbox from extractMedia's `\ssrc="…"` capture
-// (postMedia.js), so a variant in `src` would quietly turn "the lightbox opens
+// (postMedia.ts), so a variant in `src` would quietly turn "the lightbox opens
 // the original" into "the lightbox opens a 512px JPEG". Keeping it bare also
 // means no frontend parser has to change.
 
@@ -96,7 +96,7 @@ func articleImageDims(media []models.Medium) map[string]imageDims {
 // A rung caps the LONGEST side, so the candidate's width is only the rung
 // itself on a landscape or square source; a portrait at rung R is
 // int(R * W/max(W,H)) wide. The expression mirrors services.fitSize's own
-// conversion (and mediaUrl.js's thumbSrcset) exactly, because a descriptor
+// conversion (and mediaUrl.ts's thumbSrcset) exactly, because a descriptor
 // that over-states by even a pixel is a descriptor that is wrong.
 //
 // Rungs at or above the longest side are dropped: writeLadder never writes

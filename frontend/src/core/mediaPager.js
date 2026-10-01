@@ -1,4 +1,4 @@
-import { html, setHTML } from "../utils/helpers.js";
+import { html, setHTML } from "../utils/helpers.ts";
 /**
  * MediaPager — the gesture layer for the admin media grid (/light/media).
  *
@@ -57,7 +57,7 @@ export class MediaPager {
    * @param {() => HTMLElement|null} opts.root      gesture root (.media-browser)
    * @param {() => HTMLElement|null} opts.area      the element that slides (#mb-media-area)
    * @param {() => HTMLElement|null} opts.grid      the live .media-grid
-   * @param {(page:number) => Promise<import('../utils/helpers.js').RawHtml>}
+   * @param {(page:number) => Promise<import('../utils/helpers.ts').RawHtml>}
    *   opts.fetchPage  neighbour page markup, built with html``
    * @param {(page:number) => void} opts.gotoPage   load a page
    * @param {() => void} opts.onZoomCommit          refit per_page after a zoom step

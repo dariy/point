@@ -78,7 +78,7 @@ BUILD_DEBUG_FRONTEND=0 \
 # ── CSS ───────────────────────────────────────────────────────────────────
 #
 # frontend/css is copied wholesale because it carries common/theme.css, which
-# the server generates at runtime from the active theme and which themeLoader.js
+# the server generates at runtime from the active theme and which themeLoader.ts
 # fetches as text before first paint. A build that omits it renders unstyled.
 
 echo "==> Building CSS"
@@ -247,7 +247,7 @@ echo "==> Writing host config"
 #
 # Assets and media are excluded from the fallback and sent to a 404 instead: a
 # missing image must not resolve to the HTML shell with a 200, which would
-# defeat dropBrokenImages() (frontend/src/utils/helpers.js) and leave broken
+# defeat dropBrokenImages() (frontend/src/utils/helpers.ts) and leave broken
 # <img> elements on the page. Media lives at /YYYY/MM/<file>, which never
 # collides with an SPA route.
 cat > "$DIST/404.html" <<'EOF'

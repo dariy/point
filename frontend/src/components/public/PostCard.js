@@ -6,15 +6,15 @@
  */
 
 import { Component } from "../Component.js";
-import { html, raw, safeUrl } from "../../utils/helpers.js";
-import { cardImageSizes } from "../../utils/gridFit.js";
-import { thumbAttrs } from "../../utils/mediaUrl.js";
-import { formatDateShort } from "../../utils/formatters.js";
-import { LOCK_SVG } from "../../utils/icons.js";
+import { html, raw, safeUrl } from "../../utils/helpers.ts";
+import { cardImageSizes } from "../../utils/gridFit.ts";
+import { thumbAttrs } from "../../utils/mediaUrl.ts";
+import { formatDateShort } from "../../utils/formatters.ts";
+import { LOCK_SVG } from "../../utils/icons.ts";
 import { getNavTags, getSettings, onNavTags } from "../../store.js";
-import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
-import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
-import { ViewContext } from "../../utils/viewContext.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
+import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.ts";
+import { ViewContext } from "../../utils/viewContext.ts";
 
 const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
 

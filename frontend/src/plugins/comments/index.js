@@ -10,7 +10,7 @@
 
 import CommentsAdminPage from './CommentsAdminPage.js';
 import { getSettings } from '../../store.js';
-import { setScriptSrc } from '../../utils/helpers.js';
+import { setScriptSrc } from '../../utils/helpers.ts';
 
 const SCRIPT_ID = 'remark42-embed-script';
 

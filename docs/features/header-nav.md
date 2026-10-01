@@ -9,7 +9,7 @@ The public header renders four zones on a single row:
 | nav      | menu links, "More ▾" overflow              | fixed per site            |
 | tools    | search, post actions, burger               | fixed, rightmost          |
 
-A single controller — `frontend/src/utils/headerFold.js` — owns the space.
+A single controller — `frontend/src/utils/headerFold.ts` — owns the space.
 Components and plugins register ordered *fold providers*; when the row
 overflows (measured, never device-sniffed), ops apply one at a time until it
 fits:
@@ -44,7 +44,7 @@ hover-with-intent on fine pointers, tap-to-toggle on coarse. There are no
 hover-only surfaces.
 
 Which of the two a click gets is decided by `eventPointerType()`
-(`utils/pointerMode.js`), never by the click's own `pointerType`: **WebKit tags
+(`utils/pointerMode.ts`), never by the click's own `pointerType`: **WebKit tags
 the compatibility click that follows a tap as `pointerType: "mouse"`** (Chrome
 reports `"touch"`), so reading the click directly made every tap on iPad take
 the mouse branch — the dropdown never opened and the tap just followed the

@@ -8,12 +8,12 @@ import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.ts";
 import { setToast } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
-import { STAR_SVG, MOON_SVG } from "../../utils/icons.js";
-import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { STAR_SVG, MOON_SVG } from "../../utils/icons.ts";
+import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
 import { CssEditor } from "../../components/light/CssEditor.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { loadThemeCss } from "../../utils/themeLoader.js";
+import { loadThemeCss } from "../../utils/themeLoader.ts";
 
 const CSS_COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\)|hsla?\([0-9.,%\s/deg]+\))$/i;
 

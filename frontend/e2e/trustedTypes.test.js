@@ -13,7 +13,7 @@
  * a marker, a popup, an undo step that did not corrupt the buffer.
  *
  * The three policies (see trustedTypesCSP in api/cmd/api/server.go):
- *   point          utils/helpers.js — every write this frontend makes
+ *   point          utils/helpers.ts — every write this frontend makes
  *   point-leaflet  frontend/vendor/leaflet/leaflet.js, patched
  *   point-codejar  frontend/vendor/codejar/codejar.js, patched
  */

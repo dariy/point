@@ -4,14 +4,14 @@
 
 import { Component } from "../../components/Component.js";
 import { Pagination } from "../../components/shared/Pagination.js";
-import { renderCopyright } from "../../utils/copyright.js";
-import { html, raw } from "../../utils/helpers.js";
+import { renderCopyright } from "../../utils/copyright.ts";
+import { html, raw } from "../../utils/helpers.ts";
 import {
   renderTagLink,
   buildTagIndex,
   parseTagUrl,
-} from "../../utils/tagLinks.js";
-import { setupTagFlyout } from "../../utils/tagFlyout.js";
+} from "../../utils/tagLinks.ts";
+import { setupTagFlyout } from "../../utils/tagFlyout.ts";
 import {
   RSS_SVG,
   SUN_SVG,
@@ -22,8 +22,8 @@ import {
   SLIDERS_SVG,
   EYE_SVG,
   EYE_OFF_SVG,
-} from "../../utils/icons.js";
-import { isRevelioOn, setRevelio } from "../../utils/revelio.js";
+} from "../../utils/icons.ts";
+import { isRevelioOn, setRevelio } from "../../utils/revelio.ts";
 import {
   getNavTags,
   getPagination,
@@ -35,13 +35,13 @@ import {
   setUser,
 } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { ViewContext } from "../../utils/viewContext.js";
+import { ViewContext } from "../../utils/viewContext.ts";
 import {
   getZoom,
   clampZoom,
   gridCols,
   maxZoomCols,
-} from "../../utils/gridFit.js";
+} from "../../utils/gridFit.ts";
 
 /**
  * Whether the actions drawer behind the sliders button is open.
@@ -55,7 +55,7 @@ let drawerOpen = false;
 
 /**
  * @typedef {object} PublicFooterProps
- * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
+ * @property {import('../../utils/helpers.ts').StoreSettings} [settings]  Public
  *   settings; reads blog_title and author_name.
  * @property {import('../../api/posts.ts').PostTag[]} [immersiveTags]  When
  *   non-empty, the footer renders them as the immersive tag bar in place of
@@ -72,7 +72,7 @@ export class PublicFooter extends Component {
     // sheet's footer so the two render the same line.
     const copyright = renderCopyright(settings);
 
-    /** @type {import("../../utils/helpers.js").Slot} */
+    /** @type {import("../../utils/helpers.ts").Slot} */
     let centerSlot = "";
     if (immersiveTags.length) {
       const navTags = getNavTags() || [];

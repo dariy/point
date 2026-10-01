@@ -39,7 +39,7 @@ function lint(code, ext) {
   }
 }
 
-const PRELUDE = "import { html, raw, setHTML, insertHTML } from './utils/helpers.js';\nimport { store } from './store.js';\nconst SVG = '<svg></svg>';\n";
+const PRELUDE = "import { html, raw, setHTML, insertHTML } from './utils/helpers.ts';\nimport { store } from './store.js';\nconst SVG = '<svg></svg>';\n";
 
 for (const ext of ['js', 'ts']) {
   const messages = (snippet) => lint(PRELUDE + snippet, ext);

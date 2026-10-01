@@ -1,4 +1,4 @@
-import { setHTML, isRawHtml } from '../utils/helpers.js';
+import { setHTML, isRawHtml } from '../utils/helpers.ts';
 
 /**
  * Base Component class.
@@ -75,17 +75,17 @@ import { setHTML, isRawHtml } from '../utils/helpers.js';
  *   update yet.
  *
  *   The cost of "handled" is that the component now owns keeping its DOM true
- *   to its props. reconcileList() (utils/reconcileList.js) is the keyed list
- *   half of that, and preserveInteraction() (utils/preserveInteraction.js)
+ *   to its props. reconcileList() (utils/reconcileList.ts) is the keyed list
+ *   half of that, and preserveInteraction() (utils/preserveInteraction.ts)
  *   carries focus and scroll across the rebuilds that do happen.
  *
  * Security contract for subclasses:
- *   - render() builds its markup with the html`` tag from utils/helpers.js and
+ *   - render() builds its markup with the html`` tag from utils/helpers.ts and
  *     returns what that tag returns. Interpolations are escaped by the tag —
  *     with safeUrl() in href/src position, escapeHtml() everywhere else — so a
  *     subclass never applies either by hand and never forgets to.
  *   - raw() opts a value out of that. It belongs around module-level constants
- *     (the SVG blobs in utils/icons.js) and around HTML the server sanitized
+ *     (the SVG blobs in utils/icons.ts) and around HTML the server sanitized
  *     before storing it (a post body). Nothing else.
  *   - Dynamic text nodes can still be set via element.textContent in
  *     afterRender(); that stays the simplest safe option for a lone string.
@@ -176,7 +176,7 @@ export class Component {
   /**
    * Return the markup describing this component, built with the html`` tag.
    * Must be overridden.
-   * @returns {import('../utils/helpers.js').RawHtml} html`` output. A plain
+   * @returns {import('../utils/helpers.ts').RawHtml} html`` output. A plain
    *   string is refused — _rerender() throws rather than write it.
    */
   render() {
@@ -481,7 +481,7 @@ export class Component {
       throw new TypeError(
         `${this.constructor.name}.render() must return html\`\` output, got ` +
         `${markup === null ? 'null' : typeof markup}. Build it with the html tag ` +
-        'from utils/helpers.js.',
+        'from utils/helpers.ts.',
       );
     }
     setHTML(this.container, markup);

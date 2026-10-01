@@ -25,8 +25,8 @@ import {
   clearFailedJobs,
 } from "../../api/system.ts";
 import { setToast } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
-import { formatFileSize } from "../../utils/formatters.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { formatFileSize } from "../../utils/formatters.ts";
 
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 

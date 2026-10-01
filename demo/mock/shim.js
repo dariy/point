@@ -152,7 +152,7 @@ const NARROWABLE = [/^\/api\/pages\//, /^\/api\/posts(\/|$)/, /^\/api\/tags(\/|$
 const NOT_NARROWABLE = ["/api/posts/analytics"];
 
 /**
- * The owner's "show me what a guest sees" switch (frontend/src/utils/revelio.js).
+ * The owner's "show me what a guest sees" switch (frontend/src/utils/revelio.ts).
  *
  * `X-Point-Revelio: off` asks a read to be answered as if nobody were signed
  * in. The backend implements it in OptionalAuthMiddleware, which resolves the
@@ -258,7 +258,7 @@ window.fetch = async function mockFetch(input, init = {}) {
   const url = typeof input === "string" ? input : input.url;
   const pathname = new URL(url, window.location.origin).pathname;
 
-  // themeLoader.js cache-busts with a ?t= query, so match on the path alone.
+  // themeLoader.ts cache-busts with a ?t= query, so match on the path alone.
   if (pathname === THEME_CSS) return themeCss();
   if (!INTERCEPT.test(pathname)) return nativeFetch(input, init);
 

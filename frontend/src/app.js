@@ -27,16 +27,16 @@ import { getMe } from "./api/auth.ts";
 import { getPublicSettings } from "./api/settings.ts";
 
 import { getVersion } from "./api/system.ts";
-import { normalizeSettings } from "./utils/helpers.js";
-import { setPageTitle } from "./utils/documentTitle.js";
+import { normalizeSettings } from "./utils/helpers.ts";
+import { setPageTitle } from "./utils/documentTitle.ts";
 import { pluginHost } from "./core/pluginHost.js";
 import { ToastContainer } from "./components/shared/Toast.js";
 import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
-import { initNotificationLog } from "./utils/notificationLog.js";
+import { initNotificationLog } from "./utils/notificationLog.ts";
 
 // ── Theming Foundation ────────────────────────────────────────────────────
-import { loadThemeCss } from "./utils/themeLoader.js";
-import { initPointerMode } from "./utils/pointerMode.js";
+import { loadThemeCss } from "./utils/themeLoader.ts";
+import { initPointerMode } from "./utils/pointerMode.ts";
 
 // Load the active theme CSS immediately to prevent FOUC
 loadThemeCss();

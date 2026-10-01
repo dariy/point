@@ -7,13 +7,13 @@ import { Component } from '../../components/Component.js';
 import { SiteCrumb } from '../../components/public/SiteCrumb.js';
 import { getSettings, getTheme, getUser, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.js';
+import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.ts';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
-import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
-import { ViewContext } from '../../utils/viewContext.js';
-import { hideFlyout } from '../../utils/tagFlyout.js';
-import { HeaderFold } from '../../utils/headerFold.js';
+import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.ts';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { hideFlyout } from '../../utils/tagFlyout.ts';
+import { HeaderFold } from '../../utils/headerFold.ts';
 
 /** Rows the search typeahead shows per section. */
 const TYPEAHEAD_POSTS = 3;
@@ -37,7 +37,7 @@ const TYPEAHEAD_TAGS = 5;
  * read there.
  *
  * @typedef {object} PublicHeaderProps
- * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
+ * @property {import('../../utils/helpers.ts').StoreSettings} [settings]  Public
  *   settings; reads blog_title, blog_subtitle and logo_url.
  * @property {string} [currentPath]  Current pathname, for active nav highlighting.
  * @property {import('../../api/nav.ts').NavTagNode[]} [navTags]  Nav tag tree,
@@ -52,7 +52,7 @@ const TYPEAHEAD_TAGS = 5;
  * @property {(() => void)|null} [onToggleImmersive]  Offer the immersive toggle.
  * @property {boolean} [distractionToggle]  Mount the post list's
  *   distraction-free toggle among the nav actions.
- * @property {import('../../utils/helpers.js').Slot} [slot]  Markup inserted as
+ * @property {import('../../utils/helpers.ts').Slot} [slot]  Markup inserted as
  *   a middle header item (between breadcrumb and action buttons; wraps to its
  *   own full-width row on mobile), e.g. a page control. No caller passes one today.
  */
@@ -210,7 +210,7 @@ export class PublicHeader extends Component {
     const gen = this._renderGen = (this._renderGen || 0) + 1;
 
     // One fold controller owns the header's space; components and plugins
-    // contribute ordered fold ops (see utils/headerFold.js for the order map).
+    // contribute ordered fold ops (see utils/headerFold.ts for the order map).
     this._fold = new HeaderFold({
       observe: this._group,
       fits: () => this._rowFits()
@@ -414,7 +414,7 @@ export class PublicHeader extends Component {
 
   /**
    * Register the header's own fold stages. Order slots 30 (nav links → More)
-   * belongs to the nav-menu plugin; see utils/headerFold.js for the full map.
+   * belongs to the nav-menu plugin; see utils/headerFold.ts for the full map.
    */
   _registerCoreFolds() {
     const group = this._group;

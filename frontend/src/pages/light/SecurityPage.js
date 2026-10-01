@@ -12,9 +12,9 @@ import {
   changePassword, changeEmail, getMe
 } from '../../api/auth.ts';
 import { setToast } from '../../store.js';
-import { html } from '../../utils/helpers.js';
-import { usernameHintField } from '../../utils/passwordForm.js';
-import { formatDateShort } from '../../utils/formatters.js';
+import { html } from '../../utils/helpers.ts';
+import { usernameHintField } from '../../utils/passwordForm.ts';
+import { formatDateShort } from '../../utils/formatters.ts';
 
 export default class SecurityPage extends Component {
   constructor(container, props = {}) {

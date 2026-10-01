@@ -7,13 +7,13 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { html, navigate, raw } from '../../utils/helpers.js';
-import { LOCK_SVG } from '../../utils/icons.js';
-import { ViewContext } from '../../utils/viewContext.js';
-import { tagHref } from '../../utils/tagLinks.js';
+import { html, navigate, raw } from '../../utils/helpers.ts';
+import { LOCK_SVG } from '../../utils/icons.ts';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { tagHref } from '../../utils/tagLinks.ts';
 import {
   showCrumbDropdown, hideFlyout, attachFlyoutTrigger, HOVER_OPEN_MS,
-} from '../../utils/tagFlyout.js';
+} from '../../utils/tagFlyout.ts';
 
 /**
  * The header's own props, passed on whole, plus the header group — clicks

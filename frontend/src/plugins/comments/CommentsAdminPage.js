@@ -10,8 +10,8 @@ import {
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { api } from "../../api/client.ts";
 import { setToast } from "../../store.js";
-import { html, parseMarkup, raw } from "../../utils/helpers.js";
-import { formatDate } from "../../utils/formatters.js";
+import { html, parseMarkup, raw } from "../../utils/helpers.ts";
+import { formatDate } from "../../utils/formatters.ts";
 import {
   MINUS_SVG,
   TRASH_SVG,
@@ -19,7 +19,7 @@ import {
   RESTORE_SVG,
   SELECT_SVG,
   X_SVG,
-} from "../../utils/icons.js";
+} from "../../utils/icons.ts";
 
 function textOf(html) {
   return parseMarkup(html || "", "text/html").body.textContent.trim();
@@ -75,7 +75,7 @@ export default class CommentsAdminPage extends Component {
         <button id="tab-blocked" role="tab" aria-selected="${tab === "blocked"}" class="btn btn-sm ${tab === "blocked" ? "btn-primary" : "btn-secondary"}">Blocked users${blocked.length ? ` (${blocked.length})` : ""}</button>
       </div>`;
 
-    /** @type {import("../../utils/helpers.js").Slot} */
+    /** @type {import("../../utils/helpers.ts").Slot} */
     let bulkToolbar = "";
     if (selectMode) {
       const isRecent = tab === "recent";

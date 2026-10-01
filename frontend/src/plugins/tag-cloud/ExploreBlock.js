@@ -4,11 +4,11 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { html } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.ts";
 import { getNavTags } from "../../store.js";
-import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
-import { setupTagFlyout } from "../../utils/tagFlyout.js";
-import { ViewContext } from "../../utils/viewContext.js";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
+import { setupTagFlyout } from "../../utils/tagFlyout.ts";
+import { ViewContext } from "../../utils/viewContext.ts";
 
 /**
  * @typedef {object} ExploreBlockProps

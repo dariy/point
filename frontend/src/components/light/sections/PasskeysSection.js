@@ -7,8 +7,8 @@
 import { Component } from "../../Component.js";
 import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.ts";
 import { setToast } from "../../../store.js";
-import { showConfirm } from "../../../utils/dialogs.js";
-import { html } from "../../../utils/helpers.js";
+import { showConfirm } from "../../../utils/dialogs.ts";
+import { html } from "../../../utils/helpers.ts";
 
 export class PasskeysSection extends Component {
   constructor(container, props = {}) {

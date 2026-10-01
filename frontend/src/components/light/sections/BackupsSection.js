@@ -13,10 +13,10 @@ import { getHealth, listBackups, createBackup, restoreBackup, deleteBackup, auth
 import { sha256 } from "../../../api/auth.ts";
 import { getAllSettings, updateSettings } from "../../../api/settings.ts";
 import { setToast } from "../../../store.js";
-import { html, setHTML, raw } from "../../../utils/helpers.js";
-import { formatFileSize } from "../../../utils/formatters.js";
-import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.js";
-import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
+import { html, setHTML, raw } from "../../../utils/helpers.ts";
+import { formatFileSize } from "../../../utils/formatters.ts";
+import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../../../utils/icons.ts";
+import { showConfirm, showPrompt } from "../../../utils/dialogs.ts";
 import { GestureController } from "../../../core/gestures.js";
 
 /** @typedef {import('../../../api/settings.ts').Settings} Settings */

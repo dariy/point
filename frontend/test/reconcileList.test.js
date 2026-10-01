@@ -2,7 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { reconcileList, setKey, KEY_ATTR } from '../src/utils/reconcileList.js';
+import { reconcileList, setKey, KEY_ATTR } from '../src/utils/reconcileList.ts';
 
 /**
  * reconcileList — the keyed list update the in-place render path is built on.

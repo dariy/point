@@ -8,8 +8,8 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { MediaBrowser } from '../../components/light/MediaBrowser.js';
-import { UPLOAD_SVG } from '../../utils/icons.js';
-import { html, raw } from "../../utils/helpers.js";
+import { UPLOAD_SVG } from '../../utils/icons.ts';
+import { html, raw } from "../../utils/helpers.ts";
 
 export default class MediaPage extends Component {
   render() {

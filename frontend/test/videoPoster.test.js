@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { captureVideoPoster, isVideoFile } from '../src/utils/videoPoster.js';
+import { captureVideoPoster, isVideoFile } from '../src/utils/videoPoster.ts';
 
 /**
  * videoPoster grabs the still that becomes a video's thumbnail. It is the only

@@ -9,7 +9,7 @@ import (
 )
 
 // TestFitSizeRule pins the truncation rule that articleSrcset (srcset.go) and
-// thumbSrcset (mediaUrl.js) copy: the long side is the rung, the short side
+// thumbSrcset (mediaUrl.ts) copy: the long side is the rung, the short side
 // is int(rung * short/long).
 func TestFitSizeRule(t *testing.T) {
 	cases := []struct{ w, h, box, wantW, wantH int }{

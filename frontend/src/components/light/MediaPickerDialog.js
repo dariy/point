@@ -12,12 +12,12 @@
  */
 
 import { Component } from '../Component.js';
-import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 import { MediaBrowser } from './MediaBrowser.js';
 import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
 import { setToast } from '../../store.js';
-import { UPLOAD_SVG } from '../../utils/icons.js';
-import { html, raw } from "../../utils/helpers.js";
+import { UPLOAD_SVG } from '../../utils/icons.ts';
+import { html, raw } from "../../utils/helpers.ts";
 
 /**
  * @typedef {object} MediaPickerDialogProps

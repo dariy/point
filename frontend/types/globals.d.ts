@@ -11,7 +11,7 @@
  */
 declare const __DEBUG__: boolean;
 
-/** The `window.__MEDIA__` bootstrap payload — see utils/mediaUrl.js. */
+/** The `window.__MEDIA__` bootstrap payload — see utils/mediaUrl.ts. */
 interface MediaBootstrap {
   /** The server's thumbnail ladder, in ascending pixel size. */
   sizes?: number[];
@@ -63,7 +63,7 @@ interface PluginManifestEntry {
 }
 
 interface Window {
-  /** Leaflet, once utils/leaflet.js has loaded it from the CDN. */
+  /** Leaflet, once utils/leaflet.ts has loaded it from the CDN. */
   L?: any;
   /**
    * Prism. The core is an ES module, but the vendored language files are global
@@ -84,7 +84,7 @@ interface Window {
   REMARK42?: Remark42;
   /**
    * Trusted Types. Chromium-only and absent from TypeScript's DOM lib, so it
-   * is declared with just the surface utils/helpers.js uses.
+   * is declared with just the surface utils/helpers.ts uses.
    */
   trustedTypes?: {
     createPolicy(

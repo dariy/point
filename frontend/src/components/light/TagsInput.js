@@ -4,7 +4,7 @@
 
 import { Component } from '../Component.js';
 import { listTags, createTag } from '../../api/tags.ts';
-import { html, setHTML, debounce } from '../../utils/helpers.js';
+import { html, setHTML, debounce } from '../../utils/helpers.ts';
 import { openTagFamilyPopover } from './TagFamilyPopover.js';
 let _tagInputCounter = 0;
 /**

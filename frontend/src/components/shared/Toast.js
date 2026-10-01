@@ -13,7 +13,7 @@
 
 import { Component } from '../Component.js';
 import { onToast } from '../../store.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 
 const DURATION_MS = 4000;
 const MAX_TOASTS = 5;

@@ -8,7 +8,7 @@
  * without that fallback the entire admin UI — the thing the demo exists to show
  * — is a 404. `npx serve` does not read `_redirects`, and its `-s` flag rewrites
  * *everything* to index.html, which hands a 200 + HTML shell to missing images
- * and defeats dropBrokenImages() (frontend/src/utils/helpers.js).
+ * and defeats dropBrokenImages() (frontend/src/utils/helpers.ts).
  *
  * So the rules are read from the build itself rather than restated here: local
  * serving and the deployed site cannot drift apart.

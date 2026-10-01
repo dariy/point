@@ -2,7 +2,7 @@ import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { setKey } from '../src/utils/reconcileList.js';
+import { setKey } from '../src/utils/reconcileList.ts';
 
 /**
  * PostGrid.reconcile — the in-place update a per_page refit uses.

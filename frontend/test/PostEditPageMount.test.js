@@ -902,7 +902,7 @@ describe('PostEditPage (mounted)', () => {
 /**
  * An in-memory stand-in for the `indexedDB` global.
  *
- * `utils/idb.js` is the share queue's only storage and talks to the real API
+ * `utils/idb.ts` is the share queue's only storage and talks to the real API
  * directly; Node has no IndexedDB, so without this the queue paths are simply
  * unreachable from a test. `rows` is live — a test can read it back after a
  * drain to see that the queue was actually emptied. `broken` makes `open()`
@@ -932,7 +932,7 @@ function installFakeIndexedDB(rows, { broken = false } = {}) {
     value: {
       open() {
         // `result` / `error` on the request itself, the way a real IDBRequest
-        // carries them — utils/idb.js reads the request, not the event.
+        // carries them — utils/idb.ts reads the request, not the event.
         const req = {};
         setImmediate(() => {
           if (broken) {

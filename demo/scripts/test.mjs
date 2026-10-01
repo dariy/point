@@ -55,7 +55,7 @@ const IGNORED_CONSOLE = [
 /** The demo's hidden place — demo/world.mjs PRIVATE_LOCATION. */
 const HIDDEN_TAG = "mirandela";
 
-/** What the client adds to every request with revelio off (utils/revelio.js). */
+/** What the client adds to every request with revelio off (utils/revelio.ts). */
 const REVELIO_OFF = { headers: { "X-Point-Revelio": "off" } };
 
 /**

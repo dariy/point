@@ -10,8 +10,8 @@
  * All markup is built with the html`` tag, which escapes every interpolation.
  */
 
-import { html, raw } from '../../../utils/helpers.js';
-import { EDIT_SVG, X_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG } from '../../../utils/icons.js';
+import { html, raw } from '../../../utils/helpers.ts';
+import { EDIT_SVG, X_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG } from '../../../utils/icons.ts';
 
 /**
  * Build tree structure from flat tag list.

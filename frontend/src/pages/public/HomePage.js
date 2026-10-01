@@ -23,11 +23,11 @@ import {
   setPagination,
   setTagCloudCache,
 } from '../../store.js';
-import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.js';
+import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.ts';
 import { GridPager } from '../../core/gridPager.js';
-import { ViewContext } from '../../utils/viewContext.js';
-import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.js';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.js';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.ts';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

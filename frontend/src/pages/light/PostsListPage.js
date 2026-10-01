@@ -12,11 +12,11 @@ import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.ts";
 import { setToast } from "../../store.js";
-import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
-import { formatDateShort } from "../../utils/formatters.js";
-import { thumbAttrs } from "../../utils/mediaUrl.js";
-import { captureInteraction } from "../../utils/preserveInteraction.js";
-import { EDIT_SVG, X_SVG, LINK_SVG, CHECK_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG, SELECT_SVG, PLUS_SVG } from "../../utils/icons.js";
+import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.ts";
+import { formatDateShort } from "../../utils/formatters.ts";
+import { thumbAttrs } from "../../utils/mediaUrl.ts";
+import { captureInteraction } from "../../utils/preserveInteraction.ts";
+import { EDIT_SVG, X_SVG, LINK_SVG, CHECK_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG, SELECT_SVG, PLUS_SVG } from "../../utils/icons.ts";
 const STATUS_LABELS = {
   published: "Published",
   draft: "Draft",
@@ -90,7 +90,7 @@ export default class PostsListPage extends Component {
     const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
     const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
     const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
-    /** @type {import("../../utils/helpers.js").Slot} */
+    /** @type {import("../../utils/helpers.ts").Slot} */
     let thumbInner = "";
     if (isImage && p.media_url) {
       thumbInner = html`<img ${thumbAttrs(p.media_url, {
@@ -196,7 +196,7 @@ export default class PostsListPage extends Component {
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
       const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
       const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
-      /** @type {import("../../utils/helpers.js").Slot} */
+      /** @type {import("../../utils/helpers.ts").Slot} */
       let previewHtml = "";
       if (isImage && p.media_url) {
         previewHtml = html`<img ${thumbAttrs(p.media_url, {

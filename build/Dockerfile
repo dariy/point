@@ -55,7 +55,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Bundle and minify frontend JS (release build — __DEBUG__=false strips the
-# debug logging in utils/debug.js). The debug bundle (frontend/js-debug) is a
+# debug logging in utils/debug.ts). The debug bundle (frontend/js-debug) is a
 # dev convenience; BUILD_DEBUG_FRONTEND=0 keeps it out of the production image.
 COPY scripts/ ./scripts/
 COPY frontend/ ./frontend/

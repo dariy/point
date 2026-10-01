@@ -10,9 +10,9 @@ import { getStats, getVersion } from '../../api/system.ts';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.ts';
 import { listPosts, createPost } from '../../api/posts.ts';
 import { setToast } from '../../store.js';
-import { html, navigate, raw } from '../../utils/helpers.js';
-import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
-import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.js';
+import { html, navigate, raw } from '../../utils/helpers.ts';
+import { formatFileSize, formatDateShort } from '../../utils/formatters.ts';
+import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.ts';
 
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {

@@ -18,9 +18,9 @@ import { GestureController } from "../../core/gestures.js";
 import { renderFields, collectUpdates } from "./settingsFields.js";
 import { updateSettings } from "../../api/settings.ts";
 import { mergeSettings, setToast } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
-import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.js";
-import { CHECK_SVG, X_SVG } from "../../utils/icons.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.ts";
+import { CHECK_SVG, X_SVG } from "../../utils/icons.ts";
 import { BackupsSection } from "./sections/BackupsSection.js";
 import { InstagramImportSection } from "./sections/InstagramImportSection.js";
 import { PasskeysSection } from "./sections/PasskeysSection.js";
@@ -70,7 +70,7 @@ export class PluginSettingsPanel extends Component {
     const { title, sections, settings, pluginId } = this.props;
     const { saving } = this.state;
 
-    /** @type {import("../../utils/helpers.js").Slot} */
+    /** @type {import("../../utils/helpers.ts").Slot} */
     let formHtml = "";
     if (this._hasForm) {
       const { inputs, toggles } = renderFields(this.props.keys, settings, {});
@@ -266,7 +266,7 @@ export class PluginSettingsPanel extends Component {
     try {
       await updateSettings(updates);
       // Reflect changes immediately in the global settings store.
-      const { normalizeSettings } = await import("../../utils/helpers.js");
+      const { normalizeSettings } = await import("../../utils/helpers.ts");
       mergeSettings(normalizeSettings(updates));
       setToast({ message: "Settings saved.", type: "success" });
       this._close();

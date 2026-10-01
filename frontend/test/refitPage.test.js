@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-// gridFit.js reads localStorage/document at import time for its zoom helpers;
+// gridFit.ts reads localStorage/document at import time for its zoom helpers;
 // refitPage itself is pure arithmetic, so the stubs only have to exist.
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 globalThis.window = { innerWidth: 1200, innerHeight: 800, getComputedStyle: () => ({}), dispatchEvent() {} };
@@ -12,7 +12,7 @@ globalThis.document = {
   querySelector: () => null,
 };
 
-const { refitPage } = await import('../src/utils/gridFit.js');
+const { refitPage } = await import('../src/utils/gridFit.ts');
 
 /**
  * A resize re-fits per_page, which moves the page boundaries under the reader.

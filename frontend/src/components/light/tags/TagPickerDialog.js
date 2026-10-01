@@ -15,14 +15,14 @@
  * builds it, here or in the caller — nothing relies on a caller remembering.
  */
 
-import { html, setHTML } from '../../../utils/helpers.js';
+import { html, setHTML } from '../../../utils/helpers.ts';
 
 /**
  * Create an active modal overlay, append it to <body>, and wire the two
  * dismissals every dialog here shares: the × button (if the markup has one)
  * and a click on the backdrop itself.
  *
- * @param {import('../../../utils/helpers.js').RawHtml} modalHtml  built with html``
+ * @param {import('../../../utils/helpers.ts').RawHtml} modalHtml  built with html``
  * Returns { overlay, close }. Callers wire their own buttons to `close`.
  */
 export function openOverlay(modalHtml) {
@@ -42,19 +42,19 @@ export function openOverlay(modalHtml) {
  * A searchable single-choice list of tags in a modal.
  *
  * @param {object}   opts
- * @param {import('../../../utils/helpers.js').RawHtml|string} opts.title
+ * @param {import('../../../utils/helpers.ts').RawHtml|string} opts.title
  *   Header text. html`` output goes in as markup; a plain string is escaped.
  * @param {string}   opts.modalClass     Modal variant class.
  * @param {Array}    opts.tags           Choices, already filtered and ordered.
  * @param {string}   opts.radioName      name= shared by the radio group.
- * @param {(tag: any) => import('../../../utils/helpers.js').RawHtml} opts.renderItem
+ * @param {(tag: any) => import('../../../utils/helpers.ts').RawHtml} opts.renderItem
  *   tag => item markup from html`` (must carry itemClass/nameClass).
  * @param {string}   opts.itemClass      Selector the search box shows/hides.
  * @param {string}   opts.nameClass      Element inside an item holding its searchable text.
  * @param {string}   opts.listClass      Wrapper around the items.
  * @param {string}   opts.searchClass    The search input.
- * @param {import('../../../utils/helpers.js').RawHtml} [opts.beforeList]  markup above the search box.
- * @param {import('../../../utils/helpers.js').RawHtml} [opts.afterList]   markup below the list.
+ * @param {import('../../../utils/helpers.ts').RawHtml} [opts.beforeList]  markup above the search box.
+ * @param {import('../../../utils/helpers.ts').RawHtml} [opts.afterList]   markup below the list.
  * @param {string}   opts.cancelId       Cancel button id.
  * @param {string}   opts.confirmId      Confirm button id.
  * @param {string}   opts.confirmLabel   Confirm button text.

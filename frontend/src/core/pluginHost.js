@@ -29,11 +29,11 @@
  *
  * Debug build only: this host logs the manifest, every chunk import, slot
  * mount/unmount and route claim through `debugLog` (a no-op in the release
- * build — see utils/debug.js). Toggle it with the FRONTEND_DEBUG env on the
+ * build — see utils/debug.ts). Toggle it with the FRONTEND_DEBUG env on the
  * backend, which decides whether the debug or release bundle is served.
  */
 
-import { debugLog, DEBUG } from "../utils/debug.js";
+import { debugLog, DEBUG } from "../utils/debug.ts";
 
 const log = debugLog("PluginHost");
 

@@ -7,7 +7,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { html, navigate } from "../../utils/helpers.js";
+import { html, navigate } from "../../utils/helpers.ts";
 
 export default class RedirectHome extends Component {
   render() {

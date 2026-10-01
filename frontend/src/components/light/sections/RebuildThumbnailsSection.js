@@ -1,6 +1,6 @@
 import { Component } from "../../Component.js";
 import { setToast } from "../../../store.js";
-import { html } from "../../../utils/helpers.js";
+import { html } from "../../../utils/helpers.ts";
 
 export class RebuildThumbnailsSection extends Component {
   render() {

@@ -11,7 +11,7 @@
 #   2. Growth in the set of point/restricted-syntax suppressions. Each one is a
 #      place where safety is asserted by a human rather than enforced by a rule
 #      — a raw() around a value the reader cannot check, or the two lines of
-#      utils/helpers.js that hold the only innerHTML and insertAdjacentHTML in
+#      utils/helpers.ts that hold the only innerHTML and insertAdjacentHTML in
 #      the frontend — so a new one is a deliberate act, not a quiet edit.
 #
 # A third shape needs a parser rather than a grep, so it lives in
@@ -53,7 +53,7 @@ fi
 
 # ── 2. The suppression budget ────────────────────────────────────────────────
 # Every line here is a place a human asserted the value is already safe. Adding
-# one means editing this list, which is the point. helpers.js is the odd one:
+# one means editing this list, which is the point. helpers.ts is the odd one:
 # its three are not raw() exceptions but the sinks themselves — the single
 # innerHTML write (setHTML), the single insertAdjacentHTML (insertHTML), and
 # the single DOMParser.parseFromString (parseMarkup) that every other write and
@@ -66,8 +66,8 @@ frontend/src/components/light/tags/TagEditorForm.js 2
 frontend/src/components/public/PostContent.js 1
 frontend/src/pages/light/PluginsPage.js 1
 frontend/src/plugins/tags-map/index.js 2
-frontend/src/utils/copyright.js 1
-frontend/src/utils/helpers.js 3
+frontend/src/utils/copyright.ts 1
+frontend/src/utils/helpers.ts 3
 LIST
 )
 actual=$(grep -rl 'eslint-disable-next-line point/restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do

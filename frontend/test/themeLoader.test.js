@@ -20,7 +20,7 @@ describe('themeLoader', () => {
       return { ok: true, text: async () => sampleCSS };
     };
 
-    const { loadThemeCss } = await import('../src/utils/themeLoader.js');
+    const { loadThemeCss } = await import('../src/utils/themeLoader.ts');
     const css = await loadThemeCss();
 
     assert.equal(css, sampleCSS);
@@ -30,7 +30,7 @@ describe('themeLoader', () => {
   test('should return empty string on fetch failure', async () => {
     global.fetch = async () => ({ ok: false, status: 404 });
 
-    const { loadThemeCss } = await import('../src/utils/themeLoader.js');
+    const { loadThemeCss } = await import('../src/utils/themeLoader.ts');
     const css = await loadThemeCss();
 
     assert.equal(css, '');
@@ -39,7 +39,7 @@ describe('themeLoader', () => {
   test('should return empty string on network error', async () => {
     global.fetch = async () => { throw new Error('Network error'); };
 
-    const { loadThemeCss } = await import('../src/utils/themeLoader.js');
+    const { loadThemeCss } = await import('../src/utils/themeLoader.ts');
     const css = await loadThemeCss();
 
     assert.equal(css, '');

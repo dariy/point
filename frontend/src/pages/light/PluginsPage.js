@@ -36,7 +36,7 @@ import { getAllSettings } from "../../api/settings.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { setPluginToggled, setToast } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
+import { html, raw } from "../../utils/helpers.ts";
 import { pluginHost } from "../../core/pluginHost.js";
 
 // Slot cardinalities that make a slot's candidates alternatives (at most one
@@ -203,7 +203,7 @@ export default class PluginsPage extends Component {
     // leftover (no visual spot) list below can be derived, never hand-kept.
     this._mappedIds = new Set();
 
-    const headerRow = (/** @type {import("../../utils/helpers.js").Slot} */ extra = "") => html`
+    const headerRow = (/** @type {import("../../utils/helpers.ts").Slot} */ extra = "") => html`
       <div class="pmap-row pmap-hdr">
         ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
       </div>`;
@@ -433,7 +433,7 @@ export default class PluginsPage extends Component {
   _renderRowControls(plugin, pending) {
     // Settings control only when the plugin is enabled: an inline drawer for
     // plugins whose settings were extracted here, else a link to its admin page.
-    /** @type {import("../../utils/helpers.js").Slot} */
+    /** @type {import("../../utils/helpers.ts").Slot} */
     let settingsLink = "";
     if (plugin.enabled && PLUGIN_SETTINGS[plugin.id]) {
       settingsLink = html`<button type="button" class="plugin-settings-link" data-settings-id="${plugin.id}">Settings</button>`;

@@ -1,4 +1,4 @@
-import { html, setHTML, raw } from "../../utils/helpers.js";
+import { html, setHTML, raw } from "../../utils/helpers.ts";
 /**
  * MediaViewer — Unified carousel component for immersive posts and lightbox.
  * (point-x52z.19)
@@ -12,17 +12,17 @@ import { html, setHTML, raw } from "../../utils/helpers.js";
  */
 
 import { Component } from '../../components/Component.js';
-import { safeUrl, navigate } from '../../utils/helpers.js';
-import { X_SVG } from '../../utils/icons.js';
+import { safeUrl, navigate } from '../../utils/helpers.ts';
+import { X_SVG } from '../../utils/icons.ts';
 import { getSettings, getUser } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
-import { hideFlyout } from '../../utils/tagFlyout.js';
-import { ViewContext } from '../../utils/viewContext.js';
+import { hideFlyout } from '../../utils/tagFlyout.ts';
+import { ViewContext } from '../../utils/viewContext.ts';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
-import { mediaFromHtml } from '../../utils/postMedia.js';
-import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.js';
-import { immersiveNavTargets } from '../../utils/immersiveNav.js';
+import { mediaFromHtml } from '../../utils/postMedia.ts';
+import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.ts';
+import { immersiveNavTargets } from '../../utils/immersiveNav.ts';
 const MIN_SHOW_MS = 2000;
 
 // Set just before a seamless cross-post navigation so the next MediaViewer
@@ -31,7 +31,7 @@ const MIN_SHOW_MS = 2000;
 let _suppressNextFadeIn = false;
 /**
  * @typedef {object} MediaViewerProps
- * @property {import('../../utils/postMedia.js').MediaItem[]} [items]  Slides.
+ * @property {import('../../utils/postMedia.ts').MediaItem[]} [items]  Slides.
  * @property {import('../../api/posts.ts').PostMediaRef[]} [media]  The post's
  *   media records, for the per-slide EXIF panel.
  * @property {number} [startIndex]
@@ -119,7 +119,7 @@ export class MediaViewer extends Component {
    * (e.g. the immersive sheet overlay). Returns nothing by default; an override
    * returns the RawHtml html`` yields.
    *
-   * @returns {import('../../utils/helpers.js').Slot}
+   * @returns {import('../../utils/helpers.ts').Slot}
    */
   _renderExtras() {
     return '';

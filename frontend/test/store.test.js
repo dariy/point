@@ -27,7 +27,7 @@ import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 import { store } from '../src/store.js';
 import { Component } from '../src/components/Component.js';
-import { html } from '../src/utils/helpers.js';
+import { html } from '../src/utils/helpers.ts';
 
 /** A subscriber that records what it was called with. */
 const spy = () => {

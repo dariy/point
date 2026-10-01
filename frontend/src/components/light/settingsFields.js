@@ -9,8 +9,8 @@
  * secrets, then plain text).
  */
 
-import { html, raw } from "../../utils/helpers.js";
-import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.ts";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
 export const LABEL_OVERRIDES = {
@@ -221,8 +221,8 @@ function inputHtml(key, value, { posts = [] }) {
  * @param {string[]} keys
  * @param {Record<string,*>} settings
  * @param {{posts?: Array}} [ctx]
- * @returns {{inputs: import("../../utils/helpers.js").RawHtml|string,
- *            toggles: import("../../utils/helpers.js").RawHtml|string}}
+ * @returns {{inputs: import("../../utils/helpers.ts").RawHtml|string,
+ *            toggles: import("../../utils/helpers.ts").RawHtml|string}}
  *   Empty is '' rather than empty markup: callers gate a wrapper on each of
  *   these, and html`` yields a String object, which is truthy even when blank.
  */

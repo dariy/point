@@ -9,10 +9,10 @@
  */
 
 import { getSettings } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
-import { defaultPostTitle } from "../../utils/formatters.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { defaultPostTitle } from "../../utils/formatters.ts";
 import { pluginHost } from "../../core/pluginHost.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, GRIP_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, GRIP_SVG } from "../../utils/icons.ts";
 
 /** Trim a value to a one-line summary length. */
 export function truncate(str, max = 24) {

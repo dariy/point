@@ -24,12 +24,12 @@
  *   });
  *
  * The router also listens for the 'app:navigate' custom event dispatched by
- * the navigate() helper in utils/helpers.js, keeping components decoupled
+ * the navigate() helper in utils/helpers.ts, keeping components decoupled
  * from the router module.
  */
 
 import { setRoute, setToast } from "./store.js";
-import { setPageTitle } from "./utils/documentTitle.js";
+import { setPageTitle } from "./utils/documentTitle.ts";
 import { subclassHooks } from "./components/Component.js";
 
 /**

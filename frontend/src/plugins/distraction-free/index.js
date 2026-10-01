@@ -1,5 +1,5 @@
-import { raw } from "../../utils/helpers.js";
-import { html, setHTML } from "../../utils/helpers.js";
+import { raw } from "../../utils/helpers.ts";
+import { html, setHTML } from "../../utils/helpers.ts";
 // Distraction-free (full-screen) mode for the public post list. A floating
 // toggle mounted into the `post-list-tools` slot (see HomePage); clicking it
 // adds `body.distraction-free`, which the plugin CSS uses to hide every bit of

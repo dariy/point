@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { stripHtml, formatTitleDate, defaultPostTitle } from '../src/utils/formatters.js';
+import { stripHtml, formatTitleDate, defaultPostTitle } from '../src/utils/formatters.ts';
 
 describe('formatters', () => {
   describe('formatTitleDate', () => {

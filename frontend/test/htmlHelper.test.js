@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { html, raw } from '../src/utils/helpers.js';
+import { html, raw } from '../src/utils/helpers.ts';
 
 test('html template helper', async (t) => {
   await t.test('escapes by default', () => {

@@ -20,16 +20,16 @@
  */
 
 import { MediaViewer } from '../../components/shared/MediaViewer.js';
-import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.js';
+import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { ViewContext } from '../../utils/viewContext.js';
-import { renderTagLink, buildTagIndex, parseTagUrl } from '../../utils/tagLinks.js';
-import { setupTagFlyout } from '../../utils/tagFlyout.js';
-import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.js';
-import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.js';
-import { immersiveNavTargets } from '../../utils/immersiveNav.js';
-import { renderCopyright } from '../../utils/copyright.js';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { renderTagLink, buildTagIndex, parseTagUrl } from '../../utils/tagLinks.ts';
+import { setupTagFlyout } from '../../utils/tagFlyout.ts';
+import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.ts';
+import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.ts';
+import { immersiveNavTargets } from '../../utils/immersiveNav.ts';
+import { renderCopyright } from '../../utils/copyright.ts';
 const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
 export class ImmersiveSheetViewer extends MediaViewer {
   constructor(container, props = {}) {

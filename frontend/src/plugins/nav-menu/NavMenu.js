@@ -1,10 +1,10 @@
-import { raw } from "../../utils/helpers.js";
-import { html, setHTML } from "../../utils/helpers.js";
+import { raw } from "../../utils/helpers.ts";
+import { html, setHTML } from "../../utils/helpers.ts";
 import { getNavTags, getSettings, getUser, onNavTags, onSettingsSelector } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
-import { navigate } from '../../utils/helpers.js';
-import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.js';
-import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
+import { navigate } from '../../utils/helpers.ts';
+import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.ts';
+import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.ts';
 const DEFAULT_INLINE_MAX = 4;
 
 /** Icon and label per tags-viz plugin, keyed by plugin id. */
@@ -39,7 +39,7 @@ const VIZ_SLOTS = [{
 /**
  * The settings this menu actually renders from, as one comparable string.
  * A primitive, because subscribeSelector compares with Object.is.
- * @param {import('../../utils/helpers.js').StoreSettings} [settings]
+ * @param {import('../../utils/helpers.ts').StoreSettings} [settings]
  */
 const navSlice = (settings = {}) => [
   settings?.nav_menu_mode,

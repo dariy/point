@@ -13,7 +13,7 @@ owned by `ThemeService` (`api/internal/services/theme_service.go`).
 - **A theme may carry layout, not just colour.** `mosaic` is the worked example: it
   zeroes the grid gap and every radius token so post cards tile edge to edge, drops
   the spacing scale, and runs the grid page full-bleed. Themes are injected as a
-  `<style>` appended to `<head>` (`utils/themeLoader.js`), so a plain selector in a
+  `<style>` appended to `<head>` (`utils/themeLoader.ts`), so a plain selector in a
   theme beats the same selector in the bundles on document order — no `!important`
   needed. Density overrides there are scoped to `html[data-section="public"]` so the
   admin section keeps its own spacing.

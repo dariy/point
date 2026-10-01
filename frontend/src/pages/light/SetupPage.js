@@ -1,8 +1,8 @@
 import { Component } from '../../components/Component.js';
-import { html, raw } from '../../utils/helpers.js';
+import { html, raw } from '../../utils/helpers.ts';
 import { api } from '../../api/client.ts';
 import { sha256 } from '../../api/auth.ts';
-import { APP_LOGO_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG } from '../../utils/icons.ts';
 
 /**
  * The one-time setup token from the setup link (`/setup?token=…`). Managed

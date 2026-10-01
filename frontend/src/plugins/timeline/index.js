@@ -1,8 +1,8 @@
 import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.ts";
 import { GestureController } from "../../core/gestures.js";
-import { renderTagLink } from "../../utils/tagLinks.js";
-import { html, setHTML } from "../../utils/helpers.js";
+import { renderTagLink } from "../../utils/tagLinks.ts";
+import { html, setHTML } from "../../utils/helpers.ts";
 const EDGE_PAD = 48;
 
 // A range change navigates + remounts the Timeline, which would otherwise rebuild

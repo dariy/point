@@ -10,13 +10,13 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
 import { getNavTags, getSettings } from '../../store.js';
-import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
-import { formatDate } from '../../utils/formatters.js';
-import { setPageTitle } from '../../utils/documentTitle.js';
-import { ViewContext } from '../../utils/viewContext.js';
-import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.js';
+import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.ts';
+import { formatDate } from '../../utils/formatters.ts';
+import { setPageTitle } from '../../utils/documentTitle.ts';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.ts';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
-import { X_SVG } from '../../utils/icons.js';
+import { X_SVG } from '../../utils/icons.ts';
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

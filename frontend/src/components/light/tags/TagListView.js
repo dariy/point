@@ -13,8 +13,8 @@
  * All markup is built with the html`` tag, which escapes every interpolation.
  */
 
-import { html, raw } from '../../../utils/helpers.js';
-import { EDIT_SVG, X_SVG, MAP_SVG } from '../../../utils/icons.js';
+import { html, raw } from '../../../utils/helpers.ts';
+import { EDIT_SVG, X_SVG, MAP_SVG } from '../../../utils/icons.ts';
 
 /**
  * Quick filters for tag attributes that aren't a parent or a search term.

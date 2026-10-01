@@ -34,11 +34,11 @@ import {
   isShortViewport,
   setCanonical,
   removeCanonical,
-} from "../../utils/helpers.js";
+} from "../../utils/helpers.ts";
 import { GridPager } from "../../core/gridPager.js";
-import { ViewContext } from "../../utils/viewContext.js";
-import { setPageTitle } from "../../utils/documentTitle.js";
-import { enterImmersive, exitImmersive, decodeImmersiveHash } from "../../utils/immersiveNav.js";
+import { ViewContext } from "../../utils/viewContext.ts";
+import { setPageTitle } from "../../utils/documentTitle.ts";
+import { enterImmersive, exitImmersive, decodeImmersiveHash } from "../../utils/immersiveNav.ts";
 import {
   computePerPage,
   cachedPerPage,
@@ -47,7 +47,7 @@ import {
   createFitLatch,
   createResizeGate,
   refitPage,
-} from "../../utils/gridFit.js";
+} from "../../utils/gridFit.ts";
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

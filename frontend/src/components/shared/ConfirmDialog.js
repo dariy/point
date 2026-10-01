@@ -4,12 +4,12 @@
 
 import { Component } from '../Component.js';
 import { Modal } from './Modal.js';
-import { html, setHTML } from '../../utils/helpers.js';
+import { html, setHTML } from '../../utils/helpers.ts';
 
 /**
  * @typedef {object} ConfirmDialogProps
- * @property {import('../../utils/helpers.js').Slot} [title]
- * @property {string|import('../../utils/helpers.js').RawHtml} [message]  Body
+ * @property {import('../../utils/helpers.ts').Slot} [title]
+ * @property {string|import('../../utils/helpers.ts').RawHtml} [message]  Body
  *   text; markup only when it is html`` output and allowHtml is set.
  * @property {string} [confirmText]  Primary button label.
  * @property {() => void} [onConfirm]

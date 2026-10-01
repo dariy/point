@@ -541,7 +541,7 @@ without re-running `make-content.sh` leaves the demo showing the old values.
   URLs in several admin views (`PostsListPage.js`, `VisualEditor.js`), and a
   static host ignores query strings, so the full-size image is served instead.
   `build.sh` downscales originals to compensate;
-  `utils/helpers.js dropBrokenImages()` handles anything missing.
+  `utils/helpers.ts dropBrokenImages()` handles anything missing.
 - **Backend-shaped admin surfaces are canned**: backups, log tailing,
   photo-library import, system restart, Instagram connect, passkey registration.
   They render and respond plausibly rather than being hidden — seeing that the

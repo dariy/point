@@ -18,8 +18,8 @@ import { Component } from "../../components/Component.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getTagsGraph, getTagCloud, getTagPage } from "../../api/pages.ts";
 import { getSettings, getUser } from "../../store.js";
-import { ViewContext } from "../../utils/viewContext.js";
-import { setPageTitle } from "../../utils/documentTitle.js";
+import { ViewContext } from "../../utils/viewContext.ts";
+import { setPageTitle } from "../../utils/documentTitle.ts";
 import {
   html,
   navigate,
@@ -28,10 +28,10 @@ import {
   setCanonical,
   setHTML,
   removeCanonical,
-} from "../../utils/helpers.js";
-import { tagKind } from "../../utils/tagLinks.js";
-import { LOCK_SVG } from "../../utils/icons.js";
-import { isRevelioOn } from "../../utils/revelio.js";
+} from "../../utils/helpers.ts";
+import { tagKind } from "../../utils/tagLinks.ts";
+import { LOCK_SVG } from "../../utils/icons.ts";
+import { isRevelioOn } from "../../utils/revelio.ts";
 
 import {
   COUNTRIES_GEOJSON,
@@ -42,7 +42,7 @@ import {
   TILE_ATTR,
   TILE_MAX_NATIVE_ZOOM,
   loadLeaflet,
-} from "../../utils/leaflet.js";
+} from "../../utils/leaflet.ts";
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

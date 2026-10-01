@@ -306,7 +306,7 @@ describe('AtlasPage owner-only marking', () => {
     const mod = await import('../src/plugins/tags-atlas/index.js');
     ({ isConcealed, concealedTitle } = mod);
     AtlasPage = mod.default;
-    ({ setRevelio } = await import('../src/utils/revelio.js'));
+    ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });
 
   afterEach(() => {
@@ -377,7 +377,7 @@ describe('AtlasPage hidden-node filter', () => {
     AtlasPage = mod.default;
     ({ isConcealed } = mod);
     ({ setUser } = await import('../src/store.js'));
-    ({ setRevelio } = await import('../src/utils/revelio.js'));
+    ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });
 
   afterEach(() => {

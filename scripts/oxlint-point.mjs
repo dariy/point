@@ -34,7 +34,7 @@ const child = (parent, kid) => `${parent} > ${kid}, ${parent} > :matches(${WRAPP
 export const RESTRICTED = [
   {
     // The sinks themselves are now off limits everywhere but the two lines of
-    // utils/helpers.js that implement setHTML()/insertHTML(), which carry a
+    // utils/helpers.ts that implement setHTML()/insertHTML(), which carry a
     // disable comment. That is what makes the Trusted Types policy tractable:
     // the browser will only accept a write that came from the named policy,
     // and exactly one function in the frontend holds it. Writing the markup
@@ -42,7 +42,7 @@ export const RESTRICTED = [
     // it is no longer sufficient, because a write that bypasses the funnel
     // bypasses the policy and dies at the sink under enforcement.
     selector: `AssignmentExpression${attr("left.property.name='innerHTML'")}`,
-    message: "Use setHTML(el, html`…`) from utils/helpers.js — a bare innerHTML write bypasses the Trusted Types policy.",
+    message: "Use setHTML(el, html`…`) from utils/helpers.ts — a bare innerHTML write bypasses the Trusted Types policy.",
   },
   {
     selector: `AssignmentExpression${attr("left.property.name='outerHTML'")}`,
@@ -50,7 +50,7 @@ export const RESTRICTED = [
   },
   {
     selector: `CallExpression${attr("callee.property.name='insertAdjacentHTML'")}`,
-    message: "Use insertHTML(el, position, html`…`) from utils/helpers.js — a bare insertAdjacentHTML bypasses the Trusted Types policy.",
+    message: "Use insertHTML(el, position, html`…`) from utils/helpers.ts — a bare insertAdjacentHTML bypasses the Trusted Types policy.",
   },
   {
     // The three selectors above match a dotted property name, which is what
@@ -58,11 +58,11 @@ export const RESTRICTED = [
     // same name — el['innerHTML'] — reaches the identical sink and used to
     // slip past them, so the name is matched in that position too.
     selector: `AssignmentExpression${attr("left.computed=true")}${attr("left.property.value=/^(inner|outer)HTML$/", ["left", "property"])}`,
-    message: "Use setHTML(el, html`…`) from utils/helpers.js — a computed-key HTML write bypasses the Trusted Types policy.",
+    message: "Use setHTML(el, html`…`) from utils/helpers.ts — a computed-key HTML write bypasses the Trusted Types policy.",
   },
   {
     selector: `CallExpression${attr("callee.computed=true")}${attr("callee.property.value='insertAdjacentHTML'", ["callee", "property"])}`,
-    message: "Use insertHTML(el, position, html`…`) from utils/helpers.js — a computed-key insertAdjacentHTML bypasses the Trusted Types policy.",
+    message: "Use insertHTML(el, position, html`…`) from utils/helpers.ts — a computed-key insertAdjacentHTML bypasses the Trusted Types policy.",
   },
   {
     // And a key assembled from pieces — el['inner' + 'HTML'] — defeats any
@@ -84,9 +84,9 @@ export const RESTRICTED = [
     // that costs an afternoon to discover — for *every* mime type, not only
     // text/html: under enforcement a plain string throws there even when the
     // result is an inert XML document that never reaches the page. So the
-    // parse goes through parseMarkup() in utils/helpers.js, where the policy is.
+    // parse goes through parseMarkup() in utils/helpers.ts, where the policy is.
     selector: `CallExpression${attr("callee.property.name='parseFromString'")}`,
-    message: "Use parseMarkup(text, mime) from utils/helpers.js — a bare parseFromString bypasses the Trusted Types policy and throws under enforcement.",
+    message: "Use parseMarkup(text, mime) from utils/helpers.ts — a bare parseFromString bypasses the Trusted Types policy and throws under enforcement.",
   },
   {
     // raw() is the one way past the html`` tag's escaping, so what may go

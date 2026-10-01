@@ -12,8 +12,8 @@ import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { listPosts } from "../../api/posts.ts";
 import { mergeSettings, setToast } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
-import { CHECK_SVG } from "../../utils/icons.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { CHECK_SVG } from "../../utils/icons.ts";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";
 
 const SETTING_GROUPS = [
@@ -194,7 +194,7 @@ export default class SettingsPage extends Component {
       await updateSettings(updates);
       setToast({ message: "Settings saved.", type: "success" });
       // Update global store with the new settings immediately so the UI reflects changes (like blog title).
-      const { normalizeSettings } = await import('../../utils/helpers.js');
+      const { normalizeSettings } = await import('../../utils/helpers.ts');
       mergeSettings(normalizeSettings(updates));
       this.setState({ saving: false, settings: { ...this.state.settings, ...updates } });
     } catch (err) {

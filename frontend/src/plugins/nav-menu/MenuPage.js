@@ -1,4 +1,4 @@
-import { html, setHTML, raw } from "../../utils/helpers.js";
+import { html, setHTML, raw } from "../../utils/helpers.ts";
 /**
  * MenuPage — custom navigation menu editor.
  *
@@ -12,9 +12,9 @@ import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
 import { getSettings, mergeSettings, setToast } from '../../store.js';
-import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
-import { HeaderFold } from '../../utils/headerFold.js';
-import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.js';
+import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';
+import { HeaderFold } from '../../utils/headerFold.ts';
+import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.ts';
 
 // ── Markdown parser/serialiser ────────────────────────────────────────────────
 

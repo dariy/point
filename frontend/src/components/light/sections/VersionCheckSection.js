@@ -16,8 +16,8 @@
 import { Component } from "../../Component.js";
 import { getVersion, checkVersionNow } from "../../../api/system.ts";
 import { setToast } from "../../../store.js";
-import { html } from "../../../utils/helpers.js";
-import { formatDatetime, isoDatetime } from "../../../utils/formatters.js";
+import { html } from "../../../utils/helpers.ts";
+import { formatDatetime, isoDatetime } from "../../../utils/formatters.ts";
 
 export class VersionCheckSection extends Component {
   constructor(container, props = {}) {

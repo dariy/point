@@ -17,9 +17,9 @@ import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
 import { Component } from '../src/components/Component.js';
-import { html, raw } from '../src/utils/helpers.js';
-import { renderTagStrip } from '../src/utils/tagStrip.js';
-import { thumbAttrs } from '../src/utils/mediaUrl.js';
+import { html, raw } from '../src/utils/helpers.ts';
+import { renderTagStrip } from '../src/utils/tagStrip.ts';
+import { thumbAttrs } from '../src/utils/mediaUrl.ts';
 
 describe('Component.render() markup contract', () => {
   let dom;

@@ -4,9 +4,9 @@
 
 import { Component } from '../Component.js';
 import { PostCard } from './PostCard.js';
-import { html } from '../../utils/helpers.js';
-import { measureCardImageSizes } from '../../utils/gridFit.js';
-import { reconcileList, setKey } from '../../utils/reconcileList.js';
+import { html } from '../../utils/helpers.ts';
+import { measureCardImageSizes } from '../../utils/gridFit.ts';
+import { reconcileList, setKey } from '../../utils/reconcileList.ts';
 
 /**
  * @typedef {object} PostGridProps

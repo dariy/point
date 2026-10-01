@@ -13,8 +13,8 @@
 import { Component } from '../../components/Component.js';
 import { login, loginWithPasskey } from '../../api/auth.ts';
 import { getUser, setUser } from '../../store.js';
-import { html, navigate } from '../../utils/helpers.js';
-import { usernameHintField } from '../../utils/passwordForm.js';
+import { html, navigate } from '../../utils/helpers.ts';
+import { usernameHintField } from '../../utils/passwordForm.ts';
 
 /**
  * @typedef {import('../../router.js').PageProps & {

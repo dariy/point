@@ -41,7 +41,7 @@ learn, a setting to forget).
     either is changed — there is deliberately no second, always-visible control for
     it. Blocks collapse to labelled bars with drag handles; drag to reorder within a
     list or across the two, since landing in the other list *is* the statement about
-    which side a block is on. Dragging is pointer-based (`utils/pointerReorder.js`,
+    which side a block is on. Dragging is pointer-based (`utils/pointerReorder.ts`,
     with edge auto-scroll) rather than HTML5 DnD, which does not exist on iOS; handles
     also take ArrowUp/ArrowDown to reorder and ArrowLeft/ArrowRight to change side.
     Below 64em the sheet drops into the page flow for the duration, since a sheet

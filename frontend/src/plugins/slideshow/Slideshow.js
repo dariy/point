@@ -1,5 +1,5 @@
-import { raw } from "../../utils/helpers.js";
-import { html, setHTML } from "../../utils/helpers.js";
+import { raw } from "../../utils/helpers.ts";
+import { html, setHTML } from "../../utils/helpers.ts";
 /**
  * Slideshow — auto-advancing controller for the immersive MediaViewer.
  *
@@ -16,7 +16,7 @@ import { html, setHTML } from "../../utils/helpers.js";
  * (resume) from a real close (stop).
  */
 
-import { PLAY_SVG, PAUSE_SVG, MINUS_SVG, PLUS_SVG, SHUFFLE_SVG, REPEAT_SVG } from '../../utils/icons.js';
+import { PLAY_SVG, PAUSE_SVG, MINUS_SVG, PLUS_SVG, SHUFFLE_SVG, REPEAT_SVG } from '../../utils/icons.ts';
 const MIN_INTERVAL = 1;
 const MAX_INTERVAL = 30;
 const DEFAULT_INTERVAL = 5;

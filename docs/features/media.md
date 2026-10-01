@@ -145,7 +145,7 @@ p-zm2s holds the work.
   DPR 3, a retina laptop), and they are the slowest rungs to encode, so upload stays fast.
   Article `<img>` tags also get `width`/`height` from the stored size when they have none
   (`srcset.go::injectArticleSrcsetDims`), so a lazy image does not move the layout.
-- **`<img srcset>`, never `<picture>`**: `postMedia.js` splits server-rendered HTML with
+- **`<img srcset>`, never `<picture>`**: `postMedia.ts` splits server-rendered HTML with
   a regex whose `VOID_TAGS` list has no `picture`, so a `<picture>` is misread as a text
   block and silently breaks immersive slides. Article `srcset` is injected *after*
   bluemonday (`srcset.go`), deliberately outside the sanitizer policy — that is what
@@ -154,7 +154,7 @@ p-zm2s holds the work.
   admin UI and location tagging. Every guest emitter of post media (`GetPostBySlug`,
   `GetPostByID`, the preview-token route) passes it through `posts.go::guestMediaMetadata`:
   with `exif_visibility` at `all` a guest gets only the six keys the viewer shows
-  (`EXIF_FIELDS` in `frontend/src/utils/exif.js`); with `hide` or `admin` a guest gets no
+  (`EXIF_FIELDS` in `frontend/src/utils/exif.ts`); with `hide` or `admin` a guest gets no
   `metadata`. An authenticated response keeps the full blob.
 - **Served originals carry no GPS by default.** With `strip_gps_public` on (the default;
   Settings → Display), the media route serves an original JPEG, PNG, WebP, TIFF, HEIC/HEIF or

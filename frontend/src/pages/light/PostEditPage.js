@@ -16,7 +16,7 @@ import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publi
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { uploadMedia } from "../../api/media.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
-import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
+import { getAllShareEntries, clearShareEntries } from "../../utils/idb.ts";
 import {
   getAutosaveStatus,
   getOfflineStatus,
@@ -24,13 +24,13 @@ import {
   setOfflineStatus,
   setToast,
 } from "../../store.js";
-import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.js";
+import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.ts";
 import { pluginHost } from "../../core/pluginHost.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.ts";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
-import { attachPointerReorder } from "../../utils/pointerReorder.js";
-import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNodes.js";
-import { attachWindowFileDrop } from "../../utils/windowFileDrop.js";
+import { attachPointerReorder } from "../../utils/pointerReorder.ts";
+import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNodes.ts";
+import { attachWindowFileDrop } from "../../utils/windowFileDrop.ts";
 import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.js";
 import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.js";
 

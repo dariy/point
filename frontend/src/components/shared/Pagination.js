@@ -3,7 +3,7 @@
  */
 
 import { Component } from '../Component.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 
 /**
  * @typedef {object} PaginationProps

@@ -3,12 +3,12 @@
  */
 
 import { Component } from "../Component.js";
-import { html } from "../../utils/helpers.js";
+import { html } from "../../utils/helpers.ts";
 import { updateMedia, reextractMediaEXIF } from "../../api/media.ts";
 import { setToast } from "../../store.js";
-import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
+import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
-import { thumbAttrs } from "../../utils/mediaUrl.js";
+import { thumbAttrs } from "../../utils/mediaUrl.ts";
 
 // .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still
 // points at the original: the card's lightbox (see _bindLightbox) opens the
@@ -17,11 +17,11 @@ const VE_THUMB_SIZES = "80px";
 
 /**
  * @typedef {object} VisualEditorProps
- * @property {import('../../utils/postNodes.js').EditorNode[]} [nodes]  The
+ * @property {import('../../utils/postNodes.ts').EditorNode[]} [nodes]  The
  *   document, in order. Text edits are written into these nodes in place.
  * @property {Record<string, import('../../api/media.ts').Media>} [mediaByPath]
  *   Media records keyed by path, for each image card's EXIF panel.
- * @property {(nodes: import('../../utils/postNodes.js').EditorNode[]) => void} [onChange]
+ * @property {(nodes: import('../../utils/postNodes.ts').EditorNode[]) => void} [onChange]
  *   Called with the new list on any structural change.
  * @property {() => void} [onInput]  Called after an in-place text edit.
  * @property {(index: number) => void} [onAddMedia]  Open the picker to insert at `index`.

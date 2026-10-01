@@ -1,6 +1,6 @@
 import { Component } from "../../components/Component.js";
-import { html } from "../../utils/helpers.js";
-import { usernameHintField } from "../../utils/passwordForm.js";
+import { html } from "../../utils/helpers.ts";
+import { usernameHintField } from "../../utils/passwordForm.ts";
 import { sha256 } from "../../api/auth.ts";
 import { api } from "../../api/client.ts";
 

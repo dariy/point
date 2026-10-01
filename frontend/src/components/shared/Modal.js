@@ -3,14 +3,14 @@
  */
 
 import { Component } from '../Component.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 
 /**
  * @typedef {object} ModalProps
- * @property {import('../../utils/helpers.js').Slot} [title]  Header title.
+ * @property {import('../../utils/helpers.ts').Slot} [title]  Header title.
  * @property {() => void} [onClose]  Called when the close button, the backdrop
  *   or Escape dismisses the modal.
- * @property {import('../../utils/helpers.js').Slot} [footer]  Footer buttons,
+ * @property {import('../../utils/helpers.ts').Slot} [footer]  Footer buttons,
  *   built with html``.
  * @property {string} [maxWidth]  e.g. '500px' (the default).
  */

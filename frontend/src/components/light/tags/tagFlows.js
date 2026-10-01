@@ -21,7 +21,7 @@
  */
 
 import { setToast } from '../../../store.js';
-import { html, setHTML } from '../../../utils/helpers.js';
+import { html, setHTML } from '../../../utils/helpers.ts';
 import { setTagParents, deleteTag, patchTag, moveTag, mergeTags } from '../../../api/tags.ts';
 import { openTagPickerDialog, openOverlay } from './TagPickerDialog.js';
 import { getChildrenOf } from './tagOrdering.js';

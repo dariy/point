@@ -3,7 +3,7 @@ import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
 import { Component } from '../src/components/Component.js';
-import { html } from '../src/utils/helpers.js';
+import { html } from '../src/utils/helpers.ts';
 
 /**
  * Component.update() — the in-place render path.

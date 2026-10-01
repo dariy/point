@@ -9,7 +9,7 @@
  * All markup is built with the html`` tag, which escapes every interpolation.
  */
 
-import { html, raw } from '../../../utils/helpers.js';
+import { html, raw } from '../../../utils/helpers.ts';
 
 /** The tag's slug rule: lowercase, punctuation dropped, spaces to dashes. */
 export function slugifyTagName(text) {

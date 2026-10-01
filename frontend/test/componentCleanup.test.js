@@ -23,7 +23,7 @@ import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
 import { Component } from '../src/components/Component.js';
-import { html } from '../src/utils/helpers.js';
+import { html } from '../src/utils/helpers.ts';
 import { setAutosaveStatus, setUser, store } from '../src/store.js';
 
 /** Live subscribers on a store key — the leak, measured at its source. */

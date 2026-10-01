@@ -252,7 +252,7 @@ export const {
   on: onSettings,
   merge: mergeSettings,
   onSelector: onSettingsSelector,
-} = /** @type {Keyed<import('./utils/helpers.js').StoreSettings>} */ (keyed('settings'));
+} = /** @type {Keyed<import('./utils/helpers.ts').StoreSettings>} */ (keyed('settings'));
 
 /** {'dark'|'light'|'auto'} Active UI theme. */
 export const { get: getTheme, set: setTheme, on: onTheme } = keyed('theme');

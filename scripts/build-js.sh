@@ -6,7 +6,7 @@
 # api/cmd/api/assets.go):
 #
 #   frontend/js/        release build — minified, __DEBUG__=false. Debug logging
-#                       (utils/debug.js) collapses to no-ops and is stripped.
+#                       (utils/debug.ts) collapses to no-ops and is stripped.
 #   frontend/js-debug/  debug build   — unminified, __DEBUG__=true. Plugin
 #                       mount/unmount, the manifest and chunk loads are logged
 #                       to the console (see core/pluginHost.js).

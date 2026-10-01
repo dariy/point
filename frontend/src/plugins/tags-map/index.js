@@ -13,9 +13,9 @@ import { Component } from "../../components/Component.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getMapPage } from "../../api/pages.ts";
 import { getSettings } from "../../store.js";
-import { html, raw } from "../../utils/helpers.js";
-import { LOCK_SVG } from "../../utils/icons.js";
-import { ViewContext } from "../../utils/viewContext.js";
+import { html, raw } from "../../utils/helpers.ts";
+import { LOCK_SVG } from "../../utils/icons.ts";
+import { ViewContext } from "../../utils/viewContext.ts";
 
 import {
   COUNTRIES_GEOJSON,
@@ -24,7 +24,7 @@ import {
   TILE_ATTR,
   TILE_MAX_NATIVE_ZOOM,
   loadLeaflet,
-} from "../../utils/leaflet.js";
+} from "../../utils/leaflet.ts";
 
 /** @typedef {import('../../router.js').PageProps} PageProps */
 

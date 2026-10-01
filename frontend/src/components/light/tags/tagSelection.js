@@ -26,8 +26,8 @@
  * react to leaves through `onModeChange` / `onBulkDone`.
  */
 
-import { html, raw } from '../../../utils/helpers.js';
-import { CHECK_SVG, TRASH_SVG } from '../../../utils/icons.js';
+import { html, raw } from '../../../utils/helpers.ts';
+import { CHECK_SVG, TRASH_SVG } from '../../../utils/icons.ts';
 import { matchesListFilter } from './TagListView.js';
 import { SWIPE_BREAKPOINT } from './tagGestures.js';
 import { bulkVisibility, bulkDelete, openBulkMoveDialog } from './tagFlows.js';

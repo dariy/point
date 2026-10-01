@@ -6,13 +6,13 @@
 
 import { Component } from "../../Component.js";
 import { getOfflineStats, getOfflineSnapshot } from "../../../api/offline.ts";
-import { saveSnapshot, saveMeta, getMeta } from "../../../utils/offlineStore.js";
-import { preCacheImages, clearImageCache } from "../../../utils/imageCache.js";
-import { thumbUrl } from "../../../utils/mediaUrl.js";
-import { mediaTypeFromPath } from "../../../utils/postMedia.js";
+import { saveSnapshot, saveMeta, getMeta } from "../../../utils/offlineStore.ts";
+import { preCacheImages, clearImageCache } from "../../../utils/imageCache.ts";
+import { thumbUrl } from "../../../utils/mediaUrl.ts";
+import { mediaTypeFromPath } from "../../../utils/postMedia.ts";
 import { setToast } from "../../../store.js";
-import { html } from "../../../utils/helpers.js";
-import { formatFileSize, formatDateShort } from "../../../utils/formatters.js";
+import { html } from "../../../utils/helpers.ts";
+import { formatFileSize, formatDateShort } from "../../../utils/formatters.ts";
 
 export class OfflineDataSection extends Component {
   constructor(container, props = {}) {

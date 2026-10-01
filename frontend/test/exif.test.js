@@ -8,7 +8,7 @@ import {
   normalizeSrc,
   metadataForSrc,
   attachExifToImage,
-} from '../src/utils/exif.js';
+} from '../src/utils/exif.ts';
 
 // A representative camera-data blob plus a GPS tag that must never surface.
 const META = {

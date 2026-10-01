@@ -14,8 +14,8 @@ import {
   getInstagramImportStatus,
 } from "../../../api/instagram.ts";
 import { setToast } from "../../../store.js";
-import { html } from "../../../utils/helpers.js";
-import { formatDateShort } from "../../../utils/formatters.js";
+import { html } from "../../../utils/helpers.ts";
+import { formatDateShort } from "../../../utils/formatters.ts";
 
 export class InstagramImportSection extends Component {
   constructor(container, props = {}) {

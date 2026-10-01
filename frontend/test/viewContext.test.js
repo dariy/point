@@ -10,7 +10,7 @@ describe('ViewContext.toUrl', () => {
 
   before(async () => {
     global.window = { location: { pathname: '/', search: '' } };
-    ({ ViewContext } = await import('../src/utils/viewContext.js'));
+    ({ ViewContext } = await import('../src/utils/viewContext.ts'));
   });
 
   const url = (pathname, query = {}) => new ViewContext(pathname, query).toUrl();

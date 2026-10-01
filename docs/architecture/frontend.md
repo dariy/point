@@ -448,7 +448,7 @@ there is nothing to update yet.
 The cost of "handled" is that the component now owns keeping its DOM true to its
 props. Two helpers carry most of that:
 
-**`reconcileList(container, items, keyOf, ops)`** — `frontend/src/utils/reconcileList.js`.
+**`reconcileList(container, items, keyOf, ops)`** — `frontend/src/utils/reconcileList.ts`.
 Brings a container's children into line with a list, matching nodes to items by
 key rather than by position, so a survivor is *moved* rather than rebuilt. Nodes
 carry their key in `data-rkey`; `create` gets it stamped for free, and
@@ -461,7 +461,7 @@ Departures are detached before the arrivals are placed, which is what makes a
 list that only lost a middle element cost zero moves. An element without
 `data-rkey` belongs to something else and is never moved, keyed or removed.
 
-**`preserveInteraction(container, fn)`** — `frontend/src/utils/preserveInteraction.js`.
+**`preserveInteraction(container, fn)`** — `frontend/src/utils/preserveInteraction.ts`.
 Snapshots focus, caret and scroll, runs `fn`, puts them back — for the rebuilds
 that still happen. The snapshot is a *selector*, not a node reference, because
 the node is about to stop existing: an `id`, a `name`, or a `data-action`, and
@@ -473,7 +473,7 @@ across an `await` (`PostsListPage._load`).
 
 The sites this replaced: `PostGrid.reconcile()` was this loop written by hand
 for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.js`) and
-`utils/gridFlip.js` still cover what a reconciler cannot — a swipe handed across
+`utils/gridFlip.ts` still cover what a reconciler cannot — a swipe handed across
 a route change, and the FLIP animation over a zoom step.
 
 ### 2.6 — Example: Simple Component
@@ -481,7 +481,7 @@ a route change, and the FLIP animation over a zoom step.
 ```javascript
 // frontend/src/components/shared/Pagination.js
 import { Component } from '../Component.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 
 export class Pagination extends Component {
   // props: { page, pages, total, minPage, onPage }
@@ -535,7 +535,7 @@ template escapes every interpolation on the way through, and
 // frontend/src/pages/public/HomePage.js
 import { Component } from '../../components/Component.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 import { pagesApi } from '../../api/pages.ts';
 
 export class HomePage extends Component {
@@ -1133,8 +1133,8 @@ frontend/
 |   |       `-- SystemPage.js
 |   |
 |   `-- utils/
-|       |-- formatters.js           <- Date, file size, truncation
-|       |-- helpers.js              <- DOM helpers, escapeHtml, debounce
+|       |-- formatters.ts           <- Date, file size, truncation
+|       |-- helpers.ts              <- DOM helpers, escapeHtml, debounce
 |       `-- validators.js          <- Client-side input validation
 |
 `-- css/
@@ -1321,7 +1321,7 @@ document.documentElement.setAttribute('data-theme', theme);
 There is exactly one HTML sink in `frontend/src`, and it is three lines long:
 
 ```javascript
-// frontend/src/utils/helpers.js
+// frontend/src/utils/helpers.ts
 export function setHTML(el, markup) {
   el.innerHTML = trusted(markup, 'setHTML');
 }
@@ -1336,7 +1336,7 @@ what the one before it misses:
    through — `safeUrl()` in `href`/`src` position, `escapeHtml()` everywhere
    else — so no caller applies either by hand and no caller forgets to.
    `raw()` is the opt-out, and it belongs around module-level constants (the
-   SVG blobs in `utils/icons.js`) and around HTML the server sanitized before
+   SVG blobs in `utils/icons.ts`) and around HTML the server sanitized before
    storing it (a post body). Nothing else.
 
 2. **`setHTML()` refuses anything else.** The tag returns a `RawHtml`, not a
@@ -1359,13 +1359,13 @@ what the one before it misses:
    is defence in depth on top of the lint rule, never a replacement.
 
    **The three names are the security claim.** `point` is the frontend's own,
-   in `utils/helpers.js`. The other two are waivers for vendored libraries that
+   in `utils/helpers.ts`. The other two are waivers for vendored libraries that
    write their own markup and were patched to route it through a policy instead
    of a plain string:
 
    | Policy | Lives in | Sinks |
    |---|---|---|
-   | `point` | `frontend/src/utils/helpers.js` | every write this frontend makes |
+   | `point` | `frontend/src/utils/helpers.ts` | every write this frontend makes |
    | `point-leaflet` | `frontend/vendor/leaflet/leaflet.js` | feature detection at import time, zoom buttons, attribution, scale, layer control, popup content, popup close button, `divIcon` markup |
    | `point-codejar` | `frontend/vendor/codejar/codejar.js` | undo restore, redo restore, and the escaped-text paste via `execCommand('insertHTML')` |
 
@@ -1382,7 +1382,7 @@ what the one before it misses:
    Prism needed no waiver. `Prism.highlightElement` writes the highlighted
    markup itself, so `PostContent` calls `Prism.highlight()` — the
    string-returning form the editors already used — and writes the result with
-   `setHTML()`. `utils/prismManual.js` switches off the automatic pass
+   `setHTML()`. `utils/prismManual.ts` switches off the automatic pass
    prism-core otherwise runs on itself at load, which went through
    `highlightElement` and was duplicated work even before it became a
    violation.
@@ -1394,7 +1394,7 @@ what the one before it misses:
    the same set, and fails if anything calls `highlightElement` again.
    `build-js.sh` additionally fails if a `createPolicy()` call lands in more
    than one chunk — a name mints once, so a graph split that duplicated
-   `helpers.js` would silently take the write path down on every page loading
+   `helpers.ts` would silently take the write path down on every page loading
    both chunks. `frontend/e2e/trustedTypes.test.js` then drives a real Chromium
    under the real header and asserts not just zero violations but that the vendored
    writers *produced* something — highlighted tokens, zoom buttons, an

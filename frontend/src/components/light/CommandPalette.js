@@ -1,9 +1,9 @@
 import { Component } from '../Component.js';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
-import { html, navigate, raw, debounce } from '../../utils/helpers.js';
-import { SEARCH_SVG, POSTS_SVG, TAGS_SVG, SETTINGS_SVG, DASHBOARD_SVG } from '../../utils/icons.js';
-import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
+import { html, navigate, raw, debounce } from '../../utils/helpers.ts';
+import { SEARCH_SVG, POSTS_SVG, TAGS_SVG, SETTINGS_SVG, DASHBOARD_SVG } from '../../utils/icons.ts';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 
 const STATIC_PAGES = [
   { href: '/light', label: 'Dashboard', icon: DASHBOARD_SVG },
