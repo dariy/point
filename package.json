@@ -8,7 +8,7 @@
   },
   "scripts": {
     "lint": "./scripts/check.sh --lint",
-    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "typecheck": "tsc -p tsconfig.json",
     "build": "./scripts/rebuild.sh",
     "test": "./scripts/run-tests.sh",
     "test:frontend": "node --test frontend/test/*.test.js",

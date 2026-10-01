@@ -3,7 +3,7 @@
 // into index.html, and browser APIs missing from TypeScript's DOM lib.
 //
 // Kept as a .d.ts rather than JSDoc because there is no single JS file that
-// owns any of them. jsconfig.json includes frontend/types/**/*.d.ts.
+// owns any of them. tsconfig.json includes frontend/types/**/*.d.ts.
 
 /**
  * Substituted by esbuild's `--define:__DEBUG__=…` (scripts/build-js.sh). Absent

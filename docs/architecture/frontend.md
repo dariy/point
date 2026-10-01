@@ -1491,13 +1491,16 @@ changing the architecture.
 ### Typechecking the JSDoc
 
 ```bash
-npm run typecheck        # tsc --noEmit -p jsconfig.json
+npm run typecheck        # tsc -p tsconfig.json
 ```
 
 The JSDoc annotations across `frontend/src` are types, and this is what makes
-them binding. There are no `.ts` files and nothing is emitted — `tsc` reads the
-comments, and `jsconfig.json` sets `checkJs: true`, so **a new file is checked
-by default**. `scripts/check.sh` and CI both run it.
+them binding. `.ts` files in `frontend/src` are checked too. Nothing is
+emitted — Node and the bundler remove the types, so `tsconfig.json` allows only
+erasable syntax (`erasableSyntaxOnly`), type-only imports use `import type`
+(`verbatimModuleSyntax`), and an import names the real file, `./x.ts` or
+`./x.js` (`allowImportingTsExtensions`). `checkJs: true` is set, so **a new
+file is checked by default**. `scripts/check.sh` and CI both run it.
 
 Three things to know before adding annotations:
 

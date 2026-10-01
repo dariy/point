@@ -42,7 +42,7 @@ Read a file before you edit it — always.
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
-| Frontend typecheck | `npm run typecheck` — `tsc --noEmit` over the JSDoc types; no `.ts` files, no emit |
+| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over the JSDoc types and `.ts` files in `frontend/src`; no emit, erasable syntax only |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |

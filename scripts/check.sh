@@ -118,11 +118,11 @@ step_js_lint() {
 
 # The JSDoc annotations in frontend/src are types, and this is what makes them
 # binding: tsc with checkJs, no emit, no .ts files. Files not yet clean carry
-# `// @ts-nocheck` on line 1 — see jsconfig.json. Part of --lint, because a
+# `// @ts-nocheck` on line 1 — see tsconfig.json. Part of --lint, because a
 # broken annotation is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
-    node_modules/.bin/tsc --noEmit -p jsconfig.json
+    node_modules/.bin/tsc -p tsconfig.json
 }
 
 # What the AST rules in scripts/oxlint-point.mjs cannot see: hand-applied escapeHtml in
@@ -179,7 +179,7 @@ if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
         case "$f" in
             api/*|scripts/check-sql-layer.sh|scripts/coverage-gate.sh) go=1 ;;
-            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|.oxlintrc.json|jsconfig.json)
+            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|.oxlintrc.json|tsconfig.json)
                 js=1; e2e=1 ;;
             scripts/check-html-escaping.sh|scripts/check-vendor-sinks.sh) js=1 ;;
             scripts/run-e2e.sh|scripts/build-css.sh|scripts/build-js.sh) e2e=1 ;;
