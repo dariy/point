@@ -13,35 +13,34 @@
  *             already is the tree; in "none" mode there is nothing to show.
  */
 
-import { api } from './client.js';
+import { api } from './client.ts';
 import { getNavTags, setNavTags, setRootTags } from '../store.js';
 
 /**
  * One node of a nav tree — services.NavTagNode. `url` is set on an authored
  * custom link and absent on a tag.
- *
- * @typedef {object} NavTagNode
- * @property {number} id
- * @property {string} name
- * @property {string} slug
- * @property {string} [url]
- * @property {number} post_count
- * @property {boolean} is_related  A co-occurring tag under a show_related parent.
- * @property {boolean} show_in_ancestors
- * @property {NavTagNode[]} children
  */
+export interface NavTagNode {
+  id: number;
+  name: string;
+  slug: string;
+  url?: string;
+  post_count: number;
+  /** A co-occurring tag under a show_related parent. */
+  is_related: boolean;
+  show_in_ancestors: boolean;
+  children: NavTagNode[];
+}
 
 /**
  * Navigation menu: hierarchical tag tree scoped to the current user's auth
  * level. Guests receive only public/visible tags; admins receive all tags.
- *
- * @returns {Promise<{ menu: NavTagNode[], tags?: NavTagNode[] }>}
  */
-export function getNavMenu() {
+export function getNavMenu(): Promise<{ menu: NavTagNode[], tags?: NavTagNode[] }> {
   return api.get('/api/pages/nav');
 }
 
-let _inflight = null;
+let _inflight: Promise<void> | null = null;
 let _generation = 0;
 
 /**
@@ -49,11 +48,8 @@ let _generation = 0;
  * share one request and skip it entirely once the menu is loaded — mounting
  * both plugins on a page costs one fetch. `force` always refetches: the menu
  * is auth-scoped, so login/logout and menu edits must re-read it.
- *
- * @param {{ force?: boolean }} [opts]
- * @returns {Promise<void>}
  */
-export function loadNav({ force = false } = {}) {
+export function loadNav({ force = false }: { force?: boolean } = {}): Promise<void> {
   if (!force) {
     if (_inflight) return _inflight;
     if (getNavTags()) return Promise.resolve();

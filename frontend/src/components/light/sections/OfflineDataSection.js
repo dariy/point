@@ -5,7 +5,7 @@
  */
 
 import { Component } from "../../Component.js";
-import { getOfflineStats, getOfflineSnapshot } from "../../../api/offline.js";
+import { getOfflineStats, getOfflineSnapshot } from "../../../api/offline.ts";
 import { saveSnapshot, saveMeta, getMeta } from "../../../utils/offlineStore.js";
 import { preCacheImages, clearImageCache } from "../../../utils/imageCache.js";
 import { thumbUrl } from "../../../utils/mediaUrl.js";

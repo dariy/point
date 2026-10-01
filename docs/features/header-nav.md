@@ -67,7 +67,7 @@ back to `menu`). In `none` mode neither is offered — a menuless site stays
 menuless.
 
 The nav-menu plugin and the site crumb both load that payload through
-`frontend/src/api/nav.js`, which fetches once and publishes `navTags` (the menu)
+`frontend/src/api/nav.ts`, which fetches once and publishes `navTags` (the menu)
 and `rootTags` (the tree) to the store. The crumb reads the store at open time
 and re-renders when it lands, so neither surface depends on the other existing.
 

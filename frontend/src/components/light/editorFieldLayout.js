@@ -48,7 +48,7 @@ function readRaw(settingsKey, storageKey) {
 /** Write one preference to localStorage now and to the account settings when they answer. */
 function persistRaw(settingsKey, storageKey, raw, label) {
   try { localStorage.setItem(storageKey, raw); } catch { /* ignore */ }
-  import("../../api/settings.js").then(({ updateSettings }) => {
+  import("../../api/settings.ts").then(({ updateSettings }) => {
     updateSettings({ [settingsKey]: raw }).catch((err) => {
       console.error(`Failed to save ${label} to global set:`, err);
     });

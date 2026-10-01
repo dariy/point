@@ -21,7 +21,7 @@ describe('loadNav', () => {
         json: async () => respond(),
       };
     };
-    ({ loadNav } = await import('../src/api/nav.js'));
+    ({ loadNav } = await import('../src/api/nav.ts'));
     ({ getNavTags, getRootTags, setNavTags, setRootTags } = await import('../src/store.js'));
   });
 

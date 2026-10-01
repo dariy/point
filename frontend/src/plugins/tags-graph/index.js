@@ -15,7 +15,7 @@
 
 import { Component } from '../../components/Component.js';
 
-import { getTagsGraph } from '../../api/pages.js';
+import { getTagsGraph } from '../../api/pages.ts';
 import { getNavTags, getSettings } from '../../store.js';
 import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';

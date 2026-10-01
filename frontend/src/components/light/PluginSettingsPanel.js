@@ -16,7 +16,7 @@
 import { Component } from "../Component.js";
 import { GestureController } from "../../core/gestures.js";
 import { renderFields, collectUpdates } from "./settingsFields.js";
-import { updateSettings } from "../../api/settings.js";
+import { updateSettings } from "../../api/settings.ts";
 import { mergeSettings, setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.js";
@@ -48,9 +48,9 @@ const SECTIONS = {
  * @property {string} [title]  Heading shown in the drawer header.
  * @property {string[]|null} [keys]  Setting keys to render and collect.
  * @property {string[]|null} [sections]  Section keys to mount; see SECTIONS.
- * @property {import('../../api/settings.js').Settings} [settings]  Current
+ * @property {import('../../api/settings.ts').Settings} [settings]  Current
  *   settings map, for `keys`.
- * @property {Awaited<ReturnType<typeof import('../../api/instagram.js').getInstagramStatus>>|null} [igStatus]
+ * @property {Awaited<ReturnType<typeof import('../../api/instagram.ts').getInstagramStatus>>|null} [igStatus]
  *   Instagram connection status (instagram only).
  * @property {() => void} [onClose]  Tear-down callback.
  */
@@ -117,7 +117,7 @@ export class PluginSettingsPanel extends Component {
   /** Connect/disconnect block for the Instagram plugin (ported from SettingsPage). */
   _renderInstagramConnection() {
     const { settings, igStatus } = this.props;
-    // The wire map, so the flag is a string (see api/settings.js).
+    // The wire map, so the flag is a string (see api/settings.ts).
     const isEnabled =
       settings.enable_instagram === "true" ||
       settings.enable_instagram === "1";
@@ -279,7 +279,7 @@ export class PluginSettingsPanel extends Component {
 
   async _disconnectInstagram() {
     try {
-      const { disconnectInstagram } = await import("../../api/instagram.js");
+      const { disconnectInstagram } = await import("../../api/instagram.ts");
       await disconnectInstagram();
       setToast({ message: "Instagram disconnected.", type: "success" });
       this._close();

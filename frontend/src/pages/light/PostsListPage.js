@@ -10,7 +10,7 @@ import { TagsInput } from "../../components/light/TagsInput.js";
 import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
-import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.js";
+import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.ts";
 import { setToast } from "../../store.js";
 import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";

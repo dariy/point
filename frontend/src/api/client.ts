@@ -9,19 +9,20 @@
  *   - Global 401 → 'api:unauthorized' event (router can redirect to login)
  */
 
-/**
- * @typedef {Object} ApiError
- * @property {number}  status   HTTP status code
- * @property {string}  message  Human-readable error message
- */
-
 import { enqueue } from '../utils/mutationQueue.js';
 import { revelioHeaders } from '../utils/revelio.js';
 
+export interface ApiError {
+  /** HTTP status code */
+  status: number;
+  /** Human-readable error message */
+  message: string;
+}
+
 class ApiClient {
-  /**
-   * @param {string} base  Base URL prefix for all requests (e.g. '')
-   */
+  _base: string;
+
+  /** @param base - Base URL prefix for all requests (e.g. '') */
   constructor(base = '') {
     this._base = base;
   }
@@ -34,18 +35,12 @@ class ApiClient {
    *
    * The response shape is whatever the endpoint sends, so `T` is chosen by the
    * caller — the per-endpoint wrappers in this directory declare it through
-   * their own `@returns`, and it falls back to `unknown` when nobody does.
-   *
-   * @template [T=unknown]
-   * @param {string} path
-   * @param {RequestInit} [init]
-   * @returns {Promise<T>}
+   * their own return types, and it falls back to `unknown` when nobody does.
    */
-  async request(path, init = {}) {
+  async request<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
     const url = this._base + path;
 
-    /** @type {RequestInit} */
-    const opts = {
+    const opts: RequestInit = {
       credentials: 'include',
       headers: {
         Accept: 'application/json',
@@ -107,12 +102,12 @@ class ApiClient {
    * string: the values it carries — media paths, say — may contain whatever
    * separator we would have joined on.
    *
-   * @template [T=unknown]
-   * @param {string} path
-   * @param {Record<string,string|number|boolean|(string|number)[]>} [params]  Query parameters
-   * @returns {Promise<T>}
+   * @param params - Query parameters
    */
-  get(path, params) {
+  get<T = unknown>(
+    path: string,
+    params?: Record<string, string | number | boolean | (string | number)[]>,
+  ): Promise<T> {
     let query;
     if (params) {
       query = new URLSearchParams();
@@ -127,14 +122,8 @@ class ApiClient {
     return this.request(url, { method: 'GET' });
   }
 
-  /**
-   * POST request with JSON body.
-   * @template [T=unknown]
-   * @param {string} path
-   * @param {unknown} [body]
-   * @returns {Promise<T>}
-   */
-  post(path, body) {
+  /** POST request with JSON body. */
+  post<T = unknown>(path: string, body?: unknown): Promise<T> {
     if (!navigator.onLine && path.startsWith('/api/') && !path.includes('/auth/')) {
       return enqueue('POST', path, body);
     }
@@ -145,14 +134,8 @@ class ApiClient {
     });
   }
 
-  /**
-   * PUT request with JSON body.
-   * @template [T=unknown]
-   * @param {string} path
-   * @param {unknown} [body]
-   * @returns {Promise<T>}
-   */
-  put(path, body) {
+  /** PUT request with JSON body. */
+  put<T = unknown>(path: string, body?: unknown): Promise<T> {
     if (!navigator.onLine && path.startsWith('/api/')) {
       return enqueue('PUT', path, body);
     }
@@ -163,14 +146,8 @@ class ApiClient {
     });
   }
 
-  /**
-   * PATCH request with JSON body.
-   * @template [T=unknown]
-   * @param {string} path
-   * @param {unknown} [body]
-   * @returns {Promise<T>}
-   */
-  patch(path, body) {
+  /** PATCH request with JSON body. */
+  patch<T = unknown>(path: string, body?: unknown): Promise<T> {
     if (!navigator.onLine && path.startsWith('/api/')) {
       return enqueue('PATCH', path, body);
     }
@@ -181,13 +158,8 @@ class ApiClient {
     });
   }
 
-  /**
-   * DELETE request.
-   * @template [T=null]
-   * @param {string} path
-   * @returns {Promise<T>}
-   */
-  delete(path) {
+  /** DELETE request. */
+  delete<T = null>(path: string): Promise<T> {
     if (!navigator.onLine && path.startsWith('/api/')) {
       return enqueue('DELETE', path);
     }
@@ -197,13 +169,8 @@ class ApiClient {
   /**
    * POST with a FormData body (file uploads). No Content-Type header —
    * the browser sets the correct multipart boundary automatically.
-   *
-   * @template [T=unknown]
-   * @param {string} path
-   * @param {FormData} formData
-   * @returns {Promise<T>}
    */
-  upload(path, formData) {
+  upload<T = unknown>(path: string, formData: FormData): Promise<T> {
     if (!navigator.onLine && path.startsWith('/api/')) {
       // For uploads, we expect a single 'file' field for now in offline mode
       const file = formData.get('file');

@@ -1,7 +1,7 @@
 /**
  * Offline API client for Point.
  */
-import { api } from './client.js';
+import { api } from './client.ts';
 
 /**
  * Get offline stats from the server.

@@ -57,7 +57,7 @@ let drawerOpen = false;
  * @typedef {object} PublicFooterProps
  * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
  *   settings; reads blog_title and author_name.
- * @property {import('../../api/posts.js').PostTag[]} [immersiveTags]  When
+ * @property {import('../../api/posts.ts').PostTag[]} [immersiveTags]  When
  *   non-empty, the footer renders them as the immersive tag bar in place of
  *   the pagination slot.
  */
@@ -221,7 +221,7 @@ export class PublicFooter extends Component {
 
     this.$("#footer-logout")?.addEventListener("click", async () => {
       try {
-        const { logout } = await import("../../api/auth.js");
+        const { logout } = await import("../../api/auth.ts");
         await logout();
       } catch {
         /* ignore */
@@ -265,8 +265,8 @@ export class PublicFooter extends Component {
     }
 
     const [{ clearPostReadCache }, { loadNav }, { router }] = await Promise.all([
-      import("../../api/posts.js"),
-      import("../../api/nav.js"),
+      import("../../api/posts.ts"),
+      import("../../api/nav.ts"),
       import("../../router.js"),
     ]);
     clearPostReadCache(); // post reads *and* the list pages behind them

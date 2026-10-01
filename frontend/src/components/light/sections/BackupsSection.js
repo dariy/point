@@ -9,9 +9,9 @@
  */
 
 import { Component } from "../../Component.js";
-import { getHealth, listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer } from "../../../api/system.js";
-import { sha256 } from "../../../api/auth.js";
-import { getAllSettings, updateSettings } from "../../../api/settings.js";
+import { getHealth, listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer } from "../../../api/system.ts";
+import { sha256 } from "../../../api/auth.ts";
+import { getAllSettings, updateSettings } from "../../../api/settings.ts";
 import { setToast } from "../../../store.js";
 import { html, setHTML, raw } from "../../../utils/helpers.js";
 import { formatFileSize } from "../../../utils/formatters.js";
@@ -19,7 +19,7 @@ import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../..
 import { showConfirm, showPrompt } from "../../../utils/dialogs.js";
 import { GestureController } from "../../../core/gestures.js";
 
-/** @typedef {import('../../../api/settings.js').Settings} Settings */
+/** @typedef {import('../../../api/settings.ts').Settings} Settings */
 
 export class BackupsSection extends Component {
   constructor(container, props = {}) {

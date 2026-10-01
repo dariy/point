@@ -12,7 +12,7 @@ import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.js";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.js";
 import { getNavTags, getSettings, getUser } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { getPostPageLocation } from "../../api/posts.js";
+import { getPostPageLocation } from "../../api/posts.ts";
 import { ViewContext } from "../../utils/viewContext.js";
 import { cachedPerPage } from "../../utils/gridFit.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
@@ -108,10 +108,10 @@ export function shouldUseImmersive(post) {
 
 /**
  * @typedef {object} PostContentProps
- * @property {import('../../api/posts.js').Post} [post]  Full post from
+ * @property {import('../../api/posts.ts').Post} [post]  Full post from
  *   GET /api/posts/slug/:slug.
- * @property {import('../../api/posts.js').PostStub|null} [prevPost]
- * @property {import('../../api/posts.js').PostStub|null} [nextPost]
+ * @property {import('../../api/posts.ts').PostStub|null} [prevPost]
+ * @property {import('../../api/posts.ts').PostStub|null} [nextPost]
  * @property {boolean} [forceImmersive]  Show the viewer even for a post that
  *   would read as an article (header expand, image click, #N link).
  * @property {number} [startIndex]  Slide the viewer opens on.

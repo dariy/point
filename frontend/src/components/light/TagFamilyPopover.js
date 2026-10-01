@@ -1,5 +1,5 @@
 import { Component } from '../Component.js';
-import { getTag } from '../../api/tags.js';
+import { getTag } from '../../api/tags.ts';
 import { html, navigate } from '../../utils/helpers.js';
 
 /**

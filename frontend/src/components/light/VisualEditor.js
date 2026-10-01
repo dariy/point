@@ -4,7 +4,7 @@
 
 import { Component } from "../Component.js";
 import { html } from "../../utils/helpers.js";
-import { updateMedia, reextractMediaEXIF } from "../../api/media.js";
+import { updateMedia, reextractMediaEXIF } from "../../api/media.ts";
 import { setToast } from "../../store.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
@@ -19,7 +19,7 @@ const VE_THUMB_SIZES = "80px";
  * @typedef {object} VisualEditorProps
  * @property {import('../../utils/postNodes.js').EditorNode[]} [nodes]  The
  *   document, in order. Text edits are written into these nodes in place.
- * @property {Record<string, import('../../api/media.js').Media>} [mediaByPath]
+ * @property {Record<string, import('../../api/media.ts').Media>} [mediaByPath]
  *   Media records keyed by path, for each image card's EXIF panel.
  * @property {(nodes: import('../../utils/postNodes.js').EditorNode[]) => void} [onChange]
  *   Called with the new list on any structural change.

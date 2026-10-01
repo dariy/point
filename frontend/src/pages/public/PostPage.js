@@ -8,7 +8,7 @@
 import { Component } from '../../components/Component.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
-import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
+import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
 import { getNavTags, getSettings } from '../../store.js';
 import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';

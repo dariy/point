@@ -56,9 +56,9 @@ demo/
   .media-cache/   transcoded media, reused across builds (gitignored)
 ```
 
-The interception point is the **platform**, not `frontend/src/api/client.js`.
+The interception point is the **platform**, not `frontend/src/api/client.ts`.
 That module is not the only caller: `router.js` fetches `/api/setup/status` on
-every `/light` navigation, `api/system.js` uploads over `XMLHttpRequest`,
+every `/light` navigation, `api/system.ts` uploads over `XMLHttpRequest`,
 `BackupsSection.js` fetches the version endpoint directly, and the comments
 plugin calls `api.*` without going through `frontend/src/api/`. Patching `fetch`
 and `XMLHttpRequest` catches all of them — including any added later — and leaves

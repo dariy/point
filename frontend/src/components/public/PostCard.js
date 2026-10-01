@@ -26,7 +26,7 @@ let touchPreview = null;
 
 /**
  * @typedef {object} PostCardProps
- * @property {import('../../api/posts.js').Post} [post]  A post list item.
+ * @property {import('../../api/posts.ts').Post} [post]  A post list item.
  * @property {boolean} [showViewCount]  From settings.show_view_counts.
  * @property {boolean} [isHero]  The first featured post, in the hero slot.
  * @property {string} [tagSlug]  The tag archive the card sits in, if any —

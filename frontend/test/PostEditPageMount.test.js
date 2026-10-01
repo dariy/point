@@ -28,7 +28,7 @@ import {
   setUser,
 } from '../src/store.js';
 import { pluginHost } from '../src/core/pluginHost.js';
-import { clearPostReadCache } from '../src/api/posts.js';
+import { clearPostReadCache } from '../src/api/posts.ts';
 
 const settle = () => new Promise(r => setImmediate(r));
 

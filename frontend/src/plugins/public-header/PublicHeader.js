@@ -8,8 +8,8 @@ import { SiteCrumb } from '../../components/public/SiteCrumb.js';
 import { getSettings, getTheme, getUser, setTheme } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.js';
-import { listPosts } from '../../api/posts.js';
-import { listTags } from '../../api/tags.js';
+import { listPosts } from '../../api/posts.ts';
+import { listTags } from '../../api/tags.ts';
 import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { hideFlyout } from '../../utils/tagFlyout.js';
@@ -40,7 +40,7 @@ const TYPEAHEAD_TAGS = 5;
  * @property {import('../../utils/helpers.js').StoreSettings} [settings]  Public
  *   settings; reads blog_title, blog_subtitle and logo_url.
  * @property {string} [currentPath]  Current pathname, for active nav highlighting.
- * @property {import('../../api/nav.js').NavTagNode[]} [navTags]  Nav tag tree,
+ * @property {import('../../api/nav.ts').NavTagNode[]} [navTags]  Nav tag tree,
  *   for the crumbs' child dropdowns.
  * @property {string} [currentTagSlug]  Active tag, for the flyout highlight.
  * @property {HeaderCrumb[]} [breadcrumb]  Tag-ancestry crumbs.

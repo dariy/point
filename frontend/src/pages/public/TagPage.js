@@ -20,8 +20,8 @@ import {
 } from "../../components/public/PostContent.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { pluginHost } from "../../core/pluginHost.js";
-import { getTagPage } from "../../api/pages.js";
-import { getPostBySlug, getPostNavigation } from "../../api/posts.js";
+import { getTagPage } from "../../api/pages.ts";
+import { getPostBySlug, getPostNavigation } from "../../api/posts.ts";
 import {
   getNavTags,
   getSettings,

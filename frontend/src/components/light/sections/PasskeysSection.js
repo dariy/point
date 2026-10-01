@@ -5,7 +5,7 @@
  */
 
 import { Component } from "../../Component.js";
-import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.js";
+import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.ts";
 import { setToast } from "../../../store.js";
 import { showConfirm } from "../../../utils/dialogs.js";
 import { html } from "../../../utils/helpers.js";

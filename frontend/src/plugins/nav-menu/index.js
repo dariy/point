@@ -1,5 +1,5 @@
 import { onUser } from '../../store.js';
-import { loadNav } from '../../api/nav.js';
+import { loadNav } from '../../api/nav.ts';
 import { NavMenu } from './NavMenu.js';
 import MenuPage from './MenuPage.js';
 

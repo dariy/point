@@ -22,7 +22,7 @@ export class RebuildThumbnailsSection extends Component {
         const ogText = btn.textContent;
         btn.textContent = "Rebuilding…";
         try {
-          const { rebuildThumbnails } = await import('../../../api/media.js');
+          const { rebuildThumbnails } = await import('../../../api/media.ts');
           const res = await rebuildThumbnails();
           setToast({ message: res.message || "Thumbnails rebuilt.", type: "success" });
         } catch (err) {

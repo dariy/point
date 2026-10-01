@@ -1,8 +1,8 @@
 import { Component } from "../../components/Component.js";
 import { html } from "../../utils/helpers.js";
 import { usernameHintField } from "../../utils/passwordForm.js";
-import { sha256 } from "../../api/auth.js";
-import { api } from "../../api/client.js";
+import { sha256 } from "../../api/auth.ts";
+import { api } from "../../api/client.ts";
 
 export default class PasswordResetPage extends Component {
   constructor(container, props = {}) {

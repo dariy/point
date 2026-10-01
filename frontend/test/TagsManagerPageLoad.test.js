@@ -14,7 +14,7 @@
  * opens a create form where they expected to edit.
  *
  * These tests mount the real page against the real admin layout and assert on
- * the requests leaving api/client.js. Nothing between the click and fetch is
+ * the requests leaving api/client.ts. Nothing between the click and fetch is
  * stubbed.
  */
 

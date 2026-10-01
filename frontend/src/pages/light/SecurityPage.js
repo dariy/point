@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
   changePassword, changeEmail, getMe
-} from '../../api/auth.js';
+} from '../../api/auth.ts';
 import { setToast } from '../../store.js';
 import { html } from '../../utils/helpers.js';
 import { usernameHintField } from '../../utils/passwordForm.js';

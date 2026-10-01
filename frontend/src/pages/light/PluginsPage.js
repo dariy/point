@@ -31,9 +31,9 @@
 
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
-import { getPlugins, setPluginEnabled, getPresets, updatePreset, applyPreset } from "../../api/plugins.js";
-import { getAllSettings } from "../../api/settings.js";
-import { getInstagramStatus } from "../../api/instagram.js";
+import { getPlugins, setPluginEnabled, getPresets, updatePreset, applyPreset } from "../../api/plugins.ts";
+import { getAllSettings } from "../../api/settings.ts";
+import { getInstagramStatus } from "../../api/instagram.ts";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { setPluginToggled, setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";

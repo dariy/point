@@ -13,7 +13,7 @@ import { Component } from '../../components/Component.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 
 import { Pagination } from '../../components/shared/Pagination.js';
-import { getHomePage } from '../../api/pages.js';
+import { getHomePage } from '../../api/pages.ts';
 import { pluginHost } from '../../core/pluginHost.js';
 import {
   getNavTags,

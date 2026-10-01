@@ -23,7 +23,7 @@ import {
   getJobs,
   retryJob,
   clearFailedJobs,
-} from "../../api/system.js";
+} from "../../api/system.ts";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { formatFileSize } from "../../utils/formatters.js";

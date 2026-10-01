@@ -23,10 +23,10 @@ import {
   setUser,
 } from "./store.js";
 import { router } from "./router.js";
-import { getMe } from "./api/auth.js";
-import { getPublicSettings } from "./api/settings.js";
+import { getMe } from "./api/auth.ts";
+import { getPublicSettings } from "./api/settings.ts";
 
-import { getVersion } from "./api/system.js";
+import { getVersion } from "./api/system.ts";
 import { normalizeSettings } from "./utils/helpers.js";
 import { setPageTitle } from "./utils/documentTitle.js";
 import { pluginHost } from "./core/pluginHost.js";

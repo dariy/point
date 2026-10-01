@@ -2,7 +2,7 @@
  * tagFlows — the tags manager's Move…, Merge…, drop-on and bulk operations.
  *
  * These are the mutating paths, so the tests assert on the requests that leave
- * api/client.js rather than on anything in between: nothing is stubbed below
+ * api/client.ts rather than on anything in between: nothing is stubbed below
  * fetch. What matters about each flow is which calls it makes, in what order,
  * and what it tells the user when one of them fails — a Move… that skips
  * setTagParents silently orders a tag into a group it does not belong to, and

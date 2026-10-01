@@ -235,7 +235,7 @@ function keyed(key) {
 
 /** The authenticated user, or null when signed out. */
 export const { get: getUser, set: setUser, on: onUser } =
-  /** @type {Keyed<import('./api/auth.js').User|null>} */ (keyed('user'));
+  /** @type {Keyed<import('./api/auth.ts').User|null>} */ (keyed('user'));
 
 /**
  * Public blog settings from /api/settings/public, normalized.
@@ -279,15 +279,15 @@ export const { get: getAutosaveStatus, set: setAutosaveStatus, on: onAutosaveSta
 
 /** Tags shown in the public nav, from /api/nav. */
 export const { get: getNavTags, set: setNavTags, on: onNavTags } =
-  /** @type {Keyed<import('./api/nav.js').NavTagNode[]>} */ (keyed('navTags'));
+  /** @type {Keyed<import('./api/nav.ts').NavTagNode[]>} */ (keyed('navTags'));
 
 /** Root tags, used by the breadcrumb to name the top level. */
 export const { get: getRootTags, set: setRootTags, on: onRootTags } =
-  /** @type {Keyed<import('./api/nav.js').NavTagNode[]>} */ (keyed('rootTags'));
+  /** @type {Keyed<import('./api/nav.ts').NavTagNode[]>} */ (keyed('rootTags'));
 
 /** Home page tag cloud, cached so a return visit renders at once. */
 export const { get: getTagCloudCache, set: setTagCloudCache } =
-  /** @type {Keyed<import('./api/pages.js').TagCloudItem[]|null>} */ (keyed('tagCloud'));
+  /** @type {Keyed<import('./api/pages.ts').TagCloudItem[]|null>} */ (keyed('tagCloud'));
 
 /** {string} Latest known app version, for the sidebar's update hint. */
 export const { get: getAppVersion, set: setAppVersion, on: onAppVersion } = keyed('version');

@@ -5,9 +5,9 @@
  * API call is answered from the in-memory store and the demo needs no backend
  * at all.
  *
- * Why here rather than swapping frontend/src/api/client.js: that module is not
+ * Why here rather than swapping frontend/src/api/client.ts: that module is not
  * the only caller. router.js fetches /api/setup/status on every /light
- * navigation, api/system.js uploads over XHR, BackupsSection fetches the
+ * navigation, api/system.ts uploads over XHR, BackupsSection fetches the
  * version endpoint directly, and the comments plugin calls `api.*` without
  * going through frontend/src/api/. Patching the platform catches all of them —
  * including any added later — and leaves the real client.js on the code path,
@@ -270,7 +270,7 @@ window.fetch = async function mockFetch(input, init = {}) {
 
 // ── XMLHttpRequest ────────────────────────────────────────────────────────
 //
-// Only api/system.js uses XHR (backup upload, for its progress events). The
+// Only api/system.ts uses XHR (backup upload, for its progress events). The
 // shim implements enough of the interface for that path — readyState/status/
 // responseText plus load and progress events — and delegates anything it does
 // not own to the real implementation.

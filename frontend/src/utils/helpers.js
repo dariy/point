@@ -232,7 +232,7 @@ export function removeCanonical() {
  * type follows its key's name: `*per_page` and `*posts_to_show` are numbers,
  * anything containing `enable` or `show` is a boolean, the rest stay strings.
  * The key decides, which a plain index signature cannot say, so the value
- * type is left to the reader; the wire form is api/settings.js's Settings.
+ * type is left to the reader; the wire form is api/settings.ts's Settings.
  *
  * @typedef {Record<string, any>} StoreSettings
  */

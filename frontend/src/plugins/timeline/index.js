@@ -1,5 +1,5 @@
 import { Component } from "../../components/Component.js";
-import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
+import { getTimeline, getTimelineLocations } from "../../api/timeline.ts";
 import { GestureController } from "../../core/gestures.js";
 import { renderTagLink } from "../../utils/tagLinks.js";
 import { html, setHTML } from "../../utils/helpers.js";

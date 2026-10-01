@@ -11,7 +11,7 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { login, loginWithPasskey } from '../../api/auth.js';
+import { login, loginWithPasskey } from '../../api/auth.ts';
 import { getUser, setUser } from '../../store.js';
 import { html, navigate } from '../../utils/helpers.js';
 import { usernameHintField } from '../../utils/passwordForm.js';
@@ -19,7 +19,7 @@ import { usernameHintField } from '../../utils/passwordForm.js';
 /**
  * @typedef {import('../../router.js').PageProps & {
  *   next?: string,
- *   onSuccess?: (user: import('../../api/auth.js').User) => unknown,
+ *   onSuccess?: (user: import('../../api/auth.ts').User) => unknown,
  *   onCancel?: () => unknown,
  * }} LoginPageProps
  */

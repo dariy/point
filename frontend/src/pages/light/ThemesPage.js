@@ -6,7 +6,7 @@
 
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
-import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
+import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.ts";
 import { setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { STAR_SVG, MOON_SVG } from "../../utils/icons.js";

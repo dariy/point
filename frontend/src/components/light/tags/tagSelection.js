@@ -187,7 +187,7 @@ function bindRowGestures(container, { state, enterWith, toggleSelected }) {
  * @param {Element} container
  * @param {object}  opts
  * @param {() => {selectMode:boolean, selectedIds:Set<number>,
- *                tags:import('../../../api/tags.js').Tag[], view:string,
+ *                tags:import('../../../api/tags.ts').Tag[], view:string,
  *                listView:{search?:string, filterParents?:Array<{id:number}>}}} opts.state
  *   Read fresh on every event, never captured — see the file header.
  * @param {(selectMode:boolean, selectedIds:Set<number>) => void} opts.onModeChange

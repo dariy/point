@@ -40,7 +40,7 @@ import { thumbSrcset } from '../utils/mediaUrl.js';
 import { dropBrokenImages } from '../utils/helpers.js';
 import { flipGrid } from '../utils/gridFlip.js';
 
-/** @typedef {import('../api/posts.js').Post} Post */
+/** @typedef {import('../api/posts.ts').Post} Post */
 /** @typedef {import('../components/public/PostCard.js').PostCardProps} PostCardProps */
 export class GridPager {
   /**

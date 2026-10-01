@@ -19,7 +19,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { hideFlyout } from '../../utils/tagFlyout.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
+import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
 import { mediaFromHtml } from '../../utils/postMedia.js';
 import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.js';
 import { immersiveNavTargets } from '../../utils/immersiveNav.js';
@@ -32,18 +32,18 @@ let _suppressNextFadeIn = false;
 /**
  * @typedef {object} MediaViewerProps
  * @property {import('../../utils/postMedia.js').MediaItem[]} [items]  Slides.
- * @property {import('../../api/posts.js').PostMediaRef[]} [media]  The post's
+ * @property {import('../../api/posts.ts').PostMediaRef[]} [media]  The post's
  *   media records, for the per-slide EXIF panel.
  * @property {number} [startIndex]
  * @property {boolean} [showClose]
  * @property {boolean} [showShare]  On unless exactly false.
  * @property {() => void} [onClose]
  * @property {(index: number) => void} [onStep]
- * @property {import('../../api/posts.js').PostStub|null} [navPrev]  Older post,
+ * @property {import('../../api/posts.ts').PostStub|null} [navPrev]  Older post,
  *   for cross-post navigation.
- * @property {import('../../api/posts.js').PostStub|null} [navNext]  Newer post.
+ * @property {import('../../api/posts.ts').PostStub|null} [navNext]  Newer post.
  * @property {boolean} [sheetMode]
- * @property {import('../../api/posts.js').Post} [post]  Read only by
+ * @property {import('../../api/posts.ts').Post} [post]  Read only by
  *   ImmersiveSheetViewer, which renders the post's details in its sheet.
  * @property {string} [editUrl]  Read only by ImmersiveSheetViewer.
  */

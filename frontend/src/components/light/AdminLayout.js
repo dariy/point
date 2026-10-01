@@ -97,7 +97,7 @@ export function setupAdminLayout(component, {
     try {
       const {
         logout
-      } = await import("../../api/auth.js");
+      } = await import("../../api/auth.ts");
       await logout();
     } catch {
       /* ignore */

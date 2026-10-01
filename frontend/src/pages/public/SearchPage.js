@@ -14,8 +14,8 @@
 import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
 import { Pagination } from '../../components/shared/Pagination.js';
-import { listPosts } from '../../api/posts.js';
-import { listTags } from '../../api/tags.js';
+import { listPosts } from '../../api/posts.ts';
+import { listTags } from '../../api/tags.ts';
 import { getNavTags, getSettings, setPagination } from '../../store.js';
 import { html, setHTML } from '../../utils/helpers.js';
 import { GridPager } from '../../core/gridPager.js';

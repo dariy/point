@@ -1,7 +1,7 @@
 import { Component } from '../../components/Component.js';
 import { html, raw } from '../../utils/helpers.js';
-import { api } from '../../api/client.js';
-import { sha256 } from '../../api/auth.js';
+import { api } from '../../api/client.ts';
+import { sha256 } from '../../api/auth.ts';
 import { APP_LOGO_SVG } from '../../utils/icons.js';
 
 /**

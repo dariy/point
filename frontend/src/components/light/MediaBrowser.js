@@ -16,11 +16,11 @@ import { Pagination } from "../shared/Pagination.js";
 import { MediaLightbox } from "../public/MediaLightbox.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { PromptDialog } from "../shared/PromptDialog.js";
-import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.js";
+import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.js";
 import { MediaPager } from "../../core/mediaPager.js";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.js";
-import { listPosts } from "../../api/posts.js";
+import { listPosts } from "../../api/posts.ts";
 import { setToast } from "../../store.js";
 import { html, setHTML, navigate, raw } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
@@ -68,7 +68,7 @@ export class MediaBrowser extends Component {
     // own dismiss gestures, and its host page has arrow keys of its own.
     this._pager = this.props.pickerMode ? null : this._makePager();
     // Picker mode: persists selected media objects across page/folder changes
-    /** @type {Record<number, import('../../api/media.js').Media>} */
+    /** @type {Record<number, import('../../api/media.ts').Media>} */
     this._selectedItemsById = {};
   }
 
@@ -1104,7 +1104,7 @@ export class MediaBrowser extends Component {
   /**
    * Returns the currently selected media objects (picker mode only).
    * Persists across page and folder changes.
-   * @returns {import('../../api/media.js').Media[]}
+   * @returns {import('../../api/media.ts').Media[]}
    */
   getSelectedItems() {
     return Object.values(this._selectedItemsById);

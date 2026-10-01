@@ -536,7 +536,7 @@ template escapes every interpolation on the way through, and
 import { Component } from '../../components/Component.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { html } from '../../utils/helpers.js';
-import { pagesApi } from '../../api/pages.js';
+import { pagesApi } from '../../api/pages.ts';
 
 export class HomePage extends Component {
   // props: {} (no external props)
@@ -797,7 +797,7 @@ export class Router {
 // frontend/src/app.js
 import { Router } from './router.js';
 import { store } from './store.js';
-import { authApi } from './api/auth.js';
+import { authApi } from './api/auth.ts';
 
 const router = new Router(document.getElementById('app'));
 
@@ -962,7 +962,7 @@ rather than growing wherever a template literal happens to be written.
 ### 5.1 — Base Client
 
 ```javascript
-// frontend/src/api/client.js
+// frontend/src/api/client.ts
 
 export class ApiError extends Error {
   constructor(status, data) {
@@ -1026,7 +1026,7 @@ export const api = {
 Each module mirrors its backend router:
 
 ```javascript
-// frontend/src/api/posts.js
+// frontend/src/api/posts.ts
 import { api } from './client.js';
 
 export const postsApi = {
@@ -1043,7 +1043,7 @@ export const postsApi = {
 ```
 
 ```javascript
-// frontend/src/api/pages.js
+// frontend/src/api/pages.ts
 import { api } from './client.js';
 
 export const pagesApi = {

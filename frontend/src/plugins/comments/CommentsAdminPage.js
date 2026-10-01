@@ -8,7 +8,7 @@ import {
   setupAdminLayout,
 } from "../../components/light/AdminLayout.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
-import { api } from "../../api/client.js";
+import { api } from "../../api/client.ts";
 import { setToast } from "../../store.js";
 import { html, parseMarkup, raw } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";

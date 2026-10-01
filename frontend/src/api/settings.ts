@@ -4,37 +4,30 @@
  * Backend prefix: /api/settings
  */
 
-import { api } from './client.js';
+import { api } from './client.ts';
 
 /**
  * The settings map. Every value is a string on the wire — the store is a
  * key/value table — so a boolean arrives as "true"/"false" and a number as its
  * digits, and each reader parses what it needs.
- *
- * @typedef {Record<string, string>} Settings
  */
+export type Settings = Record<string, string>;
 
-/**
- * Get public blog settings (no auth required).
- * @returns {Promise<Settings>}
- */
-export function getPublicSettings() {
+/** Get public blog settings (no auth required). */
+export function getPublicSettings(): Promise<Settings> {
   return api.get('/api/settings/public');
 }
 
-/**
- * Get all settings (admin, requires auth).
- * @returns {Promise<Settings>}
- */
-export function getAllSettings() {
+/** Get all settings (admin, requires auth). */
+export function getAllSettings(): Promise<Settings> {
   return api.get('/api/settings');
 }
 
 /**
  * Update settings (admin, requires auth).
- * @param {Settings} data  Key-value setting pairs
- * @returns {Promise<Settings>}
+ *
+ * @param data - Key-value setting pairs
  */
-export function updateSettings(data) {
+export function updateSettings(data: Settings): Promise<Settings> {
   return api.put('/api/settings', data);
 }

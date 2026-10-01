@@ -21,10 +21,10 @@ import { Component } from '../Component.js';
 import { setToast } from '../../store.js';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.js';
 
-import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.js';
+import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.ts';
 /**
  * @typedef {object} PhotoLibraryPickerDialogProps
- * @property {(result: Awaited<ReturnType<typeof import('../../api/system.js').importSelectedPhotos>>) => void} [onImport]
+ * @property {(result: Awaited<ReturnType<typeof import('../../api/system.ts').importSelectedPhotos>>) => void} [onImport]
  *   Called with the import summary.
  */
 

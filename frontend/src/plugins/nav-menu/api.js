@@ -1,6 +1,6 @@
-import { api } from '../../api/client.js';
+import { api } from '../../api/client.ts';
 
-/** @typedef {import('../../api/nav.js').NavTagNode} NavTagNode */
+/** @typedef {import('../../api/nav.ts').NavTagNode} NavTagNode */
 
 /**
  * Admin: get current nav menu config (mode + custom items).

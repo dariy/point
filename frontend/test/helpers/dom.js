@@ -64,7 +64,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
     if (win[k]) def(k, win[k]);
   }
 
-  // api/client.js routes every mutating call through the offline mutation
+  // api/client.ts routes every mutating call through the offline mutation
   // queue (IndexedDB) when `navigator.onLine` is falsy. Node's `navigator`
   // exists but has no `onLine`, so without this the harness would silently
   // send nothing over fetch and hang on a database no test provides.

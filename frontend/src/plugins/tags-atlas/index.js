@@ -16,7 +16,7 @@
 import { Component } from "../../components/Component.js";
 
 import { pluginHost } from "../../core/pluginHost.js";
-import { getTagsGraph, getTagCloud, getTagPage } from "../../api/pages.js";
+import { getTagsGraph, getTagCloud, getTagPage } from "../../api/pages.ts";
 import { getSettings, getUser } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { setPageTitle } from "../../utils/documentTitle.js";
@@ -99,9 +99,9 @@ const DESKTOP_QUERY = "(min-width: 64em)";
  * Markup for the side panel's content: the place name, its post count, one row
  * per post that the active filters keep, and a "more" button while pages remain.
  *
- * @param {{tag: {name: string}, posts: import("../../api/posts.js").Post[], page: number, pages: number,
+ * @param {{tag: {name: string}, posts: import("../../api/posts.ts").Post[], page: number, pages: number,
  *   total: number|null, loading: boolean, error: string|null}} panel
- * @param {(post: import("../../api/posts.js").Post) => boolean} skip  true for a post the filters drop
+ * @param {(post: import("../../api/posts.ts").Post) => boolean} skip  true for a post the filters drop
  */
 export function panelHtml(panel, skip = () => false) {
   const rows = panel.posts.filter((p) => !skip(p));

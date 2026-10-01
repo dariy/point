@@ -21,7 +21,7 @@ import { html, raw } from "../../utils/helpers.js";
 
 /**
  * @typedef {object} MediaPickerDialogProps
- * @property {(items: import('../../api/media.js').Media[]) => void} [onConfirm]
+ * @property {(items: import('../../api/media.ts').Media[]) => void} [onConfirm]
  *   Called with the chosen media; open() can override it per opening.
  */
 

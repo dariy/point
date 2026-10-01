@@ -16,7 +16,7 @@
 import { Component } from '../Component.js';
 import { getRootTags, onRootTags } from '../../store.js';
 import { html, navigate } from '../../utils/helpers.js';
-import { loadNav } from '../../api/nav.js';
+import { loadNav } from '../../api/nav.ts';
 import { tagHref } from '../../utils/tagLinks.js';
 import { attachFlyoutTrigger, hideFlyoutWithin } from '../../utils/tagFlyout.js';
 

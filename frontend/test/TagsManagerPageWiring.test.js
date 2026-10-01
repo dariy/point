@@ -17,7 +17,7 @@
  *     since the public nav is built from the same hierarchy the flow just moved.
  *
  * The page is mounted for real, against the real admin layout, and asserts on
- * the requests leaving api/client.js.
+ * the requests leaving api/client.ts.
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';

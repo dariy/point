@@ -12,7 +12,7 @@ import { ViewContext } from "../../utils/viewContext.js";
 
 /**
  * @typedef {object} ExploreBlockProps
- * @property {import('../../api/pages.js').TagCloudItem[]} [tags]
+ * @property {import('../../api/pages.ts').TagCloudItem[]} [tags]
  */
 
 /** @extends {Component<ExploreBlockProps>} */

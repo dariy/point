@@ -8,7 +8,7 @@
  */
 
 import { Component } from "../../Component.js";
-import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.js";
+import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.ts";
 import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";

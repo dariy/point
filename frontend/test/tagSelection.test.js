@@ -6,7 +6,7 @@
  * would test nothing: every selector here is one the page depends on.
  *
  * The bulk actions are driven through their real buttons and asserted on the
- * requests leaving api/client.js — nothing between the click and fetch is
+ * requests leaving api/client.ts — nothing between the click and fetch is
  * stubbed. What the page itself would do next (re-render, reload) arrives as
  * onModeChange / onBulkDone, which is exactly the boundary the module owns.
  */

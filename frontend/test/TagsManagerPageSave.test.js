@@ -9,7 +9,7 @@
  *
  * The tests drive the real modal — _openModal renders the real editor form and
  * wires the real submit handler — and assert on the HTTP requests that leave
- * api/client.js. Nothing between the click and fetch is stubbed.
+ * api/client.ts. Nothing between the click and fetch is stubbed.
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';

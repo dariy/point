@@ -12,9 +12,9 @@ import { TagsInput } from "../../components/light/TagsInput.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
 import { MarkdownEditor } from "../../components/light/MarkdownEditor.js";
-import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender } from "../../api/posts.js";
-import { getInstagramStatus } from "../../api/instagram.js";
-import { uploadMedia } from "../../api/media.js";
+import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender } from "../../api/posts.ts";
+import { getInstagramStatus } from "../../api/instagram.ts";
+import { uploadMedia } from "../../api/media.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import {
@@ -945,7 +945,7 @@ export default class PostEditPage extends Component {
       const {
         getMediaByPaths,
         renameMedia
-      } = await import('../../api/media.js');
+      } = await import('../../api/media.ts');
       const item = (await getMediaByPaths([oldPath]))[oldPath];
       if (!item) throw new Error(`Media not found: ${oldPath}`);
       const updated = await renameMedia(item.id, newFilename);
@@ -1096,7 +1096,7 @@ export default class PostEditPage extends Component {
         try {
           const {
             getMediaByPaths
-          } = await import('../../api/media.js');
+          } = await import('../../api/media.ts');
           this._mediaByPath = await getMediaByPaths(paths);
         } catch (_e) {/* ignore */}
       }
@@ -1203,7 +1203,7 @@ export default class PostEditPage extends Component {
       const {
         analyzeMedia,
         analyzeMediaByPath
-      } = await import('../../api/media.js');
+      } = await import('../../api/media.ts');
       const result = item.id ? await analyzeMedia(item.id) : await analyzeMediaByPath(item.path);
       const isEmpty = !result.title && !result.tags?.length && !result.excerpt;
       if (field === "title" && result.title) post.title = result.title;else if (field === "tags" && result.tags?.length) {
@@ -1241,7 +1241,7 @@ export default class PostEditPage extends Component {
       const {
         analyzeMedia,
         analyzeMediaByPath
-      } = await import('../../api/media.js');
+      } = await import('../../api/media.ts');
       const result = item.id ? await analyzeMedia(item.id) : await analyzeMediaByPath(item.path);
       const mergedTags = [...snap.tags, ...(result.tags || []).filter(t => !snap.tags.includes(t))];
       const post = {

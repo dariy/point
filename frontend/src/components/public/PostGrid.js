@@ -10,7 +10,7 @@ import { reconcileList, setKey } from '../../utils/reconcileList.js';
 
 /**
  * @typedef {object} PostGridProps
- * @property {import('../../api/posts.js').Post[]} [posts]  Post list items.
+ * @property {import('../../api/posts.ts').Post[]} [posts]  Post list items.
  * @property {boolean} [showViewCount]  Passed through to PostCard.
  * @property {string} [emptyMessage]  Text shown when `posts` is empty.
  * @property {boolean} [reversed]  Fill right-to-left instead of left-to-right.
@@ -120,7 +120,7 @@ export class PostGrid extends Component {
    * region when the grid cannot take the list, and setProps() would give them
    * a grid that had already rebuilt itself on the way to saying no.
    *
-   * @param {import('../../api/posts.js').Post[]} posts  the refit list.
+   * @param {import('../../api/posts.ts').Post[]} posts  the refit list.
    * @returns {boolean} false when the lists diverge — caller re-renders instead.
    */
   reconcile(posts = []) {
@@ -130,8 +130,8 @@ export class PostGrid extends Component {
   }
 
   /**
-   * @param {import('../../api/posts.js').Post[]} posts    the list to end up showing
-   * @param {import('../../api/posts.js').Post[]} current  the list currently on screen
+   * @param {import('../../api/posts.ts').Post[]} posts    the list to end up showing
+   * @param {import('../../api/posts.ts').Post[]} current  the list currently on screen
    * @returns {boolean}
    */
   _reconcileTo(posts, current) {

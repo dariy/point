@@ -11,7 +11,7 @@
 import { Component } from "../../components/Component.js";
 
 import { pluginHost } from "../../core/pluginHost.js";
-import { getMapPage } from "../../api/pages.js";
+import { getMapPage } from "../../api/pages.ts";
 import { getSettings } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { LOCK_SVG } from "../../utils/icons.js";

@@ -10,7 +10,7 @@
 
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
-import { listPosts } from "../../api/posts.js";
+import { listPosts } from "../../api/posts.ts";
 import { mergeSettings, setToast } from "../../store.js";
 import { html, raw } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
@@ -165,7 +165,7 @@ export default class SettingsPage extends Component {
 
   async _load() {
     try {
-      const { getAllSettings } = await import('../../api/settings.js');
+      const { getAllSettings } = await import('../../api/settings.ts');
       const [settings, postsResp] = await Promise.all([
         getAllSettings(),
         listPosts({ type: "page", per_page: 500 }),
@@ -190,7 +190,7 @@ export default class SettingsPage extends Component {
     const updates = collectUpdates(form, keys);
 
     try {
-      const { updateSettings } = await import('../../api/settings.js');
+      const { updateSettings } = await import('../../api/settings.ts');
       await updateSettings(updates);
       setToast({ message: "Settings saved.", type: "success" });
       // Update global store with the new settings immediately so the UI reflects changes (like blog title).

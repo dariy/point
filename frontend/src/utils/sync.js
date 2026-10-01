@@ -2,7 +2,7 @@
  * Sync Engine for Point offline mutation queue.
  */
 import { getQueue, updateStatus } from './mutationQueue.js';
-import { api } from '../api/client.js';
+import { api } from '../api/client.ts';
 
 
 let isSyncing = false;

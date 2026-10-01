@@ -6,9 +6,9 @@
 
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
-import { getStats, getVersion } from '../../api/system.js';
-import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
-import { listPosts, createPost } from '../../api/posts.js';
+import { getStats, getVersion } from '../../api/system.ts';
+import { getPostAnalytics, getTopPosts } from '../../api/analytics.ts';
+import { listPosts, createPost } from '../../api/posts.ts';
 import { setToast } from '../../store.js';
 import { html, navigate, raw } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';

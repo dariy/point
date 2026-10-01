@@ -12,7 +12,7 @@ import {
   getInstagramStatus,
   triggerInstagramImport,
   getInstagramImportStatus,
-} from "../../../api/instagram.js";
+} from "../../../api/instagram.ts";
 import { setToast } from "../../../store.js";
 import { html } from "../../../utils/helpers.js";
 import { formatDateShort } from "../../../utils/formatters.js";

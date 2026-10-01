@@ -11,8 +11,8 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
-import { parseMapsCoords } from '../../api/util.js';
+import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.ts';
+import { parseMapsCoords } from '../../api/util.ts';
 import { getTagsView, setToast } from '../../store.js';
 import { html, setHTML, raw } from '../../utils/helpers.js';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.js';

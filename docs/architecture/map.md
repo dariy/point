@@ -140,7 +140,7 @@ the admin input.
 | Routing | `frontend/src/router.js` — History API, `load: () => import(…)` per route, auth guard. |
 | Page | `frontend/src/pages/public/` (reader) and `frontend/src/pages/light/` (admin, under `/light`). |
 | Component | `frontend/src/components/{public,light,shared}/`, all extending the base class in `frontend/src/components/Component.js`. |
-| Server calls | `frontend/src/api/<domain>.js`, all built on the `api` fetch wrapper in `frontend/src/api/client.js`. |
+| Server calls | `frontend/src/api/<domain>.ts`, all built on the `api` fetch wrapper in `frontend/src/api/client.ts`. |
 | Shared state | `frontend/src/store.js` — a pub/sub key-value store; subscribe by key. |
 | Cross-cutting machinery | `frontend/src/core/` — the plugin host, the grid and media pagers, gestures. Not a dumping ground: four files, each a subsystem a page uses rather than a helper it calls. |
 | Helpers | `frontend/src/utils/` — small, pure, individually tested (EXIF parsing, media URLs, grid fitting, post-node serialisation). |

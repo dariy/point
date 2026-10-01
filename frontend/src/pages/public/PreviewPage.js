@@ -10,7 +10,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
 
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
-import { previewPost } from '../../api/posts.js';
+import { previewPost } from '../../api/posts.ts';
 import { getNavTags, getSettings } from '../../store.js';
 import { html } from '../../utils/helpers.js';
 import { setPageTitle } from '../../utils/documentTitle.js';
