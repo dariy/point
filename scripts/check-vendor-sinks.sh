@@ -98,7 +98,7 @@ LIST
 # because it is how the directive quietly stops describing the page.
 csp_names=$(grep -oE '^const trustedTypesCSP = ".*"$' "$SERVER" |
     grep -oE 'trusted-types [^"]*' | cut -d' ' -f2- | tr ' ' '\n' | sort -u)
-code_names=$(grep -rhoE "createPolicy\(['\"][^'\"]+" "$SRC" "$VENDOR" --include='*.js' 2>/dev/null |
+code_names=$(grep -rhoE "createPolicy\(['\"][^'\"]+" "$SRC" "$VENDOR" --include='*.js' --include='*.ts' 2>/dev/null |
     sed -E "s/.*['\"]//" | sort -u)
 if [ "$csp_names" != "$code_names" ]; then
     report "the trusted-types allowlist and the registered policies disagree" \

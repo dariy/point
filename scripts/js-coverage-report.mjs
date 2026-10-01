@@ -64,7 +64,7 @@ function walk(dir) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (entry.endsWith(".js")) out.push(full);
+    else if (/\.[jt]s$/.test(entry)) out.push(full);
   }
   return out;
 }

@@ -12,7 +12,7 @@
 #                       to the console (see core/pluginHost.js).
 #
 # Each set is ONE esbuild pass with --splitting over the core entry (app.js)
-# plus every plugin entry (frontend/src/plugins/<id>/index.js):
+# plus every plugin entry (frontend/src/plugins/<id>/index.ts or index.js):
 #
 #   app.js              stable, unhashed core entry — referenced from
 #                       index.html (?v=__BUILD_VERSION__) and sw.js SHELL_URLS.
@@ -46,7 +46,11 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # APP_ENTRY / JS_RELEASE_DIR are overridable so an alternate bundle can be built
 # from the same flags rather than a divergent copy of this script — see
 # demo/scripts/build.sh, which swaps in the mock entry point.
-APP_ENTRY="${APP_ENTRY:-$ROOT_DIR/frontend/src/app.js}"
+# The default entry is app.ts when it exists, else app.js.
+if [ -z "$APP_ENTRY" ]; then
+  APP_ENTRY="$ROOT_DIR/frontend/src/app.ts"
+  [ -f "$APP_ENTRY" ] || APP_ENTRY="$ROOT_DIR/frontend/src/app.js"
+fi
 JS_RELEASE_DIR="${JS_RELEASE_DIR:-$ROOT_DIR/frontend/js}"
 JS_DEBUG_DIR="${JS_DEBUG_DIR:-$ROOT_DIR/frontend/js-debug}"
 PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
@@ -64,8 +68,9 @@ fi
 # esbuild default (esnext) across toolchain upgrades.
 ES_TARGET="es2022"
 
-# Collect "p/<id>=<entry>" args for every frontend/src/plugins/<id>/index.js
-# once; both bundle sets share the same plugin entries. The p/ alias prefix
+# Collect "p/<id>=<entry>" args for every frontend/src/plugins/<id>/index.ts
+# (or index.js) once. A plugin directory with neither fails the build: a
+# silent skip would ship a manifest without that plugin. both bundle sets share the same plugin entries. The p/ alias prefix
 # routes each plugin entry's output to <js_dir>/p/<id>.js.
 # ponytail: space-separated string + word-splitting instead of a bash array so
 # this runs under POSIX sh. Plugin ids/paths never contain spaces.
@@ -73,9 +78,13 @@ PLUGIN_ARGS=""
 PLUGIN_COUNT=0
 if [ -d "$PLUGIN_SRC" ]; then
   for dir in "$PLUGIN_SRC"/*/; do
-    entry="${dir}index.js"
-    [ -f "$entry" ] || continue
     id="$(basename "$dir")"
+    entry="${dir}index.ts"
+    [ -f "$entry" ] || entry="${dir}index.js"
+    if [ ! -f "$entry" ]; then
+      echo "  FAIL  plugin '$id' has no index.ts or index.js in $dir" >&2
+      exit 1
+    fi
     PLUGIN_ARGS="$PLUGIN_ARGS p/${id}=${entry}"
     PLUGIN_COUNT=$((PLUGIN_COUNT + 1))
   done
