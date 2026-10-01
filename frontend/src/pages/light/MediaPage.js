@@ -6,8 +6,8 @@
  */
 
 import { Component } from '../../components/Component.ts';
-import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
-import { MediaBrowser } from '../../components/light/MediaBrowser.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.ts';
+import { MediaBrowser } from '../../components/light/MediaBrowser.ts';
 import { UPLOAD_SVG } from '../../utils/icons.ts';
 import { html, raw } from "../../utils/helpers.ts";
 

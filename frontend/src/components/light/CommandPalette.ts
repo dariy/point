@@ -14,7 +14,10 @@ const STATIC_PAGES = [
 ];
 
 export class CommandPalette extends Component {
-  constructor(container, props = {}) {
+  _onGlobalKeyDown: (e: KeyboardEvent) => void;
+  _performSearch: (query: string) => void;
+
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       isOpen: false,
@@ -69,13 +72,13 @@ export class CommandPalette extends Component {
     input?.focus();
 
     input?.addEventListener('input', (e) => {
-      const q = /** @type {HTMLInputElement} */ (e.target).value;
+      const q = (e.target as HTMLInputElement).value;
       this.setState({ query: q, selectedIndex: 0 });
       this._performSearch(q);
     });
 
     this.$('#cp-overlay')?.addEventListener('click', (e) => {
-      if (/** @type {HTMLElement} */ (e.target).id === 'cp-overlay') this.close();
+      if ((e.target as HTMLElement).id === 'cp-overlay') this.close();
     });
 
     this.$$('.cp-result-item').forEach(item => {

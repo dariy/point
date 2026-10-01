@@ -26,6 +26,8 @@ import { html, setHTML, navigate, raw } from "../../utils/helpers.ts";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.ts";
+import type { Media } from "../../api/media.ts";
+import type { Slot } from "../../utils/helpers.ts";
 
 // What a grid card paints at. The grid is auto-fill minmax(180px, 1fr), dropping
 // to 144px under 48em, and a pinned zoom (core/mediaPager.ts) can squeeze a
@@ -33,21 +35,29 @@ import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../
 // the previews are object-fit: cover, so the browser rounding a rung up is the
 // forgiving direction.
 const GRID_THUMB_SIZES = "(max-width: 48em) 50vw, 220px";
-/**
- * @typedef {object} MediaBrowserProps
- * @property {boolean} [pickerMode]  Show checkboxes on items, hide the
- *   delete/copy actions, and scope drag-drop to the component container.
- */
 
-/** @extends {Component<MediaBrowserProps>} */
-export class MediaBrowser extends Component {
-  constructor(container, props = {}) {
+export interface MediaBrowserProps {
+  /** Show checkboxes on items, hide the delete/copy actions, and scope drag-drop to the component container. */
+  pickerMode?: boolean;
+}
+
+export class MediaBrowser extends Component<MediaBrowserProps> {
+  _dragCount: number;
+  _internalDrag: boolean;
+  _lastPerPage: number;
+  _measuredPerPage: number;
+  _searchTimeout: ReturnType<typeof setTimeout>;
+  _lightbox: MediaLightbox | null;
+  _pager: MediaPager | null;
+  /** Picker mode: persists selected media objects across page/folder changes. */
+  _selectedItemsById: Record<number, Media>;
+
+  constructor(container: HTMLElement, props: MediaBrowserProps = {}) {
     super(container, props);
     this.state = {
       loading: true,
       media: [],
-      /** @type {{ page?: number, pages?: number, total?: number }} */
-      pagination: {},
+      pagination: {} as { page?: number; pages?: number; total?: number },
       typeFilter: "",
       filenameFilter: "",
       selectedFolder: null,
@@ -67,8 +77,6 @@ export class MediaBrowser extends Component {
     // (core/mediaPager.ts). Standalone only: the picker is a modal that owns its
     // own dismiss gestures, and its host page has arrow keys of its own.
     this._pager = this.props.pickerMode ? null : this._makePager();
-    // Picker mode: persists selected media objects across page/folder changes
-    /** @type {Record<number, import('../../api/media.ts').Media>} */
     this._selectedItemsById = {};
   }
 
@@ -114,7 +122,7 @@ export class MediaBrowser extends Component {
    * bound: nothing in a ghost is ever clicked.
    */
   async _pageMarkup(page) {
-    const params = {
+    const params: Parameters<typeof listMedia>[0] = {
       page,
       per_page: this._lastPerPage || 24
     };
@@ -242,7 +250,7 @@ export class MediaBrowser extends Component {
    */
   _centerActiveChip() {
     const strip = this.$(".mb-folder-chips");
-    const active = /** @type {HTMLElement} */ (strip?.querySelector(".mb-folder-chip.active"));
+    const active = (strip?.querySelector(".mb-folder-chip.active") as HTMLElement);
     if (!strip || !active) return;
     strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
   }
@@ -418,8 +426,7 @@ export class MediaBrowser extends Component {
   _renderReferringPostsInline(m) {
     const st = (this.state.referringPostsState || {})[m.id];
     if (!st) return "";
-    /** @type {import("../../utils/helpers.ts").Slot} */
-    let body = "";
+    let body: Slot = "";
     if (st.loading) {
       body = html`<div class="referring-posts-loading">Searching…</div>`;
     } else if (st.error) {
@@ -523,12 +530,11 @@ export class MediaBrowser extends Component {
       btn.addEventListener("click", async () => {
         const id = parseInt(btn.dataset.id, 10);
         const panel = btn.closest(".exif-panel");
-        /** @type {Record<string,string>} */
-        const fields = {};
+        const fields: Record<string,string> = {};
         const invalid = [];
         panel.querySelectorAll(".exif-rows tr").forEach(tr => {
-          const key = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-key"))?.value.trim();
-          const val = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-val"))?.value.trim();
+          const key = (tr.querySelector(".exif-key") as HTMLInputElement)?.value.trim();
+          const val = (tr.querySelector(".exif-val") as HTMLInputElement)?.value.trim();
           if (!key) return;
           if (val && !/^[a-zA-Z0-9 ]*$/.test(val)) {
             invalid.push(key);
@@ -716,7 +722,7 @@ export class MediaBrowser extends Component {
         })
       });
     }
-    const fileInput = /** @type {HTMLInputElement|null} */ (this.$("#mb-file-input"));
+    const fileInput = (this.$("#mb-file-input") as HTMLInputElement|null);
 
     // Tree and mobile-bar copies of each control are both in the DOM (CSS shows
     // one), so every listener binds across all matches.
@@ -746,8 +752,8 @@ export class MediaBrowser extends Component {
     if (!pickerMode) {
       const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
-        setHTML(/** @type {HTMLElement} */ (h1), html`${this._renderBreadcrumbs()}`);
-        h1.querySelectorAll(".mb-breadcrumb-item").forEach((/** @type {HTMLElement} */ btn) => {
+        setHTML((h1 as HTMLElement), html`${this._renderBreadcrumbs()}`);
+        h1.querySelectorAll<HTMLElement>(".mb-breadcrumb-item").forEach((btn) => {
           btn.addEventListener("click", () => {
             this.setState({
               selectedFolder: btn.dataset.folder || null
@@ -767,7 +773,7 @@ export class MediaBrowser extends Component {
     this._bindPreviewFallback();
     this.$$(".mb-type-filter").forEach(select => select.addEventListener("change", e => {
       this.setState({
-        typeFilter: /** @type {HTMLSelectElement} */ (e.target).value
+        typeFilter: (e.target as HTMLSelectElement).value
       });
       this._load({
         page: 1
@@ -793,7 +799,7 @@ export class MediaBrowser extends Component {
     // Search input
     this.$$(".mb-search-input").forEach(input => {
       input.addEventListener("input", (e) => {
-        const val = /** @type {HTMLInputElement} */ (e.target).value;
+        const val = (e.target as HTMLInputElement).value;
         this.state.filenameFilter = val; // save without re-rendering
         if (this._searchTimeout) clearTimeout(this._searchTimeout);
         this._searchTimeout = setTimeout(() => {
@@ -808,7 +814,7 @@ export class MediaBrowser extends Component {
       this.$$(".media-item").forEach(item => {
         item.addEventListener("click", e => {
           // Don't trigger if clicking directly on checkbox label (it handles its own state)
-          if (/** @type {HTMLElement} */ (e.target).closest(".media-item-checkbox")) return;
+          if ((e.target as HTMLElement).closest(".media-item-checkbox")) return;
           const id = parseInt(item.dataset.id, 10);
           this._toggleSelection(id);
         });
@@ -978,7 +984,7 @@ export class MediaBrowser extends Component {
 
   /** Create a post from all currently selected images (standalone mode). */
   async _createPostFromSelected() {
-    const items = Array.from(this.state.selectedIds).map(id => this._selectedItemsById[id]).filter(Boolean);
+    const items = Array.from(this.state.selectedIds as Set<number>).map(id => this._selectedItemsById[id]).filter(Boolean);
     if (items.length === 0) {
       setToast({
         message: "No images selected.",
@@ -1104,9 +1110,8 @@ export class MediaBrowser extends Component {
   /**
    * Returns the currently selected media objects (picker mode only).
    * Persists across page and folder changes.
-   * @returns {import('../../api/media.ts').Media[]}
    */
-  getSelectedItems() {
+  getSelectedItems(): Media[] {
     return Object.values(this._selectedItemsById);
   }
 
@@ -1194,7 +1199,7 @@ export class MediaBrowser extends Component {
   }
   async _loadFolders() {
     try {
-      const params = {};
+      const params: Parameters<typeof getMediaFolders>[0] = {};
       if (this.state.typeFilter) params.file_type = this.state.typeFilter;
       const data = await getMediaFolders(params);
       const folders = data.folders || [];
@@ -1219,7 +1224,7 @@ export class MediaBrowser extends Component {
     const MAX = 120; // backend has no clamp; don't fetch unbounded
     const area = this.$("#mb-media-area");
     const grid = this.$(".media-grid");
-    const item = /** @type {HTMLElement} */ (grid?.firstElementChild);
+    const item = (grid?.firstElementChild as HTMLElement);
     if (!area || !item || !area.clientHeight) return null; // nothing to measure yet
 
     const cs = getComputedStyle(grid);
@@ -1233,14 +1238,14 @@ export class MediaBrowser extends Component {
     this._load({ page: 1 });
   }
 
-  async _load(overrides = {}) {
+  async _load(overrides: { page?: number; corrected?: boolean } = {}) {
     this.setState({
       loading: true,
       error: null
     });
     const perPage = this._measuredPerPage ?? 24;
     this._lastPerPage = perPage;
-    const params = {
+    const params: Parameters<typeof listMedia>[0] = {
       page: overrides.page ?? 1,
       per_page: perPage
     };

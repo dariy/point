@@ -538,7 +538,7 @@ without re-running `make-content.sh` leaves the demo showing the old values.
 ## Known limitations
 
 - **`?thumb` does not resolve to a thumbnail.** The client appends it to media
-  URLs in several admin views (`PostsListPage.js`, `VisualEditor.js`), and a
+  URLs in several admin views (`PostsListPage.js`, `VisualEditor.ts`), and a
   static host ignores query strings, so the full-size image is served instead.
   `build.sh` downscales originals to compensate;
   `utils/helpers.ts dropBrokenImages()` handles anything missing.

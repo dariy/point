@@ -4,10 +4,10 @@
  * Provides a template function for render() and a setup function for afterRender().
  */
 
-import { LightSidebar } from "./LightSidebar.js";
-import { AdminBottomBar } from "./AdminBottomBar.js";
-import { CommandPalette } from "./CommandPalette.js";
-import { ShortcutHelp } from "./ShortcutHelp.js";
+import { LightSidebar } from "./LightSidebar.ts";
+import { AdminBottomBar } from "./AdminBottomBar.ts";
+import { CommandPalette } from "./CommandPalette.ts";
+import { ShortcutHelp } from "./ShortcutHelp.ts";
 import {
   getAutosaveStatus,
   getOfflineStatus,
@@ -19,8 +19,21 @@ import { syncQueue } from "../../utils/sync.ts";
 import { setupHeaderCompact } from "../../utils/headerCompact.ts";
 import { html, insertHTML, navigate, raw } from "../../utils/helpers.ts";
 import { EXTERNAL_LINK_SVG } from "../../utils/icons.ts";
+import type { Component } from "../Component.ts";
+import type { RawHtml, Slot } from "../../utils/helpers.ts";
 
-/** @typedef {import('../../utils/helpers.ts').Slot} Slot */
+export interface AdminLayoutSlots {
+  title?: Slot;
+  actions?: Slot;
+  banner?: Slot;
+  content?: Slot;
+  contentClass?: string;
+}
+
+export interface AdminLayoutOptions {
+  currentPath?: string;
+  publicUrl?: string;
+}
 
 /**
  * Shared markup for admin pages, for use inside component.render().
@@ -28,9 +41,7 @@ import { EXTERNAL_LINK_SVG } from "../../utils/icons.ts";
  * `title`, `actions`, `banner` and `content` are markup slots: pass html``
  * output. A plain string is escaped, which is the safe default — a page that
  * wants markup there says so with the tag.
- *
- * @param {{ title?: Slot, actions?: Slot, banner?: Slot, content?: Slot, contentClass?: string }} slots
- * @returns {import('../../utils/helpers.ts').RawHtml}
+
  */
 export function adminLayoutTemplate({
   title = "Admin",
@@ -38,7 +49,7 @@ export function adminLayoutTemplate({
   banner = "",
   content = "",
   contentClass = ""
-}) {
+}: AdminLayoutSlots): RawHtml {
   const offline = getOfflineStatus() || {};
   const autosave = getAutosaveStatus() || {};
   const syncPill = renderSyncPill(offline, autosave);
@@ -73,14 +84,11 @@ export function adminLayoutTemplate({
  * to call from beforeUnmount() — it used to return a teardown closure, and
  * every page overwrote its handle on the next render without ever calling it,
  * which leaked an observer and two store subscriptions per setState().
- *
- * @param {any} component
- * @param {{ currentPath?: string, publicUrl?: string }} [options]
  */
-export function setupAdminLayout(component, {
+export function setupAdminLayout(component: Component, {
   currentPath,
   publicUrl
-} = {}) {
+}: AdminLayoutOptions = {}) {
   component.registerCleanup(setupHeaderCompact(component.$(".light-header")));
   // Public-site link — icon button pinned to the right edge of the header
   // actions. Deliberately a plain in-app link: the public site and the admin
@@ -123,7 +131,19 @@ export function setupAdminLayout(component, {
   component.subscribeStore(onOfflineStatus, () => updateSyncPill(component));
   component.subscribeStore(onAutosaveStatus, () => updateSyncPill(component));
 }
-function renderSyncPill(offline, autosave = {}) {
+interface OfflineState {
+  pending?: number;
+  failed?: number;
+  syncing?: boolean;
+  has_ops?: boolean;
+}
+
+interface AutosaveState {
+  status?: string;
+  lastSaved?: number;
+}
+
+function renderSyncPill(offline: OfflineState, autosave: AutosaveState = {}) {
   let text = "";
   let cls = "sync-pill";
   if (autosave.status === "saving") {
@@ -164,7 +184,7 @@ function onSyncPillClick() {
     syncQueue();
   }
 }
-function updateSyncPill(component) {
+function updateSyncPill(component: Component) {
   const offline = getOfflineStatus() || {};
   const autosave = getAutosaveStatus() || {};
   const newPill = renderSyncPill(offline, autosave);

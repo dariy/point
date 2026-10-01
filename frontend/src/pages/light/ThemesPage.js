@@ -5,13 +5,13 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.ts";
 import { setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { STAR_SVG, MOON_SVG } from "../../utils/icons.ts";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
-import { CssEditor } from "../../components/light/CssEditor.js";
+import { CssEditor } from "../../components/light/CssEditor.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 import { loadThemeCss } from "../../utils/themeLoader.ts";
 

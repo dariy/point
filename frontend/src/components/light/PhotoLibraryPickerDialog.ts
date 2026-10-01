@@ -22,18 +22,19 @@ import { setToast } from '../../store.ts';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.ts';
-/**
- * @typedef {object} PhotoLibraryPickerDialogProps
- * @property {(result: Awaited<ReturnType<typeof import('../../api/system.ts').importSelectedPhotos>>) => void} [onImport]
- *   Called with the import summary.
- */
 
-/** @extends {Component<PhotoLibraryPickerDialogProps>} */
-export class PhotoLibraryPickerDialog extends Component {
-  /** @param {PhotoLibraryPickerDialogProps} props */
+export interface PhotoLibraryPickerDialogProps {
+  /** Called with the import summary. */
+  onImport?: (result: Awaited<ReturnType<typeof importSelectedPhotos>>) => void;
+}
+
+export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialogProps> {
+  _keyHandler: ((e: KeyboardEvent) => void) | null;
+  _mounted: boolean;
+
   constructor({
     onImport
-  }) {
+  }: PhotoLibraryPickerDialogProps) {
     const container = document.createElement('div');
     container.className = 'modal-overlay photo-library-overlay';
     container.setAttribute('aria-modal', 'true');
@@ -85,18 +86,15 @@ export class PhotoLibraryPickerDialog extends Component {
 
     // Event delegation on stable region containers — handles dynamically replaced content
     this.$('#plpd-breadcrumb').addEventListener('click', e => {
-      const btn = /** @type {HTMLElement} */ (
-        /** @type {HTMLElement} */ (e.target).closest('.breadcrumb-btn'));
+      const btn = (e.target as HTMLElement).closest('.breadcrumb-btn') as HTMLElement;
       if (btn) this._navigateToBreadcrumb(parseInt(btn.dataset.index, 10));
     });
     this.$('#plpd-sidebar').addEventListener('click', e => {
-      const btn = /** @type {HTMLElement} */ (
-        /** @type {HTMLElement} */ (e.target).closest('.photo-library-folder-btn'));
+      const btn = (e.target as HTMLElement).closest('.photo-library-folder-btn') as HTMLElement;
       if (btn) this._navigateInto(btn.dataset.folder);
     });
     this.$('#plpd-content').addEventListener('click', e => {
-      const item = /** @type {HTMLElement} */ (
-        /** @type {HTMLElement} */ (e.target).closest('.photo-library-item'));
+      const item = (e.target as HTMLElement).closest('.photo-library-item') as HTMLElement;
       if (item) this._toggleFile(item.dataset.path);
     });
     this.container.addEventListener('click', e => {
@@ -286,7 +284,7 @@ export class PhotoLibraryPickerDialog extends Component {
     })}</div>`);
   }
   _patchImportBtn(count, importing) {
-    const btn = /** @type {HTMLButtonElement|null} */ (this.$('#plpd-import-btn'));
+    const btn = (this.$('#plpd-import-btn') as HTMLButtonElement|null);
     if (!btn) return;
     btn.disabled = count === 0 || importing;
     btn.textContent = importing ? 'Importing…' : count === 0 ? 'Import selected' : `Import ${count} photo${count !== 1 ? 's' : ''}`;

@@ -1099,13 +1099,13 @@ frontend/
 |   |   |   `-- ImmersiveViewer.js
 |   |   |
 |   |   `-- light/                  <- Admin panel components
-|   |       |-- AdminLayout.js
+|   |       |-- AdminLayout.ts
 |   |       |-- Sidebar.js
 |   |       |-- StatusSelect.js
 |   |       |-- TagSelector.js
 |   |       |-- MediaPicker.js
 |   |       |-- MediaDropZone.js
-|   |       |-- MarkdownEditor.js
+|   |       |-- MarkdownEditor.ts
 |   |       |-- DataTable.js
 |   |       |-- TreeView.js
 |   |       |-- StatCard.js

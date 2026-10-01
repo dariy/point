@@ -68,7 +68,7 @@ interface Window {
   /**
    * Prism. The core is an ES module, but the vendored language files are global
    * scripts that read and extend a bare `Prism`, so the core's export is
-   * published here before they load — see components/light/MarkdownEditor.js.
+   * published here before they load — see components/light/MarkdownEditor.ts.
    * `any` because what the global holds grows with every language file.
    */
   Prism?: any;

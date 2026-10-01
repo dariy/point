@@ -5,18 +5,24 @@
 import { Component } from '../Component.ts';
 import { listTags, createTag } from '../../api/tags.ts';
 import { html, setHTML, debounce } from '../../utils/helpers.ts';
-import { openTagFamilyPopover } from './TagFamilyPopover.js';
-let _tagInputCounter = 0;
-/**
- * @typedef {object} TagsInputProps
- * @property {string[]} [tags]  Initial tag names.
- * @property {(tags: string[]) => void} [onChange]  Called with the updated
- *   names whenever they change.
- */
+import { openTagFamilyPopover } from './TagFamilyPopover.ts';
+import type { Tag, TagInput } from '../../api/tags.ts';
 
-/** @extends {Component<TagsInputProps>} */
-export class TagsInput extends Component {
-  constructor(container, props = {}) {
+let _tagInputCounter = 0;
+
+export interface TagsInputProps {
+  /** Initial tag names. */
+  tags?: string[];
+  /** Called with the updated names whenever they change. */
+  onChange?: (tags: string[]) => void;
+}
+
+export class TagsInput extends Component<TagsInputProps> {
+  _uid: string;
+  _allTags: Tag[];
+  _fetchSuggestions: (query: string) => void;
+
+  constructor(container: HTMLElement, props: TagsInputProps = {}) {
     super(container, props);
     this._uid = `tags-input-${++_tagInputCounter}`;
     this.state = {
@@ -52,7 +58,7 @@ export class TagsInput extends Component {
     // Family popover
     this.$$('.tag-chip').forEach(chip => {
       chip.addEventListener('click', e => {
-        if (/** @type {HTMLElement} */ (e.target).classList.contains('tag-remove')) return;
+        if ((e.target as HTMLElement).classList.contains('tag-remove')) return;
         const tagName = chip.dataset.tag;
         const tagObj = this._allTags.find(t => t.name === tagName);
         if (tagObj) openTagFamilyPopover(tagObj.id, chip);
@@ -72,11 +78,11 @@ export class TagsInput extends Component {
     });
 
     // Text input
-    const input = /** @type {HTMLInputElement|null} */ (this.$(`#${this._uid}-text`));
+    const input = (this.$(`#${this._uid}-text`) as HTMLInputElement|null);
     if (!input) return;
     input.addEventListener('input', e => {
       // Android virtual keyboards fire Enter as insertLineBreak (no keydown key).
-      if (/** @type {InputEvent} */ (e).inputType === 'insertLineBreak') {
+      if ((e as InputEvent).inputType === 'insertLineBreak') {
         input.value = input.value.replace(/\n/g, '');
         const val = input.value.trim();
         if (val) this._addTag(val);
@@ -170,7 +176,7 @@ export class TagsInput extends Component {
       tags
     });
     this.props.onChange?.(tags);
-    const input = /** @type {HTMLInputElement|null} */ (this.$(`#${this._uid}-text`));
+    const input = (this.$(`#${this._uid}-text`) as HTMLInputElement|null);
     if (input) {
       input.value = '';
       input.focus();
@@ -272,8 +278,8 @@ export class TagsInput extends Component {
     `);
     box.appendChild(popover);
     box.classList.add('show');
-    const nameInput = /** @type {HTMLInputElement} */ (popover.querySelector('.new-tag-name'));
-    const parentInput = /** @type {HTMLInputElement} */ (popover.querySelector('.new-tag-parent'));
+    const nameInput = (popover.querySelector('.new-tag-name') as HTMLInputElement);
+    const parentInput = (popover.querySelector('.new-tag-parent') as HTMLInputElement);
     const parentSuggestions = popover.querySelector('.parent-suggestions');
     const createBtn = popover.querySelector('.btn-create');
     const cancelBtn = popover.querySelector('.btn-cancel');
@@ -317,7 +323,7 @@ export class TagsInput extends Component {
       const finalName = nameInput.value.trim();
       if (!finalName) return;
       try {
-        const params = {
+        const params: TagInput = {
           name: finalName
         };
         if (selectedParentId) {

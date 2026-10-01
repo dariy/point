@@ -2,14 +2,13 @@ import { Component } from '../Component.ts';
 import { getTag } from '../../api/tags.ts';
 import { html, navigate } from '../../utils/helpers.ts';
 
-/**
- * @typedef {object} TagFamilyPopoverProps
- * @property {number} [tagId]  The tag whose parents, siblings and children to show.
- */
+export interface TagFamilyPopoverProps {
+  /** The tag whose parents, siblings and children to show. */
+  tagId?: number;
+}
 
-/** @extends {Component<TagFamilyPopoverProps>} */
-export class TagFamilyPopover extends Component {
-  constructor(container, props = {}) {
+export class TagFamilyPopover extends Component<TagFamilyPopoverProps> {
+  constructor(container: HTMLElement, props: TagFamilyPopoverProps = {}) {
     super(container, props);
     this.state = {
       loading: true,

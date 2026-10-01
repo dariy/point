@@ -30,11 +30,11 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
 import { getPlugins, setPluginEnabled, getPresets, updatePreset, applyPreset } from "../../api/plugins.ts";
 import { getAllSettings } from "../../api/settings.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
-import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
+import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.ts";
 import { setPluginToggled, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { pluginHost } from "../../core/pluginHost.ts";

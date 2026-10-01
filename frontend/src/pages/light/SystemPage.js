@@ -12,7 +12,7 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import {
   adminLayoutTemplate,
   setupAdminLayout,
-} from "../../components/light/AdminLayout.js";
+} from "../../components/light/AdminLayout.ts";
 import {
   clearCache,
   getMigrations,

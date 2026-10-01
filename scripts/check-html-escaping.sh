@@ -59,9 +59,9 @@ fi
 # the single DOMParser.parseFromString (parseMarkup) that every other write and
 # parse in the frontend goes through.
 expected=$(cat <<'LIST'
-frontend/src/components/light/CssEditor.js 1
-frontend/src/components/light/MarkdownEditor.js 1
-frontend/src/components/light/settingsFields.js 1
+frontend/src/components/light/CssEditor.ts 1
+frontend/src/components/light/MarkdownEditor.ts 1
+frontend/src/components/light/settingsFields.ts 1
 frontend/src/components/light/tags/TagEditorForm.js 2
 frontend/src/components/public/PostContent.ts 1
 frontend/src/pages/light/PluginsPage.js 1

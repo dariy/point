@@ -26,8 +26,24 @@ if (Prism.languages.markdown) {
     }
   });
 }
-export class MarkdownEditor extends Component {
-  constructor(container, props = {}) {
+export interface MarkdownEditorProps {
+  value?: string;
+  placeholder?: string;
+  onChange?: (code: string) => void;
+  isMaximized?: boolean;
+  /** Element id of the editor; generated when absent. */
+  id?: string;
+}
+
+export class MarkdownEditor extends Component<MarkdownEditorProps> {
+  value: string;
+  placeholder: string;
+  onChange: (code: string) => void;
+  jar: ReturnType<typeof CodeJar> | null;
+  isMaximized: boolean;
+  id: string;
+
+  constructor(container: HTMLElement, props: MarkdownEditorProps = {}) {
     super(container, props);
     this.value = props.value || '';
     this.placeholder = props.placeholder || 'Write your post content here…';

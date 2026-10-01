@@ -92,7 +92,7 @@ describe('MediaBrowser', () => {
     };
     fakeFetch();
     setToast(null);
-    ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.js'));
+    ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.ts'));
   });
 
   afterEach(() => {

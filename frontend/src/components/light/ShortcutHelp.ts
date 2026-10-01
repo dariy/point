@@ -18,7 +18,9 @@ const SHORTCUTS = [
 ];
 
 export class ShortcutHelp extends Component {
-  constructor(container, props = {}) {
+  _onGlobalKeyDown: (e: KeyboardEvent) => void;
+
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = { isOpen: false };
     this._onGlobalKeyDown = this._onKeyDownGlobal.bind(this);
@@ -58,7 +60,7 @@ export class ShortcutHelp extends Component {
     if (!this.state.isOpen) return;
 
     this.$('#sh-overlay')?.addEventListener('click', (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
+      const target = (e.target as HTMLElement);
       if (target.id === 'sh-overlay' || target.classList.contains('sh-close')) this.close();
     });
     this.$('.sh-close')?.addEventListener('click', () => this.close());

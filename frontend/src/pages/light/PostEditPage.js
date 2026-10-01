@@ -7,11 +7,11 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
-import { TagsInput } from "../../components/light/TagsInput.js";
-import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
-import { CssEditor } from "../../components/light/CssEditor.js";
-import { MarkdownEditor } from "../../components/light/MarkdownEditor.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
+import { TagsInput } from "../../components/light/TagsInput.ts";
+import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.ts";
+import { CssEditor } from "../../components/light/CssEditor.ts";
+import { MarkdownEditor } from "../../components/light/MarkdownEditor.ts";
 import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender } from "../../api/posts.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { uploadMedia } from "../../api/media.ts";
@@ -27,12 +27,12 @@ import {
 import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.ts";
-import { VisualEditor } from "../../components/light/VisualEditor.js";
+import { VisualEditor } from "../../components/light/VisualEditor.ts";
 import { attachPointerReorder } from "../../utils/pointerReorder.ts";
 import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNodes.ts";
 import { attachWindowFileDrop } from "../../utils/windowFileDrop.ts";
-import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.js";
-import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.js";
+import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.ts";
+import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.ts";
 
 /** @typedef {import('../../router.ts').PageProps} PageProps */
 

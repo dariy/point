@@ -15,10 +15,11 @@
 
 import { Component } from "../Component.ts";
 import { GestureController } from "../../core/gestures.ts";
-import { renderFields, collectUpdates } from "./settingsFields.js";
+import { renderFields, collectUpdates } from "./settingsFields.ts";
 import { updateSettings } from "../../api/settings.ts";
 import { mergeSettings, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
+import type { Slot } from "../../utils/helpers.ts";
 import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.ts";
 import { CHECK_SVG, X_SVG } from "../../utils/icons.ts";
 import { BackupsSection } from "./sections/BackupsSection.js";
@@ -29,6 +30,8 @@ import { OfflineDataSection } from "./sections/OfflineDataSection.js";
 import { SyncQueueSection } from "./sections/SyncQueueSection.js";
 import { VersionCheckSection } from "./sections/VersionCheckSection.js";
 import { RebuildThumbnailsSection } from "./sections/RebuildThumbnailsSection.js";
+import type { Settings } from "../../api/settings.ts";
+import type { getInstagramStatus } from "../../api/instagram.ts";
 
 // Section key → component class. Referenced by PLUGIN_SETTINGS in PluginsPage.
 const SECTIONS = {
@@ -42,22 +45,30 @@ const SECTIONS = {
   "rebuild-thumbnails": RebuildThumbnailsSection,
 };
 
-/**
- * @typedef {object} PluginSettingsPanelProps
- * @property {string} [pluginId]  Drives the Instagram connection block.
- * @property {string} [title]  Heading shown in the drawer header.
- * @property {string[]|null} [keys]  Setting keys to render and collect.
- * @property {string[]|null} [sections]  Section keys to mount; see SECTIONS.
- * @property {import('../../api/settings.ts').Settings} [settings]  Current
- *   settings map, for `keys`.
- * @property {Awaited<ReturnType<typeof import('../../api/instagram.ts').getInstagramStatus>>|null} [igStatus]
- *   Instagram connection status (instagram only).
- * @property {() => void} [onClose]  Tear-down callback.
- */
+export interface PluginSettingsPanelProps {
+  /** Drives the Instagram connection block. */
+  pluginId?: string;
+  /** Heading shown in the drawer header. */
+  title?: string;
+  /** Setting keys to render and collect. */
+  keys?: string[]|null;
+  /** Section keys to mount; see SECTIONS. */
+  sections?: string[]|null;
+  /** Current settings map, for `keys`. */
+  settings?: Settings;
+  /** Instagram connection status (instagram only). */
+  igStatus?: Awaited<ReturnType<typeof getInstagramStatus>> | null;
+  /** Tear-down callback. */
+  onClose?: () => void;
+}
 
-/** @extends {Component<PluginSettingsPanelProps>} */
-export class PluginSettingsPanel extends Component {
-  constructor(container, props = {}) {
+export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
+  _opened: boolean;
+  _closing: boolean;
+  _onKeydown: (e: KeyboardEvent) => void;
+  _gestures: GestureController;
+
+  constructor(container: HTMLElement, props: PluginSettingsPanelProps = {}) {
     super(container, props);
     this.state = { saving: false };
   }
@@ -70,8 +81,7 @@ export class PluginSettingsPanel extends Component {
     const { title, sections, settings, pluginId } = this.props;
     const { saving } = this.state;
 
-    /** @type {import("../../utils/helpers.ts").Slot} */
-    let formHtml = "";
+    let formHtml: Slot = "";
     if (this._hasForm) {
       const { inputs, toggles } = renderFields(this.props.keys, settings, {});
       const toggleSection = toggles ? html`<div class="settings-toggles">${toggles}</div>` : "";
@@ -258,7 +268,7 @@ export class PluginSettingsPanel extends Component {
   }
 
   async _save() {
-    const form = /** @type {HTMLFormElement|null} */ (this.$("#plugin-settings-form"));
+    const form = (this.$("#plugin-settings-form") as HTMLFormElement|null);
     if (!form) return;
     this.setState({ saving: true });
 

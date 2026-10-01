@@ -29,15 +29,16 @@ const MANAGE_ITEMS = [
   { href: '/light/system',   label: 'System',    icon: SYSTEM_SVG    },
 ];
 
-/**
- * @typedef {object} LightSidebarProps
- * @property {string} [currentPath]  Active route path.
- * @property {() => void} [onLogout]
- */
+export interface LightSidebarProps {
+  /** Active route path. */
+  currentPath?: string;
+  onLogout?: () => void;
+}
 
-/** @extends {Component<LightSidebarProps>} */
-export class LightSidebar extends Component {
-  constructor(container, props = {}) {
+export class LightSidebar extends Component<LightSidebarProps> {
+  _manageActive: boolean;
+
+  constructor(container: HTMLElement, props: LightSidebarProps = {}) {
     super(container, props);
     // null = never toggled, so the group follows the current page (expanded
     // while you are on one of its items). Once toggled it is the answer, on

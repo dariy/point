@@ -10,7 +10,7 @@ import {
   readPinnedFields,
   orderIndex,
   moveInOrder,
-} from '../src/components/light/editorFieldLayout.js';
+} from '../src/components/light/editorFieldLayout.ts';
 
 /** A localStorage that starts empty and can be seeded per test. */
 function fakeStorage(seed = {}) {

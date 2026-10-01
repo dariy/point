@@ -42,13 +42,14 @@ export interface Media {
  * avoids fishing for them in a page of the library. At most 500 per request.
  *
  * `orphaned_only` is deliberately absent: the handler reads page, per_page,
- * file_type, folder and paths and nothing else, so any other key is sent and
- * dropped.
+ * file_type, filename, folder and paths and nothing else, so any other key is
+ * sent and dropped.
  */
 export function listMedia(params: {
   page?: number;
   per_page?: number;
   file_type?: string;
+  filename?: string;
   folder?: string;
   paths?: string[];
 } = {}): Promise<{ media: Media[], total: number, page: number, per_page: number, pages: number }> {

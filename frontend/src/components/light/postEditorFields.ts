@@ -4,15 +4,27 @@
  * Every post property is one group: a `<details>` block with a summary row and
  * a body. `buildFieldGroups` produces them all from the post and the editor's
  * state, and `renderGroup` turns one into markup — which side of the layout it
- * lands on is decided by the caller (see editorFieldLayout.js), so the markup
+ * lands on is decided by the caller (see editorFieldLayout.ts), so the markup
  * for a field exists once regardless of placement.
  */
 
 import { getSettings } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
+import type { RawHtml } from "../../utils/helpers.ts";
 import { defaultPostTitle } from "../../utils/formatters.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, GRIP_SVG } from "../../utils/icons.ts";
+
+/** One collapsible editor group: its label, summary row and body. */
+export interface FieldGroup {
+  /** Literal label; may carry an HTML entity. */
+  label: string;
+  summary: string;
+  body: RawHtml;
+  /** Always on the canvas; arrange mode cannot move it. */
+  fixed?: boolean;
+  hidden?: boolean;
+}
 
 /** Trim a value to a one-line summary length. */
 export function truncate(str, max = 24) {
@@ -101,7 +113,7 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
   const cssSummary = (p.css || "").trim() ? "custom" : "none";
   const tagNames = toTagNames(p.tags);
 
-  const groups = {
+  const groups: Record<string, FieldGroup> = {
     title: {
       label: "Post title",
       summary: title ? truncate(p.title) : "auto",
@@ -220,7 +232,7 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
  * That is what lets arrange mode *move* the live element instead of
  * re-rendering, keeping unsaved input values, focus and listeners.
  */
-export function renderGroup(key, group, pinned) {
+export function renderGroup(key: string, group: FieldGroup, pinned: boolean) {
   const plain = group.label.replace(/&amp;/g, "&");
   // The labels are literals in this module and one of them carries an entity
   // ("Status &amp; visibility"), so the title span takes it raw; `plain` is the

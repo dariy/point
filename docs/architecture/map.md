@@ -114,7 +114,7 @@ setting is a DB row and not a config field. In order:
 
 1. `frontend/src/pages/light/SettingsPage.js` — add the key to a group in
    `SETTING_GROUPS`; that alone renders an input and saves it.
-2. `frontend/src/components/light/settingsFields.js` — a label override if the
+2. `frontend/src/components/light/settingsFields.ts` — a label override if the
    snake_case name does not humanise well, plus `NUMERIC_KEYS` or
    `DEFAULT_ON_KEYS` if it is a number or an on-by-default toggle.
 3. `api/internal/api/settings.go` — add the key to `publicSettingKeys` **only**

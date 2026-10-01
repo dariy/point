@@ -5,7 +5,7 @@
  */
 
 import { Component } from '../../components/Component.ts';
-import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.ts';
 import { getStats, getVersion } from '../../api/system.ts';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.ts';
 import { listPosts, createPost } from '../../api/posts.ts';

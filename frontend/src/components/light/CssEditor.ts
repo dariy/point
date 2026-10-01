@@ -11,12 +11,29 @@ import Prism from '../../../vendor/prismjs/prism-core.js';
 window.Prism = Prism;
 import '../../../vendor/prismjs/prism-css.js';
 
+export interface CssEditorProps {
+  value?: string;
+  placeholder?: string;
+  onChange?: (code: string) => void;
+  isMaximized?: boolean;
+  /** Element id of the editor; generated when absent. */
+  id?: string;
+}
+
 /**
  * CssEditor component.
  * Wraps CodeJar and PrismJS to provide a code editor with CSS syntax highlighting.
  */
-export class CssEditor extends Component {
-  constructor(container, props = {}) {
+export class CssEditor extends Component<CssEditorProps> {
+  value: string;
+  placeholder: string;
+  onChange: (code: string) => void;
+  jar: ReturnType<typeof CodeJar> | null;
+  isMaximized: boolean;
+  id: string;
+  _placeholder: HTMLElement | null;
+
+  constructor(container: HTMLElement, props: CssEditorProps = {}) {
     super(container, props);
     this.value = props.value || '';
     this.placeholder = props.placeholder || '/* Add your CSS here */';

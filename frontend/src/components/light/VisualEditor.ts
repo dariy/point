@@ -9,28 +9,30 @@ import { setToast } from "../../store.ts";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
+import type { EditorNode } from "../../utils/postNodes.ts";
+import type { Media } from "../../api/media.ts";
 
 // .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still
 // points at the original: the card's lightbox (see _bindLightbox) opens the
 // full image, not the rung the card painted.
 const VE_THUMB_SIZES = "80px";
 
-/**
- * @typedef {object} VisualEditorProps
- * @property {import('../../utils/postNodes.ts').EditorNode[]} [nodes]  The
- *   document, in order. Text edits are written into these nodes in place.
- * @property {Record<string, import('../../api/media.ts').Media>} [mediaByPath]
- *   Media records keyed by path, for each image card's EXIF panel.
- * @property {(nodes: import('../../utils/postNodes.ts').EditorNode[]) => void} [onChange]
- *   Called with the new list on any structural change.
- * @property {() => void} [onInput]  Called after an in-place text edit.
- * @property {(index: number) => void} [onAddMedia]  Open the picker to insert at `index`.
- * @property {(oldPath: string, newFilename: string) => Promise<void>} [onRename]
- *   Inline rename of an image card's file.
- */
+export interface VisualEditorProps {
+  /** The document, in order. Text edits are written into these nodes in place. */
+  nodes?: EditorNode[];
+  /** Media records keyed by path, for each image card's EXIF panel. */
+  mediaByPath?: Record<string, Media>;
+  /** Called with the new list on any structural change. */
+  onChange?: (nodes: EditorNode[]) => void;
+  /** Called after an in-place text edit. */
+  onInput?: () => void;
+  /** Open the picker to insert at `index`. */
+  onAddMedia?: (index: number) => void;
+  /** Inline rename of an image card's file. */
+  onRename?: (oldPath: string, newFilename: string) => Promise<void>;
+}
 
-/** @extends {Component<VisualEditorProps>} */
-export class VisualEditor extends Component {
+export class VisualEditor extends Component<VisualEditorProps> {
   render() {
     const { nodes = [] } = this.props;
 
@@ -156,8 +158,7 @@ export class VisualEditor extends Component {
     this.$$(".ve-exif-toggle").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const panel = /** @type {HTMLElement} */ (
-          btn.closest(".ve-card").querySelector(".ve-exif-panel"));
+        const panel = btn.closest(".ve-card").querySelector(".ve-exif-panel") as HTMLElement;
         if (panel) panel.hidden = !panel.hidden;
       });
     });
@@ -201,8 +202,8 @@ export class VisualEditor extends Component {
         const panel = btn.closest(".ve-exif-panel");
         const metadata = {};
         panel.querySelectorAll(".exif-rows tr").forEach((tr) => {
-          const key = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-key"))?.value.trim();
-          const val = /** @type {HTMLInputElement} */ (tr.querySelector(".exif-val"))?.value.trim();
+          const key = (tr.querySelector(".exif-key") as HTMLInputElement)?.value.trim();
+          const val = (tr.querySelector(".exif-val") as HTMLInputElement)?.value.trim();
           if (key) metadata[key] = val;
         });
         try {
@@ -283,9 +284,8 @@ export class VisualEditor extends Component {
    * Read current node state from DOM (capturing live textarea values)
    * and serialize to the plain-text content format.
    * Called by PostEditPage at save time.
-   * @returns {string}
    */
-  serializeNodes() {
+  serializeNodes(): string {
     const nodes = this.props.nodes || [];
     return nodes
       .map((node, i) => {
@@ -293,8 +293,8 @@ export class VisualEditor extends Component {
         const card = this.container.querySelector(
           `.ve-card[data-index="${i}"]`,
         );
-        const ta = /** @type {HTMLTextAreaElement} */ (card?.querySelector(".ve-text-area"));
-        const blockClassInput = /** @type {HTMLInputElement} */ (card?.querySelector(".ve-block-class"));
+        const ta = (card?.querySelector(".ve-text-area") as HTMLTextAreaElement);
+        const blockClassInput = (card?.querySelector(".ve-block-class") as HTMLInputElement);
         const text = ta ? ta.value : node.text || "";
         const blockClass = (
           blockClassInput ? blockClassInput.value : node.blockClass || ""
@@ -310,7 +310,7 @@ export class VisualEditor extends Component {
   _bindInsertZones() {
     this.$$(".ve-insert-text").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const zone = /** @type {HTMLElement} */ (btn.closest(".ve-insert-zone"));
+        const zone = (btn.closest(".ve-insert-zone") as HTMLElement);
         if (!zone) return;
         const at = parseInt(zone.dataset.insertAt, 10);
         const next = [...this.props.nodes];
@@ -319,14 +319,14 @@ export class VisualEditor extends Component {
         // After parent re-renders via setProps, focus the new textarea
         requestAnimationFrame(() => {
           const cards = this.$$(".ve-card");
-          /** @type {HTMLElement} */ (cards[at]?.querySelector(".ve-text-area"))?.focus();
+          (cards[at]?.querySelector(".ve-text-area") as HTMLElement)?.focus();
         });
       });
     });
 
     this.$$(".ve-insert-media").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const zone = /** @type {HTMLElement} */ (btn.closest(".ve-insert-zone"));
+        const zone = (btn.closest(".ve-insert-zone") as HTMLElement);
         if (!zone) return;
         const at = parseInt(zone.dataset.insertAt, 10);
         if (this.props.onAddMedia) {
@@ -337,7 +337,7 @@ export class VisualEditor extends Component {
   }
 
   _bindTextCards() {
-    this.$$(".ve-text-area").forEach((/** @type {HTMLTextAreaElement} */ ta) => {
+    (this.$$(".ve-text-area") as NodeListOf<HTMLTextAreaElement>).forEach((ta) => {
       const resize = () => {
         ta.style.height = "auto";
         ta.style.height = ta.scrollHeight + "px";
@@ -345,7 +345,7 @@ export class VisualEditor extends Component {
       resize();
       ta.addEventListener("input", () => {
         resize();
-        const card = /** @type {HTMLElement} */ (ta.closest(".ve-card"));
+        const card = (ta.closest(".ve-card") as HTMLElement);
         if (card) {
           const idx = parseInt(card.dataset.index, 10);
           if (this.props.nodes[idx]) {
@@ -358,9 +358,9 @@ export class VisualEditor extends Component {
       });
     });
 
-    this.$$(".ve-block-class").forEach((/** @type {HTMLInputElement} */ input) => {
+    (this.$$(".ve-block-class") as NodeListOf<HTMLInputElement>).forEach((input) => {
       input.addEventListener("input", () => {
-        const card = /** @type {HTMLElement} */ (input.closest(".ve-card"));
+        const card = (input.closest(".ve-card") as HTMLElement);
         if (card) {
           const idx = parseInt(card.dataset.index, 10);
           if (this.props.nodes[idx]) {
@@ -375,7 +375,7 @@ export class VisualEditor extends Component {
   _bindRemove() {
     this.$$(".ve-remove").forEach((btn) => {
       btn.addEventListener("click", (e) => {
-        const idx = parseInt(/** @type {HTMLElement} */ (e.currentTarget).dataset.index, 10);
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.index, 10);
         const next = [...this.props.nodes];
         next.splice(idx, 1);
         this.props.onChange(next);
@@ -422,15 +422,14 @@ export class VisualEditor extends Component {
 
     // Enable dragging only when mousedown starts on the handle
     list.addEventListener("mousedown", (e) => {
-      const handle = /** @type {HTMLElement} */ (e.target).closest(".ve-handle");
+      const handle = (e.target as HTMLElement).closest(".ve-handle");
       if (!handle) return;
       const card = handle.closest(".ve-card");
       if (card) card.setAttribute("draggable", "true");
     });
 
     list.addEventListener("dragstart", (e) => {
-      const card = /** @type {HTMLElement} */ (
-        /** @type {HTMLElement} */ (e.target).closest(".ve-card"));
+      const card = (e.target as HTMLElement).closest(".ve-card") as HTMLElement;
       if (!card || card.getAttribute("draggable") !== "true") return;
       dragIdx = parseInt(card.dataset.index, 10);
       card.classList.add("dragging");
@@ -456,7 +455,7 @@ export class VisualEditor extends Component {
     });
 
     list.addEventListener("dragleave", (e) => {
-      if (!list.contains(/** @type {Node} */ (e.relatedTarget))) removeIndicator();
+      if (!list.contains((e.relatedTarget as Node))) removeIndicator();
     });
 
     list.addEventListener("drop", (e) => {
@@ -487,7 +486,7 @@ export class VisualEditor extends Component {
   _bindInlineRename() {
     this.$$(".ve-path").forEach((span) => {
       span.addEventListener("click", () => {
-        const card = /** @type {HTMLElement} */ (span.closest(".ve-card"));
+        const card = (span.closest(".ve-card") as HTMLElement);
         if (!card) return;
         const idx = parseInt(card.dataset.index, 10);
         const node = this.props.nodes[idx];

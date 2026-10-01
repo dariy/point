@@ -9,7 +9,7 @@ import { html, setHTML, raw } from "../../utils/helpers.ts";
  */
 
 import { Component } from '../../components/Component.ts';
-import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.ts';
 import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
 import { getSettings, mergeSettings, setToast } from '../../store.ts';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';

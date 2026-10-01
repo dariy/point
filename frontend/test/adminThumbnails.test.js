@@ -26,8 +26,8 @@ let VisualEditor;
 before(async () => {
   dom = setupDOM();
   ({ default: PostsListPage } = await import('../src/pages/light/PostsListPage.js'));
-  ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.js'));
-  ({ VisualEditor } = await import('../src/components/light/VisualEditor.js'));
+  ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.ts'));
+  ({ VisualEditor } = await import('../src/components/light/VisualEditor.ts'));
   dom.cleanup();
 });
 

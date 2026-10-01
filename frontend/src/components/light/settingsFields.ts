@@ -10,6 +10,7 @@
  */
 
 import { html, raw } from "../../utils/helpers.ts";
+import type { RawHtml } from "../../utils/helpers.ts";
 import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.ts";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
@@ -218,15 +219,15 @@ function inputHtml(key, value, { posts = [] }) {
  * toggles are checkbox pills grouped together; everything else is a labelled
  * form group. Callers place each group where they want it.
  *
- * @param {string[]} keys
- * @param {Record<string,*>} settings
- * @param {{posts?: Array}} [ctx]
- * @returns {{inputs: import("../../utils/helpers.ts").RawHtml|string,
- *            toggles: import("../../utils/helpers.ts").RawHtml|string}}
- *   Empty is '' rather than empty markup: callers gate a wrapper on each of
- *   these, and html`` yields a String object, which is truthy even when blank.
+ * Each part is '' when empty rather than empty markup: callers gate a wrapper
+ * on each of these, and html`` yields a String object, which is truthy even
+ * when blank.
  */
-export function renderFields(keys, settings, ctx = {}) {
+export function renderFields(
+  keys: string[],
+  settings: Record<string, unknown>,
+  ctx: { posts?: unknown[] } = {},
+): { inputs: RawHtml | string; toggles: RawHtml | string } {
   const inputs = [];
   const toggles = [];
 
@@ -263,15 +264,10 @@ export function renderFields(keys, settings, ctx = {}) {
  * Collect a settings-update object from a form, restricted to `keys`. Checkbox
  * keys are always emitted ("true"/"false") since unchecked boxes are absent from
  * FormData; other keys are emitted only when present in the form.
- *
- * @param {HTMLFormElement} form
- * @param {string[]} keys
- * @returns {Record<string,string>}
  */
-export function collectUpdates(form, keys) {
+export function collectUpdates(form: HTMLFormElement, keys: string[]): Record<string, string> {
   const fd = new FormData(form);
-  /** @type {Record<string,string>} */
-  const updates = {};
+  const updates: Record<string,string> = {};
   for (const key of keys) {
     if (isToggleKey(key)) {
       updates[key] = fd.has(key) ? "true" : "false";

@@ -18,12 +18,12 @@ learn, a setting to forget).
 
 ## What is implemented
 
-- **One layout component**: every page renders through `AdminLayout.js` (shared
+- **One layout component**: every page renders through `AdminLayout.ts` (shared
   chrome, sync pill, header behavior implemented once).
-- **Grouped sidebar** (`LightSidebar.js`): WRITE (New post button, Home, Posts, Media,
+- **Grouped sidebar** (`LightSidebar.ts`): WRITE (New post button, Home, Posts, Media,
   Tags) over a collapsible MANAGE group (Analytics, Menu, Themes, Plugins, Settings,
   Security, System).
-- **Bottom tab bar on phones** (`AdminBottomBar.js`) with a prominent center ➕; the
+- **Bottom tab bar on phones** (`AdminBottomBar.ts`) with a prominent center ➕; the
   editor goes full-screen over it; the hamburger drawer is gone on phones.
 - **Editor** (`PostEditPage.js`): every block is one group — content (Text/Visual),
   title, tags, status & visibility, schedule, slug, excerpt, immersive mode, custom
@@ -57,8 +57,8 @@ learn, a setting to forget).
   status filtering, bulk/select mode.
 - **Tag workflow bridge**: hierarchy-aware autocomplete, deliberate-create popover,
   pinned Unfiled queue, Move…/Merge… dialogs (see [tag-system.md](tag-system.md)).
-- **Power-user layer**: `CommandPalette.js` (Ctrl+K — posts, tags, admin pages,
-  actions) and `ShortcutHelp.js` (`?` overlay) — depth without visual cost.
+- **Power-user layer**: `CommandPalette.ts` (Ctrl+K — posts, tags, admin pages,
+  actions) and `ShortcutHelp.ts` (`?` overlay) — depth without visual cost.
 - **Media on touch**: breadcrumb + a drill-down folder chip strip instead of the tree,
   long-press selection (see [media.md](media.md)).
 - **Touch pass**: ≥44 px targets, no hover-only or drag-only affordances on coarse

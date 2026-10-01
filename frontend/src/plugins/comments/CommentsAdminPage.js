@@ -6,7 +6,7 @@ import { Component } from "../../components/Component.ts";
 import {
   adminLayoutTemplate,
   setupAdminLayout,
-} from "../../components/light/AdminLayout.js";
+} from "../../components/light/AdminLayout.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { api } from "../../api/client.ts";
 import { setToast } from "../../store.ts";

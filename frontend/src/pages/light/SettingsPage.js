@@ -9,12 +9,12 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
 import { listPosts } from "../../api/posts.ts";
 import { mergeSettings, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { CHECK_SVG } from "../../utils/icons.ts";
-import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";
+import { renderFields, collectUpdates } from "../../components/light/settingsFields.ts";
 
 const SETTING_GROUPS = [
   {
@@ -137,7 +137,7 @@ export default class SettingsPage extends Component {
 
   async _pickLogo() {
     if (!this._logoPicker) {
-      const { MediaPickerDialog } = await import("../../components/light/MediaPickerDialog.js");
+      const { MediaPickerDialog } = await import("../../components/light/MediaPickerDialog.ts");
       this._logoPicker = new MediaPickerDialog({
         onConfirm: (items) => {
           const path = items[0]?.path;

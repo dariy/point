@@ -13,22 +13,25 @@
 
 import { Component } from '../Component.ts';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
-import { MediaBrowser } from './MediaBrowser.js';
-import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
+import { MediaBrowser } from './MediaBrowser.ts';
+import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.ts';
 import { setToast } from '../../store.ts';
 import { UPLOAD_SVG } from '../../utils/icons.ts';
 import { html, raw } from "../../utils/helpers.ts";
+import type { Media } from '../../api/media.ts';
 
-/**
- * @typedef {object} MediaPickerDialogProps
- * @property {(items: import('../../api/media.ts').Media[]) => void} [onConfirm]
- *   Called with the chosen media; open() can override it per opening.
- */
+export interface MediaPickerDialogProps {
+  /** Called with the chosen media; open() can override it per opening. */
+  onConfirm?: (items: Media[]) => void;
+}
 
-/** @extends {Component<MediaPickerDialogProps>} */
-export class MediaPickerDialog extends Component {
-  /** @param {MediaPickerDialogProps} props */
-  constructor({ onConfirm }) {
+export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
+  _activeBrowser: MediaBrowser | null;
+  _libraryPicker: PhotoLibraryPickerDialog | null;
+  _keyHandler: ((e: KeyboardEvent) => void) | null;
+  _onConfirmOverride: ((items: Media[]) => void) | null;
+
+  constructor({ onConfirm }: MediaPickerDialogProps) {
     const container = document.createElement('div');
     container.className = 'modal-overlay media-picker-overlay';
     container.setAttribute('aria-modal', 'true');
@@ -78,7 +81,7 @@ export class MediaPickerDialog extends Component {
     });
   }
 
-  open(onConfirmOverride) {
+  open(onConfirmOverride?: (items: Media[]) => void) {
     if (this._activeBrowser) return; // already open
     this._onConfirmOverride = onConfirmOverride || null;
     this.container.classList.add('active');

@@ -9,15 +9,15 @@ import { getTheme, onPluginToggled, setTheme } from '../../store.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 
-/**
- * @typedef {object} AdminBottomBarProps
- * @property {string} [currentPath]  Active route path.
- * @property {string} [publicUrl]  Where "View Site" goes; '/' by default.
- * @property {() => void} [onLogout]
- */
+export interface AdminBottomBarProps {
+  /** Active route path. */
+  currentPath?: string;
+  /** Where "View Site" goes; '/' by default. */
+  publicUrl?: string;
+  onLogout?: () => void;
+}
 
-/** @extends {Component<AdminBottomBarProps>} */
-export class AdminBottomBar extends Component {
+export class AdminBottomBar extends Component<AdminBottomBarProps> {
   render() {
     const { currentPath = '' } = this.props;
 

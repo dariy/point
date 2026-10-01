@@ -71,7 +71,7 @@ All five phases of the original refactor are done.
 ### Per-plugin settings drawer
 
 `PLUGIN_SETTINGS` in `PluginsPage.js` maps a plugin id to the settings it shows in
-the right-hand drawer (`PluginSettingsPanel.js`): `keys` renders plain settings
+the right-hand drawer (`PluginSettingsPanel.ts`): `keys` renders plain settings
 fields saved together through `PUT /api/settings`, `sections` mounts self-contained
 components from `components/light/sections/` (backups, Instagram import, passkeys,
 API keys, offline data, sync queue, version check). Plugins whose configuration is a

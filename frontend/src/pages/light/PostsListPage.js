@@ -5,9 +5,9 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
-import { TagsInput } from "../../components/light/TagsInput.js";
-import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
+import { TagsInput } from "../../components/light/TagsInput.ts";
+import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.ts";
 import { Pagination } from "../../components/shared/Pagination.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.ts";
