@@ -435,3 +435,130 @@ describe('AtlasPage hidden-node filter', () => {
     assert.equal(p._filteredOut({ id: 10, slug: 'q', status: 'published' }), false);
   });
 });
+
+describe('AtlasPage desktop side panel', () => {
+  let AtlasPage;
+  let panelHtml;
+  let setRoute;
+
+  const TAG_PAGE = {
+    posts: [
+      { id: 10, slug: 'p10', title: 'Berlin 2020', status: 'published', published_at: '2020-05-01T00:00:00Z' },
+      { id: 12, slug: 'p12', title: 'Draft', status: 'draft' },
+    ],
+    pagination: { page: 1, per_page: 2, total: 3, pages: 2 },
+  };
+
+  before(async () => {
+    const mod = await import('../src/plugins/tags-atlas/index.js');
+    AtlasPage = mod.default;
+    panelHtml = mod.panelHtml;
+    ({ setRoute } = await import('../src/store.js'));
+  });
+
+  afterEach(() => {
+    setRoute({ pathname: '/atlas', query: {} });
+    global.window.matchMedia = () => ({ matches: false });
+    delete global.fetch;
+  });
+
+  /** A page with a fake #atlas-panel element that records what is written to it. */
+  function withPanel(desktop) {
+    global.window.matchMedia = () => ({ matches: desktop });
+    const el = { hidden: true, innerHTML: '', addEventListener() {} };
+    const page = new AtlasPage({
+      querySelector: (sel) => (sel === '#atlas-panel' ? el : null),
+      querySelectorAll: () => [],
+    });
+    page._buildIndexes(GRAPH);
+    return { page, el, berlin: page._tagsById.get(1) };
+  }
+
+  test('a place at desktop width loads its posts with the year scope and renders rows', async () => {
+    setRoute({ pathname: '/atlas', query: { timeline: '2019-2021' } });
+    const { page, el, berlin } = withPanel(true);
+    const calls = fakeFetch(TAG_PAGE);
+
+    await page._openPanel(berlin);
+
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].includes('/api/pages/tags/berlin'), 'requests the tag page');
+    assert.ok(calls[0].includes('page=1'));
+    assert.ok(calls[0].includes('year_from=2019') && calls[0].includes('year_to=2021'));
+    assert.equal(el.hidden, false);
+    const out = String(el.innerHTML);
+    assert.ok(out.includes('Berlin') && out.includes('3 posts'), 'name and count');
+    assert.ok(out.includes('data-slug="p10"') && out.includes('data-slug="p12"'));
+    assert.ok(out.includes('data-action="more"'), 'more pages remain');
+
+    // "More" asks for the next page and appends.
+    fakeFetch({ posts: [{ id: 13, slug: 'p13', title: 'Last' }], pagination: { page: 2, total: 3, pages: 2 } });
+    await page._loadPanelPage();
+    assert.equal(page._panel.posts.length, 3);
+    assert.ok(!String(el.innerHTML).includes('data-action="more"'), 'no more pages');
+  });
+
+  test('a range change refetches the list with the new range', async () => {
+    const { page, berlin } = withPanel(true);
+    setRoute({ pathname: '/atlas', query: { timeline: '2010-2012' } });
+    let calls = fakeFetch(TAG_PAGE);
+    await page._openPanel(berlin);
+    assert.ok(calls[0].includes('year_from=2010'));
+
+    // A range change redraws the places, which reselects the place → reopens the panel.
+    setRoute({ pathname: '/atlas', query: { timeline: '2015-2016' } });
+    calls = fakeFetch(TAG_PAGE);
+    await page._openPanel(berlin);
+    assert.ok(calls[0].includes('year_from=2015') && calls[0].includes('year_to=2016'));
+    assert.equal(page._panel.posts.length, 2, 'the list is replaced, not appended');
+  });
+
+  test('_clearSelection removes the panel and drops a late page', async () => {
+    const { page, el, berlin } = withPanel(true);
+    fakeFetch(TAG_PAGE);
+    const pending = page._openPanel(berlin);
+    page._clearSelection();
+    await pending;
+    assert.equal(page._panel, null);
+    assert.equal(el.hidden, true);
+    assert.equal(String(el.innerHTML), '');
+  });
+
+  test('at a narrow width no panel opens and nothing is fetched', async () => {
+    const { page, el, berlin } = withPanel(false);
+    const calls = fakeFetch(TAG_PAGE);
+    await page._openPanel(berlin);
+    assert.equal(page._panel, null);
+    assert.equal(calls.length, 0);
+    assert.equal(el.hidden, true);
+  });
+
+  test('with "Hidden" off the list skips concealed posts', () => {
+    const page = new AtlasPage({});
+    page._hiddenTypes.add('concealed');
+    const out = String(panelHtml(
+      { tag: { name: 'Berlin' }, ...TAG_PAGE, page: 1, pages: 1, total: 2, loading: false, error: null },
+      (p) => page._filteredOut(p),
+    ));
+    assert.ok(out.includes('data-slug="p10"'));
+    assert.ok(!out.includes('data-slug="p12"'), 'draft skipped');
+  });
+
+  test('a post row opens the post and leaves atlasOpenContext', () => {
+    const store = {};
+    global.sessionStorage = { setItem: (k, v) => { store[k] = v; } };
+    const navs = [];
+    const prevDispatch = global.window.dispatchEvent;
+    global.window.dispatchEvent = (ev) => navs.push(ev.detail.path);
+    try {
+      const { page, berlin } = withPanel(true);
+      page._activeTag = berlin;
+      page._openPanelPost('p10');
+      assert.deepEqual(JSON.parse(store.atlasOpenContext), { placeTagId: 1 });
+      assert.deepEqual(navs, ['/posts/p10']);
+    } finally {
+      global.window.dispatchEvent = prevDispatch;
+      delete global.sessionStorage;
+    }
+  });
+});
