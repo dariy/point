@@ -15,7 +15,7 @@ import { MarkdownEditor } from "../../components/light/MarkdownEditor.js";
 import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender } from "../../api/posts.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { uploadMedia } from "../../api/media.ts";
-import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.ts";
 import {
   getAutosaveStatus,

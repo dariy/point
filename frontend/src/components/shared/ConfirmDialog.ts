@@ -3,23 +3,24 @@
  */
 
 import { Component } from '../Component.ts';
-import { Modal } from './Modal.js';
+import { Modal } from './Modal.ts';
 import { html, setHTML } from '../../utils/helpers.ts';
+import type { Slot, RawHtml } from '../../utils/helpers.ts';
 
-/**
- * @typedef {object} ConfirmDialogProps
- * @property {import('../../utils/helpers.ts').Slot} [title]
- * @property {string|import('../../utils/helpers.ts').RawHtml} [message]  Body
- *   text; markup only when it is html`` output and allowHtml is set.
- * @property {string} [confirmText]  Primary button label.
- * @property {() => void} [onConfirm]
- * @property {() => void} [onCancel]
- * @property {'primary'|'danger'} [variant]
- * @property {boolean} [allowHtml]  Render `message` as markup rather than text.
- */
+export interface ConfirmDialogProps {
+  title?: Slot;
+  /** Body text; markup only when it is html`` output and allowHtml is set. */
+  message?: string | RawHtml;
+  /** Primary button label. */
+  confirmText?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  variant?: 'primary' | 'danger';
+  /** Render `message` as markup rather than text. */
+  allowHtml?: boolean;
+}
 
-/** @extends {Component<ConfirmDialogProps>} */
-export class ConfirmDialog extends Component {
+export class ConfirmDialog extends Component<ConfirmDialogProps> {
   render() {
     return html`<div id="modal-wrapper"></div>`;
   }

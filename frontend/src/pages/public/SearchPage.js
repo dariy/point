@@ -13,7 +13,7 @@
  */
 import { pluginHost } from '../../core/pluginHost.ts';
 import { Component } from '../../components/Component.ts';
-import { Pagination } from '../../components/shared/Pagination.js';
+import { Pagination } from '../../components/shared/Pagination.ts';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
 import { getNavTags, getSettings, setPagination } from '../../store.ts';

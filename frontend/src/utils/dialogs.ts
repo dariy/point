@@ -6,8 +6,8 @@
  * SecurityPage) so the per-plugin section components can reuse the same pattern.
  */
 
-import { ConfirmDialog } from "../components/shared/ConfirmDialog.js";
-import { PromptDialog } from "../components/shared/PromptDialog.js";
+import { ConfirmDialog } from "../components/shared/ConfirmDialog.ts";
+import { PromptDialog } from "../components/shared/PromptDialog.ts";
 import type { RawHtml } from "./helpers.ts";
 
 /**

@@ -6,7 +6,7 @@
 
 import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
-import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.ts';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
   changePassword, changeEmail, getMe

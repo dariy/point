@@ -31,8 +31,8 @@ import { html, setHTML } from "../utils/helpers.ts";
  * a reload blink.
  */
 
-import { PostCard } from '../components/public/PostCard.js';
-import { Pagination } from '../components/shared/Pagination.js';
+import { PostCard } from '../components/public/PostCard.ts';
+import { Pagination } from '../components/shared/Pagination.ts';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.ts';
 import { getSettings } from '../store.ts';
 import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gridFit.ts';
@@ -41,7 +41,7 @@ import { dropBrokenImages } from '../utils/helpers.ts';
 import { flipGrid } from '../utils/gridFlip.ts';
 
 import type { Post } from '../api/posts.ts';
-import type { PostCardProps } from '../components/public/PostCard.js';
+import type { PostCardProps } from '../components/public/PostCard.ts';
 import type { RawHtml } from '../utils/helpers.ts';
 import type { SafariGestureEvent } from './gestures.ts';
 /** What the host page hands the pager. */

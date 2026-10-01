@@ -1,6 +1,6 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
-import { Pagination } from '../src/components/shared/Pagination.js';
+import { Pagination } from '../src/components/shared/Pagination.ts';
 
 // ── Minimal DOM so gridPager.js runs under node ───────────────────────────────
 // The pager only ever touches inline styles, classList, listeners and a couple

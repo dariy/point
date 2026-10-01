@@ -3,23 +3,28 @@
  */
 
 import { Component } from '../Component.ts';
-import { Modal } from './Modal.js';
+import { Modal } from './Modal.ts';
 import { html } from '../../utils/helpers.ts';
+import type { Slot } from '../../utils/helpers.ts';
 
-/**
- * @typedef {object} PromptDialogProps
- * @property {import('../../utils/helpers.ts').Slot} [title]
- * @property {string} [message]  Body text; each line becomes a paragraph.
- * @property {string} [defaultValue]  Initial value of the input.
- * @property {string} [inputType]  'text' (the default) or 'password'.
- * @property {'primary'|'danger'} [variant]  Confirm button style.
- * @property {string} [confirmText]  Primary button label.
- * @property {(value: string) => void} [onConfirm]  Called with the value.
- * @property {() => void} [onCancel]
- */
+export interface PromptDialogProps {
+  title?: Slot;
+  /** Body text; each line becomes a paragraph. */
+  message?: string;
+  /** Initial value of the input. */
+  defaultValue?: string;
+  /** 'text' (the default) or 'password'. */
+  inputType?: string;
+  /** Confirm button style. */
+  variant?: 'primary' | 'danger';
+  /** Primary button label. */
+  confirmText?: string;
+  /** Called with the value. */
+  onConfirm?: (value: string) => void;
+  onCancel?: () => void;
+}
 
-/** @extends {Component<PromptDialogProps>} */
-export class PromptDialog extends Component {
+export class PromptDialog extends Component<PromptDialogProps> {
   render() {
     return html`
       <div id="modal-wrapper"></div>
@@ -72,9 +77,9 @@ export class PromptDialog extends Component {
     modal.$('#prompt-ok-btn')?.addEventListener('click', () => this._handleConfirm(modal));
   }
 
-  _handleConfirm(modal) {
+  _handleConfirm(modal: Modal) {
     const { onConfirm } = this.props;
-    const input = modal.$('#prompt-input');
+    const input = modal.$('#prompt-input') as HTMLInputElement | null;
     if (onConfirm && input) {
       onConfirm(input.value);
     }

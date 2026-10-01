@@ -1,4 +1,4 @@
-import { MediaViewer } from '../../components/shared/MediaViewer.js';
+import { MediaViewer } from '../../components/shared/MediaViewer.ts';
 
 // Standard immersive viewer (header + footer chrome). The Sheet viewer is a
 // separate plugin (immersive-sheet); whichever is enabled claims the

@@ -24,7 +24,7 @@ import { setKey } from '../src/utils/reconcileList.ts';
 let PostGrid;
 let dom;
 
-before(async () => { ({ PostGrid } = await import('../src/components/public/PostGrid.js')); });
+before(async () => { ({ PostGrid } = await import('../src/components/public/PostGrid.ts')); });
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => dom.cleanup());
 

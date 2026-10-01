@@ -5,21 +5,31 @@
 import { Component } from '../Component.ts';
 import { html } from '../../utils/helpers.ts';
 
-/**
- * @typedef {object} PaginationProps
- * @property {number} [page]  Current page.
- * @property {number} [pages]  Last page.
- * @property {number} [minPage]  First page — 1 normally. The home feed lowers
- *   it to 0 or below for the owner, where the non-positive pages hold the
- *   scheduled queue (see pages/public/HomePage.js).
- * @property {number} [total]  Total items.
- * @property {boolean} [compact]  Show the item count as a tooltip instead of a
- *   label (for tight housings like the footer's centre slot).
- * @property {(page: number) => void} [onPage]  Called with the page navigated to.
- */
+export interface PaginationProps {
+  /** Current page. */
+  page?: number;
+  /** Last page. */
+  pages?: number;
+  /**
+   * First page — 1 normally. The home feed lowers it to 0 or below for the
+   * owner, where the non-positive pages hold the scheduled queue (see
+   * pages/public/HomePage.js).
+   */
+  minPage?: number;
+  /** Total items. */
+  total?: number;
+  /**
+   * Show the item count as a tooltip instead of a label (for tight housings
+   * like the footer's centre slot).
+   */
+  compact?: boolean;
+  /** Called with the page navigated to. */
+  onPage?: (page: number) => void;
+}
 
-/** @extends {Component<PaginationProps>} */
-export class Pagination extends Component {
+type PageItem = number | '…';
+
+export class Pagination extends Component<PaginationProps> {
   render() {
     const { page, pages, total, compact } = this.props;
     const minPage = this._minPage();
@@ -65,7 +75,7 @@ export class Pagination extends Component {
    * attribute, not the handler, is what stops the navigation.
    */
   actions = {
-    page(e, el) {
+    page(this: Pagination, _e: Event, el: HTMLButtonElement) {
       if (el.disabled) return;
       const p = parseInt(el.dataset.page, 10);
       if (p >= this._minPage() && p <= this.props.pages && this.props.onPage) {
@@ -84,13 +94,13 @@ export class Pagination extends Component {
    * Build a compact page number array with ellipsis gaps.
    * e.g. [1, '…', 4, 5, 6, '…', 10]
    */
-  _buildItems(page, pages, minPage = 1) {
+  _buildItems(page: number, pages: number, minPage = 1): PageItem[] {
     const span = pages - minPage + 1;
     if (span <= 7) {
       return Array.from({ length: span }, (_, i) => minPage + i);
     }
-    const items = [];
-    const addRange = (from, to) => {
+    const items: PageItem[] = [];
+    const addRange = (from: number, to: number) => {
       for (let i = from; i <= to; i++) items.push(i);
     };
     items.push(minPage);

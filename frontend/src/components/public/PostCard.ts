@@ -15,6 +15,7 @@ import { getNavTags, getSettings, onNavTags } from "../../store.ts";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
+import type { Post } from "../../api/posts.ts";
 
 const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
 
@@ -22,19 +23,27 @@ const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
 // closes every other card's overlay, so the card that lost its overlay must
 // lose its video with it. Cards are separate component instances, so the
 // running preview is tracked here rather than on any one of them.
-let touchPreview = null;
+let touchPreview: PostCard | null = null;
 
-/**
- * @typedef {object} PostCardProps
- * @property {import('../../api/posts.ts').Post} [post]  A post list item.
- * @property {boolean} [showViewCount]  From settings.show_view_counts.
- * @property {boolean} [isHero]  The first featured post, in the hero slot.
- * @property {string} [tagSlug]  The tag archive the card sits in, if any —
- *   opening the post then keeps that tag as the navigation context.
- */
+export interface PostCardProps {
+  /** A post list item. */
+  post?: Post;
+  /** From settings.show_view_counts. */
+  showViewCount?: boolean;
+  /** The first featured post, in the hero slot. */
+  isHero?: boolean;
+  /**
+   * The tag archive the card sits in, if any — opening the post then keeps
+   * that tag as the navigation context.
+   */
+  tagSlug?: string;
+}
 
-/** @extends {Component<PostCardProps>} */
-export class PostCard extends Component {
+export class PostCard extends Component<PostCardProps> {
+  _stopHoverVideo: (() => void) | null;
+  _startTouchVideo: (() => void) | null;
+  _hoverVideo: HTMLVideoElement | null;
+
   render() {
     const { post, showViewCount = false, isHero = false } = this.props;
     if (!post) return html``;
@@ -127,7 +136,7 @@ export class PostCard extends Component {
   afterRender() {
     const { post, tagSlug } = this.props;
     if (!post) return;
-    const card = this.$(".post-card");
+    const card = this.$(".post-card") as HTMLElement | null;
     if (!card) return;
 
     this._stopHoverVideo?.();
@@ -201,7 +210,7 @@ export class PostCard extends Component {
       // card's own — including a tap on an arrow that is invisible until the
       // overlay is revealed, which must count as that reveal tap.
       card.addEventListener("click", (e) => {
-        const target = /** @type {HTMLElement} */ (e.target);
+        const target = e.target as HTMLElement;
         if (target.closest("a")) return;
         const needsTwoTap =
           lastPointerType !== "mouse" && !card.classList.contains("is-touched");
@@ -229,8 +238,8 @@ export class PostCard extends Component {
           // the dismissing tap or by the next render boundary — a card revealed
           // and then re-rendered (navTags landing, say) used to leave this on
           // document for the life of the page.
-          const dismiss = (ev) => {
-            if (!card.contains(ev.target)) {
+          const dismiss = (ev: Event) => {
+            if (!card.contains(ev.target as Node)) {
               card.classList.remove("is-touched");
               this._stopHoverVideo?.();
               document.removeEventListener("click", dismiss, true);
@@ -243,7 +252,7 @@ export class PostCard extends Component {
       });
     } else {
       card.addEventListener("click", (e) => {
-        if (/** @type {HTMLElement} */ (e.target).closest("a, button")) return;
+        if ((e.target as HTMLElement).closest("a, button")) return;
         go();
       });
     }
@@ -251,7 +260,7 @@ export class PostCard extends Component {
     // Firefox doesn't focus non-interactive elements on click; force it so arrow key
     // navigation in PostGrid works consistently across browsers.
     card.addEventListener("mousedown", (e) => {
-      if (!(/** @type {HTMLElement} */ (e.target)).closest("a, button")) card.focus({ preventScroll: true });
+      if (!(e.target as HTMLElement).closest("a, button")) card.focus({ preventScroll: true });
     });
 
     card.addEventListener("keydown", (e) => {
@@ -283,10 +292,10 @@ export class PostCard extends Component {
    * fires both around a single tap, which would start and stop the video in
    * the same gesture.
    *
-   * @param {HTMLElement} card      the .post-card element
-   * @param {string}      mediaUrl  original media path (not the poster)
+   * @param card - the .post-card element
+   * @param mediaUrl - original media path (not the poster)
    */
-  _setupHoverVideo(card, mediaUrl) {
+  _setupHoverVideo(card: HTMLElement, mediaUrl: string) {
     const bg = card.querySelector(".post-card-background");
     if (!bg) return;
 

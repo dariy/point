@@ -13,7 +13,7 @@ describe('Pagination', () => {
   let Pagination;
 
   before(async () => {
-    ({ Pagination } = await import('../src/components/shared/Pagination.js'));
+    ({ Pagination } = await import('../src/components/shared/Pagination.ts'));
   });
 
   // render() returns the RawHtml html`` produces; String() for assert equality.

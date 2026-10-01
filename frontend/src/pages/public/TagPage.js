@@ -17,8 +17,8 @@ import { Component } from "../../components/Component.ts";
 import {
   PostContent,
   shouldUseImmersive,
-} from "../../components/public/PostContent.js";
-import { Pagination } from "../../components/shared/Pagination.js";
+} from "../../components/public/PostContent.ts";
+import { Pagination } from "../../components/shared/Pagination.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 import { getTagPage } from "../../api/pages.ts";
 import { getPostBySlug, getPostNavigation } from "../../api/posts.ts";

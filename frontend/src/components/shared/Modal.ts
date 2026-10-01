@@ -4,19 +4,25 @@
 
 import { Component } from '../Component.ts';
 import { html } from '../../utils/helpers.ts';
+import type { Slot } from '../../utils/helpers.ts';
 
-/**
- * @typedef {object} ModalProps
- * @property {import('../../utils/helpers.ts').Slot} [title]  Header title.
- * @property {() => void} [onClose]  Called when the close button, the backdrop
- *   or Escape dismisses the modal.
- * @property {import('../../utils/helpers.ts').Slot} [footer]  Footer buttons,
- *   built with html``.
- * @property {string} [maxWidth]  e.g. '500px' (the default).
- */
+export interface ModalProps {
+  /** Header title. */
+  title?: Slot;
+  /**
+   * Called when the close button, the backdrop or Escape dismisses the
+   * modal.
+   */
+  onClose?: () => void;
+  /** Footer buttons, built with html``. */
+  footer?: Slot;
+  /** e.g. '500px' (the default). */
+  maxWidth?: string;
+}
 
-/** @extends {Component<ModalProps>} */
-export class Modal extends Component {
+export class Modal extends Component<ModalProps> {
+  _onKeyDown: (e: KeyboardEvent) => void;
+
   render() {
     const { title = '', footer = '', maxWidth = '500px' } = this.props;
 
@@ -37,7 +43,7 @@ export class Modal extends Component {
     const closeBtn = this.$('#modal-close-btn');
     const backdrop = this.$('#modal-backdrop');
 
-    const handleClose = (e) => {
+    const handleClose = (e: Event) => {
       if (e.target === closeBtn || e.target === backdrop) {
         this.props.onClose?.();
       }
@@ -47,7 +53,7 @@ export class Modal extends Component {
     backdrop?.addEventListener('click', handleClose);
 
     // Escape key to close
-    this._onKeyDown = (e) => {
+    this._onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') this.props.onClose?.();
     };
     window.addEventListener('keydown', this._onKeyDown);

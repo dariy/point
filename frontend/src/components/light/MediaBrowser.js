@@ -12,10 +12,10 @@
  */
 
 import { Component } from "../Component.ts";
-import { Pagination } from "../shared/Pagination.js";
-import { MediaLightbox } from "../public/MediaLightbox.js";
-import { ConfirmDialog } from "../shared/ConfirmDialog.js";
-import { PromptDialog } from "../shared/PromptDialog.js";
+import { Pagination } from "../shared/Pagination.ts";
+import { MediaLightbox } from "../public/MediaLightbox.ts";
+import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
+import { PromptDialog } from "../shared/PromptDialog.ts";
 import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.ts";
 import { MediaPager } from "../../core/mediaPager.ts";
@@ -1004,7 +1004,7 @@ export class MediaBrowser extends Component {
   _showBulkDeleteConfirm(ids) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
-    import("../shared/ConfirmDialog.js").then(({
+    import("../shared/ConfirmDialog.ts").then(({
       ConfirmDialog
     }) => {
       const dialog = new ConfirmDialog(mountEl, {

@@ -10,9 +10,9 @@
 import { Component } from '../../components/Component.ts';
 
 
-import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
+import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.ts';
 
-import { Pagination } from '../../components/shared/Pagination.js';
+import { Pagination } from '../../components/shared/Pagination.ts';
 import { getHomePage } from '../../api/pages.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import {

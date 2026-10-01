@@ -13,6 +13,7 @@ import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.ts";
 import { getNavTags, getSettings, getUser } from "../../store.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 import { getPostPageLocation } from "../../api/posts.ts";
+import type { Post, PostMediaRef, PostStub } from "../../api/posts.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { cachedPerPage } from "../../utils/gridFit.ts";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.ts";
@@ -20,8 +21,8 @@ import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "..
 // Sets Prism.manual before prism-core is imported below — see that file.
 import "../../utils/prismManual.ts";
 
-const _prismLoading = new Map();
-const _LANG_DEPS = {
+const _prismLoading = new Map<string, Promise<void>>();
+const _LANG_DEPS: Record<string, string[]> = {
   javascript: ["clike"],
   typescript: ["clike", "javascript"],
   go: ["clike"],
@@ -38,7 +39,7 @@ async function _ensurePrismCore() {
   await import("/assets/vendor/prismjs/prism-core.js");
 }
 
-async function _loadPrismLang(lang) {
+async function _loadPrismLang(lang: string): Promise<void> {
   if (_prismLoading.has(lang)) return _prismLoading.get(lang);
   const p = (async () => {
     for (const dep of _LANG_DEPS[lang] ?? []) await _loadPrismLang(dep);
@@ -63,10 +64,10 @@ async function _loadPrismLang(lang) {
  * in this frontend. `Prism.highlight()` escapes the source text itself, which
  * is why raw() is the honest wrapper here.
  *
- * @param {HTMLElement} code  the `<code>` element
- * @param {string} lang       the language named by its `language-*` class
+ * @param code - the `<code>` element
+ * @param lang - the language named by its `language-*` class
  */
-function _highlightInto(code, lang) {
+function _highlightInto(code: HTMLElement, lang: string) {
   const Prism = window.Prism;
   const grammar = Prism?.languages?.[lang];
   // The grammar import failed (an unknown language, or offline). Leave the
@@ -85,7 +86,7 @@ function _highlightInto(code, lang) {
  * Returns true when the post should render in immersive (full-screen) mode.
  * Exported so PostPage can use the same check to configure its child components.
  */
-export function shouldUseImmersive(post) {
+export function shouldUseImmersive(post: Post | null | undefined): boolean {
   if (!post) return false;
   if (post.immersive_mode === "immersive") return true;
   if (post.immersive_mode === "non-immersive") return false;
@@ -93,7 +94,9 @@ export function shouldUseImmersive(post) {
   const body = post.content_html || "";
   if (body.includes("<hr>") || body.includes("<hr/>") || body.includes("<hr />")) return true;
   if (post.type === "page" || post.status === "page") return false;
-  const media = post.media || [];
+  // PostMediaRef has no `type`: the API does not send it, so both audio
+  // checks below never match. Cast kept until p-967m fixes it.
+  const media = (post.media || []) as (PostMediaRef & { type?: string })[];
   if (media.length && media.every((m) => m.type === "audio")) return false;
   const text = stripHtml(body).replace(/&nbsp;/g, " ").trim();
   if (text.length !== 0) {
@@ -106,22 +109,30 @@ export function shouldUseImmersive(post) {
   return hasVisualMedia || hasContentMedia;
 }
 
-/**
- * @typedef {object} PostContentProps
- * @property {import('../../api/posts.ts').Post} [post]  Full post from
- *   GET /api/posts/slug/:slug.
- * @property {import('../../api/posts.ts').PostStub|null} [prevPost]
- * @property {import('../../api/posts.ts').PostStub|null} [nextPost]
- * @property {boolean} [forceImmersive]  Show the viewer even for a post that
- *   would read as an article (header expand, image click, #N link).
- * @property {number} [startIndex]  Slide the viewer opens on.
- * @property {string} [tagSlug]  The tag archive the post was opened from.
- * @property {() => void} [onExitImmersive]  Unwind a forced viewer to the article.
- * @property {(index?: number) => void} [onEnterImmersive]  Open the viewer at a slide.
- */
+export interface PostContentProps {
+  /** Full post from GET /api/posts/slug/:slug. */
+  post?: Post;
+  prevPost?: PostStub | null;
+  nextPost?: PostStub | null;
+  /**
+   * Show the viewer even for a post that would read as an article (header
+   * expand, image click, #N link).
+   */
+  forceImmersive?: boolean;
+  /** Slide the viewer opens on. */
+  startIndex?: number;
+  /** The tag archive the post was opened from. */
+  tagSlug?: string;
+  /** Unwind a forced viewer to the article. */
+  onExitImmersive?: () => void;
+  /** Open the viewer at a slide. */
+  onEnterImmersive?: (index?: number) => void;
+}
 
-/** @extends {Component<PostContentProps>} */
-export class PostContent extends Component {
+export class PostContent extends Component<PostContentProps> {
+  _viewer: ReturnType<typeof pluginHost.fillOne> | null;
+  _comments: ReturnType<typeof pluginHost.fill> | null;
+
   render() {
     const { post, prevPost, nextPost, forceImmersive = false } = this.props;
     if (!post) return html``;
@@ -183,7 +194,7 @@ export class PostContent extends Component {
             // to gridFit's cached value — the same one the grid fetched with.
             const vc = ViewContext.current();
             const minPerPage = (getSettings() || {}).posts_per_page || 10;
-            const params = tagSlug ? { tag: tagSlug } : {};
+            const params: { tag?: string; per_page?: number } = tagSlug ? { tag: tagSlug } : {};
             params.per_page = vc.perPage || cachedPerPage(minPerPage);
             const data = await getPostPageLocation(post.slug, params);
             ViewContext.update({ page: data.page, postSlug: null });
@@ -207,7 +218,7 @@ export class PostContent extends Component {
         // Capture the mounted viewer so it's torn down on the next render/unmount
         // — otherwise the old MediaViewer (and any slot plugins it owns, e.g. the
         // slideshow's timers + document listeners) leak across post navigation.
-        this._viewer = pluginHost.fillOne('post-viewer', this.$('#media-viewer-mount'), viewerProps);
+        this._viewer = pluginHost.fillOne('post-viewer', this.$('#media-viewer-mount') as HTMLElement, viewerProps);
       }
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
@@ -241,7 +252,7 @@ export class PostContent extends Component {
     }
   }
 
-  _renderNormal(post, prevPost, nextPost) {
+  _renderNormal(post: Post, prevPost: PostStub | null | undefined, nextPost: PostStub | null | undefined) {
     const tags = renderTagStrip(post.tags);
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     // Both raw()s are server-sanitized content: the per-post CSS through
@@ -270,14 +281,14 @@ export class PostContent extends Component {
       ${navEnabled ? this._renderNormalPostArrows(prevPost, nextPost) : ""}`;
   }
 
-  _renderNormalPostArrows(prevPost, nextPost) {
+  _renderNormalPostArrows(prevPost: PostStub | null | undefined, nextPost: PostStub | null | undefined) {
     if (!prevPost && !nextPost) return '';
     const prev = prevPost ? html`<a href="/posts/${prevPost.slug}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>` : "";
     const next = nextPost ? html`<a href="/posts/${nextPost.slug}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>` : "";
     return html`<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
   }
 
-  _enhanceLinks(body) {
+  _enhanceLinks(body: Element) {
     body.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href") || "";
       if (/^https?:\/\//.test(href)) {
@@ -287,7 +298,7 @@ export class PostContent extends Component {
     });
   }
 
-  _enhanceMedia(body) {
+  _enhanceMedia(body: Element) {
     const { onEnterImmersive, post } = this.props;
     const fallbackAlt = post?.excerpt || post?.title || "";
     body.querySelectorAll("img").forEach((img) => { if (!img.getAttribute("alt")) img.setAttribute("alt", fallbackAlt); });
@@ -321,8 +332,8 @@ export class PostContent extends Component {
     }
   }
 
-  _enhanceCodeBlocks(body) {
-    const toHighlight = [];
+  _enhanceCodeBlocks(body: Element) {
+    const toHighlight: { code: HTMLElement; lang: string }[] = [];
     body.querySelectorAll("pre").forEach((pre) => {
       const code = pre.querySelector("code");
       if (!code) return;
@@ -338,7 +349,7 @@ export class PostContent extends Component {
     })();
   }
 
-  _renderNav(prev, next) {
+  _renderNav(prev: PostStub | null | undefined, next: PostStub | null | undefined) {
     if (!prev && !next) return '';
     const prevLink = prev ? html`<a href="/posts/${prev.slug}" class="post-nav-link prev" rel="prev"><span class="nav-label">Previous</span><span class="nav-title">${prev.title}</span></a>` : html`<span></span>`;
     const nextLink = next ? html`<a href="/posts/${next.slug}" class="post-nav-link next" rel="next"><span class="nav-label">Next</span><span class="nav-title">${next.title}</span></a>` : html`<span></span>`;

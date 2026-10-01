@@ -31,8 +31,8 @@ import { getVersion } from "./api/system.ts";
 import { normalizeSettings } from "./utils/helpers.ts";
 import { setPageTitle } from "./utils/documentTitle.ts";
 import { pluginHost } from "./core/pluginHost.ts";
-import { ToastContainer } from "./components/shared/Toast.js";
-import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
+import { ToastContainer } from "./components/shared/Toast.ts";
+import { NotificationLogButton } from "./components/shared/NotificationLogButton.ts";
 import { initNotificationLog } from "./utils/notificationLog.ts";
 
 // ── Theming Foundation ────────────────────────────────────────────────────

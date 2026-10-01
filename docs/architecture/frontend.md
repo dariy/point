@@ -479,7 +479,7 @@ a route change, and the FLIP animation over a zoom step.
 ### 2.6 — Example: Simple Component
 
 ```javascript
-// frontend/src/components/shared/Pagination.js
+// frontend/src/components/shared/Pagination.ts
 import { Component } from '../Component.js';
 import { html } from '../../utils/helpers.ts';
 
@@ -534,7 +534,7 @@ template escapes every interpolation on the way through, and
 ```javascript
 // frontend/src/pages/public/HomePage.js
 import { Component } from '../../components/Component.ts';
-import { PostGrid } from '../../components/public/PostGrid.js';
+import { PostGrid } from '../../components/public/PostGrid.ts';
 import { html } from '../../utils/helpers.ts';
 import { pagesApi } from '../../api/pages.ts';
 
@@ -1080,21 +1080,21 @@ frontend/
 |   |   |-- Component.js            <- Base class
 |   |   |
 |   |   |-- shared/                 <- Used in both public + light
-|   |   |   |-- Modal.js
-|   |   |   |-- Toast.js
-|   |   |   |-- Pagination.js
+|   |   |   |-- Modal.ts
+|   |   |   |-- Toast.ts
+|   |   |   |-- Pagination.ts
 |   |   |   |-- TagBadge.js
 |   |   |   |-- ThemeToggle.js
-|   |   |   |-- ConfirmDialog.js
+|   |   |   |-- ConfirmDialog.ts
 |   |   |   `-- LoadingSpinner.js
 |   |   |
 |   |   |-- public/                 <- Public blog components
 |   |   |   |-- PublicHeader.js
 |   |   |   |-- PublicFooter.js
-|   |   |   |-- PostCard.js
-|   |   |   |-- PostGrid.js
-|   |   |   |-- PostContent.js
-|   |   |   |-- MediaLightbox.js
+|   |   |   |-- PostCard.ts
+|   |   |   |-- PostGrid.ts
+|   |   |   |-- PostContent.ts
+|   |   |   |-- MediaLightbox.ts
 |   |   |   |-- TagCloud.js
 |   |   |   `-- ImmersiveViewer.js
 |   |   |
@@ -1577,7 +1577,7 @@ cross-origin access during development.
 
 | Item | Convention | Example |
 |---|---|---|
-| Component files | PascalCase | `PostCard.js` |
+| Component files | PascalCase | `PostCard.ts` |
 | Component classes | PascalCase | `class PostCard` |
 | API modules | camelCase | `postsApi` |
 | CSS classes | BEM-ish kebab | `.post-card__title` |

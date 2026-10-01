@@ -7,9 +7,20 @@
  *   lb.open(images, startIndex);    // images: [{ src, alt }]
  */
 
-import { MediaViewer } from '../shared/MediaViewer.js';
+import { MediaViewer } from '../shared/MediaViewer.ts';
+import type { MediaItem } from '../../utils/postMedia.ts';
+
+interface LightboxImage {
+  src: string;
+  alt: string;
+}
 
 export class MediaLightbox {
+  _images: LightboxImage[];
+  _index: number;
+  _el: HTMLElement | null;
+  _viewer: MediaViewer | null;
+
   constructor() {
     this._images = [];
     this._index = 0;
@@ -22,10 +33,10 @@ export class MediaLightbox {
 
   /**
    * Open the lightbox.
-   * @param {Array<{ src: string, alt: string }>} images
-   * @param {number} [startIndex]
+   * @param images
+   * @param startIndex
    */
-  open(images, startIndex = 0) {
+  open(images: LightboxImage[], startIndex = 0) {
     this._images = images;
     this._index = Math.max(0, Math.min(startIndex, images.length - 1));
     this._show();
@@ -60,11 +71,10 @@ export class MediaLightbox {
     this._el.classList.add('active');
     document.body.classList.add('ui-hidden'); // hide main site header/footer
     
-    /** @type {import('../../utils/postMedia.ts').MediaItem[]} */
-    const items = this._images.map(img => ({ type: 'image', url: img.src, alt: img.alt }));
+    const items: MediaItem[] = this._images.map(img => ({ type: 'image', url: img.src, alt: img.alt }));
     
     if (this._viewer) this._viewer.unmount();
-    this._viewer = new MediaViewer(this._el.querySelector('#lightbox-viewer-mount'), {
+    this._viewer = new MediaViewer(this._el.querySelector('#lightbox-viewer-mount') as HTMLElement, {
       items,
       startIndex: this._index,
       showClose: true,

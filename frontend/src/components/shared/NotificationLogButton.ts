@@ -14,16 +14,24 @@ import { html, setHTML } from "../../utils/helpers.ts";
 
 import { Component } from '../Component.ts';
 import { getRoute, getToastLog, onRoute, onToastLog, setToastLog } from '../../store.ts';
-import { Modal } from './Modal.js';
+import { Modal } from './Modal.ts';
 
 import { getRecentEntries } from '../../utils/notificationLog.ts';
-const TYPE_LABELS = {
+
+type ToastLogEntry = ReturnType<typeof getRecentEntries>[number];
+
+const TYPE_LABELS: Record<string, string> = {
   success: '✓',
   error: '✕',
   warning: '!',
   info: 'i'
 };
 export class NotificationLogButton extends Component {
+  _isOpen: boolean;
+  _activeModal: Modal | null;
+  _modalEl: HTMLElement | null;
+  _pruneTimer: ReturnType<typeof setTimeout> | null;
+
   constructor() {
     const container = document.createElement('div');
     container.className = 'notification-log-fab';
@@ -68,7 +76,7 @@ export class NotificationLogButton extends Component {
 
   // ── Visibility ────────────────────────────────────────────────────────────
 
-  _updateVisibility(entries, route) {
+  _updateVisibility(entries: ToastLogEntry[] | null | undefined, route: { pathname?: string } | null | undefined) {
     const isAdmin = route?.pathname?.startsWith('/light');
     const hasRecent = Array.isArray(entries) && entries.length > 0;
     if (isAdmin && hasRecent) {
@@ -83,7 +91,7 @@ export class NotificationLogButton extends Component {
    * Schedule a one-shot timeout so the button hides the moment the oldest
    * entry ages out of the 10-minute window — no polling required.
    */
-  _schedulePruneTimer(entries) {
+  _schedulePruneTimer(entries: ToastLogEntry[] | null | undefined) {
     if (this._pruneTimer) clearTimeout(this._pruneTimer);
     if (!entries || entries.length === 0) return;
     const expiresIn = entries[0].timestamp + 10 * 60 * 1000 - Date.now();

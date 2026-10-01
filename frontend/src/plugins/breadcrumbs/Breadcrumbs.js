@@ -3,7 +3,7 @@
  *
  * The blog title that heads the trail is NOT here: it is site identity and
  * outlives this plugin being switched off, so the header owns it (see
- * components/public/SiteCrumb.js). This component renders everything after it.
+ * components/public/SiteCrumb.ts). This component renders everything after it.
  */
 
 import { Component } from '../../components/Component.ts';

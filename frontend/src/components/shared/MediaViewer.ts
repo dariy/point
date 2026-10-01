@@ -23,38 +23,80 @@ import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
 import { mediaFromHtml } from '../../utils/postMedia.ts';
 import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.ts';
 import { immersiveNavTargets } from '../../utils/immersiveNav.ts';
+import type { MediaItem } from '../../utils/postMedia.ts';
+import type { Post, PostMediaRef, PostStub } from '../../api/posts.ts';
+import type { Slot } from '../../utils/helpers.ts';
 const MIN_SHOW_MS = 2000;
 
 // Set just before a seamless cross-post navigation so the next MediaViewer
 // mount skips its entrance fade — the dragged photo is already in place, so a
 // fade-in would re-blink it. Lives at module scope to bridge the route swap.
 let _suppressNextFadeIn = false;
-/**
- * @typedef {object} MediaViewerProps
- * @property {import('../../utils/postMedia.ts').MediaItem[]} [items]  Slides.
- * @property {import('../../api/posts.ts').PostMediaRef[]} [media]  The post's
- *   media records, for the per-slide EXIF panel.
- * @property {number} [startIndex]
- * @property {boolean} [showClose]
- * @property {boolean} [showShare]  On unless exactly false.
- * @property {() => void} [onClose]
- * @property {(index: number) => void} [onStep]
- * @property {import('../../api/posts.ts').PostStub|null} [navPrev]  Older post,
- *   for cross-post navigation.
- * @property {import('../../api/posts.ts').PostStub|null} [navNext]  Newer post.
- * @property {boolean} [sheetMode]
- * @property {import('../../api/posts.ts').Post} [post]  Read only by
- *   ImmersiveSheetViewer, which renders the post's details in its sheet.
- * @property {string} [editUrl]  Read only by ImmersiveSheetViewer.
- */
-
-/** @extends {Component<MediaViewerProps>} */
-export class MediaViewer extends Component {
+export interface MediaViewerProps {
+  /** Slides. */
+  items?: MediaItem[];
+  /** The post's media records, for the per-slide EXIF panel. */
+  media?: PostMediaRef[];
+  startIndex?: number;
+  showClose?: boolean;
+  /** On unless exactly false. */
+  showShare?: boolean;
+  onClose?: () => void;
+  onStep?: (index: number) => void;
+  /** Older post, for cross-post navigation. */
+  navPrev?: PostStub | null;
+  /** Newer post. */
+  navNext?: PostStub | null;
+  sheetMode?: boolean;
   /**
-   * @param {HTMLElement} container
-   * @param {MediaViewerProps} [props]
+   * Read only by ImmersiveSheetViewer, which renders the post's details in
+   * its sheet.
    */
-  constructor(container, props = {}) {
+  post?: Post;
+  /** Read only by ImmersiveSheetViewer. */
+  editUrl?: string;
+}
+
+/** Carousel direction: 'back' = below index 0, 'fwd' = past the last index. */
+type EdgeDir = 'back' | 'fwd';
+
+/** Preloaded media of an adjacent post. */
+interface EdgeMedia {
+  slug: string;
+  items: MediaItem[];
+  index: number;
+  item: MediaItem;
+}
+
+interface ZoomState {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export class MediaViewer extends Component<MediaViewerProps> {
+  _index: number;
+  _zoomState: ZoomState;
+  _lastShowTime: number;
+  _edge: Record<EdgeDir, EdgeMedia | null>;
+  _ghost: Record<EdgeDir, HTMLElement | null>;
+  _peekEl: HTMLElement | null;
+  _peekDir: EdgeDir | null;
+  _neighborVersion: number;
+  _slides: HTMLElement[];
+  _dots: HTMLElement[];
+  _slotMounts: ReturnType<typeof pluginHost.fill>[];
+  _exifMeta: (object | null)[] | null;
+  _exifControl: ReturnType<typeof createImmersiveExifControl> | null;
+  _goTo: (i: number) => boolean;
+  _gesture: GestureController;
+  _trackpad: TrackpadDetector;
+
+  /**
+   * @param container
+   * @param props
+   */
+  constructor(container: HTMLElement, props: MediaViewerProps = {}) {
     super(container, props);
     this._index = props.startIndex || 0;
     this._zoomState = {
@@ -118,10 +160,8 @@ export class MediaViewer extends Component {
    * Hook for subclasses to inject extra markup inside the viewer wrapper
    * (e.g. the immersive sheet overlay). Returns nothing by default; an override
    * returns the RawHtml html`` yields.
-   *
-   * @returns {import('../../utils/helpers.ts').Slot}
    */
-  _renderExtras() {
+  _renderExtras(): Slot {
     return '';
   }
 
@@ -130,7 +170,7 @@ export class MediaViewer extends Component {
   _useFloatingExif() {
     return true;
   }
-  _renderItem(item) {
+  _renderItem(item: MediaItem) {
     if (item.type === 'html') {
       // Post body markup, already sanitised server-side by the bluemonday policy.
       return html`<div class="immersive-text-slide"><div class="immersive-text-content">${raw(item.html)}</div></div>`;
@@ -144,7 +184,7 @@ export class MediaViewer extends Component {
     }
     return html`<img src="${url}" alt="${item.alt || ''}" class="immersive-bg-image" loading="lazy" decoding="async">`;
   }
-  _renderPostNav(prev, next) {
+  _renderPostNav(prev: PostStub | null | undefined, next: PostStub | null | undefined) {
     const {
       back,
       fwd
@@ -155,7 +195,7 @@ export class MediaViewer extends Component {
   }
   afterRender() {
     this._initInteractivity();
-    const wrapper = this.$('.media-viewer-wrapper');
+    const wrapper = this.$('.media-viewer-wrapper') as HTMLElement;
     // The floating share button is its own plugin (immersive-share); it injects
     // the button into the wrapper when enabled. showShare:false (e.g. a viewer
     // with no post) opts out, matching the old inline behaviour.
@@ -183,7 +223,7 @@ export class MediaViewer extends Component {
    * registers (the slideshow keeps document-level ones) are torn down with the
    * viewer — fill() results are otherwise discarded. Cleaned up in _cleanup().
    */
-  _fillSlot(slot, wrapper, ctx) {
+  _fillSlot(slot: string, wrapper: HTMLElement, ctx: object) {
     const p = pluginHost.fill(slot, wrapper, ctx);
     (this._slotMounts ||= []).push(p);
   }
@@ -192,12 +232,10 @@ export class MediaViewer extends Component {
   }
   _initInteractivity() {
     this._cleanup();
-    const wrapper = this.$('.media-viewer-wrapper');
-    const visuals = this.$('.immersive-visuals');
-    const slides = /** @type {HTMLElement[]} */ (
-      Array.from(visuals.querySelectorAll('.carousel-slide')));
-    const dots = /** @type {HTMLElement[]} */ (
-      Array.from(this.container.querySelectorAll('.carousel-dot')));
+    const wrapper = this.$('.media-viewer-wrapper') as HTMLElement;
+    const visuals = this.$('.immersive-visuals') as HTMLElement;
+    const slides = Array.from(visuals.querySelectorAll('.carousel-slide')) as HTMLElement[];
+    const dots = Array.from(this.container.querySelectorAll('.carousel-dot')) as HTMLElement[];
     this._slides = slides;
     this._dots = dots;
     let lastTapTime = 0;
@@ -228,7 +266,7 @@ export class MediaViewer extends Component {
     // Returns true when the step crossed into another post (a navigation is
     // underway), false when it stayed within this post — the slideshow uses this
     // to tell a real cross from an end-of-feed wrap.
-    const goTo = i => {
+    const goTo = (i: number): boolean => {
       const n = slides.length;
       if (!n) {
         if (i < 0) return this._navigatePost('back');
@@ -275,8 +313,8 @@ export class MediaViewer extends Component {
     this._goTo = goTo;
 
     // Nav panels
-    this.on(this.$('.immersive-nav-prev'), 'click', e => this._panelClick(e, () => goTo(this._index - 1)));
-    this.on(this.$('.immersive-nav-next'), 'click', e => this._panelClick(e, () => goTo(this._index + 1)));
+    this.on(this.$('.immersive-nav-prev'), 'click', (e: MouseEvent) => this._panelClick(e, () => goTo(this._index - 1)));
+    this.on(this.$('.immersive-nav-next'), 'click', (e: MouseEvent) => this._panelClick(e, () => goTo(this._index + 1)));
     dots.forEach((d, i) => this.on(d, 'click', () => goTo(i)));
 
     // Close
@@ -287,7 +325,7 @@ export class MediaViewer extends Component {
         onClose?.();
         return;
       }
-      if (e.target.closest('a, button, .immersive-nav-panel, input, .post-info-card, .immersive-sheet')) return;
+      if ((e.target as Element).closest('a, button, .immersive-nav-panel, input, .post-info-card, .immersive-sheet')) return;
       document.body.classList.contains('ui-hidden') ? this._showUI() : this._hideUI();
     });
 
@@ -372,7 +410,7 @@ export class MediaViewer extends Component {
     });
 
     // Keyboard
-    this.on(document, 'keydown', e => this._onKeyDown(e));
+    this.on(document, 'keydown', (e: KeyboardEvent) => this._onKeyDown(e));
     this._lastShowTime = Date.now();
 
     // Preload the adjacent posts' edge media so they can peek in during a drag.
@@ -380,8 +418,9 @@ export class MediaViewer extends Component {
   }
 
   /** Keyboard shortcuts. Subclasses override to claim keys before the defaults. */
-  _onKeyDown(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  _onKeyDown(e: KeyboardEvent) {
+    const tag = (e.target as Element).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (this._zoomState.scale > 1) {
       if (e.key === 'Escape') this._resetZoom();
       return;
@@ -414,7 +453,7 @@ export class MediaViewer extends Component {
    * The feed-direction setting swaps which adjacent post sits on each side
    * (see immersiveNavTargets).
    */
-  _targetFor(dir) {
+  _targetFor(dir: EdgeDir): PostStub | null | undefined {
     const targets = immersiveNavTargets(getSettings(), this.props.navPrev, this.props.navNext);
     return targets[dir];
   }
@@ -427,7 +466,7 @@ export class MediaViewer extends Component {
    */
   async _preloadNeighbors() {
     const version = ++this._neighborVersion;
-    const load = async dir => {
+    const load = async (dir: EdgeDir) => {
       const target = this._targetFor(dir);
       if (!target?.slug) return;
       let post;
@@ -459,7 +498,7 @@ export class MediaViewer extends Component {
   }
 
   /** Create the off-screen ghost slide element for a cross-post peek. */
-  _buildEdgeGhost(dir, item) {
+  _buildEdgeGhost(dir: EdgeDir, item: MediaItem) {
     const visuals = this.$('.immersive-visuals');
     if (!visuals || this._ghost[dir]) return;
     const el = document.createElement('div');
@@ -473,15 +512,15 @@ export class MediaViewer extends Component {
 
   /**
    * Cross into the adjacent post.
-   * @param {'back'|'fwd'} dir
-   * @param {{ seamless?: boolean }} [opts]  seamless=true skips the fade-out and
+   * @param dir
+   * @param opts - seamless=true skips the fade-out and
    *   suppresses the next entrance fade, for an uninterrupted drag hand-off
    *   (the adjacent post + its nav are already cached, so the reload paints
    *   nothing). seamless=false keeps the classic fade for keyboard/click nav.
    */
-  _navigatePost(dir, {
+  _navigatePost(dir: EdgeDir, {
     seamless = false
-  } = {}) {
+  }: { seamless?: boolean } = {}): boolean {
     const target = this._targetFor(dir);
     if (!target) return false;
 
@@ -516,7 +555,7 @@ export class MediaViewer extends Component {
     }
     return true;
   }
-  _isBlocked(dir) {
+  _isBlocked(dir: EdgeDir) {
     const n = this.props.items.length;
     const isAtEdge = dir === 'back' ? this._index === 0 : this._index === n - 1;
     if (!isAtEdge) return false;
@@ -528,7 +567,7 @@ export class MediaViewer extends Component {
    * given direction: the adjacent in-post slide, or the preloaded cross-post
    * ghost when at a post boundary. Null when there's nothing to reveal.
    */
-  _neighborEl(dir) {
+  _neighborEl(dir: EdgeDir): HTMLElement | null {
     const n = this.props.items.length;
     const idx = dir === 'fwd' ? this._index + 1 : this._index - 1;
     if (idx >= 0 && idx < n) return this._slides?.[idx] || null;
@@ -541,7 +580,7 @@ export class MediaViewer extends Component {
    * When the neighbor belongs to the next/prev post, the route swaps under it
    * once it lands, so the photo movement flows unbroken across the boundary.
    */
-  _commitHorizontal(dir) {
+  _commitHorizontal(dir: EdgeDir) {
     const newIndex = dir === 'fwd' ? this._index + 1 : this._index - 1;
     const n = this.props.items.length;
     const crossing = newIndex < 0 || newIndex >= n;
@@ -580,7 +619,7 @@ export class MediaViewer extends Component {
    * Make `newIndex` the active slide without a crossfade — the drag animation
    * has already moved it into place, so we just swap classes and clean up.
    */
-  _finalizeSwap(newIndex) {
+  _finalizeSwap(newIndex: number) {
     const old = this._slides[this._index];
     const next = this._slides[newIndex];
     this._index = newIndex;
@@ -605,7 +644,7 @@ export class MediaViewer extends Component {
   }
 
   /** Track the element currently peeking in, clearing any previous one. */
-  _setPeek(dir, el) {
+  _setPeek(dir: EdgeDir, el: HTMLElement) {
     if (this._peekEl && this._peekEl !== el) this._clearPeek();
     this._peekEl = el;
     this._peekDir = dir;
@@ -636,7 +675,7 @@ export class MediaViewer extends Component {
   }
 
   /** Real-time drag feedback. Overridable for alternate vertical gestures. */
-  _onSwipeMove(dx, dy) {
+  _onSwipeMove(dx: number, dy: number) {
     this._updateVisuals(this._calcSwipeX(dx, dy), dy);
   }
 
@@ -646,7 +685,7 @@ export class MediaViewer extends Component {
   }
 
   /** Drag committed past threshold in `dir` ('left'|'right'|'up'|'down'). */
-  _onSwipeCommit(dir) {
+  _onSwipeCommit(dir: 'left' | 'right' | 'up' | 'down') {
     if (dir === 'down') return this.props.onClose?.();
     if (dir === 'up') return this._resetVisuals();
     if (dir === 'left' && this._isBlocked('fwd') || dir === 'right' && this._isBlocked('back')) {
@@ -659,7 +698,7 @@ export class MediaViewer extends Component {
    * blocked, plain otherwise. A drag that is more vertical than horizontal is
    * on its way to a dismiss, so it never rubber-bands.
    */
-  _calcSwipeX(dx, dy) {
+  _calcSwipeX(dx: number, dy: number) {
     if (Math.abs(dx) <= Math.abs(dy || 0)) return dx;
     const blocked = dx > 0 && this._isBlocked('back') || dx < 0 && this._isBlocked('fwd');
     return blocked ? rubberBand(dx) : dx;
@@ -700,8 +739,8 @@ export class MediaViewer extends Component {
     target.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     target.style.opacity = '1';
   }
-  _activeEl() {
-    return this._slides?.[this._index] || this.$('.carousel-slide.active') || this.$('.immersive-visuals');
+  _activeEl(): HTMLElement | null {
+    return this._slides?.[this._index] || (this.$('.carousel-slide.active') as HTMLElement | null) || (this.$('.immersive-visuals') as HTMLElement | null);
   }
   _resetVisuals() {
     const target = this._activeEl();
@@ -749,7 +788,7 @@ export class MediaViewer extends Component {
    * the edge, while sliding the neighbor in from the opposite side with the
    * mirrored (rising) opacity — the "infinite stripe" feel.
    */
-  _horizontalDrag(active, tx) {
+  _horizontalDrag(active: HTMLElement, tx: number) {
     const W = window.innerWidth;
     const dir = tx < 0 ? 'fwd' : 'back';
     const neighbor = this._neighborEl(dir);
@@ -771,21 +810,20 @@ export class MediaViewer extends Component {
     neighbor.style.zIndex = '11';
   }
   _getMaxScale() {
-    const img = /** @type {HTMLImageElement|HTMLVideoElement} */ (
-      (this.$('.carousel-slide.active') || this.$('.immersive-visuals')).querySelector('img, video'));
+    const img = (this.$('.carousel-slide.active') || this.$('.immersive-visuals')).querySelector('img, video') as HTMLImageElement | HTMLVideoElement | null;
     if (!img) return 2;
     const rect = img.getBoundingClientRect();
     const nw = ('naturalWidth' in img ? img.naturalWidth : img.videoWidth) || rect.width * 2;
     return Math.max(window.innerWidth / rect.width, window.innerHeight / rect.height, nw / rect.width, 2);
   }
-  _panelClick(e, navFn) {
+  _panelClick(e: MouseEvent, navFn: () => void) {
     // While zoomed the edge panels don't navigate — an edge tap is part of
     // inspecting the zoomed image, not a step. Reset to fit first (double-tap/Esc).
     if (this._zoomState.scale > 1) {
       e.stopPropagation();
       return;
     }
-    const panel = e.currentTarget;
+    const panel = e.currentTarget as HTMLElement;
     panel.style.pointerEvents = 'none';
     const link = document.elementFromPoint(e.clientX, e.clientY)?.closest('a');
     panel.style.pointerEvents = '';

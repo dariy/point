@@ -9,7 +9,7 @@
 import { pluginHost } from '../../core/pluginHost.ts';
 import { Component } from '../../components/Component.ts';
 
-import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
+import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.ts';
 import { previewPost } from '../../api/posts.ts';
 import { getNavTags, getSettings } from '../../store.ts';
 import { html } from '../../utils/helpers.ts';

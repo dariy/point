@@ -1,4 +1,4 @@
-import { PostGrid } from '../../components/public/PostGrid.js';
+import { PostGrid } from '../../components/public/PostGrid.ts';
 import { attachHoverEffect } from './hover.js';
 
 export function mount(el, ctx) {

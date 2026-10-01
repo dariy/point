@@ -22,8 +22,8 @@ import (
 // writing their own srcset full of arbitrary URLs. Adding it to the policy
 // would hand that back.
 //
-// `src` is left pointing at the bare original on purpose. PostContent.js and
-// MediaViewer.js build the lightbox from extractMedia's `\ssrc="…"` capture
+// `src` is left pointing at the bare original on purpose. PostContent.ts and
+// MediaViewer.ts build the lightbox from extractMedia's `\ssrc="…"` capture
 // (postMedia.ts), so a variant in `src` would quietly turn "the lightbox opens
 // the original" into "the lightbox opens a 512px JPEG". Keeping it bare also
 // means no frontend parser has to change.

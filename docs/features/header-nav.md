@@ -74,7 +74,7 @@ and re-renders when it lands, so neither surface depends on the other existing.
 ### Who renders the title
 
 The blog title is *site identity*, not page context, so the header owns it —
-`components/public/SiteCrumb.js`, mounted at the head of the context zone —
+`components/public/SiteCrumb.ts`, mounted at the head of the context zone —
 while the breadcrumbs plugin renders the trail after it. Switch breadcrumbs off
 and the title and its dropdown stay; the trail is simply gone. The two render
 into sibling `display: contents` wrappers inside `.site-breadcrumb` (each

@@ -7,7 +7,7 @@ import {
   adminLayoutTemplate,
   setupAdminLayout,
 } from "../../components/light/AdminLayout.js";
-import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { api } from "../../api/client.ts";
 import { setToast } from "../../store.ts";
 import { html, parseMarkup, raw } from "../../utils/helpers.ts";

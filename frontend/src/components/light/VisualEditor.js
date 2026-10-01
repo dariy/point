@@ -7,7 +7,7 @@ import { html } from "../../utils/helpers.ts";
 import { updateMedia, reextractMediaEXIF } from "../../api/media.ts";
 import { setToast } from "../../store.ts";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
-import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 
 // .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still

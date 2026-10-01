@@ -38,7 +38,7 @@ describe('SiteCrumb', () => {
     global.localStorage = { getItem: () => null, setItem: () => {} };
 
     ({ setRootTags } = await import('../src/store.ts'));
-    ({ SiteCrumb } = await import('../src/components/public/SiteCrumb.js'));
+    ({ SiteCrumb } = await import('../src/components/public/SiteCrumb.ts'));
 
     container = {
       querySelector: () => null,

@@ -7,7 +7,7 @@
 
 import { Component } from '../../components/Component.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
-import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
+import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.ts';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
 import { getNavTags, getSettings } from '../../store.ts';
 import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.ts';

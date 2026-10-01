@@ -58,7 +58,7 @@ hands-free auto-advancing show inside the viewer. Implemented behavior:
 - **Viewer extensibility via slots** (`immersive-share` proved the pattern; slideshow
   followed) — floating controls are sibling plugins, not viewer patches.
 - **MediaLightbox vs. immersive carousel**: the admin/public lightbox
-  (`frontend/src/components/public/MediaLightbox.js`) still duplicates some
+  (`frontend/src/components/public/MediaLightbox.ts`) still duplicates some
   gesture/keyboard logic; long-term convergence into one media-viewer component with
   two entry modes remains the intended direction (from the public-UX proposal).
 

@@ -3,25 +3,34 @@
  */
 
 import { Component } from '../Component.ts';
-import { PostCard } from './PostCard.js';
+import { PostCard } from './PostCard.ts';
 import { html } from '../../utils/helpers.ts';
 import { measureCardImageSizes } from '../../utils/gridFit.ts';
 import { reconcileList, setKey } from '../../utils/reconcileList.ts';
+import type { Post } from '../../api/posts.ts';
+import type { PostCardProps } from './PostCard.ts';
 
-/**
- * @typedef {object} PostGridProps
- * @property {import('../../api/posts.ts').Post[]} [posts]  Post list items.
- * @property {boolean} [showViewCount]  Passed through to PostCard.
- * @property {string} [emptyMessage]  Text shown when `posts` is empty.
- * @property {boolean} [reversed]  Fill right-to-left instead of left-to-right.
- *   The home feed's scheduled ("future") pages read outward from page 1: the
- *   post about to go live sits top-right, next to where the newest published
- *   post would be, and the queue runs leftwards and down from there.
- * @property {string} [tagSlug]  Passed through to PostCard.
- */
+export interface PostGridProps {
+  /** Post list items. */
+  posts?: Post[];
+  /** Passed through to PostCard. */
+  showViewCount?: boolean;
+  /** Text shown when `posts` is empty. */
+  emptyMessage?: string;
+  /**
+   * Fill right-to-left instead of left-to-right. The home feed's scheduled
+   * ("future") pages read outward from page 1: the post about to go live sits
+   * top-right, next to where the newest published post would be, and the
+   * queue runs leftwards and down from there.
+   */
+  reversed?: boolean;
+  /** Passed through to PostCard. */
+  tagSlug?: string;
+}
 
-/** @extends {Component<PostGridProps>} */
-export class PostGrid extends Component {
+export class PostGrid extends Component<PostGridProps> {
+  _cards: (PostCard | null)[];
+
   render() {
     const { posts = [], emptyMessage = 'No posts yet.', reversed = false } = this.props;
 
@@ -67,20 +76,19 @@ export class PostGrid extends Component {
     // focused — and so released at the render boundary: the handler closes over
     // `grid`, and a grid from a previous render is a detached node whose cards
     // no longer exist.
-    this.on(document, 'keydown', (e) => {
+    this.on(document, 'keydown', (e: KeyboardEvent) => {
       if (!e.ctrlKey || !['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
-      const cards = /** @type {HTMLElement[]} */ (
-        Array.from(grid.querySelectorAll('.post-card[tabindex="0"]')));
+      const cards = Array.from(grid.querySelectorAll('.post-card[tabindex="0"]')) as HTMLElement[];
       if (!cards.length) return;
       e.preventDefault();
-      const idx = cards.indexOf(/** @type {HTMLElement} */ (document.activeElement));
+      const idx = cards.indexOf(document.activeElement as HTMLElement);
       const delta = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
       const next = idx === -1 ? 0 : Math.max(0, Math.min(idx + delta, cards.length - 1));
       cards[next].focus();
     });
   }
 
-  _cardProps(post, isHero = false) {
+  _cardProps(post: Post, isHero = false): PostCardProps {
     const { showViewCount = false, tagSlug } = this.props;
     // isHero is not decoration: the hero slot spans the whole row, so its card
     // paints an image several times the width of a regular one and has to ask
@@ -95,10 +103,10 @@ export class PostGrid extends Component {
    * with, so a change to `showViewCount` or `tagSlug` has to go through the
    * rebuild or half the grid would still be showing the old answer.
    *
-   * @param {PostGridProps} prevProps
-   * @returns {boolean} true when the grid was updated in place.
+   * @param prevProps
+   * @returns true when the grid was updated in place.
    */
-  update(prevProps) {
+  update(prevProps: PostGridProps): boolean {
     for (const key of new Set([...Object.keys(prevProps), ...Object.keys(this.props)])) {
       if (key !== 'posts' && prevProps[key] !== this.props[key]) return false;
     }
@@ -120,21 +128,20 @@ export class PostGrid extends Component {
    * region when the grid cannot take the list, and setProps() would give them
    * a grid that had already rebuilt itself on the way to saying no.
    *
-   * @param {import('../../api/posts.ts').Post[]} posts  the refit list.
-   * @returns {boolean} false when the lists diverge — caller re-renders instead.
+   * @param posts - the refit list.
+   * @returns false when the lists diverge — caller re-renders instead.
    */
-  reconcile(posts = []) {
+  reconcile(posts: Post[] = []): boolean {
     const handled = this._reconcileTo(posts, this.props.posts || []);
     if (handled) this.props = { ...this.props, posts };
     return handled;
   }
 
   /**
-   * @param {import('../../api/posts.ts').Post[]} posts    the list to end up showing
-   * @param {import('../../api/posts.ts').Post[]} current  the list currently on screen
-   * @returns {boolean}
+   * @param posts - the list to end up showing
+   * @param current - the list currently on screen
    */
-  _reconcileTo(posts, current) {
+  _reconcileTo(posts: Post[], current: Post[]): boolean {
     const grid = this.$('.posts-grid');
     // An empty list on either side is the empty-state markup, not a grid.
     if (!grid || !current.length || !posts.length || !this._cards) return false;
@@ -157,8 +164,7 @@ export class PostGrid extends Component {
     // arrivals read it.
     measureCardImageSizes(grid);
 
-    /** @type {Map<string, import('./PostCard.js').PostCard>} */
-    const cards = new Map();
+    const cards = new Map<string, PostCard>();
     current.forEach((post, i) => {
       if (this._cards[i]) cards.set(String(post.id), this._cards[i]);
     });

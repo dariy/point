@@ -18,8 +18,22 @@ import { html } from '../../utils/helpers.ts';
 const DURATION_MS = 4000;
 const MAX_TOASTS = 5;
 
+interface ToastPayload {
+  message: string;
+  type?: 'success' | 'error' | 'info' | 'warning';
+}
+
+interface ToastEntry {
+  id: number;
+  el: HTMLElement;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
 export class ToastContainer extends Component {
-  constructor(container, props = {}) {
+  _toasts: ToastEntry[];
+  _nextId: number;
+
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this._toasts = [];
     this._nextId = 1;
@@ -35,7 +49,7 @@ export class ToastContainer extends Component {
     });
   }
 
-  _add({ message, type = 'info' }) {
+  _add({ message, type = 'info' }: ToastPayload) {
     const id = this._nextId++;
 
     // Limit visible toasts.
@@ -64,7 +78,7 @@ export class ToastContainer extends Component {
     el.append(msg, btn);
     this.container.appendChild(el);
 
-    const entry = { id, el, timer: null };
+    const entry: ToastEntry = { id, el, timer: null };
     entry.timer = setTimeout(() => this._remove(id), DURATION_MS);
     this._toasts.push(entry);
 
@@ -72,7 +86,7 @@ export class ToastContainer extends Component {
     requestAnimationFrame(() => el.classList.add('toast-visible'));
   }
 
-  _remove(id) {
+  _remove(id: number) {
     const idx = this._toasts.findIndex((t) => t.id === id);
     if (idx === -1) return;
     const [entry] = this._toasts.splice(idx, 1);

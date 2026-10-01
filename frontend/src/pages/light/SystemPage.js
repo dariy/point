@@ -8,7 +8,7 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import {
   adminLayoutTemplate,
   setupAdminLayout,

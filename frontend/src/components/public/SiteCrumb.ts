@@ -19,19 +19,21 @@ import { html, navigate } from '../../utils/helpers.ts';
 import { loadNav } from '../../api/nav.ts';
 import { tagHref } from '../../utils/tagLinks.ts';
 import { attachFlyoutTrigger, hideFlyoutWithin } from '../../utils/tagFlyout.ts';
+import type { StoreSettings } from '../../utils/helpers.ts';
+import type { HeaderFold } from '../../utils/headerFold.ts';
 
-/**
- * @typedef {object} SiteCrumbProps
- * @property {import('../../utils/helpers.ts').StoreSettings} [settings]  Public
- *   settings; reads blog_title and show_title_dropdown.
- * @property {boolean} [hasTrail]  Crumbs follow: render as a link with a separator.
- * @property {HTMLElement} [group]  Header group; clicks inside it don't dismiss the panel.
- * @property {import('../../utils/headerFold.ts').HeaderFold} [fold]  Re-measured
- *   when late data changes our width.
- */
+export interface SiteCrumbProps {
+  /** Public settings; reads blog_title and show_title_dropdown. */
+  settings?: StoreSettings;
+  /** Crumbs follow: render as a link with a separator. */
+  hasTrail?: boolean;
+  /** Header group; clicks inside it don't dismiss the panel. */
+  group?: HTMLElement;
+  /** Re-measured when late data changes our width. */
+  fold?: HeaderFold;
+}
 
-/** @extends {Component<SiteCrumbProps>} */
-export class SiteCrumb extends Component {
+export class SiteCrumb extends Component<SiteCrumbProps> {
   render() {
     const { settings = {}, hasTrail = false } = this.props;
 

@@ -4,7 +4,7 @@
  */
 
 import { Component } from '../../components/Component.ts';
-import { SiteCrumb } from '../../components/public/SiteCrumb.js';
+import { SiteCrumb } from '../../components/public/SiteCrumb.ts';
 import { getSettings, getTheme, getUser, setTheme } from '../../store.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.ts';

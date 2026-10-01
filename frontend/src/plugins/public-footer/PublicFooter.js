@@ -3,7 +3,7 @@
  */
 
 import { Component } from "../../components/Component.ts";
-import { Pagination } from "../../components/shared/Pagination.js";
+import { Pagination } from "../../components/shared/Pagination.ts";
 import { renderCopyright } from "../../utils/copyright.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import {

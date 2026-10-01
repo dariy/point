@@ -19,7 +19,7 @@
  * the classic MediaViewer is left untouched.
  */
 
-import { MediaViewer } from '../../components/shared/MediaViewer.js';
+import { MediaViewer } from '../../components/shared/MediaViewer.ts';
 import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.ts';
 import { pluginHost } from '../../core/pluginHost.ts';

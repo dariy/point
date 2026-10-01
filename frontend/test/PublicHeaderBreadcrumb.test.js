@@ -133,7 +133,7 @@ describe('Breadcrumbs plugin', () => {
   // ── Root "site" crumb ─────────────────────────────────────────────────────
 
   test('the blog title is not rendered here', () => {
-    // It is the header's SiteCrumb (see components/public/SiteCrumb.js) so that
+    // It is the header's SiteCrumb (see components/public/SiteCrumb.ts) so that
     // switching this plugin off leaves the site identity — and its root-tag
     // dropdown — standing. This component starts at the first tag crumb.
     const markup = renderWith(
