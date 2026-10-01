@@ -1,6 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 import { pluginHost } from '../src/core/pluginHost.js';
+import { mergeSettings } from '../src/store.js';
 
 describe('PostEditPage', () => {
   let PostEditPage;
@@ -458,6 +459,9 @@ test('should preserve other fields when switching from visual to text mode', () 
       getItem: (k) => (k === 'point:editor:field-order' ? JSON.stringify(['tags', 'title']) : null),
       setItem: () => {}, removeItem: () => {},
     };
+    // Earlier drop tests save the order and pins to the settings store, which
+    // the layout reads before localStorage.
+    mergeSettings({ editor_field_order: null, editor_pinned: null });
     try {
       const container = { querySelector: () => null, querySelectorAll: () => [] };
       const page = new PostEditPage(container, { params: { id: '1' } });

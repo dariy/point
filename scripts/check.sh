@@ -274,10 +274,20 @@ run_lane() {
 mkdir -p "$LOG_DIR"
 for s in "${!SELECTED[@]}"; do rm -f "$LOG_DIR/$s.log" "$LOG_DIR/$s.status"; done
 
-# Both JS lanes need node_modules; installing once here keeps them from racing
-# two `npm ci` runs over the same directory.
 needs_node=""
 for s in "${JS_LANE[@]}" "${E2E_LANE[@]}"; do [ -z "${SELECTED[$s]}" ] || needs_node=1; done
+# The frontend tests import .ts files; Node must remove their types itself.
+if [ -n "$needs_node" ]; then
+    case "$(node -p 'process.features.typescript' 2>/dev/null)" in
+        strip|transform) ;;
+        *) echo "This Node cannot remove TypeScript types (process.features.typescript is false)."
+           echo "Install an official Node $(cat "$ROOT_DIR/.nvmrc") build from https://nodejs.org/ — distro builds leave it out."
+           exit 1 ;;
+    esac
+fi
+
+# Both JS lanes need node_modules; installing once here keeps them from racing
+# two `npm ci` runs over the same directory.
 if [ -n "$needs_node" ] && { [ ! -x "$ROOT_DIR/node_modules/.bin/eslint" ] || [ ! -x "$ROOT_DIR/node_modules/.bin/tsc" ]; }; then
     echo "npm ci (node_modules is missing) — log: tmp/check/npm-ci.log"
     (cd "$ROOT_DIR" && npm ci --no-audit --no-fund) >"$LOG_DIR/npm-ci.log" 2>&1 || {

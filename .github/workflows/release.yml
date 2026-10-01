@@ -216,7 +216,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
 
       - name: Build tarballs
         run: ./scripts/build-tarball.sh --version="${{ inputs.tag || github.ref_name }}"

@@ -4,8 +4,8 @@
 # The alternative to this script is discovering the answer through a failing
 # build — `check.sh` has always required `golangci-lint` and `govulncheck`
 # without anything saying so. Every version below is read from the file that
-# already decides it (api/go.mod for Go, .github/workflows/test.yml for Node
-# and the two tool pins), so this report cannot drift from what CI enforces.
+# already decides it (api/go.mod for Go, .nvmrc for Node, .github/workflows/test.yml
+# for the two tool pins), so this report cannot drift from what CI enforces.
 #
 # Usage: ./scripts/doctor.sh [--json]
 #   --json   the same report as one JSON object on stdout, nothing else
@@ -76,7 +76,8 @@ version_ge() {
 
 # ── What the repo asks for ───────────────────────────────────────────────────
 GO_WANT="$(awk '$1 == "go" { print $2; exit }' "$ROOT_DIR/api/go.mod" 2>/dev/null)"
-NODE_WANT="$(sed -n 's/.*node-version: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' "$WORKFLOW" 2>/dev/null | head -1)"
+# CI reads the same file through setup-node's node-version-file.
+NODE_WANT="$(tr -d ' \tv\r' <"$ROOT_DIR/.nvmrc" 2>/dev/null | head -1)"
 # CI installs golangci-lint with golangci-lint-action, pinned by the first
 # `version:` input after the `uses:` line.
 LINT_WANT="$(awk '/golangci-lint-action@/ { f = 1 }
@@ -124,11 +125,17 @@ if ! command -v node >/dev/null 2>&1; then
         "install Node $NODE_WANT — https://nodejs.org/"
 else
     node_found="$(node -v 2>/dev/null)"; node_found="${node_found#v}"
-    if version_ge "$node_found" "$NODE_WANT"; then
-        row pass node "Node" "$node_found" "$NODE_WANT" "CI builds on Node $NODE_WANT"
-    else
+    if ! version_ge "$node_found" "$NODE_WANT"; then
         row fail node "Node" "$node_found" "$NODE_WANT" \
             "older than the Node CI builds on" "install Node $NODE_WANT or newer"
+    elif ! case "$(node -p process.features.typescript 2>/dev/null)" in strip|transform) true ;; *) false ;; esac; then
+        # Distro builds (Debian, Ubuntu) leave out amaro, so the frontend
+        # tests cannot import .ts files under them.
+        row fail node "Node" "$node_found" "$NODE_WANT" \
+            "this build cannot remove TypeScript types (process.features.typescript is false)" \
+            "install an official Node $NODE_WANT build — https://nodejs.org/"
+    else
+        row pass node "Node" "$node_found" "$NODE_WANT" "CI builds on Node $NODE_WANT"
     fi
 fi
 
