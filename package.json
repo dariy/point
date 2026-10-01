@@ -18,8 +18,8 @@
     "@playwright/cli": "0.1.21",
     "@types/node": "^26.6.2",
     "esbuild": "^0.28.2",
-    "espree": "^10.4.0",
     "linkedom": "^0.18.13",
+    "oxc-parser": "0.152.0",
     "oxlint": "1.86.0",
     "playwright": "^1.63.0",
     "typescript": "^7.0.2"
