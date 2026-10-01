@@ -4,9 +4,9 @@
  * SecurityPage into the plugin settings drawer.
  */
 
-import { Component } from "../../Component.js";
+import { Component } from "../../Component.ts";
 import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.ts";
-import { setToast } from "../../../store.js";
+import { setToast } from "../../../store.ts";
 import { showConfirm } from "../../../utils/dialogs.ts";
 import { html } from "../../../utils/helpers.ts";
 

@@ -1,5 +1,5 @@
-import { Component } from "../../Component.js";
-import { setToast } from "../../../store.js";
+import { Component } from "../../Component.ts";
+import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 
 export class RebuildThumbnailsSection extends Component {

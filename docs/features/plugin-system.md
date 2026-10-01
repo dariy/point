@@ -27,7 +27,7 @@ All five phases of the original refactor are done.
 - Admin API: `GET /api/plugins` (full catalog — the one surface allowed to reveal
   disabled plugins, behind `AuthMiddleware`), `PATCH /api/plugins/:id`.
 
-### Frontend (`frontend/src/core/pluginHost.js`)
+### Frontend (`frontend/src/core/pluginHost.ts`)
 
 - Reads `window.__PLUGINS__` at bootstrap. A slot is *claimed* only when the plugin has
   a built chunk (`entry` URL); `fill(slot, el, ctx)` lazily imports and mounts claimants;

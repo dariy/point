@@ -1,5 +1,5 @@
 import { html, setHTML, raw } from "../../utils/helpers.ts";
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
 import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.ts';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';

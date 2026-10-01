@@ -39,7 +39,7 @@ function lint(code, ext) {
   }
 }
 
-const PRELUDE = "import { html, raw, setHTML, insertHTML } from './utils/helpers.ts';\nimport { store } from './store.js';\nconst SVG = '<svg></svg>';\n";
+const PRELUDE = "import { html, raw, setHTML, insertHTML } from './utils/helpers.ts';\nimport { store } from './store.ts';\nconst SVG = '<svg></svg>';\n";
 
 for (const ext of ['js', 'ts']) {
   const messages = (snippet) => lint(PRELUDE + snippet, ext);
@@ -131,7 +131,7 @@ const SELECTORS = [
   ['parseFromString call', "p => W(p.parseFromString)(s, 'text/html')", /bare parseFromString/],
   ['raw() around a template literal', 'x => html`<p>${raw(W(`<b>${x}</b>`))}</p>`', /wrap a template literal/],
   ['raw() around a call', 'x => html`<p>${raw(W(x.toUpperCase()))}</p>`', /wrap a call/],
-  ['store string key', "() => store.get(W('user'))", /accessor from store\.js/],
+  ['store string key', "() => store.get(W('user'))", /accessor from store\.ts/],
   ['unquoted attribute', 'u => W(html)`<a href=${u}>x</a>`', /must be quoted/],
 ];
 

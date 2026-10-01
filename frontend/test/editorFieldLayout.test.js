@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setSettings } from '../src/store.js';
+import { setSettings } from '../src/store.ts';
 import {
   DEFAULT_ORDER,
   DEFAULT_PINNED,

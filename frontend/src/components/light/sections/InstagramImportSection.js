@@ -7,13 +7,13 @@
  * controls that live in the same drawer's settings form.
  */
 
-import { Component } from "../../Component.js";
+import { Component } from "../../Component.ts";
 import {
   getInstagramStatus,
   triggerInstagramImport,
   getInstagramImportStatus,
 } from "../../../api/instagram.ts";
-import { setToast } from "../../../store.js";
+import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
 

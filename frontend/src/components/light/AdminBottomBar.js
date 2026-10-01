@@ -1,12 +1,12 @@
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import {
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, PLUS_SVG, MENU_SVG,
   TAGS_SVG, MENU_SVG as NAV_MENU_SVG, THEMES_SVG, PLUGINS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
   SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG, COMMENTS_SVG
 } from '../../utils/icons.ts';
 import { html, raw } from '../../utils/helpers.ts';
-import { getTheme, onPluginToggled, setTheme } from '../../store.js';
-import { pluginHost } from '../../core/pluginHost.js';
+import { getTheme, onPluginToggled, setTheme } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 
 /**

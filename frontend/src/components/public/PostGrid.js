@@ -2,7 +2,7 @@
  * PostGrid — renders a responsive grid of PostCard components.
  */
 
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { PostCard } from './PostCard.js';
 import { html } from '../../utils/helpers.ts';
 import { measureCardImageSizes } from '../../utils/gridFit.ts';

@@ -8,10 +8,10 @@
  * for a field exists once regardless of placement.
  */
 
-import { getSettings } from "../../store.js";
+import { getSettings } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { defaultPostTitle } from "../../utils/formatters.ts";
-import { pluginHost } from "../../core/pluginHost.js";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, GRIP_SVG } from "../../utils/icons.ts";
 
 /** Trim a value to a one-line summary length. */

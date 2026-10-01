@@ -4,12 +4,12 @@
  * Fetches: GET /api/system/stats, GET /api/system/version
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getStats, getVersion } from '../../api/system.ts';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.ts';
 import { listPosts, createPost } from '../../api/posts.ts';
-import { setToast } from '../../store.js';
+import { setToast } from '../../store.ts';
 import { html, navigate, raw } from '../../utils/helpers.ts';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.ts';
 import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.ts';

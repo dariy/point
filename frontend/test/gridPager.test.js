@@ -126,7 +126,7 @@ before(async () => {
     addEventListener() {},
     removeEventListener() {},
   };
-  ({ GridPager } = await import('../src/core/gridPager.js'));
+  ({ GridPager } = await import('../src/core/gridPager.ts'));
 });
 
 /** A pager wired to stub elements, recording every navigation it requests. */

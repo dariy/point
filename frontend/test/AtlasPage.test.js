@@ -64,7 +64,7 @@ describe('AtlasPage lazy cloud loading', () => {
     };
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
-    ({ setRoute } = await import('../src/store.js'));
+    ({ setRoute } = await import('../src/store.ts'));
   });
 
   afterEach(() => {
@@ -167,7 +167,7 @@ describe('AtlasPage timeline filtering', () => {
   before(async () => {
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
-    ({ setRoute } = await import('../src/store.js'));
+    ({ setRoute } = await import('../src/store.ts'));
   });
 
   afterEach(() => {
@@ -376,7 +376,7 @@ describe('AtlasPage hidden-node filter', () => {
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
     ({ isConcealed } = mod);
-    ({ setUser } = await import('../src/store.js'));
+    ({ setUser } = await import('../src/store.ts'));
     ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });
 
@@ -453,7 +453,7 @@ describe('AtlasPage desktop side panel', () => {
     const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
     panelHtml = mod.panelHtml;
-    ({ setRoute } = await import('../src/store.js'));
+    ({ setRoute } = await import('../src/store.ts'));
   });
 
   afterEach(() => {

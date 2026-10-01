@@ -17,7 +17,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire, type, check } from './helpers/dom.js';
-import { getToast, setToast } from '../src/store.js';
+import { getToast, setToast } from '../src/store.ts';
 
 const settle = () => new Promise(r => setImmediate(r));
 

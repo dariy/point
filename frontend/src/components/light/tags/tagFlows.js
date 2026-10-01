@@ -20,7 +20,7 @@
  * openTagPickerDialog and openOverlay insert what they are given as-is.
  */
 
-import { setToast } from '../../../store.js';
+import { setToast } from '../../../store.ts';
 import { html, setHTML } from '../../../utils/helpers.ts';
 import { setTagParents, deleteTag, patchTag, moveTag, mergeTags } from '../../../api/tags.ts';
 import { openTagPickerDialog, openOverlay } from './TagPickerDialog.js';

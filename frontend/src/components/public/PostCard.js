@@ -5,13 +5,13 @@
  * which navigate to their respective tag pages.
  */
 
-import { Component } from "../Component.js";
+import { Component } from "../Component.ts";
 import { html, raw, safeUrl } from "../../utils/helpers.ts";
 import { cardImageSizes } from "../../utils/gridFit.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { formatDateShort } from "../../utils/formatters.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
-import { getNavTags, getSettings, onNavTags } from "../../store.js";
+import { getNavTags, getSettings, onNavTags } from "../../store.ts";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.ts";
 import { ViewContext } from "../../utils/viewContext.ts";

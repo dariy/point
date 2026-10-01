@@ -11,8 +11,8 @@
  * Types: 'success' | 'error' | 'info' | 'warning'
  */
 
-import { Component } from '../Component.js';
-import { onToast } from '../../store.js';
+import { Component } from '../Component.ts';
+import { onToast } from '../../store.ts';
 import { html } from '../../utils/helpers.ts';
 
 const DURATION_MS = 4000;

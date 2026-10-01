@@ -98,35 +98,31 @@ import { setHTML, isRawHtml } from '../utils/helpers.ts';
 /**
  * A component's state. Untyped: unlike props, which cross a boundary and are
  * checked there, state is private to the component that keeps it.
- *
- * @typedef {Record<string, any>} ComponentState
  */
+export type ComponentState = Record<string, any>;
 
 /**
  * The optional hooks a subclass may declare. None of them exist on the base
  * class — every call site tests for one before calling it — so reading them off
  * a Component needs the checker told that the absence is the point.
- *
- * @typedef {object} SubclassHooks
- * @property {(prevProps: object, prevState: ComponentState) => unknown} [update]
- *   In-place update. Exactly `true` means handled; see _rerender().
- * @property {() => void} [beforeRender]
- *   Release what the previous render acquired, before the container is replaced.
- * @property {Record<string, (event: Event, el: Element) => unknown>} [actions]
- *   Delegated handlers, keyed by `data-action` name or `'<type>:<name>'`, called
- *   with the component as `this` — see _dispatchAction().
- * @property {(params: Record<string, string>, query: Record<string, string>) => void} [onRouteUpdate]
- *   Same-route navigation: refresh in place instead of remounting (router.js).
  */
+export interface SubclassHooks {
+  /** In-place update. Exactly `true` means handled; see _rerender(). */
+  update?: (prevProps: object, prevState: ComponentState) => unknown;
+  /** Release what the previous render acquired, before the container is replaced. */
+  beforeRender?: () => void;
+  /**
+   * Delegated handlers, keyed by `data-action` name or `'<type>:<name>'`, called with the component
+   * as `this` — see _dispatchAction().
+   */
+  actions?: Record<string, (event: Event, el: Element) => unknown>;
+  /** Same-route navigation: refresh in place instead of remounting (router.ts). */
+  onRouteUpdate?: (params: Record<string, string>, query: Record<string, string>) => void;
+}
 
-/**
- * A component's subclass hooks. A cast, not a check — see {@link SubclassHooks}.
- *
- * @param {Component} component
- * @returns {SubclassHooks}
- */
-export function subclassHooks(component) {
-  return /** @type {SubclassHooks} */ (/** @type {unknown} */ (component));
+/** A component's subclass hooks. A cast, not a check — see {@link SubclassHooks}. */
+export function subclassHooks(component: Component): SubclassHooks {
+  return ((component as unknown) as SubclassHooks);
 }
 
 /**
@@ -135,38 +131,40 @@ export function subclassHooks(component) {
  * `object`, is what a component that declares nothing gets: it can be handed
  * props, but reading one off it is an error until it says what they are.
  *
- * @template {object} [P=object]
  */
-export class Component {
+export class Component<P extends object = object> {
+  container: HTMLElement;
+  props: P;
+  state: ComponentState;
+  _children: Component[];
   /**
-   * @param {HTMLElement} container  The DOM node this component renders into
-   * @param {P}           [props]    Initial properties
+   * Teardowns for resources acquired by the current render. Drained before
+   * every re-render and on unmount.
    */
-  constructor(container, props = /** @type {P} */ ({})) {
+  _cleanups: Function[];
+  /**
+   * Teardowns for the delegated `actions` listeners. Bound once at mount()
+   * because this.container survives every render; released at unmount().
+   */
+  _actionTeardowns: Function[];
+  /**
+   * Whether render() has ever written into the container. Gates update():
+   * the first pass has no DOM to update in place.
+   */
+  _rendered: boolean;
+  _unmounted: boolean;
+
+  /**
+   * @param container - The DOM node this component renders into
+   * @param props - Initial properties
+   */
+  constructor(container: HTMLElement, props: P = {} as P) {
     this.container = container;
-    /** @type {P} */
     this.props = props;
-    /** @type {ComponentState} */
     this.state = {};
-    /** @type {Component[]} */
     this._children = [];
-    /**
-     * Teardowns for resources acquired by the current render. Drained before
-     * every re-render and on unmount.
-     * @type {Function[]}
-     */
     this._cleanups = [];
-    /**
-     * Teardowns for the delegated `actions` listeners. Bound once at mount()
-     * because this.container survives every render; released at unmount().
-     * @type {Function[]}
-     */
     this._actionTeardowns = [];
-    /**
-     * Whether render() has ever written into the container. Gates update():
-     * the first pass has no DOM to update in place.
-     * @type {boolean}
-     */
     this._rendered = false;
     this._unmounted = false;
   }
@@ -176,10 +174,11 @@ export class Component {
   /**
    * Return the markup describing this component, built with the html`` tag.
    * Must be overridden.
-   * @returns {import('../utils/helpers.ts').RawHtml} html`` output. A plain
+   *
+   * @returns html`` output. A plain
    *   string is refused — _rerender() throws rather than write it.
    */
-  render() {
+  render(): import('../utils/helpers.ts').RawHtml {
     throw new Error(`${this.constructor.name}.render() not implemented`);
   }
 
@@ -209,11 +208,8 @@ export class Component {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /**
-   * Merge delta into state and re-render.
-   * @param {ComponentState} delta
-   */
-  setState(delta) {
+  /** Merge delta into state and re-render. */
+  setState(delta: ComponentState) {
     if (this._unmounted) return;
     const prevState = this.state;
     this.state = {
@@ -223,11 +219,8 @@ export class Component {
     this._rerender(this.props, prevState);
   }
 
-  /**
-   * Merge delta into props and re-render.
-   * @param {Partial<P>} delta
-   */
-  setProps(delta) {
+  /** Merge delta into props and re-render. */
+  setProps(delta: Partial<P>) {
     if (this._unmounted) return;
     const prevProps = this.props;
     this.props = {
@@ -267,19 +260,21 @@ export class Component {
    * Component: a page that mounts MediaBrowser and then calls
    * `browser.openFilePicker()` is calling a method only the subclass has.
    *
-   * @template {Component} T
-   * @param {new (container: HTMLElement, props?: T['props']) => T} Cls  Component
+   * @param Cls - Component
    *   class to instantiate
-   * @param {string|HTMLElement} target  Selector or element inside this.container
-   * @param {T['props']} [props]  Checked against the child's own props type.
-   * @returns {T}
+   * @param target - Selector or element inside this.container
+   * @param props - Checked against the child's own props type.
    */
-  mountChild(Cls, target, props = /** @type {T['props']} */ ({})) {
+  mountChild<T extends Component>(
+    Cls: new (container: HTMLElement, props?: T['props']) => T,
+    target: string | HTMLElement,
+    props: T['props'] = {} as T['props'],
+  ): T {
     const el = typeof target === 'string' ? this.container.querySelector(target) : target;
     if (!el) {
       throw new Error(`${this.constructor.name}.mountChild: target "${target}" not found`);
     }
-    const child = new Cls(/** @type {HTMLElement} */ (el), props);
+    const child = new Cls((el as HTMLElement), props);
     child.mount();
     this._children.push(child);
     return child;
@@ -294,28 +289,28 @@ export class Component {
    * cleanup registered outside afterRender() simply lives until the next
    * render boundary like any other.
    *
-   * @param {Function} [fn]  Teardown; ignored when not a function, so the
+   * @param fn - Teardown; ignored when not a function, so the
    *                         return value of a setup helper can be passed
    *                         straight through.
    */
-  registerCleanup(fn) {
+  registerCleanup(fn?: Function) {
     if (typeof fn === 'function') this._cleanups.push(fn);
   }
 
   /**
    * Subscribe to a store key for the lifetime of the current render.
    *
-   * Takes one of store.js's `on*` accessors rather than the store and a key,
+   * Takes one of store.ts's `on*` accessors rather than the store and a key,
    * so a mistyped key is a build error instead of a subscription that never
    * fires:
    *
    *   this.subscribeStore(onSettings, () => this.setState({}));
    *
-   * @param {Function} subscribe  An `on*` accessor from store.js; returns the
+   * @param subscribe - An `on*` accessor from store.ts; returns the
    *                              unsubscribe function.
-   * @param {Function} callback   Called with the new value on every change.
+   * @param callback - Called with the new value on every change.
    */
-  subscribeStore(subscribe, callback) {
+  subscribeStore(subscribe: Function, callback: Function) {
     this.registerCleanup(subscribe(callback));
   }
 
@@ -328,13 +323,13 @@ export class Component {
    *
    *   this.subscribeStoreSelector(onSettingsSelector, s => s.blog_title, cb);
    *
-   * @param {Function} subscribeSelector  An `on*Selector` accessor from
-   *                                      store.js; returns the unsubscribe
+   * @param subscribeSelector - An `on*Selector` accessor from
+   *                                      store.ts; returns the unsubscribe
    *                                      function.
-   * @param {Function} select    Maps the key's value to the slice to watch
-   * @param {Function} callback  Called when the slice changes
+   * @param select - Maps the key's value to the slice to watch
+   * @param callback - Called when the slice changes
    */
-  subscribeStoreSelector(subscribeSelector, select, callback) {
+  subscribeStoreSelector(subscribeSelector: Function, select: Function, callback: Function) {
     this.registerCleanup(subscribeSelector(select, callback));
   }
 
@@ -349,15 +344,17 @@ export class Component {
    * A missing target is a no-op rather than a throw, so the `this.$('.x')` of
    * a conditionally rendered element can be passed straight in.
    *
-   * @param {EventTarget|null|undefined} target
-   * @param {string} type
-   * @param {EventListenerOrEventListenerObject} handler
-   * @param {boolean|AddEventListenerOptions} [options]  Passed to both add and
+   * @param options - Passed to both add and
    *                                    remove, so a capture listener detaches
    *                                    correctly.
-   * @returns {EventTarget|null} target, for chaining; null when there was none.
+   * @returns target, for chaining; null when there was none.
    */
-  on(target, type, handler, options) {
+  on(
+    target: EventTarget | null | undefined,
+    type: string,
+    handler: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ): EventTarget | null {
     if (!target?.addEventListener) return null;
     target.addEventListener(type, handler, options);
     this.registerCleanup(() => target.removeEventListener(type, handler, options));
@@ -367,11 +364,10 @@ export class Component {
   /**
    * setTimeout whose pending callback is cancelled at the next render boundary.
    * A timer that already fired clears harmlessly.
-   * @param {Function} fn
-   * @param {number} [ms]
-   * @returns {*} the timer id
+   *
+   * @returns the timer id
    */
-  timer(fn, ms) {
+  timer(fn: Function, ms?: number): unknown {
     const id = setTimeout(fn, ms);
     this.registerCleanup(() => clearTimeout(id));
     return id;
@@ -382,11 +378,10 @@ export class Component {
    *
    * An interval that must survive re-renders — a poll started once — belongs
    * in the constructor with beforeUnmount() to stop it, not here.
-   * @param {Function} fn
-   * @param {number} [ms]
-   * @returns {*} the interval id
+   *
+   * @returns the interval id
    */
-  interval(fn, ms) {
+  interval(fn: Function, ms?: number): unknown {
     const id = setInterval(fn, ms);
     this.registerCleanup(() => clearInterval(id));
     return id;
@@ -398,12 +393,8 @@ export class Component {
    *
    * Returns the observer, so the usual one-liner reads:
    *   this.observe(new ResizeObserver(fn)).observe(el)
-   *
-   * @template {{ disconnect: Function }} T
-   * @param {T} observer
-   * @returns {T}
    */
-  observe(observer) {
+  observe<T extends { disconnect: Function }>(observer: T): T {
     this.registerCleanup(() => observer.disconnect());
     return observer;
   }
@@ -411,10 +402,10 @@ export class Component {
   /**
    * requestAnimationFrame cancelled at the next render boundary, so a frame
    * scheduled by the previous render cannot run against the new DOM.
-   * @param {FrameRequestCallback} fn
-   * @returns {number} the frame id
+   *
+   * @returns the frame id
    */
-  raf(fn) {
+  raf(fn: FrameRequestCallback): number {
     const id = requestAnimationFrame(fn);
     this.registerCleanup(() => cancelAnimationFrame(id));
     return id;
@@ -422,10 +413,8 @@ export class Component {
 
   /**
    * Query selector scoped to this component's container.
-   * @param {string} selector
-   * @returns {HTMLElement|null}
    */
-  $(selector) {
+  $(selector: string): HTMLElement | null {
     return this.container.querySelector(selector);
   }
 
@@ -435,20 +424,18 @@ export class Component {
    * Typed as HTMLElements to match $(): a component queries the markup its own
    * render() produced, and every caller here treats the results as elements.
    *
-   * @param {string} selector
-   * @returns {NodeListOf<HTMLElement>}
    */
-  $$(selector) {
+  $$(selector: string): NodeListOf<HTMLElement> {
     return this.container.querySelectorAll(selector);
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
   /**
-   * @param {P} [prevProps]  props as they were before this change
-   * @param {ComponentState} [prevState]  state as it was before this change
+   * @param prevProps - props as they were before this change
+   * @param prevState - state as it was before this change
    */
-  _rerender(prevProps, prevState) {
+  _rerender(prevProps?: P, prevState?: ComponentState) {
     // The in-place path. Offered only from the second render onwards — before
     // the first there is no DOM to update — and only when the subclass has
     // declared update(). Returning true means "handled": the DOM below is left
@@ -507,7 +494,7 @@ export class Component {
     if (!actions || !this.container?.addEventListener) return;
     if (this._actionTeardowns.length) return; // already bound; mount() is idempotent
 
-    const types = new Set();
+    const types = new Set<string>();
     for (const key of Object.keys(actions)) {
       const sep = key.indexOf(':');
       types.add(sep > 0 ? key.slice(0, sep) : 'click');
@@ -537,14 +524,12 @@ export class Component {
    * mounted with mountChild() is that child's to answer — it bubbles through
    * here on its way up the tree, and dispatching it again would run the
    * parent's same-named action a second time.
-   *
-   * @param {Event} event
    */
-  _dispatchAction(event) {
+  _dispatchAction(event: Event) {
     const { actions } = subclassHooks(this);
     if (!actions) return;
 
-    const el = /** @type {Element} */ (event.target)?.closest?.('[data-action]');
+    const el = (event.target as Element)?.closest?.('[data-action]');
     if (!el || !this.container.contains(el)) return;
 
     for (const child of this._children) {

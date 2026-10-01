@@ -14,7 +14,7 @@
  */
 
 import { api } from './client.ts';
-import { getNavTags, setNavTags, setRootTags } from '../store.js';
+import { getNavTags, setNavTags, setRootTags } from '../store.ts';
 
 /**
  * One node of a nav tree — services.NavTagNode. `url` is set on an authored

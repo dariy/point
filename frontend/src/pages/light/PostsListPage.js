@@ -4,14 +4,14 @@
  * Fetches: GET /api/posts
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
 import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.ts";
-import { setToast } from "../../store.js";
+import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.ts";
 import { formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";

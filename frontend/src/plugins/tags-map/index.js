@@ -8,11 +8,11 @@
  * GeoJSON:     /assets/vendor/leaflet/countries.geojson
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 
-import { pluginHost } from "../../core/pluginHost.js";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { getMapPage } from "../../api/pages.ts";
-import { getSettings } from "../../store.js";
+import { getSettings } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
@@ -26,7 +26,7 @@ import {
   loadLeaflet,
 } from "../../utils/leaflet.ts";
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** Marker radius in px, scaled by post count. */
 function markerRadius(postCount) {

@@ -47,7 +47,7 @@ describe('Immersive navigation controls', () => {
       disconnect() {}
     };
 
-    ({ setRoute, setUser } = await import('../src/store.js'));
+    ({ setRoute, setUser } = await import('../src/store.ts'));
     setRoute({ pathname: '/posts/demo', params: {}, query: {} });
 
     ({ PublicHeader } = await import('../src/plugins/public-header/PublicHeader.js'));

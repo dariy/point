@@ -13,11 +13,11 @@
  * Props (from router): { params, query }
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 
-import { pluginHost } from "../../core/pluginHost.js";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { getTagsGraph, getTagCloud, getTagPage } from "../../api/pages.ts";
-import { getSettings, getUser } from "../../store.js";
+import { getSettings, getUser } from "../../store.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { setPageTitle } from "../../utils/documentTitle.ts";
 import {
@@ -44,7 +44,7 @@ import {
   loadLeaflet,
 } from "../../utils/leaflet.ts";
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** Marker radius in px for a geo-tag, scaled by post count. */
 function markerRadius(postCount) {

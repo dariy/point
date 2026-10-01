@@ -6,7 +6,7 @@
  * components/public/SiteCrumb.js). This component renders everything after it.
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { html, navigate, raw } from '../../utils/helpers.ts';
 import { LOCK_SVG } from '../../utils/icons.ts';
 import { ViewContext } from '../../utils/viewContext.ts';

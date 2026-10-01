@@ -2,14 +2,14 @@
  * CommentsAdminPage — /light/comments moderation for the remark42 plugin.
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import {
   adminLayoutTemplate,
   setupAdminLayout,
 } from "../../components/light/AdminLayout.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { api } from "../../api/client.ts";
-import { setToast } from "../../store.js";
+import { setToast } from "../../store.ts";
 import { html, parseMarkup, raw } from "../../utils/helpers.ts";
 import { formatDate } from "../../utils/formatters.ts";
 import {

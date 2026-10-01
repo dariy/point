@@ -4,13 +4,13 @@
  * Extracted from SystemPage into the plugin settings drawer.
  */
 
-import { Component } from "../../Component.js";
+import { Component } from "../../Component.ts";
 import { getOfflineStats, getOfflineSnapshot } from "../../../api/offline.ts";
 import { saveSnapshot, saveMeta, getMeta } from "../../../utils/offlineStore.ts";
 import { preCacheImages, clearImageCache } from "../../../utils/imageCache.ts";
 import { thumbUrl } from "../../../utils/mediaUrl.ts";
 import { mediaTypeFromPath } from "../../../utils/postMedia.ts";
-import { setToast } from "../../../store.js";
+import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatFileSize, formatDateShort } from "../../../utils/formatters.ts";
 

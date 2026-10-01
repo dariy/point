@@ -1,6 +1,6 @@
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.ts";
-import { GestureController } from "../../core/gestures.js";
+import { GestureController } from "../../core/gestures.ts";
 import { renderTagLink } from "../../utils/tagLinks.ts";
 import { html, setHTML } from "../../utils/helpers.ts";
 const EDGE_PAD = 48;

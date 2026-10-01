@@ -17,7 +17,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, selectOption, type } from './helpers/dom.js';
-import { getToast, onToast, setToast } from '../src/store.js';
+import { getToast, onToast, setToast } from '../src/store.ts';
 import {
   candidateTags, parentsWith, positionOptions, bulkOutcome, pluralTags,
   runBulk, bulkVisibility, bulkDelete,

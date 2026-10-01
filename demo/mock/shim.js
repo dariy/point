@@ -6,7 +6,7 @@
  * at all.
  *
  * Why here rather than swapping frontend/src/api/client.ts: that module is not
- * the only caller. router.js fetches /api/setup/status on every /light
+ * the only caller. router.ts fetches /api/setup/status on every /light
  * navigation, api/system.ts uploads over XHR, BackupsSection fetches the
  * version endpoint directly, and the comments plugin calls `api.*` without
  * going through frontend/src/api/. Patching the platform catches all of them —
@@ -196,7 +196,7 @@ function guestView(state) {
  * Resolve a request against the route table.
  *
  * Unmatched endpoints fail SOFT — an empty 200, never a rejection and never a
- * 401. client.js turns a 401 into an `api:unauthorized` event which app.js
+ * 401. client.js turns a 401 into an `api:unauthorized` event which app.ts
  * escalates into a hard navigation to /light/login, so one unhandled endpoint
  * would eject a visitor from the demo mid-click. An empty body just renders an
  * empty section.

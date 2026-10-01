@@ -22,7 +22,7 @@ describe('loadNav', () => {
       };
     };
     ({ loadNav } = await import('../src/api/nav.ts'));
-    ({ getNavTags, getRootTags, setNavTags, setRootTags } = await import('../src/store.js'));
+    ({ getNavTags, getRootTags, setNavTags, setRootTags } = await import('../src/store.ts'));
   });
 
   test('custom mode: menu keeps the links, rootTags carries the tag tree', async () => {

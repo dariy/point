@@ -11,24 +11,24 @@
  *   getSelectedItems()  Picker mode: array of selected media objects.
  */
 
-import { Component } from "../Component.js";
+import { Component } from "../Component.ts";
 import { Pagination } from "../shared/Pagination.js";
 import { MediaLightbox } from "../public/MediaLightbox.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { PromptDialog } from "../shared/PromptDialog.js";
 import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.ts";
-import { MediaPager } from "../../core/mediaPager.js";
+import { MediaPager } from "../../core/mediaPager.ts";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.ts";
 import { listPosts } from "../../api/posts.ts";
-import { setToast } from "../../store.js";
+import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw } from "../../utils/helpers.ts";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.ts";
 
 // What a grid card paints at. The grid is auto-fill minmax(180px, 1fr), dropping
-// to 144px under 48em, and a pinned zoom (core/mediaPager.js) can squeeze a
+// to 144px under 48em, and a pinned zoom (core/mediaPager.ts) can squeeze a
 // column to MIN_CARD_PX = 110. The nominal desktop width covers the common case;
 // the previews are object-fit: cover, so the browser rounding a rung up is the
 // forgiving direction.
@@ -64,7 +64,7 @@ export class MediaBrowser extends Component {
     this._dragCount = 0;
     this._lightbox = this.props.pickerMode ? null : new MediaLightbox();
     // Swipe-to-page and pinch-to-zoom on the grid, like the public post grids
-    // (core/mediaPager.js). Standalone only: the picker is a modal that owns its
+    // (core/mediaPager.ts). Standalone only: the picker is a modal that owns its
     // own dismiss gestures, and its host page has arrow keys of its own.
     this._pager = this.props.pickerMode ? null : this._makePager();
     // Picker mode: persists selected media objects across page/folder changes

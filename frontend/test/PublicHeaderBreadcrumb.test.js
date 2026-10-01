@@ -43,7 +43,7 @@ describe('Breadcrumbs plugin', () => {
       disconnect() {}
     };
 
-    ({ setRoute } = await import('../src/store.js'));
+    ({ setRoute } = await import('../src/store.ts'));
 
     const mod = await import('../src/plugins/breadcrumbs/Breadcrumbs.js');
     BreadcrumbsComponent = mod.Breadcrumbs;

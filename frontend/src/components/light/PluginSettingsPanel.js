@@ -13,11 +13,11 @@
  * unmounting this component and removing that node.
  */
 
-import { Component } from "../Component.js";
-import { GestureController } from "../../core/gestures.js";
+import { Component } from "../Component.ts";
+import { GestureController } from "../../core/gestures.ts";
 import { renderFields, collectUpdates } from "./settingsFields.js";
 import { updateSettings } from "../../api/settings.ts";
-import { mergeSettings, setToast } from "../../store.js";
+import { mergeSettings, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.ts";
 import { CHECK_SVG, X_SVG } from "../../utils/icons.ts";

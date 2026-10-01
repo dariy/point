@@ -5,11 +5,11 @@
  * Props (from router): { params: { slug }, query }
  */
 
-import { Component } from '../../components/Component.js';
-import { pluginHost } from '../../core/pluginHost.js';
+import { Component } from '../../components/Component.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
-import { getNavTags, getSettings } from '../../store.js';
+import { getNavTags, getSettings } from '../../store.ts';
 import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from '../../utils/helpers.ts';
 import { formatDate } from '../../utils/formatters.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
@@ -18,7 +18,7 @@ import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
 import { X_SVG } from '../../utils/icons.ts';
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** @extends {Component<PageProps>} */
 export default class PostPage extends Component {

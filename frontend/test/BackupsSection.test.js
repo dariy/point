@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
 import { setupDOM } from "./helpers/dom.js";
 import { BackupsSection } from "../src/components/light/sections/BackupsSection.js";
-import * as gestures from "../src/core/gestures.js";
+import * as gestures from "../src/core/gestures.ts";
 
 test("BackupsSection", async (t) => {
   let dom;

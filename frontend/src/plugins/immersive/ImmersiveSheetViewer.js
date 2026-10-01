@@ -21,8 +21,8 @@
 
 import { MediaViewer } from '../../components/shared/MediaViewer.js';
 import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
-import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.js';
-import { pluginHost } from '../../core/pluginHost.js';
+import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { renderTagLink, buildTagIndex, parseTagUrl } from '../../utils/tagLinks.ts';
 import { setupTagFlyout } from '../../utils/tagFlyout.ts';

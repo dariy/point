@@ -34,7 +34,7 @@ describe('TagsManagerPage', () => {
       addEventListener: () => {},
       removeEventListener: () => {}
     };
-    const storeMod = await import('../src/store.js');
+    const storeMod = await import('../src/store.ts');
     global.store = storeMod.store;
 
     const mod = await import('../src/pages/light/TagsManagerPage.js');

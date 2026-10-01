@@ -12,7 +12,7 @@ import { html, setHTML } from "../../utils/helpers.ts";
 // Flick up raises the overlay — the site footer, carrying the paginator in
 // every orientation — and flick down puts it away again; a flick down with
 // nothing raised leaves the mode. The gestures come from GridPager, which owns
-// the recogniser for every grid page (see core/gridPager.js).
+// the recogniser for every grid page (see core/gridPager.ts).
 
 const KEY = 'distraction-free';
 const MODE_CLASS = 'distraction-free';

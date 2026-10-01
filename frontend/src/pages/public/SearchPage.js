@@ -5,25 +5,25 @@
  *
  * The results grid is a first-class grid view: it pages by swipe, trackpad,
  * arrow keys and hover chevrons, and zooms by pinch or the footer slider, all of
- * which come from the shared GridPager (core/gridPager.js) that the home and tag
+ * which come from the shared GridPager (core/gridPager.ts) that the home and tag
  * grids use. A page change refreshes only the grid — the header, breadcrumb and
  * matching-tag chips depend on the query, not the page, so they stay put.
  *
  * Props (from router): { query: { q, page } }
  */
-import { pluginHost } from '../../core/pluginHost.js';
-import { Component } from '../../components/Component.js';
+import { pluginHost } from '../../core/pluginHost.ts';
+import { Component } from '../../components/Component.ts';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
-import { getNavTags, getSettings, setPagination } from '../../store.js';
+import { getNavTags, getSettings, setPagination } from '../../store.ts';
 import { html, setHTML } from '../../utils/helpers.ts';
-import { GridPager } from '../../core/gridPager.js';
+import { GridPager } from '../../core/gridPager.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
 import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** @extends {Component<PageProps>} */
 export default class SearchPage extends Component {
@@ -46,7 +46,7 @@ export default class SearchPage extends Component {
     // — see createResizeGate.
     this._resizeGate = createResizeGate();
     // Swipe/trackpad/keyboard pagination and pinch zoom for the results grid —
-    // see core/gridPager.js. Shared with HomePage and TagPage.
+    // see core/gridPager.ts. Shared with HomePage and TagPage.
     this._pager = new GridPager({
       gridMount: () => this.$('#grid-mount'),
       gestureRoot: () => this.$('.site-main'),

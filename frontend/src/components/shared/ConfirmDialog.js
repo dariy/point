@@ -2,7 +2,7 @@
  * ConfirmDialog — specialized Modal for confirmations.
  */
 
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { Modal } from './Modal.js';
 import { html, setHTML } from '../../utils/helpers.ts';
 

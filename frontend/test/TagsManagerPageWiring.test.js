@@ -24,7 +24,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, type } from './helpers/dom.js';
-import { getToast, setToast, setUser } from '../src/store.js';
+import { getToast, setToast, setUser } from '../src/store.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,

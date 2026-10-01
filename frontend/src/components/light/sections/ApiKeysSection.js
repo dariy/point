@@ -7,9 +7,9 @@
  * button. That list is empty and hidden when the mcp plugin is off.
  */
 
-import { Component } from "../../Component.js";
+import { Component } from "../../Component.ts";
 import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.ts";
-import { setToast } from "../../../store.js";
+import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.ts";

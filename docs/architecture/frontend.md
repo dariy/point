@@ -50,7 +50,7 @@ Every UI element inherits from `Component`. The class handles the contract
 between a component and its DOM node.
 
 ```javascript
-// frontend/src/components/Component.js
+// frontend/src/components/Component.ts
 
 export class Component {
   /**
@@ -166,7 +166,7 @@ export class Component {
 
   /**
    * Helper: subscribe to a store key for the lifetime of the current render.
-   * Takes one of store.js's `on*` accessors, not a store and a string key.
+   * Takes one of store.ts's `on*` accessors, not a store and a string key.
    */
   subscribeStore(subscribe, callback) {
     this.registerCleanup(subscribe(callback));
@@ -472,7 +472,7 @@ snapshot with the restore handed back as a function, for a page that reloads
 across an `await` (`PostsListPage._load`).
 
 The sites this replaced: `PostGrid.reconcile()` was this loop written by hand
-for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.js`) and
+for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.ts`) and
 `utils/gridFlip.ts` still cover what a reconciler cannot — a swipe handed across
 a route change, and the FLIP animation over a zoom step.
 
@@ -533,7 +533,7 @@ template escapes every interpolation on the way through, and
 
 ```javascript
 // frontend/src/pages/public/HomePage.js
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { html } from '../../utils/helpers.ts';
 import { pagesApi } from '../../api/pages.ts';
@@ -601,9 +601,9 @@ export class HomePage extends Component {
 ### 3.1 — Route Table
 
 ```javascript
-// frontend/src/router.js
+// frontend/src/router.ts
 
-import { store } from './store.js';
+import { store } from './store.ts';
 
 // Public routes (no auth required)
 const PUBLIC_ROUTES = [
@@ -794,9 +794,9 @@ export class Router {
 ### 3.3 — App Entry Point
 
 ```javascript
-// frontend/src/app.js
-import { Router } from './router.js';
-import { store } from './store.js';
+// frontend/src/app.ts
+import { Router } from './router.ts';
+import { store } from './store.ts';
 import { authApi } from './api/auth.ts';
 
 const router = new Router(document.getElementById('app'));
@@ -823,7 +823,7 @@ A minimal reactive key-value store. Components subscribe to changes in
 specific keys.
 
 ```javascript
-// frontend/src/store.js
+// frontend/src/store.ts
 
 class Store {
   constructor() {
@@ -910,23 +910,23 @@ shows up as a component that renders empty forever and a report that says "the
 toast never appears". The keys with a single call site are the worst of it,
 because there is no second use to compare a typo against.
 
-So `store.js` binds each key once and exports a get/set/subscribe triple, and
+So `store.ts` binds each key once and exports a get/set/subscribe triple, and
 the rest of the app imports those. esbuild resolves named imports at build time,
 which turns the same typo into a build failure that names the fix:
 
 ```
-✘ [ERROR] No matching export in "store.js" for import "getUsr"
+✘ [ERROR] No matching export in "store.ts" for import "getUsr"
           Did you mean to import "getUser" instead?
 ```
 
 A `point/restricted-syntax` lint rule (`scripts/oxlint-point.mjs`) rejects a string-literal key
-outside `store.js` — for `merge` and `subscribeSelector` as much as for the
+outside `store.ts` — for `merge` and `subscribeSelector` as much as for the
 basic three — so the raw form cannot come back. A hand-written list of
-"well-known keys" lived here and in a comment at the tail of `store.js` before
+"well-known keys" lived here and in a comment at the tail of `store.ts` before
 this; both had drifted to about a third of the real set, which is what a
 contract kept as prose does.
 
-**The keys, as exported (`frontend/src/store.js`):**
+**The keys, as exported (`frontend/src/store.ts`):**
 
 | Key | Accessors | Type |
 |---|---|---|
@@ -1062,9 +1062,9 @@ frontend/
 |-- index.html                      <- SPA shell (never changes)
 |
 |-- src/
-|   |-- app.js                      <- Bootstrap: auth check + router start
-|   |-- router.js                   <- Router class + route table
-|   |-- store.js                    <- Global reactive state
+|   |-- app.ts                      <- Bootstrap: auth check + router start
+|   |-- router.ts                   <- Router class + route table
+|   |-- store.ts                    <- Global reactive state
 |   |
 |   |-- api/
 |   |   |-- client.js               <- Base fetch wrapper
@@ -1271,7 +1271,7 @@ is needed, it must be server-generated and sanitized.
 
 ```javascript
 // Global toast system via store:
-import { setToast } from '../store.js';
+import { setToast } from '../store.ts';
 setToast({ message: 'Post saved!', type: 'success' });
 ```
 

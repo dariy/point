@@ -56,7 +56,7 @@ describe('TagsManagerPage._handleSave', () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
 
-    ({ getToast, setToast } = await import('../src/store.js'));
+    ({ getToast, setToast } = await import('../src/store.ts'));
     const { default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js');
 
     page = new TagsManagerPage(dom.document.createElement('div'));

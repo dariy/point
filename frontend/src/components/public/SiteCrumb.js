@@ -13,8 +13,8 @@
  * can drop it with the `show_title_dropdown` setting (Plugins → Public Header).
  */
 
-import { Component } from '../Component.js';
-import { getRootTags, onRootTags } from '../../store.js';
+import { Component } from '../Component.ts';
+import { getRootTags, onRootTags } from '../../store.ts';
 import { html, navigate } from '../../utils/helpers.ts';
 import { loadNav } from '../../api/nav.ts';
 import { tagHref } from '../../utils/tagLinks.ts';

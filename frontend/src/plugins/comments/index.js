@@ -9,7 +9,7 @@
 // and fires "REMARK42::ready" on window after the first init.
 
 import CommentsAdminPage from './CommentsAdminPage.js';
-import { getSettings } from '../../store.js';
+import { getSettings } from '../../store.ts';
 import { setScriptSrc } from '../../utils/helpers.ts';
 
 const SCRIPT_ID = 'remark42-embed-script';
@@ -152,7 +152,7 @@ export function mount(el, ctx) {
     window.addEventListener('REMARK42::ready', onReady, { once: true });
   }
 
-  // Follow the site theme toggle (app.js dispatches `themechange`) and, for
+  // Follow the site theme toggle (app.ts dispatches `themechange`) and, for
   // the "auto" theme, OS-level scheme flips (which don't fire `themechange`).
   const onTheme = () => {
     window.REMARK42?.changeTheme?.(isDark() ? 'dark' : 'light');

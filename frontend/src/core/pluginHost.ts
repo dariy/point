@@ -16,7 +16,7 @@
  *     plugin module that owns a route (`tags-route` for /tags, `map-route`
  *     for /map).
  *   - dynamic routes: `routes()` lists manifest-provided routes to merge into
- *     the static table in app.js.
+ *     the static table in app.ts.
  *
  * A plugin chunk default-exports (or names) a `mount(el, ctx)` function for slot
  * plugins, or a `{ default: PageClass }` page module for route plugins.
@@ -37,22 +37,33 @@ import { debugLog, DEBUG } from "../utils/debug.ts";
 
 const log = debugLog("PluginHost");
 
-// Single-claim slots whose members own a public path (/tags, /map). app.js
+// Single-claim slots whose members own a public path (/tags, /map). app.ts
 // resolves these through claimRoute(), so they never join the merged route
 // table — see routes() below.
 const CLAIM_ROUTE_SLOTS = new Set(["tags-route", "map-route"]);
 
-/** @typedef {PluginManifestEntry} ManifestEntry  See types/globals.d.ts. */
+/** See types/globals.d.ts. */
+type ManifestEntry = PluginManifestEntry;
+
+/** A plugin chunk module: a `mount` export, or a default export. */
+export interface PluginModule {
+  mount?: Function;
+  default?: Function;
+}
 
 class PluginHost {
+  _manifest: ManifestEntry[];
+  /** slot name -> entries */
+  _bySlot: Map<string, ManifestEntry[]>;
+  /** id -> entry */
+  _byId: Map<string, ManifestEntry>;
+  /** entry url -> import promise (loaded once) */
+  _loaded: Map<string, Promise<PluginModule>>;
+
   constructor() {
-    /** @type {ManifestEntry[]} */
     this._manifest = [];
-    /** @type {Map<string, ManifestEntry[]>} slot name -> entries */
     this._bySlot = new Map();
-    /** @type {Map<string, ManifestEntry>} id -> entry */
     this._byId = new Map();
-    /** @type {Map<string, Promise>} entry url -> import promise (loaded once) */
     this._loaded = new Map();
   }
 
@@ -60,7 +71,7 @@ class PluginHost {
    * Initialise from the injected manifest (defaults to `window.__PLUGINS__`).
    * Idempotent — safe to call again to re-seed (used by tests).
    */
-  init(manifest) {
+  init(manifest?: ManifestEntry[]) {
     if (manifest === undefined) {
       manifest = typeof window !== "undefined" ? window.__PLUGINS__ : undefined;
     }

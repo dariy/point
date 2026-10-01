@@ -1,7 +1,7 @@
 import { raw } from "../../utils/helpers.ts";
 import { html, setHTML } from "../../utils/helpers.ts";
-import { getNavTags, getSettings, getUser, onNavTags, onSettingsSelector } from '../../store.js';
-import { pluginHost } from '../../core/pluginHost.js';
+import { getNavTags, getSettings, getUser, onNavTags, onSettingsSelector } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
 import { navigate } from '../../utils/helpers.ts';
 import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.ts';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.ts';
@@ -25,7 +25,7 @@ const VIZ_META = {
 
 /**
  * The two single-claim viz slots and the public path each one owns, listing
- * candidates in the same order app.js resolves them (see resolveVizModule) —
+ * candidates in the same order app.ts resolves them (see resolveVizModule) —
  * so a button's icon names the plugin its path will actually load.
  */
 const VIZ_SLOTS = [{

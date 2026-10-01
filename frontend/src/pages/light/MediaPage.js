@@ -5,7 +5,7 @@
  * MediaBrowser component so it can be reused in the MediaPickerDialog.
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { MediaBrowser } from '../../components/light/MediaBrowser.js';
 import { UPLOAD_SVG } from '../../utils/icons.ts';

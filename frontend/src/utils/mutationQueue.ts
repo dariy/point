@@ -1,7 +1,7 @@
 /**
  * Mutation Queue helper for Admin Offline CRUD.
  */
-import { setOfflineStatus } from '../store.js';
+import { setOfflineStatus } from '../store.ts';
 
 const DB_NAME = 'point-offline';
 const VERSION = 1;

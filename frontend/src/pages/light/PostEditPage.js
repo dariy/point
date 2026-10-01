@@ -6,7 +6,7 @@
  *   /light/posts/:id/edit     → edit existing
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
@@ -23,9 +23,9 @@ import {
   setAutosaveStatus,
   setOfflineStatus,
   setToast,
-} from "../../store.js";
+} from "../../store.ts";
 import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.ts";
-import { pluginHost } from "../../core/pluginHost.js";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.ts";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 import { attachPointerReorder } from "../../utils/pointerReorder.ts";
@@ -34,7 +34,7 @@ import { attachWindowFileDrop } from "../../utils/windowFileDrop.ts";
 import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.js";
 import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.js";
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;

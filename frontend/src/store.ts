@@ -9,7 +9,7 @@
  * rather than a silent undefined. See the "Keyed accessors" block there.
  *
  * Usage:
- *   import { getUser, setUser, onUser } from '../store.js';
+ *   import { getUser, setUser, onUser } from '../store.ts';
  *
  *   // Read
  *   const user = getUser();
@@ -37,10 +37,11 @@
  */
 
 class Store {
+  _state: Record<string, unknown>;
+  _listeners: Record<string, Set<Function>>;
+
   constructor() {
-    /** @type {Record<string, unknown>} */
     this._state = {};
-    /** @type {Record<string, Set<Function>>} */
     this._listeners = {};
   }
 
@@ -51,13 +52,9 @@ class Store {
    * caller that knows the shape say so, either by annotating the variable it
    * reads into or by declaring it on the function that returns it. Unstated,
    * it stays `unknown` and the caller has to narrow.
-   *
-   * @template [T=unknown]
-   * @param {string} key
-   * @returns {T}
    */
-  get(key) {
-    return /** @type {T} */ (this._state[key]);
+  get<T = unknown>(key: string): T {
+    return (this._state[key] as T);
   }
 
   /**
@@ -69,11 +66,8 @@ class Store {
    * contents. A payload rebuilt on every fetch — settings parsed from JSON,
    * say — is a fresh reference each time and will never be caught here; that
    * is what merge() is for.
-   *
-   * @param {string} key
-   * @param {unknown} value
    */
-  set(key, value) {
+  set(key: string, value: unknown) {
     if (Object.is(this._state[key], value) && key in this._state) return;
     this._state[key] = value;
     const listeners = this._listeners[key];
@@ -95,11 +89,11 @@ class Store {
 
   /**
    * Subscribe to changes on a key.
-   * @param {string} key
-   * @param {Function} callback  Called with the new value whenever it changes
-   * @returns {Function}  Unsubscribe function
+   *
+   * @param callback - Called with the new value whenever it changes
+   * @returns Unsubscribe function
    */
-  subscribe(key, callback) {
+  subscribe(key: string, callback: Function): Function {
     if (!this._listeners[key]) this._listeners[key] = new Set();
     this._listeners[key].add(callback);
     return () => this._listeners[key].delete(callback);
@@ -117,12 +111,11 @@ class Store {
    * compared with Object.is, so return a primitive or a stable reference —
    * `s => ({ a: s.a })` builds a new object each time and never compares equal.
    *
-   * @param {string} key
-   * @param {Function} select    Maps the key's value to the slice to watch
-   * @param {Function} callback  Called with (slice, value) when the slice changes
-   * @returns {Function}  Unsubscribe function
+   * @param select - Maps the key's value to the slice to watch
+   * @param callback - Called with (slice, value) when the slice changes
+   * @returns Unsubscribe function
    */
-  subscribeSelector(key, select, callback) {
+  subscribeSelector(key: string, select: Function, callback: Function): Function {
     let previous = select(this._state[key]);
     return this.subscribe(key, (value) => {
       const next = select(value);
@@ -146,24 +139,17 @@ class Store {
    * Shallow by design: values are compared with Object.is, so a nested object
    * rebuilt by the caller counts as a change. The settings payload is flat
    * primitives after normalizeSettings(), which is what makes this enough.
-   *
-   * @param {string} key
-   * @param {Record<string, unknown>} patch
    */
-  merge(key, patch) {
-    const current = /** @type {Record<string, unknown>|undefined} */ (this._state[key]);
+  merge(key: string, patch: Record<string, unknown>) {
+    const current = (this._state[key] as Record<string, unknown> | undefined);
     const next = { ...current, ...patch };
     if (current && typeof current === 'object' && shallowEqual(current, next)) return;
     this.set(key, next);
   }
 }
 
-/**
- * Same keys, and every value Object.is-equal.
- * @param {Record<string, unknown>} a
- * @param {Record<string, unknown>} b
- */
-function shallowEqual(a, b) {
+/** Same keys, and every value Object.is-equal. */
+function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>) {
   const keys = Object.keys(a);
   if (keys.length !== Object.keys(b).length) return false;
   return keys.every((k) => Object.is(a[k], b[k]));
@@ -175,7 +161,7 @@ function shallowEqual(a, b) {
  * A plain module constant is safe here because the core and all plugin
  * entries are bundled in ONE esbuild pass with --splitting (see
  * scripts/build-js.sh): this module lands in a single shared chunk, so every
- * importer — app.js and plugin chunks alike — gets the same instance.
+ * importer — app.ts and plugin chunks alike — gets the same instance.
  */
 export const store = new Store();
 
@@ -189,7 +175,7 @@ export const store = new Store();
 // there is no second use to compare against. A named import is resolved by
 // esbuild at build time, so the same typo is:
 //
-//   ✘ [ERROR] No matching export in "store.js" for import "getUsr"
+//   ✘ [ERROR] No matching export in "store.ts" for import "getUsr"
 //             Did you mean to import "getUser" instead?
 //
 // This block also replaces a hand-maintained list of "well-known keys" that had
@@ -201,16 +187,14 @@ export const store = new Store();
  * One store key's operations. `on` and `onSelector` return the unsubscribe
  * function, as store.subscribe() does. keyed() cannot know what a key holds, so
  * an export that does know says so with a cast to `Keyed<ItsType>`.
- *
- * @template T
- * @typedef {{
- *   get: () => T,
- *   set: (value: T) => void,
- *   on: (callback: (value: T) => void) => Function,
- *   merge: (patch: Partial<T>) => void,
- *   onSelector: (select: (value: T) => unknown, callback: Function) => Function,
- * }} Keyed
  */
+export interface Keyed<T> {
+  get: () => T;
+  set: (value: T) => void;
+  on: (callback: (value: T) => void) => Function;
+  merge: (patch: Partial<T>) => void;
+  onSelector: (select: (value: T) => unknown, callback: Function) => Function;
+}
 
 /**
  * Bind one store key to its operations.
@@ -219,11 +203,8 @@ export const store = new Store();
  * coarse object keys — `settings` is every public setting in one object — where
  * a whole-key write or a whole-key subscription costs a repaint that nothing
  * asked for. A key that holds a primitive simply never destructures them.
- *
- * @param {string} key
- * @returns {Keyed<any>}
  */
-function keyed(key) {
+function keyed(key: string): Keyed<any> {
   return {
     get: () => store.get(key),
     set: (value) => store.set(key, value),
@@ -235,7 +216,7 @@ function keyed(key) {
 
 /** The authenticated user, or null when signed out. */
 export const { get: getUser, set: setUser, on: onUser } =
-  /** @type {Keyed<import('./api/auth.ts').User|null>} */ (keyed('user'));
+  (keyed('user') as Keyed<import('./api/auth.ts').User | null>);
 
 /**
  * Public blog settings from /api/settings/public, normalized.
@@ -252,7 +233,7 @@ export const {
   on: onSettings,
   merge: mergeSettings,
   onSelector: onSettingsSelector,
-} = /** @type {Keyed<import('./utils/helpers.ts').StoreSettings>} */ (keyed('settings'));
+} = (keyed('settings') as Keyed<import('./utils/helpers.ts').StoreSettings>);
 
 /** {'dark'|'light'|'auto'} Active UI theme. */
 export const { get: getTheme, set: setTheme, on: onTheme } = keyed('theme');
@@ -279,15 +260,15 @@ export const { get: getAutosaveStatus, set: setAutosaveStatus, on: onAutosaveSta
 
 /** Tags shown in the public nav, from /api/nav. */
 export const { get: getNavTags, set: setNavTags, on: onNavTags } =
-  /** @type {Keyed<import('./api/nav.ts').NavTagNode[]>} */ (keyed('navTags'));
+  (keyed('navTags') as Keyed<import('./api/nav.ts').NavTagNode[]>);
 
 /** Root tags, used by the breadcrumb to name the top level. */
 export const { get: getRootTags, set: setRootTags, on: onRootTags } =
-  /** @type {Keyed<import('./api/nav.ts').NavTagNode[]>} */ (keyed('rootTags'));
+  (keyed('rootTags') as Keyed<import('./api/nav.ts').NavTagNode[]>);
 
 /** Home page tag cloud, cached so a return visit renders at once. */
 export const { get: getTagCloudCache, set: setTagCloudCache } =
-  /** @type {Keyed<import('./api/pages.ts').TagCloudItem[]|null>} */ (keyed('tagCloud'));
+  (keyed('tagCloud') as Keyed<import('./api/pages.ts').TagCloudItem[] | null>);
 
 /** {string} Latest known app version, for the sidebar's update hint. */
 export const { get: getAppVersion, set: setAppVersion, on: onAppVersion } = keyed('version');

@@ -2,11 +2,11 @@
  * LightSidebar — admin navigation sidebar.
  */
 
-import { Component } from '../Component.js';
-import { getAppVersion, getTheme, onAppVersion, onPluginToggled, setTheme } from '../../store.js';
+import { Component } from '../Component.ts';
+import { getAppVersion, getTheme, onAppVersion, onPluginToggled, setTheme } from '../../store.ts';
 import { html, raw } from '../../utils/helpers.ts';
 import { DEBUG } from '../../utils/debug.ts';
-import { pluginHost } from '../../core/pluginHost.js';
+import { pluginHost } from '../../core/pluginHost.ts';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,

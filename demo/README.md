@@ -32,7 +32,7 @@ demo/
   world.mjs       tag universe, locations and topical vocabulary
   settings.mjs    the settings the demo presents (titles, footer line)
   mock/
-    entry.js      build entry — imports the shim, then the real app.js
+    entry.js      build entry — imports the shim, then the real app.ts
     shim.js       patches window.fetch + XMLHttpRequest
     store.js      mutable in-memory model, seeded from fixtures
     routes.js     endpoint handlers over the store
@@ -57,7 +57,7 @@ demo/
 ```
 
 The interception point is the **platform**, not `frontend/src/api/client.ts`.
-That module is not the only caller: `router.js` fetches `/api/setup/status` on
+That module is not the only caller: `router.ts` fetches `/api/setup/status` on
 every `/light` navigation, `api/system.ts` uploads over `XMLHttpRequest`,
 `BackupsSection.js` fetches the version endpoint directly, and the comments
 plugin calls `api.*` without going through `frontend/src/api/`. Patching `fetch`
@@ -66,9 +66,9 @@ the real `client.js` on the code path, so the demo exercises genuine error
 handling and caching instead of a parallel implementation of it.
 
 `entry.js` relies on ES module evaluation order: the shim is installed before
-`app.js` runs its top-level `loadThemeCss()` fetch.
+`app.ts` runs its top-level `loadThemeCss()` fetch.
 
-**`app.js` itself is never modified.** The demo runs the real application.
+**`app.ts` itself is never modified.** The demo runs the real application.
 
 ### Two kinds of fixture data
 
@@ -205,7 +205,7 @@ would freeze them at whatever they were when the fixtures were recorded:
 ### Failing soft
 
 An unmatched endpoint returns an empty `200`, never a rejection and never a
-`401`. `client.js` turns a 401 into an `api:unauthorized` event which `app.js`
+`401`. `client.js` turns a 401 into an `api:unauthorized` event which `app.ts`
 escalates into a hard navigation to `/light/login` — one unhandled endpoint would
 otherwise eject a visitor mid-click.
 
@@ -469,7 +469,7 @@ work at build time:
 - `__BUILD_VERSION__` → a fixed demo string
 - `<!-- __HEAD_HTML__ -->` → empty (the demo embeds no third-party origin)
 - **`window.__PLUGINS__` injected before `</head>`** — not optional:
-  `core/pluginHost.js` is completely inert without it, silently costing the demo
+  `core/pluginHost.ts` is completely inert without it, silently costing the demo
   its media viewer, timeline and tag visualisation. The build fails rather than
   emit an empty manifest.
 
@@ -484,7 +484,7 @@ work at build time:
 | `mcp` | Server-side capability with no meaning without a server |
 | `offline-sync` | Registers `/sw.js` and enables the IndexedDB mutation queue. A service worker would serve stale bundles, and the queue would accumulate writes that never drain |
 
-`app.js` falls back to importing `offline-sync` statically when the manifest is
+`app.ts` falls back to importing `offline-sync` statically when the manifest is
 **empty**, so the manifest must be present and non-empty for that omission to
 take effect. The build enforces this.
 

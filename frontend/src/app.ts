@@ -21,15 +21,16 @@ import {
   setSettings,
   setTheme,
   setUser,
-} from "./store.js";
-import { router } from "./router.js";
+} from "./store.ts";
+import { router } from "./router.ts";
+import type { Route } from "./router.ts";
 import { getMe } from "./api/auth.ts";
 import { getPublicSettings } from "./api/settings.ts";
 
 import { getVersion } from "./api/system.ts";
 import { normalizeSettings } from "./utils/helpers.ts";
 import { setPageTitle } from "./utils/documentTitle.ts";
-import { pluginHost } from "./core/pluginHost.js";
+import { pluginHost } from "./core/pluginHost.ts";
 import { ToastContainer } from "./components/shared/Toast.js";
 import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
 import { initNotificationLog } from "./utils/notificationLog.ts";
@@ -59,7 +60,7 @@ pluginHost.init();
 // guest UI — and anything running in it — before a password is ever typed, and
 // keeps that markup out of the authenticated session that follows.
 window.addEventListener("app:login-required", (event) => {
-  const { detail } = /** @type {CustomEvent} */ (event);
+  const { detail } = (event as CustomEvent);
   const next = detail?.next || null;
   const target =
     "/light/login" + (next ? `?next=${encodeURIComponent(next)}` : "");
@@ -80,8 +81,8 @@ window.addEventListener("app:login-required", (event) => {
 // but the browser does not apply its rules. We swap media attributes
 // synchronously on every route change, before any page component mounts.
 
-const _cssPublic = /** @type {HTMLLinkElement|null} */ (document.getElementById("css-public"));
-const _cssLight = /** @type {HTMLLinkElement|null} */ (document.getElementById("css-light"));
+const _cssPublic = (document.getElementById("css-public") as HTMLLinkElement | null);
+const _cssLight = (document.getElementById("css-light") as HTMLLinkElement | null);
 
 function _applySection(pathname) {
   const isLight = pathname.startsWith("/light") || pathname === "/setup";
@@ -240,13 +241,12 @@ const MAP_VIZ_PLUGINS = ["tags-atlas", "tags-map"];
  * gate in TagVizAccessible: no enabled viz (or admins-only for a logged-out
  * visitor) sends the visitor home.
  *
- * @param {string} slot - "tags-route" or "map-route"
- * @param {string[]} candidates - the slot's members in registry order; the
+ * @param slot - "tags-route" or "map-route"
+ * @param candidates - the slot's members in registry order; the
  *   first is the slot's default, used as the fallback before the manifest lands.
  */
-async function resolveVizModule(slot, candidates) {
-  /** @type {Record<string, any>} */
-  const settings = getSettings() || {};
+async function resolveVizModule(slot: string, candidates: string[]) {
+  const settings: Record<string, any> = getSettings() || {};
   const visibility = settings.tags_visibility || "hidden";
   const isAdmin = !!getUser();
 
@@ -279,7 +279,7 @@ const resolveMapModule = () => resolveVizModule("map-route", MAP_VIZ_PLUGINS);
 // applies it on every mount, so a page with a fixed name needs nothing else.
 // Pages whose name is only known after a fetch (a post, a tag, a search query)
 // leave it unset and call setPageTitle() themselves once loaded.
-const routes = [
+const routes: Route[] = [
   // Standalone login page (public — no auth required). Reached via a hard
   // navigation so it loads in its own document, isolated from the guest UI and
   // any third-party markup injected into it.

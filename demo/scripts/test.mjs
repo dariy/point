@@ -9,7 +9,7 @@
  *      backend, and a single leaked call means some path still expects one.
  *   2. Console errors.
  *   3. Being bounced to /light/login while authenticated, which is what happens
- *      when a handler returns 401: client.js raises api:unauthorized and app.js
+ *      when a handler returns 401: client.js raises api:unauthorized and app.ts
  *      escalates it to a hard navigation.
  *   4. Behaviour the route walk cannot see: an edit surviving the walk out of
  *      the admin (and a reload still resetting it), the scheduled queue left of

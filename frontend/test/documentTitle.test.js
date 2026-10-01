@@ -46,8 +46,8 @@ describe('document title', () => {
       json: async () => ({ setup_complete: true }),
     });
     ({ setPageTitle, siteTitle } = await import('../src/utils/documentTitle.ts'));
-    ({ router } = await import('../src/router.js'));
-    ({ setSettings } = await import('../src/store.js'));
+    ({ router } = await import('../src/router.ts'));
+    ({ setSettings } = await import('../src/store.ts'));
   });
 
   beforeEach(() => {

@@ -26,8 +26,8 @@ import {
   setSettings,
   setToast,
   setUser,
-} from '../src/store.js';
-import { pluginHost } from '../src/core/pluginHost.js';
+} from '../src/store.ts';
+import { pluginHost } from '../src/core/pluginHost.ts';
 import { clearPostReadCache } from '../src/api/posts.ts';
 
 const settle = () => new Promise(r => setImmediate(r));

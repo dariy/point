@@ -13,9 +13,9 @@
  * error verbatim when it fails.
  */
 
-import { Component } from "../../Component.js";
+import { Component } from "../../Component.ts";
 import { getVersion, checkVersionNow } from "../../../api/system.ts";
-import { setToast } from "../../../store.js";
+import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDatetime, isoDatetime } from "../../../utils/formatters.ts";
 

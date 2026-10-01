@@ -4,14 +4,14 @@
  * Fetches: GET /api/auth/sessions
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
   changePassword, changeEmail, getMe
 } from '../../api/auth.ts';
-import { setToast } from '../../store.js';
+import { setToast } from '../../store.ts';
 import { html } from '../../utils/helpers.ts';
 import { usernameHintField } from '../../utils/passwordForm.ts';
 import { formatDateShort } from '../../utils/formatters.ts';

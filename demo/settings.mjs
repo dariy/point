@@ -24,7 +24,7 @@
  *
  * `tags_visibility` is a demo choice rather than a scrub: the source instance
  * keeps the tag visualisation admin-only, which makes /tags redirect logged-out
- * visitors home (app.js resolveTagsModule). Showing it is most of the point of
+ * visitors home (app.ts resolveTagsModule). Showing it is most of the point of
  * a demo.
  */
 export const REPLACE_SETTINGS = {

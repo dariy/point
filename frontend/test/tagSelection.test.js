@@ -15,7 +15,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, selectOption } from './helpers/dom.js';
-import { getToast, setToast } from '../src/store.js';
+import { getToast, setToast } from '../src/store.ts';
 import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.js';
 import { renderTagList } from '../src/components/light/tags/TagListView.js';
 import {

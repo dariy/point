@@ -13,18 +13,18 @@
  * Props (from router): { params, query }
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 
 import { getTagsGraph } from '../../api/pages.ts';
-import { getNavTags, getSettings } from '../../store.js';
+import { getNavTags, getSettings } from '../../store.ts';
 import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.ts';
 import { SEARCH_SVG } from '../../utils/icons.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
 import { TagGraph } from "./tagGraph.js";
-import { pluginHost } from '../../core/pluginHost.js';
+import { pluginHost } from '../../core/pluginHost.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** @extends {Component<PageProps>} */
 export default class TagsPage extends Component {

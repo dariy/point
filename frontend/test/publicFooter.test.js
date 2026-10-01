@@ -111,7 +111,7 @@ describe('PublicFooter revelio toggle', () => {
     };
     global.window.localStorage = global.localStorage;
     ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.js'));
-    ({ setUser } = await import('../src/store.js'));
+    ({ setUser } = await import('../src/store.ts'));
     ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });
 

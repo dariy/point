@@ -8,10 +8,10 @@ import { html, setHTML, raw } from "../../utils/helpers.ts";
  *   - markdown: plain-text format with `- [Label](url)` syntax
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
-import { getSettings, mergeSettings, setToast } from '../../store.js';
+import { getSettings, mergeSettings, setToast } from '../../store.ts';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';
 import { HeaderFold } from '../../utils/headerFold.ts';
 import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.ts';

@@ -29,15 +29,15 @@
  * site never sees them (server-side enabled-only manifest + 404'd chunks/routes).
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { getPlugins, setPluginEnabled, getPresets, updatePreset, applyPreset } from "../../api/plugins.ts";
 import { getAllSettings } from "../../api/settings.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
-import { setPluginToggled, setToast } from "../../store.js";
+import { setPluginToggled, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
-import { pluginHost } from "../../core/pluginHost.js";
+import { pluginHost } from "../../core/pluginHost.ts";
 
 // Slot cardinalities that make a slot's candidates alternatives (at most one
 // enabled) and that keep a slot occupied (its last claimant can't be turned

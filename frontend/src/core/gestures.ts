@@ -9,14 +9,20 @@
 /**
  * iOS-style rubber-band damping for edge-resistance drag.
  * Returns a damped displacement that fights back as dx grows.
- * @param {number} dx      - Raw displacement in px (positive or negative)
- * @param {number} width   - Viewport/container width in px (default: window.innerWidth)
- * @returns {number} damped displacement
+ *
+ * @param dx - Raw displacement in px (positive or negative)
+ * @param width - Viewport/container width in px (default: window.innerWidth)
+ * @returns damped displacement
  */
-export function rubberBand(dx, width = window.innerWidth) {
+export function rubberBand(dx: number, width: number = window.innerWidth): number {
   const absDx = Math.abs(dx);
   const damped = (1 - 1 / ((absDx * 0.55) / width + 1)) * width; // 0.55 = iOS-standard damping coefficient
   return dx < 0 ? -damped : damped;
+}
+
+/** Desktop Safari's trackpad pinch event (gesturestart/change/end), not in lib.dom. */
+export interface SafariGestureEvent extends Event {
+  readonly scale: number;
 }
 
 const STATE = {
@@ -29,35 +35,69 @@ const STATE = {
   PANNING: "PANNING",
 };
 
-export class GestureController {
+/** GestureController options. Every callback is optional. */
+export interface GestureOptions {
+  /** (dx, dy) — real-time drag feedback */
+  onSwipeMove?: Function;
+  /** (dir: 'left'|'right'|'up'|'down') */
+  onSwipeCommit?: Function;
+  /** () — drag ended without commit */
+  onSwipeCancel?: Function;
+  /** (dx, dy) — pan while zoomed */
+  onPanMove?: Function;
+  /** (scaleDelta, cx, cy) — multiplicative */
+  onPinchMove?: Function;
+  /** () */
+  onPinchEnd?: Function;
+  /** (x, y) */
+  onTap?: Function;
+  /** (x, y) */
+  onDoubleTap?: Function;
+  /** (x, y) */
+  onTwoFingerTap?: Function;
   /**
-   * @param {HTMLElement} element
-   * @param {object} opts
-   * @param {Function} [opts.onSwipeMove]    (dx, dy) — real-time drag feedback
-   * @param {Function} [opts.onSwipeCommit]  (dir: 'left'|'right'|'up'|'down')
-   * @param {Function} [opts.onSwipeCancel]  () — drag ended without commit
-   * @param {Function} [opts.onPanMove]      (dx, dy) — pan while zoomed
-   * @param {Function} [opts.onPinchMove]    (scaleDelta, cx, cy) — multiplicative
-   * @param {Function} [opts.onPinchEnd]     ()
-   * @param {Function} [opts.onTap]          (x, y)
-   * @param {Function} [opts.onDoubleTap]    (x, y)
-   * @param {Function} [opts.onTwoFingerTap] (x, y)
-   * @param {string}   [opts.ignoreSelector]  CSS selector; touches starting on a
-   *   matching element (or its ancestor) are ignored so the consumer can cede
-   *   that region to a nested gesture handler.
-   * @param {number}   [opts.swipeThresholdPx=50]
-   * @param {number}   [opts.commitThresholdPx=12]  movement before state commits
-   * @param {number}   [opts.edgeIgnorePx=30]
-   * @param {number}   [opts.doubleTapMs=300]
-   * @param {number}   [opts.tapMovePx=8]
-   * @param {number}   [opts.directionRatio=1.3]  dominance factor that splits a
-   *   drag into one of three classes: "mostly horizontal" (absDx ≥ absDy×ratio),
-   *   "mostly vertical" (absDy ≥ absDx×ratio), or "mostly diagonal" (neither axis
-   *   dominates). A horizontal class commits to a swipe/pan; a vertical class
-   *   commits to a vertical swipe; a diagonal class is ignored so an ambiguous,
-   *   slanted drag never flips the page or fires a vertical action.
+   * CSS selector; touches starting on a matching element (or its ancestor) are
+   * ignored so the consumer can cede that region to a nested gesture handler.
    */
-  constructor(element, opts = {}) {
+  ignoreSelector?: string;
+  /** Default 50. */
+  swipeThresholdPx?: number;
+  /** Movement before state commits. Default 12. */
+  commitThresholdPx?: number;
+  /** Default 30. */
+  edgeIgnorePx?: number;
+  /** Default 300. */
+  doubleTapMs?: number;
+  /** Default 8. */
+  tapMovePx?: number;
+  /**
+   * Dominance factor that splits a drag into one of three classes: "mostly
+   * horizontal" (absDx ≥ absDy×ratio), "mostly vertical" (absDy ≥ absDx×ratio),
+   * or "mostly diagonal" (neither axis dominates). A horizontal class commits to
+   * a swipe/pan; a vertical class commits to a vertical swipe; a diagonal class
+   * is ignored so an ambiguous, slanted drag never flips the page or fires a
+   * vertical action. Default 1.3.
+   */
+  directionRatio?: number;
+}
+
+export class GestureController {
+  _el: HTMLElement;
+  _opts: GestureOptions;
+  _state: string;
+  _zoomed: boolean;
+  _startX: number;
+  _startY: number;
+  _pinchStartDist: number;
+  _pinchCx: number;
+  _pinchCy: number;
+  _twoFingerStartX: number;
+  _twoFingerStartY: number;
+  _twoFingerStartTime: number;
+  _lastTapTime: number;
+  _swallowClick: boolean;
+
+  constructor(element: HTMLElement, opts: GestureOptions = {}) {
     this._el = element;
     this._opts = {
       swipeThresholdPx: 50,
@@ -332,24 +372,36 @@ export class GestureController {
  * Direction: deltaX > 0 → 'left' (finger moved right = content scrolls left).
  */
 export class TrackpadDetector {
+  _el: HTMLElement;
+  onHorizontal: Function;
+  thresholdDeltaX: number;
+  maxDeltaY: number;
+  dominanceRatio: number;
+  cooldownMs: number;
+  _lastFired: number;
+
   /**
-   * @param {HTMLElement} element
-   * @param {object} opts
-   * @param {Function} opts.onHorizontal     Called with 'left' | 'right'
-   * @param {number}   [opts.thresholdDeltaX=60]
-   * @param {number}   [opts.maxDeltaY=30]
-   * @param {number}   [opts.dominanceRatio=1.5]  deltaX must exceed deltaY by
+   * @param opts.onHorizontal - Called with 'left' | 'right'
+   * @param opts.thresholdDeltaX
+   * @param opts.maxDeltaY
+   * @param opts.dominanceRatio - deltaX must exceed deltaY by
    *   this factor, so a vertical scroll with sideways jitter never fires.
-   * @param {number}   [opts.cooldownMs=600]
+   * @param opts.cooldownMs
    */
   constructor(
-    element,
+    element: HTMLElement,
     {
       onHorizontal,
       thresholdDeltaX = 60,
       maxDeltaY = 30,
       dominanceRatio = 1.5,
       cooldownMs = 600,
+    }: {
+      onHorizontal: Function;
+      thresholdDeltaX?: number;
+      maxDeltaY?: number;
+      dominanceRatio?: number;
+      cooldownMs?: number;
     },
   ) {
     this._el = element;

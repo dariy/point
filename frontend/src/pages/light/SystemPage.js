@@ -7,7 +7,7 @@
  * Fetches: GET /api/system/*
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import {
   adminLayoutTemplate,
@@ -24,7 +24,7 @@ import {
   retryJob,
   clearFailedJobs,
 } from "../../api/system.ts";
-import { setToast } from "../../store.js";
+import { setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { formatFileSize } from "../../utils/formatters.ts";
 

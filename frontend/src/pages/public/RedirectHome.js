@@ -6,7 +6,7 @@
  * and redirecting in afterRender() keeps the behaviour entirely client-side.
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { html, navigate } from "../../utils/helpers.ts";
 
 export default class RedirectHome extends Component {

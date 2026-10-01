@@ -1,4 +1,4 @@
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { html, raw } from '../../utils/helpers.ts';
 import { api } from '../../api/client.ts';
 import { sha256 } from '../../api/auth.ts';

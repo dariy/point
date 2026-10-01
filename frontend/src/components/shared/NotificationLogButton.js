@@ -12,8 +12,8 @@ import { html, setHTML } from "../../utils/helpers.ts";
  *   btn.mount();
  */
 
-import { Component } from '../Component.js';
-import { getRoute, getToastLog, onRoute, onToastLog, setToastLog } from '../../store.js';
+import { Component } from '../Component.ts';
+import { getRoute, getToastLog, onRoute, onToastLog, setToastLog } from '../../store.ts';
 import { Modal } from './Modal.js';
 
 import { getRecentEntries } from '../../utils/notificationLog.ts';

@@ -10,14 +10,14 @@
  * present.
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { login, loginWithPasskey } from '../../api/auth.ts';
-import { getUser, setUser } from '../../store.js';
+import { getUser, setUser } from '../../store.ts';
 import { html, navigate } from '../../utils/helpers.ts';
 import { usernameHintField } from '../../utils/passwordForm.ts';
 
 /**
- * @typedef {import('../../router.js').PageProps & {
+ * @typedef {import('../../router.ts').PageProps & {
  *   next?: string,
  *   onSuccess?: (user: import('../../api/auth.ts').User) => unknown,
  *   onCancel?: () => unknown,

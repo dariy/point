@@ -2,7 +2,7 @@
  * TagsInput — inline tag-badge input with autocomplete.
  */
 
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { listTags, createTag } from '../../api/tags.ts';
 import { html, setHTML, debounce } from '../../utils/helpers.ts';
 import { openTagFamilyPopover } from './TagFamilyPopover.js';

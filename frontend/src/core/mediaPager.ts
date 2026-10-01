@@ -1,15 +1,16 @@
 import { html, setHTML } from "../utils/helpers.ts";
+import type { RawHtml } from "../utils/helpers.ts";
 /**
  * MediaPager — the gesture layer for the admin media grid (/light/media).
  *
- * The public grids get swipe pagination and pinch-zoom from core/gridPager.js;
+ * The public grids get swipe pagination and pinch-zoom from core/gridPager.ts;
  * this gives the media library the same two gestures. It is a sibling of
  * GridPager rather than a generalisation of it because the parts that differ are
  * most of it: GridPager navigates routes, renders PostCards and drives gridFit's
  * per_page arithmetic, none of which the media browser has (its pages are
  * component state, its cards are MediaBrowser markup, and its capacity is
  * measured by MediaBrowser._gridCapacity). What the two genuinely share — the
- * touch recognisers — already lives in core/gestures.js, so both read the same
+ * touch recognisers — already lives in core/gestures.ts, so both read the same
  * gesture state machine and only the wiring here is new.
  *
  * The host (MediaBrowser) owns the data and hands the pager four things:
@@ -34,7 +35,8 @@ import { html, setHTML } from "../utils/helpers.ts";
  * underneath.
  */
 
-import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
+import { GestureController, TrackpadDetector, rubberBand } from './gestures.ts';
+import type { SafariGestureEvent } from './gestures.ts';
 
 // "Zoom" is a chosen column count, sticky per browser like the public grid's.
 const ZOOM_KEY = 'mediaGridZoom';
@@ -51,29 +53,62 @@ export function getMediaZoom() {
 export function setMediaZoom(cols) {
   if (cols > 0) localStorage.setItem(ZOOM_KEY, String(cols));else localStorage.removeItem(ZOOM_KEY);
 }
+/** What the host (MediaBrowser) hands the pager. */
+export interface MediaPagerOptions {
+  /** gesture root (.media-browser) */
+  root: () => HTMLElement | null;
+  /** the element that slides (#mb-media-area) */
+  area: () => HTMLElement | null;
+  /** the live .media-grid */
+  grid: () => HTMLElement | null;
+  /** neighbour page markup, built with html`` */
+  fetchPage: (page: number) => Promise<RawHtml>;
+  /** load a page */
+  gotoPage: (page: number) => void;
+  /** refit per_page after a zoom step */
+  onZoomCommit: () => void;
+  /** false once the host unmounted */
+  isAlive: () => boolean;
+}
+
 export class MediaPager {
+  _o: MediaPagerOptions;
+  _ghosts: { prev: HTMLElement | null, next: HTMLElement | null };
   /**
-   * @param {object} opts
-   * @param {() => HTMLElement|null} opts.root      gesture root (.media-browser)
-   * @param {() => HTMLElement|null} opts.area      the element that slides (#mb-media-area)
-   * @param {() => HTMLElement|null} opts.grid      the live .media-grid
-   * @param {(page:number) => Promise<import('../utils/helpers.ts').RawHtml>}
-   *   opts.fetchPage  neighbour page markup, built with html``
-   * @param {(page:number) => void} opts.gotoPage   load a page
-   * @param {() => void} opts.onZoomCommit          refit per_page after a zoom step
-   * @param {() => boolean} opts.isAlive            false once the host unmounted
+   * The listing's paging state, as arm() last received it. Empty until then,
+   * hence the optional properties every reader defaults.
    */
-  constructor(opts) {
+  _pagination: { page?: number, pages?: number, total?: number };
+  _ghostKey: string | null;
+  _ghostVersion: number;
+  _committedGhost: HTMLElement | null;
+  _peekGhost: HTMLElement | null;
+  _gesture: GestureController | null;
+  _trackpad: TrackpadDetector | null;
+  _touchEl: HTMLElement | null;
+  _onTouchDown: () => void;
+  _onKeyNav: ((e: KeyboardEvent) => void) | null;
+  _navArrows: HTMLButtonElement[] | null;
+  _stride: number | null;
+  _pageNavPending: boolean;
+  _pageNavWatchdog: ReturnType<typeof setTimeout>;
+  _pinchAccum: number;
+  _zoomCommitTimer: ReturnType<typeof setTimeout>;
+  _wheelAccum: number;
+  _gestureScale: number;
+  _onZoomKey: ((e: KeyboardEvent) => void) | null;
+  _onZoomWheel: ((e: WheelEvent) => void) | null;
+  _onGestureStart: (e: Event) => void;
+  _onGestureChange: (e: SafariGestureEvent) => void;
+  _onGestureEnd: (e: Event) => void;
+  _zoomWheelEl: HTMLElement | null;
+
+  constructor(opts: MediaPagerOptions) {
     this._o = opts;
     this._ghosts = {
       prev: null,
       next: null
     };
-    /**
-     * The listing's paging state, as arm() last received it. Empty until then,
-     * hence the optional properties every reader defaults.
-     * @type {{page?: number, pages?: number, total?: number}}
-     */
     this._pagination = {};
   }
 
@@ -85,10 +120,10 @@ export class MediaPager {
    * load; every previous binding is torn down first and the neighbour preload
    * is skipped unless `key` says the listing itself changed.
    *
-   * @param {{page?:number, pages?:number}} pagination  empty until the first load lands
-   * @param {string} key  identity of the current listing (page + filters)
+   * @param pagination - empty until the first load lands
+   * @param key - identity of the current listing (page + filters)
    */
-  arm(pagination, key) {
+  arm(pagination: {page?:number, pages?:number}, key: string) {
     this._teardown(); // also releases the swipe lock a commit armed
     this._pagination = pagination || {};
     this.applyZoom();
@@ -601,8 +636,7 @@ export class MediaPager {
     };
     window.addEventListener('keydown', this._onKeyNav);
     const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    /** @type {Array<[string, () => void, string, string]>} */
-    const arrowSpecs = [
+    const arrowSpecs: Array<[string, () => void, string, string]> = [
       ['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
       ['next', goNext, 'Next page', 'M9 18l6-6-6-6'],
     ];

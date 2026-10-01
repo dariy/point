@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { setupDOM, fire, click } from './helpers/dom.js';
-import { setNavTags, setRoute, setSettings } from '../src/store.js';
+import { setNavTags, setRoute, setSettings } from '../src/store.ts';
 import { PostCard } from '../src/components/public/PostCard.js';
 
 /**

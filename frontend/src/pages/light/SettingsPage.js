@@ -8,10 +8,10 @@
  * they are properties of the deployment, not of the blog.
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { listPosts } from "../../api/posts.ts";
-import { mergeSettings, setToast } from "../../store.js";
+import { mergeSettings, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { CHECK_SVG } from "../../utils/icons.ts";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";

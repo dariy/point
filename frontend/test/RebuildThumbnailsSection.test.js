@@ -17,7 +17,7 @@ describe('RebuildThumbnailsSection', () => {
     const mod = await import('../src/components/light/sections/RebuildThumbnailsSection.js');
     RebuildThumbnailsSection = mod.RebuildThumbnailsSection;
 
-    ({ onToast, setToast } = await import('../src/store.js'));
+    ({ onToast, setToast } = await import('../src/store.ts'));
   });
 
   after(() => {

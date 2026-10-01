@@ -11,12 +11,12 @@ import { html, setHTML, raw } from "../../utils/helpers.ts";
  *   - Full-screen post-to-post navigation
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { safeUrl, navigate } from '../../utils/helpers.ts';
 import { X_SVG } from '../../utils/icons.ts';
-import { getSettings, getUser } from '../../store.js';
-import { pluginHost } from '../../core/pluginHost.js';
-import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
+import { getSettings, getUser } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
+import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.ts';
 import { hideFlyout } from '../../utils/tagFlyout.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';

@@ -9,9 +9,9 @@
 #                       (utils/debug.ts) collapses to no-ops and is stripped.
 #   frontend/js-debug/  debug build   — unminified, __DEBUG__=true. Plugin
 #                       mount/unmount, the manifest and chunk loads are logged
-#                       to the console (see core/pluginHost.js).
+#                       to the console (see core/pluginHost.ts).
 #
-# Each set is ONE esbuild pass with --splitting over the core entry (app.js)
+# Each set is ONE esbuild pass with --splitting over the core entry (app.ts)
 # plus every plugin entry (frontend/src/plugins/<id>/index.ts or index.js):
 #
 #   app.js              stable, unhashed core entry — referenced from
@@ -21,7 +21,7 @@
 #   chunks/*-[hash].js  code-split chunks: lazily imported pages and code
 #                       shared between the core and plugin entries.
 #
-# The single module graph means dynamic import() in app.js produces real lazy
+# The single module graph means dynamic import() in app.ts produces real lazy
 # chunks (pages parse on first navigation, not up front) and shared modules
 # (store, Component, api/client) exist exactly once — no duplication between
 # app.js and plugin chunks, and no globalThis singleton anchors needed.
@@ -109,7 +109,7 @@ build_set() {
   rm -rf "$js_dir"
   mkdir -p "$js_dir" "$meta_dir"
 
-  # One esbuild pass with --splitting over the core entry (app.js) plus every
+  # One esbuild pass with --splitting over the core entry (app.ts) plus every
   # plugin entry. Pinned binary (see $ESBUILD above) for reproducible bundles.
   # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
   "$ESBUILD" "app=$APP_ENTRY" $PLUGIN_ARGS \

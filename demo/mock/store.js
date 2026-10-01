@@ -44,7 +44,7 @@ let state = null;
  * Whether the visitor has "logged in".
  *
  * Kept in sessionStorage because the store itself is module state that dies on
- * every full page load — and the admin UI does hard navigations (app.js sends
+ * every full page load — and the admin UI does hard navigations (app.ts sends
  * any login-required signal through window.location.assign). Without this, a
  * visitor who logs in and then reloads, deep-links, or follows one of those
  * navigations is bounced straight back to the login page.

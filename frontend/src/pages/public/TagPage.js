@@ -11,7 +11,7 @@
  * Props (from router): { params: { slug }, query: { page, slug } }
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 
 
 import {
@@ -19,7 +19,7 @@ import {
   shouldUseImmersive,
 } from "../../components/public/PostContent.js";
 import { Pagination } from "../../components/shared/Pagination.js";
-import { pluginHost } from "../../core/pluginHost.js";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { getTagPage } from "../../api/pages.ts";
 import { getPostBySlug, getPostNavigation } from "../../api/posts.ts";
 import {
@@ -28,14 +28,14 @@ import {
   getTagBreadcrumb,
   setPagination,
   setTagBreadcrumb,
-} from "../../store.js";
+} from "../../store.ts";
 import {
   html,
   isShortViewport,
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.ts";
-import { GridPager } from "../../core/gridPager.js";
+import { GridPager } from "../../core/gridPager.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { setPageTitle } from "../../utils/documentTitle.ts";
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from "../../utils/immersiveNav.ts";
@@ -49,7 +49,7 @@ import {
   refitPage,
 } from "../../utils/gridFit.ts";
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** @extends {Component<PageProps>} */
 export default class TagPage extends Component {
@@ -74,7 +74,7 @@ export default class TagPage extends Component {
     // — see createResizeGate.
     this._resizeGate = createResizeGate();
     // Swipe/trackpad/keyboard pagination and pinch zoom for the grid — see
-    // core/gridPager.js. Shared with HomePage and SearchPage.
+    // core/gridPager.ts. Shared with HomePage and SearchPage.
     this._pager = new GridPager({
       gridMount: () => this.$("#grid-mount"),
       gestureRoot: () => this.$(".site-main"),

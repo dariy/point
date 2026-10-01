@@ -22,9 +22,9 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { Component } from '../src/components/Component.js';
+import { Component } from '../src/components/Component.ts';
 import { html } from '../src/utils/helpers.ts';
-import { setAutosaveStatus, setUser, store } from '../src/store.js';
+import { setAutosaveStatus, setUser, store } from '../src/store.ts';
 
 /** Live subscribers on a store key — the leak, measured at its source. */
 const listeners = key => store._listeners[key]?.size ?? 0;
@@ -32,7 +32,7 @@ const listeners = key => store._listeners[key]?.size ?? 0;
 /**
  * An `on*`-shaped subscriber for a probe key.
  *
- * subscribeStore() takes one of store.js's accessors, not a store and a string
+ * subscribeStore() takes one of store.ts's accessors, not a store and a string
  * key. These tests are about how long a subscription lives, not about any real
  * key, so they bind their own throwaway ones in the same shape.
  */

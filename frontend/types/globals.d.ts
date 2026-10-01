@@ -48,7 +48,7 @@ type PluginType = "route" | "slot" | "enhancer" | "service";
 
 /**
  * One entry of the `window.__PLUGINS__` manifest — plugins.ManifestEntry
- * (api/internal/plugins/registry.go), read by core/pluginHost.js. The manifest
+ * (api/internal/plugins/registry.go), read by core/pluginHost.ts. The manifest
  * lists enabled plugins only, so an entry carries no enabled state.
  */
 interface PluginManifestEntry {

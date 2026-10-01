@@ -8,12 +8,12 @@
  * Markup is built with the html`` tag, which escapes every interpolation.
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.ts';
 import { parseMapsCoords } from '../../api/util.ts';
-import { getTagsView, setToast } from '../../store.js';
+import { getTagsView, setToast } from '../../store.ts';
 import { html, setHTML, raw } from '../../utils/helpers.ts';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.ts';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';
@@ -27,7 +27,7 @@ import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../compon
 import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.js';
 import { setupListFilters } from '../../components/light/tags/tagListFilters.js';
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** @extends {Component<PageProps>} */
 export default class TagsManagerPage extends Component {

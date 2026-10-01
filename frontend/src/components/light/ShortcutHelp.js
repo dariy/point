@@ -1,4 +1,4 @@
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { html } from '../../utils/helpers.ts';
 import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
 

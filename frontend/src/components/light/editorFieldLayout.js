@@ -16,7 +16,7 @@
  * there before the first render). Settings win when both exist.
  */
 
-import { getSettings, mergeSettings } from "../../store.js";
+import { getSettings, mergeSettings } from "../../store.ts";
 
 /**
  * Seeds the order, and orders anything missing from a stored one — a future

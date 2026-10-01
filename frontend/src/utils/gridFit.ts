@@ -11,7 +11,7 @@
  * on screen, callers re-measure it for an exact column/row count.
  */
 
-import { pluginHost } from '../core/pluginHost.js';
+import { pluginHost } from '../core/pluginHost.ts';
 
 const MAX_PER_PAGE = 60;
 // Shaved off the height the rows are fitted into. The fit currently lands the

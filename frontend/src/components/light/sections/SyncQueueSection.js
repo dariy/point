@@ -4,10 +4,10 @@
  * sync now. Extracted from SystemPage into the plugin settings drawer.
  */
 
-import { Component } from "../../Component.js";
+import { Component } from "../../Component.ts";
 import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.ts";
 import { syncQueue } from "../../../utils/sync.ts";
-import { setToast } from "../../../store.js";
+import { setToast } from "../../../store.ts";
 import { html, raw } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
 import { WARNING_SVG } from "../../../utils/icons.ts";

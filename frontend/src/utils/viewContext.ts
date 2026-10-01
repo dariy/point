@@ -1,4 +1,4 @@
-import { getRoute } from '../store.js';
+import { getRoute } from '../store.ts';
 import { navigate } from './helpers.ts';
 
 /**

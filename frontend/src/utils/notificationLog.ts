@@ -13,7 +13,7 @@
  *   { id: number, message: string, type: string, timestamp: number }
  */
 
-import { onToast, setToastLog } from '../store.js';
+import { onToast, setToastLog } from '../store.ts';
 
 const MAX_AGE_MS  = 10 * 60 * 1000; // 10 minutes
 const MAX_ENTRIES = 100;

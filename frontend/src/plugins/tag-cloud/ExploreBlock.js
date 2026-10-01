@@ -3,9 +3,9 @@
  * Replaces the weighted TagCloud.
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { html } from "../../utils/helpers.ts";
-import { getNavTags } from "../../store.js";
+import { getNavTags } from "../../store.ts";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
 import { setupTagFlyout } from "../../utils/tagFlyout.ts";
 import { ViewContext } from "../../utils/viewContext.ts";

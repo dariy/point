@@ -1,4 +1,4 @@
-import { onUser } from '../../store.js';
+import { onUser } from '../../store.ts';
 import { loadNav } from '../../api/nav.ts';
 import { NavMenu } from './NavMenu.js';
 import MenuPage from './MenuPage.js';

@@ -6,17 +6,17 @@
  *
  * Renders the post in preview mode with a notice banner.
  */
-import { pluginHost } from '../../core/pluginHost.js';
-import { Component } from '../../components/Component.js';
+import { pluginHost } from '../../core/pluginHost.ts';
+import { Component } from '../../components/Component.ts';
 
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { previewPost } from '../../api/posts.ts';
-import { getNavTags, getSettings } from '../../store.js';
+import { getNavTags, getSettings } from '../../store.ts';
 import { html } from '../../utils/helpers.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.ts';
 
-/** @typedef {import('../../router.js').PageProps} PageProps */
+/** @typedef {import('../../router.ts').PageProps} PageProps */
 
 /** @extends {Component<PageProps>} */
 export default class PreviewPage extends Component {

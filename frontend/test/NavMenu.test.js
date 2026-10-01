@@ -2,8 +2,8 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
 import { NavMenu } from '../src/plugins/nav-menu/NavMenu.js';
-import { setUser, store } from '../src/store.js';
-import { pluginHost } from '../src/core/pluginHost.js';
+import { setUser, store } from '../src/store.ts';
+import { pluginHost } from '../src/core/pluginHost.ts';
 
 // The More ▾ panel renders admin-authored menu items into the PUBLIC header.
 // It used to be built with a bare template literal wrapped in raw(), which put

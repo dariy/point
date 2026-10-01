@@ -2,7 +2,7 @@
  * PromptDialog — specialized Modal for inputs.
  */
 
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { Modal } from './Modal.js';
 import { html } from '../../utils/helpers.ts';
 

@@ -10,7 +10,7 @@
  *   /path/:param/rest    (params anywhere in the path)
  *
  * Usage:
- *   import { router } from './router.js';
+ *   import { router } from './router.ts';
  *
  *   router.init([
  *     { path: '/',             load: () => import('./pages/public/HomePage.js'),    public: true },
@@ -28,47 +28,54 @@
  * from the router module.
  */
 
-import { setRoute, setToast } from "./store.js";
+import { setRoute, setToast } from "./store.ts";
 import { setPageTitle } from "./utils/documentTitle.ts";
-import { subclassHooks } from "./components/Component.js";
+import { subclassHooks } from "./components/Component.ts";
 
 /**
  * What the router hands every page it mounts, and again to onRouteUpdate() on
  * a same-route navigation: the `:name` segments of the matched pattern and the
  * parsed query string.
- *
- * @typedef {object} PageProps
- * @property {Record<string, string>} params
- * @property {Record<string, string>} query
  */
+export interface PageProps {
+  params: Record<string, string>;
+  query: Record<string, string>;
+}
 
-/**
- * One route table entry.
- *
- * @typedef {object} Route
- * @property {string} path  Pattern, with `:name` segments.
- * @property {Function} load  Resolves to the page class.
- * @property {boolean} [public]  Reachable without a session.
- * @property {string} [title]  Document title.
- * @property {string} [key]  Shared identity: two patterns with the same key
- *   resolve to the same page instance, refreshed through onRouteUpdate().
- */
+/** One route table entry. */
+export interface Route {
+  /** Pattern, with `:name` segments. */
+  path: string;
+  /** Resolves to the page class. */
+  load: Function;
+  /** Reachable without a session. */
+  public?: boolean;
+  /** Document title. */
+  title?: string;
+  /**
+   * Shared identity: two patterns with the same key resolve to the same page instance, refreshed
+   * through onRouteUpdate().
+   */
+  key?: string;
+}
 
 class Router {
+  _routes: Route[];
+  _mountPoint: HTMLElement|null;
+  /** returns true if user is authenticated */
+  _authGuard: Function|null;
+  _loginPath: string;
+  _setupPath: string;
+  _currentPage: import('./components/Component.ts').Component|null;
+  _currentRoute: Route|null;
+
   constructor() {
-    /** @type {Route[]} */
     this._routes = [];
-    /** @type {HTMLElement|null} */
     this._mountPoint = null;
-    /** @type {Function|null} returns true if user is authenticated */
     this._authGuard = null;
-    /** @type {string} */
     this._loginPath = "/light/login";
-    /** @type {string} */
     this._setupPath = "/setup";
-    /** @type {import('./components/Component.js').Component|null} */
     this._currentPage = null;
-    /** @type {Route|null} */
     this._currentRoute = null;
 
     this._onPopState = this._onPopState.bind(this);
@@ -78,20 +85,15 @@ class Router {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /**
-   * Initialise the router and render the current URL.
-   *
-   * @param {Route[]} routes
-   * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string }} opts
-   */
+  /** Initialise the router and render the current URL. */
   init(
-    routes,
+    routes: Route[],
     {
       mountPoint,
       authGuard = null,
       loginPath = "/light/login",
       setupPath = "/setup",
-    },
+    }: { mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string },
   ) {
     this._routes = routes;
     this._mountPoint = mountPoint;
@@ -115,12 +117,8 @@ class Router {
     this._showFallback("404", "Page not found.");
   }
 
-  /**
-   * Programmatically navigate to a path.
-   * @param {string} path
-   * @param {{ replace?: boolean }} [opts]
-   */
-  navigate(path, { replace = false } = {}) {
+  /** Programmatically navigate to a path. */
+  navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
     if (replace) {
       history.replaceState(null, "", path);
     } else {
@@ -142,11 +140,11 @@ class Router {
    *
    * Still an in-document re-render: no document reload, so no white flash.
    *
-   * @param {string} [path] Optional URL to render instead of the current one,
+   * @param path - Optional URL to render instead of the current one,
    *   replacing the history entry (the scheduled feed pages do not exist on the
    *   guest side of the switch, so concealing has to leave them).
    */
-  refresh(path) {
+  refresh(path?: string) {
     if (path && path !== location.pathname + location.search + location.hash) {
       history.replaceState(null, "", path);
     }
@@ -226,11 +224,10 @@ class Router {
   /**
    * Match a route pattern against a pathname. Returns params object or null.
    *
-   * @param {string} pattern   e.g. '/posts/:slug'
-   * @param {string} pathname  e.g. '/posts/my-first-post'
-   * @returns {Record<string,string>|null}
+   * @param pattern - e.g. '/posts/:slug'
+   * @param pathname - e.g. '/posts/my-first-post'
    */
-  _match(pattern, pathname) {
+  _match(pattern: string, pathname: string): Record<string,string> | null {
     // Normalize: remove trailing slashes and multiple slashes
     const cleanPattern = pattern.replace(/\/+$/, "") || "/";
     const cleanPathname = pathname.replace(/\/+$/, "") || "/";
@@ -239,8 +236,7 @@ class Router {
     const urlParts = cleanPathname.split("/");
     if (patParts.length !== urlParts.length) return null;
 
-    /** @type {Record<string,string>} */
-    const params = {};
+    const params: Record<string,string> = {};
     for (let i = 0; i < patParts.length; i++) {
       if (patParts[i].startsWith(":")) {
         params[patParts[i].slice(1)] = decodeURIComponent(urlParts[i]);
@@ -253,12 +249,11 @@ class Router {
 
   /**
    * Parse query string into a plain object.
-   * @param {string} search  e.g. '?page=2&q=foo'
-   * @returns {Record<string,string>}
+   *
+   * @param search - e.g. '?page=2&q=foo'
    */
-  _parseSearch(search) {
-    /** @type {Record<string,string>} */
-    const out = {};
+  _parseSearch(search: string): Record<string,string> {
+    const out: Record<string,string> = {};
     for (const [k, v] of new URLSearchParams(search)) {
       out[k] = v;
     }
@@ -267,9 +262,10 @@ class Router {
 
   /**
    * Resolve the route for a path, unmount the current page, mount the new one.
-   * @param {string} fullPath  pathname + optional search string
+   *
+   * @param fullPath - pathname + optional search string
    */
-  async _render(fullPath) {
+  async _render(fullPath: string) {
     // Strip hash if present
     const hashIndex = fullPath.indexOf("#");
     const pathWithoutHash =
@@ -375,7 +371,7 @@ class Router {
     // A page is being replaced, so the title the outgoing one set is now stale.
     // Reset it here — the one funnel every navigation passes through, including
     // back/forward — rather than asking fifteen pages to remember. Routes with a
-    // fixed name declare it in the table (see app.js); routes whose name depends
+    // fixed name declare it in the table (see app.ts); routes whose name depends
     // on loaded data (a post, a tag, a search query) declare nothing and call
     // setPageTitle() themselves once the fetch resolves, which lands after this.
     // Deliberately *not* on the same-route path above: there the page instance
@@ -407,11 +403,8 @@ class Router {
   /**
    * Render a simple static fallback (404 / error) using safe DOM methods.
    * No user content is interpolated here so no escaping is needed.
-   *
-   * @param {string} heading
-   * @param {string} body
    */
-  _showFallback(heading, body) {
+  _showFallback(heading: string, body: string) {
     setPageTitle(heading === "404" ? "Page not found" : heading);
     if (this._currentPage) {
       this._currentPage.unmount();

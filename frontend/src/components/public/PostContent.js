@@ -5,13 +5,13 @@
  * It uses the unified MediaViewer component.
  */
 
-import { Component } from "../Component.js";
+import { Component } from "../Component.ts";
 import { html, navigate, raw, setHTML } from "../../utils/helpers.ts";
 import { formatDate } from "../../utils/formatters.ts";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
 import { renderTagStrip, setupTagStrip } from "../../utils/tagStrip.ts";
-import { getNavTags, getSettings, getUser } from "../../store.js";
-import { pluginHost } from "../../core/pluginHost.js";
+import { getNavTags, getSettings, getUser } from "../../store.ts";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { getPostPageLocation } from "../../api/posts.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { cachedPerPage } from "../../utils/gridFit.ts";

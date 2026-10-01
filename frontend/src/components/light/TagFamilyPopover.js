@@ -1,4 +1,4 @@
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { getTag } from '../../api/tags.ts';
 import { html, navigate } from '../../utils/helpers.ts';
 

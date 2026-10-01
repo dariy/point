@@ -2,7 +2,7 @@
  * Public site footer — copyright, pagination slot (normal), or post tags (immersive).
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { renderCopyright } from "../../utils/copyright.ts";
 import { html, raw } from "../../utils/helpers.ts";
@@ -33,8 +33,8 @@ import {
   setTagCloudCache,
   setTheme,
   setUser,
-} from "../../store.js";
-import { pluginHost } from "../../core/pluginHost.js";
+} from "../../store.ts";
+import { pluginHost } from "../../core/pluginHost.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import {
   getZoom,
@@ -267,7 +267,7 @@ export class PublicFooter extends Component {
     const [{ clearPostReadCache }, { loadNav }, { router }] = await Promise.all([
       import("../../api/posts.ts"),
       import("../../api/nav.ts"),
-      import("../../router.js"),
+      import("../../router.ts"),
     ]);
     clearPostReadCache(); // post reads *and* the list pages behind them
     setTagCloudCache(null);

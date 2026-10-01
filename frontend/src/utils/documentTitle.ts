@@ -12,7 +12,7 @@
  * known until its fetch resolves — calls setPageTitle() once it does.
  */
 
-import { getSettings } from '../store.js';
+import { getSettings } from '../store.ts';
 
 /** Shown before settings load, and when the blog has no title of its own. */
 const FALLBACK_SITE_TITLE = 'Point';

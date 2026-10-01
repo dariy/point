@@ -2,10 +2,10 @@
  * VisualEditor — visual image-sequence editor for immersive posts.
  */
 
-import { Component } from "../Component.js";
+import { Component } from "../Component.ts";
 import { html } from "../../utils/helpers.ts";
 import { updateMedia, reextractMediaEXIF } from "../../api/media.ts";
-import { setToast } from "../../store.js";
+import { setToast } from "../../store.ts";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";

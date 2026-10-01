@@ -14,7 +14,7 @@ import {
   onAutosaveStatus,
   onOfflineStatus,
   setUser,
-} from "../../store.js";
+} from "../../store.ts";
 import { syncQueue } from "../../utils/sync.ts";
 import { setupHeaderCompact } from "../../utils/headerCompact.ts";
 import { html, insertHTML, navigate, raw } from "../../utils/helpers.ts";

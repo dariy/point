@@ -3,10 +3,10 @@
  * facets), and nav buttons.
  */
 
-import { Component } from '../../components/Component.js';
+import { Component } from '../../components/Component.ts';
 import { SiteCrumb } from '../../components/public/SiteCrumb.js';
-import { getSettings, getTheme, getUser, setTheme } from '../../store.js';
-import { pluginHost } from '../../core/pluginHost.js';
+import { getSettings, getTheme, getUser, setTheme } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
 import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.ts';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';

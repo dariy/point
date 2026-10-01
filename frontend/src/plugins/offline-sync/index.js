@@ -1,6 +1,6 @@
 import { syncQueue } from "../../utils/sync.ts";
 import { getMeta } from "../../utils/offlineStore.ts";
-import { setOfflineStatus } from "../../store.js";
+import { setOfflineStatus } from "../../store.ts";
 
 export async function mount() {
   // Register service worker (PWA shell cache + Web Share Target).

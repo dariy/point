@@ -105,18 +105,18 @@ export const RESTRICTED = [
     message: "raw() must not wrap a call. If the value is genuinely pre-escaped, say why on an eslint-disable-next-line.",
   },
   {
-    // store.js binds every key to a get/set/subscribe triple and exports
+    // store.ts binds every key to a get/set/subscribe triple and exports
     // those; the string form is what the accessors exist to replace. A typo
     // in a key is undefined at runtime — a component that renders empty
     // forever — where a typo in a named import is an esbuild error naming
-    // the closest match. store.js itself is not linted against this: it is
+    // the closest match. store.ts itself is not linted against this: it is
     // where the literals live (the `storeKey` id, skipped in .oxlintrc.json).
     id: "storeKey",
     selector: [
       `CallExpression${attr("callee.object.name='store'", ["callee", "object"])}${attr("callee.property.name=/^(get|set|subscribe|subscribeSelector|merge)$/")} > Literal:first-child`,
       `CallExpression${attr("callee.object.name='store'", ["callee", "object"])}${attr("callee.property.name=/^(get|set|subscribe|subscribeSelector|merge)$/")} > :matches(${WRAPPERS}):first-child > Literal`,
     ].join(", "),
-    message: "Use an accessor from store.js (getUser/setUser/onUser, …) — a string key is not checked by anything.",
+    message: "Use an accessor from store.ts (getUser/setUser/onUser, …) — a string key is not checked by anything.",
   },
   {
     // An interpolation landing straight after `attr=` is unquoted, and the

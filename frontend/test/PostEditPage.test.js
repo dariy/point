@@ -1,7 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
-import { pluginHost } from '../src/core/pluginHost.js';
-import { mergeSettings } from '../src/store.js';
+import { pluginHost } from '../src/core/pluginHost.ts';
+import { mergeSettings } from '../src/store.ts';
 
 describe('PostEditPage', () => {
   let PostEditPage;

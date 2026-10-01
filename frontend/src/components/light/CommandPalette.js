@@ -1,4 +1,4 @@
-import { Component } from '../Component.js';
+import { Component } from '../Component.ts';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
 import { html, navigate, raw, debounce } from '../../utils/helpers.ts';
