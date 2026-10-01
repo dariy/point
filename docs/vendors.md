@@ -8,7 +8,7 @@ for why (small, dependency-light Vanilla JS Component System).
 
 ## Frontend (vendored JS)
 
-No JS runtime dependencies are installed via npm — `esbuild` and `eslint` in
+No JS runtime dependencies are installed via npm — `esbuild` and `oxlint` in
 `package.json` are build-time only. Third-party browser code lives, unminified
 and reviewable, in `frontend/vendor/`:
 

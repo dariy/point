@@ -415,7 +415,7 @@ export default class PluginsPage extends Component {
 
     // Every meta entry is html`` output already; raw() covers only the join,
     // which is what turns the array back into a plain string.
-    // eslint-disable-next-line no-restricted-syntax -- see above.
+    // eslint-disable-next-line point/restricted-syntax -- see above.
     const metaJoined = raw(meta.join(" · "));
     return html`
       <div class="plugin-card${plugin.enabled ? " is-enabled" : ""}" data-id="${plugin.id}">

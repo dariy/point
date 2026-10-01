@@ -67,7 +67,7 @@ export class MarkdownEditor extends Component {
         // Prism emits markup by design; it is the sanctioned raw() the
         // convention names alongside the SVG constants, and its input here is
         // the editor's own textContent.
-        // eslint-disable-next-line no-restricted-syntax
+        // eslint-disable-next-line point/restricted-syntax
         setHTML(editor, html`${raw(Prism.highlight(editor.textContent, lang, langKey))}`);
       }
     };

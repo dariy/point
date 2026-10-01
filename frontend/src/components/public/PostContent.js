@@ -77,7 +77,7 @@ function _highlightInto(code, lang) {
   if (pre && pre.nodeName === "PRE") Prism.util.setLanguage(pre, lang);
   // Prism emits markup by design and escapes the source text on the way; this
   // is the same sanctioned raw() the two editors use around Prism.highlight().
-  // eslint-disable-next-line no-restricted-syntax -- pre-escaped by Prism.
+  // eslint-disable-next-line point/restricted-syntax -- pre-escaped by Prism.
   setHTML(code, raw(Prism.highlight(code.textContent, grammar, lang)));
 }
 

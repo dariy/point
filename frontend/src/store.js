@@ -194,7 +194,7 @@ export const store = new Store();
 //
 // This block also replaces a hand-maintained list of "well-known keys" that had
 // drifted to roughly a third of the real set, which is the ordinary fate of a
-// contract kept as a comment. A no-restricted-syntax rule in eslint.config.js
+// contract kept as a comment. The point/restricted-syntax lint rule
 // keeps the raw string form from coming back.
 
 /**

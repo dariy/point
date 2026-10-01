@@ -8,7 +8,7 @@
  *   html`<div>${cond ? `<button>Hi</button>` : ''}</div>`
  *                      ^ escaped into &lt;button&gt;Hi&lt;/button&gt;
  *
- * Nothing catches this today. eslint's `no-restricted-syntax` selectors cannot
+ * Nothing catches this today. The `point/restricted-syntax` selectors cannot
  * see the difference between that and the legitimate shape one line away —
  * `${count ? ` (${count})` : ''}`, plain text an author *wants* escaped —
  * because telling them apart means looking at the literal's contents, not its

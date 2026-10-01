@@ -58,7 +58,7 @@ export class CssEditor extends Component {
         const code = editor.textContent;
         // Prism emits markup by design; it is the sanctioned raw() the
         // convention names alongside the SVG constants.
-        // eslint-disable-next-line no-restricted-syntax
+        // eslint-disable-next-line point/restricted-syntax
         setHTML(editor, html`${raw(window.Prism.highlight(code, window.Prism.languages.css, 'css'))}`);
       }
     };

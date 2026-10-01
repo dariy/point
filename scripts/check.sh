@@ -109,11 +109,10 @@ step_govulncheck() {
     govulncheck ./...
 }
 
-# The lockfile-pinned eslint (flat config, eslint.config.js) — the system eslint
-# may be a different major version reading a different config format.
+# The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.mjs).
 step_js_lint() {
     cd "$ROOT_DIR"
-    node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs \
+    node_modules/.bin/oxlint frontend/src frontend/sw.js scripts/*.mjs \
         demo/mock demo/*.mjs demo/scripts/*.mjs
 }
 
@@ -126,7 +125,7 @@ step_js_typecheck() {
     node_modules/.bin/tsc --noEmit -p jsconfig.json
 }
 
-# What the AST rules in eslint.config.js cannot see: hand-applied escapeHtml in
+# What the AST rules in scripts/oxlint-point.mjs cannot see: hand-applied escapeHtml in
 # an interpolation, and growth in the set of raw() exceptions.
 step_html_escaping() {
     "$SCRIPT_DIR/check-html-escaping.sh"
@@ -180,7 +179,7 @@ if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
         case "$f" in
             api/*|scripts/check-sql-layer.sh|scripts/coverage-gate.sh) go=1 ;;
-            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|eslint.config.js|jsconfig.json)
+            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|.oxlintrc.json|jsconfig.json)
                 js=1; e2e=1 ;;
             scripts/check-html-escaping.sh|scripts/check-vendor-sinks.sh) js=1 ;;
             scripts/run-e2e.sh|scripts/build-css.sh|scripts/build-js.sh) e2e=1 ;;
@@ -288,7 +287,7 @@ fi
 
 # Both JS lanes need node_modules; installing once here keeps them from racing
 # two `npm ci` runs over the same directory.
-if [ -n "$needs_node" ] && { [ ! -x "$ROOT_DIR/node_modules/.bin/eslint" ] || [ ! -x "$ROOT_DIR/node_modules/.bin/tsc" ]; }; then
+if [ -n "$needs_node" ] && { [ ! -x "$ROOT_DIR/node_modules/.bin/oxlint" ] || [ ! -x "$ROOT_DIR/node_modules/.bin/tsc" ]; }; then
     echo "npm ci (node_modules is missing) — log: tmp/check/npm-ci.log"
     (cd "$ROOT_DIR" && npm ci --no-audit --no-fund) >"$LOG_DIR/npm-ci.log" 2>&1 || {
         tail -n "$TAIL" "$LOG_DIR/npm-ci.log"

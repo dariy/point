@@ -62,7 +62,7 @@ export function renderCopyright(settings = {}) {
   // match; a lone one of either is consumed as literal text.
   // The callback returns escaped text and html`` markup only; raw() states
   // that about the assembled result.
-  // eslint-disable-next-line no-restricted-syntax
+  // eslint-disable-next-line point/restricted-syntax
   return raw(template.replace(
     /\{\{(\w+)\}\}|\[([^\]]*)\]\(([^)\s]+)\)|([^{[]+|[{[])/g,
     (m, token, text, href, literal) => {

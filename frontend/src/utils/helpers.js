@@ -481,14 +481,14 @@ function trusted(markup, sink) {
  *
  * Every HTML write goes through here, which is what makes the Trusted Types
  * policy tractable: one gate to register instead of sixty sinks to audit. The
- * lint rule in eslint.config.js keeps it that way — a bare `.innerHTML =`
+ * lint rule in scripts/oxlint-point.mjs keeps it that way — a bare `.innerHTML =`
  * anywhere in frontend/src is an error.
  *
  * @param {HTMLElement} el
  * @param {import('./helpers.js').RawHtml} markup  html`` output
  */
 export function setHTML(el, markup) {
-  // eslint-disable-next-line no-restricted-syntax -- the one innerHTML write.
+  // eslint-disable-next-line point/restricted-syntax -- the one innerHTML write.
   el.innerHTML = trusted(markup, 'setHTML');
 }
 
@@ -501,7 +501,7 @@ export function setHTML(el, markup) {
  * @param {import('./helpers.js').RawHtml} markup  html`` output
  */
 export function insertHTML(el, position, markup) {
-  // eslint-disable-next-line no-restricted-syntax -- the one insertAdjacentHTML.
+  // eslint-disable-next-line point/restricted-syntax -- the one insertAdjacentHTML.
   el.insertAdjacentHTML(position, trusted(markup, 'insertHTML'));
 }
 
@@ -527,7 +527,7 @@ export function parseMarkup(text, mime, Parser = globalThis.DOMParser) {
   const p = trustedTypesPolicy();
   const str = String(text);
   const value = /** @type {string} */ (/** @type {unknown} */ (p ? p.createHTML(str) : str));
-  // eslint-disable-next-line no-restricted-syntax -- the one parseFromString.
+  // eslint-disable-next-line point/restricted-syntax -- the one parseFromString.
   return new Parser().parseFromString(value, /** @type {DOMParserSupportedType} */ (mime));
 }
 

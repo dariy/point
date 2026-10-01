@@ -1,0 +1,228 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "off"
+  },
+  "jsPlugins": [
+    "./scripts/oxlint-point.mjs"
+  ],
+  "ignorePatterns": [
+    "data/**",
+    "frontend/js/**",
+    "frontend/js-debug/**",
+    "frontend/vendor/**"
+  ],
+  "rules": {
+    "constructor-super": "error",
+    "for-direction": "error",
+    "getter-return": "error",
+    "no-async-promise-executor": "error",
+    "no-case-declarations": "error",
+    "no-class-assign": "error",
+    "no-compare-neg-zero": "error",
+    "no-cond-assign": "error",
+    "no-const-assign": "error",
+    "no-constant-condition": "error",
+    "no-control-regex": "error",
+    "no-debugger": "error",
+    "no-delete-var": "error",
+    "no-dupe-class-members": "error",
+    "no-dupe-else-if": "error",
+    "no-dupe-keys": "error",
+    "no-duplicate-case": "error",
+    "no-empty": "error",
+    "no-empty-character-class": "error",
+    "no-empty-pattern": "error",
+    "no-ex-assign": "error",
+    "no-extra-boolean-cast": "error",
+    "no-fallthrough": "error",
+    "no-func-assign": "error",
+    "no-global-assign": "error",
+    "no-import-assign": "error",
+    "no-inner-declarations": "error",
+    "no-invalid-regexp": "error",
+    "no-irregular-whitespace": "error",
+    "no-loss-of-precision": "error",
+    "no-misleading-character-class": "error",
+    "no-nonoctal-decimal-escape": "error",
+    "no-obj-calls": "error",
+    "no-prototype-builtins": "error",
+    "no-redeclare": "error",
+    "no-regex-spaces": "error",
+    "no-self-assign": "error",
+    "no-setter-return": "error",
+    "no-shadow-restricted-names": "error",
+    "no-sparse-arrays": "error",
+    "no-this-before-super": "error",
+    "no-undef": "error",
+    "no-unexpected-multiline": "error",
+    "no-unreachable": "error",
+    "no-unsafe-finally": "error",
+    "no-unsafe-negation": "error",
+    "no-unsafe-optional-chaining": "error",
+    "no-unused-labels": "error",
+    "no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "no-useless-backreference": "error",
+    "no-useless-catch": "error",
+    "no-useless-escape": "error",
+    "no-with": "error",
+    "require-yield": "error",
+    "use-isnan": "error",
+    "valid-typeof": "error",
+    "no-console": "off",
+    "no-new-native-nonconstructor": "error",
+    "point/restricted-syntax": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "frontend/src/**/*.js",
+        "frontend/src/**/*.ts",
+        "demo/mock/**/*.js"
+      ],
+      "globals": {
+        "globalThis": "readonly",
+        "window": "readonly",
+        "document": "readonly",
+        "navigator": "readonly",
+        "localStorage": "readonly",
+        "sessionStorage": "readonly",
+        "location": "readonly",
+        "fetch": "readonly",
+        "Response": "readonly",
+        "structuredClone": "readonly",
+        "XMLHttpRequest": "readonly",
+        "URL": "readonly",
+        "URLSearchParams": "readonly",
+        "CustomEvent": "readonly",
+        "Event": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly",
+        "console": "readonly",
+        "Image": "readonly",
+        "Audio": "readonly",
+        "Video": "readonly",
+        "FileReader": "readonly",
+        "FormData": "readonly",
+        "Blob": "readonly",
+        "File": "readonly",
+        "crypto": "readonly",
+        "TextEncoder": "readonly",
+        "TextDecoder": "readonly",
+        "requestAnimationFrame": "readonly",
+        "cancelAnimationFrame": "readonly",
+        "requestIdleCallback": "readonly",
+        "cancelIdleCallback": "readonly",
+        "history": "readonly",
+        "indexedDB": "readonly",
+        "caches": "readonly",
+        "setInterval": "readonly",
+        "clearInterval": "readonly",
+        "alert": "readonly",
+        "confirm": "readonly",
+        "prompt": "readonly",
+        "DOMParser": "readonly",
+        "customElements": "readonly",
+        "HTMLElement": "readonly",
+        "HTMLImageElement": "readonly",
+        "ResizeObserver": "readonly",
+        "MutationObserver": "readonly",
+        "performance": "readonly",
+        "atob": "readonly",
+        "btoa": "readonly",
+        "Uint8Array": "readonly",
+        "ArrayBuffer": "readonly",
+        "PublicKeyCredential": "readonly",
+        "AbortController": "readonly",
+        "getComputedStyle": "readonly",
+        "MouseEvent": "readonly",
+        "CSS": "readonly",
+        "Promise": "readonly",
+        "Map": "readonly",
+        "Set": "readonly",
+        "JSON": "readonly",
+        "Math": "readonly",
+        "Date": "readonly",
+        "__DEBUG__": "readonly"
+      }
+    },
+    {
+      "files": [
+        "frontend/src/store.js",
+        "frontend/src/store.ts"
+      ],
+      "rules": {
+        "point/restricted-syntax": [
+          "error",
+          {
+            "skip": [
+              "storeKey"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "frontend/sw.js"
+      ],
+      "globals": {
+        "self": "readonly",
+        "caches": "readonly",
+        "indexedDB": "readonly",
+        "fetch": "readonly",
+        "navigator": "readonly",
+        "crypto": "readonly",
+        "console": "readonly",
+        "URL": "readonly",
+        "Response": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly",
+        "Promise": "readonly",
+        "JSON": "readonly",
+        "Math": "readonly",
+        "Date": "readonly"
+      }
+    },
+    {
+      "files": [
+        "scripts/**/*.mjs",
+        "demo/**/*.mjs"
+      ],
+      "globals": {
+        "process": "readonly",
+        "console": "readonly",
+        "JSON": "readonly",
+        "fetch": "readonly",
+        "FormData": "readonly",
+        "Blob": "readonly",
+        "URL": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly"
+      }
+    },
+    {
+      "files": [
+        "demo/scripts/test.mjs"
+      ],
+      "globals": {
+        "process": "readonly",
+        "console": "readonly",
+        "JSON": "readonly",
+        "fetch": "readonly",
+        "URL": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly",
+        "document": "readonly",
+        "window": "readonly",
+        "location": "readonly"
+      }
+    }
+  ]
+}

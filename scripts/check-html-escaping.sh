@@ -1,14 +1,14 @@
 #!/bin/bash
 # The html`` convention, asserted against the tree rather than trusted.
 #
-# eslint.config.js catches the shapes a parser can see: raw() around a call or a
+# scripts/oxlint-point.mjs catches the shapes a parser can see: raw() around a call or a
 # template literal, an interpolation in an unquoted attribute, a bare innerHTML.
 # This covers the two things it cannot:
 #
 #   1. Hand-applied escapeHtml() inside an interpolation. The tag escapes by
 #      default, so calling it by hand means either a plain template literal
 #      (unescaped by definition) or a double-escape.
-#   2. Growth in the set of no-restricted-syntax suppressions. Each one is a
+#   2. Growth in the set of point/restricted-syntax suppressions. Each one is a
 #      place where safety is asserted by a human rather than enforced by a rule
 #      — a raw() around a value the reader cannot check, or the two lines of
 #      utils/helpers.js that hold the only innerHTML and insertAdjacentHTML in
@@ -70,8 +70,8 @@ frontend/src/utils/copyright.js 1
 frontend/src/utils/helpers.js 3
 LIST
 )
-actual=$(grep -rl 'eslint-disable-next-line no-restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do
-    echo "$f $(grep -c 'eslint-disable-next-line no-restricted-syntax' "$f")"
+actual=$(grep -rl 'eslint-disable-next-line point/restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do
+    echo "$f $(grep -c 'eslint-disable-next-line point/restricted-syntax' "$f")"
 done)
 if [ "$actual" != "$expected" ]; then
     report "the suppression list moved" \

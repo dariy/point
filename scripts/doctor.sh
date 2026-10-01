@@ -143,18 +143,18 @@ if command -v npm >/dev/null 2>&1; then
     row pass npm "npm" "$(npm -v 2>/dev/null)" "" "installs the build-time dependencies"
 else
     row fail npm "npm" "not installed" "" \
-        "no way to install esbuild and eslint" "it ships with Node — reinstall Node"
+        "no way to install esbuild and oxlint" "it ships with Node — reinstall Node"
 fi
 
 # ── JS dependencies ──────────────────────────────────────────────────────────
 # run.sh installs these itself when esbuild is missing, and check.sh when
-# eslint is; a warning here only tells you the first build will be slower.
+# oxlint is; a warning here only tells you the first build will be slower.
 missing_dep=""
-for dep in esbuild eslint; do
+for dep in esbuild oxlint; do
     [ -x "$ROOT_DIR/node_modules/.bin/$dep" ] || missing_dep="${missing_dep:+$missing_dep, }$dep"
 done
 if [ -z "$missing_dep" ]; then
-    row pass npm-deps "JS deps" "installed" "" "node_modules/ has esbuild and eslint"
+    row pass npm-deps "JS deps" "installed" "" "node_modules/ has esbuild and oxlint"
 else
     row warn npm-deps "JS deps" "missing" "" \
         "$missing_dep not in node_modules/ — run.sh and check.sh install them on demand" \

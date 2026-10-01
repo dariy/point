@@ -383,7 +383,7 @@ export default class MapPage extends Component {
           );
           // Each link is html`` output; raw() covers only the join, which keeps the
           // single-space separator the popup has always had.
-          // eslint-disable-next-line no-restricted-syntax
+          // eslint-disable-next-line point/restricted-syntax
           const yearLinks = raw(yearLinkList.join(" "));
           const yearsHtml =
             tag.years && tag.years.length > 0
@@ -433,7 +433,7 @@ export default class MapPage extends Component {
       );
       // Each link is html`` output; raw() covers only the join, which keeps the
       // single-space separator the popup has always had.
-      // eslint-disable-next-line no-restricted-syntax
+      // eslint-disable-next-line point/restricted-syntax
       const yearLinks = raw(yearLinkList.join(" "));
       const yearsHtml =
         tag.years && tag.years.length > 0
