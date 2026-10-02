@@ -19,13 +19,30 @@ export const DAMPING = 0.55;
 /** Movement below this is noise, not yet a direction. */
 export const MIN_MOVE_PX = 8;
 
+/** Which part of a row a drop lands on. */
+export type DropZone = 'before' | 'after' | 'on';
+
+/** What a drop does: see reorderPlan. */
+export type ReorderPlan =
+  | { action: 'reparent' }
+  | { action: 'invalid' }
+  | { action: 'reorder'; parentId: number; afterId: number | null };
+
+/** The callbacks of bindDragAndDrop. */
+export interface DragAndDropHandlers {
+  onReparent?: (dragId: number, targetId: number) => void;
+  onReorder?: (dragId: number, parentId: number, afterId: number | null) => void;
+  onInvalidReorder?: () => void;
+  siblingBefore: (targetId: number, parentId: number) => number | null;
+}
+
 /**
  * Which way is this drag going?
  * Returns null while the movement is still too small to call — the caller must
  * not lock a direction until it is, or a slightly-off vertical scroll gets
  * hijacked into a horizontal swipe.
  */
-export function gestureDirection(rawDx, rawDy, minMove = MIN_MOVE_PX) {
+export function gestureDirection(rawDx: number, rawDy: number, minMove = MIN_MOVE_PX): 'horizontal' | 'vertical' | null {
   const absDx = Math.abs(rawDx);
   const absDy = Math.abs(rawDy);
   if (Math.max(absDx, absDy) < minMove) return null;
@@ -37,7 +54,9 @@ export function gestureDirection(rawDx, rawDy, minMove = MIN_MOVE_PX) {
  * past 0 (dragging a closed row rightward) and past -actionsWidth (dragging an
  * open row further left) both meet increasing resistance rather than a wall.
  */
-export function swipeTranslate({ rawDx, isOpen, actionsWidth, damping = DAMPING }) {
+export function swipeTranslate({ rawDx, isOpen, actionsWidth, damping = DAMPING }: {
+  rawDx: number; isOpen: boolean; actionsWidth: number; damping?: number;
+}): number {
   const baseOffset = isOpen ? -actionsWidth : 0;
   let translate = baseOffset + rawDx;
 
@@ -59,7 +78,9 @@ export function swipeTranslate({ rawDx, isOpen, actionsWidth, damping = DAMPING 
  *   'select'     a closed row swiped right — toggle selection, as on post cards
  *   'reset'      not far enough either way — snap back to rest
  */
-export function swipeOutcome({ dx, isOpen, actionsWidth, threshold = THRESHOLD_PX }) {
+export function swipeOutcome({ dx, isOpen, actionsWidth, threshold = THRESHOLD_PX }: {
+  dx: number; isOpen: boolean; actionsWidth: number; threshold?: number;
+}): 'close' | 'snap-open' | 'open' | 'select' | 'reset' {
   if (isOpen) return dx > threshold ? 'close' : 'snap-open';
   if (dx < -threshold && actionsWidth > 0) return 'open';
   if (dx > threshold) return 'select';
@@ -70,7 +91,7 @@ export function swipeOutcome({ dx, isOpen, actionsWidth, threshold = THRESHOLD_P
  * Which third of the row the pointer is over: the outer quarters mean "put it
  * beside this tag", the middle half means "put it inside this tag".
  */
-export function dropZoneFor(clientY, rect) {
+export function dropZoneFor(clientY: number, rect: { top: number; height: number }): DropZone {
   const rel = (clientY - rect.top) / rect.height;
   if (rel < 0.25) return 'before';
   if (rel > 0.75) return 'after';
@@ -89,7 +110,13 @@ export function dropZoneFor(clientY, rect) {
  * needing a lookup: dropping before a target means landing after whatever
  * currently precedes it, and null there means "move to the front".
  */
-export function reorderPlan({ zone, dragParent, targetParent, targetId, siblingBefore }) {
+export function reorderPlan({ zone, dragParent, targetParent, targetId, siblingBefore }: {
+  zone: DropZone;
+  dragParent: number | null | undefined;
+  targetParent: number | null | undefined;
+  targetId: number;
+  siblingBefore: (targetId: number, parentId: number) => number | null;
+}): ReorderPlan {
   if (zone === 'on') return { action: 'reparent' };
   if (dragParent === null || dragParent === undefined || dragParent !== targetParent) {
     return { action: 'invalid' };
@@ -102,7 +129,7 @@ export function reorderPlan({ zone, dragParent, targetParent, targetId, siblingB
 }
 
 /** Read a row's data-parent-id, where an empty attribute means "top level". */
-export function rowParentId(row) {
+export function rowParentId(row: HTMLElement): number | null {
   return row.dataset.parentId !== '' ? parseInt(row.dataset.parentId, 10) : null;
 }
 
@@ -115,21 +142,24 @@ export function rowParentId(row) {
  * width, or no matchMedia at all). Callers must call the previous cleanup
  * before rebinding after a re-render.
  *
- * @param {Element} container
- * @param {{ onSelect?: (row: HTMLElement) => void }} [handlers]
+ * @param container
+ * @param handlers
  */
-export function bindSwipeToReveal(container, { onSelect } = {}) {
+export function bindSwipeToReveal(
+  container: Element,
+  { onSelect }: { onSelect?: (row: HTMLElement) => void } = {},
+): (() => void) | null {
   if (!window.matchMedia) return null;      // SSR / test env guard
   const mql = window.matchMedia(SWIPE_BREAKPOINT);
   if (!mql.matches) return null;            // desktop — nothing to do
 
-  let openRow = null;                       // currently revealed row (or null)
+  let openRow: HTMLElement | null = null;                       // currently revealed row (or null)
   let actionsWidth = 0;                     // measured width of the actions panel
   let startX = 0, startY = 0;
   let dragging = false;                     // true once we've committed to horizontal
   let decided = false;                      // true once direction is locked
   let dx = 0;
-  const abortControllers = [];
+  const abortControllers: AbortController[] = [];
 
   const closeOpen = () => {
     if (!openRow) return;
@@ -139,7 +169,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
   };
 
   // Tree rows carry .tm-row; list-view rows are the <tr class="tm-tag-row">.
-  container.querySelectorAll('.tm-row, .tm-tag-row').forEach((/** @type {HTMLElement} */ row) => {
+  container.querySelectorAll<HTMLElement>('.tm-row, .tm-tag-row').forEach(row => {
     if (!row.querySelector('.tm-actions')) return;
     const ac = new AbortController();
     abortControllers.push(ac);
@@ -148,7 +178,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
     row.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) return;
       // If tapping inside the already-open row's actions, let buttons handle it
-      if (row === openRow && /** @type {HTMLElement} */ (e.target).closest('.tm-actions')) return;
+      if (row === openRow && (e.target as HTMLElement).closest('.tm-actions')) return;
 
       const t = e.touches[0];
       startX = t.clientX;
@@ -158,7 +188,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
       dx = 0;
 
       // Measure actions width (varies per row due to button count)
-      const actions = /** @type {HTMLElement} */ (row.querySelector('.tm-actions'));
+      const actions = (row.querySelector('.tm-actions') as HTMLElement);
       actionsWidth = actions ? actions.offsetWidth : 0;
 
       // Disable transition during drag for responsive feel
@@ -234,7 +264,7 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
   container.addEventListener('click', e => {
     if (!openRow) return;
     // If click is inside the open row, let it propagate normally
-    if (openRow.contains(e.target)) return;
+    if (openRow.contains(e.target as Node)) return;
     closeOpen();
   }, { signal: containerAc.signal });
 
@@ -247,22 +277,25 @@ export function bindSwipeToReveal(container, { onSelect } = {}) {
 /**
  * Drag a tree row onto another tag to reparent it, or between two to reorder.
  *
- * @param {Element}  container
- * @param {object}   handlers
- * @param {Function} handlers.onReparent        (dragId, targetId) => void
- * @param {Function} handlers.onReorder         (dragId, parentId, afterId) => void
- * @param {Function} handlers.onInvalidReorder  () => void
- * @param {Function} handlers.siblingBefore     (targetId, parentId) => id|null
+ * @param container
+ * @param handlers
+ * @param handlers.onReparent        (dragId, targetId) => void
+ * @param handlers.onReorder         (dragId, parentId, afterId) => void
+ * @param handlers.onInvalidReorder  () => void
+ * @param handlers.siblingBefore     (targetId, parentId) => id|null
  */
-export function bindDragAndDrop(container, { onReparent, onReorder, onInvalidReorder, siblingBefore }) {
-  let dragState = null;
+export function bindDragAndDrop(
+  container: Element,
+  { onReparent, onReorder, onInvalidReorder, siblingBefore }: DragAndDropHandlers,
+): void {
+  let dragState: { tagId: number; parentId: number | null } | null = null;
 
   const clearIndicators = () => {
     container.querySelectorAll('.tm-row').forEach(r =>
       r.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on'));
   };
 
-  container.querySelectorAll('.tm-row[draggable="true"]').forEach((/** @type {HTMLElement} */ row) => {
+  container.querySelectorAll<HTMLElement>('.tm-row[draggable="true"]').forEach(row => {
     row.addEventListener('dragstart', e => {
       const id = parseInt(row.dataset.id, 10);
       dragState = { tagId: id, parentId: rowParentId(row) };
@@ -293,7 +326,7 @@ export function bindDragAndDrop(container, { onReparent, onReorder, onInvalidReo
     });
 
     row.addEventListener('dragleave', e => {
-      if (!row.contains(/** @type {Node} */ (e.relatedTarget))) {
+      if (!row.contains((e.relatedTarget as Node))) {
         row.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on');
       }
     });

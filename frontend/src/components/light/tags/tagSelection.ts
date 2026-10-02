@@ -16,7 +16,7 @@
  * then deleting them is the one mistake this screen must not make.
  *
  * The select-all box is tri-state, and `indeterminate` is a hint only — it is
- * never read back. Same rule as the editor's toggle trees (tagToggleTree.js):
+ * never read back. Same rule as the editor's toggle trees (tagToggleTree.ts):
  * a checked box is never also indeterminate, since browsers paint the partial
  * mark over the tick and would hide it.
  *
@@ -28,9 +28,13 @@
 
 import { html, raw } from '../../../utils/helpers.ts';
 import { CHECK_SVG, TRASH_SVG } from '../../../utils/icons.ts';
-import { matchesListFilter } from './TagListView.js';
-import { SWIPE_BREAKPOINT } from './tagGestures.js';
-import { bulkVisibility, bulkDelete, openBulkMoveDialog } from './tagFlows.js';
+import type { RawHtml } from '../../../utils/helpers.ts';
+import type { Tag } from '../../../api/tags.ts';
+import { matchesListFilter } from './TagListView.ts';
+import type { ListFilter } from './TagListView.ts';
+import type { ConfirmFn } from './tagFlows.ts';
+import { SWIPE_BREAKPOINT } from './tagGestures.ts';
+import { bulkVisibility, bulkDelete, openBulkMoveDialog } from './tagFlows.ts';
 
 /** Hold a row this long to start selecting. Matches the post cards. */
 export const LONG_PRESS_MS = 500;
@@ -41,7 +45,36 @@ export const INTERACTIVE = 'input, button, a, select, label';
 /** Tree rows carry .tm-row; list-view rows are the <tr class="tm-tag-row">. */
 export const ROW_SELECTOR = '.tm-row, .tm-tag-row';
 
-const rowId = row => parseInt(row.dataset.id, 10);
+const rowId = (row: HTMLElement): number => parseInt(row.dataset.id, 10);
+
+/** The page state that select mode reads, fresh on every event. */
+export interface SelectModeState {
+  selectMode: boolean;
+  selectedIds: Set<number>;
+  tags: Tag[];
+  view: string;
+  listView: ListFilter;
+}
+
+/** The options of setupSelectMode. */
+export interface SelectModeOptions {
+  /** Read fresh on every event, never captured — see the file header. */
+  state: () => SelectModeState;
+  /** Entering or leaving select mode; the page turns this into a re-render. */
+  onModeChange: (selectMode: boolean, selectedIds: Set<number>) => void;
+  /** After a bulk run, failures included. */
+  onBulkDone: () => void;
+  /** The page's ConfirmDialog plumbing. */
+  confirm: ConfirmFn;
+}
+
+/** The handle setupSelectMode returns to the page. */
+export interface SelectModeHandle {
+  selectBySwipe: (row: HTMLElement) => void;
+  setSelected: (id: number, on: boolean) => void;
+  toggleSelected: (id: number) => void;
+  update: () => void;
+}
 
 // ── Decisions ────────────────────────────────────────────────────────────────
 
@@ -53,7 +86,7 @@ const rowId = row => parseInt(row.dataset.id, 10);
  * uses the same predicate the rows themselves were shown or hidden with
  * (_applyListFilter), so the two cannot drift apart.
  */
-export function selectableTags(tags, view, listView) {
+export function selectableTags(tags: Tag[], view: string, listView: ListFilter): Tag[] {
   if (view !== 'list') return tags;
   return tags.filter(t => matchesListFilter(t, listView));
 }
@@ -63,7 +96,7 @@ export function selectableTags(tags, view, listView) {
  * is everything, partial when it is some of it, and neither when it is empty —
  * an empty selection over an empty list is not "all selected".
  */
-export function selectAllState(selected, total) {
+export function selectAllState(selected: number, total: number): { checked: boolean; indeterminate: boolean } {
   return {
     checked: selected > 0 && selected === total,
     indeterminate: selected > 0 && selected < total,
@@ -78,7 +111,7 @@ export function selectAllState(selected, total) {
  *
  * The page decides when to show it; this only says what it looks like.
  */
-export function renderBulkToolbar() {
+export function renderBulkToolbar(): RawHtml {
   return html`
       <div class="tm-bulk-toolbar" id="tm-bulk-toolbar">
         <label class="select-all-label"><input type="checkbox" id="tm-select-all-cb"> Select all</label>
@@ -101,8 +134,8 @@ export function renderBulkToolbar() {
 // ── DOM sync ─────────────────────────────────────────────────────────────────
 
 /** Show a tag as selected or not, on every row that tag owns. */
-export function applyRowSelection(container, id, on) {
-  container.querySelectorAll(`.tm-select-cb[data-id="${id}"]`).forEach(cb => {
+export function applyRowSelection(container: Element, id: number, on: boolean): void {
+  container.querySelectorAll<HTMLInputElement>(`.tm-select-cb[data-id="${id}"]`).forEach(cb => {
     cb.checked = on;
   });
   container.querySelectorAll(`.tm-row[data-id="${id}"], .tm-tag-row[data-id="${id}"]`)
@@ -117,22 +150,25 @@ export function applyRowSelection(container, id, on) {
  * select mode can be off, and the page swaps the toolbar out with the rest of
  * the content on load and error.
  *
- * @param {object} opts
- * @param {number} opts.selected      Size of the selection.
- * @param {() => number} opts.total   How many tags are selectable. A function
+ * @param opts
+ * @param opts.selected      Size of the selection.
+ * @param opts.total   How many tags are selectable. A function
  *   because only the select-all box needs it, and counting means running the
  *   list filter over every tag — on every tick of every checkbox.
  */
-export function updateBulkToolbar(container, { selected, total }) {
+export function updateBulkToolbar(
+  container: Element,
+  { selected, total }: { selected: number; total: () => number },
+): void {
   const count = container.querySelector('#tm-bulk-count');
   if (count) count.textContent = `${selected} selected`;
 
   ['#tm-bulk-apply-btn', '#tm-bulk-move-btn', '#tm-bulk-delete-btn'].forEach(sel => {
-    const btn = container.querySelector(sel);
+    const btn = container.querySelector<HTMLButtonElement>(sel);
     if (btn) btn.disabled = selected === 0;
   });
 
-  const selectAll = container.querySelector('#tm-select-all-cb');
+  const selectAll = container.querySelector<HTMLInputElement>('#tm-select-all-cb');
   if (selectAll) {
     const { checked, indeterminate } = selectAllState(selected, total());
     selectAll.checked = checked;
@@ -151,18 +187,25 @@ export function updateBulkToolbar(container, { selected, total }) {
  * Select button is the way in. Nothing is torn down: the rows these listeners
  * sit on are replaced wholesale by the next render.
  */
-function bindRowGestures(container, { state, enterWith, toggleSelected }) {
+function bindRowGestures(
+  container: Element,
+  { state, enterWith, toggleSelected }: {
+    state: () => SelectModeState;
+    enterWith: (id: number) => void;
+    toggleSelected: (id: number) => void;
+  },
+): void {
   if (!window.matchMedia?.(SWIPE_BREAKPOINT).matches) return;
 
-  container.querySelectorAll(ROW_SELECTOR).forEach(row => {
+  container.querySelectorAll<HTMLElement>(ROW_SELECTOR).forEach(row => {
     const id = rowId(row);
     if (!Number.isInteger(id)) return;
 
-    let timer = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
 
     row.addEventListener('pointerdown', e => {
-      if (e.target.closest(INTERACTIVE)) return;
+      if ((e.target as Element).closest(INTERACTIVE)) return;
       if (state().selectMode) return;
       timer = setTimeout(() => {
         timer = null;
@@ -175,7 +218,7 @@ function bindRowGestures(container, { state, enterWith, toggleSelected }) {
 
     row.addEventListener('click', e => {
       if (!state().selectMode) return;
-      if (e.target.closest(INTERACTIVE)) return;
+      if ((e.target as Element).closest(INTERACTIVE)) return;
       toggleSelected(id);
     });
   });
@@ -184,20 +227,14 @@ function bindRowGestures(container, { state, enterWith, toggleSelected }) {
 /**
  * Wire select mode inside `container` and return the handle the page keeps.
  *
- * @param {Element} container
- * @param {object}  opts
- * @param {() => {selectMode:boolean, selectedIds:Set<number>,
- *                tags:import('../../../api/tags.ts').Tag[], view:string,
- *                listView:{search?:string, filterParents?:Array<{id:number}>}}} opts.state
- *   Read fresh on every event, never captured — see the file header.
- * @param {(selectMode:boolean, selectedIds:Set<number>) => void} opts.onModeChange
- *   Entering or leaving select mode; the page turns this into a re-render.
- * @param {() => void} opts.onBulkDone   After a bulk run, failures included.
- * @param {Function}   opts.confirm      The page's ConfirmDialog plumbing.
- * @returns {{selectBySwipe: Function, setSelected: Function,
- *            toggleSelected: Function, update: Function}}
+ * @param container
+ * @param opts  See SelectModeOptions.
+ * @returns The handle the page keeps.
  */
-export function setupSelectMode(container, { state, onModeChange, onBulkDone, confirm }) {
+export function setupSelectMode(
+  container: Element,
+  { state, onModeChange, onBulkDone, confirm }: SelectModeOptions,
+): SelectModeHandle {
   const update = () => {
     const { selectedIds, tags, view, listView } = state();
     updateBulkToolbar(container, {
@@ -210,27 +247,27 @@ export function setupSelectMode(container, { state, onModeChange, onBulkDone, co
    * Select or deselect one tag, in place — see the file header on why this
    * never goes through the page's setState.
    */
-  const setSelected = (id, on) => {
+  const setSelected = (id: number, on: boolean) => {
     const { selectedIds } = state();
     if (on) selectedIds.add(id); else selectedIds.delete(id);
     applyRowSelection(container, id, on);
     update();
   };
 
-  const toggleSelected = id => setSelected(id, !state().selectedIds.has(id));
+  const toggleSelected = (id: number) => setSelected(id, !state().selectedIds.has(id));
 
   /** Enter select mode with one tag already picked — the touch way in. */
-  const enterWith = id => onModeChange(true, new Set([id]));
+  const enterWith = (id: number) => onModeChange(true, new Set([id]));
 
   /** Swipe-right on a row: start selecting, or add/remove it if already on. */
-  const selectBySwipe = row => {
+  const selectBySwipe = (row: HTMLElement) => {
     const id = rowId(row);
     if (!Number.isInteger(id)) return;
     if (!state().selectMode) enterWith(id);
     else toggleSelected(id);
   };
 
-  const handle = { selectBySwipe, setSelected, toggleSelected, update };
+  const handle: SelectModeHandle = { selectBySwipe, setSelected, toggleSelected, update };
 
   container.querySelector('#tm-select-btn')?.addEventListener('click', () => {
     onModeChange(!state().selectMode, new Set());
@@ -240,7 +277,7 @@ export function setupSelectMode(container, { state, onModeChange, onBulkDone, co
 
   if (!state().selectMode) return handle;
 
-  container.querySelectorAll('.tm-select-cb').forEach((/** @type {HTMLInputElement} */ cb) => {
+  container.querySelectorAll<HTMLInputElement>('.tm-select-cb').forEach(cb => {
     cb.addEventListener('change', e => {
       // Belt and braces, kept from the original: nothing above a row listens
       // for `change`, and the tap that ticked the box is already ignored by the
@@ -252,17 +289,16 @@ export function setupSelectMode(container, { state, onModeChange, onBulkDone, co
   });
 
   container.querySelector('#tm-select-all-cb')?.addEventListener('change', e => {
-    const selectedIds = new Set();
+    const selectedIds = new Set<number>();
     const { tags, view, listView } = state();
-    if (e.target.checked) selectableTags(tags, view, listView).forEach(t => selectedIds.add(t.id));
+    if ((e.target as HTMLInputElement).checked) selectableTags(tags, view, listView).forEach(t => selectedIds.add(t.id));
     onModeChange(true, selectedIds);
   });
 
   container.querySelector('#tm-bulk-apply-btn')
     ?.addEventListener('click', () => bulkVisibility({
       ids: [...state().selectedIds],
-      hidden: /** @type {HTMLSelectElement} */ (
-        container.querySelector('#tm-bulk-visibility-select')).value === 'hidden',
+      hidden: (container.querySelector('#tm-bulk-visibility-select') as HTMLSelectElement).value === 'hidden',
       onDone: onBulkDone,
     }));
   container.querySelector('#tm-bulk-move-btn')

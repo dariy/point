@@ -11,16 +11,46 @@
  */
 
 import { html, raw } from '../../../utils/helpers.ts';
+import type { RawHtml } from '../../../utils/helpers.ts';
+import type { Tag } from '../../../api/tags.ts';
 import { EDIT_SVG, X_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG } from '../../../utils/icons.ts';
+
+/**
+ * A tag as the tree sorts it. GET /api/tags does not send sort_order, so the
+ * sort falls back to the name when it is absent.
+ */
+export interface TreeTag extends Tag {
+  sort_order?: number | null;
+}
+
+/** A tag in the forest, with its child nodes. */
+export interface TagNode extends TreeTag {
+  childrenNodes: TagNode[];
+}
+
+/** What buildTagTree returns. */
+export interface TagForest {
+  navRoots: TagNode[];
+  otherRoots: TagNode[];
+  unfiled: TreeTag[];
+}
+
+/** The view descriptor of the tree renderers. */
+export interface TagTreeViewState {
+  expanded: Set<number>;
+  unfiledExpanded?: boolean;
+  selectMode?: boolean;
+  selectedIds: Set<number>;
+}
 
 /**
  * Build tree structure from flat tag list.
  * Returns { navRoots, otherRoots, unfiled } for the forest renderer.
  * Multi-parent tags appear under each parent (DAG).
  */
-export function buildTagTree(tags) {
+export function buildTagTree(tags: TreeTag[]): TagForest {
   const tagById = new Map(tags.map(t => [t.id, t]));
-  const childrenOf = new Map();
+  const childrenOf = new Map<number, TreeTag[]>();
   tags.forEach(t => {
     (t.parents || []).forEach(p => {
       if (tagById.has(p.id)) {
@@ -30,14 +60,14 @@ export function buildTagTree(tags) {
     });
   });
 
-  const sortFn = (a, b) => {
+  const sortFn = (a: TreeTag, b: TreeTag) => {
     const ao = a.sort_order ?? Infinity;
     const bo = b.sort_order ?? Infinity;
     if (ao !== bo) return ao - bo;
     return a.name.localeCompare(b.name);
   };
 
-  const makeNode = (tag, ancestorIds) => {
+  const makeNode = (tag: TreeTag, ancestorIds: Set<number>): TagNode => {
     const kids = (childrenOf.get(tag.id) || []).filter(c => !ancestorIds.has(c.id));
     kids.sort(sortFn);
     return {
@@ -69,13 +99,13 @@ export function buildTagTree(tags) {
   return { navRoots, otherRoots, unfiled };
 }
 
-export function renderTagForest({ navRoots, otherRoots, unfiled }, view) {
+export function renderTagForest({ navRoots, otherRoots, unfiled }: TagForest, view: TagTreeViewState): RawHtml {
   const total = navRoots.length + otherRoots.length + unfiled.length;
   if (!total) return html`<p class="empty-state">No tags found.</p>`;
 
   // Collected rather than concatenated: `+=` would drop html`` output back to a
   // plain string, and the caller interpolates the result as markup.
-  const parts = [];
+  const parts: RawHtml[] = [];
 
   if (navRoots.length) {
     parts.push(html`<ul class="tm-tree level-0">${navRoots.map(n => renderTagNode(n, 0, null, view))}</ul>`);
@@ -92,12 +122,12 @@ export function renderTagForest({ navRoots, otherRoots, unfiled }, view) {
   return html`<div class="tm-tree-root">${parts}</div>`;
 }
 
-export function renderTagTree(nodes, level = 0, parentId = null, view) {
+export function renderTagTree(nodes: TagNode[], level = 0, parentId: number | null = null, view: TagTreeViewState): RawHtml | '' {
   if (!nodes.length) return level === 0 ? html`<p class="empty-state">No tags found.</p>` : '';
   return html`<ul class="tm-tree level-${level}" data-parent-id="${parentId ?? ''}">${nodes.map(n => renderTagNode(n, level, parentId, view))}</ul>`;
 }
 
-export function renderTagNode(node, level, parentId, view) {
+export function renderTagNode(node: TagNode, level: number, parentId: number | null, view: TagTreeViewState): RawHtml {
   const isExpanded = view.expanded.has(node.id);
   const hasChildren = node.childrenNodes.length > 0;
 
@@ -135,13 +165,13 @@ export function renderTagNode(node, level, parentId, view) {
       </li>`;
 }
 
-export function renderSelectCheckbox(tag, selectMode, isSelected) {
+export function renderSelectCheckbox(tag: Tag, selectMode: boolean | undefined, isSelected: boolean): RawHtml | '' {
   if (!selectMode) return '';
   return html`<input type="checkbox" class="tm-select-cb" data-id="${tag.id}"${isSelected ? raw(' checked') : ''} aria-label="Select ${tag.name}">`;
 }
 
-export function renderRowBadges(node) {
-  const parts = [];
+export function renderRowBadges(node: Tag): RawHtml | '' {
+  const parts: RawHtml[] = [];
 
   if (node.nav_order != null) {
     parts.push(html`<span class="tm-badge tm-badge-nav" title="In public navigation (position ${node.nav_order})">⌂ nav</span>`);
@@ -175,7 +205,7 @@ export function renderRowBadges(node) {
   return parts.length ? html`${parts}` : '';
 }
 
-export function renderUnfiledGroup(unfiledTags, view) {
+export function renderUnfiledGroup(unfiledTags: Tag[], view: TagTreeViewState): RawHtml {
   const { unfiledExpanded, selectMode } = view;
   const n = unfiledTags.length;
   const rows = unfiledTags.map(tag => html`

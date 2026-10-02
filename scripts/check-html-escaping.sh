@@ -62,7 +62,7 @@ expected=$(cat <<'LIST'
 frontend/src/components/light/CssEditor.ts 1
 frontend/src/components/light/MarkdownEditor.ts 1
 frontend/src/components/light/settingsFields.ts 1
-frontend/src/components/light/tags/TagEditorForm.js 2
+frontend/src/components/light/tags/TagEditorForm.ts 2
 frontend/src/components/public/PostContent.ts 1
 frontend/src/pages/light/PluginsPage.js 1
 frontend/src/plugins/tags-map/index.js 2

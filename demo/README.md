@@ -59,7 +59,7 @@ demo/
 The interception point is the **platform**, not `frontend/src/api/client.ts`.
 That module is not the only caller: `router.ts` fetches `/api/setup/status` on
 every `/light` navigation, `api/system.ts` uploads over `XMLHttpRequest`,
-`BackupsSection.js` fetches the version endpoint directly, and the comments
+`BackupsSection.ts` fetches the version endpoint directly, and the comments
 plugin calls `api.*` without going through `frontend/src/api/`. Patching `fetch`
 and `XMLHttpRequest` catches all of them — including any added later — and leaves
 the real `client.js` on the code path, so the demo exercises genuine error

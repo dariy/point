@@ -19,8 +19,10 @@ import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDatetime, isoDatetime } from "../../../utils/formatters.ts";
 
+type VersionInfo = Awaited<ReturnType<typeof getVersion>>;
+
 export class VersionCheckSection extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = { loading: true, checking: false, info: null, error: null, justChecked: false };
   }
@@ -74,7 +76,7 @@ export class VersionCheckSection extends Component {
   }
 
   /** The one-line answer: broken, update available, unknown, or current. */
-  _renderVerdict(info) {
+  _renderVerdict(info: VersionInfo) {
     if (info.error) {
       return html`<p class="version-verdict is-error" role="alert">Check failed: ${info.error}</p>`;
     }

@@ -17,7 +17,7 @@ export class RebuildThumbnailsSection extends Component {
     if (rebuildBtn) {
       rebuildBtn.addEventListener("click", async (e) => {
         e.preventDefault();
-        const btn = /** @type {HTMLButtonElement} */ (e.target);
+        const btn = e.target as HTMLButtonElement;
         btn.disabled = true;
         const ogText = btn.textContent;
         btn.textContent = "Rebuilding…";

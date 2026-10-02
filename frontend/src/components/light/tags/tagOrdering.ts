@@ -7,8 +7,10 @@
  * authority on sort order, not the child's own sort_order field.
  */
 
+import type { Tag } from '../../../api/tags.ts';
+
 /** Children of parentId, in the parent's stored order. Unknown ids yield []. */
-export function getChildrenOf(tags, parentId) {
+export function getChildrenOf(tags: Tag[], parentId: number | null | undefined): Tag[] {
   if (!parentId) return [];
   const parent = tags.find(t => t.id === parentId);
   if (!parent) return [];
@@ -20,7 +22,7 @@ export function getChildrenOf(tags, parentId) {
  * The id of the sibling just before targetId in parentId's children, or null
  * if targetId is first — which the move APIs read as "put it at the front".
  */
-export function getSiblingBefore(tags, targetId, parentId) {
+export function getSiblingBefore(tags: Tag[], targetId: number, parentId: number | null | undefined): number | null {
   const siblings = getChildrenOf(tags, parentId);
   const idx = siblings.findIndex(t => t.id === targetId);
   if (idx <= 0) return null;

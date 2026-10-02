@@ -9,13 +9,14 @@
 
 import { Component } from "../../Component.ts";
 import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.ts";
+import type { OAuthClient } from "../../../api/auth.ts";
 import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
 import { showConfirm, showPrompt } from "../../../utils/dialogs.ts";
 
 export class ApiKeysSection extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = { loading: true, apiKeys: [], oauthClients: [] };
   }
@@ -65,7 +66,7 @@ export class ApiKeysSection extends Component {
       ${this._renderOAuthClients(oauthClients)}`;
   }
 
-  _renderOAuthClients(clients) {
+  _renderOAuthClients(clients: OAuthClient[]) {
     if (!clients.length) return "";
     return html`
       <h3 class="section-subhead">Connected apps</h3>
@@ -99,7 +100,7 @@ export class ApiKeysSection extends Component {
   afterRender() {
     this.$("#create-api-key-btn")?.addEventListener("click", () => this._handleCreate());
     this.$$(".delete-api-key-btn").forEach((btn) => {
-      btn.addEventListener("click", () => this._handleDelete(btn.dataset.id));
+      btn.addEventListener("click", () => this._handleDelete(Number(btn.dataset.id)));
     });
     this.$$(".revoke-oauth-client-btn").forEach((btn) => {
       btn.addEventListener("click", () => this._handleRevokeClient(btn.dataset.id));
@@ -144,7 +145,7 @@ export class ApiKeysSection extends Component {
     });
   }
 
-  _handleDelete(id) {
+  _handleDelete(id: number) {
     showConfirm({
       title: "Delete API Key",
       message: "Permanently delete this API key? Applications using it will lose access.",
@@ -161,7 +162,7 @@ export class ApiKeysSection extends Component {
     });
   }
 
-  _handleRevokeClient(clientId) {
+  _handleRevokeClient(clientId: string) {
     showConfirm({
       title: "Revoke Connected App",
       message: "Revoke this app? Its tokens stop working now, and it must sign in again to reconnect.",

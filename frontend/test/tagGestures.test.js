@@ -13,7 +13,7 @@ import {
   bindDragAndDrop,
   THRESHOLD_PX,
   DAMPING,
-} from '../src/components/light/tags/tagGestures.js';
+} from '../src/components/light/tags/tagGestures.ts';
 
 describe('gestureDirection', () => {
   test('withholds a direction until the movement is big enough', () => {

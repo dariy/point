@@ -13,7 +13,7 @@ import { formatDateShort } from "../../../utils/formatters.ts";
 import { WARNING_SVG } from "../../../utils/icons.ts";
 
 export class SyncQueueSection extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = { loading: true, queue: [] };
   }

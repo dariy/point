@@ -9,7 +9,7 @@ import {
   renderSelectCheckbox as _renderSelectCheckbox,
   renderRowBadges as _renderRowBadges,
   renderUnfiledGroup as _renderUnfiledGroup,
-} from '../src/components/light/tags/TagTreeView.js';
+} from '../src/components/light/tags/TagTreeView.ts';
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take. Every assertion below wants the

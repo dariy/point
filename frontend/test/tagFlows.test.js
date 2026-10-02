@@ -22,7 +22,7 @@ import {
   candidateTags, parentsWith, positionOptions, bulkOutcome, pluralTags,
   runBulk, bulkVisibility, bulkDelete,
   openBulkMoveDialog, openMergeDialog, openMoveDialog, openDropOnConfirm,
-} from '../src/components/light/tags/tagFlows.js';
+} from '../src/components/light/tags/tagFlows.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,

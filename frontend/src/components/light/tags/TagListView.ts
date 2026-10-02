@@ -14,13 +14,37 @@
  */
 
 import { html, raw } from '../../../utils/helpers.ts';
+import type { Tag, TagStub } from '../../../api/tags.ts';
+import type { RawHtml } from '../../../utils/helpers.ts';
 import { EDIT_SVG, X_SVG, MAP_SVG } from '../../../utils/icons.ts';
+
+/** One quick-filter toggle of the list view. */
+export interface QuickFilter {
+  key: string;
+  label: string;
+  test: (tag: Tag) => boolean;
+}
+
+/** The list-view filters that matchesListFilter applies. */
+export interface ListFilter {
+  search?: string;
+  filterParents?: TagStub[];
+  filterFlags?: string[];
+}
+
+/** The view descriptor of renderTagList. */
+export interface TagListViewState extends ListFilter {
+  sortField?: string;
+  sortOrder?: string;
+  selectMode?: boolean;
+  selectedIds: Set<number>;
+}
 
 /**
  * Quick filters for tag attributes that aren't a parent or a search term.
  * Each `test` reads the same fields the tree view's badges already show.
  */
-export const QUICK_FILTERS = [
+export const QUICK_FILTERS: QuickFilter[] = [
   { key: 'hidden', label: 'Hidden', test: tag => !!(tag.hidden || tag.effective_hidden) },
   { key: 'coords', label: 'Has coordinates', test: tag => (tag.locations?.length ?? 0) > 0 },
 ];
@@ -30,7 +54,7 @@ export const QUICK_FILTERS = [
  * filters? Shared with "Select all" so the selection can never reach past
  * what the filters are showing.
  */
-export function matchesListFilter(tag, { search = '', filterParents = [], filterFlags = [] } = {}) {
+export function matchesListFilter(tag: Tag, { search = '', filterParents = [], filterFlags = [] }: ListFilter = {}): boolean {
   const q = (search || '').trim().toLowerCase();
   const parents = tag.parents || [];
   const textMatch = !q ||
@@ -50,7 +74,7 @@ export function matchesListFilter(tag, { search = '', filterParents = [], filter
 }
 
 /** Sort a copy of `tags` by the list view's active column. */
-export function sortTagsForList(tags, sortField, sortOrder) {
+export function sortTagsForList(tags: Tag[], sortField: string | undefined, sortOrder: string | undefined): Tag[] {
   const dir = sortOrder === 'asc' ? 1 : -1;
 
   return [...tags].sort((a, b) => {
@@ -79,7 +103,7 @@ export function sortTagsForList(tags, sortField, sortOrder) {
  * of the markup drifted once already — the second one had a bare "×" where this
  * has the icon, so a chip changed shape the moment anything touched the row.
  */
-export function renderFilterChips(filterParents = []) {
+export function renderFilterChips(filterParents: TagStub[] = []): RawHtml | '' {
   const chips = filterParents.map(p =>
     html`<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${p.name} <span class="tm-chip-remove">${raw(X_SVG)}</span></button>`
   );
@@ -89,13 +113,13 @@ export function renderFilterChips(filterParents = []) {
 }
 
 /** The quick-filter toggle buttons, active ones painted like the view toggle. */
-export function renderQuickFilters(filterFlags = []) {
+export function renderQuickFilters(filterFlags: string[] = []): RawHtml {
   return html`${QUICK_FILTERS.map(f => html`
       <button type="button" class="btn btn-sm tm-quick-filter-btn${filterFlags.includes(f.key) ? ' btn-primary' : ' btn-secondary'}" data-flag="${f.key}">${f.label}</button>`)}`;
 }
 
-export function renderSortHeader(field, label, className = '', title = '',
-  /** @type {{ sortField?: string, sortOrder?: string }} */ { sortField, sortOrder } = {}) {
+export function renderSortHeader(field: string, label: string, className = '', title = '',
+  { sortField, sortOrder }: { sortField?: string; sortOrder?: string } = {}): RawHtml {
   const isActive = sortField === field;
   const icon = isActive ? (sortOrder === 'asc' ? ' ▴' : ' ▾') : '';
 
@@ -110,7 +134,7 @@ export function renderSortHeader(field, label, className = '', title = '',
       </th>`;
 }
 
-export function renderTagList(tags, view) {
+export function renderTagList(tags: Tag[], view: TagListViewState): RawHtml {
   if (!tags.length) return html`<p class="empty-state">No tags found.</p>`;
 
   const { sortField, sortOrder, selectMode, selectedIds, search, filterParents, filterFlags = [] } = view;

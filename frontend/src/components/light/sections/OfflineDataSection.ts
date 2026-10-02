@@ -15,7 +15,7 @@ import { html } from "../../../utils/helpers.ts";
 import { formatFileSize, formatDateShort } from "../../../utils/formatters.ts";
 
 export class OfflineDataSection extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -127,7 +127,7 @@ export class OfflineDataSection extends Component {
    * name goes, so nothing ever reported, and the arithmetic behind it multiplied
    * a progress *object* by 0.6 and rendered NaN.)
    */
-  _imageProgress(total) {
+  _imageProgress(total: number): () => void {
     let done = 0;
     let shownPct = -1;
     return () => {
@@ -161,10 +161,10 @@ export class OfflineDataSection extends Component {
    * for. Remote URLs are skipped entirely: `cache.add` cannot store an opaque
    * cross-origin response, and the service worker never sees those requests.
    */
-  _imageUrls(data) {
-    const thumbs = new Set();
-    const originals = new Set();
-    const local = (u) => typeof u === "string" && u.startsWith("/");
+  _imageUrls(data: { posts?: Array<{ media_url?: string }>; media?: Array<{ path?: string }> }): { thumbs: string[]; originals: string[] } {
+    const thumbs = new Set<string>();
+    const originals = new Set<string>();
+    const local = (u: unknown): u is string => typeof u === "string" && u.startsWith("/");
 
     (data.posts || []).forEach((p) => {
       if (!local(p.media_url)) return;

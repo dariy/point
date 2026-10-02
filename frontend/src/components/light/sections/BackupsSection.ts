@@ -19,10 +19,17 @@ import { RESTORE_SVG, X_SVG, DOWNLOAD_SVG, UPLOAD_SVG, REFRESH_SVG } from "../..
 import { showConfirm, showPrompt } from "../../../utils/dialogs.ts";
 import { GestureController } from "../../../core/gestures.ts";
 
-/** @typedef {import('../../../api/settings.ts').Settings} Settings */
+import type { Settings } from '../../../api/settings.ts';
+import type { Backup } from '../../../api/system.ts';
 
 export class BackupsSection extends Component {
-  constructor(container, props = {}) {
+  _itemGestures: GestureController[];
+  _pollTimer: ReturnType<typeof setInterval> | null;
+  _awaitingBackupStart: boolean;
+  _backupInitiatedAt: number;
+  _restartOverlay: HTMLDivElement | null;
+
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -54,7 +61,7 @@ export class BackupsSection extends Component {
           <span>Automatic backups</span>
         </label>`;
     const preset = [1, 7, 30].includes(intervalDays);
-    const opt = (v, label) => html`<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
+    const opt = (v: number, label: string) => html`<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
     return html`
       <div class="backup-settings">
         ${raw(enableRow)}
@@ -79,7 +86,7 @@ export class BackupsSection extends Component {
 
   // A single backup row: a live "Creating…" placeholder while the archive is
   // still being written, otherwise the normal swipe row with actions.
-  _renderItem(b) {
+  _renderItem(b: Backup) {
     if (b.in_progress) {
       return html`
         <li class="backup-item backup-in-progress">
@@ -148,7 +155,7 @@ export class BackupsSection extends Component {
   }
   afterRender() {
     this.$("#create-backup-btn")?.addEventListener("click", () => this._handleCreate());
-    const uploadInput = /** @type {HTMLInputElement|null} */ (this.$("#upload-backup-input"));
+    const uploadInput = (this.$("#upload-backup-input") as HTMLInputElement|null);
     this.$("#upload-backup-btn")?.addEventListener("click", () => uploadInput?.click());
     uploadInput?.addEventListener("change", () => {
       const file = uploadInput.files?.[0];
@@ -202,18 +209,18 @@ export class BackupsSection extends Component {
     this._destroySwipe();
     this._itemGestures = [];
     const items = [...this.$$(".backup-swipe-item")];
-    const closeAll = except => {
+    const closeAll = (except: Element | null) => {
       items.forEach(it => {
         if (it === except) return;
-        const c = /** @type {HTMLElement} */ (it.querySelector(".backup-swipe-content"));
+        const c = (it.querySelector(".backup-swipe-content") as HTMLElement);
         c.style.transition = "";
         c.style.transform = "translateX(0)";
         it.classList.remove("is-open");
       });
     };
     items.forEach(item => {
-      const content = /** @type {HTMLElement} */ (item.querySelector(".backup-swipe-content"));
-      const actions = /** @type {HTMLElement} */ (item.querySelector(".backup-swipe-actions"));
+      const content = (item.querySelector(".backup-swipe-content") as HTMLElement);
+      const actions = (item.querySelector(".backup-swipe-actions") as HTMLElement);
       const open = () => {
         closeAll(item);
         content.style.transition = "";
@@ -276,15 +283,16 @@ export class BackupsSection extends Component {
    * each has to be named as the control it is before the DOM lib will part
    * with its `checked`/`value`/`disabled`.
    *
-   * @returns {{ enable: HTMLInputElement|null, freq: HTMLSelectElement|null,
-   *             freqDays: HTMLInputElement|null, keep: HTMLInputElement|null }}
    */
-  _settingsControls() {
+  _settingsControls(): {
+    enable: HTMLInputElement | null; freq: HTMLSelectElement | null;
+    freqDays: HTMLInputElement | null; keep: HTMLInputElement | null;
+  } {
     return {
-      enable: /** @type {HTMLInputElement|null} */ (this.$("#bk-enable")),
-      freq: /** @type {HTMLSelectElement|null} */ (this.$("#bk-freq")),
-      freqDays: /** @type {HTMLInputElement|null} */ (this.$("#bk-freq-days")),
-      keep: /** @type {HTMLInputElement|null} */ (this.$("#bk-keep")),
+      enable: this.$("#bk-enable") as HTMLInputElement | null,
+      freq: this.$("#bk-freq") as HTMLSelectElement | null,
+      freqDays: this.$("#bk-freq-days") as HTMLInputElement | null,
+      keep: this.$("#bk-keep") as HTMLInputElement | null,
     };
   }
   async _saveSettings() {
@@ -331,7 +339,7 @@ export class BackupsSection extends Component {
   }
   async _load() {
     try {
-      const [backups, settings, health] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => /** @type {Settings} */ ({})), getHealth().catch(() => null)]);
+      const [backups, settings, health] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => ({} as Settings)), getHealth().catch(() => null)]);
       this.setState({
         loading: false,
         backups: Array.isArray(backups) ? backups : [],
@@ -422,7 +430,7 @@ export class BackupsSection extends Component {
   // goes up immediately and covers the whole flow — scheduling the restore
   // (validating the archive can take a moment) and the restart — so there's no
   // confusing gap or intermediate dialog.
-  async _handleRestore(filename, password) {
+  async _handleRestore(filename: string, password: string) {
     this._mountRestartOverlay("Restoring backup…");
     try {
       const hashed = await sha256(password);
@@ -454,7 +462,7 @@ export class BackupsSection extends Component {
   // Trigger the in-place restart, then hold the (already-mounted) blocking overlay
   // until the server is reachable again before reloading — so the operator never
   // sees a raw "connection refused" during the restart window.
-  async _restartAndReload(text) {
+  async _restartAndReload(text: string) {
     try {
       await restartServer();
     } catch (err) {
@@ -495,9 +503,8 @@ export class BackupsSection extends Component {
   // Resolve once the server has gone down and come back up (a resolved fetch —
   // even a 401 after a restore invalidates the session — means it's serving).
   // Falls back to resolving on a timeout so we never hang forever.
-  /** @returns {Promise<void>} */
-  _awaitServerBack() {
-    return new Promise(resolve => {
+  _awaitServerBack(): Promise<void> {
+    return new Promise<void>(resolve => {
       const start = Date.now();
       let sawDown = false;
       const ping = () => fetch("/api/system/version", {
@@ -518,7 +525,7 @@ export class BackupsSection extends Component {
       tick();
     });
   }
-  async _handleDelete(filename) {
+  async _handleDelete(filename: string) {
     try {
       await deleteBackup(filename);
       setToast({
@@ -536,7 +543,7 @@ export class BackupsSection extends Component {
 
   // Move out: re-enter the password, exchange it for a one-time token, then let
   // the browser stream the archive to disk (supports resume; never buffered in JS).
-  _handleDownload(filename) {
+  _handleDownload(filename: string) {
     showPrompt({
       title: "Download backup",
       message: `Confirm your password to download "${filename}".`,
@@ -567,7 +574,7 @@ export class BackupsSection extends Component {
 
   // Move in: upload the archive into the backups folder (staging only — it is not
   // applied). The user reviews it in the list and Restores it if they choose to.
-  _handleUpload(file) {
+  _handleUpload(file: File) {
     showConfirm({
       title: "Upload archive",
       message: `Add "${file.name}" to your backups? It won't be applied — you can Restore it afterward if you want to.`,

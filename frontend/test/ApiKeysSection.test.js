@@ -21,7 +21,7 @@ describe('ApiKeysSection connected apps', () => {
       removeEventListener: () => {},
       dispatchEvent: () => {}
     };
-    const mod = await import('../src/components/light/sections/ApiKeysSection.js');
+    const mod = await import('../src/components/light/sections/ApiKeysSection.ts');
     ApiKeysSection = mod.ApiKeysSection;
   });
 

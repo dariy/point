@@ -17,8 +17,12 @@ import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
 
+type ImportStatus = Awaited<ReturnType<typeof getInstagramImportStatus>>;
+
 export class InstagramImportSection extends Component {
-  constructor(container, props = {}) {
+  _pollTimer: ReturnType<typeof setInterval> | null;
+
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -52,7 +56,7 @@ export class InstagramImportSection extends Component {
       </section>`;
   }
 
-  _statusHtml(status, running) {
+  _statusHtml(status: ImportStatus | null, running: boolean) {
     if (!status) return "";
     if (running && status.progress) {
       const p = status.progress;

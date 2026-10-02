@@ -17,15 +17,15 @@ import { getTagsView, setToast } from '../../store.ts';
 import { html, setHTML, raw } from '../../utils/helpers.ts';
 import { X_SVG, REFRESH_SVG, LIST_SVG, TREE_SVG, PLUS_SVG, SELECT_SVG } from '../../utils/icons.ts';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';
-import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.js';
-import { renderTagList, renderFilterChips, matchesListFilter } from '../../components/light/tags/TagListView.js';
-import { getSiblingBefore } from '../../components/light/tags/tagOrdering.js';
-import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.js';
-import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/tagGestures.js';
-import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.js';
-import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../components/light/tags/tagFlows.js';
-import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.js';
-import { setupListFilters } from '../../components/light/tags/tagListFilters.js';
+import { buildTagTree, renderTagForest } from '../../components/light/tags/TagTreeView.ts';
+import { renderTagList, renderFilterChips, matchesListFilter } from '../../components/light/tags/TagListView.ts';
+import { getSiblingBefore } from '../../components/light/tags/tagOrdering.ts';
+import { renderTagEditorForm, slugifyTagName, tagEditorSelection } from '../../components/light/tags/TagEditorForm.ts';
+import { bindSwipeToReveal, bindDragAndDrop } from '../../components/light/tags/tagGestures.ts';
+import { setupTagToggleTrees } from '../../components/light/tags/tagToggleTree.ts';
+import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../components/light/tags/tagFlows.ts';
+import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.ts';
+import { setupListFilters } from '../../components/light/tags/tagListFilters.ts';
 
 /** @typedef {import('../../router.ts').PageProps} PageProps */
 

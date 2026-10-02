@@ -11,7 +11,7 @@ import { showConfirm } from "../../../utils/dialogs.ts";
 import { html } from "../../../utils/helpers.ts";
 
 export class PasskeysSection extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
     this.state = {
       loading: true,

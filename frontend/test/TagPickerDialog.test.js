@@ -12,7 +12,7 @@ let TagPickerDialog;
 
 beforeEach(async () => {
   dom = setupDOM();
-  TagPickerDialog ??= await import('../src/components/light/tags/TagPickerDialog.js');
+  TagPickerDialog ??= await import('../src/components/light/tags/TagPickerDialog.ts');
 });
 afterEach(() => dom.cleanup());
 

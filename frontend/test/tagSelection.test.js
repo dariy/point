@@ -16,12 +16,12 @@ import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, selectOption } from './helpers/dom.js';
 import { getToast, setToast } from '../src/store.ts';
-import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.js';
-import { renderTagList } from '../src/components/light/tags/TagListView.js';
+import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.ts';
+import { renderTagList } from '../src/components/light/tags/TagListView.ts';
 import {
   selectableTags, selectAllState, renderBulkToolbar, applyRowSelection,
   updateBulkToolbar, setupSelectMode, LONG_PRESS_MS, INTERACTIVE, ROW_SELECTOR,
-} from '../src/components/light/tags/tagSelection.js';
+} from '../src/components/light/tags/tagSelection.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,

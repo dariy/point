@@ -1,7 +1,7 @@
 /**
  * tagToggleTree — the behaviour of the editor modal's Parents/Children pickers.
  *
- * renderTagToggles (TagEditorForm.js) emits the markup; everything that makes it
+ * renderTagToggles (TagEditorForm.ts) emits the markup; everything that makes it
  * behave like a tree lives here: the expand/collapse buttons, the search box
  * above each tree, and the indeterminate state that tells a user a collapsed
  * branch holds a checked tag.
@@ -14,13 +14,13 @@
  */
 
 /** Rows a node owns beneath it — its own checkbox is not one of them. */
-function descendantCheckboxes(node) {
-  return node.querySelectorAll('.tag-toggle-node input[type="checkbox"]');
+function descendantCheckboxes(node: Element): NodeListOf<HTMLInputElement> {
+  return node.querySelectorAll<HTMLInputElement>('.tag-toggle-node input[type="checkbox"]');
 }
 
 /** A node's own checkbox, not one belonging to a nested node. */
-function ownCheckbox(node) {
-  return node.querySelector(':scope > .tag-toggle-row .tag-toggle input[type="checkbox"]');
+function ownCheckbox(node: Element): HTMLInputElement | null {
+  return node.querySelector<HTMLInputElement>(':scope > .tag-toggle-row .tag-toggle input[type="checkbox"]');
 }
 
 /**
@@ -36,7 +36,7 @@ function ownCheckbox(node) {
  * A checked box is never also indeterminate: the box already says "selected",
  * and browsers paint indeterminate over checked, which would hide that.
  */
-export function syncIndeterminate(tree) {
+export function syncIndeterminate(tree: Element): void {
   tree.querySelectorAll('.tag-toggle-node').forEach(node => {
     const ownCb = ownCheckbox(node);
     if (!ownCb) return;
@@ -53,7 +53,7 @@ export function syncIndeterminate(tree) {
  * have to come back because hiding is per-element — a visible node inside a
  * hidden parent is still invisible.
  */
-export function filterToggleTree(container, query) {
+export function filterToggleTree(container: Element, query: string): void {
   const q = query.trim().toLowerCase();
   const allNodes = Array.from(container.querySelectorAll('.tag-toggle-node'));
   const allLists = Array.from(container.querySelectorAll('.tag-toggle-tree'));
@@ -70,7 +70,7 @@ export function filterToggleTree(container, query) {
   allNodes.forEach(n => {
     const label = n.querySelector(':scope > .tag-toggle-row .tag-toggle span');
     if (label && label.textContent.toLowerCase().includes(q)) {
-      let el = n;
+      let el: Element | null = n;
       while (el && el !== container) {
         if (el.classList.contains('tag-toggle-node') || el.classList.contains('tag-toggle-tree')) {
           el.classList.remove('hidden');
@@ -82,7 +82,7 @@ export function filterToggleTree(container, query) {
 }
 
 /** Flip one branch open or shut, keeping the arrow and aria-expanded with it. */
-export function toggleBranch(root, btn) {
+export function toggleBranch(root: Element, btn: HTMLElement): void {
   const list = root.querySelector(`#${btn.dataset.ttToggle}`);
   if (!list) return;
   const open = !list.classList.contains('hidden');
@@ -97,8 +97,8 @@ export function toggleBranch(root, btn) {
  * Listeners are not torn down: the modal they are bound to is removed whole on
  * close, taking them with it.
  */
-export function setupTagToggleTrees(root) {
-  root.querySelectorAll('[data-tt-toggle]').forEach(btn => {
+export function setupTagToggleTrees(root: Element): void {
+  root.querySelectorAll<HTMLElement>('[data-tt-toggle]').forEach(btn => {
     btn.addEventListener('click', () => toggleBranch(root, btn));
   });
 
@@ -115,7 +115,7 @@ export function setupTagToggleTrees(root) {
 
   // Each search box filters the container that follows it — the pickers come in
   // pairs (Parents, Children) and must not filter each other.
-  root.querySelectorAll('.tm-toggle-search').forEach(input => {
+  root.querySelectorAll<HTMLInputElement>('.tm-toggle-search').forEach(input => {
     const container = input.nextElementSibling;
     if (!container) return;
     input.addEventListener('input', () => filterToggleTree(container, input.value));

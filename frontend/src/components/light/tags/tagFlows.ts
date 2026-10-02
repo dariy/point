@@ -22,9 +22,22 @@
 
 import { setToast } from '../../../store.ts';
 import { html, setHTML } from '../../../utils/helpers.ts';
+import type { RawHtml } from '../../../utils/helpers.ts';
+import type { Tag } from '../../../api/tags.ts';
 import { setTagParents, deleteTag, patchTag, moveTag, mergeTags } from '../../../api/tags.ts';
-import { openTagPickerDialog, openOverlay } from './TagPickerDialog.js';
-import { getChildrenOf } from './tagOrdering.js';
+import { openTagPickerDialog, openOverlay } from './TagPickerDialog.ts';
+import { getChildrenOf } from './tagOrdering.ts';
+
+/** The outcome of a bulk run, in the shape setToast takes. */
+export interface BulkOutcome {
+  message: string;
+  type: 'success' | 'error';
+}
+
+/** The confirm plumbing of ConfirmDialog, in its positional shape. */
+export type ConfirmFn = (
+  title: string, message: string, confirmLabel: string, variant: string, onConfirm: () => unknown,
+) => void;
 
 // ── Decisions ────────────────────────────────────────────────────────────────
 
@@ -38,7 +51,7 @@ import { getChildrenOf } from './tagOrdering.js';
  * itself is not a merge. Sorting is on the filtered copy, never the caller's
  * array.
  */
-export function candidateTags(tags, excludeIds) {
+export function candidateTags(tags: Tag[], excludeIds: Iterable<number>): Tag[] {
   const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds);
   return tags.filter(t => !excluded.has(t.id)).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -51,7 +64,7 @@ export function candidateTags(tags, excludeIds) {
  * a hierarchy with a set identical to the one already stored — setTagParents
  * replaces wholesale, and a no-op write still bumps the server's ordering.
  */
-export function parentsWith(tag, parentId) {
+export function parentsWith(tag: Tag, parentId: number): number[] | null {
   const current = (tag.parents || []).map(p => p.id);
   return current.includes(parentId) ? null : [...current, parentId];
 }
@@ -63,7 +76,7 @@ export function parentsWith(tag, parentId) {
  * An empty value means "at the beginning" — moveTag reads `after_id: null`
  * that way — and the moving tag is never offered as its own anchor.
  */
-export function positionOptions(tags, parentId, movingId) {
+export function positionOptions(tags: Tag[], parentId: number | null, movingId: number): RawHtml {
   return html`${[html`<option value="">At beginning</option>`, ...getChildrenOf(tags, parentId).filter(t => t.id !== movingId).map(s => html`<option value="${s.id}">After "${s.name}"</option>`)]}`;
 }
 
@@ -75,7 +88,7 @@ export function positionOptions(tags, parentId, movingId) {
  * a run where four calls 4xx'd is the only thing the user would ever see, and
  * nothing later corrects it.
  */
-export function bulkOutcome(done, total, successMessage) {
+export function bulkOutcome(done: number, total: number, successMessage: (count: number) => string): BulkOutcome {
   const failed = total - done;
   return failed === 0 ? {
     message: successMessage(done),
@@ -87,7 +100,7 @@ export function bulkOutcome(done, total, successMessage) {
 }
 
 /** "1 tag" / "3 tags" — the plural these flows repeat in every message. */
-export function pluralTags(n) {
+export function pluralTags(n: number): string {
   return `${n} tag${n === 1 ? '' : 's'}`;
 }
 
@@ -102,14 +115,17 @@ export function pluralTags(n) {
  * rethrown — the point of the flow is that one bad id does not abandon the
  * rest of the selection.
  *
- * @param {number[]} ids
- * @param {(id:number)=>Promise} op
- * @param {(count:number)=>string} successMessage  Called with the done count.
- * @param {{onDone?: Function}} [opts]  Run after the toast, failures included.
+ * @param ids
+ * @param op
+ * @param successMessage  Called with the done count.
+ * @param opts  Run after the toast, failures included.
  */
-export async function runBulk(ids, op, successMessage, {
-  onDone
-} = {}) {
+export async function runBulk(
+  ids: number[],
+  op: (id: number) => Promise<unknown>,
+  successMessage: (count: number) => string,
+  { onDone }: { onDone?: () => void } = {},
+): Promise<void> {
   let done = 0;
   for (const id of ids) {
     try {
@@ -128,7 +144,7 @@ export function bulkVisibility({
   ids,
   hidden,
   onDone
-}) {
+}: { ids: number[]; hidden: boolean; onDone?: () => void }): Promise<void> {
   return runBulk(ids, id => patchTag(id, {
     hidden
   }), n => `${pluralTags(n)} marked ${hidden ? 'hidden' : 'visible'}.`, {
@@ -146,7 +162,7 @@ export function bulkDelete({
   ids,
   confirm,
   onDone
-}) {
+}: { ids: number[]; confirm: ConfirmFn; onDone?: () => void }): void {
   confirm('Delete tags', `Delete ${pluralTags(ids.length)}? Posts will NOT be deleted.`, 'Delete', 'danger', () => runBulk(ids, id => deleteTag(id), n => `${pluralTags(n)} deleted.`, {
     onDone
   }));
@@ -163,7 +179,7 @@ export function openBulkMoveDialog({
   tags,
   ids,
   onDone
-}) {
+}: { tags: Tag[]; ids: number[]; onDone?: () => void }): { overlay: HTMLDivElement; close: () => void } | null {
   if (!ids.length) return null;
   const available = candidateTags(tags, ids);
   if (!available.length) {
@@ -214,7 +230,7 @@ export function openMergeDialog({
   tags,
   loserId,
   onDone
-}) {
+}: { tags: Tag[]; loserId: number; onDone?: () => void }): { overlay: HTMLDivElement; close: () => void } | null {
   const loser = tags.find(t => t.id === loserId);
   if (!loser) return null;
   return openTagPickerDialog({
@@ -250,7 +266,7 @@ export function openMergeDialog({
       message: 'Select a destination tag first.',
       type: 'error'
     }),
-    collect: overlay => overlay.querySelector('#tm-merge-redirect').checked,
+    collect: overlay => (overlay.querySelector('#tm-merge-redirect') as HTMLInputElement).checked,
     onConfirm: async (winnerId, keepRedirect) => {
       try {
         await mergeTags(loserId, {
@@ -280,8 +296,7 @@ export function openMergeDialog({
  * parentsWith), and moveTag then orders it within that parent's children.
  * moveTag alone would order a tag into a group it does not belong to.
  *
- * @param {{ tags: import('../../../api/tags.ts').Tag[], tagId: number, contextParentId: number|null,
- *           onDone: () => void }} options  `contextParentId` is the parent
+ * @param options  `contextParentId` is the parent
  *   whose branch the user clicked Move… under; preselected, and the group
  *   whose positions are offered first.
  */
@@ -290,7 +305,9 @@ export function openMoveDialog({
   tagId,
   contextParentId,
   onDone
-}) {
+}: {
+  tags: Tag[]; tagId: number; contextParentId: number | null; onDone?: () => void;
+}): { overlay: HTMLDivElement; close: () => void } | null {
   const tag = tags.find(t => t.id === tagId);
   if (!tag) return null;
   return openTagPickerDialog({
@@ -321,13 +338,14 @@ export function openMoveDialog({
     onMount: overlay => {
       // Re-offer positions whenever the chosen parent changes.
       overlay.querySelector('.tm-picker-list').addEventListener('change', e => {
-        if (e.target.name === 'tm-move-parent') {
-          setHTML(overlay.querySelector('.tm-move-position-select'), html`${positionOptions(tags, parseInt(e.target.value, 10), tagId)}`);
+        const input = e.target as HTMLInputElement;
+        if (input.name === 'tm-move-parent') {
+          setHTML(overlay.querySelector('.tm-move-position-select'), html`${positionOptions(tags, parseInt(input.value, 10), tagId)}`);
         }
       });
     },
     collect: overlay => {
-      const raw = overlay.querySelector('.tm-move-position-select').value;
+      const raw = (overlay.querySelector('.tm-move-position-select') as HTMLSelectElement).value;
       return raw ? parseInt(raw, 10) : null;
     },
     onConfirm: async (parentId, afterId) => {
@@ -366,7 +384,9 @@ export function openDropOnConfirm({
   dragId,
   targetId,
   onDone
-}) {
+}: {
+  tags: Tag[]; dragId: number; targetId: number; onDone?: () => void;
+}): { overlay: HTMLDivElement; close: () => void } | null {
   const drag = tags.find(t => t.id === dragId);
   const target = tags.find(t => t.id === targetId);
   if (!drag || !target) return null;

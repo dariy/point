@@ -16,16 +16,17 @@
  */
 
 import { html, setHTML } from '../../../utils/helpers.ts';
+import type { RawHtml } from '../../../utils/helpers.ts';
 
 /**
  * Create an active modal overlay, append it to <body>, and wire the two
  * dismissals every dialog here shares: the × button (if the markup has one)
  * and a click on the backdrop itself.
  *
- * @param {import('../../../utils/helpers.ts').RawHtml} modalHtml  built with html``
+ * @param modalHtml  built with html``
  * Returns { overlay, close }. Callers wire their own buttons to `close`.
  */
-export function openOverlay(modalHtml) {
+export function openOverlay(modalHtml: RawHtml): { overlay: HTMLDivElement; close: () => void } {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay active';
   setHTML(overlay, html`${modalHtml}`);
@@ -38,39 +39,58 @@ export function openOverlay(modalHtml) {
   return { overlay, close };
 }
 
+/** The options of openTagPickerDialog. */
+export interface TagPickerOptions<T = unknown, E = unknown> {
+  /** Header text. html`` output goes in as markup; a plain string is escaped. */
+  title: RawHtml | string;
+  /** Modal variant class. */
+  modalClass: string;
+  /** Choices, already filtered and ordered. */
+  tags: T[];
+  /** name= shared by the radio group. */
+  radioName: string;
+  /** tag => item markup from html`` (must carry itemClass/nameClass). */
+  renderItem: (tag: T) => RawHtml;
+  /** Selector the search box shows/hides. */
+  itemClass: string;
+  /** Element inside an item holding its searchable text. */
+  nameClass: string;
+  /** Wrapper around the items. */
+  listClass: string;
+  /** The search input. */
+  searchClass: string;
+  /** Markup above the search box. */
+  beforeList?: RawHtml | '';
+  /** Markup below the list. */
+  afterList?: RawHtml | '';
+  /** Cancel button id. */
+  cancelId: string;
+  /** Confirm button id. */
+  confirmId: string;
+  /** Confirm button text. */
+  confirmLabel: string;
+  /** (overlay) => extras, read BEFORE the close. */
+  collect?: (overlay: HTMLDivElement) => E;
+  /** (selectedId, extras) => void, run AFTER the close. */
+  onConfirm: (selectedId: number, extras: E | undefined) => unknown;
+  /** Called instead when nothing is selected. */
+  onEmpty: () => void;
+  /** (overlay, close) => void, for extra controls. */
+  onMount?: (overlay: HTMLDivElement, close: () => void) => void;
+}
+
 /**
  * A searchable single-choice list of tags in a modal.
  *
- * @param {object}   opts
- * @param {import('../../../utils/helpers.ts').RawHtml|string} opts.title
- *   Header text. html`` output goes in as markup; a plain string is escaped.
- * @param {string}   opts.modalClass     Modal variant class.
- * @param {Array}    opts.tags           Choices, already filtered and ordered.
- * @param {string}   opts.radioName      name= shared by the radio group.
- * @param {(tag: any) => import('../../../utils/helpers.ts').RawHtml} opts.renderItem
- *   tag => item markup from html`` (must carry itemClass/nameClass).
- * @param {string}   opts.itemClass      Selector the search box shows/hides.
- * @param {string}   opts.nameClass      Element inside an item holding its searchable text.
- * @param {string}   opts.listClass      Wrapper around the items.
- * @param {string}   opts.searchClass    The search input.
- * @param {import('../../../utils/helpers.ts').RawHtml} [opts.beforeList]  markup above the search box.
- * @param {import('../../../utils/helpers.ts').RawHtml} [opts.afterList]   markup below the list.
- * @param {string}   opts.cancelId       Cancel button id.
- * @param {string}   opts.confirmId      Confirm button id.
- * @param {string}   opts.confirmLabel   Confirm button text.
- * @param {Function} [opts.collect]      (overlay) => extras, read BEFORE the close.
- * @param {Function} opts.onConfirm      (selectedId, extras) => void, run AFTER the close.
- * @param {Function} opts.onEmpty        Called instead when nothing is selected.
- * @param {Function} [opts.onMount]      (overlay, close) => void, for extra controls.
- * @returns {{overlay: Element, close: Function}}
+ * @param opts  See TagPickerOptions.
  */
-export function openTagPickerDialog({
+export function openTagPickerDialog<T, E = unknown>({
   title, modalClass, tags, radioName, renderItem,
   itemClass, nameClass, listClass, searchClass,
   beforeList = '', afterList = '',
   cancelId, confirmId, confirmLabel,
   collect, onConfirm, onEmpty, onMount,
-}) {
+}: TagPickerOptions<T, E>): { overlay: HTMLDivElement; close: () => void } {
   const items = tags.map(renderItem);
 
   const { overlay, close } = openOverlay(html`
@@ -94,7 +114,7 @@ export function openTagPickerDialog({
   overlay.querySelector(`#${cancelId}`).addEventListener('click', close);
 
   overlay.querySelector(`.${searchClass}`).addEventListener('input', e => {
-    const q = e.target.value.trim().toLowerCase();
+    const q = (e.target as HTMLInputElement).value.trim().toLowerCase();
     overlay.querySelectorAll(`.${itemClass}`).forEach(item => {
       const name = item.querySelector(`.${nameClass}`)?.textContent.toLowerCase() || '';
       item.classList.toggle('hidden', q !== '' && !name.includes(q));
@@ -102,8 +122,7 @@ export function openTagPickerDialog({
   });
 
   overlay.querySelector(`#${confirmId}`).addEventListener('click', async () => {
-    const radio = /** @type {HTMLInputElement|null} */ (
-      overlay.querySelector(`input[name="${radioName}"]:checked`));
+    const radio = overlay.querySelector(`input[name="${radioName}"]:checked`) as HTMLInputElement | null;
     if (!radio) {
       onEmpty();
       return;

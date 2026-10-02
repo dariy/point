@@ -10,9 +10,11 @@
  */
 
 import { html, raw } from '../../../utils/helpers.ts';
+import type { RawHtml } from '../../../utils/helpers.ts';
+import type { TreeTag } from './TagTreeView.ts';
 
 /** The tag's slug rule: lowercase, punctuation dropped, spaces to dashes. */
-export function slugifyTagName(text) {
+export function slugifyTagName(text: string): string {
   return text.toLowerCase()
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_]+/g, '-')
@@ -27,9 +29,9 @@ export function slugifyTagName(text) {
  * the "+" was clicked on, if any. The page keeps a copy to diff against on
  * save, which is why this is separate from the rendering.
  */
-export function tagEditorSelection(tag, parentId) {
+export function tagEditorSelection(tag: TreeTag | null, parentId: number | null): { selParents: number[]; selChildren: number[] } {
   const isEdit = !!tag;
-  const f = tag || {};
+  const f = tag || ({} as Partial<TreeTag>);
   return {
     selParents: isEdit ? (f.parents || []).map(p => p.id) : (parentId ? [parentId] : []),
     selChildren: isEdit ? (f.children || []).map(c => c.id) : [],
@@ -37,9 +39,11 @@ export function tagEditorSelection(tag, parentId) {
 }
 
 /** The whole modal, as a string. `allTags` populates the structure pickers. */
-export function renderTagEditorForm({ tag = null, parentId = null, allTags = [] } = {}) {
+export function renderTagEditorForm(
+  { tag = null, parentId = null, allTags = [] }: { tag?: TreeTag | null; parentId?: number | null; allTags?: TreeTag[] } = {},
+): RawHtml {
   const isEdit = !!tag;
-  const f = tag || {};
+  const f = tag || ({} as Partial<TreeTag>);
   const selfId = isEdit ? f.id : null;
   const { selParents, selChildren } = tagEditorSelection(tag, parentId);
 
@@ -184,7 +188,7 @@ const _html = [
   return raw(_html.join('\n'));
 }
 
-export function renderVisibilitySection(f) {
+export function renderVisibilitySection(f: Partial<TreeTag>): RawHtml {
   const isEffectivelyHidden = f.effective_hidden && !f.hidden;
   const hiddenViaAncestor = isEffectivelyHidden && f.hidden_via
     ? html`<span class="tm-inherited-chip">inherited — <button type="button" class="tm-badge-via-btn" data-open-tag-id="${f.hidden_via}">change at ancestor</button></span>`
@@ -207,14 +211,14 @@ export function renderVisibilitySection(f) {
 
 
 /** Render tag-badge toggle checkboxes for parent/children selection. */
-export function renderTagToggles(inputName, allTags, selfId, selectedIds) {
+export function renderTagToggles(inputName: string, allTags: TreeTag[], selfId: number | null, selectedIds: number[]): RawHtml | string {
   const available = allTags.filter(t => t.id !== selfId);
   if (!available.length) return '<span class="tag-toggles-empty">No other tags available.</span>';
 
   const selectedSet = new Set(selectedIds);
   const treeById = new Map(available.map(t => [t.id, t]));
 
-  const childrenOf = new Map();
+  const childrenOf = new Map<number, TreeTag[]>();
   available.forEach(t => {
     (t.parents || []).forEach(p => {
       if (treeById.has(p.id)) {
@@ -233,9 +237,9 @@ export function renderTagToggles(inputName, allTags, selfId, selectedIds) {
       return a.name.localeCompare(b.name);
     });
 
-  const hasCheckedDesc = new Set();
-  const visiting = new Set();
-  const markDesc = (id) => {
+  const hasCheckedDesc = new Set<number>();
+  const visiting = new Set<number>();
+  const markDesc = (id: number): boolean => {
     if (visiting.has(id)) return selectedSet.has(id);
     visiting.add(id);
     let anyChecked = selectedSet.has(id);
@@ -245,8 +249,8 @@ export function renderTagToggles(inputName, allTags, selfId, selectedIds) {
   };
   roots.forEach(r => markDesc(r.id));
 
-  const rendered = new Set();
-  const renderNode = (t, level) => {
+  const rendered = new Set<number>();
+  const renderNode = (t: TreeTag, level: number): RawHtml | '' => {
     if (rendered.has(t.id)) return '';
     rendered.add(t.id);
     const kids = (childrenOf.get(t.id) || [])
