@@ -77,6 +77,9 @@ export interface GridPagination {
   min_page?: number;
 }
 
+/** Which neighbouring page a ghost holds. */
+type Dir = 'prev' | 'next';
+
 /** A preloaded neighbour page, parked off-screen. */
 interface PageGhost {
   page: number;
@@ -86,37 +89,37 @@ interface PageGhost {
 
 export class GridPager {
   _o: GridPagerOptions;
-  _pageGhosts: { prev: PageGhost | null, next: PageGhost | null };
+  _pageGhosts: Record<Dir, PageGhost | null>;
   /**
    * Media URLs already prefetched, so a repaint of the same page does not
    * queue them a second time.
    */
   _warmedMedia: Set<string>|null;
-  _pagination: GridPagination;
-  _seamlessSwipe: boolean;
-  _committedGhost: HTMLElement | null;
-  _peekGhost: HTMLElement | null;
-  _ghostVersion: number;
-  _gesture: GestureController | null;
-  _trackpad: TrackpadDetector | null;
-  _touchEl: HTMLElement | null;
-  _onTouchDown: () => void;
-  _onKeyNav: ((e: KeyboardEvent) => void) | null;
-  _navArrows: HTMLButtonElement[] | null;
-  _stride: number | null;
-  _pageNavPending: boolean;
-  _pageNavWatchdog: ReturnType<typeof setTimeout>;
-  _pinchAccum: number;
-  _zoomCommitTimer: ReturnType<typeof setTimeout>;
-  _wheelAccum: number;
-  _gestureScale: number;
-  _onZoomRequest: ((e: CustomEvent) => void) | null;
-  _onZoomKey: ((e: KeyboardEvent) => void) | null;
-  _onZoomWheel: ((e: WheelEvent) => void) | null;
-  _onGestureStart: (e: Event) => void;
-  _onGestureChange: (e: SafariGestureEvent) => void;
-  _onGestureEnd: (e: Event) => void;
-  _zoomWheelEl: HTMLElement | null;
+  _pagination: GridPagination = {};
+  _seamlessSwipe?: boolean;
+  _committedGhost: HTMLElement | null = null;
+  _peekGhost: HTMLElement | null = null;
+  _ghostVersion = 0;
+  _gesture: GestureController | null = null;
+  _trackpad: TrackpadDetector | null = null;
+  _touchEl: HTMLElement | null = null;
+  _onTouchDown: () => void = () => {};
+  _onKeyNav: ((e: KeyboardEvent) => void) | null = null;
+  _navArrows: HTMLButtonElement[] | null = null;
+  _stride: number | null = null;
+  _pageNavPending = false;
+  _pageNavWatchdog?: ReturnType<typeof setTimeout>;
+  _pinchAccum = 1;
+  _zoomCommitTimer?: ReturnType<typeof setTimeout>;
+  _wheelAccum = 0;
+  _gestureScale = 1;
+  _onZoomRequest: ((e: Event) => void) | null = null;
+  _onZoomKey: ((e: KeyboardEvent) => void) | null = null;
+  _onZoomWheel: ((e: WheelEvent) => void) | null = null;
+  _onGestureStart: (e: Event) => void = () => {};
+  _onGestureChange: (e: Event) => void = () => {};
+  _onGestureEnd: (e: Event) => void = () => {};
+  _zoomWheelEl: HTMLElement | null = null;
 
   constructor(opts: GridPagerOptions) {
     this._o = {
@@ -138,7 +141,7 @@ export class GridPager {
    */
   static minPage(pagination: GridPagination): number {
     const m = pagination?.minPage ?? pagination?.min_page;
-    return Number.isInteger(m) && m < 1 ? m : 1;
+    return typeof m === 'number' && Number.isInteger(m) && m < 1 ? m : 1;
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -241,22 +244,23 @@ export class GridPager {
     if (!root) return;
     const pag = this._pagination;
     const vw = () => window.innerWidth || 500;
-    const atEnd = () => pag.page >= pag.pages;
-    const atStart = () => pag.page <= GridPager.minPage(pag);
+    const page = () => pag.page ?? 1;
+    const atEnd = () => page() >= (pag.pages ?? 1);
+    const atStart = () => page() <= GridPager.minPage(pag);
     this._gesture = new GestureController(root, {
       // Engage the drag a touch sooner than the immersive default so the grid
       // starts tracking the finger promptly instead of feeling laggy.
       commitThresholdPx: 8,
-      onPinchMove: this._o.zoom ? scaleDelta => this._pinchStep(scaleDelta) : undefined,
+      onPinchMove: this._o.zoom ? (scaleDelta: number) => this._pinchStep(scaleDelta) : undefined,
       onPinchEnd: this._o.zoom ? () => this._onPinchEnd() : undefined,
-      onSwipeMove: (dx, dy) => {
+      onSwipeMove: (dx: number, dy: number) => {
         // A commit is already animating to the next page; ignore new drags until
         // it settles so a second commit can't orphan the first's ghost overlay.
         if (this._pageNavPending) return;
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const gridMount = this._o.gridMount();
         if (!gridMount) return;
-        const dir = dx < 0 ? 'next' : 'prev';
+        const dir: Dir = dx < 0 ? 'next' : 'prev';
         const blocked = dir === 'next' && atEnd() || dir === 'prev' && atStart();
         const tx = blocked ? rubberBand(dx) : dx;
         const ratio = Math.abs(tx) / vw();
@@ -287,7 +291,7 @@ export class GridPager {
         }
       },
       onSwipeCancel: () => this._resetGridSwipe(),
-      onSwipeCommit: dir => {
+      onSwipeCommit: (dir: string) => {
         // Only horizontal swipes paginate; a vertical one is a page scroll, and
         // is forwarded for whatever page-level mode wants it (see below).
         if (dir === 'up' || dir === 'down') return this._emitVerticalSwipe(dir);
@@ -302,9 +306,9 @@ export class GridPager {
       }
     });
     this._trackpad = new TrackpadDetector(root, {
-      onHorizontal: dir => {
+      onHorizontal: (dir: string) => {
         if (this._pageNavPending) return;
-        if (dir === 'left' && pag.page < pag.pages) this._o.gotoPage(pag.page + 1);else if (dir === 'right' && pag.page > GridPager.minPage(pag)) this._o.gotoPage(pag.page - 1);
+        if (dir === 'left' && !atEnd()) this._o.gotoPage(page() + 1);else if (dir === 'right' && !atStart()) this._o.gotoPage(page() - 1);
       }
     });
 
@@ -336,7 +340,7 @@ export class GridPager {
    * and nothing else. (The gesture layer deliberately doesn't preventDefault a
    * vertical drag, so the browser scrolls in parallel either way.)
    */
-  _emitVerticalSwipe(dir) {
+  _emitVerticalSwipe(dir: 'up' | 'down') {
     const y = window.scrollY || 0;
     const atTop = y <= 2;
     const atBottom = y + window.innerHeight >= document.documentElement.scrollHeight - 2;
@@ -355,12 +359,13 @@ export class GridPager {
   _setupPageControls() {
     const pag = this._pagination;
     const pages = pag.pages || 1;
+    const page = pag.page ?? 1;
     const minPage = GridPager.minPage(pag);
     const goPrev = () => {
-      if (pag.page > minPage) this._o.gotoPage(pag.page - 1);
+      if (page > minPage) this._o.gotoPage(page - 1);
     };
     const goNext = () => {
-      if (pag.page < pages) this._o.gotoPage(pag.page + 1);
+      if (page < pages) this._o.gotoPage(page + 1);
     };
     this._onKeyNav = e => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -378,7 +383,7 @@ export class GridPager {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
-    const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const CHEVRON = (d: string) => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     const arrowSpecs: Array<[string, () => void, string, string]> = [
       ['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
       ['next', goNext, 'Next page', 'M9 18l6-6-6-6'],
@@ -389,7 +394,7 @@ export class GridPager {
       b.className = `page-nav-arrow page-nav-${dir}`;
       b.setAttribute('aria-label', label);
       setHTML(b, html`${CHEVRON(d)}`);
-      b.disabled = dir === 'prev' ? pag.page <= minPage : pag.page >= pages;
+      b.disabled = dir === 'prev' ? page <= minPage : page >= pages;
       b.addEventListener('click', go);
       document.body.appendChild(b);
       return b;
@@ -408,7 +413,7 @@ export class GridPager {
   // timeline plugin documents), so the zoom would appear frozen after one step.
 
   /** Accumulate incremental pinch scale and step a column once it crosses ±40%. */
-  _pinchStep(scaleDelta) {
+  _pinchStep(scaleDelta: number) {
     this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
     if (this._pinchAccum > 1.4) {
       this._zoomBy(-1);
@@ -425,8 +430,8 @@ export class GridPager {
   }
 
   /** Apply a ±1 column zoom step: instant CSS re-flow, deferred per_page refit. */
-  _zoomBy(delta) {
-    const grid = this._o.gridMount()?.querySelector('.posts-grid');
+  _zoomBy(delta: number) {
+    const grid = this._o.gridMount()?.querySelector<HTMLElement>('.posts-grid');
     if (!grid) return;
     // CSS-only: pins columns + rows + squares cards, no remount. Both halves of
     // the new geometry go inside the FLIP so the cards glide into it rather
@@ -449,7 +454,7 @@ export class GridPager {
    * refit clears the marks (PostGrid.reconcile), so nothing stays hidden if it
    * turns out to fit after all.
    */
-  _trimToCapacity(grid) {
+  _trimToCapacity(grid: HTMLElement) {
     const capacity = zoomCapacity();
     if (!capacity) return;
     grid.querySelectorAll('.post-card-slot').forEach((slot, i) => {
@@ -469,7 +474,8 @@ export class GridPager {
     document.body.classList.add('grid-zoomable');
     // Footer slider sets an absolute column count; commit is debounced here
     // like every other zoom path.
-    this._onZoomRequest = e => {
+    this._onZoomRequest = ev => {
+      const e = ev as CustomEvent<{ cols?: number } | undefined>;
       const grid = (
         this._o.gridMount()?.querySelector('.posts-grid') ?? null
       ) as HTMLElement | null;
@@ -515,7 +521,8 @@ export class GridPager {
       e.preventDefault();
       this._gestureScale = 1;
     };
-    this._onGestureChange = e => {
+    this._onGestureChange = ev => {
+      const e = ev as SafariGestureEvent;
       e.preventDefault();
       const rel = e.scale / (this._gestureScale || 1);
       if (rel > 1.4) {
@@ -532,7 +539,8 @@ export class GridPager {
       this._commitZoom();
     };
     this._zoomWheelEl = this._o.gestureRoot();
-    this._zoomWheelEl?.addEventListener('wheel', this._onZoomWheel, {
+    const onWheel = this._onZoomWheel;
+    this._zoomWheelEl?.addEventListener('wheel', onWheel, {
       passive: false
     });
     this._zoomWheelEl?.addEventListener('gesturestart', this._onGestureStart, {
@@ -551,7 +559,7 @@ export class GridPager {
     this._onZoomRequest = null;
     if (this._onZoomKey) window.removeEventListener('keydown', this._onZoomKey);
     if (this._zoomWheelEl) {
-      this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
+      if (this._onZoomWheel) this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
       this._zoomWheelEl.removeEventListener('gesturestart', this._onGestureStart);
       this._zoomWheelEl.removeEventListener('gesturechange', this._onGestureChange);
       this._zoomWheelEl.removeEventListener('gestureend', this._onGestureEnd);
@@ -578,7 +586,7 @@ export class GridPager {
   // ── Adjacent-page preloading + swipe peek ──────────────────────────────────
 
   /** The preloaded ghost grid element for a drag direction, if ready. */
-  _pageGhost(dir) {
+  _pageGhost(dir: Dir) {
     return this._pageGhosts?.[dir]?.el || null;
   }
 
@@ -612,7 +620,7 @@ export class GridPager {
   _belowGridGrowth(page: number): number {
     const mounts = ['#pagination-mount', '#footer-mount']
       .map(sel => document.querySelector(sel))
-      .filter(Boolean);
+      .filter((m): m is Element => m !== null);
     // The copy that is actually laid out; the other one is display:none and
     // measures 0, which is also what an unpaginated view measures.
     const live = [...(document.querySelectorAll?.(
@@ -639,7 +647,7 @@ export class GridPager {
     const display = live.style.display;
     try {
       live.style.display = 'none';
-      live.parentElement.appendChild(probe);
+      live.parentElement?.appendChild(probe);
       return band() - before;
     } finally {
       probe.remove();
@@ -672,7 +680,7 @@ export class GridPager {
     const height = liveGrid.offsetHeight;
     const top = liveGrid.offsetTop;
     if (!height) return;
-    for (const dir of ['prev', 'next']) {
+    for (const dir of ['prev', 'next'] as const) {
       const ghost = this._pageGhosts?.[dir];
       if (!ghost?.el) continue;
       ghost.el.style.height = `${Math.max(0, height - (ghost.growth || 0))}px`;
@@ -720,7 +728,7 @@ export class GridPager {
     const liveGrid = this._o.gridMount();
     const container = liveGrid?.parentElement;
     const minPage = GridPager.minPage(pag);
-    if (!container || !pag || pag.pages - minPage < 1) return;
+    if (!liveGrid || !container || !pag || (pag.pages ?? 1) - minPage < 1) return;
     // The live grid stretches its cards to fill the viewport when content is
     // short (grid-expand). The ghost sits outside that flex, so pin it to the
     // live grid's box — height, and the offset of the grid within the container,
@@ -728,9 +736,9 @@ export class GridPager {
     const gridHeight = liveGrid.offsetHeight;
     const gridTop = liveGrid.offsetTop;
     const version = this._ghostVersion = (this._ghostVersion || 0) + 1;
-    const build = async dir => {
-      const page = dir === 'next' ? pag.page + 1 : pag.page - 1;
-      if (page < minPage || page > pag.pages) return;
+    const build = async (dir: Dir) => {
+      const page = dir === 'next' ? (pag.page ?? 1) + 1 : (pag.page ?? 1) - 1;
+      if (page < minPage || page > (pag.pages ?? 1)) return;
       // The box the *destination* page gets, though, is the live one minus
       // whatever its own paginator takes on top of the current one. Measured
       // here, before the slide, so the incoming cards are laid out once at the
@@ -794,8 +802,8 @@ export class GridPager {
    * Videos are warmed too, and for the same reason: a card paints a video's
    * poster frame through the same ladder, so it is an image like any other.
    */
-  _warmGridMedia(posts) {
-    const urls = posts.map(p => p && p.media_url).filter(Boolean);
+  _warmGridMedia(posts: Post[]) {
+    const urls = posts.map(p => p && p.media_url).filter((u): u is string => !!u);
     if (!urls.length) return;
     const sizes = cardImageSizes();
     const warm = () => {
@@ -823,7 +831,7 @@ export class GridPager {
   }
 
   /** Build static grid markup (real cards, no listeners) for a ghost preview. */
-  _buildGridHtml(posts, page) {
+  _buildGridHtml(posts: Post[], page: number) {
     if (!posts.length) return this._o.emptyHtml;
     const settings: Record<string, any> = getSettings() || {};
     const heroIndex = posts.findIndex(p => p.is_featured);
@@ -847,7 +855,7 @@ export class GridPager {
   /** Remove the off-screen ghost grids and invalidate any in-flight preload. */
   _clearPageGhosts() {
     this._ghostVersion = (this._ghostVersion || 0) + 1;
-    for (const dir of ['prev', 'next']) {
+    for (const dir of ['prev', 'next'] as const) {
       this._pageGhosts[dir]?.el?.remove();
       this._pageGhosts[dir] = null;
     }
@@ -855,7 +863,7 @@ export class GridPager {
   }
 
   /** Snap a ghost peeking from the wrong side back off-screen instantly. */
-  _clearOtherPeek(dir) {
+  _clearOtherPeek(dir: Dir) {
     const g = this._peekGhost;
     if (g && g.dataset.edge !== dir) {
       const stride = this._cachedStride();
@@ -907,10 +915,10 @@ export class GridPager {
    * it — the new page's real grid mounts beneath the ghost and the ghost is
    * dropped, so the motion flows unbroken with no reload blink.
    */
-  _commitPageSwipe(dir) {
+  _commitPageSwipe(dir: Dir) {
     const pag = this._pagination;
     const ghost = this._pageGhost(dir);
-    const targetPage = dir === 'next' ? pag.page + 1 : pag.page - 1;
+    const targetPage = dir === 'next' ? (pag.page ?? 1) + 1 : (pag.page ?? 1) - 1;
 
     // Lock out further swipes until the new grid mounts (or the watchdog fires).
     // Without this, a second commit during the ~280ms hand-off overwrites

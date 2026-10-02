@@ -81,9 +81,17 @@ export interface GestureOptions {
   directionRatio?: number;
 }
 
+type GestureCallback =
+  | "onSwipeMove" | "onSwipeCommit" | "onSwipeCancel" | "onPanMove" | "onPinchMove"
+  | "onPinchEnd" | "onTap" | "onDoubleTap" | "onTwoFingerTap";
+
+type GestureDefaults =
+  | "swipeThresholdPx" | "commitThresholdPx" | "edgeIgnorePx" | "doubleTapMs"
+  | "tapMovePx" | "directionRatio";
+
 export class GestureController {
   _el: HTMLElement;
-  _opts: GestureOptions;
+  _opts: GestureOptions & Required<Pick<GestureOptions, GestureDefaults>>;
   _state: string;
   _zoomed: boolean;
   _startX: number;
@@ -142,7 +150,7 @@ export class GestureController {
     element.addEventListener("click", this._onClick, true);
   }
 
-  _onClick(e) {
+  _onClick(e: MouseEvent) {
     if (this._swallowClick) {
       e.stopPropagation();
       e.preventDefault();
@@ -150,36 +158,38 @@ export class GestureController {
   }
 
   /** Call this whenever the consumer's zoom state changes. */
-  setZoomed(zoomed) {
+  setZoomed(zoomed: boolean) {
     this._zoomed = zoomed;
   }
 
-  _emit(name, ...args) {
-    if (typeof this._opts[name] === "function") this._opts[name](...args);
+  _emit(name: GestureCallback, ...args: unknown[]) {
+    const fn = this._opts[name];
+    if (typeof fn === "function") fn(...args);
   }
 
-  _dist(touches) {
+  _dist(touches: TouchList) {
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  _center(touches) {
+  _center(touches: TouchList) {
     return {
       x: (touches[0].clientX + touches[1].clientX) / 2,
       y: (touches[0].clientY + touches[1].clientY) / 2,
     };
   }
 
-  _onStart(e) {
+  _onStart(e: TouchEvent) {
     if (e.touches.length === 1) {
+      const target = e.target as Element;
       // Ignore touches starting in a scrollable tags bar, or in any region the
       // consumer opts out of via `ignoreSelector` (e.g. a swipe-to-reveal row
       // that owns its own horizontal gesture and must not also close a drawer).
       if (
-        e.target.closest(".tag-strip-scroll") ||
-        e.target.closest(".post-card-tags") ||
-        (this._opts.ignoreSelector && e.target.closest(this._opts.ignoreSelector))
+        target.closest(".tag-strip-scroll") ||
+        target.closest(".post-card-tags") ||
+        (this._opts.ignoreSelector && target.closest(this._opts.ignoreSelector))
       ) {
         this._state = STATE.IDLE;
         return;
@@ -208,7 +218,7 @@ export class GestureController {
     }
   }
 
-  _onMove(e) {
+  _onMove(e: TouchEvent) {
     // Two-finger pinch
     if (
       e.touches.length === 2 &&
@@ -279,7 +289,7 @@ export class GestureController {
     }
   }
 
-  _onEnd(e) {
+  _onEnd(e: TouchEvent) {
     const state = this._state;
     this._state = STATE.IDLE;
 
@@ -416,13 +426,14 @@ export class TrackpadDetector {
     element.addEventListener("wheel", this._onWheel, { passive: true });
   }
 
-  _onWheel(e) {
+  _onWheel(e: WheelEvent) {
+    const target = e.target as Element;
     const now = Date.now();
     if (now - this._lastFired < this.cooldownMs) return;
     // Ignore events in the scrollable tags bar
     if (
-      e.target.closest(".tag-strip-scroll") ||
-      e.target.closest(".post-card-tags")
+      target.closest(".tag-strip-scroll") ||
+      target.closest(".post-card-tags")
     )
       return;
     const absDx = Math.abs(e.deltaX);

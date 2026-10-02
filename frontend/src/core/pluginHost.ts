@@ -108,7 +108,7 @@ class PluginHost {
   }
 
   /** Whether plugin `id` is present in the enabled-only manifest. */
-  isEnabled(id) {
+  isEnabled(id: string) {
     return this._byId.has(id);
   }
 
@@ -117,18 +117,21 @@ class PluginHost {
    * entry without `entry` is enabled but not yet extracted, so it does not claim
    * the slot — the shell keeps rendering it directly.
    */
-  slotEntries(slot) {
+  slotEntries(slot: string) {
     return (this._bySlot.get(slot) || []).filter((e) => e.entry);
   }
 
   /** Whether any built plugin chunk claims `slot`. */
-  hasSlot(slot) {
+  hasSlot(slot: string) {
     return this.slotEntries(slot).length > 0;
   }
 
   /** Lazily import a plugin chunk and its CSS, memoising the module promise per URL. */
-  _import(e) {
-    if (!this._loaded.has(e.entry)) {
+  _import(e: ManifestEntry): Promise<PluginModule> {
+    // Callers pass only entries with a built chunk, so `entry` is set.
+    const url = e.entry ?? "";
+    let p = this._loaded.get(url);
+    if (!p) {
       if (e.css && typeof document !== "undefined" && !document.querySelector(`link[href="${e.css}"]`)) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
@@ -136,17 +139,17 @@ class PluginHost {
         document.head.appendChild(link);
         if (DEBUG) log(`load css '${e.id}' →`, e.css);
       }
-      if (DEBUG) log(`import chunk '${e.id}' →`, e.entry);
-      let p = import(/* @vite-ignore */ e.entry);
+      if (DEBUG) log(`import chunk '${e.id}' →`, url);
+      p = import(/* @vite-ignore */ url) as Promise<PluginModule>;
       if (DEBUG) {
         p = p.catch((err) => {
           log.error(`chunk '${e.id}' failed to load:`, err);
           throw err;
         });
       }
-      this._loaded.set(e.entry, p);
+      this._loaded.set(url, p);
     }
-    return this._loaded.get(e.entry);
+    return p;
   }
 
   /**
@@ -155,10 +158,11 @@ class PluginHost {
    * mount results (e.g. component instances). A failing plugin is logged and
    * skipped — one broken plugin never blocks the rest of the page.
    */
-  async fill(slot, el, ctx = {}) {
+  async fill(slot: string, el: HTMLElement | null, ctx: object = {}) {
     const entries = this.slotEntries(slot);
     if (DEBUG && entries.length) log(`fill slot '${slot}' — ${entries.length} plugin(s):`, entries.map((e) => e.id).join(", "));
-    const out = [];
+    // Mount results are whatever each plugin returns; callers know the shape.
+    const out: any[] = [];
     for (const e of entries) {
       try {
         const mod = await this._import(e);
@@ -187,7 +191,7 @@ class PluginHost {
    * Standard or Sheet immersive plugin. Returns the mount result, or null when no
    * claimant has a chunk. A failing plugin is logged and yields null.
    */
-  async fillOne(slot, el, ctx = {}) {
+  async fillOne(slot: string, el: HTMLElement | null, ctx: object = {}) {
     const entries = this.slotEntries(slot);
     if (!entries.length) return null;
     const e = entries[0];
@@ -216,13 +220,14 @@ class PluginHost {
    * `comp.unmount()`), so the host can't see them otherwise. No-op when DEBUG is
    * false — the whole method is dead code that minification drops.
    */
-  _traceUnmount(result, id, slot) {
+  _traceUnmount(result: unknown, id: string, slot: string) {
     if (!result || typeof result !== "object") return;
+    const obj = result as Record<string, unknown>;
     for (const method of ["unmount", "destroy"]) {
-      const fn = result[method];
+      const fn = obj[method];
       if (typeof fn !== "function") continue;
       const orig = fn.bind(result);
-      result[method] = (...args) => {
+      obj[method] = (...args: unknown[]) => {
         log(`${method} '${id}' from slot '${slot}'`);
         return orig(...args);
       };
@@ -236,7 +241,7 @@ class PluginHost {
    * (`{ default: PageClass }`) or null when no claimant has a built chunk —
    * letting the caller fall back to a core module.
    */
-  async claimRoute(slot, choose) {
+  async claimRoute(slot: string, choose?: (entries: ManifestEntry[]) => ManifestEntry | undefined) {
     const entries = this.slotEntries(slot);
     if (!entries.length) return null;
     const e = choose ? choose(entries) : entries[0];
@@ -246,7 +251,7 @@ class PluginHost {
   }
 
   /** Import a route plugin's chunk module (`{ default: PageClass }`). */
-  loadEntry(entry) {
+  loadEntry(entry: ManifestEntry) {
     return this._import(entry);
   }
 
@@ -260,10 +265,10 @@ class PluginHost {
     // any `/light/` path — including slot plugins like nav-menu that also own an
     // admin page. The single-claim public slots are handled separately.
     const out = this._manifest.filter(
-      (e) => e.entry && !CLAIM_ROUTE_SLOTS.has(e.slot) && Array.isArray(e.routes) &&
+      (e) => e.entry && !CLAIM_ROUTE_SLOTS.has(e.slot ?? "") && Array.isArray(e.routes) &&
         e.routes.some((p) => p.startsWith("/light")),
     );
-    if (DEBUG && out.length) log("dynamic routes:", out.flatMap((e) => e.routes).join(", "));
+    if (DEBUG && out.length) log("dynamic routes:", out.flatMap((e) => e.routes ?? []).join(", "));
     return out;
   }
 }
