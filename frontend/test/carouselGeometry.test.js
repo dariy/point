@@ -1,5 +1,5 @@
 /**
- * carousel/geometry.js — the pure math behind the slide builder.
+ * carousel/geometry.ts — the pure math behind the slide builder.
  *
  * Every function is numbers in, plain objects out, so this file needs no DOM
  * and no canvas. The draw layer (a later bead) is a thin shim over these

@@ -275,7 +275,7 @@ type carouselTemplateSummary struct {
 }
 
 // carouselTemplateRequest carries slug and name beside the envelope even though
-// the envelope (toTemplate in document.js) holds an id and a name of its own.
+// the envelope (toTemplate in document.ts) holds an id and a name of its own.
 // Reading them out of the envelope would mean parsing it here, and the whole
 // point of the opaque contract is that Go never looks inside — so the caller
 // states them, they become columns, and the listing can name templates without

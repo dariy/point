@@ -1,7 +1,7 @@
 /**
  * Carousel Studio — the draw layer.
  *
- * Two sequencers over `geometry.js` behind one facade. `renderSplit` fetches a
+ * Two sequencers over `geometry.ts` behind one facade. `renderSplit` fetches a
  * single source and asks `sliceRects` for the columns; `renderDeck` walks a
  * deck document where every slide names its own source and crop and asks
  * `deckSlideRects` for its rect. Both then do the same thing per slide: decode
@@ -27,7 +27,7 @@
  * `VALIGN_SLACK`, `ALIGN_ANCHOR`, the mark colour and the font stack) are
  * exported rather than private, and so are `fontSpec` and `counterText`: this
  * module is the contract the studio's live preview has to match, and
- * `studio/preview.js` binds to these numbers instead of copying them. The
+ * `studio/preview.ts` binds to these numbers instead of copying them. The
  * dependency runs one way — the preview reads the render, never the reverse.
  */
 
@@ -73,7 +73,7 @@ export const TEXT_SHADOW = { color: 'rgba(0, 0, 0, 0.55)', blur: 0.16, offsetY: 
  *  photograph, and dark photographs are the common case. */
 export const DEFAULT_MARK_COLOR = '#ffffff';
 
-/** Black, matching `document.js`'s `DEFAULT_BG_COLOR` — a `rect` layer with no
+/** Black, matching `document.ts`'s `DEFAULT_BG_COLOR` — a `rect` layer with no
  *  usable fill is a scrim, and a scrim darkens. */
 const DEFAULT_RECT_FILL = '#000000';
 
@@ -97,38 +97,48 @@ export const ALIGN_ANCHOR = {
   right: (w) => w,
 };
 
-/**
- * @typedef {object} SliceOpts
- * @property {number} sx source crop x, whole pixels
- * @property {number} sy source crop y
- * @property {number} sw source crop width
- * @property {number} sh source crop height
- * @property {number} resizeWidth  target width — the slide column, so the blit is 1:1
- * @property {number} resizeHeight target height
- * @property {'pixelated'|'low'|'medium'|'high'} resizeQuality
- */
+export interface SliceOpts {
+  /** source crop x, whole pixels */
+  sx: number;
+  /** source crop y */
+  sy: number;
+  /** source crop width */
+  sw: number;
+  /** source crop height */
+  sh: number;
+  /** target width — the slide column, so the blit is 1:1 */
+  resizeWidth: number;
+  /** target height */
+  resizeHeight: number;
+  resizeQuality: 'pixelated' | 'low' | 'medium' | 'high';
+}
 
-/**
- * @typedef {object} RenderDeps
- * @property {(url: string) => Promise<Blob>} fetchBlob  same-origin GET of a content path
- * @property {(blob: Blob, opts: SliceOpts) => Promise<ImageBitmap>} decode  cropped + resized createImageBitmap
- * @property {(url: string) => Promise<{ w: number, h: number }>} probeSize  natural source pixel size
- * @property {(w: number, h: number) => { canvas: any, ctx: any }} makeSurface  a fresh canvas + 2D ctx
- * @property {(canvas: any, type: string, quality: number) => Promise<Blob|null>} encode  canvas.toBlob
- * @property {(file: File, meta: { post_id?: number }) => Promise<{ id: number, path: string }>} upload
- * @property {(id: number) => Promise<any>} deleteMedia  used only to unwind a partial upload failure
- * @property {() => Promise<string>} [resolveFont]  the active theme's font
- *   stack, awaited once per render before the first layer is painted. Optional:
- *   a deps object without one paints in {@link DEFAULT_FONT_STACK}.
- */
+export interface RenderDeps {
+  /** same-origin GET of a content path */
+  fetchBlob: (url: string) => Promise<Blob>;
+  /** cropped + resized createImageBitmap */
+  decode: (blob: Blob, opts: SliceOpts) => Promise<ImageBitmap>;
+  /** natural source pixel size */
+  probeSize: (url: string) => Promise<{ w: number, h: number }>;
+  /** a fresh canvas + 2D ctx */
+  makeSurface: (w: number, h: number) => { canvas: any, ctx: any };
+  /** canvas.toBlob */
+  encode: (canvas: any, type: string, quality: number) => Promise<Blob | null>;
+  upload: (file: File, meta: { post_id?: number }) => Promise<{ id: number, path: string }>;
+  /** used only to unwind a partial upload failure */
+  deleteMedia: (id: number) => Promise<any>;
+  /**
+   * the active theme's font stack, awaited once per render before the first layer is painted.
+   * Optional: a deps object without one paints in {@link DEFAULT_FONT_STACK}.
+   */
+  resolveFont?: () => Promise<string>;
+}
 
 /**
  * Browser-backed deps — the one place this module names `document`, `fetch`,
  * `Image`, `createImageBitmap` and the media API.
- *
- * @returns {RenderDeps}
  */
-export function browserDeps() {
+export function browserDeps(): RenderDeps {
   return {
     fetchBlob: async (url) => {
       const res = await fetch(url, { credentials: 'same-origin' });
@@ -176,11 +186,11 @@ export function browserDeps() {
  * only bites a caller that hands `paintSlide` a background no document ever
  * normalized — which then falls through to the default fill rather than
  * throwing out of `addColorStop` half way through an encode.
- *
- * @param {import('./document.ts').CarouselBg|null|undefined} bg
- * @returns {{angle: number, stops: Array<{at:number,color:string}>}|null}
  */
-function gradientFill(bg) {
+function gradientFill(bg: import('./document.ts').CarouselBg | null | undefined): {
+  angle: number;
+  stops: Array<{at:number,color:string}>;
+} | null {
   if (!bg || bg.type !== 'gradient') return null;
   const stops = Array.isArray(bg.stops) ? bg.stops : [];
   if (stops.length < 2) return null;
@@ -193,11 +203,11 @@ function gradientFill(bg) {
 /**
  * The CSS font shorthand for one line of layer type.
  *
- * @param {number} weight 1..1000, as the schema clamps it
- * @param {number} size canvas pixels
- * @param {string} family the resolved stack
+ * @param weight - 1..1000, as the schema clamps it
+ * @param size - canvas pixels
+ * @param family - the resolved stack
  */
-export function fontSpec(weight, size, family) {
+export function fontSpec(weight: number, size: number, family: string) {
   return `${Math.round(weight) || 400} ${size}px ${family}`;
 }
 
@@ -219,13 +229,19 @@ export function fontSpec(weight, size, family) {
  * is set inside one `save`/`restore`, the measuring passes included, so no
  * layer can leak state into the next one.
  *
- * @param {any} ctx 2D context
- * @param {import('./document.ts').CarouselTextLayer} layer a normalized layer
- * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
- * @param {number} frameH canvas height — what a numeric `size` is a fraction of
- * @param {string} family the resolved font stack
+ * @param ctx - 2D context
+ * @param layer - a normalized layer
+ * @param box - from {@link layerRect}
+ * @param frameH - canvas height — what a numeric `size` is a fraction of
+ * @param family - the resolved font stack
  */
-function paintTextLayer(ctx, layer, box, frameH, family) {
+function paintTextLayer(
+  ctx: any,
+  layer: import('./document.ts').CarouselTextLayer,
+  box: {x:number,y:number,w:number,h:number},
+  frameH: number,
+  family: string,
+) {
   const text = typeof layer.text === 'string' ? layer.text : '';
   if (!text.trim()) return;
   const lineHeight = layer.lineHeight > 0 ? layer.lineHeight : 1.2;
@@ -238,8 +254,7 @@ function paintTextLayer(ctx, layer, box, frameH, family) {
     };
 
     let fontSize;
-    /** @type {string[]} */
-    let lines;
+    let lines: string[];
     if (layer.size == null) {
       // Bounded by the box on both axes before the scan starts: one line can
       // never be taller than the box, and a glyph roughly wider than the box
@@ -313,11 +328,13 @@ function alphaOf(layer) {
  * area. A layer that could not load is skipped and the rest of the slide is
  * painted: one broken logo must never cost a whole carousel.
  *
- * @param {any} ctx 2D context
- * @param {import('./document.ts').CarouselImageLayer} layer
- * @param {{bitmap: any, x: number, y: number, w: number, h: number}} [placed]
+ * @param ctx - 2D context
  */
-function paintImageLayer(ctx, layer, placed) {
+function paintImageLayer(
+  ctx: any,
+  layer: import('./document.ts').CarouselImageLayer,
+  placed?: {bitmap: any, x: number, y: number, w: number, h: number},
+) {
   const alpha = alphaOf(layer);
   if (!placed || !placed.bitmap || alpha <= 0) return;
   ctx.save();
@@ -339,11 +356,14 @@ function paintImageLayer(ctx, layer, placed) {
  * pixel it is a square corner, and a context too old to have `roundRect` gets
  * one too: a square scrim beats a thrown render.
  *
- * @param {any} ctx 2D context
- * @param {import('./document.ts').CarouselRectLayer} layer
- * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ * @param ctx - 2D context
+ * @param box - from {@link layerRect}
  */
-function paintRectLayer(ctx, layer, box) {
+function paintRectLayer(
+  ctx: any,
+  layer: import('./document.ts').CarouselRectLayer,
+  box: {x:number,y:number,w:number,h:number},
+) {
   const alpha = alphaOf(layer);
   if (alpha <= 0 || box.w < 1 || box.h < 1) return;
   const radius = Math.min(0.5, Math.max(0, num(layer.radius, 0))) * Math.min(box.w, box.h);
@@ -370,11 +390,10 @@ function paintRectLayer(ctx, layer, box) {
  * allows that, because a fixed caption styled like a counter is a legitimate
  * thing to want.
  *
- * @param {string} format
- * @param {number} index 0-based slide index; `{i}` is `index + 1`
- * @param {number} count slides in the deck
+ * @param index - 0-based slide index; `{i}` is `index + 1`
+ * @param count - slides in the deck
  */
-export function counterText(format, index, count) {
+export function counterText(format: string, index: number, count: number) {
   const f = typeof format === 'string' ? format : '';
   return f.replace(/\{i\}/g, String(index + 1)).replace(/\{n\}/g, String(count));
 }
@@ -391,11 +410,14 @@ export function counterText(format, index, count) {
  * cap stays inside it: the studio sizes the box and the shape follows, rather
  * than a fixed aspect the box would have to be reconciled with.
  *
- * @param {any} ctx 2D context
- * @param {import('./document.ts').CarouselArrowLayer} layer
- * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ * @param ctx - 2D context
+ * @param box - from {@link layerRect}
  */
-function paintArrowLayer(ctx, layer, box) {
+function paintArrowLayer(
+  ctx: any,
+  layer: import('./document.ts').CarouselArrowLayer,
+  box: {x:number,y:number,w:number,h:number},
+) {
   const alpha = alphaOf(layer);
   if (alpha <= 0) return;
   const stroke = Math.max(1, Math.round(Math.min(box.w, box.h) * ARROW_STROKE));
@@ -436,11 +458,14 @@ function paintArrowLayer(ctx, layer, box) {
  * since each one carries its own width. A box under a pixel on either side
  * cannot hold its own stroke, so it is skipped whole.
  *
- * @param {any} ctx 2D context
- * @param {import('./document.ts').CarouselInkLayer} layer
- * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
+ * @param ctx - 2D context
+ * @param box - from {@link layerRect}
  */
-function paintInkLayer(ctx, layer, box) {
+function paintInkLayer(
+  ctx: any,
+  layer: import('./document.ts').CarouselInkLayer,
+  box: {x:number,y:number,w:number,h:number},
+) {
   const alpha = alphaOf(layer);
   if (alpha <= 0 || box.w < 1 || box.h < 1) return;
   const short = Math.min(box.w, box.h);
@@ -469,7 +494,7 @@ function paintInkLayer(ctx, layer, box) {
 
 /**
  * One painter per layer `type`, the draw-layer twin of `LAYER_BUILDERS` in
- * `document.js`: a table rather than a switch, so a type the schema knows and
+ * `document.ts`: a table rather than a switch, so a type the schema knows and
  * this build cannot draw is a missing key — skipped whole — rather than a
  * half-executed branch.
  *
@@ -479,10 +504,13 @@ function paintInkLayer(ctx, layer, box) {
  * numeric type size is a fraction of, the resolved font stack, this slide's
  * position in the deck (which is what a `counter` needs and no per-slide layer
  * could know), and the images {@link loadLayerImages} decoded for this slide.
- *
- * @type {Record<string, (ctx: any, layer: any, box: {x:number,y:number,w:number,h:number}, env: any) => void>}
  */
-const LAYER_PAINTERS = {
+const LAYER_PAINTERS: Record<string, (ctx: any, layer: any, box: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}, env: any) => void> = {
   text: (ctx, layer, box, env) => paintTextLayer(ctx, layer, box, env.frameH, env.family),
 
   image: (ctx, layer, box, env) => paintImageLayer(ctx, layer, env.images?.get(layer)),
@@ -543,7 +571,7 @@ function paintDispatch(ctx, layer, box, env) {
 
 /**
  * Paint a slide's layers over the image, back to front — list order is meaning
- * and `normalizeLayers` (`document.js`) preserves it, so this does not sort. A
+ * and `normalizeLayers` (`document.ts`) preserves it, so this does not sort. A
  * `rect` scrim under a headline is exactly a rect earlier in the list.
  *
  * A layer type this build does not know how to draw is not an error — the
@@ -553,16 +581,24 @@ function paintDispatch(ctx, layer, box, env) {
  * half of the layer pair and resolving a box any other way is how a filmstrip
  * starts lying about the render.
  *
- * @param {any} ctx 2D context
- * @param {import('./document.ts').CarouselLayer[]|null|undefined} layers
- * @param {string} aspect the aspect key `ctx`'s canvas was sized from
- * @param {{font?: string, index?: number, count?: number,
- *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>}} [env]
+ * @param ctx - 2D context
+ * @param aspect - the aspect key `ctx`'s canvas was sized from
+ * @param env
  *   `font` is the resolved stack (the built-in default when empty); `index` and
  *   `count` place this slide in its deck for a `counter`; `images` holds what
  *   {@link loadLayerImages} decoded for this slide's `image` layers
  */
-export function paintLayers(ctx, layers, aspect, env = {}) {
+export function paintLayers(
+  ctx: any,
+  layers: import('./document.ts').CarouselLayer[] | null | undefined,
+  aspect: string,
+  env: {
+    font?: string;
+    index?: number;
+    count?: number;
+    images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>;
+  } = {},
+) {
   if (!Array.isArray(layers) || !layers.length) return;
   const resolved = resolveLayerEnv(aspect, env);
   for (const layer of layers) {
@@ -597,13 +633,18 @@ function resolveLayerEnv(aspect, env) {
  * is continuous because every slice was cut from one deck rect, and the canvas
  * clips the overflow for free.
  *
- * @param {any} ctx 2D context
- * @param {Array<{layer: import('./document.ts').CarouselLayer,
- *   box: {x:number,y:number,w:number,h:number}}>|null|undefined} entries
- * @param {string} aspect the aspect key `ctx`'s canvas was sized from
- * @param {Parameters<typeof paintLayers>[3]} [env]
+ * @param ctx - 2D context
+ * @param aspect - the aspect key `ctx`'s canvas was sized from
  */
-export function paintSpanLayers(ctx, entries, aspect, env = {}) {
+export function paintSpanLayers(
+  ctx: any,
+  entries: Array<{
+    layer: import('./document.ts').CarouselLayer;
+    box: {x:number,y:number,w:number,h:number};
+  }> | null | undefined,
+  aspect: string,
+  env: Parameters<typeof paintLayers>[3] = {},
+) {
   if (!Array.isArray(entries) || !entries.length) return;
   const resolved = resolveLayerEnv(aspect, env);
   for (const { layer, box } of entries) {
@@ -617,14 +658,19 @@ export function paintSpanLayers(ctx, entries, aspect, env = {}) {
  * two render sequencers so a split deck and a deck deck slice span layers the
  * same way.
  *
- * @param {import('./document.ts').CarouselLayer[]|null|undefined} spanLayers
- * @param {number} i slide index
- * @param {number} n slides in the deck
- * @param {string} aspect aspect key
- * @returns {Array<{layer: import('./document.ts').CarouselLayer,
- *   box: {x:number,y:number,w:number,h:number}}>}
+ * @param i - slide index
+ * @param n - slides in the deck
+ * @param aspect - aspect key
  */
-function spanLayersForSlide(spanLayers, i, n, aspect) {
+function spanLayersForSlide(
+  spanLayers: import('./document.ts').CarouselLayer[] | null | undefined,
+  i: number,
+  n: number,
+  aspect: string,
+): Array<{
+  layer: import('./document.ts').CarouselLayer;
+  box: {x:number,y:number,w:number,h:number};
+}> {
   if (!Array.isArray(spanLayers) || !spanLayers.length) return [];
   const out = [];
   for (const layer of spanLayers) {
@@ -661,20 +707,16 @@ function spanLayersForSlide(spanLayers, i, n, aspect) {
  * returns on an empty list without touching the context, so the S1/S2 render
  * paths encode exactly the bytes they always did.
  *
- * @param {any} ctx 2D context
- * @param {ImageBitmap} bitmap the decoded column, sized `rect.dw × rect.dh`
- * @param {{dx:number,dy:number,dw:number,dh:number,
- *   pad?:{x:number,w:number}|Array<{x:number,y:number,w:number,h:number}>}} rect
+ * @param ctx - 2D context
+ * @param bitmap - the decoded column, sized `rect.dw × rect.dh`
+ * @param rect
  *   from `sliceRects` (split) or `deckSlideRects` (deck)
- * @param {number} w canvas width
- * @param {number} h canvas height
- * @param {import('./document.ts').CarouselBg|null} [bg] fill for the pad region
- * @param {import('./document.ts').CarouselLayer[]} [layers] the slide's own
+ * @param w - canvas width
+ * @param h - canvas height
+ * @param bg - fill for the pad region
+ * @param layers - the slide's own
  *   layers, painted back to front over the image
- * @param {{aspect?: string, font?: string, index?: number, count?: number,
- *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>,
- *   spanLayers?: Array<{layer: import('./document.ts').CarouselLayer,
- *     box: {x:number,y:number,w:number,h:number}}>}} [opts]
+ * @param opts
  *   `aspect` is the key `w`/`h` were sized from — layer boxes resolve against
  *   it; `font` is the stack resolved once per render by `deps.resolveFont`;
  *   `index`/`count` are this slide's place in the deck, which a `counter` layer
@@ -682,7 +724,32 @@ function spanLayersForSlide(spanLayers, i, n, aspect) {
  *   `spanLayers` are the deck's spanning layers already sliced to this slide,
  *   painted last (over the slide's own layers)
  */
-export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
+export function paintSlide(
+  ctx: any,
+  bitmap: ImageBitmap,
+  rect: {
+    dx: number;
+    dy: number;
+    dw: number;
+    dh: number;
+    pad?: {x:number,w:number} | Array<{x:number,y:number,w:number,h:number}>;
+  },
+  w: number,
+  h: number,
+  bg?: import('./document.ts').CarouselBg | null,
+  layers?: import('./document.ts').CarouselLayer[],
+  opts: {
+    aspect?: string;
+    font?: string;
+    index?: number;
+    count?: number;
+    images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>;
+    spanLayers?: Array<{
+      layer: import('./document.ts').CarouselLayer;
+      box: {x:number,y:number,w:number,h:number};
+    }>;
+  } = {},
+) {
   ctx.clearRect(0, 0, w, h);
   const pad = padRects(rect, w, h);
   if (pad.length) {
@@ -725,15 +792,16 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
  * {@link paintImageLayer} skips what it cannot find. One broken layer must not
  * be able to fail a whole render.
  *
- * @param {import('./document.ts').CarouselLayer[]|undefined} layers
- * @param {string|undefined} aspect the slide's aspect key
- * @param {((source: string) => Promise<{blob: Blob, w: number, h: number}>)|undefined} load
- * @param {RenderDeps} deps
- * @returns {Promise<Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>>}
+ * @param aspect - the slide's aspect key
  */
-async function loadLayerImages(layers, aspect, load, deps, spanEntries) {
-  /** @type {Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>} */
-  const images = new Map();
+async function loadLayerImages(
+  layers: import('./document.ts').CarouselLayer[] | undefined,
+  aspect: string | undefined,
+  load: ((source: string) => Promise<{blob: Blob, w: number, h: number}>) | undefined,
+  deps: RenderDeps,
+  spanEntries,
+): Promise<Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>> {
+  const images: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}> = new Map();
   if (!load) return images;
 
   const place = async (layer, box) => {
@@ -791,22 +859,35 @@ async function loadLayerImages(layers, aspect, load, deps, spanEntries) {
  * A `null` from `deps.encode` is a hard error — a silently dropped slide would
  * be worse.
  *
- * @param {Blob} blob the source image bytes
- * @param {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:any}} rect
+ * @param blob - the source image bytes
+ * @param rect
  *   from `sliceRects` (split) or `deckSlideRects` (deck)
- * @param {import('./document.ts').CarouselBg|null|undefined} bg background fill
+ * @param bg - background fill
  *   for the pad region
- * @param {number} slideW @param {number} slideH canvas size
- * @param {RenderDeps} deps
- * @param {{aspect?: string, layers?: import('./document.ts').CarouselLayer[],
- *   font?: string, index?: number, count?: number,
- *   load?: (source: string) => Promise<{blob: Blob, w: number, h: number}>,
- *   spanLayers?: Array<{layer: import('./document.ts').CarouselLayer,
- *     box: {x:number,y:number,w:number,h:number}}>}} [paint]
+ * @param slideH - canvas size
+ * @param paint
  *   what `paintSlide` draws over the image
- * @returns {Promise<Blob>}
  */
-async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
+async function encodeSlide(
+  blob: Blob,
+  rect: {sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:any},
+  bg: import('./document.ts').CarouselBg | null | undefined,
+  slideW: number,
+  slideH: number,
+  deps: RenderDeps,
+  paint: {
+    aspect?: string;
+    layers?: import('./document.ts').CarouselLayer[];
+    font?: string;
+    index?: number;
+    count?: number;
+    load?: (source: string) => Promise<{blob: Blob, w: number, h: number}>;
+    spanLayers?: Array<{
+      layer: import('./document.ts').CarouselLayer;
+      box: {x:number,y:number,w:number,h:number};
+    }>;
+  } = {},
+): Promise<Blob> {
   const bitmap = await deps.decode(blob, {
     sx: rect.sx,
     sy: rect.sy,
@@ -816,8 +897,7 @@ async function encodeSlide(blob, rect, bg, slideW, slideH, deps, paint = {}) {
     resizeHeight: rect.dh,
     resizeQuality: 'high',
   });
-  /** @type {Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>} */
-  let images = new Map();
+  let images: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}> = new Map();
   try {
     images = await loadLayerImages(
       paint.layers,
@@ -864,13 +944,12 @@ const TYPESET_LAYERS = ['text', 'counter'];
  *
  * A hidden `text` or `counter` layer does not count: nothing is typeset for it,
  * so waiting on a face for its sake would be a wait for no glyphs.
- *
- * @param {RenderDeps} deps
- * @returns {(layers: Array<{type?: string, hidden?: boolean}|null|undefined>) => Promise<string>}
  */
-function fontResolver(deps) {
-  /** @type {Promise<string>|null} */
-  let pending = null;
+function fontResolver(deps: RenderDeps): (layers: Array<{
+  type?: string;
+  hidden?: boolean;
+} | null | undefined>) => Promise<string> {
+  let pending: Promise<string> | null = null;
   return async (layers) => {
     if (!layers.some((l) => l && !l.hidden && TYPESET_LAYERS.includes(l.type))) return '';
     if (!pending) {
@@ -900,16 +979,16 @@ function fontResolver(deps) {
  * header promises is about decoded RGBA, and `encodeSlide` still keeps exactly
  * one slide's worth of those alive at a time.
  *
- * @param {RenderDeps} deps
- * @param {{source: string, w: number, h: number}|null} seed a size the caller
+ * @param seed - a size the caller
  *   already knows, skipping the probe — keyed by the path it describes, because
  *   a layer image loaded through this same cache is a different picture and
  *   must be probed on its own
- * @returns {(source: string) => Promise<{blob: Blob, w: number, h: number}>}
  */
-function sourceLoader(deps, seed) {
-  /** @type {Map<string, Promise<{blob: Blob, w: number, h: number}>>} */
-  const cache = new Map();
+function sourceLoader(
+  deps: RenderDeps,
+  seed: {source: string, w: number, h: number} | null,
+): (source: string) => Promise<{blob: Blob, w: number, h: number}> {
+  const cache: Map<string, Promise<{blob: Blob, w: number, h: number}>> = new Map();
   return (source) => {
     let pending = cache.get(source);
     if (!pending) {
@@ -932,40 +1011,48 @@ function sourceLoader(deps, seed) {
 /**
  * The flat, doc-free spec the split path has taken since S1: one source, a
  * count, and the doc-level framing every column is a slave of.
- *
- * @typedef {object} SplitSpec
- * @property {string} source
- * @property {number} n
- * @property {string} aspect
- * @property {'cover'|'exact'|'pad'} [strategy]
- * @property {number} [anchorY]
- * @property {import('./document.ts').CarouselBg|null} [bg]
- * @property {number} [srcW]
- * @property {number} [srcH]
- * @property {import('./document.ts').CarouselLayer[][]} [layers]  each column's
- *   own layer list, index-aligned with the slides. Layers are not deck-only: a
- *   split deck carrying a headline is the headline use case.
- * @property {import('./document.ts').CarouselLayer[]} [spanLayers]  the deck's
- *   spanning layers, sliced per column by {@link spanLayerRect} — a headline
- *   that runs across the seams of a split deck is exactly this.
  */
+export interface SplitSpec {
+  source: string;
+  n: number;
+  aspect: string;
+  strategy?: 'cover' | 'exact' | 'pad';
+  anchorY?: number;
+  bg?: import('./document.ts').CarouselBg | null;
+  srcW?: number;
+  srcH?: number;
+  /**
+   * each column's own layer list, index-aligned with the slides. Layers are not deck-only: a split
+   * deck carrying a headline is the headline use case.
+   */
+  layers?: import('./document.ts').CarouselLayer[][];
+  /**
+   * the deck's spanning layers, sliced per column by {@link spanLayerRect} — a headline that runs
+   * across the seams of a split deck is exactly this.
+   */
+  spanLayers?: import('./document.ts').CarouselLayer[];
+}
 
 /**
  * Slice one source image into `n` slide JPEGs — one crop-and-resize decode per
  * slide, each painted + encoded onto its own `slideW × slideH` canvas. A `null`
  * from `deps.encode` is a hard error — a silently dropped slide would be worse.
  *
- * @param {SplitSpec} spec  `srcW`/`srcH` skip the `probeSize` call when the caller already knows them
- * @param {RenderDeps} deps
- * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
- * @param {Array<{id:number,path:string}|null>} [keep]  per-slide reuse: a
+ * @param spec - `srcW`/`srcH` skip the `probeSize` call when the caller already knows them
+ * @param onProgress - fired after each slide
+ * @param keep - per-slide reuse: a
  *   truthy entry at index `i` means slide `i`'s inputs are unchanged since the
- *   last render (see `specHash` in document.js) — skip its decode/encode
+ *   last render (see `specHash` in document.ts) — skip its decode/encode
  *   entirely and leave a `null` placeholder in its slot.
- * @returns {Promise<(Blob|null)[]>} the encoded slides, in deck order — `null`
+ * @returns the encoded slides, in deck order — `null`
  *   at every index `keep` reused
  */
-export async function renderSplit(spec, deps, onProgress, keep) {
+export async function renderSplit(
+  spec: SplitSpec,
+  deps: RenderDeps,
+  onProgress?: (p: { done: number, total: number }) => void,
+  keep?: Array<{id:number,path:string} | null>,
+): Promise<(Blob | null)[]> {
   const { source, aspect, strategy, anchorY } = spec;
   const bg = spec.bg ?? null;
   const count = Math.max(1, Math.floor(spec.n));
@@ -1008,12 +1095,15 @@ export async function renderSplit(spec, deps, onProgress, keep) {
   return slides;
 }
 
-/**
- * @typedef {object} RenderOpts
- * @property {number} [srcW] source pixel width the caller already probed
- * @property {number} [srcH] source pixel height — skips a `probeSize` call.
- *   Never a document field: the document stores no derived data.
- */
+export interface RenderOpts {
+  /** source pixel width the caller already probed */
+  srcW?: number;
+  /**
+   * source pixel height — skips a `probeSize` call. Never a document field: the document stores no
+   * derived data.
+   */
+  srcH?: number;
+}
 
 /**
  * Render a `deck` document: every slide names its own `source` and its own
@@ -1031,15 +1121,19 @@ export async function renderSplit(spec, deps, onProgress, keep) {
  * every one of them, so a letterbox on two opposite sides is painted by the same
  * code as the split path's single tail column.
  *
- * @param {import('./document.ts').CarouselDoc} doc a normalized deck document
- * @param {RenderDeps} deps
- * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
- * @param {Array<{id:number,path:string}|null>} [keep] per-slide reuse — see `renderSplit`
- * @param {RenderOpts} [opts]
- * @returns {Promise<(Blob|null)[]>} the encoded slides, in deck order — `null`
+ * @param doc - a normalized deck document
+ * @param onProgress - fired after each slide
+ * @param keep - per-slide reuse — see `renderSplit`
+ * @returns the encoded slides, in deck order — `null`
  *   at every index `keep` reused
  */
-export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
+export async function renderDeck(
+  doc: import('./document.ts').CarouselDoc,
+  deps: RenderDeps,
+  onProgress?: (p: { done: number, total: number }) => void,
+  keep?: Array<{id:number,path:string} | null>,
+  opts: RenderOpts = {},
+): Promise<(Blob | null)[]> {
   const slides = doc?.slides || [];
   const [slideW, slideH] = canvasSize(doc?.aspect);
   // A single-source deck can take the caller's dimensions; with two sources in
@@ -1090,15 +1184,19 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
  * one `sliceRects` can leave a pad on; the layers come from every slide, since
  * unlike `crop`/`fit` they are painted in both modes.
  *
- * @param {import('./document.ts').CarouselDoc} doc a normalized document
- * @param {RenderDeps} deps
- * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
- * @param {Array<{id:number,path:string}|null>} [keep] per-slide reuse — see `renderSplit`
- * @param {RenderOpts} [opts]
- * @returns {Promise<(Blob|null)[]>} the encoded slides, in deck order — `null`
+ * @param doc - a normalized document
+ * @param onProgress - fired after each slide
+ * @param keep - per-slide reuse — see `renderSplit`
+ * @returns the encoded slides, in deck order — `null`
  *   at every index `keep` reused
  */
-export async function renderCarousel(doc, deps, onProgress, keep, opts = {}) {
+export async function renderCarousel(
+  doc: import('./document.ts').CarouselDoc,
+  deps: RenderDeps,
+  onProgress?: (p: { done: number, total: number }) => void,
+  keep?: Array<{id:number,path:string} | null>,
+  opts: RenderOpts = {},
+): Promise<(Blob | null)[]> {
   const slides = doc?.slides || [];
   // Nothing to draw. Guarded here rather than in the sequencers, because
   // `renderSplit` would round an empty deck up to one slide and fetch `''`.
@@ -1136,15 +1234,16 @@ export async function renderCarousel(doc, deps, onProgress, keep, opts = {}) {
  * the upload and partial-failure unwind below are shared by both paths rather
  * than copied into a deck-shaped twin.
  *
- * @param {({ doc: import('./document.ts').CarouselDoc } & RenderOpts & { postId: number })
- *   | (SplitSpec & { postId: number })} spec
- * @param {RenderDeps} deps
- * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
- * @param {Array<{id:number,path:string}|null>} [keep]  see `renderSplit` — a
+ * @param onProgress - fired after each slide
+ * @param keep - see `renderSplit` — a
  *   kept slide is reused verbatim and never uploaded
- * @returns {Promise<Array<{ id: number, path: string }>>}
  */
-export async function renderAndUpload(spec, deps, onProgress, keep) {
+export async function renderAndUpload(
+  spec: ({ doc: import('./document.ts').CarouselDoc } & RenderOpts & { postId: number }) | (SplitSpec & { postId: number }),
+  deps: RenderDeps,
+  onProgress?: (p: { done: number, total: number }) => void,
+  keep?: Array<{id:number,path:string} | null>,
+): Promise<Array<{ id: number, path: string }>> {
   const blobs =
     'doc' in spec
       ? await renderCarousel(spec.doc, deps, onProgress, keep, spec)

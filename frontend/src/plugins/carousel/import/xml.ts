@@ -28,11 +28,8 @@ import { parseMarkup } from '../../../utils/helpers.ts';
 /**
  * An element's name with any namespace prefix removed. Reads `nodeName` for
  * the reason in the header — `localName` disagrees between DOMs.
- *
- * @param {Node|null|undefined} node
- * @returns {string}
  */
-export function local(node) {
+export function local(node: Node | null | undefined): string {
   const name = node ? node.nodeName || '' : '';
   const at = name.indexOf(':');
   return at < 0 ? name : name.slice(at + 1);
@@ -45,15 +42,12 @@ export function local(node) {
  * Indexed rather than spread: `HTMLCollection` is only iterable with the
  * `dom.iterable` lib, and `jsconfig.json` does not name its libs.
  *
- * @param {Element|null|undefined} el
- * @param {string} [name] local name to keep; every child when omitted
- * @returns {Element[]}
+ * @param name - local name to keep; every child when omitted
  */
-export function children(el, name) {
+export function children(el: Element | null | undefined, name?: string): Element[] {
   if (!el) return [];
   const kids = el.children;
-  /** @type {Element[]} */
-  const out = [];
+  const out: Element[] = [];
   for (let i = 0; i < (kids ? kids.length : 0); i++) {
     const kid = kids[i];
     if (!name || local(kid) === name) out.push(kid);
@@ -61,14 +55,8 @@ export function children(el, name) {
   return out;
 }
 
-/**
- * The first element child with this local name, or `null`.
- *
- * @param {Element|null|undefined} el
- * @param {string} name
- * @returns {Element|null}
- */
-export function child(el, name) {
+/** The first element child with this local name, or `null`. */
+export function child(el: Element | null | undefined, name: string): Element | null {
   if (!el) return null;
   const kids = el.children;
   for (let i = 0; i < (kids ? kids.length : 0); i++) {
@@ -82,12 +70,8 @@ export function child(el, name) {
  * the first link that is missing. OOXML nests four or five deep for every
  * value worth reading, and a chain of `&&`s at each call site reads worse than
  * this does.
- *
- * @param {Element|null|undefined} el
- * @param {...string} names
- * @returns {Element|null}
  */
-export function path(el, ...names) {
+export function path(el: Element | null | undefined, ...names: string[]): Element | null {
   let at = el || null;
   for (const name of names) {
     at = child(at, name);
@@ -96,17 +80,10 @@ export function path(el, ...names) {
   return at;
 }
 
-/**
- * Every descendant with this local name, document order, self excluded.
- *
- * @param {Element|null|undefined} el
- * @param {string} name
- * @returns {Element[]}
- */
-export function descendants(el, name) {
-  /** @type {Element[]} */
-  const out = [];
-  const visit = (/** @type {Element} */ node) => {
+/** Every descendant with this local name, document order, self excluded. */
+export function descendants(el: Element | null | undefined, name: string): Element[] {
+  const out: Element[] = [];
+  const visit = (node: Element) => {
     for (const kid of children(node)) {
       if (local(kid) === name) out.push(kid);
       visit(kid);
@@ -121,12 +98,8 @@ export function descendants(el, name) {
  * the prefix is bound to. The unprefixed lookup is tried first because that is
  * the overwhelmingly common case and it costs one call; the scan is the
  * fallback for a prefixed one.
- *
- * @param {Element|null|undefined} el
- * @param {string} name
- * @returns {string|null}
  */
-export function attr(el, name) {
+export function attr(el: Element | null | undefined, name: string): string | null {
   if (!el) return null;
   const direct = el.getAttribute(name);
   if (direct !== null) return direct;
@@ -142,13 +115,12 @@ export function attr(el, name) {
 /**
  * An attribute as a finite number, or `fallback`. OOXML writes every geometry
  * value as an integer attribute, so this is most of the reading.
- *
- * @param {Element|null|undefined} el
- * @param {string} name
- * @param {number} [fallback]
- * @returns {number}
  */
-export function attrNum(el, name, fallback = 0) {
+export function attrNum(
+  el: Element | null | undefined,
+  name: string,
+  fallback: number = 0,
+): number {
   const raw = attr(el, name);
   if (raw === null || raw.trim() === '') return fallback;
   const n = Number(raw);
@@ -158,13 +130,12 @@ export function attrNum(el, name, fallback = 0) {
 /**
  * An OOXML boolean attribute. The schema's `xsd:boolean` allows all four
  * spellings and PowerPoint writes `1` where Canva writes `true`.
- *
- * @param {Element|null|undefined} el
- * @param {string} name
- * @param {boolean} [fallback]
- * @returns {boolean}
  */
-export function attrBool(el, name, fallback = false) {
+export function attrBool(
+  el: Element | null | undefined,
+  name: string,
+  fallback: boolean = false,
+): boolean {
   const raw = attr(el, name);
   if (raw === null) return fallback;
   const v = raw.trim().toLowerCase();
@@ -193,15 +164,18 @@ export function attrBool(el, name, fallback = false) {
  * threaded through, since that is the seam a runtime with no global `DOMParser`
  * (`node --test`) supplies its own by.
  *
- * @param {string} text
- * @param {string} root expected local name of the document element
- * @param {typeof DOMParser} [Parser] the seam a test uses to supply linkedom's
- * @param {DOMParserSupportedType} [mime] the type to parse as. `image/svg+xml`
+ * @param root - expected local name of the document element
+ * @param Parser - the seam a test uses to supply linkedom's
+ * @param mime - the type to parse as. `image/svg+xml`
  *   for an SVG, so a browser builds the SVG DOM the file asked for rather than
  *   the generic XML one
- * @returns {Element|null}
  */
-export function parseXml(text, root, Parser = globalThis.DOMParser, mime = 'application/xml') {
+export function parseXml(
+  text: string,
+  root: string,
+  Parser: typeof DOMParser = globalThis.DOMParser,
+  mime: DOMParserSupportedType = 'application/xml',
+): Element | null {
   if (typeof Parser !== 'function') return null;
   let doc;
   try {

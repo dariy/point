@@ -68,55 +68,58 @@ export const ZIP_LIMITS = {
  * A typed ZIP failure. `code` is stable enough to branch on and `entry` names
  * the archive member when the failure belongs to one, so the importer can
  * report "could not read ppt/slides/slide3.xml" rather than failing anonymously.
- *
- * @typedef {'malformed'|'zip64'|'unsupported'|'unsafe-path'|'too-large'|'not-found'} ZipErrorCode
  */
+export type ZipErrorCode = 'malformed' | 'zip64' | 'unsupported' | 'unsafe-path' | 'too-large' | 'not-found';
 export class ZipError extends Error {
-  /**
-   * @param {ZipErrorCode} code
-   * @param {string} message
-   * @param {string} [entry] archive member the failure belongs to
-   */
-  constructor(code, message, entry) {
+  code: ZipErrorCode;
+  entry: string;
+
+  /** @param entry - archive member the failure belongs to */
+  constructor(code: ZipErrorCode, message: string, entry?: string) {
     super(entry ? `${entry}: ${message}` : message);
     this.name = 'ZipError';
-    /** @type {ZipErrorCode} */
     this.code = code;
     this.entry = entry || '';
   }
 }
 
-/**
- * @typedef {object} ZipEntry
- * @property {string} name path within the archive, `/`-separated
- * @property {number} method compression method — {@link STORED} or {@link DEFLATE}
- * @property {number} compressedSize bytes on disk
- * @property {number} size bytes once inflated, per the central directory
- * @property {number} offset local file header offset
- */
+export interface ZipEntry {
+  /** path within the archive, `/`-separated */
+  name: string;
+  /** compression method — {@link STORED} or {@link DEFLATE} */
+  method: number;
+  /** bytes on disk */
+  compressedSize: number;
+  /** bytes once inflated, per the central directory */
+  size: number;
+  /** local file header offset */
+  offset: number;
+}
 
-/**
- * @typedef {object} ZipReader
- * @property {() => string[]} names entry paths, central-directory order, directories excluded
- * @property {(name: string) => boolean} has
- * @property {(name: string) => ZipEntry|null} entry the central-directory record, unread
- * @property {(name: string) => Promise<Uint8Array>} read inflate one entry
- */
+export interface ZipReader {
+  /** entry paths, central-directory order, directories excluded */
+  names: () => string[];
+  has: (name: string) => boolean;
+  /** the central-directory record, unread */
+  entry: (name: string) => ZipEntry | null;
+  /** inflate one entry */
+  read: (name: string) => Promise<Uint8Array>;
+}
 
-/**
- * @typedef {object} ZipOptions
- * @property {number} [maxEntries]
- * @property {number} [maxEntryBytes]
- * @property {number} [maxTotalBytes]
- * @property {(bytes: Uint8Array, limit: number, name: string) => Promise<Uint8Array>} [decompress]
- *   raw-deflate inflater; the seam exists so a runtime without
- *   `DecompressionStream` can be tested rather than skipped
- */
+export interface ZipOptions {
+  maxEntries?: number;
+  maxEntryBytes?: number;
+  maxTotalBytes?: number;
+  /**
+   * raw-deflate inflater; the seam exists so a runtime without `DecompressionStream` can be tested
+   * rather than skipped
+   */
+  decompress?: (bytes: Uint8Array, limit: number, name: string) => Promise<Uint8Array>;
+}
 
 const nameDecoder = new TextDecoder('utf-8');
 
-/** @param {string} [entry] */
-const zip64 = (entry) =>
+const zip64 = (entry?: string) =>
   new ZipError('zip64', 'this archive uses Zip64, which this reader does not support', entry);
 
 /**
@@ -124,10 +127,8 @@ const zip64 = (entry) =>
  * archive. A backslash is refused outright rather than normalized: a reader
  * that rewrites `..\` into a path segment is one interpretation away from
  * writing outside the root.
- *
- * @param {string} name
  */
-function isSafePath(name) {
+function isSafePath(name: string) {
   if (!name || name.length > 1024) return false;
   if (name.includes('\\') || name.includes('\0')) return false;
   if (name.startsWith('/') || /^[a-zA-Z]:/.test(name)) return false;
@@ -139,11 +140,9 @@ function isSafePath(name) {
  * The comment length has to account for exactly the bytes that follow, which is
  * what rules out a signature that happens to appear inside a comment.
  *
- * @param {DataView} view
- * @param {number} len
- * @returns {number} offset of the record
+ * @returns offset of the record
  */
-function findEocd(view, len) {
+function findEocd(view: DataView, len: number): number {
   const floor = Math.max(0, len - EOCD_SIZE - MAX_COMMENT);
   for (let at = len - EOCD_SIZE; at >= floor; at--) {
     if (view.getUint32(at, true) !== SIG_EOCD) continue;
@@ -156,12 +155,8 @@ function findEocd(view, len) {
  * Parse the central directory. Nothing is inflated here — `read()` does that
  * per entry, so a `.pptx` carrying 20 MB of images costs only its directory
  * until the importer asks for a part it wants.
- *
- * @param {Uint8Array|ArrayBuffer} bytes
- * @param {ZipOptions} [options]
- * @returns {ZipReader}
  */
-export function openZip(bytes, options = {}) {
+export function openZip(bytes: Uint8Array | ArrayBuffer, options: ZipOptions = {}): ZipReader {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const limits = {
     maxEntries: options.maxEntries ?? ZIP_LIMITS.maxEntries,
@@ -187,8 +182,7 @@ export function openZip(bytes, options = {}) {
     throw new ZipError('too-large', `archive declares ${count} entries, over the ${limits.maxEntries} cap`);
   }
 
-  /** @type {Map<string, ZipEntry>} */
-  const entries = new Map();
+  const entries: Map<string, ZipEntry> = new Map();
   const cdEnd = cdStart + cdSize;
   let total = 0;
   let at = cdStart;
@@ -244,29 +238,25 @@ export function openZip(bytes, options = {}) {
 /**
  * Every entry, inflated, keyed by path. The convenience form — prefer
  * {@link openZip} when only a few parts of a large archive are wanted.
- *
- * @param {Uint8Array|ArrayBuffer} bytes
- * @param {ZipOptions} [options]
- * @returns {Promise<Map<string, Uint8Array>>}
  */
-export async function readZip(bytes, options = {}) {
+export async function readZip(
+  bytes: Uint8Array | ArrayBuffer,
+  options: ZipOptions = {},
+): Promise<Map<string, Uint8Array>> {
   const zip = openZip(bytes, options);
-  /** @type {Map<string, Uint8Array>} */
-  const out = new Map();
+  const out: Map<string, Uint8Array> = new Map();
   for (const name of zip.names()) out.set(name, await zip.read(name));
   return out;
 }
 
-/**
- * @param {Uint8Array} data
- * @param {DataView} view
- * @param {Map<string, ZipEntry>} entries
- * @param {string} name
- * @param {{maxEntryBytes: number}} limits
- * @param {NonNullable<ZipOptions['decompress']>} decompress
- * @returns {Promise<Uint8Array>}
- */
-async function readEntry(data, view, entries, name, limits, decompress) {
+async function readEntry(
+  data: Uint8Array,
+  view: DataView,
+  entries: Map<string, ZipEntry>,
+  name: string,
+  limits: {maxEntryBytes: number},
+  decompress: NonNullable<ZipOptions['decompress']>,
+): Promise<Uint8Array> {
   const entry = entries.get(name);
   if (!entry) throw new ZipError('not-found', 'no such entry in this archive', name);
   if (entry.offset + LOCAL_SIZE > data.byteLength) {
@@ -313,13 +303,8 @@ async function readEntry(data, view, entries, name, limits, decompress) {
 /**
  * Raw-deflate inflate through the platform, counting bytes as they arrive so a
  * bomb is stopped mid-stream rather than after it has been allocated.
- *
- * @param {Uint8Array} bytes
- * @param {number} limit
- * @param {string} name
- * @returns {Promise<Uint8Array>}
  */
-async function inflateRaw(bytes, limit, name) {
+async function inflateRaw(bytes: Uint8Array, limit: number, name: string): Promise<Uint8Array> {
   const Inflate = globalThis.DecompressionStream;
   if (typeof Inflate !== 'function') {
     throw new ZipError('unsupported', 'this runtime has no DecompressionStream', name);
@@ -328,16 +313,14 @@ async function inflateRaw(bytes, limit, name) {
   // stream's type parameter is invariant to it, so a `ReadableStream<Uint8Array>`
   // will not pipe into `DecompressionStream.writable`, which is a
   // `WritableStream<BufferSource>`.
-  /** @type {ReadableStream<BufferSource>} */
-  const source = new ReadableStream({
+  const source: ReadableStream<BufferSource> = new ReadableStream({
     start(controller) {
-      controller.enqueue(/** @type {BufferSource} */ (bytes));
+      controller.enqueue((bytes as BufferSource));
       controller.close();
     },
   });
   const reader = source.pipeThrough(new Inflate('deflate-raw')).getReader();
-  /** @type {Uint8Array[]} */
-  const chunks = [];
+  const chunks: Uint8Array[] = [];
   let total = 0;
   try {
     for (;;) {

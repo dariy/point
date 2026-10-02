@@ -1,5 +1,5 @@
 /**
- * carousel/document.js — the carousel document model.
+ * carousel/document.ts — the carousel document model.
  *
  * The stored JSON is the source of truth; the `:::{.carousel-block}` in post
  * content is regenerated output. These tests pin normalization (defaults,

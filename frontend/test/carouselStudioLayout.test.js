@@ -1,5 +1,5 @@
 /**
- * carousel/studio/layout.js — the studio's viewport constants.
+ * carousel/studio/layout.ts — the studio's viewport constants.
  *
  * The two answers this module owns are both defaults-under-uncertainty: what a
  * viewport with no `matchMedia` counts as, and what a storage read that throws
@@ -70,7 +70,7 @@ describe('carousel studio layout', () => {
     test('the gate is a pointer question, not a width one', () => {
       // Named here because the stylesheet selects the whole layout with it:
       // the fixed shell in carousel.css and light/layout.css, and the studio's
-      // own coarse-pointer block. studio/gestures.js imports this same
+      // own coarse-pointer block. studio/gestures.ts imports this same
       // `isTouchLayout` rather than asking the query a second way.
       assert.strictEqual(TOUCH_LAYOUT, '(pointer: coarse)');
     });

@@ -2,13 +2,13 @@
  * Carousel Studio — undo/redo over the document.
  *
  * The document is already immutable by construction: every writer in
- * `document.js` returns a *new* `CarouselDoc`, and the page commits with
+ * `document.ts` returns a *new* `CarouselDoc`, and the page commits with
  * `setState({ doc })` under an explicit "the document IS the state" contract.
  * So history here is a ring of `doc` references — no cloning, no inverse
  * operations, no command objects. Undo is "hand back the previous reference".
  *
  * Granularity is the caller's to choose, and the studio already has the right
- * split: `studio/gestures.js` paints provisionally and commits once per gesture
+ * split: `studio/gestures.ts` paints provisionally and commits once per gesture
  * (a wheel burst debounces to one `commit`), property forms repaint on `input`
  * and commit on `change`. Pushing at those commit points — and nowhere else —
  * reproduces the step size a user expects without any debouncing of its own.
@@ -32,29 +32,30 @@ import { serializeDocument } from "../document.ts";
  *  enough that the retained slide metadata stays trivial next to the media. */
 const DEFAULT_LIMIT = 60;
 
-/**
- * @typedef {object} CarouselHistory
- * @property {boolean} canUndo   is there an earlier document to go back to?
- * @property {boolean} canRedo   is there a later one to come forward to?
- * @property {number} depth      how many documents are held (tests, mostly)
- * @property {(doc: *) => void} reset   start over from `doc` as the only entry
- * @property {(doc: *) => boolean} push  record `doc`; false when it deduped
- * @property {(doc: *) => void} replace  swap the current entry for `doc`
- * @property {() => *|null} undo   the previous document, or null
- * @property {() => *|null} redo   the next document, or null
- */
+export interface CarouselHistory {
+  /** is there an earlier document to go back to? */
+  canUndo: boolean;
+  /** is there a later one to come forward to? */
+  canRedo: boolean;
+  /** how many documents are held (tests, mostly) */
+  depth: number;
+  /** start over from `doc` as the only entry */
+  reset: (doc: any) => void;
+  /** record `doc`; false when it deduped */
+  push: (doc: any) => boolean;
+  /** swap the current entry for `doc` */
+  replace: (doc: any) => void;
+  /** the previous document, or null */
+  undo: () => any | null;
+  /** the next document, or null */
+  redo: () => any | null;
+}
 
-/**
- * Build a history ring.
- *
- * @param {{limit?: number}} [options]
- * @returns {CarouselHistory}
- */
-export function createHistory({ limit = DEFAULT_LIMIT } = {}) {
+/** Build a history ring. */
+export function createHistory({ limit = DEFAULT_LIMIT }: {limit?: number} = {}): CarouselHistory {
   const cap = Math.max(1, Math.floor(limit) || DEFAULT_LIMIT);
-  /** Documents oldest-first, each with the serialization `push` dedups on.
-   *  @type {{doc: *, key: string}[]} */
-  let entries = [];
+  /** Documents oldest-first, each with the serialization `push` dedups on. */
+  let entries: {doc: any, key: string}[] = [];
   /** Index of the document the caller is currently showing; -1 when empty. */
   let at = -1;
 

@@ -1,5 +1,5 @@
 /**
- * carousel/studio/panels.js — the studio's markup builders.
+ * carousel/studio/panels.ts — the studio's markup builders.
  *
  * These functions are pure by design: they take the numbers the page reads off
  * its state and return `html`, answering no questions about the page itself.

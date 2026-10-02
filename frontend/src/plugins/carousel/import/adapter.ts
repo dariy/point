@@ -2,7 +2,7 @@
  * carousel/import/adapter.ts — what every import adapter shares.
  *
  * An importer's job is to turn somebody else's file into the envelope
- * `document.js` already defines. That leaves four things which are the same
+ * `document.ts` already defines. That leaves four things which are the same
  * whichever file it is, and which are here so the PPTX and SVG adapters cannot
  * drift on them:
  *
@@ -32,19 +32,16 @@ import { canvasSize } from '../geometry.ts';
  *
  * These are *whole-import* failures. Anything that costs one slide or one
  * shape is a report entry instead — see {@link createReport}.
- *
- * @typedef {'malformed'|'unsupported'|'empty'|'too-large'} ImportErrorCode
  */
+export type ImportErrorCode = 'malformed' | 'unsupported' | 'empty' | 'too-large';
 export class ImportError extends Error {
-  /**
-   * @param {ImportErrorCode} code
-   * @param {string} message
-   * @param {string} [part] member of the imported file the failure belongs to
-   */
-  constructor(code, message, part) {
+  code: ImportErrorCode;
+  part: string;
+
+  /** @param part - member of the imported file the failure belongs to */
+  constructor(code: ImportErrorCode, message: string, part?: string) {
     super(part ? `${part}: ${message}` : message);
     this.name = 'ImportError';
-    /** @type {ImportErrorCode} */
     this.code = code;
     this.part = part || '';
   }
@@ -61,6 +58,18 @@ export class ImportError extends Error {
  * so ~5.8 MB of photographs is the real ceiling; the per-asset cap keeps one
  * hero image from spending it alone.
  */
+/** What `importPptx` and `importSvg` accept besides the file itself. */
+export interface ImportOptions {
+  /** what the user called the file; the template's name and slug come from it */
+  filename?: string;
+  /** force a target aspect instead of the nearest */
+  aspect?: string;
+  /** a `DOMParser` for a runtime without a global one */
+  parser?: typeof DOMParser;
+  maxAssetBytes?: number;
+  maxTotalBytes?: number;
+}
+
 export const ASSET_LIMITS = {
   maxAssetBytes: 2 * 1024 * 1024,
   maxTotalBytes: 8 * 1024 * 1024,
@@ -88,23 +97,16 @@ const MIME_BY_EXT = {
  * The other direction, first spelling wins: `image/jpeg` is `.jpg`, not the
  * `.jfif` that also maps to it. Derived from {@link MIME_BY_EXT} rather than
  * written out, so the two cannot disagree about what Point stores.
- *
- * @type {Record<string, string>}
  */
-const EXT_BY_MIME = {};
+const EXT_BY_MIME: Record<string, string> = {};
 for (const [ext, mime] of Object.entries(MIME_BY_EXT)) {
   if (!EXT_BY_MIME[mime]) EXT_BY_MIME[mime] = ext;
 }
 
-/**
- * The image MIME type for a path, or `''` when nothing here decodes it.
- *
- * @param {string} name
- * @returns {string}
- */
-export function mimeForPath(name) {
+/** The image MIME type for a path, or `''` when nothing here decodes it. */
+export function mimeForPath(name: string): string {
   const ext = String(name || '').toLowerCase().split('.').pop() || '';
-  return MIME_BY_EXT[/** @type {keyof typeof MIME_BY_EXT} */ (ext)] || '';
+  return MIME_BY_EXT[(ext as keyof typeof MIME_BY_EXT)] || '';
 }
 
 /** Base64 in 32 KB slices: one `fromCharCode` per byte would build a two
@@ -119,12 +121,7 @@ function base64(bytes) {
   return btoa(out);
 }
 
-/**
- * @param {Uint8Array} bytes
- * @param {string} mime
- * @returns {string}
- */
-export function dataUrl(bytes, mime) {
+export function dataUrl(bytes: Uint8Array, mime: string): string {
   return `data:${mime};base64,${base64(bytes)}`;
 }
 
@@ -142,11 +139,12 @@ export function dataUrl(bytes, mime) {
  * `name` is synthetic and only exists so the shared code can read a type off it
  * and quote it in a refusal: an inline image has no filename to report.
  *
- * @param {string} url
- * @param {string} name what to call it in a report, without the extension
- * @returns {{bytes: Uint8Array, mime: string, name: string}|null}
+ * @param name - what to call it in a report, without the extension
  */
-export function fromDataUrl(url, name) {
+export function fromDataUrl(
+  url: string,
+  name: string,
+): {bytes: Uint8Array, mime: string, name: string} | null {
   const match = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]*)$/i.exec(String(url || ''));
   if (!match) return null;
   const mime = match[1].toLowerCase();
@@ -166,27 +164,26 @@ export function fromDataUrl(url, name) {
 /** Megabytes, one decimal, for a message a person reads. */
 const mb = (n) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
 
-/**
- * @typedef {object} ImportAssets
- * @property {(part: string, bytes: Uint8Array, slide: number|null) => string}
- *   inline the `data:` URL for an archive member, or `''` when it was refused —
- *   which is already recorded in the report, by name, with its slide
- * @property {() => {count: number, bytes: number}} totals
- */
+export interface ImportAssets {
+  /**
+   * the `data:` URL for an archive member, or `''` when it was refused — which is already
+   * recorded in the report, by name, with its slide
+   */
+  inline: (part: string, bytes: Uint8Array, slide: number | null) => string;
+  totals: () => {count: number, bytes: number};
+}
 
 /**
  * The asset budget, shared across every slide of one import so a logo reused
  * on eight slides is inlined — and counted — once.
- *
- * @param {ReturnType<typeof createReport>} report
- * @param {{maxAssetBytes?: number, maxTotalBytes?: number}} [limits]
- * @returns {ImportAssets}
  */
-export function createAssets(report, limits = {}) {
+export function createAssets(
+  report: ReturnType<typeof createReport>,
+  limits: {maxAssetBytes?: number, maxTotalBytes?: number} = {},
+): ImportAssets {
   const maxAsset = limits.maxAssetBytes ?? ASSET_LIMITS.maxAssetBytes;
   const maxTotal = limits.maxTotalBytes ?? ASSET_LIMITS.maxTotalBytes;
-  /** @type {Map<string, string>} */
-  const seen = new Map();
+  const seen: Map<string, string> = new Map();
   let bytes = 0;
 
   return {
@@ -195,8 +192,7 @@ export function createAssets(report, limits = {}) {
       if (already !== undefined) return already;
       const name = part.split('/').pop() || part;
       const mime = mimeForPath(part);
-      /** @param {string} why */
-      const refuse = (why) => {
+      const refuse = (why: string) => {
         report.drop(slide, `image Point cannot store: ${name} (${why})`);
         seen.set(part, '');
         return '';
@@ -217,28 +213,26 @@ export function createAssets(report, limits = {}) {
   };
 }
 
-/**
- * @typedef {object} ImportFit
- * @property {string} aspect the {@link ASPECTS} key chosen
- * @property {number} fx  fraction of the target width the source occupies
- * @property {number} fy  fraction of the target height the source occupies
- * @property {(x: number, y: number, w: number, h: number) => {x:number,y:number,w:number,h:number}}
- *   box source-unit rect → a normalized layer box
- * @property {(h: number) => number} height source-unit length → fraction of the
- *   target canvas height (type sizes, in particular)
- * @property {{from: string, to: string, axis: 'x'|'y'|'', margin: number, note: string}} aspectReport
- */
+export interface ImportFit {
+  /** the {@link ASPECTS} key chosen */
+  aspect: string;
+  /** fraction of the target width the source occupies */
+  fx: number;
+  /** fraction of the target height the source occupies */
+  fy: number;
+  /** source-unit rect → a normalized layer box */
+  box: (x: number, y: number, w: number, h: number) => {x:number,y:number,w:number,h:number};
+  /** source-unit length → fraction of the target canvas height (type sizes, in particular) */
+  height: (h: number) => number;
+  aspectReport: {from: string, to: string, axis: 'x' | 'y' | '', margin: number, note: string};
+}
 
 /**
  * The {@link ASPECTS} key closest to a source canvas, compared in log space so
  * "how far off is it" means the same in both directions — 2:1 and 1:2 are
  * equally far from square, which a plain difference of ratios does not say.
- *
- * @param {number} w
- * @param {number} h
- * @returns {string}
  */
-export function chooseAspect(w, h) {
+export function chooseAspect(w: number, h: number): string {
   const src = Math.log(w / h);
   let best = ASPECTS[0];
   let bestOff = Infinity;
@@ -262,12 +256,8 @@ export function chooseAspect(w, h) {
  * common divisor is meaningless — `10287000:12858750` reduces to `4:5` only
  * after being asked for a *small* answer. The tolerance is relative, so a deck
  * that is a rounding error away from 16:9 still reads as 16:9.
- *
- * @param {number} w
- * @param {number} h
- * @returns {string}
  */
-export function ratioLabel(w, h) {
+export function ratioLabel(w: number, h: number): string {
   const ratio = w / h;
   for (let d = 1; d <= 40; d++) {
     const n = Math.round(ratio * d);
@@ -284,12 +274,9 @@ export function ratioLabel(w, h) {
  * source coordinate into a schema one. Doing it per shape is how a deck ends
  * up with its rectangles fitted one way and its type another.
  *
- * @param {number} srcW
- * @param {number} srcH
- * @param {string} [aspect] the target, else the nearest by {@link chooseAspect}
- * @returns {ImportFit}
+ * @param aspect - the target, else the nearest by {@link chooseAspect}
  */
-export function centreFit(srcW, srcH, aspect = '') {
+export function centreFit(srcW: number, srcH: number, aspect: string = ''): ImportFit {
   const to = ASPECTS.includes(aspect) ? aspect : chooseAspect(srcW, srcH);
   const [cw, ch] = canvasSize(to);
   const src = srcW / srcH;
@@ -323,13 +310,15 @@ export function centreFit(srcW, srcH, aspect = '') {
  * difference in somebody's export, not a design decision, and reporting "0%
  * margin" would invite a hunt for it.
  *
- * @param {string} from
- * @param {string} to
- * @param {boolean} wide source wider than the target, so the margin is vertical
- * @param {number} margin fraction of the binding side, one side of the two
- * @returns {ImportFit['aspectReport']}
+ * @param wide - source wider than the target, so the margin is vertical
+ * @param margin - fraction of the binding side, one side of the two
  */
-function fitNote(from, to, wide, margin) {
+function fitNote(
+  from: string,
+  to: string,
+  wide: boolean,
+  margin: number,
+): ImportFit['aspectReport'] {
   if (margin < 0.005) return { from, to, axis: '', margin: 0, note: `${from} matches ${to}` };
   const side = wide ? 'top and bottom' : 'each side';
   return {
@@ -356,13 +345,12 @@ const FULL_FRAME = { cover: 0.95, offset: 0.05 };
  *
  * The rectangle is in source units with the canvas origin already subtracted: a
  * `viewBox` may start anywhere, a slide always starts at zero.
- *
- * @param {{x: number, y: number, w: number, h: number}} rect
- * @param {number} srcW
- * @param {number} srcH
- * @returns {boolean}
  */
-export function coversCanvas(rect, srcW, srcH) {
+export function coversCanvas(
+  rect: {x: number, y: number, w: number, h: number},
+  srcW: number,
+  srcH: number,
+): boolean {
   return (
     rect.w >= srcW * FULL_FRAME.cover &&
     rect.h >= srcH * FULL_FRAME.cover &&
@@ -371,23 +359,27 @@ export function coversCanvas(rect, srcW, srcH) {
   );
 }
 
-/**
- * @typedef {object} ImportReport
- * @property {string} format
- * @property {string} file
- * @property {number} slides slides the template ended up with
- * @property {number} sourceSlides slides the file offered
- * @property {{kept: number, total: number}} shapes
- * @property {ImportFit['aspectReport']} aspect
- * @property {string[]} fonts recorded, never applied
- * @property {{count: number, bytes: number}} assets
- * @property {Array<{slide: number|null, what: string, n: number}>} dropped
- * @property {Array<{slide: number|null, part: string, reason: string}>} failed
- * @property {string[]} warnings
- * @property {string[]} order the files, in the order they became slides — empty
- *   for a format that states its own order. A list of SVGs does not, so the
- *   importer sorts them and this is how a person sees what it decided
- */
+export interface ImportReport {
+  format: string;
+  file: string;
+  /** slides the template ended up with */
+  slides: number;
+  /** slides the file offered */
+  sourceSlides: number;
+  shapes: {kept: number, total: number};
+  aspect: ImportFit['aspectReport'];
+  /** recorded, never applied */
+  fonts: string[];
+  assets: {count: number, bytes: number};
+  dropped: Array<{slide: number | null, what: string, n: number}>;
+  failed: Array<{slide: number | null, part: string, reason: string}>;
+  warnings: string[];
+  /**
+   * the files, in the order they became slides — empty for a format that states its own order. A
+   * list of SVGs does not, so the importer sorts them and this is how a person sees what it decided
+   */
+  order: string[];
+}
 
 /**
  * The report accumulator.
@@ -401,29 +393,19 @@ export function coversCanvas(rect, srcW, srcH) {
  * `dropped` is deliberately the shape `normalizeDropped` accepts, so the same
  * list can be stored in the template's `origin` and survive a round trip
  * through the API: a template opened next month still says what it lost.
- *
- * @param {{format: string, file: string}} meta
  */
-export function createReport(meta) {
-  /** @type {Map<string, {slide: number|null, what: string, n: number}>} */
-  const dropped = new Map();
-  /** @type {Array<{slide: number|null, part: string, reason: string}>} */
-  const failed = [];
-  /** @type {Set<string>} */
-  const fonts = new Set();
-  /** @type {string[]} */
-  const warnings = [];
+export function createReport(meta: {format: string, file: string}) {
+  const dropped: Map<string, {slide: number | null, what: string, n: number}> = new Map();
+  const failed: Array<{slide: number | null, part: string, reason: string}> = [];
+  const fonts: Set<string> = new Set();
+  const warnings: string[] = [];
 
   return {
     /**
      * Something the schema has no room for. `slide` is the index it happened
      * on, or `null` for the deck as a whole.
-     *
-     * @param {number|null} slide
-     * @param {string} what
-     * @param {number} [n]
      */
-    drop(slide, what, n = 1) {
+    drop(slide: number | null, what: string, n: number = 1) {
       const key = `${slide} ${what}`;
       const at = dropped.get(key);
       if (at) at.n += n;
@@ -433,25 +415,21 @@ export function createReport(meta) {
     /**
      * A part that could not be read at all. One bad slide costs that slide,
      * not the import.
-     *
-     * @param {number|null} slide
-     * @param {string} part
-     * @param {string} reason
      */
-    fail(slide, part, reason) {
+    fail(slide: number | null, part: string, reason: string) {
       failed.push({ slide, part, reason });
     },
 
-    /** A typeface the source named. Recorded; nothing renders it. @param {string} name */
-    font(name) {
+    /** A typeface the source named. Recorded; nothing renders it. */
+    font(name: string) {
       const clean = String(name || '').trim();
       // `+mj-lt` / `+mn-lt` are references to the source theme's own fonts, not
       // typefaces. Recording them would name a font nobody has.
       if (clean && !clean.startsWith('+')) fonts.add(clean);
     },
 
-    /** Something a person should be told in words. @param {string} text */
-    warn(text) {
+    /** Something a person should be told in words. */
+    warn(text: string) {
       if (text) warnings.push(text);
     },
 
@@ -461,15 +439,15 @@ export function createReport(meta) {
     /** The recorded typefaces, first-seen order. */
     typefaces: () => [...fonts],
 
-    /**
-     * The plain, serializable report.
-     *
-     * @param {{slides: number, sourceSlides: number, shapes: {kept: number, total: number},
-     *   aspect: ImportFit['aspectReport'], assets: {count: number, bytes: number},
-     *   order?: string[]}} totals
-     * @returns {ImportReport}
-     */
-    finish(totals) {
+    /** The plain, serializable report. */
+    finish(totals: {
+      slides: number;
+      sourceSlides: number;
+      shapes: {kept: number, total: number};
+      aspect: ImportFit['aspectReport'];
+      assets: {count: number, bytes: number};
+      order?: string[];
+    }): ImportReport {
       return {
         format: meta.format,
         file: meta.file,
@@ -496,11 +474,8 @@ export function createReport(meta) {
  * (`api/carousel.ts`), and the name keeps the author's capitalisation because
  * they chose it. Uniqueness is not settled here — two decks with one name are
  * the save path's problem, and it is the one place that can ask.
- *
- * @param {string} file
- * @returns {{id: string, name: string}}
  */
-export function metaFromFilename(file) {
+export function metaFromFilename(file: string): {id: string, name: string} {
   const base = String(file || '')
     .split(/[\\/]/)
     .pop()

@@ -1612,7 +1612,7 @@ describe('CarouselStudioPage', () => {
      *  hatch is the parent frame's, so the letterbox shows through it. */
     const pair = (css) => css.trim().split(/\s+/).map((v) => Number(v.replace('%', '')));
 
-    /** The stage's own column for slide `i` — the editing surface `gestures.js`
+    /** The stage's own column for slide `i` — the editing surface `gestures.ts`
      *  binds, and the sole paint host now that the filmstrip is merged into it.
      *  Everything a pointer or an arrow key does happens here, including the
      *  handle that moves the selection's order. */
@@ -1638,7 +1638,7 @@ describe('CarouselStudioPage', () => {
     }
 
     /** Pan the crop — `ctrlKey` is what asks `onPointerDown` for the crop
-     *  gesture rather than a plain pane-scroll drag (`studio/gestures.js`). */
+     *  gesture rather than a plain pane-scroll drag (`studio/gestures.ts`). */
     function drag(frame, img, dx, dy) {
       withBox(img);
       fire(frame, 'pointerdown', { pointerId: 1, button: 0, clientX: 200, clientY: 200, ctrlKey: true });
@@ -1648,7 +1648,7 @@ describe('CarouselStudioPage', () => {
     }
 
     /** Selection is a tap on the stage column now — a pointerdown/pointerup
-     *  pair with no movement in between (`onPointerUp` in `studio/gestures.js`
+     *  pair with no movement in between (`onPointerUp` in `studio/gestures.ts`
      *  only selects when `!moved`), not a native click on a button. */
     function tapSlide(el, i) {
       const col = stageCol(el, i);
@@ -4081,7 +4081,7 @@ describe('CarouselStudioPage', () => {
   describe('the touch layout', () => {
     const SRC = '/2026/08/pano.jpg';
 
-    /** A coarse pointer, for `isTouchLayout` (studio/layout.js). Must be in
+    /** A coarse pointer, for `isTouchLayout` (studio/layout.ts). Must be in
      *  place before the mount: the page reads the query in its constructor
      *  (`readPropsPref`) and again in every `afterRender`. */
     const goCoarse = () => {

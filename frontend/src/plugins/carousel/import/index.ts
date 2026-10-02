@@ -12,7 +12,7 @@
  * avoids.
  *
  * Every adapter returns `{ template, report }` and throws `ImportError` — see
- * `adapter.js`, which is also where the parts they share live.
+ * `adapter.ts`, which is also where the parts they share live.
  */
 
 import { importPptx } from './pptx.ts';
@@ -20,19 +20,24 @@ import { importSvg } from './svg.ts';
 
 export { ImportError, ASSET_LIMITS } from './adapter.ts';
 
-/**
- * @typedef {object} ImportAdapter
- * @property {string} format matches `TEMPLATE_ORIGINS` in `document.js`
- * @property {string} label what the picker calls it
- * @property {string[]} extensions lower-case, with the dot
- * @property {string} accept the `<input type="file" accept>` value
- * @property {boolean} takesList `true` when one template comes from many files
- * @property {(input: *, options?: *) => Promise<{template: import('../document.ts').CarouselTemplate,
- *   report: import('./adapter.ts').ImportReport}>} read
- */
+export interface ImportAdapter {
+  /** matches `TEMPLATE_ORIGINS` in `document.ts` */
+  format: string;
+  /** what the picker calls it */
+  label: string;
+  /** lower-case, with the dot */
+  extensions: string[];
+  /** the `<input type="file" accept>` value */
+  accept: string;
+  /** `true` when one template comes from many files */
+  takesList: boolean;
+  read: (input: any, options?: any) => Promise<{
+    template: import('../document.ts').CarouselTemplate;
+    report: import('./adapter.ts').ImportReport;
+  }>;
+}
 
-/** @type {ImportAdapter} */
-const PPTX = {
+const PPTX: ImportAdapter = {
   format: 'pptx',
   label: 'PowerPoint or Canva (.pptx)',
   extensions: ['.pptx'],
@@ -47,10 +52,8 @@ const PPTX = {
  * `takesList`. Every design tool worth importing from exports SVG: Figma,
  * Illustrator, Sketch and XD are all proprietary on disk, and Canva offers it
  * beside the PPTX above.
- *
- * @type {ImportAdapter}
  */
-const SVG = {
+const SVG: ImportAdapter = {
   format: 'svg',
   label: 'Figma, Illustrator, Sketch or Canva (.svg)',
   extensions: ['.svg'],
@@ -72,11 +75,8 @@ export const IMPORT_ACCEPT = IMPORTERS.map((a) => a.accept).join(',');
  * arrives as `application/vnd.openxmlformats-…` from a file input, as
  * `application/zip` from some archivers, and as `''` from a drag out of a
  * download manager, so the extension is the only field that is reliably there.
- *
- * @param {string} filename
- * @returns {ImportAdapter|null}
  */
-export function adapterFor(filename) {
+export function adapterFor(filename: string): ImportAdapter | null {
   const name = String(filename || '').toLowerCase();
   return IMPORTERS.find((a) => a.extensions.some((ext) => name.endsWith(ext))) || null;
 }

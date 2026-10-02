@@ -38,61 +38,100 @@ const DEFAULT_ANCHOR_Y = 0.5;
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 const isObj = (v) => v != null && typeof v === 'object';
-const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
+const num = (v, d) => (Number.isFinite(v) ? (v as number) : d);
 
-/**
- * @typedef {object} CarouselCrop
- * @property {number} x
- * @property {number} y
- * @property {number} w
- * @property {number} h
- */
+export interface CarouselCrop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
-/**
- * @typedef {object} CarouselRendered
- * @property {string} path
- * @property {number|null} media_id
- * @property {string} specHash
- */
+export interface CarouselRendered {
+  path: string;
+  media_id: number | null;
+  specHash: string;
+}
 
 /**
  * The background fill behind a slide's pixels. `blur` carries an optional
  * `radius` in canvas px, `solid` a `color`, `gradient` a CSS `angle` in degrees
  * plus its `stops`. `null` means the default, which renders as `blur`.
- *
- * @typedef {{type:'blur', radius?:number}
- *   | {type:'solid', color:string}
- *   | {type:'gradient', angle:number, stops:Array<{at:number,color:string}>}} CarouselBg
  */
+export type CarouselBg = {type:'blur', radius?:number} | {
+  type: 'solid';
+  color: string;
+} | {type:'gradient', angle:number, stops:Array<{at:number,color:string}>};
 
 /**
  * A layer's placement box: `{x, y, w, h}` in 0..1 of the canvas it sits on,
  * plus `rotate` in degrees — presentational only, wrapped into -180..180 and
  * folded into `specHash` alongside the rest of the box, but never read by
- * {@link layerFrame} or its callers (`geometry.js`), which stay rotation-blind
+ * {@link layerFrame} or its callers (`geometry.ts`), which stay rotation-blind
  * on purpose.
- *
- * @typedef {object} CarouselBox
- * @property {number} x
- * @property {number} y
- * @property {number} w
- * @property {number} h
- * @property {number} rotate
  */
+export interface CarouselBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotate: number;
+}
 
 /**
  * The typography a `text` and a `counter` layer share. `size` is the type size
  * as a fraction of the canvas height, or `null` to auto-fit the box. Opacity
  * lives in `color`'s alpha (`#rrggbbaa`), which is why neither carries one.
- *
- * @typedef {object} CarouselTextStyle
- * @property {'left'|'center'|'right'} align
- * @property {'top'|'middle'|'bottom'} valign
- * @property {string} color
- * @property {number} weight
- * @property {number|null} size
- * @property {boolean} shadow
  */
+export interface CarouselTextStyle {
+  align: 'left' | 'center' | 'right';
+  valign: 'top' | 'middle' | 'bottom';
+  color: string;
+  weight: number;
+  size: number | null;
+  shadow: boolean;
+}
+
+export type CarouselTextLayer = {type:'text', box:CarouselBox, text:string, lineHeight:number} & CarouselTextStyle;
+
+export interface CarouselImageLayer {
+  type: 'image';
+  box: CarouselBox;
+  source: string;
+  fit: 'cover' | 'contain';
+  opacity: number;
+}
+
+export interface CarouselRectLayer {
+  type: 'rect';
+  box: CarouselBox;
+  fill: string;
+  opacity: number;
+  radius: number;
+}
+
+export type CarouselCounterLayer = {type:'counter', box:CarouselBox, format:string} & CarouselTextStyle;
+
+export interface CarouselArrowLayer {
+  type: 'arrow';
+  box: CarouselBox;
+  direction: 'left' | 'right';
+  color: string;
+  opacity: number;
+}
+
+export interface CarouselInkStroke {
+  w: number;
+  pts: Array<[number,number]>;
+}
+
+export interface CarouselInkLayer {
+  type: 'ink';
+  box: CarouselBox;
+  strokes: CarouselInkStroke[];
+  color: string;
+  opacity: number;
+}
 
 /**
  * One drawable placed over a slide's image, in that slide's canvas space — or,
@@ -105,48 +144,48 @@ const num = (v, d) => (Number.isFinite(v) ? /** @type {number} */ (v) : d);
  * means visible — so the flag cannot move an existing slide's `specHash` until
  * something is actually hidden, and a document written before it existed reads
  * back byte-identical.
- *
- * @typedef {{type:'text', box:CarouselBox, text:string, lineHeight:number} & CarouselTextStyle} CarouselTextLayer
- * @typedef {{type:'image', box:CarouselBox, source:string, fit:'cover'|'contain', opacity:number}} CarouselImageLayer
- * @typedef {{type:'rect', box:CarouselBox, fill:string, opacity:number, radius:number}} CarouselRectLayer
- * @typedef {{type:'counter', box:CarouselBox, format:string} & CarouselTextStyle} CarouselCounterLayer
- * @typedef {{type:'arrow', box:CarouselBox, direction:'left'|'right', color:string, opacity:number}} CarouselArrowLayer
- * @typedef {{w:number, pts:Array<[number,number]>}} CarouselInkStroke
- * @typedef {{type:'ink', box:CarouselBox, strokes:CarouselInkStroke[], color:string, opacity:number}} CarouselInkLayer
- * @typedef {(CarouselTextLayer|CarouselImageLayer|CarouselRectLayer|CarouselCounterLayer
- *   |CarouselArrowLayer|CarouselInkLayer) & {hidden?: boolean}} CarouselLayer
  */
+export type CarouselLayer = (
+  | CarouselTextLayer
+  | CarouselImageLayer
+  | CarouselRectLayer
+  | CarouselCounterLayer
+  | CarouselArrowLayer
+  | CarouselInkLayer
+) & { hidden?: boolean };
 
-/**
- * @typedef {object} CarouselSlide
- * @property {string} source
- * @property {CarouselCrop} crop
- * @property {'cover'|'contain'} fit
- * @property {CarouselBg|null} bg
- * @property {CarouselLayer[]} layers
- * @property {CarouselRendered|null} rendered
- */
+export interface CarouselSlide {
+  source: string;
+  crop: CarouselCrop;
+  fit: 'cover' | 'contain';
+  bg: CarouselBg | null;
+  layers: CarouselLayer[];
+  rendered: CarouselRendered | null;
+}
 
-/**
- * @typedef {object} CarouselDoc
- * @property {number} version
- * @property {string} aspect
- * @property {string} mode
- * @property {'cover'|'exact'|'pad'} strategy  how `split` mode fits the source to the deck
- * @property {number} anchorY  0..1 vertical placement of the crop band in its slack
- * @property {CarouselSlide[]} slides
- * @property {CarouselLayer[]} spanLayers  layers in the deck's canvas space,
- *   sliced across slide boundaries (addressed as slide {@link SPAN_SLIDE})
- * @property {{id:string,custom:boolean}|null} template
- */
+export interface CarouselDoc {
+  version: number;
+  aspect: string;
+  mode: string;
+  /** how `split` mode fits the source to the deck */
+  strategy: 'cover' | 'exact' | 'pad';
+  /** 0..1 vertical placement of the crop band in its slack */
+  anchorY: number;
+  slides: CarouselSlide[];
+  /**
+   * layers in the deck's canvas space, sliced across slide boundaries (addressed as slide {@link
+   * SPAN_SLIDE})
+   */
+  spanLayers: CarouselLayer[];
+  template: {id:string,custom:boolean} | null;
+}
 
 /** A fresh, empty document. */
 export function emptyDocument() {
   return normalizeDocument({});
 }
 
-/** @param {*} crop @returns {CarouselCrop} */
-function normalizeCrop(crop) {
+function normalizeCrop(crop: any): CarouselCrop {
   const c = isObj(crop) ? crop : {};
   const w = clamp(num(c.w, 1), 0, 1);
   const h = clamp(num(c.h, 1), 0, 1);
@@ -170,8 +209,7 @@ function normalizeCrop(crop) {
  */
 const COLOR_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
-/** @param {*} value @param {string} fallback @returns {string} */
-function normalizeColor(value, fallback) {
+function normalizeColor(value: any, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const c = value.trim().toLowerCase();
   if (c === 'transparent') return c;
@@ -193,11 +231,8 @@ const DEFAULT_GRADIENT_STOPS = [
  * Entries whose colour the canvas would reject are dropped; a stop with no
  * usable `at` is spread evenly across what survives, so `[{color}, {color}]`
  * is a complete gradient.
- *
- * @param {*} stops
- * @returns {Array<{at:number,color:string}>|null}
  */
-function normalizeStops(stops) {
+function normalizeStops(stops: any): Array<{at:number,color:string}> | null {
   if (!Array.isArray(stops)) return null;
   const kept = [];
   for (const s of stops) {
@@ -218,12 +253,9 @@ function normalizeStops(stops) {
  *
  * An unusable value degrades rather than throwing: a gradient with no parseable
  * stops falls back to {@link DEFAULT_GRADIENT_STOPS}, an unrecognized type to
- * `null`. `render.js` may not discover a bad background mid-encode.
- *
- * @param {*} bg
- * @returns {CarouselBg|null}
+ * `null`. `render.ts` may not discover a bad background mid-encode.
  */
-function normalizeBg(bg) {
+function normalizeBg(bg: any): CarouselBg | null {
   if (!isObj(bg) || !BG_TYPES.includes(bg.type)) return null;
   if (bg.type === 'solid') {
     return { type: 'solid', color: normalizeColor(bg.color, DEFAULT_BG_COLOR) };
@@ -271,11 +303,8 @@ const DEFAULT_ROTATE = 0;
  * Wrap degrees into -180..180 — a full turn has no preferred zero, so a value
  * outside the range means the same angle, not an invalid one. `180` wraps to
  * `-180`, the same seam a compass bearing picks.
- *
- * @param {number} deg
- * @returns {number}
  */
-function wrapRotate(deg) {
+function wrapRotate(deg: number): number {
   return ((deg + 180) % 360 + 360) % 360 - 180;
 }
 
@@ -306,17 +335,15 @@ const DEFAULT_DIRECTION = 'right';
  * origin so that `x+w <= 1` and `y+h <= 1`. The same discipline `clampPan`
  * keeps for a crop against its source, done arithmetically here — a box has no
  * source to measure against, which is what keeps this module independent of
- * `geometry.js`.
+ * `geometry.ts`.
  *
  * A span layer's box clamps against this same 0..1 range. That its `1` means
  * "the whole deck" rather than "one slide" is the renderer's business.
  *
- * @param {*} box
- * @param {*} [base] an already-normal box whose fields stand in for the
+ * @param base - an already-normal box whose fields stand in for the
  *   defaults — see {@link normalizeLayer}
- * @returns {CarouselBox}
  */
-function normalizeBox(box, base) {
+function normalizeBox(box: any, base?: any): CarouselBox {
   const b = isObj(box) ? box : {};
   const d = isObj(base) ? base : { x: 0, y: 0, w: 1, h: 1, rotate: DEFAULT_ROTATE };
   const w = clamp(num(b.w, d.w), MIN_BOX, 1);
@@ -334,7 +361,7 @@ function normalizeBox(box, base) {
  * Type size as a fraction of the canvas height, or `null` for "auto-fit the
  * box" — which is the default, because a headline that fits is worth more than
  * one that is exactly 7% tall. Anything unusable falls back rather than
- * throwing: `render.js` cannot discover a bad size mid-encode.
+ * throwing: `render.ts` cannot discover a bad size mid-encode.
  */
 function normalizeSize(value, fallback) {
   return Number.isFinite(value) ? clamp(value, MIN_BOX, 1) : fallback;
@@ -349,11 +376,10 @@ function normalizeOpacity(l, fb) {
  * The typography `text` and `counter` share. Split out so the two cannot drift:
  * `.3` paints one and `.4` the other, from the same fields.
  *
- * @param {*} l the raw layer
- * @param {(key: string, dflt: *) => *} fb the fallback resolver
- * @returns {CarouselTextStyle}
+ * @param l - the raw layer
+ * @param fb - the fallback resolver
  */
-function normalizeTextStyle(l, fb) {
+function normalizeTextStyle(l: any, fb: (key: string, dflt: any) => any): CarouselTextStyle {
   return {
     align: ALIGNS.includes(l.align) ? l.align : fb('align', DEFAULT_ALIGN),
     valign: VALIGNS.includes(l.valign) ? l.valign : fb('valign', DEFAULT_VALIGN),
@@ -365,7 +391,7 @@ function normalizeTextStyle(l, fb) {
 }
 
 /** An ink stroke's width, as a fraction of the box's shorter side — the same
- *  convention `rect`'s `radius` and `render.js`'s `ARROW_STROKE` use, so a
+ *  convention `rect`'s `radius` and `render.ts`'s `ARROW_STROKE` use, so a
  *  resize keeps the stroke sensible. Canvas px would not survive a resize. */
 const MIN_STROKE_WIDTH = 0.001;
 const MAX_STROKE_WIDTH = 0.25;
@@ -386,11 +412,8 @@ const MAX_INK_STROKES = 200;
  * fallback to fall back to, so a pair that is not two finite numbers is
  * dropped rather than defaulted — {@link normalizeStroke} is what decides
  * whether the stroke it belonged to survives that.
- *
- * @param {*} pt
- * @returns {[number, number]|null}
  */
-function normalizePoint(pt) {
+function normalizePoint(pt: any): [number, number] | null {
   if (!Array.isArray(pt) || pt.length < 2) return null;
   const [x, y] = pt;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -403,11 +426,8 @@ function normalizePoint(pt) {
  * survive — two is the least that draws a line. Points beyond
  * {@link MAX_STROKE_POINTS} are dropped, not the whole stroke: a runaway
  * session should lose its tail, not the mark.
- *
- * @param {*} stroke
- * @returns {{w:number, pts:Array<[number,number]>}|null}
  */
-function normalizeStroke(stroke) {
+function normalizeStroke(stroke: any): {w:number, pts:Array<[number,number]>} | null {
   if (!isObj(stroke) || !Array.isArray(stroke.pts)) return null;
   const pts = [];
   for (const pt of stroke.pts) {
@@ -423,11 +443,8 @@ function normalizeStroke(stroke) {
  * A stroke list: every entry normalized, the ones that cannot be a stroke at
  * all dropped, capped at {@link MAX_INK_STROKES} for the reason
  * {@link normalizeStroke} caps points.
- *
- * @param {*} strokes
- * @returns {Array<{w:number, pts:Array<[number,number]>}>}
  */
-function normalizeStrokes(strokes) {
+function normalizeStrokes(strokes: any): Array<{w:number, pts:Array<[number,number]>}> {
   if (!Array.isArray(strokes)) return [];
   const out = [];
   for (const stroke of strokes) {
@@ -438,16 +455,20 @@ function normalizeStrokes(strokes) {
   return out;
 }
 
+type LayerBuilder = (
+  l: any,
+  fb: (key: string, dflt: any) => any,
+  box: CarouselBox,
+) => CarouselLayer;
+
 /**
  * One builder per `type`: the full shape that type normalizes to, given the raw
  * layer, the fallback resolver and an already-clamped box. A table rather than
  * a switch so that {@link LAYER_TYPES} can be derived from it — the list of
  * what is valid and the code that produces it cannot disagree — and so adding a
  * new type is one entry rather than a longer function.
- *
- * @type {Record<string, (l: *, fb: (key: string, dflt: *) => *, box: CarouselBox) => CarouselLayer>}
  */
-const LAYER_BUILDERS = {
+const LAYER_BUILDERS: Record<string, LayerBuilder> = {
   text: (l, fb, box) => ({
     type: 'text',
     box,
@@ -529,17 +550,15 @@ export const LAYER_TYPES = Object.keys(LAYER_BUILDERS);
  * visible layer normalizes to exactly the object it did before the flag
  * existed — see the {@link CarouselLayer} typedef.
  *
- * @param {*} layer
- * @param {*} [base] an already-normal layer of the same `type` whose fields
+ * @param base - an already-normal layer of the same `type` whose fields
  *   stand in for the schema defaults. This is how {@link updateLayer} keeps
  *   `updateSlideFraming`'s contract — a patch value the schema rejects leaves
  *   the layer's own — without a second predicate per field.
- * @returns {CarouselLayer|null}
  */
-export function normalizeLayer(layer, base = undefined) {
-  const l = /** @type {*} */ (layer);
+export function normalizeLayer(layer: any, base: any = undefined): CarouselLayer | null {
+  const l = (layer as any);
   if (!isObj(l) || !LAYER_TYPES.includes(l.type)) return null;
-  const b = isObj(base) && /** @type {*} */ (base).type === l.type ? /** @type {*} */ (base) : {};
+  const b = isObj(base) && (base as any).type === l.type ? (base as any) : {};
   /** The base layer's field when it has one, else the schema default. */
   const fb = (key, dflt) => (b[key] === undefined ? dflt : b[key]);
   const next = LAYER_BUILDERS[l.type](l, fb, normalizeBox(l.box, b.box));
@@ -550,11 +569,8 @@ export function normalizeLayer(layer, base = undefined) {
 /**
  * A layer list: every entry normalized, the ones that cannot be a layer at all
  * dropped. Painted back to front, so order is meaning and is preserved.
- *
- * @param {*} layers
- * @returns {CarouselLayer[]}
  */
-function normalizeLayers(layers) {
+function normalizeLayers(layers: any): CarouselLayer[] {
   if (!Array.isArray(layers)) return [];
   const out = [];
   for (const layer of layers) {
@@ -564,8 +580,7 @@ function normalizeLayers(layers) {
   return out;
 }
 
-/** @param {*} rendered @returns {CarouselRendered|null} */
-function normalizeRendered(rendered) {
+function normalizeRendered(rendered: any): CarouselRendered | null {
   if (!isObj(rendered)) return null;
   const path = typeof rendered.path === 'string' ? rendered.path : '';
   if (!path) return null;
@@ -576,8 +591,7 @@ function normalizeRendered(rendered) {
   };
 }
 
-/** @param {*} slide @returns {CarouselSlide} */
-function normalizeSlide(slide) {
+function normalizeSlide(slide: any): CarouselSlide {
   const s = isObj(slide) ? slide : {};
   return {
     source: typeof s.source === 'string' ? s.source : '',
@@ -589,8 +603,7 @@ function normalizeSlide(slide) {
   };
 }
 
-/** @param {*} template @returns {{id:string,custom:boolean}|null} */
-function normalizeTemplate(template) {
+function normalizeTemplate(template: any): {id:string,custom:boolean} | null {
   if (!isObj(template) || typeof template.id !== 'string' || !template.id) return null;
   return { id: template.id, custom: Boolean(template.custom) };
 }
@@ -600,11 +613,8 @@ function normalizeTemplate(template) {
  * fields defaulted, out-of-range numbers clamped. Idempotent — normalizing an
  * already-normal document returns an equal one, which is what makes the
  * parse/serialize pair a round trip.
- *
- * @param {*} input
- * @returns {CarouselDoc}
  */
-export function normalizeDocument(input) {
+export function normalizeDocument(input: any): CarouselDoc {
   const doc = isObj(input) ? input : {};
   return {
     version: DOC_VERSION,
@@ -623,11 +633,8 @@ export function normalizeDocument(input) {
  * already-parsed object, or `null`/`''` (a post with no carousel yet → an empty
  * document). Throws only on a non-empty string that is not valid JSON — losing
  * a malformed document silently would be worse than surfacing the error.
- *
- * @param {string|object|null|undefined} input
- * @returns {CarouselDoc}
  */
-export function parseDocument(input) {
+export function parseDocument(input: string | object | null | undefined): CarouselDoc {
   if (input == null || input === '') return emptyDocument();
   const raw = typeof input === 'string' ? JSON.parse(input) : input;
   return normalizeDocument(raw);
@@ -637,11 +644,8 @@ export function parseDocument(input) {
  * Serialize a document for storage. Keys are written in a fixed order (the
  * order `normalizeDocument` builds them), so identical documents serialize to
  * identical strings.
- *
- * @param {*} doc
- * @returns {string}
  */
-export function serializeDocument(doc) {
+export function serializeDocument(doc: any): string {
   return JSON.stringify(normalizeDocument(doc));
 }
 
@@ -650,12 +654,10 @@ export function serializeDocument(doc) {
  * rendered slide, in slide order, blank line between them. Slides with no
  * rendered output yet are skipped; an empty result is the empty string.
  *
- * @param {*} doc
- * @param {string} [key] the block key to write into the fence — omitted, the
+ * @param key - the block key to write into the fence — omitted, the
  *   fence stays in its keyless form.
- * @returns {string}
  */
-export function buildCarouselBlock(doc, key) {
+export function buildCarouselBlock(doc: any, key?: string): string {
   const paths = normalizeDocument(doc)
     .slides.map((s) => (s.rendered ? s.rendered.path : ''))
     .filter(Boolean);
@@ -678,10 +680,14 @@ const FENCE_SOURCE = ':::\\{([^}\\n]*)\\}\\n[\\s\\S]*?\\n:::';
  * `:::{.carousel-block #c-7f3a}` — the same tolerance postNodes' own fence
  * reader has, because both read posts a person may have hand-edited.
  *
- * @param {string} content the post's markdown
- * @returns {{ key: string|null, paths: string[], start: number, end: number }[]}
+ * @param content - the post's markdown
  */
-export function carouselFences(content) {
+export function carouselFences(content: string): {
+  key: string | null;
+  paths: string[];
+  start: number;
+  end: number;
+}[] {
   const re = new RegExp(FENCE_SOURCE, 'g');
   const src = String(content ?? '');
   const out = [];
@@ -719,13 +725,12 @@ function fencePaths(fence) {
  * one save that adopts it, which is also the save that writes `key` into it.
  * With neither given the target is the post's first carousel, which is what a
  * caller that predates block keys means by "the carousel".
- *
- * @param {{ key: string|null, start: number, end: number }[]} fences
- * @param {string} [key]
- * @param {number} [ordinal]
- * @returns {{ key: string|null, start: number, end: number }|null}
  */
-function targetFence(fences, key, ordinal) {
+function targetFence(
+  fences: { key: string | null, start: number, end: number }[],
+  key?: string,
+  ordinal?: number,
+): { key: string | null, start: number, end: number } | null {
   if (key) {
     const keyed = fences.find((f) => f.key === key);
     if (keyed) return keyed;
@@ -743,15 +748,19 @@ function targetFence(fences, key, ordinal) {
  * other carousel fence included — comes through byte for byte: this is a
  * targeted string edit, not a parse/serialize round trip.
  *
- * @param {string} content the post's markdown
- * @param {*} doc the carousel document
- * @param {string} [key] the block key: which fence to replace, and the key the
+ * @param content - the post's markdown
+ * @param doc - the carousel document
+ * @param key - the block key: which fence to replace, and the key the
  *   written fence carries.
- * @param {number} [ordinal] 1-based position of the target fence, for a block
+ * @param ordinal - 1-based position of the target fence, for a block
  *   whose fence is still keyless. Only consulted when no fence carries `key`.
- * @returns {string}
  */
-export function applyCarouselBlock(content, doc, key, ordinal) {
+export function applyCarouselBlock(
+  content: string,
+  doc: any,
+  key?: string,
+  ordinal?: number,
+): string {
   const block = buildCarouselBlock(doc, key);
   const src = String(content ?? '');
   const fence = targetFence(carouselFences(src), key, ordinal);
@@ -779,11 +788,8 @@ export function applyCarouselBlock(content, doc, key, ordinal) {
  * reuse or to delete" — the studio renders a fresh file beside it and leaves
  * the original in the media library. Recording the real media id here would
  * make the next render delete the author's photo.
- *
- * @param {string} path
- * @returns {CarouselSlide}
  */
-function adoptedSlide(path) {
+function adoptedSlide(path: string): CarouselSlide {
   return normalizeSlide({ source: path, rendered: { path, media_id: null, specHash: '' } });
 }
 
@@ -813,11 +819,11 @@ function adoptedSlide(path) {
  * (`toDeckDocument`), and doing it here would need source pixel sizes this pure
  * function does not have.
  *
- * @param {*} doc the stored document, or an empty one for a block with no row
- * @param {string[]} paths the fence's paths, in document order
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param doc - the stored document, or an empty one for a block with no row
+ * @param paths - the fence's paths, in document order
+ * @returns a new document; the input is not mutated
  */
-export function adoptFencePaths(doc, paths) {
+export function adoptFencePaths(doc: any, paths: string[]): CarouselDoc {
   const base = normalizeDocument(doc);
   const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && p);
   if (!list.length) return base;
@@ -845,7 +851,7 @@ export function adoptFencePaths(doc, paths) {
 
 /**
  * A fresh `split` document: `n` slides, all drawn from the one `source` image.
- * `render.js` recomputes the exact draw rect from the slide index via
+ * `render.ts` recomputes the exact draw rect from the slide index via
  * `geometry.sliceRects`; each slide's `crop` records the horizontal band it
  * covers so the document is self-describing and every slide's `specHash` is
  * distinct (equal hashes would collapse under the C8 re-render dedup).
@@ -854,13 +860,15 @@ export function adoptFencePaths(doc, paths) {
  * **deck**, not to a slide count, so re-slicing to a different `n` re-flows the
  * same headline across the new seams rather than dropping it (S3). The studio
  * passes the current document's span layers in on every re-slice.
- *
- * @param {{ source: string, n: number, aspect: string,
- *   strategy?: 'cover'|'exact'|'pad', anchorY?: number,
- *   spanLayers?: CarouselLayer[] }} spec
- * @returns {CarouselDoc}
  */
-export function splitDocument({ source, n, aspect, strategy, anchorY, spanLayers }) {
+export function splitDocument({ source, n, aspect, strategy, anchorY, spanLayers }: {
+  source: string;
+  n: number;
+  aspect: string;
+  strategy?: 'cover' | 'exact' | 'pad';
+  anchorY?: number;
+  spanLayers?: CarouselLayer[];
+}): CarouselDoc {
   const count = Math.max(1, Math.floor(n));
   return normalizeDocument({
     version: DOC_VERSION,
@@ -911,13 +919,13 @@ export function splitDocument({ source, n, aspect, strategy, anchorY, spanLayers
  *   pixel-identical wherever the source can honour them; where it cannot, both
  *   paths fall back to `cover` alike and inherit that bound.
  *
- * @param {*} doc the document to convert (any mode; already-`deck` is a no-op)
- * @param {number} srcW source width in pixels — an argument, never a document
+ * @param doc - the document to convert (any mode; already-`deck` is a no-op)
+ * @param srcW - source width in pixels — an argument, never a document
  *   field: the document stores no derived data (callers re-probe on load)
- * @param {number} srcH source height in pixels
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param srcH - source height in pixels
+ * @returns a new document; the input is not mutated
  */
-export function toDeckDocument(doc, srcW, srcH) {
+export function toDeckDocument(doc: any, srcW: number, srcH: number): CarouselDoc {
   const base = normalizeDocument(doc);
   const w = Number.isFinite(srcW) ? Math.floor(srcW) : 0;
   const h = Number.isFinite(srcH) ? Math.floor(srcH) : 0;
@@ -978,14 +986,16 @@ function mergeCrop(current, patch) {
  * this runs at gesture rate from pointer handlers, where a throw strands the
  * drag mid-flight.
  *
- * @param {*} doc
- * @param {number} slideIndex
- * @param {{crop?: Partial<CarouselCrop>, fit?: string, bg?: CarouselBg|null}} update
- * @param {{srcW?: number, srcH?: number}} [opts] source pixel dimensions, used
+ * @param opts - source pixel dimensions, used
  *   to clamp the crop; omitting them still clamps to the 0..1 normalized box
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @returns a new document; the input is not mutated
  */
-export function updateSlideFraming(doc, slideIndex, update, opts = {}) {
+export function updateSlideFraming(
+  doc: any,
+  slideIndex: number,
+  update: {crop?: Partial<CarouselCrop>, fit?: string, bg?: CarouselBg | null},
+  opts: {srcW?: number, srcH?: number} = {},
+): CarouselDoc {
   const base = normalizeDocument(doc);
   const i = Number(slideIndex);
   if (
@@ -1005,7 +1015,7 @@ export function updateSlideFraming(doc, slideIndex, update, opts = {}) {
   if ('crop' in update) {
     next.crop = clampPan(normalizeCrop(mergeCrop(slide.crop, update.crop)), srcW, srcH);
   }
-  if (FITS.includes(update.fit)) next.fit = /** @type {'cover'|'contain'} */ (update.fit);
+  if (FITS.includes(update.fit)) next.fit = (update.fit as 'cover' | 'contain');
   if ('bg' in update) next.bg = normalizeBg(update.bg);
 
   return normalizeDocument({
@@ -1018,12 +1028,8 @@ export function updateSlideFraming(doc, slideIndex, update, opts = {}) {
  * The layer list a `slideIndex` addresses — `doc.spanLayers` at
  * {@link SPAN_SLIDE}, a slide's own otherwise — or `null` when it names
  * nothing. `doc` must already be normal.
- *
- * @param {CarouselDoc} doc
- * @param {*} slideIndex
- * @returns {CarouselLayer[]|null}
  */
-function layersAt(doc, slideIndex) {
+function layersAt(doc: CarouselDoc, slideIndex: any): CarouselLayer[] | null {
   const i = Number(slideIndex);
   if (slideIndex == null || !Number.isInteger(i)) return null;
   if (i === SPAN_SLIDE) return doc.spanLayers;
@@ -1034,12 +1040,8 @@ function layersAt(doc, slideIndex) {
  * `layerIndex` as an index into `list`, or `-1` when it names no layer there.
  * The one definition of "in range" the three mutators below share, so none of
  * them can disagree with the others about what an out-of-range index is.
- *
- * @param {CarouselLayer[]|null} list
- * @param {*} layerIndex
- * @returns {number}
  */
-function layerIndexIn(list, layerIndex) {
+function layerIndexIn(list: CarouselLayer[] | null, layerIndex: any): number {
   const j = Number(layerIndex);
   return list && Number.isInteger(j) && j >= 0 && j < list.length ? j : -1;
 }
@@ -1048,13 +1050,8 @@ function layerIndexIn(list, layerIndex) {
  * `doc` with the list `slideIndex` addresses replaced. Normalized on the way
  * out like every other writer here, so the result is a document the renderer
  * and the preview cannot read differently.
- *
- * @param {CarouselDoc} doc
- * @param {number} slideIndex
- * @param {CarouselLayer[]} layers
- * @returns {CarouselDoc}
  */
-function withLayers(doc, slideIndex, layers) {
+function withLayers(doc: CarouselDoc, slideIndex: number, layers: CarouselLayer[]): CarouselDoc {
   const i = Number(slideIndex);
   if (i === SPAN_SLIDE) return normalizeDocument({ ...doc, spanLayers: layers });
   return normalizeDocument({
@@ -1073,12 +1070,10 @@ function withLayers(doc, slideIndex, layers) {
  * {@link updateSlideFraming} keeps, and for the same reason: these run from UI
  * handlers where a throw strands the studio.
  *
- * @param {*} doc
- * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
- * @param {*} layer
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param slideIndex - the slide, or {@link SPAN_SLIDE} for the deck
+ * @returns a new document; the input is not mutated
  */
-export function addLayer(doc, slideIndex, layer) {
+export function addLayer(doc: any, slideIndex: number, layer: any): CarouselDoc {
   const base = normalizeDocument(doc);
   const list = layersAt(base, slideIndex);
   const next = normalizeLayer(layer);
@@ -1099,20 +1094,22 @@ export function addLayer(doc, slideIndex, layer) {
  * A layer's `type` is fixed: patching it is ignored, because every other field
  * means something different under a different type. Remove and re-add instead.
  *
- * @param {*} doc
- * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
- * @param {number} layerIndex
- * @param {*} patch
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param slideIndex - the slide, or {@link SPAN_SLIDE} for the deck
+ * @returns a new document; the input is not mutated
  */
-export function updateLayer(doc, slideIndex, layerIndex, patch) {
+export function updateLayer(
+  doc: any,
+  slideIndex: number,
+  layerIndex: number,
+  patch: any,
+): CarouselDoc {
   const base = normalizeDocument(doc);
   const list = layersAt(base, slideIndex);
   const j = layerIndexIn(list, layerIndex);
   if (!list || j < 0 || !isObj(patch)) return base;
 
   const current = list[j];
-  const p = /** @type {*} */ (patch);
+  const p = (patch as any);
   const merged = { ...current, ...p, type: current.type };
   if ('box' in p) merged.box = mergeCrop(current.box, p.box);
   const next = normalizeLayer(merged, current);
@@ -1128,12 +1125,10 @@ export function updateLayer(doc, slideIndex, layerIndex, patch) {
 /**
  * Drop the layer at `layerIndex`. An out-of-range index is a no-op.
  *
- * @param {*} doc
- * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
- * @param {number} layerIndex
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param slideIndex - the slide, or {@link SPAN_SLIDE} for the deck
+ * @returns a new document; the input is not mutated
  */
-export function removeLayer(doc, slideIndex, layerIndex) {
+export function removeLayer(doc: any, slideIndex: number, layerIndex: number): CarouselDoc {
   const base = normalizeDocument(doc);
   const list = layersAt(base, slideIndex);
   const j = layerIndexIn(list, layerIndex);
@@ -1151,13 +1146,15 @@ export function removeLayer(doc, slideIndex, layerIndex) {
  * not exchange it with whatever it landed on. Either index out of range is a
  * no-op; `from === to` returns an equal document.
  *
- * @param {*} doc
- * @param {number} slideIndex the slide, or {@link SPAN_SLIDE} for the deck
- * @param {number} from
- * @param {number} to
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param slideIndex - the slide, or {@link SPAN_SLIDE} for the deck
+ * @returns a new document; the input is not mutated
  */
-export function reorderLayer(doc, slideIndex, from, to) {
+export function reorderLayer(
+  doc: any,
+  slideIndex: number,
+  from: number,
+  to: number,
+): CarouselDoc {
   const base = normalizeDocument(doc);
   const list = layersAt(base, slideIndex);
   const a = layerIndexIn(list, from);
@@ -1175,7 +1172,7 @@ export function reorderLayer(doc, slideIndex, from, to) {
 // returns an equal document, and nothing throws. They run from the rail's
 // pointer handlers, where a throw strands a gesture.
 //
-// No slide-count bounds here. `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
+// No slide-count bounds here. `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.ts`)
 // belong to the state owner, which can refuse in a toast; a model that refused
 // silently would leave its caller unable to tell a refusal from a no-op.
 // `applyTemplate` is the one place in this module that does clamp, and for the
@@ -1191,12 +1188,8 @@ export function reorderLayer(doc, slideIndex, from, to) {
  * `i` as an index into `slides`, or -1 when it names no slide — the slide twin
  * of {@link layerIndexIn}, so the writers below cannot disagree with each other
  * about what out of range means.
- *
- * @param {CarouselSlide[]} slides
- * @param {*} i
- * @returns {number}
  */
-function slideIndexIn(slides, i) {
+function slideIndexIn(slides: CarouselSlide[], i: any): number {
   const j = Number(i);
   // `i == null` before the coercion, because `Number(null)` is 0 and a control
   // that forgot to say which slide it meant must not silently mean the first.
@@ -1223,12 +1216,11 @@ function slideIndexIn(slides, i) {
  * pair would take the other's image with it. So it is dropped here rather than
  * trusted.
  *
- * @param {*} doc
- * @param {number} at insertion position, `0..slides.length`
- * @param {*} [slide] the slide to insert; omitted means "another like this one"
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @param at - insertion position, `0..slides.length`
+ * @param slide - the slide to insert; omitted means "another like this one"
+ * @returns a new document; the input is not mutated
  */
-export function addSlide(doc, at, slide) {
+export function addSlide(doc: any, at: number, slide?: any): CarouselDoc {
   const base = normalizeDocument(doc);
   const i = Number(at);
   if (at == null || !Number.isInteger(i) || i < 0 || i > base.slides.length) return base;
@@ -1249,11 +1241,9 @@ export function addSlide(doc, at, slide) {
  * `ListOrphanedMedia` will never flag it. `_deleteSuperseded` (`index.js`) does
  * that on the next render, from the *saved* set rather than from the document.
  *
- * @param {*} doc
- * @param {number} i
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @returns a new document; the input is not mutated
  */
-export function removeSlide(doc, i) {
+export function removeSlide(doc: any, i: number): CarouselDoc {
   const base = normalizeDocument(doc);
   const j = slideIndexIn(base.slides, i);
   if (j < 0) return base;
@@ -1269,11 +1259,9 @@ export function removeSlide(doc, i) {
  * byte-identical slides are what `assertDistinctMedia` (`index.js`) refuses —
  * so a duplicate is a starting point, and the caller says so.
  *
- * @param {*} doc
- * @param {number} i
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @returns a new document; the input is not mutated
  */
-export function duplicateSlide(doc, i) {
+export function duplicateSlide(doc: any, i: number): CarouselDoc {
   const base = normalizeDocument(doc);
   const j = slideIndexIn(base.slides, i);
   if (j < 0) return base;
@@ -1287,12 +1275,9 @@ export function duplicateSlide(doc, i) {
  * whatever it landed on. Either index out of range is a no-op; `from === to`
  * returns an equal document.
  *
- * @param {*} doc
- * @param {number} from
- * @param {number} to
- * @returns {CarouselDoc} a new document; the input is not mutated
+ * @returns a new document; the input is not mutated
  */
-export function moveSlide(doc, from, to) {
+export function moveSlide(doc: any, from: number, to: number): CarouselDoc {
   const base = normalizeDocument(doc);
   const a = slideIndexIn(base.slides, from);
   const b = slideIndexIn(base.slides, to);
@@ -1312,7 +1297,7 @@ export function moveSlide(doc, from, to) {
 // itself says nothing about either).
 //
 // Placeholders resolve **on apply, not at paint time**, unlike a `counter`
-// layer's `{i}`/`{n}` — which `render.js` still owns and which this module
+// layer's `{i}`/`{n}` — which `render.ts` still owns and which this module
 // deliberately leaves alone. The author has to be able to edit the headline the
 // template produced, so the substitution happens once and the result is
 // thereafter an ordinary document with no template machinery left in it.
@@ -1330,46 +1315,55 @@ const DEFAULT_ORIGIN = 'studio';
  *  whitespace-only title is a placeholder with no value, not a value. */
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
-/**
- * @typedef {object} CarouselTemplateContext
- * @property {{title?:string, excerpt?:string, slug?:string, url?:string,
- *   tags?:Array<string|{name?:string}>}} [post] the post being filled from
- * @property {{logo_url?:string, app_url?:string}} [settings] blog settings
- * @property {Array<string|{path?:string, original_path?:string}>} [media] the
- *   post's images, in the order the slides should show them
- */
+export interface CarouselTemplateContext {
+  /** the post being filled from */
+  post?: {
+    title?: string;
+    excerpt?: string;
+    slug?: string;
+    url?: string;
+    tags?: Array<string | {name?:string}>;
+  };
+  /** blog settings */
+  settings?: {logo_url?:string, app_url?:string};
+  /** the post's images, in the order the slides should show them */
+  media?: Array<string | {path?:string, original_path?:string}>;
+}
 
-/**
- * @typedef {object} CarouselTemplateOrigin
- * @property {'pptx'|'svg'|'studio'} format
- * @property {string} file
- * @property {string[]} fonts  recorded, never rendered (type stays the theme's)
- * @property {{w:number,h:number}|null} srcSize
- * @property {Array<{slide:number|null, what:string, n:number}>} dropped
- */
+export interface CarouselTemplateOrigin {
+  format: 'pptx' | 'svg' | 'studio';
+  file: string;
+  /** recorded, never rendered (type stays the theme's) */
+  fonts: string[];
+  srcSize: {w:number,h:number} | null;
+  dropped: Array<{slide:number | null, what:string, n:number}>;
+}
 
-/**
- * @typedef {object} CarouselTemplate
- * @property {number} templateVersion
- * @property {string} id  matches the applied document's `template.id`
- * @property {string} name
- * @property {CarouselTemplateOrigin} origin
- * @property {CarouselDoc} doc
- */
+export interface CarouselTemplate {
+  templateVersion: number;
+  /** matches the applied document's `template.id` */
+  id: string;
+  name: string;
+  origin: CarouselTemplateOrigin;
+  doc: CarouselDoc;
+}
 
 /**
  * What {@link applyTemplate} could not fill. Every field is a count or a list
  * rather than a message: the studio writes the sentence, this module supplies
  * the facts.
- *
- * @typedef {object} CarouselTemplateReport
- * @property {string[]} unresolved  the text placeholders left literal, deduped
- *   and in {@link PLACEHOLDERS} order. `{logo}` is never here — a logo with no
- *   value drops its layer instead, and `droppedLogoLayers` counts that
- * @property {number} droppedLogoLayers
- * @property {number[]} slidesWithoutSource  indexes into the returned document
- * @property {{from:number,to:number}|null} clampedSlides
  */
+export interface CarouselTemplateReport {
+  /**
+   * the text placeholders left literal, deduped and in {@link PLACEHOLDERS} order. `{logo}` is
+   * never here — a logo with no value drops its layer instead, and `droppedLogoLayers` counts that
+   */
+  unresolved: string[];
+  droppedLogoLayers: number;
+  /** indexes into the returned document */
+  slidesWithoutSource: number[];
+  clampedSlides: {from:number,to:number} | null;
+}
 
 /**
  * The post's tags, `#hashtagged` and space-joined — the same string
@@ -1377,15 +1371,12 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
  * (`api/internal/services/post_publish.go`), so a template's `{tags}` and that
  * post's caption read alike. Accepts the API's `[{name}]` and a plain
  * `[string]`, because the studio holds one and a hand-written context the other.
- *
- * @param {*} tags
- * @returns {string}
  */
-function hashtags(tags) {
+function hashtags(tags: any): string {
   if (!Array.isArray(tags)) return '';
   const names = [];
   for (const t of tags) {
-    const name = typeof t === 'string' ? t.trim() : isObj(t) ? str(/** @type {*} */ (t).name) : '';
+    const name = typeof t === 'string' ? t.trim() : isObj(t) ? str((t as any).name) : '';
     if (name) names.push(name.startsWith('#') ? name : `#${name}`);
   }
   return names.join(' ');
@@ -1396,11 +1387,8 @@ function hashtags(tags) {
  * the slug — the path `expandCaptionTemplate` builds, for the same reason it
  * builds one. Empty when neither is available, which makes `{link}` an
  * unresolved placeholder rather than a link to nowhere.
- *
- * @param {{post: *, settings: *}} ctx
- * @returns {string}
  */
-function postLink({ post, settings }) {
+function postLink({ post, settings }: {post: any, settings: any}): string {
   const given = str(post.url);
   if (given) return given;
   const base = str(settings.app_url).replace(/\/+$/, '');
@@ -1417,14 +1405,14 @@ function postLink({ post, settings }) {
  * {@link LAYER_BUILDERS}.
  *
  * `{i}` and `{n}` are deliberately absent. They are a `counter` layer's, they
- * resolve per slide at paint time (`render.js`'s `counterText`), and a template
+ * resolve per slide at paint time (`render.ts`'s `counterText`), and a template
  * that carried them through this table would freeze slide 3's number into
  * slide 3 forever.
- *
- * @type {Record<string, {field:'text'|'source', label:string,
- *   resolve:(ctx:{post:*, settings:*}) => string}>}
  */
-const PLACEHOLDER_TABLE = {
+const PLACEHOLDER_TABLE: Record<string, {field:'text' | 'source', label:string, resolve:(ctx:{
+  post: any;
+  settings: any;
+}) => string}> = {
   '{title}': {
     field: 'text',
     label: "the post's title",
@@ -1458,10 +1446,12 @@ const PLACEHOLDER_TABLE = {
  * `format`; `source` is an `image` layer's), and a `label` for help text.
  * Frozen, and derived from {@link PLACEHOLDER_TABLE}, so the studio's list and
  * the resolver are the same list.
- *
- * @type {ReadonlyArray<{token:string, field:'text'|'source', label:string}>}
  */
-export const PLACEHOLDERS = Object.freeze(
+export const PLACEHOLDERS: ReadonlyArray<{
+  token: string;
+  field: 'text' | 'source';
+  label: string;
+}> = Object.freeze(
   Object.entries(PLACEHOLDER_TABLE).map(([token, e]) =>
     Object.freeze({ token, field: e.field, label: e.label }),
   ),
@@ -1482,13 +1472,8 @@ const TEXT_TOKENS = PLACEHOLDERS.filter((p) => p.field === 'text').map((p) => p.
  *
  * `split`/`join` rather than `replaceAll`, whose string replacement interprets
  * `$&` and friends — a post title is user text and may contain them.
- *
- * @param {string} value
- * @param {{post:*, settings:*}} ctx
- * @param {Set<string>} unresolved
- * @returns {string}
  */
-function substituteText(value, ctx, unresolved) {
+function substituteText(value: string, ctx: {post:any, settings:any}, unresolved: Set<string>): string {
   let out = value;
   for (const token of TEXT_TOKENS) {
     if (!out.includes(token)) continue;
@@ -1504,13 +1489,12 @@ function substituteText(value, ctx, unresolved) {
  * survive the apply. Only a `{logo}` image layer with no logo returns `null`:
  * an image layer with no source paints nothing, and a template must not leave a
  * dead layer behind for the author to discover and delete.
- *
- * @param {CarouselLayer} layer
- * @param {{post:*, settings:*}} ctx
- * @param {{unresolved:Set<string>, droppedLogoLayers:number}} acc
- * @returns {CarouselLayer|null}
  */
-function applyToLayer(layer, ctx, acc) {
+function applyToLayer(
+  layer: CarouselLayer,
+  ctx: {post:any, settings:any},
+  acc: {unresolved:Set<string>, droppedLogoLayers:number},
+): CarouselLayer | null {
   if (layer.type === 'text') {
     return { ...layer, text: substituteText(layer.text, ctx, acc.unresolved) };
   }
@@ -1529,15 +1513,12 @@ function applyToLayer(layer, ctx, acc) {
   return layer;
 }
 
-/**
- * {@link applyToLayer} across a list, dropping what it refuses.
- *
- * @param {CarouselLayer[]} layers
- * @param {{post:*, settings:*}} ctx
- * @param {{unresolved:Set<string>, droppedLogoLayers:number}} acc
- * @returns {CarouselLayer[]}
- */
-function applyToLayers(layers, ctx, acc) {
+/** {@link applyToLayer} across a list, dropping what it refuses. */
+function applyToLayers(
+  layers: CarouselLayer[],
+  ctx: {post:any, settings:any},
+  acc: {unresolved:Set<string>, droppedLogoLayers:number},
+): CarouselLayer[] {
   const out = [];
   for (const layer of layers) {
     const next = applyToLayer(layer, ctx, acc);
@@ -1550,11 +1531,8 @@ function applyToLayers(layers, ctx, acc) {
  * One media entry's path. Accepts a bare path and the `{path}` shape the photo
  * picker hands the studio, plus the API row's `original_path`, so a caller can
  * pass whichever list it already holds.
- *
- * @param {*} m
- * @returns {string}
  */
-function mediaPath(m) {
+function mediaPath(m: any): string {
   if (typeof m === 'string') return m.trim();
   if (!isObj(m)) return '';
   return str(m.path) || str(m.original_path);
@@ -1566,12 +1544,11 @@ function mediaPath(m) {
  * writer, so a padded slide is exactly the slide the "add" control would have
  * made — and shrinking keeps the head, because a template's later slides are
  * its outro and its earlier ones carry the design.
- *
- * @param {CarouselDoc} doc
- * @param {{clampedSlides:{from:number,to:number}|null}} acc
- * @returns {CarouselDoc}
  */
-function clampSlideCount(doc, acc) {
+function clampSlideCount(
+  doc: CarouselDoc,
+  acc: {clampedSlides:{from:number,to:number} | null},
+): CarouselDoc {
   const from = doc.slides.length;
   let out = doc;
   if (from > MAX_SLIDES) {
@@ -1587,11 +1564,8 @@ function clampSlideCount(doc, acc) {
  * The apply context with every field present and the media list flattened to
  * paths, so the resolvers and {@link fillSources} below can read it without
  * each re-asking whether the caller supplied anything.
- *
- * @param {*} ctx
- * @returns {{post:*, settings:*, media:string[]}}
  */
-function templateContext(ctx) {
+function templateContext(ctx: any): {post:any, settings:any, media:string[]} {
   const c = isObj(ctx) ? ctx : {};
   return {
     post: isObj(c.post) ? c.post : {},
@@ -1610,13 +1584,12 @@ function templateContext(ctx) {
  * A slide the media runs out for keeps its empty `source` and is named in the
  * report. Inventing one would be worse: the render refuses a sourceless slide,
  * and the author has to know which one to fill.
- *
- * @param {CarouselSlide[]} slides
- * @param {string[]} sources
- * @param {{slidesWithoutSource:number[]}} acc
- * @returns {CarouselSlide[]}
  */
-function fillSources(slides, sources, acc) {
+function fillSources(
+  slides: CarouselSlide[],
+  sources: string[],
+  acc: {slidesWithoutSource:number[]},
+): CarouselSlide[] {
   let cursor = 0;
   return slides.map((slide, i) => {
     if (slide.source) return slide;
@@ -1637,11 +1610,12 @@ function fillSources(slides, sources, acc) {
  * everything reaching {@link applyTemplate} in v1 arrived by import or by "save
  * as template", and only a shipped canvas says otherwise.
  *
- * @param {*} envelopeId
- * @param {{id:string,custom:boolean}|null} own the document's existing block
- * @returns {{id:string,custom:boolean}|null}
+ * @param own - the document's existing block
  */
-function appliedTemplate(envelopeId, own) {
+function appliedTemplate(
+  envelopeId: any,
+  own: {id:string,custom:boolean} | null,
+): {id:string,custom:boolean} | null {
   const id = str(envelopeId) || (own ? own.id : '');
   if (!id) return null;
   return { id, custom: own ? own.custom : true };
@@ -1653,11 +1627,11 @@ function appliedTemplate(envelopeId, own) {
  * Accepts the {@link CarouselTemplate} envelope or a bare `CarouselDoc` (a
  * built-in canvas is repo JSON and needs no envelope). What it does:
  *
- * - the slide count is clamped to `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
+ * - the slide count is clamped to `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.ts`)
  *   **first**, so a slide the clamp appended is filled like any other;
  * - `{title}` `{excerpt}` `{tags}` `{link}` are substituted into every `text`
  *   layer's `text` and every `counter`'s `format`. `{i}`/`{n}` are **not** —
- *   they stay `render.js`'s, resolved per slide at paint time;
+ *   they stay `render.ts`'s, resolved per slide at paint time;
  * - an `image` layer whose `source` is `{logo}` takes the `logo_url` setting,
  *   and is dropped when that setting is empty;
  * - a slide with no `source` takes the next of `media`, keeping its `crop` and
@@ -1675,22 +1649,21 @@ function appliedTemplate(envelopeId, own) {
  * blank headline is one they ship.
  *
  * Pure: no DOM, no network, no clock. The input is not mutated.
- *
- * @param {CarouselTemplate|CarouselDoc|*} template
- * @param {CarouselTemplateContext} [ctx]
- * @returns {{doc: CarouselDoc, report: CarouselTemplateReport}}
  */
-export function applyTemplate(template, ctx = {}) {
-  const t = /** @type {*} */ (template);
+export function applyTemplate(
+  template: CarouselTemplate | CarouselDoc | any,
+  ctx: CarouselTemplateContext = {},
+): {doc: CarouselDoc, report: CarouselTemplateReport} {
+  const t = (template as any);
   // A `CarouselDoc` has no `doc` field, so this discriminates the envelope from
   // a bare document without either of them carrying a marker.
   const env = isObj(t) && isObj(t.doc) ? t : { id: '', doc: t };
   const c = templateContext(ctx);
   const acc = {
-    unresolved: /** @type {Set<string>} */ (new Set()),
+    unresolved: (new Set() as Set<string>),
     droppedLogoLayers: 0,
-    slidesWithoutSource: /** @type {number[]} */ ([]),
-    clampedSlides: /** @type {{from:number,to:number}|null} */ (null),
+    slidesWithoutSource: ([] as number[]),
+    clampedSlides: (null as {from:number,to:number} | null),
   };
 
   const base = clampSlideCount(normalizeDocument(env.doc), acc);
@@ -1716,8 +1689,7 @@ export function applyTemplate(template, ctx = {}) {
   };
 }
 
-/** @param {*} entry @returns {{slide:number|null, what:string, n:number}|null} */
-function normalizeDropped(entry) {
+function normalizeDropped(entry: any): {slide:number | null, what:string, n:number} | null {
   if (!isObj(entry)) return null;
   const what = str(entry.what);
   if (!what) return null;
@@ -1730,13 +1702,10 @@ function normalizeDropped(entry) {
  * fields dropped, an unrecognized `format` defaulted. Display-only: the studio
  * shows it so an import that lost shapes says so, and the fonts it names are
  * recorded rather than rendered (type stays in the active theme's family).
- *
- * @param {*} origin
- * @returns {CarouselTemplateOrigin}
  */
-function normalizeOrigin(origin) {
+function normalizeOrigin(origin: any): CarouselTemplateOrigin {
   const o = isObj(origin) ? origin : {};
-  const size = isObj(o.srcSize) ? /** @type {*} */ (o.srcSize) : {};
+  const size = isObj(o.srcSize) ? (o.srcSize as any) : {};
   const w = Math.floor(num(size.w, 0));
   const h = Math.floor(num(size.h, 0));
   return {
@@ -1745,9 +1714,11 @@ function normalizeOrigin(origin) {
     fonts: Array.isArray(o.fonts) ? o.fonts.map(str).filter(Boolean) : [],
     srcSize: w > 0 && h > 0 ? { w, h } : null,
     dropped: Array.isArray(o.dropped)
-      ? /** @type {Array<{slide:number|null,what:string,n:number}>} */ (
-          o.dropped.map(normalizeDropped).filter(Boolean)
-        )
+      ? (o.dropped.map(normalizeDropped).filter(Boolean) as Array<{
+          slide: number | null;
+          what: string;
+          n: number;
+        }>)
       : [],
   };
 }
@@ -1768,12 +1739,11 @@ function normalizeOrigin(origin) {
  *
  * Round trip: for a document with no placeholders and no `rendered` blocks,
  * `applyTemplate(toTemplate(doc, meta)).doc` equals `normalizeDocument(doc)`.
- *
- * @param {*} doc
- * @param {{id?:string, name?:string, origin?:*}} [meta]
- * @returns {CarouselTemplate}
  */
-export function toTemplate(doc, meta = {}) {
+export function toTemplate(
+  doc: any,
+  meta: {id?:string, name?:string, origin?:any} = {},
+): CarouselTemplate {
   const m = isObj(meta) ? meta : {};
   const base = normalizeDocument(doc);
   return {
@@ -1810,17 +1780,19 @@ function fnv1a(str) {
  * `spanLayers`, which the caller folds in) mean the slide can reuse its
  * existing render instead of re-encoding.
  *
- * @param {*} slide
- * @param {string} [aspect] doc-level aspect, included in the hash when given
- * @param {{ strategy?: string, anchorY?: number, spanLayers?: * }} [deck]
+ * @param aspect - doc-level aspect, included in the hash when given
+ * @param deck
  *   doc-level inputs that reach into a single slide's pixels: the split
  *   strategy and vertical anchor, a change to either re-slicing every column,
  *   and the span layers, which paint across this slide whether it knows about
  *   them or not. Folding them in invalidates the cached render, which is the
  *   point — `specHash` sees one slide and cannot find them itself
- * @returns {string}
  */
-export function specHash(slide, aspect = '', deck = {}) {
+export function specHash(
+  slide: any,
+  aspect: string = '',
+  deck: { strategy?: string, anchorY?: number, spanLayers?: any } = {},
+): string {
   const s = normalizeSlide(slide);
   return fnv1a(
     stableStringify({

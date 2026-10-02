@@ -24,12 +24,8 @@ import { api } from './client.ts';
  * The `?post=&block=` query string for one row, `block` omitted when there is no
  * key — the server then resolves the post's first carousel, and an omitted
  * parameter is what says so.
- *
- * @param {number} postId
- * @param {string} [blockKey]
- * @returns {string}
  */
-function rowQuery(postId, blockKey) {
+function rowQuery(postId: number, blockKey?: string): string {
   const params = new URLSearchParams({ post: String(postId) });
   if (blockKey) params.set('block', blockKey);
   return params.toString();
@@ -41,11 +37,18 @@ function rowQuery(postId, blockKey) {
  * Rejects with `{ status: 404 }` when the block has no carousel yet — a caller
  * opening the studio should treat that as "start from an empty document".
  *
- * @param {number} postId
- * @param {string} [blockKey]  Omitted: the post's first carousel.
- * @returns {Promise<{ post_id: number, block_key: string, doc: object, created_at: string, updated_at: string }>}
+ * @param blockKey - Omitted: the post's first carousel.
  */
-export function getCarousel(postId, blockKey) {
+export function getCarousel(
+  postId: number,
+  blockKey?: string,
+): Promise<{
+  post_id: number;
+  block_key: string;
+  doc: object;
+  created_at: string;
+  updated_at: string;
+}> {
   return api.get(`/api/carousel?${rowQuery(postId, blockKey)}`);
 }
 
@@ -53,12 +56,19 @@ export function getCarousel(postId, blockKey) {
  * Create or replace one block's carousel document, leaving the post's other
  * carousels untouched. The post must already exist.
  *
- * @param {number} postId
- * @param {import('../plugins/carousel/document.ts').CarouselDoc} doc
- * @param {string} [blockKey]  Omitted: the post's first carousel.
- * @returns {Promise<{ post_id: number, block_key: string, doc: object, created_at: string, updated_at: string }>}
+ * @param blockKey - Omitted: the post's first carousel.
  */
-export function saveCarousel(postId, doc, blockKey) {
+export function saveCarousel(
+  postId: number,
+  doc: import('../plugins/carousel/document.ts').CarouselDoc,
+  blockKey?: string,
+): Promise<{
+  post_id: number;
+  block_key: string;
+  doc: object;
+  created_at: string;
+  updated_at: string;
+}> {
   return api.put(`/api/carousel?${rowQuery(postId, blockKey)}`, { doc });
 }
 
@@ -66,11 +76,9 @@ export function saveCarousel(postId, doc, blockKey) {
  * Delete one block's carousel document. Idempotent — deleting one that is not
  * there still resolves.
  *
- * @param {number} postId
- * @param {string} [blockKey]  Omitted: the post's first carousel.
- * @returns {Promise<null>}
+ * @param blockKey - Omitted: the post's first carousel.
  */
-export function deleteCarousel(postId, blockKey) {
+export function deleteCarousel(postId: number, blockKey?: string): Promise<null> {
   return api.delete(`/api/carousel?${rowQuery(postId, blockKey)}`);
 }
 
@@ -84,21 +92,20 @@ export function deleteCarousel(postId, blockKey) {
  */
 export const TEMPLATE_MAX_BYTES = 8 * 1024 * 1024;
 
-/**
- * @typedef {Object} CarouselTemplateSummary
- * @property {string} slug
- * @property {string} name
- * @property {string} created_at
- */
+export interface CarouselTemplateSummary {
+  slug: string;
+  name: string;
+  created_at: string;
+}
 
-/**
- * @typedef {Object} CarouselTemplate
- * @property {string} slug
- * @property {string} name
- * @property {object} doc  The template envelope (a JSON object).
- * @property {string} created_at
- * @property {string} updated_at
- */
+export interface CarouselTemplate {
+  slug: string;
+  name: string;
+  /** The template envelope (a JSON object). */
+  doc: object;
+  created_at: string;
+  updated_at: string;
+}
 
 /**
  * List every template, name and slug only.
@@ -106,10 +113,8 @@ export const TEMPLATE_MAX_BYTES = 8 * 1024 * 1024;
  * The listing deliberately carries no envelopes: a gallery of names must not
  * pull every inlined asset of every template. Call `getCarouselTemplate` for
  * the one the user picks.
- *
- * @returns {Promise<CarouselTemplateSummary[]>}
  */
-export function listCarouselTemplates() {
+export function listCarouselTemplates(): Promise<CarouselTemplateSummary[]> {
   return api.get('/api/carousel/templates');
 }
 
@@ -117,11 +122,8 @@ export function listCarouselTemplates() {
  * Fetch one template envelope in full.
  *
  * Rejects with `{ status: 404 }` when no template carries that slug.
- *
- * @param {string} slug
- * @returns {Promise<CarouselTemplate>}
  */
-export function getCarouselTemplate(slug) {
+export function getCarouselTemplate(slug: string): Promise<CarouselTemplate> {
   return api.get(`/api/carousel/templates/${encodeURIComponent(slug)}`);
 }
 
@@ -130,7 +132,7 @@ export function getCarouselTemplate(slug) {
  * "save as template" can send the same slug twice without asking first.
  *
  * `doc` is the template envelope `toTemplate()` builds (plugins/carousel/
- * document.js). Its `id` and `name` are inside the envelope, which the server
+ * document.ts). Its `id` and `name` are inside the envelope, which the server
  * never parses — so pass them here too, matching what the envelope says.
  *
  * The slug must be url-safe: lowercase letters, digits, hyphen or underscore,
@@ -138,23 +140,19 @@ export function getCarouselTemplate(slug) {
  *
  * Rejects with `{ status: 400 }` on a bad slug, a missing name or a `doc` that
  * is not a JSON object, and `{ status: 413 }` past `TEMPLATE_MAX_BYTES`.
- *
- * @param {string} slug
- * @param {string} name
- * @param {import('../plugins/carousel/document.ts').CarouselTemplate} doc
- * @returns {Promise<CarouselTemplate>}
  */
-export function saveCarouselTemplate(slug, name, doc) {
+export function saveCarouselTemplate(
+  slug: string,
+  name: string,
+  doc: import('../plugins/carousel/document.ts').CarouselTemplate,
+): Promise<CarouselTemplate> {
   return api.post('/api/carousel/templates', { slug, name, doc });
 }
 
 /**
  * Delete a template. Idempotent — deleting one that is not there still
  * resolves.
- *
- * @param {string} slug
- * @returns {Promise<null>}
  */
-export function deleteCarouselTemplate(slug) {
+export function deleteCarouselTemplate(slug: string): Promise<null> {
   return api.delete(`/api/carousel/templates/${encodeURIComponent(slug)}`);
 }

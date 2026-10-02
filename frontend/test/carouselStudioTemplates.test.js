@@ -1,5 +1,5 @@
 /**
- * carousel/studio/templates.js — the template gallery's arithmetic.
+ * carousel/studio/templates.ts — the template gallery's arithmetic.
  *
  * The module is pure, so these tests are the whole contract: which strings in a
  * document are inlined assets, what replaces them, and why a template is

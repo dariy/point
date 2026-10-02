@@ -1,7 +1,7 @@
 /**
- * carousel/render.js — the draw layer.
+ * carousel/render.ts — the draw layer.
  *
- * render.js issues no measurements of its own (all from geometry.js) and
+ * render.ts issues no measurements of its own (all from geometry.ts) and
  * touches nothing real: decode, canvas, encode and upload go through an
  * injected `deps` object. These tests drive it with a recording fake and
  * assert the call SEQUENCE — clearRect then (pad fill then) drawImage, one

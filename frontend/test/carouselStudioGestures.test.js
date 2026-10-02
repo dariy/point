@@ -1,5 +1,5 @@
 /**
- * carousel/studio/gestures.js — deck-mode direct manipulation.
+ * carousel/studio/gestures.ts — deck-mode direct manipulation.
  *
  * Two halves. The pure helpers (`pointerCentroid`, `zoomCrop`, `sameCrop`,
  * `panScale`) are the gesture arithmetic, and `panScale` is the one that makes
@@ -44,7 +44,7 @@ import { createMultiTapWatcher } from '../src/plugins/carousel/studio/pointerSes
 
 const FULL = { x: 0, y: 0, w: 1, h: 1 };
 
-/** A frame stand-in — gestures.js touches only these members, so a plain
+/** A frame stand-in — gestures.ts touches only these members, so a plain
  *  object keeps the listener bookkeeping visible without a DOM. `box` may carry
  *  a `left`, which is what puts a deck's columns side by side. */
 function fakeFrame(i, box = { width: 500, height: 500 }) {
@@ -549,7 +549,7 @@ describe('carousel studio gestures', () => {
   });
 
   describe('the touch layout', () => {
-    /** Run `fn` with the touch layout on. `isTouchLayout()` (studio/layout.js)
+    /** Run `fn` with the touch layout on. `isTouchLayout()` (studio/layout.ts)
      *  asks `globalThis.window.matchMedia`, and this suite has no DOM, so the
      *  window is this stub and the media query is the only thing it answers.
      *  Restored afterwards, because every other test in this file is a fine
@@ -691,7 +691,7 @@ describe('carousel studio gestures', () => {
 
     test('a wider grabPx (the coarse-pointer twin) reaches an edge the mouse tolerance misses', () => {
       // Left edge at x=50. 18px off is past the default 12px tolerance but
-      // inside a 22px one — gestures.js passes HANDLE_GRAB_PX_COARSE there
+      // inside a 22px one — gestures.ts passes HANDLE_GRAB_PX_COARSE there
       // under a touch, mirroring carousel.css's own coarse-pointer rule.
       assert.strictEqual(hitLayer(rect, box, 32, 100), null, 'the default tolerance misses');
       assert.deepStrictEqual(hitLayer(rect, box, 32, 100, 22), { mode: 'resize', h: -1, v: 0 });
@@ -1247,7 +1247,7 @@ describe('carousel studio gestures', () => {
     /** The default deck headline shape: 0.32..0.42 of a three-slide deck, so it
      *  sits inside column 1 with room to run at a seam. */
     const SPAN_BOX = { x: 0.32, y: 0.4, w: 0.1, h: 0.2 };
-    /** `SPAN_SLIDE` in `document.js` — the index a deck-wide layer commits to. */
+    /** `SPAN_SLIDE` in `document.ts` — the index a deck-wide layer commits to. */
     const SPAN_SLIDE = -1;
 
     /** Three 200×250 columns side by side, so the deck box is 600×250, and a

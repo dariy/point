@@ -16,7 +16,7 @@
  * CSS has no `measureText`: left to the browser, the preview would break lines
  * where the browser likes and the JPEG would break them where `wrapText` does.
  * So the preview measures — on one memoized offscreen 2D context, in the same
- * face `render.js` resolves — and calls the very functions the renderer calls,
+ * face `render.ts` resolves — and calls the very functions the renderer calls,
  * {@link autoFitText} and {@link wrapText}, with `measure` bound to it. There
  * is exactly one typesetter; this module is a second caller of it, not a second
  * copy. What remains different between the stage and the JPEG is glyph
@@ -66,12 +66,19 @@ const PAD_HATCH =
  * lies about what the render will produce; a hatch layer sits behind the image
  * so `pad`'s trailing gap reads as a deliberate block instead of stretched or
  * missing image.
- *
- * @param {{stage: HTMLElement|null, frames: ArrayLike<HTMLElement>}} els
- * @param {{source: string, srcW: number|null, srcH: number|null, aspect: string,
- *   anchorY: number, n: number, strategy: 'cover'|'exact'|'pad'}} o
  */
-export function paintSplit({ stage, frames }, { source, srcW, srcH, aspect, anchorY, n, strategy }) {
+export function paintSplit(
+  { stage, frames }: {stage: HTMLElement | null, frames: ArrayLike<HTMLElement>},
+  { source, srcW, srcH, aspect, anchorY, n, strategy }: {
+    source: string;
+    srcW: number | null;
+    srcH: number | null;
+    aspect: string;
+    anchorY: number;
+    n: number;
+    strategy: 'cover' | 'exact' | 'pad';
+  },
+) {
   const bg = `url("${encodeURI(source)}"), ${PAD_HATCH}`;
   const applyBg = (el, size, position) => {
     el.style.backgroundImage = bg;
@@ -110,13 +117,12 @@ export function paintSplit({ stage, frames }, { source, srcW, srcH, aspect, anch
  * now sits in its slack, and say so in words. One custom property plus one
  * string, so the drag repaints it at the same cost as the band itself.
  *
- * The rail is markup (`anchorRail` in `panels.js`) and the stylesheet decides
+ * The rail is markup (`anchorRail` in `panels.ts`) and the stylesheet decides
  * whether it is visible; this only ever positions it.
  *
- * @param {HTMLElement|null} rail
- * @param {number} anchorY 0..1
+ * @param anchorY - 0..1
  */
-export function paintAnchorRail(rail, anchorY) {
+export function paintAnchorRail(rail: HTMLElement | null, anchorY: number) {
   if (!rail) return;
   const pct = Math.min(100, Math.max(0, anchorY * 100));
   rail.style.setProperty("--carousel-anchor-pos", `${pct}%`);
@@ -131,12 +137,19 @@ export function paintAnchorRail(rail, anchorY) {
  * with a provisional slide, so the drag and the committed document are painted
  * by identical code.
  *
- * @param {{imgs: ArrayLike<HTMLElement>, bgs: ArrayLike<HTMLElement>}} els
- * @param {{slide: import('../document.ts').CarouselSlide, srcW: number|null,
- *   srcH: number|null, aspect: string, hasPad: boolean}} o  `hasPad` is the
+ * @param o - `hasPad` is the
  *   caller's answer to whether this slide leaves a letterbox to fill.
  */
-export function paintDeckSlide({ imgs, bgs }, { slide, srcW, srcH, aspect, hasPad }) {
+export function paintDeckSlide(
+  { imgs, bgs }: {imgs: ArrayLike<HTMLElement>, bgs: ArrayLike<HTMLElement>},
+  { slide, srcW, srcH, aspect, hasPad }: {
+    slide: import('../document.ts').CarouselSlide;
+    srcW: number | null;
+    srcH: number | null;
+    aspect: string;
+    hasPad: boolean;
+  },
+) {
   const fit = deckSlideFitCSS(srcW || 0, srcH || 0, aspect, slide.crop, slide.fit);
   const url = slide.source ? `url("${encodeURI(slide.source)}")` : "none";
   Array.from(imgs).forEach((el) => {
@@ -171,13 +184,17 @@ export function paintDeckSlide({ imgs, bgs }, { slide, srcW, srcH, aspect, hasPa
  * A slide with nothing to fill — no letterbox, or no usable source yet —
  * keeps the layer empty, leaving the frame's hatch to show through as the
  * "nothing to preview yet" affordance it was added for.
- *
- * @param {ArrayLike<HTMLElement>} bgs
- * @param {{slide: import('../document.ts').CarouselSlide,
- *   fit: ReturnType<typeof import('../geometry.ts').deckSlideFitCSS>, url: string,
- *   aspect: string, hasPad: boolean}} o
  */
-function paintDeckBg(bgs, { slide, fit, url, aspect, hasPad }) {
+function paintDeckBg(
+  bgs: ArrayLike<HTMLElement>,
+  { slide, fit, url, aspect, hasPad }: {
+    slide: import('../document.ts').CarouselSlide;
+    fit: ReturnType<typeof import('../geometry.ts').deckSlideFitCSS>;
+    url: string;
+    aspect: string;
+    hasPad: boolean;
+  },
+) {
   const [dstW] = canvasSize(aspect);
   const bg = slide.bg;
 
@@ -235,9 +252,9 @@ let measureCtx;
  * it asked) and `false` when it already was, so a re-render that happens after
  * the font landed does not schedule a redundant second paint.
  *
- * @returns {Promise<boolean>} whether the caller should repaint
+ * @returns whether the caller should repaint
  */
-export function ensurePreviewFont() {
+export function ensurePreviewFont(): Promise<boolean> {
   if (fontStack || typeof document === "undefined") return Promise.resolve(false);
   if (!fontPending) {
     fontPending = (async () => {
@@ -259,11 +276,8 @@ export function ensurePreviewFont() {
  * layer's weight on the shared offscreen context — the exact shape
  * `paintTextLayer` builds against the slide canvas. `null` where no 2D context
  * can be had, which is an environment that could not render the JPEG either.
- *
- * @param {number} weight
- * @returns {import('../geometry.ts').MeasureText|null}
  */
-function measurer(weight) {
+function measurer(weight: number): import('../geometry.ts').MeasureText | null {
   const ctx = measureContext();
   if (!ctx) return null;
   return (candidate, size) => {
@@ -297,11 +311,10 @@ function measureContext() {
  * Zero where the browser reports no baseline metrics (the property is newer
  * than the rest of `TextMetrics`), which is exactly the old behaviour.
  *
- * @param {number} weight
- * @param {number} fontSize the size the block is actually set at
- * @returns {number} canvas pixels to add to the block's top
+ * @param fontSize - the size the block is actually set at
+ * @returns canvas pixels to add to the block's top
  */
-function baselineShift(weight, fontSize) {
+function baselineShift(weight: number, fontSize: number): number {
   const ctx = measureContext();
   if (!ctx) return 0;
   // The scan left whatever size it stopped on behind; the shift belongs to the
@@ -321,7 +334,7 @@ function baselineShift(weight, fontSize) {
 }
 
 /**
- * Where `paintTextLayer` (`render.js`) will put this layer's type, in the box's
+ * Where `paintTextLayer` (`render.ts`) will put this layer's type, in the box's
  * own canvas pixels — the same wrap, the same fitted size, the same vertical
  * origin. Nothing here decides line breaks: `size: null` asks
  * {@link autoFitText} and a numeric size asks {@link wrapText}, which is what
@@ -331,23 +344,30 @@ function baselineShift(weight, fontSize) {
  * the DOM twin positions inside the layer element; it can be negative, exactly
  * as the painter's `slack` can, when a fixed size overflows its box.
  *
- * @param {{text: string,
- *   layer: {size?: number|null, lineHeight?: number, valign?: string, align?: string},
- *   box: {x:number,y:number,w:number,h:number}, frameH: number,
- *   measure: import('../geometry.ts').MeasureText}} o  `layer` is read for its
+ * @param o - `layer` is read for its
  *   four typographic fields only, so a `counter` (which carries no
  *   `lineHeight`) is the same argument as a `text`
- * @returns {{fontSize:number, lines:string[], lineBox:number, top:number,
- *   align:'left'|'center'|'right'}|null} `null` for nothing to set
+ * @returns `null` for nothing to set
  */
-export function textPlan({ text, layer, box, frameH, measure }) {
+export function textPlan({ text, layer, box, frameH, measure }: {
+  text: string;
+  layer: {size?: number | null, lineHeight?: number, valign?: string, align?: string};
+  box: {x:number,y:number,w:number,h:number};
+  frameH: number;
+  measure: import('../geometry.ts').MeasureText;
+}): {
+  fontSize: number;
+  lines: string[];
+  lineBox: number;
+  top: number;
+  align: 'left' | 'center' | 'right';
+} | null {
   const body = typeof text === "string" ? text : "";
   if (!body.trim()) return null;
   const lineHeight = layer.lineHeight > 0 ? layer.lineHeight : 1.2;
 
   let fontSize;
-  /** @type {string[]} */
-  let lines;
+  let lines: string[];
   if (layer.size == null) {
     const max = Math.max(MIN_AUTO_PX, Math.floor(Math.min(box.h / lineHeight, box.w)));
     ({ fontSize, lines } = autoFitText({
@@ -372,23 +392,20 @@ export function textPlan({ text, layer, box, frameH, measure }) {
     lines,
     lineBox,
     top: (VALIGN_SLACK[layer.valign] || VALIGN_SLACK.top)(slack),
-    align: /** @type {'left'|'center'|'right'} */ (
-      ALIGN_ANCHOR[layer.align] ? layer.align : "left"
-    ),
+    align: (ALIGN_ANCHOR[layer.align] ? layer.align : "left") as 'left' | 'center' | 'right',
   };
 }
 
 /**
- * The chevron `paintArrowLayer` (`render.js`) will stroke, in the box's own
+ * The chevron `paintArrowLayer` (`render.ts`) will stroke, in the box's own
  * canvas pixels: three points and a width, inset by half the stroke so the
  * round cap stays inside the box. `null` for a box too small to hold its own
  * stroke — which the painter skips, so the preview skips it too.
- *
- * @param {{w:number, h:number}} box
- * @param {'left'|'right'} direction
- * @returns {{stroke:number, points:Array<[number,number]>}|null}
  */
-export function arrowPlan(box, direction) {
+export function arrowPlan(
+  box: {w:number, h:number},
+  direction: 'left' | 'right',
+): {stroke:number, points:Array<[number,number]>} | null {
   const stroke = Math.max(1, Math.round(Math.min(box.w, box.h) * ARROW_STROKE));
   const inset = stroke / 2;
   const x0 = inset;
@@ -408,19 +425,18 @@ export function arrowPlan(box, direction) {
 }
 
 /**
- * The strokes `paintInkLayer` (`render.js`) will draw, in the box's own canvas
+ * The strokes `paintInkLayer` (`render.ts`) will draw, in the box's own canvas
  * pixels: each stroke's points scaled by the box's width and height — the
  * same 0..1 space {@link layerRect} resolves everything else from — paired
  * with its own width in canvas pixels, the {@link ARROW_STROKE}-style
  * fraction of the box's shorter side. `[]` for a box too small to hold its
  * own stroke — which the painter skips too, so the preview skips it the same
  * way {@link arrowPlan} does.
- *
- * @param {{w:number, h:number}} box
- * @param {Array<{w:number, pts:Array<[number,number]>}>} strokes
- * @returns {Array<{stroke:number, points:Array<[number,number]>}>}
  */
-export function inkPlan(box, strokes) {
+export function inkPlan(
+  box: {w:number, h:number},
+  strokes: Array<{w:number, pts:Array<[number,number]>}>,
+): Array<{stroke:number, points:Array<[number,number]>}> {
   if (box.w < 1 || box.h < 1) return [];
   const short = Math.min(box.w, box.h);
   return (Array.isArray(strokes) ? strokes : [])
@@ -433,7 +449,7 @@ export function inkPlan(box, strokes) {
 
 /**
  * Paint a slide's own layers as positioned DOM elements over its image — the
- * CSS twin of `render.js`'s `paintLayers`. Every `.carousel-studio__layer` the
+ * CSS twin of `render.ts`'s `paintLayers`. Every `.carousel-studio__layer` the
  * markup placed inside a `[data-slice]` host is resolved through `layerRect` —
  * the very rect `paintLayers` hands its painters — and written out as percent
  * of it, so the preview cannot round a box differently from the canvas. The
@@ -441,17 +457,23 @@ export function inkPlan(box, strokes) {
  * in. A `data-layer` index past the end of the list (the layer was deleted
  * since the last render) hides its element rather than leaving a stale mark,
  * and so does a layer the author switched off (`hidden`) — the preview's half
- * of the same skip `paintDispatch` (`render.js`) makes on the canvas.
+ * of the same skip `paintDispatch` (`render.ts`) makes on the canvas.
  * A non-zero `box.rotate` becomes a CSS `rotate()` about the element's own
  * centre — its default transform-origin — the same point `paintDispatch`
- * (`render.js`) rotates the canvas draw about.
+ * (`render.ts`) rotates the canvas draw about.
  *
- * @param {{hosts: ArrayLike<HTMLElement>}} els  the slide's `[data-slice]`
+ * @param els - the slide's `[data-slice]`
  *   elements: the stage slice and the filmstrip frame
- * @param {{layers: import('../document.ts').CarouselLayer[]|undefined,
- *   aspect: string, index: number, count: number}} o
  */
-export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
+export function paintDeckLayers(
+  { hosts }: {hosts: ArrayLike<HTMLElement>},
+  { layers, aspect, index, count }: {
+    layers: import('../document.ts').CarouselLayer[] | undefined;
+    aspect: string;
+    index: number;
+    count: number;
+  },
+) {
   const list = Array.isArray(layers) ? layers : [];
   const [w, h] = canvasSize(aspect);
   // A canvas length is a fraction of canvas height; the frame is a `cqw` query
@@ -460,8 +482,8 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
   const heightCqw = w > 0 ? (h / w) * 100 : 100;
 
   Array.from(hosts).forEach((host) => {
-    const nodes = /** @type {NodeListOf<HTMLElement>} */ (
-      host.querySelectorAll(".carousel-studio__layer")
+    const nodes = (
+      host.querySelectorAll(".carousel-studio__layer") as NodeListOf<HTMLElement>
     );
     Array.from(nodes).forEach((el) => {
       const layer = list[Number(el.dataset.layer)];
@@ -483,7 +505,7 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
 
 /**
  * Paint the deck's spanning layers over one slide's `[data-slice]` hosts — the
- * CSS twin of `render.js`'s `paintSpanLayers`. Each `.carousel-studio__span-layer`
+ * CSS twin of `render.ts`'s `paintSpanLayers`. Each `.carousel-studio__span-layer`
  * node is resolved through `spanLayerRect`: a slide-local rect that starts
  * off-frame and overflows the width where the layer crosses a seam, so the
  * host's `overflow: hidden` clips it exactly where the JPEG's frame edge will.
@@ -491,19 +513,27 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
  * behind it (deleted since the last render), or belongs to a layer the author
  * switched off (`hidden`) is not painted.
  *
- * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
- * @param {{spanLayers: import('../document.ts').CarouselLayer[]|undefined,
- *   aspect: string, index: number, count: number, selected: number|null}} o
+ * @param els - one slide's `[data-slice]` elements
+ * @param o
  *   `selected` is the span-layer index the panel is editing, or `null`
  */
-export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, selected }) {
+export function paintSpanLayers(
+  { hosts }: {hosts: ArrayLike<HTMLElement>},
+  { spanLayers, aspect, index, count, selected }: {
+    spanLayers: import('../document.ts').CarouselLayer[] | undefined;
+    aspect: string;
+    index: number;
+    count: number;
+    selected: number | null;
+  },
+) {
   const list = Array.isArray(spanLayers) ? spanLayers : [];
   const [w, h] = canvasSize(aspect);
   const heightCqw = w > 0 ? (h / w) * 100 : 100;
 
   Array.from(hosts).forEach((host) => {
-    const nodes = /** @type {NodeListOf<HTMLElement>} */ (
-      host.querySelectorAll(".carousel-studio__span-layer")
+    const nodes = (
+      host.querySelectorAll(".carousel-studio__span-layer") as NodeListOf<HTMLElement>
     );
     Array.from(nodes).forEach((el) => {
       const j = Number(el.dataset.spanLayer);
@@ -531,15 +561,22 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
  * inherit the previous mark's styling; `textContent = ""` drops whatever child
  * the type paint appended with it.
  *
- * @param {HTMLElement} el
- * @param {import('../document.ts').CarouselLayer} layer
- * @param {{index: number, count: number, frameH: number, heightCqw: number,
- *   rect: {x:number,y:number,w:number,h:number}}} env  the slide's place in the
+ * @param env - the slide's place in the
  *   deck (a `counter`'s `{i}` / `{n}`), the canvas height a numeric type size
  *   is a fraction of, one unit of canvas height in `cqw` of the frame, and this
  *   layer's box in canvas pixels
  */
-function paintLayerContent(el, layer, env) {
+function paintLayerContent(
+  el: HTMLElement,
+  layer: import('../document.ts').CarouselLayer,
+  env: {
+    index: number;
+    count: number;
+    frameH: number;
+    heightCqw: number;
+    rect: {x:number,y:number,w:number,h:number};
+  },
+) {
   // The block a live on-canvas edit owns (`index.js`'s `_enterTextEdit`) holds
   // the caret; rebuilding it here — every repaint's own first move — would
   // yank the caret out from under whoever is typing. `restyleEditingText` is
@@ -589,14 +626,18 @@ function paintLayerContent(el, layer, env) {
  *
  * Horizontal placement stays `text-align` over the full box width, which is
  * exactly what `ALIGN_ANCHOR` plus the canvas `textAlign` come to.
- *
- * @param {HTMLElement} el
- * @param {import('../document.ts').CarouselTextLayer
- *   | import('../document.ts').CarouselCounterLayer} layer
- * @param {{index: number, count: number, frameH: number, heightCqw: number,
- *   rect: {x:number,y:number,w:number,h:number}}} env
  */
-function paintTextContent(el, layer, { index, count, rect, frameH, heightCqw }) {
+function paintTextContent(
+  el: HTMLElement,
+  layer: import('../document.ts').CarouselTextLayer | import('../document.ts').CarouselCounterLayer,
+  { index, count, rect, frameH, heightCqw }: {
+    index: number;
+    count: number;
+    frameH: number;
+    heightCqw: number;
+    rect: {x:number,y:number,w:number,h:number};
+  },
+) {
   const text =
     layer.type === "counter" ? counterText(layer.format, index, count) : layer.text || "";
   const measure = measurer(layer.weight);
@@ -645,12 +686,18 @@ function applyTextFit(block, plan, layer, frameH, heightCqw) {
  * {@link paintTextContent} (autofit or fixed size, wrap, valign), applied as
  * style only: the block, and the caret in it, are never touched.
  *
- * @param {HTMLElement} el the `.carousel-studio__layer`/`.carousel-studio__span-layer`
+ * @param el - the `.carousel-studio__layer`/`.carousel-studio__span-layer`
  *   host whose `.carousel-studio__layer-text` child is being edited
- * @param {import('../document.ts').CarouselTextLayer} layer
- * @param {{frameH: number, heightCqw: number, rect: {x:number,y:number,w:number,h:number}}} env
  */
-export function restyleEditingText(el, layer, { frameH, heightCqw, rect }) {
+export function restyleEditingText(
+  el: HTMLElement,
+  layer: import('../document.ts').CarouselTextLayer,
+  { frameH, heightCqw, rect }: {
+    frameH: number;
+    heightCqw: number;
+    rect: {x:number,y:number,w:number,h:number};
+  },
+) {
   const block = el.querySelector(".carousel-studio__layer-text");
   if (!block) return;
   const measure = measurer(layer.weight);
@@ -668,11 +715,13 @@ export function restyleEditingText(el, layer, { frameH, heightCqw, rect }) {
  * aspect is the box's (both are percentages of a frame that carries the canvas
  * aspect), so the uniform `viewBox` scale is exact.
  *
- * @param {HTMLElement} el
- * @param {import('../document.ts').CarouselArrowLayer} layer
- * @param {{w:number, h:number}} rect the layer's box in canvas pixels
+ * @param rect - the layer's box in canvas pixels
  */
-function paintArrowContent(el, layer, rect) {
+function paintArrowContent(
+  el: HTMLElement,
+  layer: import('../document.ts').CarouselArrowLayer,
+  rect: {w:number, h:number},
+) {
   el.style.opacity = String(layer.opacity);
   const plan = arrowPlan(rect, layer.direction);
   if (!plan) return;
@@ -702,11 +751,13 @@ function paintArrowContent(el, layer, rect) {
  * canvas-pixel box — {@link paintArrowContent} uses, so the drawing is the
  * render's geometry scaled, not an approximation of it.
  *
- * @param {HTMLElement} el
- * @param {import('../document.ts').CarouselInkLayer} layer
- * @param {{w:number, h:number}} rect the layer's box in canvas pixels
+ * @param rect - the layer's box in canvas pixels
  */
-function paintInkContent(el, layer, rect) {
+function paintInkContent(
+  el: HTMLElement,
+  layer: import('../document.ts').CarouselInkLayer,
+  rect: {w:number, h:number},
+) {
   el.style.opacity = String(layer.opacity);
   const strokes = inkPlan(rect, layer.strokes);
   if (!strokes.length) return;
@@ -740,12 +791,14 @@ function paintInkContent(el, layer, rect) {
  * outright while there is nothing to show, on the column the session is not
  * scoped to as much as on one that has drawn no stroke.
  *
- * @param {HTMLElement} el
- * @param {import('../document.ts').CarouselInkLayer|null} layer a synthetic
+ * @param layer - a synthetic
  *   layer built from the session's own strokes, or `null` to hide the node
- * @param {string} aspect
  */
-export function paintInkDraft(el, layer, aspect) {
+export function paintInkDraft(
+  el: HTMLElement,
+  layer: import('../document.ts').CarouselInkLayer | null,
+  aspect: string,
+) {
   if (!layer) {
     el.style.display = "none";
     return;
@@ -770,23 +823,25 @@ export function paintInkDraft(el, layer, aspect) {
  * it does not reach, without the markup having to be re-emitted mid-drag.
  * `rotate` turns into the same CSS `rotate()` the layer's own node gets
  * (`paintDeckLayers`); the rotate handle is a child of the outline box in the
- * markup (`panels.js`), so it swings with it for free.
+ * markup (`panels.ts`), so it swings with it for free.
  *
- * @param {ArrayLike<HTMLElement>} hosts
- * @param {{x:number,y:number,w:number,h:number}|null} rect
- * @param {{v:number[], h:number[]}} guides
- * @param {number} [rotate] degrees; 0 except mid-drag or on a rotated layer
+ * @param rotate - degrees; 0 except mid-drag or on a rotated layer
  */
-function paintChrome(hosts, rect, guides, rotate = 0) {
+function paintChrome(
+  hosts: ArrayLike<HTMLElement>,
+  rect: {x:number,y:number,w:number,h:number} | null,
+  guides: {v:number[], h:number[]},
+  rotate: number = 0,
+) {
   Array.from(hosts).forEach((host) => {
-    const chrome = /** @type {HTMLElement|null} */ (
-      host.querySelector(".carousel-studio__chrome")
+    const chrome = (
+      host.querySelector(".carousel-studio__chrome") as HTMLElement | null
     );
     if (!chrome) return;
     chrome.style.display = rect ? "" : "none";
     if (!rect) return;
-    const outline = /** @type {HTMLElement|null} */ (
-      chrome.querySelector(".carousel-studio__chrome-box")
+    const outline = (
+      chrome.querySelector(".carousel-studio__chrome-box") as HTMLElement | null
     );
     if (outline) {
       outline.style.left = `${rect.x}%`;
@@ -818,16 +873,22 @@ function paintChrome(hosts, rect, guides, rotate = 0) {
  * Move the selection chrome — an outline box with eight resize handles — over
  * the selected slide layer, and draw the snap guides that engaged this frame.
  * `paintDeckLayers`'s twin for the one element that is UI, not preview: the
- * chrome node is present only while a layer is selected (panels.js), so a host
+ * chrome node is present only while a layer is selected (panels.ts), so a host
  * without one is simply skipped.
  *
- * @param {{hosts: ArrayLike<HTMLElement>}} els  the selected slide's `[data-slice]`
+ * @param els - the selected slide's `[data-slice]`
  *   elements
- * @param {{box: {x:number,y:number,w:number,h:number,rotate?:number}, aspect: string,
- *   guides: {v: number[], h: number[]}}} o  `guides` in canvas fractions, empty
+ * @param o - `guides` in canvas fractions, empty
  *   except mid-drag
  */
-export function paintLayerChrome({ hosts }, { box, aspect, guides }) {
+export function paintLayerChrome(
+  { hosts }: {hosts: ArrayLike<HTMLElement>},
+  { box, aspect, guides }: {
+    box: {x:number,y:number,w:number,h:number,rotate?:number};
+    aspect: string;
+    guides: {v: number[], h: number[]};
+  },
+) {
   paintChrome(
     hosts,
     box ? layerCSS({ box }, aspect) : null,
@@ -848,11 +909,18 @@ export function paintLayerChrome({ hosts }, { box, aspect, guides }) {
  * in, and are re-based into this slide's; one that lands outside the slide is
  * clipped rather than filtered, for the same reason.
  *
- * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
- * @param {{layer: import('../document.ts').CarouselLayer|null, aspect: string,
- *   index: number, count: number, guides: {v: number[], h: number[]}}} o
+ * @param els - one slide's `[data-slice]` elements
  */
-export function paintSpanChrome({ hosts }, { layer, aspect, index, count, guides }) {
+export function paintSpanChrome(
+  { hosts }: {hosts: ArrayLike<HTMLElement>},
+  { layer, aspect, index, count, guides }: {
+    layer: import('../document.ts').CarouselLayer | null;
+    aspect: string;
+    index: number;
+    count: number;
+    guides: {v: number[], h: number[]};
+  },
+) {
   const [w, h] = canvasSize(aspect);
   const n = Math.max(1, count);
   const rect = layer ? spanLayerRect(layer, index, n, aspect) : null;

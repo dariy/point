@@ -231,7 +231,7 @@
   overflow: visible;
 }
 
-/* A deck column is *the* editing surface: `gestures.js` binds these, so a
+/* A deck column is *the* editing surface: `gestures.ts` binds these, so a
  * Ctrl/Shift-pan, a pinch, a Ctrl/Shift-wheel zoom, a layer drag and an arrow
  * nudge all happen here, at the size the user is looking at. The reorder
  * handle, the slide number and the duplicate/delete actions all live in the
@@ -246,7 +246,7 @@
  * `touch-action: pan-x pan-y`, not `none`: a plain drag — either axis — has to
  * reach a scroller, the strip on one axis and the page on the other, or a
  * phone user whose thumb lands on the tile cannot scroll past it at all.
- * `gestures.js` claims a plain touch drag only for a second finger (a pinch),
+ * `gestures.ts` claims a plain touch drag only for a second finger (a pinch),
  * never the first, so the two never fight over the same one.
  *
  * That is the fine pointer's rule. The touch layout replaces it with `none` —
@@ -274,9 +274,9 @@
 }
 
 /* The one column showing a selected layer's chrome (`is-layer-armed`,
- * panels.js — the same `(i === deckIndex && slideChrome) || spanChrome` test
+ * panels.ts — the same `(i === deckIndex && slideChrome) || spanChrome` test
  * `layerChrome` itself reads) must not hand a one-finger drag to the scroller:
- * the layer's own grab (`PRESS_KINDS` in gestures.js) claims a press on it
+ * the layer's own grab (`PRESS_KINDS` in gestures.ts) claims a press on it
  * unconditionally, but `pan-x pan-y` above lets the browser start a native
  * pan on that same finger regardless of the claim. Every other column keeps
  * `pan-x pan-y`, so the strip still scrolls sideways with a finger wherever
@@ -295,7 +295,7 @@
  * slide the same way a selected layer's drag is) — same `touch-action: none`
  * reasoning as `is-layer-armed`, plus a crosshair for the whole time the
  * session is open, not only mid-stroke, so the pointer reads as "this column
- * draws" before the first press. `is-drawing` (`gestures.js`'s own dress
+ * draws" before the first press. `is-drawing` (`gestures.ts`'s own dress
  * class for the stroke itself) keeps the same cursor rather than picking up
  * `is-dragging`'s `grabbing` — nothing here is being panned. */
 .carousel-studio__stage-slide.is-ink-armed {
@@ -337,12 +337,12 @@
 /* ── Panorama: the vertical anchor ─────────────────────────────────────────
  * In Panorama mode the whole stage is the editing surface for the one field
  * the mode has: where the crop band sits in its vertical slack. The class is
- * emitted only when there *is* slack (see `anchorRail` in studio/panels.js),
+ * emitted only when there *is* slack (see `anchorRail` in studio/panels.ts),
  * so a stage with nothing to move keeps its default scroll behaviour and its
  * default cursor.
  *
  * `touch-action: pan-x`, the mirror of a deck column's `pan-y`: a sideways
- * finger still pans the strip, and a vertical one is ours. `gestures.js`
+ * finger still pans the strip, and a vertical one is ours. `gestures.ts`
  * claims a touch drag only once it has called the direction, so the two never
  * fight over the same finger. */
 .carousel-studio__stage--anchor {
@@ -387,7 +387,7 @@
 }
 
 /* Positioned by `--carousel-anchor-pos` alone (paintAnchorRail in
- * studio/preview.js), so a drag repaints it with one custom-property write. */
+ * studio/preview.ts), so a drag repaints it with one custom-property write. */
 .carousel-studio__anchor-thumb {
   position: absolute;
   left: 50%;
@@ -495,7 +495,7 @@
  * pinned to the bottom of a document-flow page is pinned to nothing. The stage
  * needs the same thing, a definite height to claim rather than a `vh` guess.
  *
- * `TOUCH_LAYOUT` (`studio/layout.js`) is this query's second half, named in
+ * `TOUCH_LAYOUT` (`studio/layout.ts`) is this query's second half, named in
  * JS. What neither half covers is a narrow fine-pointer window, which keeps
  * the flex column it always had and scrolls with the rest of the document. */
 @media (min-width: 48em), (pointer: coarse) {
@@ -667,7 +667,7 @@
  * it.
  *
  * Duplicate rides along beneath Add in every zone but the head one
- * (`studio/panels.js` skips it there — there is no slide before the head to
+ * (`studio/panels.ts` skips it there — there is no slide before the head to
  * copy), so the two stack in one column rather than compete for the same
  * centre. */
 .carousel-studio__insert-zone {
@@ -1105,7 +1105,7 @@
 /* ── Layers ────────────────────────────────────────────────────────────────
  * Deck mode only: a per-slide list plus the selected layer's property form.
  * The live preview of each layer is a positioned DOM element inside every
- * `[data-slice]` host — the CSS twin of `render.js`'s `paintLayers`. */
+ * `[data-slice]` host — the CSS twin of `render.ts`'s `paintLayers`. */
 .carousel-studio__layers {
   display: flex;
   flex-direction: column;
@@ -1227,12 +1227,12 @@
 /* One layer's live preview: positioned in percent of the frame by
  * `paintDeckLayers`, its content painted by type. `pointer-events: none` keeps
  * it from intercepting the deck frame's gesture — a layer press is routed
- * geometrically by `hitLayer` (gestures.js) against the selected layer's box,
+ * geometrically by `hitLayer` (gestures.ts) against the selected layer's box,
  * not by DOM hit-testing.
  *
  * The font stack is the same token the renderer resolves — and it is the only
  * type decision left to CSS. Wrap points, fitted size, line box and vertical
- * origin all arrive as inline styles from `preview.js`, which measures them on
+ * origin all arrive as inline styles from `preview.ts`, which measures them on
  * a 2D context through the renderer's own `wrapText` / `autoFitText`; hence no
  * `white-space` or `line-height` here to override them with.
  *
@@ -1264,7 +1264,7 @@
  * so the stage's own gestures can hit-test box coordinates instead of DOM
  * targets; re-enabling it here on just the editable block is what lets a
  * click inside it place a caret rather than being read as a stage press
- * (`studio/gestures.js`'s `onPointerDown` also skips claiming one that lands
+ * (`studio/gestures.ts`'s `onPointerDown` also skips claiming one that lands
  * here, for the same reason). The dashed outline is the only chrome an edit
  * gets — the selection box/handles stay put underneath it. */
 .carousel-studio__layer-text.is-editing {
@@ -1293,7 +1293,7 @@
 
 /* The outline + eight handles over the selected layer, and the snap-guide
  * layer. Positioned by `paintLayerChrome`; present in the markup only while a
- * layer is selected (panels.js), so a deselect clears it on the next render. */
+ * layer is selected (panels.ts), so a deselect clears it on the next render. */
 .carousel-studio__chrome {
   position: absolute;
   inset: 0;
@@ -1329,10 +1329,10 @@
 
 /* The ninth handle: round rather than square so it reads as a different kind
  * of drag, sitting above the box's own top edge — `ROTATE_HANDLE_OFFSET_PX`
- * in gestures.js hit-tests against this same offset, worked out by hand since
+ * in gestures.ts hit-tests against this same offset, worked out by hand since
  * that module has no DOM to measure the handle's rotated position from. As a
  * child of `.carousel-studio__chrome-box` it inherits that box's own
- * `rotate()` transform (`paintChrome`, preview.js), so it swings around the
+ * `rotate()` transform (`paintChrome`, preview.ts), so it swings around the
  * box as it turns rather than needing a second write. */
 .carousel-studio__handle--rotate {
   left: 50%;
@@ -1530,12 +1530,12 @@
  * platform's own touch-target guidance.
  *
  * The resize and rotate handles paint bigger so the target reads where it
- * grabs, but the painted square is not what decides the grab — `gestures.js`
+ * grabs, but the painted square is not what decides the grab — `gestures.ts`
  * resolves a press geometrically, against `HANDLE_GRAB_PX`, `ROTATE_
  * HANDLE_OFFSET_PX` and `ROTATE_HANDLE_HIT_PX`. Those three constants carry a
  * coarse-pointer twin in JS, read behind the same `(pointer: coarse)` query —
  * `_COARSE` mirroring the plain constant's own px value here, the way
- * `studio/layout.js` already mirrors `SHEET_BREAKPOINT`. The rotate handle's
+ * `studio/layout.ts` already mirrors `SHEET_BREAKPOINT`. The rotate handle's
  * offset (-48px) is the one number both sides must actually agree on, since
  * it also decides where the enlarged hit circle sits clear of the resize
  * handles' own widened band. */
@@ -1608,8 +1608,8 @@
      * rule exists to leave a finger to the strip's own scroller; with the
      * scroller locked above there is nothing left for the browser to pan, and
      * `pan-x` would only cost the crop its first 8px of travel. So the tile
-     * takes every drag, and `gestures.js` pans the crop with it — no modifier,
-     * because a finger has none to hold (`isTouchLayout`, studio/layout.js). */
+     * takes every drag, and `gestures.ts` pans the crop with it — no modifier,
+     * because a finger has none to hold (`isTouchLayout`, studio/layout.ts). */
     touch-action: none;
   }
 }
@@ -1617,7 +1617,7 @@
 /* ── Coarse pointer: the dock replaces the toolbar ───────────────────────────
  * A row of text buttons at the top edge is the hardest place on a phone for a
  * thumb to reach, so the dock takes the bottom edge and the toolbar row goes.
- * Both are in the markup on every pointer (`builder()`, studio/panels.js);
+ * Both are in the markup on every pointer (`builder()`, studio/panels.ts);
  * this is the only place that decides which one the user sees.
  *
  * The toolbar's own controls are not lost with it. The mode toggle, the Draw
@@ -1745,7 +1745,7 @@
   }
 
   /* The tray's contents are at the end of the sheet here — `builder()` places
-     them there and emits the tray row empty (studio/panels.js), since a second
+     them there and emits the tray row empty (studio/panels.ts), since a second
      copy would be a second `#carousel-render-btn` and a second set of the same
      delegated actions. The empty row still takes the grid's gap, so hide it.
      `:has` scopes that to the row after a builder that *has* a panel: a studio

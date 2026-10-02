@@ -1,5 +1,5 @@
 /**
- * carousel/studio/preview.js — the live preview, written as CSS.
+ * carousel/studio/preview.ts — the live preview, written as CSS.
  *
  * These functions are the studio's only DOM writes for framing, and they hold
  * no state: they take the elements and the numbers. So the tests hand them
@@ -44,7 +44,7 @@ const measure = (text, size) => ({ width: text.length * CHAR_EM * size });
 
 /** The stand-in face's vertical metrics, as fractions of the font size. The
  *  central baseline is deliberately NOT `(ascent - descent) / 2`, because in a
- *  real browser it is not either — that gap is the whole reason `preview.js`
+ *  real browser it is not either — that gap is the whole reason `preview.ts`
  *  measures a baseline shift instead of assuming one. */
 const ASCENT = 0.8;
 const DESCENT = 0.2;
@@ -52,7 +52,7 @@ const CENTRAL = 0.25;
 /** What that costs the block's top, per px of font size: `-central - (A-D)/2`. */
 const SHIFT_PER_PX = CENTRAL - (ASCENT - DESCENT) / 2;
 
-/** `preview.js` measures on an offscreen 2D context it takes from `document`
+/** `preview.ts` measures on an offscreen 2D context it takes from `document`
  *  and memoizes on first use; in node there is none, so it gets this. Assigned
  *  at module scope so it is in place before any test paints. */
 globalThis.document = {
@@ -427,7 +427,7 @@ describe('carousel studio preview', () => {
    * The bead this closes ("preview/render parity for text and arrows") turns on
    * one claim: the stage and the JPEG run the *same* typesetter. These tests
    * make that falsifiable — they paint the same layer twice, once through
-   * `render.js` onto a recording ctx and once through `textPlan` / `arrowPlan`,
+   * `render.ts` onto a recording ctx and once through `textPlan` / `arrowPlan`,
    * and assert the two agree exactly rather than approximately.
    */
   describe('parity with the render', () => {
@@ -450,7 +450,7 @@ describe('carousel studio preview', () => {
       return ctx;
     }
 
-    /** What `render.js` does with one layer on a fresh canvas. */
+    /** What `render.ts` does with one layer on a fresh canvas. */
     function rendered(layer, env = {}) {
       const log = [];
       paintLayers(recordingCtx(log), [layer], ASPECT, env);

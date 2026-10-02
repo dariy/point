@@ -1,5 +1,5 @@
 /**
- * carousel/import/zip.js — the dependency-free ZIP reader.
+ * carousel/import/zip.ts — the dependency-free ZIP reader.
  *
  * Two kinds of archive are read here, deliberately:
  *

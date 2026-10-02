@@ -1,8 +1,8 @@
 /**
- * carousel/studio/history.js — the undo/redo ring over the carousel document.
+ * carousel/studio/history.ts — the undo/redo ring over the carousel document.
  *
  * The ring exists because the document is immutable by construction: every
- * writer in `document.js` returns a new document, so the previous state is
+ * writer in `document.ts` returns a new document, so the previous state is
  * simply the previous reference. These pin the three things that cannot be read
  * off that sentence — that an *equal* document is dropped rather than recorded
  * (several studio writers deliberately return one when a value is rejected),

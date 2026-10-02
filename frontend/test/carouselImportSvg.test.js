@@ -1,5 +1,5 @@
 /**
- * carousel/import/svg.js — SVG into a carousel template.
+ * carousel/import/svg.ts — SVG into a carousel template.
  *
  * The fixtures are written here as source rather than committed as files: an
  * SVG *is* its text, so a test that asserts on a fill can be read beside the
@@ -10,7 +10,7 @@
  *
  * `DOMParser` comes from linkedom, because `node --test` has none. It parses
  * `image/svg+xml` the same way a browser does, and the disagreements that do
- * exist are what `xml.js` is written around.
+ * exist are what `xml.ts` is written around.
  */
 
 import { test, describe } from 'node:test';
