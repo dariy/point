@@ -24,7 +24,7 @@
  *
  * `tags_visibility` is a demo choice rather than a scrub: the source instance
  * keeps the tag visualisation admin-only, which makes /tags redirect logged-out
- * visitors home (app.js resolveTagsModule). Showing it is most of the point of
+ * visitors home (app.ts resolveTagsModule). Showing it is most of the point of
  * a demo.
  */
 export const REPLACE_SETTINGS = {
@@ -42,7 +42,7 @@ export const REPLACE_SETTINGS = {
  *
  * `footer_copyright` credits picsum.photos, where the demo's photographs come
  * from (see README, Content licensing). `{{author_name}}` and `{{engine}}` are
- * tokens and `[text](url)` is a link (utils/copyright.js); everything else is
+ * tokens and `[text](url)` is a link (utils/copyright.ts); everything else is
  * literal text and is escaped — raw HTML here renders as visible markup.
  *
  * The managed-hosting link is the demo's only outbound pointer to point.photos,

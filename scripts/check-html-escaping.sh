@@ -1,17 +1,17 @@
 #!/bin/bash
 # The html`` convention, asserted against the tree rather than trusted.
 #
-# eslint.config.js catches the shapes a parser can see: raw() around a call or a
+# scripts/oxlint-point.mjs catches the shapes a parser can see: raw() around a call or a
 # template literal, an interpolation in an unquoted attribute, a bare innerHTML.
 # This covers the two things it cannot:
 #
 #   1. Hand-applied escapeHtml() inside an interpolation. The tag escapes by
 #      default, so calling it by hand means either a plain template literal
 #      (unescaped by definition) or a double-escape.
-#   2. Growth in the set of no-restricted-syntax suppressions. Each one is a
+#   2. Growth in the set of point/restricted-syntax suppressions. Each one is a
 #      place where safety is asserted by a human rather than enforced by a rule
 #      — a raw() around a value the reader cannot check, or the two lines of
-#      utils/helpers.js that hold the only innerHTML and insertAdjacentHTML in
+#      utils/helpers.ts that hold the only innerHTML and insertAdjacentHTML in
 #      the frontend — so a new one is a deliberate act, not a quiet edit.
 #
 # A third shape needs a parser rather than a grep, so it lives in
@@ -53,25 +53,25 @@ fi
 
 # ── 2. The suppression budget ────────────────────────────────────────────────
 # Every line here is a place a human asserted the value is already safe. Adding
-# one means editing this list, which is the point. helpers.js is the odd one:
+# one means editing this list, which is the point. helpers.ts is the odd one:
 # its three are not raw() exceptions but the sinks themselves — the single
 # innerHTML write (setHTML), the single insertAdjacentHTML (insertHTML), and
 # the single DOMParser.parseFromString (parseMarkup) that every other write and
 # parse in the frontend goes through.
 expected=$(cat <<'LIST'
-frontend/src/components/light/CssEditor.js 1
-frontend/src/components/light/MarkdownEditor.js 1
-frontend/src/components/light/settingsFields.js 1
-frontend/src/components/light/tags/TagEditorForm.js 2
-frontend/src/components/public/PostContent.js 1
-frontend/src/pages/light/PluginsPage.js 1
-frontend/src/plugins/tags-map/index.js 2
-frontend/src/utils/copyright.js 1
-frontend/src/utils/helpers.js 3
+frontend/src/components/light/CssEditor.ts 1
+frontend/src/components/light/MarkdownEditor.ts 1
+frontend/src/components/light/settingsFields.ts 1
+frontend/src/components/light/tags/TagEditorForm.ts 2
+frontend/src/components/public/PostContent.ts 1
+frontend/src/pages/light/PluginsPage.ts 1
+frontend/src/plugins/tags-map/index.ts 2
+frontend/src/utils/copyright.ts 1
+frontend/src/utils/helpers.ts 3
 LIST
 )
-actual=$(grep -rl 'eslint-disable-next-line no-restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do
-    echo "$f $(grep -c 'eslint-disable-next-line no-restricted-syntax' "$f")"
+actual=$(grep -rl 'eslint-disable-next-line point/restricted-syntax' "$SRC" 2>/dev/null | sort | while read -r f; do
+    echo "$f $(grep -c 'eslint-disable-next-line point/restricted-syntax' "$f")"
 done)
 if [ "$actual" != "$expected" ]; then
     report "the suppression list moved" \

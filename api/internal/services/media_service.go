@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -32,7 +33,10 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/repository"
 
-	"github.com/disintegration/imaging"
+	// Registers WebP with image.Decode and image.DecodeConfig. imgproc.go
+	// registers JPEG, PNG, GIF, BMP and TIFF only, so without this a WebP
+	// upload stores no size and no ladder. Pure Go: the binary stays CGO-free.
+	_ "golang.org/x/image/webp"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
@@ -55,9 +59,19 @@ type MediaService struct {
 	// Variant for why the global decode semaphore is not enough on its own.
 	variantFlight singleflight.Group
 
+	// deferred counts the background AVIF and HEIC decodes in flight. See
+	// media_deferred.go.
+	deferred sync.WaitGroup
+
 	// prewarming is held for the life of a background prewarm so a second
 	// rebuild does not start a duplicate one. See startPrewarm.
 	prewarming atomic.Bool
+
+	// jobs and ffmpeg run the video transcode. See media_video.go.
+	jobs         *JobService
+	ffmpeg       *FFmpeg
+	videoTimeout time.Duration
+	videoThreads int
 }
 
 // WithCache attaches the public page cache so a rebuild can drop it. Without
@@ -196,7 +210,17 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	if strings.HasPrefix(p.MimeType, "image/") {
 		fileType = "image"
 		// Load image for dimensions and the thumbnail ladder
-		src, err := s.decodeImage(ctx, p.Content)
+		var src image.Image
+		var err error
+		if isDeferredDecode(p.MimeType) {
+			// The decode runs after the row exists. See media_deferred.go.
+			var w, h int64
+			w, h, err = s.deferredHeader(p.Content)
+			width = sql.NullInt64{Int64: w, Valid: w > 0}
+			height = sql.NullInt64{Int64: h, Valid: h > 0}
+		} else {
+			src, err = s.decodeImage(ctx, p.Content)
+		}
 		if errors.Is(err, ErrTooLarge) {
 			// Other decode failures are tolerated below — the file is stored
 			// without dimensions or a thumbnail. "Too many pixels" is not a
@@ -205,7 +229,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			// never learn why.
 			return models.Medium{}, err
 		}
-		if err == nil {
+		if err == nil && src != nil {
 			decoded = src
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -215,6 +239,11 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		metadata = s.extractEXIF(bytes.NewReader(p.Content))
 	} else if strings.HasPrefix(p.MimeType, "video/") {
 		fileType = "video"
+		// A slim install has no ffmpeg to transcode HEVC, and most browsers
+		// cannot play it. Record the codec so the admin UI can say so.
+		if IsHEVCVideo(p.Content) {
+			metadata = map[string]interface{}{VideoCodecMetaKey: "hevc"}
+		}
 	} else if strings.HasPrefix(p.MimeType, "audio/") {
 		fileType = "audio"
 	}
@@ -235,7 +264,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	// one who pays for it. A failure is not fatal: the media route regenerates
 	// any missing rung on request.
 	if decoded != nil {
-		if err := s.writeLadder(ctx, originalRelPath, decoded, ""); err != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(p.Content), "", UploadMaxVariantSize); err != nil {
 			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
 		}
 	}
@@ -274,6 +303,11 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	// location tag from those coordinates and attach it to the post. Best-effort:
 	// failures (e.g. no network, no place name) must not fail the upload.
 	s.tagPostFromGPS(ctx, p.PostID, metadata)
+
+	if fileType == "image" && isDeferredDecode(p.MimeType) {
+		s.startDeferred(media, p.Content)
+	}
+	s.enqueueTranscode(ctx, media)
 
 	return media, nil
 }
@@ -334,7 +368,17 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	if strings.HasPrefix(mimeType, "image/") {
 		fileType = "image"
-		src, err := s.decodeImage(ctx, content)
+		var src image.Image
+		var err error
+		if isDeferredDecode(mimeType) {
+			// The decode runs after the row exists. See media_deferred.go.
+			var w, h int64
+			w, h, err = s.deferredHeader(content)
+			width = sql.NullInt64{Int64: w, Valid: w > 0}
+			height = sql.NullInt64{Int64: h, Valid: h > 0}
+		} else {
+			src, err = s.decodeImage(ctx, content)
+		}
 		if errors.Is(err, ErrTooLarge) {
 			// Other decode failures are tolerated below — the file is stored
 			// without dimensions or a thumbnail. "Too many pixels" is not a
@@ -343,7 +387,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 			// never learn why.
 			return models.Medium{}, err
 		}
-		if err == nil {
+		if err == nil && src != nil {
 			decoded = src
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -373,12 +417,12 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	// Same eager ladder as UploadFile, off the decode already done above.
 	if decoded != nil {
-		if err := s.writeLadder(ctx, originalRelPath, decoded, ""); err != nil {
+		if err := s.writeLadder(ctx, originalRelPath, decoded, extractICC(content), "", UploadMaxVariantSize); err != nil {
 			slog.Warn("thumbnail ladder generation failed", "path", originalRelPath, "error", err)
 		}
 	}
 
-	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
+	media, err := s.repo.CreateMedia(ctx, models.CreateMediaParams{
 		Filename:         filename,
 		OriginalPath:     originalRelPath,
 		ThumbnailPath:    sql.NullString{},
@@ -395,6 +439,10 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		OriginalMetadata: metadataJSON,
 		UploadedAt:       now,
 	})
+	if err == nil && fileType == "image" && isDeferredDecode(mimeType) {
+		s.startDeferred(media, content)
+	}
+	return media, err
 }
 
 func (s *MediaService) GetMediaByID(ctx context.Context, id int64) (models.Medium, error) {
@@ -418,16 +466,17 @@ type ListMediaParams struct {
 	PerPage  int32
 	FileType string
 	Folder   string // "YYYY/MM" format; empty means no folder filter
+	Filename string // substring search
 }
 
 func (s *MediaService) ListMedia(ctx context.Context, p ListMediaParams) ([]models.Medium, int64, error) {
 	offset := (p.Page - 1) * p.PerPage
-	media, err := s.repo.ListMediaFiltered(ctx, p.FileType, p.Folder, int64(p.PerPage), int64(offset))
+	media, err := s.repo.ListMediaFiltered(ctx, p.FileType, p.Folder, p.Filename, int64(p.PerPage), int64(offset))
 	if err != nil {
 		return nil, 0, err
 	}
 
-	total, err := s.repo.CountMediaFiltered(ctx, p.FileType, p.Folder)
+	total, err := s.repo.CountMediaFiltered(ctx, p.FileType, p.Folder, p.Filename)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -627,6 +676,7 @@ func (s *MediaService) DeleteMedia(ctx context.Context, id int64) error {
 	// Delete files
 	originalFull := filepath.Join(s.cfg.StoragePath, "media", media.OriginalPath)
 	_ = os.Remove(originalFull)
+	s.removeHEIFArchive(media)
 
 	if media.ThumbnailPath.Valid {
 		thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", media.ThumbnailPath.String)
@@ -648,6 +698,7 @@ func (s *MediaService) BulkDeleteMedia(ctx context.Context, ids []int64) (int, e
 	for _, m := range records {
 		originalFull := filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath)
 		_ = os.Remove(originalFull)
+		s.removeHEIFArchive(m)
 		if m.ThumbnailPath.Valid {
 			thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String)
 			_ = os.Remove(thumbnailFull)
@@ -684,6 +735,7 @@ func (s *MediaService) CleanupOrphaned(ctx context.Context) (int, int64, error) 
 		ids = append(ids, m.ID)
 		freed += m.FileSize
 		_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath))
+		s.removeHEIFArchive(m)
 		if m.ThumbnailPath.Valid {
 			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
 		}
@@ -743,13 +795,21 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 	newOrigRel := filepath.Join(newRelDir, newBase)
 	newOrigFull := filepath.Join(s.cfg.StoragePath, "media", newOrigRel)
 
+	archive := s.heifArchive(m)
 	if err := os.Rename(oldOrigFull, newOrigFull); err != nil {
 		return models.Medium{}, fmt.Errorf("rename file: %w", err)
+	}
+	// The archival HEIC beside a converted JPEG follows it.
+	if archive != "" {
+		newArchive := strings.TrimSuffix(newOrigRel, filepath.Ext(newOrigRel)) + filepath.Ext(archive)
+		_ = os.Rename(filepath.Join(s.cfg.StoragePath, "media", archive), filepath.Join(s.cfg.StoragePath, "media", newArchive))
 	}
 
 	// Drop the ladder rather than renaming four files: a rung is keyed on the
 	// original's path, so the old names are now orphans, and regenerating one
 	// costs a single decode on next request.
+	// The transcode of a video follows it; the other variants are cut again.
+	_ = os.Rename(filepath.Join(s.mediaBase(), VideoTranscodeRelPath(m.OriginalPath)), filepath.Join(s.mediaBase(), VideoTranscodeRelPath(newOrigRel)))
 	s.removeAllVariants(m.OriginalPath)
 
 	// A video poster does have to move. It is client-captured and there is no
@@ -793,9 +853,9 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 
 // SaveVideoPoster stores a client-captured frame as a video's thumbnail.
 //
-// The runtime image ships no ffmpeg (and the binary is CGO-free), so there is
-// no server-side video decoder: the admin browser draws a frame off a <video>
-// element onto a canvas and posts the resulting JPEG here. The frame lands on
+// The admin browser draws a frame off a <video> element onto a canvas and
+// posts the resulting JPEG here. It is the only poster source on the slim
+// image, and it replaces a server poster (WriteServerPoster). The frame lands on
 // the same media/thumbnails/YYYY/MM/ path an image upload would use, so every
 // existing consumer of ?thumb picks it up with no further changes.
 func (s *MediaService) SaveVideoPoster(ctx context.Context, id int64, poster []byte) (models.Medium, error) {
@@ -841,8 +901,8 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 	if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
 		return models.Medium{}, err
 	}
-	thumb := imaging.Fit(src, posterMaxSide, posterMaxSide, imaging.Lanczos)
-	if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
+	thumb := fitImage(src, posterMaxSide, posterMaxSide)
+	if err := saveJPEGWithICC(thumb, thumbFull, nil, s.jpegQuality(ctx)); err != nil {
 		return models.Medium{}, err
 	}
 
@@ -864,14 +924,22 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 }
 
 // VariantSizes is the thumbnail ladder: the cap applied to the LONGEST side of
-// a derived JPEG, ascending. Aspect ratio is preserved (imaging.Fit), so a
+// a derived JPEG, ascending. Aspect ratio is preserved (fitImage), so a
 // portrait source at rung 512 is 512 tall and narrower than that.
 //
-// Four rungs cover the whole product: 128 for dense grids and list rows, 256
-// for atlas chips, 512 for cards and the legacy bare `?thumb`, 1024 for article
-// bodies, retina cards and social cards. JPEG only — the binary is CGO-free and
-// disintegration/imaging cannot encode WebP or AVIF without a cgo dependency.
-var VariantSizes = []int{128, 256, 512, 1024}
+// 128 is for dense grids and list rows, 256 for atlas chips, 512 for cards and
+// the legacy bare `?thumb`, 1024 for retina cards and social cards. 1600 and
+// 2048 are for article bodies on phones at DPR 3 and retina laptops, which
+// otherwise download the original. Upload writes the rungs up to
+// UploadMaxVariantSize only; the larger ones are written on the first request
+// or by the rebuild prewarm (see writeLadder). JPEG only — the binary is CGO-free, and
+// no pure-Go WebP or AVIF encoder is good enough.
+var VariantSizes = []int{128, 256, 512, 1024, 1600, 2048}
+
+// UploadMaxVariantSize is the largest rung that upload and import write
+// eagerly. The rungs above it are large to encode and only article bodies use
+// them, so they wait for the first request.
+const UploadMaxVariantSize = 1024
 
 // DefaultVariantSize is the rung a bare `?thumb` resolves to. Existing
 // posts.thumbnail_path rows and published post content carry `?thumb` with no
@@ -1034,7 +1102,7 @@ func variantIsFresh(variantFull, srcFull string) bool {
 // pattern that matters more than the process-wide decode semaphore, which
 // bounds the machine but not the duplication.
 //
-// Rungs at or above the source's longest side are never written: imaging.Fit
+// Rungs at or above the source's longest side are never written: fitImage
 // does not upscale, so they would be byte-identical copies of one another. The
 // caller gets ErrVariantNotNeeded and serves the original instead. A video
 // falls back to its poster frame rather than the original, which is a media
@@ -1065,7 +1133,11 @@ func (s *MediaService) Variant(ctx context.Context, media models.Medium, size in
 
 	key := strconv.FormatInt(media.ID, 10)
 	if _, err, _ := s.variantFlight.Do(key, func() (any, error) {
-		return nil, s.buildLadder(ctx, media.OriginalPath, srcFull)
+		src, err := s.buildLadder(ctx, media.OriginalPath, srcFull)
+		if err == nil {
+			s.backfillDimensions(ctx, media, src)
+		}
+		return nil, err
 	}); err != nil {
 		return "", err
 	}
@@ -1083,16 +1155,33 @@ func (s *MediaService) Variant(ctx context.Context, media models.Medium, size in
 }
 
 // buildLadder decodes a source once and writes every rung derived from it.
-func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull string) error {
+// It returns the decoded source so the caller can read its size.
+func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull string) (image.Image, error) {
 	data, err := os.ReadFile(srcFull)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	src, err := s.decodeImage(ctx, data)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return s.writeLadder(ctx, originalPath, src, srcFull)
+	return src, s.writeLadder(ctx, originalPath, src, extractICC(data), srcFull, 0)
+}
+
+// backfillDimensions stores the decoded size on an image row that has none.
+// Rows uploaded before a decoder existed for their format (WebP) carry no
+// width or height; the first lazy variant decode fills them in.
+func (s *MediaService) backfillDimensions(ctx context.Context, media models.Medium, src image.Image) {
+	if !strings.EqualFold(media.FileType, "image") || (media.Width.Valid && media.Width.Int64 > 0) {
+		return
+	}
+	b := src.Bounds()
+	if b.Dx() <= 0 || b.Dy() <= 0 {
+		return
+	}
+	if err := s.repo.SetMediaDimensions(ctx, media.ID, int64(b.Dx()), int64(b.Dy())); err != nil {
+		slog.Warn("media dimensions backfill failed", "media_id", media.ID, "error", err)
+	}
 }
 
 // writeLadder writes every missing or stale rung from an already-decoded
@@ -1102,10 +1191,15 @@ func (s *MediaService) buildLadder(ctx context.Context, originalPath, srcFull st
 // srcFull is the source's path for the freshness check; pass "" when the
 // source has no settled file yet (an upload writes its original after this
 // runs) to write every rung unconditionally.
-func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, srcFull string) error {
+//
+// icc is the source's ICC profile from extractICC, or nil. Every rung carries
+// it, so a Display P3 or Adobe RGB photo keeps its colour in grids and cards.
+//
+// maxRung, when above 0, skips every rung larger than it; 0 writes them all.
+func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src image.Image, icc []byte, srcFull string, maxRung int) error {
 	bounds := src.Bounds()
 	longest := maxInt(bounds.Dx(), bounds.Dy())
-	quality := imaging.JPEGQuality(s.jpegQuality(ctx))
+	quality := s.jpegQuality(ctx)
 
 	var firstErr error
 	fail := func(err error) {
@@ -1114,8 +1208,9 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 		}
 	}
 
+	var sizes []int
 	for _, size := range VariantSizes {
-		if size >= longest {
+		if size >= longest || (maxRung > 0 && size > maxRung) {
 			continue
 		}
 		full := s.variantFullPath(originalPath, size)
@@ -1126,7 +1221,11 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 			fail(err)
 			continue
 		}
-		if err := imaging.Save(imaging.Fit(src, size, size, imaging.Lanczos), full, quality); err != nil {
+		sizes = append(sizes, size)
+	}
+	rungs := fitLadder(src, sizes)
+	for _, size := range sizes {
+		if err := saveJPEGWithICC(rungs[size], s.variantFullPath(originalPath, size), icc, quality); err != nil {
 			fail(err)
 		}
 	}
@@ -1142,6 +1241,7 @@ func (s *MediaService) removeAllVariants(originalPath string) {
 	for _, size := range VariantSizes {
 		_ = os.Remove(s.variantFullPath(originalPath, size))
 	}
+	_ = os.Remove(filepath.Join(s.mediaBase(), VideoTranscodeRelPath(originalPath)))
 }
 
 // prewarmLimit bounds the eager regeneration a rebuild kicks off: the N most
@@ -1169,6 +1269,7 @@ type RebuildResult struct {
 	Purged     int    `json:"purged"`
 	Legacy     int    `json:"legacy"`
 	Prewarming int    `json:"prewarming"`
+	VideoJobs  int    `json:"video_jobs"`
 }
 
 // RebuildThumbnails invalidates every derived image on the site.
@@ -1222,7 +1323,73 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, er
 	}
 
 	res.Prewarming = s.startPrewarm(ctx)
+
+	// Transcodes are derived files too, and a backup leaves them out.
+	videoJobs, err := s.BackfillVideos(ctx)
+	if err != nil {
+		slog.Warn("thumbnail rebuild: video backfill stopped", "error", err)
+	}
+	res.VideoJobs = videoJobs
 	return res, nil
+}
+
+// OrientationFixSetting records that the one-time purge of variants cut
+// before decode applied EXIF orientation has run.
+const OrientationFixSetting = "media_orientation_variants_purged"
+
+// PurgeOrientedVariants removes, once per install, every cached rung of an
+// image whose stored EXIF Orientation is 2 to 8. Those rungs were cut from
+// unrotated pixels; the next request regenerates them upright. When it removes
+// anything it also rolls the thumbnail generation and drops the rendered public
+// pages, because a variant URL that does not move is never re-fetched.
+func (s *MediaService) PurgeOrientedVariants(ctx context.Context) (int, error) {
+	if s.settingsService == nil {
+		return 0, nil
+	}
+	if done, _ := s.settingsService.GetSetting(ctx, OrientationFixSetting, ""); done == "true" {
+		return 0, nil
+	}
+	affected := 0
+	for offset := int64(0); ; offset += mediaScanPage {
+		rows, err := s.repo.ListMediaFiltered(ctx, "image", "", "", mediaScanPage, offset)
+		if err != nil {
+			return affected, err
+		}
+		for _, m := range rows {
+			if orientedMetadata(m.Metadata) {
+				s.removeAllVariants(m.OriginalPath)
+				affected++
+			}
+		}
+		if len(rows) < mediaScanPage {
+			break
+		}
+	}
+	if affected > 0 {
+		if err := s.settingsService.SetSetting(ctx, ThumbnailGenerationSetting, newGenerationToken(), "string"); err != nil {
+			return affected, err
+		}
+		if s.cache != nil {
+			if err := s.cache.InvalidatePublicPages(ctx); err != nil {
+				slog.Warn("orientation fix: public page cache not dropped", "error", err)
+			}
+		}
+	}
+	return affected, s.settingsService.SetSetting(ctx, OrientationFixSetting, "true", "boolean")
+}
+
+// orientedMetadata reports whether a media metadata blob carries an EXIF
+// Orientation other than 1 (formatEXIFValue stores it as a decimal string).
+func orientedMetadata(md sql.NullString) bool {
+	if !md.Valid || md.String == "" {
+		return false
+	}
+	var m map[string]interface{}
+	if json.Unmarshal([]byte(md.String), &m) != nil {
+		return false
+	}
+	o, _ := m["Orientation"].(string)
+	return len(o) == 1 && o[0] >= '2' && o[0] <= '8'
 }
 
 // newGenerationToken mints a token no earlier rebuild has used.
@@ -1299,7 +1466,7 @@ func (s *MediaService) sweepLegacyThumbnails(ctx context.Context) (int, error) {
 func (s *MediaService) videoPosterPaths(ctx context.Context) (map[string]bool, error) {
 	posters := make(map[string]bool)
 	for offset := int64(0); ; offset += mediaScanPage {
-		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", mediaScanPage, offset)
+		rows, err := s.repo.ListMediaFiltered(ctx, "video", "", "", mediaScanPage, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -1322,7 +1489,7 @@ func (s *MediaService) videoPosterPaths(ctx context.Context) (map[string]bool, e
 // seconds. Only one prewarm runs at a time: a second rebuild while the first is
 // still warming would double the decode load to produce the same files.
 func (s *MediaService) startPrewarm(ctx context.Context) int {
-	rows, err := s.repo.ListMediaFiltered(ctx, "", "", prewarmLimit, 0)
+	rows, err := s.repo.ListMediaFiltered(ctx, "", "", "", prewarmLimit, 0)
 	if err != nil {
 		slog.Warn("thumbnail rebuild: prewarm list failed", "error", err)
 		return 0
@@ -1383,7 +1550,7 @@ var (
 	// serve or derive a variant from.
 	ErrNoPoster = kindSentinel(ErrNotFound, "video has no poster frame")
 	// The requested rung is at or above the source's longest side, so it was
-	// never written: imaging.Fit does not upscale. Callers serve the source.
+	// never written: fitImage does not upscale. Callers serve the source.
 	ErrVariantNotNeeded = kindSentinel(ErrNotFound, "source is smaller than the requested size")
 	// The analysis upstream answered, but not with something we can use.
 	ErrResponseUnusable = kindSentinel(ErrUpstream, "the response cannot be used")
@@ -1797,9 +1964,15 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 	return changed, nil
 }
 
-// safeImagingDecode wraps imaging.Decode to convert panics into errors.
-// The imaging library can panic on crafted TIFF files (CVE-2023-36308) and
-// there is no patched upstream version as of 2026-05.
+// safeImagingDecode wraps decodeOriented to convert panics into errors. The
+// decode applies the EXIF Orientation tag. Without it every derived file was
+// cut from the raw sensor pixels: a phone
+// photo tagged Orientation 6 got sideways variants and swapped stored
+// dimensions while the browser showed the original upright. Every decode
+// path — upload, import, lazy variant, rebuild prewarm, Instagram import —
+// comes through here, so the bounds a caller reads are the displayed size.
+// A decoder can panic on a crafted file (CVE-2023-36308 was one in the TIFF
+// path of the old imaging library), so every decode keeps this guard.
 //
 // It bounds nothing on its own. Production callers go through
 // MediaService.decodeImage, which adds the pixel guard and the concurrency
@@ -1816,7 +1989,7 @@ func safeImagingDecode(r io.Reader) (img image.Image, err error) {
 			err = fmt.Errorf("image decode panic: %v", rec)
 		}
 	}()
-	return imaging.Decode(r)
+	return decodeOriented(r)
 }
 
 // defaultMaxImageMegapixels is the pixel ceiling used when the operator has
@@ -1875,20 +2048,8 @@ func (s *MediaService) maxImagePixels() int64 {
 // This lives here rather than in the HTTP handler because the Instagram
 // importer reaches the same decode with images the operator never chose.
 func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Image, error) {
-	if limit := s.maxImagePixels(); limit > 0 {
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-		if err != nil {
-			// Unreadable header. Fall through to the full decode, which
-			// produces the caller's usual decode error rather than a
-			// misleading "too large".
-			slog.Debug("image header unreadable, skipping pixel guard", "error", err)
-		} else if cfg.Width > 0 && cfg.Height > 0 {
-			if px := int64(cfg.Width) * int64(cfg.Height); px > limit {
-				return nil, wrapKind(ErrTooLarge, fmt.Errorf(
-					"image too large: %d megapixels (%dx%d), limit %d megapixels",
-					(px+999_999)/1_000_000, cfg.Width, cfg.Height, limit/1_000_000))
-			}
-		}
+	if _, err := s.checkPixels(data); err != nil {
+		return nil, err
 	}
 
 	if decodeObserver != nil {
@@ -1902,5 +2063,34 @@ func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Imag
 		return nil, ctx.Err()
 	}
 
+	if isHEIFData(data) {
+		return safeHEIFDecode(bytes.NewReader(data))
+	}
 	return safeImagingDecode(bytes.NewReader(data))
+}
+
+// checkPixels is the pixel guard of decodeImage. It reads only the header and
+// returns the header's config, which is zero when the header is unreadable.
+// The deferred AVIF and HEIC path calls it on its own, so the upload refuses
+// an oversized image before the slow decode starts.
+func (s *MediaService) checkPixels(data []byte) (image.Config, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if limit := s.maxImagePixels(); limit > 0 {
+		if err != nil {
+			// Unreadable header. Fall through to the full decode, which
+			// produces the caller's usual decode error rather than a
+			// misleading "too large".
+			slog.Debug("image header unreadable, skipping pixel guard", "error", err)
+		} else if cfg.Width > 0 && cfg.Height > 0 {
+			if px := int64(cfg.Width) * int64(cfg.Height); px > limit {
+				return image.Config{}, wrapKind(ErrTooLarge, fmt.Errorf(
+					"image too large: %d megapixels (%dx%d), limit %d megapixels",
+					(px+999_999)/1_000_000, cfg.Width, cfg.Height, limit/1_000_000))
+			}
+		}
+	}
+	if err != nil {
+		return image.Config{}, nil
+	}
+	return cfg, nil
 }

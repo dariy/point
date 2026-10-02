@@ -17,7 +17,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire, type, check } from './helpers/dom.js';
-import { getToast, setToast } from '../src/store.js';
+import { getToast, setToast } from '../src/store.ts';
 
 const settle = () => new Promise(r => setImmediate(r));
 
@@ -92,7 +92,7 @@ describe('MediaBrowser', () => {
     };
     fakeFetch();
     setToast(null);
-    ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.js'));
+    ({ MediaBrowser } = await import('../src/components/light/MediaBrowser.ts'));
   });
 
   afterEach(() => {

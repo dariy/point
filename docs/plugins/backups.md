@@ -28,12 +28,52 @@ the live WAL-mode `point.db` byte-for-byte (which can capture a torn database), 
 archive tars a `VACUUM INTO` snapshot in its place and omits the `-wal`/`-shm`
 sidecars.
 
+The archive **leaves out derived data** that the engine rebuilds: `media/variants/`
+(resized images, regenerated on the first request after a restore) and the page
+cache `cache/` (refilled as pages are served). The `backups/` directory is also left
+out. gzip runs at `BestSpeed`, because the archive is mostly JPEGs that do not
+compress. The format stays `.tar.gz`, so restore, move in and `BACKUP_HOOK` do not
+change.
+
+A file that **vanishes or cannot be read** during the walk (a cache eviction, a
+thumbnail rebuild, a log rotation) is skipped before its tar header is written, so
+the archive stays valid. Each skip is logged. A run with skips still publishes the
+archive, and the `backup archive` task in `/api/system/health` records the skipped
+count as its last error. An error while copying a file that did open fails the
+backup.
+
 Each archive gets a **SHA-256 checksum** computed in the same write pass and stored
 as a `<archive>.sha256` sidecar (`sha256sum` format). It surfaces in the backups
 list, is advertised on download via the `X-Archive-SHA256` response header, and is
 recomputed on upload. This is an **integrity** check (detects corruption/truncation),
 not an authenticity one — a bare checksum proves nothing about a hostile archive;
 password re-entry and tar-traversal hardening cover that.
+
+## Schedule and managed mode (`BACKUP_MANAGED`)
+
+A daily task at 03:00 creates a backup when one is due (`backup_interval_days`),
+then keeps the newest `backup_keep` archives (0 = keep all). Setup seeds
+`enable_backup=true`, so a new install backs up from the first night. The admin
+can turn the toggle off in the Backups settings.
+
+A host that sells backups sets `BACKUP_MANAGED=true`. Then:
+
+- The scheduler ignores `enable_backup=false`. Scheduled backups always run.
+- Retention is at least 7 archives. A lower `backup_keep` is raised to 7; 0 stays
+  "keep all".
+- The Backups settings show "managed by your host" in place of the toggle.
+
+Unset (the default), the toggle and `backup_keep` apply as written.
+
+`GET /api/system/health` has a `backup` block for a host's dead-man check. It
+accepts an API key, so no admin session is necessary:
+
+```json
+"backup": {"managed": true, "enabled": true, "last_backup": "2026-09-30T03:00:12Z"}
+```
+
+`last_backup` is the modification time of the newest archive on disk. A restart
+does not clear it. It is absent when there is no archive.
 
 ## Move out / move in
 

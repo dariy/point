@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { captureVideoPoster, isVideoFile } from '../src/utils/videoPoster.js';
+import { captureVideoPoster, isVideoFile } from '../src/utils/videoPoster.ts';
 
 /**
  * videoPoster grabs the still that becomes a video's thumbnail. It is the only
@@ -14,6 +14,7 @@ import { captureVideoPoster, isVideoFile } from '../src/utils/videoPoster.js';
  * <canvas> are stood up as fakes that emit the same events.
  */
 describe('captureVideoPoster', () => {
+  const RealURL = URL;
   let videos, revoked, drawnSizes;
   /** Mutates the next fake <video> before it is handed to the module. */
   let tweakVideo;
@@ -95,15 +96,17 @@ describe('captureVideoPoster', () => {
         return c;
       },
     };
-    global.URL = {
-      createObjectURL: () => 'blob:fake',
-      revokeObjectURL: (u) => revoked.push(u),
+    global.URL = class extends RealURL {
+      static createObjectURL = () => 'blob:fake';
+      static revokeObjectURL = (u) => revoked.push(u);
     };
+    global.location = { href: 'https://photos.example/admin/media', origin: 'https://photos.example' };
   });
 
   afterEach(() => {
     delete global.document;
-    delete global.URL;
+    global.URL = RealURL;
+    delete global.location;
   });
 
   test('captures a frame from a video blob', async () => {
@@ -177,9 +180,16 @@ describe('captureVideoPoster', () => {
 
   test('takes a URL source without minting an object URL', async () => {
     await captureVideoPoster('/2026/07/clip.mp4');
-    assert.strictEqual(videos[0].src, '/2026/07/clip.mp4');
+    assert.strictEqual(videos[0].src, 'https://photos.example/2026/07/clip.mp4');
     assert.deepStrictEqual(revoked, [], 'nothing was created, nothing to revoke');
   });
+
+  for (const bad of ['javascript:alert(1)', 'https://evil.example/a.mp4', '//evil.example/a.mp4', 'data:video/mp4,x']) {
+    test(`refuses a URL source that is not same-origin http(s): ${bad}`, async () => {
+      assert.strictEqual(await captureVideoPoster(bad), null);
+      assert.strictEqual(videos[0].src, undefined, 'the decoder never saw it');
+    });
+  }
 });
 
 describe('isVideoFile', () => {

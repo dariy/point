@@ -21,7 +21,7 @@ import assert from 'node:assert';
 import { DOMParser } from 'linkedom';
 
 import { setupDOM, click, fire, type } from './helpers/dom.js';
-import { getToast, setSettings, setUser } from '../src/store.js';
+import { getToast, setSettings, setUser } from '../src/store.ts';
 import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
 import {
   SPAN_SLIDE,

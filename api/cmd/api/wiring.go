@@ -19,16 +19,19 @@ import (
 )
 
 type AppServices struct {
-	Settings    *services.SettingsService
-	Auth        *services.AuthService
-	ApiKey      *services.ApiKeyService
-	Tag         *services.TagService
-	Post        *services.PostService
-	Media       *services.MediaService
-	System      *services.SystemService
-	Cache       *services.CacheService
-	Scheduler   *services.SchedulerService
-	Health      *services.HealthRegistry
+	Settings  *services.SettingsService
+	Auth      *services.AuthService
+	ApiKey    *services.ApiKeyService
+	Tag       *services.TagService
+	Post      *services.PostService
+	Media     *services.MediaService
+	System    *services.SystemService
+	Cache     *services.CacheService
+	Scheduler *services.SchedulerService
+	Jobs      *services.JobService
+	Health    *services.HealthRegistry
+	// FFmpeg is the detected ffmpeg/ffprobe pair. Not available in the slim image.
+	FFmpeg      *services.FFmpeg
 	Theme       *services.ThemeService
 	Timeline    *services.TimelineService
 	Instagram   *services.InstagramService
@@ -63,20 +66,25 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		WithBudgetMB(cfg.PageCacheBudgetMB).
 		WithMetrics(metricsRegistry)
 	tagService.WithCache(cacheService)
+	jobService := services.NewJobService(repo)
 	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL).
 		WithHealth(healthRegistry).
 		WithCache(cacheService).
-		WithMetrics(metricsRegistry)
+		WithMetrics(metricsRegistry).
+		WithJobs(jobService)
+	ffmpeg := services.DetectFFmpeg()
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService).
-		WithCache(cacheService)
+		WithCache(cacheService).
+		WithVideo(jobService, ffmpeg)
 	systemService := services.NewSystemService(repo, cfg.StoragePath, cfg.DatabaseURL).
 		WithBackupHook(cfg.BackupHook, time.Duration(cfg.BackupHookTimeoutSeconds)*time.Second).
+		WithManagedBackups(cfg.BackupManaged).
 		WithHealth(healthRegistry)
 	// Drop any half-written backup left by a process that was interrupted mid-backup.
 	systemService.CleanupPartialBackups()
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry).WithJobs(jobService)
 
 	s3Presigner, err := services.NewS3Presigner(
 		os.Getenv("S3_ENDPOINT"),
@@ -99,6 +107,8 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		System:      systemService,
 		Cache:       cacheService,
 		Scheduler:   schedulerService,
+		Jobs:        jobService,
+		FFmpeg:      ffmpeg,
 		Health:      healthRegistry,
 		Theme:       themeService,
 		Timeline:    timelineService,
@@ -168,7 +178,7 @@ func initHandlers(cfg config.Config, repo repository.Repository, svcs *AppServic
 		Settings:  api.NewSettingsHandler(svcs.Settings, remarkSupervisor),
 		Plugins:   api.NewPluginsHandler(svcs.Settings),
 		Theme:     api.NewThemeHandler(svcs.Theme),
-		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithStorageQuotaMB(cfg.StorageQuotaMB),
+		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithJobs(svcs.Jobs).WithFFmpeg(svcs.FFmpeg).WithStorageQuotaMB(cfg.StorageQuotaMB),
 		Feeds:     api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache),
 		Pages:     api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache),
 		Timeline:  api.NewTimelineHandler(svcs.Timeline, svcs.Settings),

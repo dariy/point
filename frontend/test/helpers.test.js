@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { linkify as _linkify } from "../src/utils/helpers.js";
+import { linkify as _linkify } from "../src/utils/helpers.ts";
 
 // linkify returns the RawHtml html`` produces; assert.equal wants a primitive.
 const linkify = (...a) => String(_linkify(...a));
@@ -56,7 +56,7 @@ test("helpers", async (t) => {
 
   await t.test("debounce", async (t) => {
     let count = 0;
-    const { debounce } = await import("../src/utils/helpers.js");
+    const { debounce } = await import("../src/utils/helpers.ts");
     const fn = debounce(() => count++, 10);
     fn();
     fn();
@@ -67,7 +67,7 @@ test("helpers", async (t) => {
 
   await t.test("throttle", async (t) => {
     let count = 0;
-    const { throttle } = await import("../src/utils/helpers.js");
+    const { throttle } = await import("../src/utils/helpers.ts");
     const fn = throttle(() => count++, 10);
     fn(); // executes immediately
     fn(); // ignored
@@ -79,7 +79,7 @@ test("helpers", async (t) => {
   });
 
   await t.test("createElement", async (t) => {
-    const { createElement } = await import("../src/utils/helpers.js");
+    const { createElement } = await import("../src/utils/helpers.ts");
     const el = createElement("div", { id: "test", class: "foo" }, "hello");
     assert.equal(el.tagName, "DIV");
     assert.equal(el.id, "test");
@@ -88,7 +88,7 @@ test("helpers", async (t) => {
   });
 
   await t.test("clearElement", async (t) => {
-    const { clearElement } = await import("../src/utils/helpers.js");
+    const { clearElement } = await import("../src/utils/helpers.ts");
     const el = document.createElement("div");
     el.innerHTML = "<span>hello</span>";
     clearElement(el);
@@ -96,7 +96,7 @@ test("helpers", async (t) => {
   });
 
   await t.test("dropBrokenImages", async (t) => {
-    const { dropBrokenImages } = await import("../src/utils/helpers.js");
+    const { dropBrokenImages } = await import("../src/utils/helpers.ts");
     const root = document.createElement("div");
     const img = document.createElement("img");
     root.appendChild(img);
@@ -108,7 +108,7 @@ test("helpers", async (t) => {
   });
 
   await t.test("navigate", async (t) => {
-    const { navigate } = await import("../src/utils/helpers.js");
+    const { navigate } = await import("../src/utils/helpers.ts");
     let navEvent = null;
     const handler = (e) => navEvent = e.detail;
     window.addEventListener("app:navigate", handler);
@@ -118,7 +118,7 @@ test("helpers", async (t) => {
   });
 
   await t.test("setCanonical / removeCanonical", async (t) => {
-    const { setCanonical, removeCanonical } = await import("../src/utils/helpers.js");
+    const { setCanonical, removeCanonical } = await import("../src/utils/helpers.ts");
     setCanonical("https://example.com/foo");
     let link = document.querySelector('link[rel="canonical"]');
     assert.ok(link);
@@ -133,7 +133,7 @@ test("helpers", async (t) => {
   });
 
   await t.test("normalizeSettings", async (t) => {
-    const { normalizeSettings } = await import("../src/utils/helpers.js");
+    const { normalizeSettings } = await import("../src/utils/helpers.ts");
     assert.deepEqual(normalizeSettings({}), {});
     assert.deepEqual(normalizeSettings({ 
       posts_per_page: "10", 

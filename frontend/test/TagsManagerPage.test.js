@@ -3,8 +3,8 @@ import assert from 'node:assert';
 
 // These assertions target the extracted modules directly rather than through
 // the page — the page no longer wraps them.
-import { buildTagTree, renderTagForest, renderTagNode, renderRowBadges } from '../src/components/light/tags/TagTreeView.js';
-import { matchesListFilter, renderFilterChips } from '../src/components/light/tags/TagListView.js';
+import { buildTagTree, renderTagForest, renderTagNode, renderRowBadges } from '../src/components/light/tags/TagTreeView.ts';
+import { matchesListFilter, renderFilterChips } from '../src/components/light/tags/TagListView.ts';
 
 /** The view descriptor the TagTreeView renderers take in place of page state. */
 const treeView = (over = {}) => ({
@@ -34,10 +34,10 @@ describe('TagsManagerPage', () => {
       addEventListener: () => {},
       removeEventListener: () => {}
     };
-    const storeMod = await import('../src/store.js');
+    const storeMod = await import('../src/store.ts');
     global.store = storeMod.store;
 
-    const mod = await import('../src/pages/light/TagsManagerPage.js');
+    const mod = await import('../src/pages/light/TagsManagerPage.ts');
     TagsManagerPage = mod.default;
   });
 

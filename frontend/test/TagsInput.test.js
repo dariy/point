@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
 import { setupDOM } from "./helpers/dom.js";
-import { TagsInput } from "../src/components/light/TagsInput.js";
+import { TagsInput } from "../src/components/light/TagsInput.ts";
 
 test("TagsInput", async (t) => {
   let dom;

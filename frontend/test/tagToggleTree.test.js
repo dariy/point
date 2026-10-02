@@ -17,8 +17,8 @@ import {
   filterToggleTree,
   toggleBranch,
   setupTagToggleTrees,
-} from '../src/components/light/tags/tagToggleTree.js';
-import { renderTagToggles } from '../src/components/light/tags/TagEditorForm.js';
+} from '../src/components/light/tags/tagToggleTree.ts';
+import { renderTagToggles } from '../src/components/light/tags/TagEditorForm.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,

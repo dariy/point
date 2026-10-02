@@ -24,54 +24,13 @@ it before you open a PR. It runs its Go, JS and E2E lanes in parallel and keeps 
 failure: one `PASS`/`FAIL` line per step, and for a failed step the tail of its log
 (`tmp/check/<step>.log` holds the whole of it), so one red step still tells you about the rest.
 
-## Reading the codebase: ask the index, don't grep the tree
+## Reading the codebase
 
 828 files, ~168k lines, two languages. A `grep -r` for anything interesting here returns hundreds of
 hits, and reading files to find out whether they matter spends the context you need for the actual
-change. This repository is indexed by [Repowise](https://repowise.dev), and its MCP tools answer
-structural questions from that index — verified against the live tree, with citations — for a
-fraction of the tokens a search costs. The index itself lives in `.repowise/` and is not committed:
-`repowise init --yes` builds it locally and needs no API key, `repowise update` resyncs it.
-
-**Query the tools first. Reach for `grep`/`find`/`cat` only when they come up empty**, and then
-scoped to a directory one of them named, never repo-wide.
-
-| What you want | Call | Instead of |
-|---|---|---|
-| How does X work / where does Y happen | `get_answer("how are session cookies issued?")` | a `grep -r` sweep and four file reads |
-| Orientation on a file, module or symbol before touching it | `get_context(targets=["api/internal/api/posts.go"])` — docs, signatures, hotspot and fix history, no source bytes | `cat` the file to see what is in it |
-| The whole shape of a file, verified | `get_context(targets=[…], include=["skeleton"])` | `grep '^func'` |
-| Find code by name or by concept | `search_codebase("carousel transition strategy")` | `find` piped into `grep` |
-| One symbol's body, when a previous answer named its id | `get_symbol("api/internal/services/post_service.go::CreatePost")` | `sed -n '120,180p'` |
-| Why is it built this way / may I diverge from the pattern | `get_why("why does the repository embed *models.Queries?")` | `git log -S` archaeology |
-| What else moves if I change this | `get_risk(targets=["api/internal/repository/db.go"])` | guessing, then a broken build |
-| A review pass over what you just wrote | `get_change_risk()`, then `get_health(targets=[…])` | hoping CI notices |
-| First session in this repo | `get_overview()` — once, then never again | reading the directory tree |
-
-The rules that keep this honest:
-
-- **Read before you edit — always.** The tools decide *which* file to open and what to expect in it;
-  they do not replace opening the file you are about to change. An `Edit` against a file you have
-  not read in this session is a guess, and the harness will reject it anyway.
-- **The index is built from committed code.** Your own uncommitted edits are not in it: after you
-  change a file, your edit is the truth and the index is stale about it. `repowise update` resyncs,
-  and a reply whose `_meta.hint` says the index is behind HEAD is telling you to.
-- **Read the confidence fields rather than skimming past them.** `verified: true` and
-  `_meta.complete` mean the bytes were checked against the live tree — don't re-read those. An
-  empty `callers` list carries a `*_basis` saying how much of the call graph resolved; a zero with a
-  weak basis is "unknown", not "nothing calls this". The generated section at the end of this file
-  spells the fields out.
-- **Send noisy commands through `repowise distill`.** Builds, a bare `go test`, `git log`/`git
-  diff`, long listings: `repowise distill ./scripts/run-tests.sh` runs the same command, preserves
-  its exit code, and prints errors first. `check.sh` does not need it — its output is already one
-  line per step plus the failures. A `[repowise#<ref>: N lines omitted]` marker expands with
-  `repowise expand <ref>` (`-q <regex>` to filter) — never re-run the command to see what was cut.
-- **Record a decision you had to reason out**: `repowise decision add --title T --decision D`. It
-  lands as `proposed`, for a person to confirm. Anything a future reader would otherwise have to
-  re-derive belongs there or in `docs/features/`.
-- **No tools in your session?** Nothing here depends on them: the "Where things live" table below
-  is the entry point, `docs/architecture/map.md` is the same map written out longhand, and `rg`
-  scoped to one directory from either is the fallback.
+change. Start from the "Where things live" table below or from `docs/architecture/map.md` (the same
+map written out longhand), then search with `rg` scoped to the directory they name, not repo-wide.
+Read a file before you edit it — always.
 
 ## Commands
 
@@ -83,16 +42,13 @@ The rules that keep this honest:
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
-| Frontend typecheck | `npm run typecheck` — `tsc --noEmit` over the JSDoc types; no `.ts` files, no emit |
+| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.js`; no emit, erasable syntax only |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
 | Regenerate SQL layer | `cd api && sqlc generate` <!-- verify:skip needs the sqlc binary, which is not part of the documented toolchain --> |
 | Check the SQL layer | `./scripts/check-sql-layer.sh` — no shadowed queries, generated models match `api/sql/` |
 | Release tarball | `./scripts/build-tarball.sh` — `dist/point-linux-{amd64,arm64}.tar.gz`, what `install.sh --method=native` downloads <!-- verify:skip cross-compiles both arches; the release workflow builds and boots it on every tag --> |
-
-Any of these that prints more than a screenful is worth wrapping in `repowise distill` — the failure
-still surfaces, the 400 passing test lines do not. `check.sh` is the exception: it is quiet already.
 
 `check.sh` also needs `golangci-lint` and `govulncheck` on your `PATH`; everything else in this
 table runs with just Go and Node. `doctor.sh` is where that becomes visible before a failing run
@@ -117,8 +73,19 @@ command you add cannot run unattended, mark it in the source with
   `api/sql/queries.sql` (and `schema.sql` for DDL), then `cd api && sqlc generate`. Config lives in
   `api/sqlc.yaml`. `extra.go` in the same package is hand-written. Keep `queries.sql` ASCII: sqlc
   expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
-- The `REPOWISE_AGENTS` block at the end of *this* file — written by `repowise agents`. Edit the
-  prose above the marker; anything below it is overwritten on the next sync.
+
+**`frontend/src` is TypeScript, and only TypeScript.** `scripts/check.sh` fails on a `.js` file
+there. JS stays in `frontend/sw.js`, `frontend/vendor/`, `frontend/test/`, `frontend/e2e/` and
+`demo/`. Node and the bundler remove the types, so there is no emit and the rules follow from that:
+
+- Erasable syntax only: no `enum`, no `namespace`, no parameter properties. Type-only imports use
+  `import type`.
+- An import names the real file: `./x.ts` for a TS module, `./x.js` for a JS module.
+- Object shapes are `interface`. Unions, aliases and mapped types are `type`.
+- Doc comments keep their prose and have no `{Type}`: `@param name - text`, `@returns text`.
+- Casts use `as`, never `<T>expr`. `strict` is off: do not add `!`. Do not add `any`, `@ts-ignore`
+  or `@ts-nocheck` to make an error go away.
+- A class declares every `this.<prop>` it assigns as a typed field.
 
 **Two vendored files carry a Point patch.** `frontend/vendor/leaflet/leaflet.js`
 and `frontend/vendor/codejar/codejar.js` route their own HTML writes through a
@@ -196,7 +163,7 @@ Two calls, and they take seconds:
 
 - `get_context(targets=[…])` on what you are about to edit — it reports the fix history and hotspot
   score. Some files here are bug magnets (`api/cmd/api/main.go`,
-  `frontend/src/pages/light/PostEditPage.js`), and knowing that before you start changes how much
+  `frontend/src/pages/light/PostEditPage.ts`), and knowing that before you start changes how much
   test you write.
 - `get_risk(targets=[…])` when the file is shared — a repository method, a `frontend/src/core/`
   module, a plugin registry entry. It names the callers that a signature change will break.
@@ -277,79 +244,3 @@ That directory is written by the tool itself and is not edited by hand, which is
 pins `@playwright/cli` to an exact version rather than a range. If the two ever drift — after a
 dependency bump, say — the CLI prints a warning on every run, and `npx playwright-cli install
 --skills` rewrites the skill to match.
-
-<!-- REPOWISE_AGENTS:START — Do not edit below this line. Auto-generated by Repowise. -->
-## Codebase Intelligence for point (Repowise)
-
-Indexed by [Repowise](https://repowise.dev). Last indexed: 2026-09-18 (commit 808f5b4). Confidence: 100%.Scope: standard index · model content · full Git. Missing or unavailable evidence is not a negative finding. Machine-readable scope: `{"analysis": {"skipped": [], "unavailable": []}, "content_provenance": "model", "file_pages": {"configured_cap": null, "effective_cap": null, "eligible": null, "generated": null, "omitted": null}, "git_commit_cap": null, "git_history_coverage": null, "git_tier": "full", "provider": {"embedder": "ollama", "model": "gemini-3.5-flash-lite", "model_cost_possible": null, "name": "gemini", "reused": null}, "run_mode": "standard", "search": {"full_text": "unknown", "next_command": null, "semantic": "unknown"}, "upgrade": {"completed_stages": [], "next_stage": null, "retryable": null, "status": "unknown"}, "version": 1}`
-
-### How to work in this repo
-
-- **Trust the index.** `verified: true` and `_meta.complete` mean the bytes were checked against the live tree, so never re-read them. Re-read only what `bounds: "approximate"` or `_meta.stale_warning` names. `confidence` rates the prose, not the evidence: on `low` read the `fallback_targets` or `best_guesses` the reply names, and run `repowise update` and ask again if `_meta.hint` says the index is behind HEAD. `index_behind: true` alone is informational.
-- **A zero carries its basis.** An empty `callers`/`callees`/`used_by` comes with a `*_basis` saying how much of that language's calls the graph resolved, so read it before concluding nothing calls a symbol. `_meta.scope_hint` names the areas the answer did not touch.
-- **Pre-edit, not instead-of-edit.** These tools decide *which* files to read and edit. Reading a file before you edit it is correct and expected.
-- **Noisy commands** (tests, builds, `git log`/`diff`, searches, listings): prefer `repowise distill <cmd>`, the same command with its exit code preserved and errors-first output. A `[repowise#<ref>: N lines omitted]` marker is recoverable via `repowise expand <ref>` (add `-q <regex>` to filter); never re-run the command to see omitted output.
-- **Recording a decision** you had to reason out: `repowise decision add --title T --decision D` records it without prompting and prints the id (`--format json` to parse it back). It lands `proposed`, for a person to confirm.
-
-### Tools
-
-| Tool | When and why |
-|------|--------------|
-| `get_answer(question)` | First call for any how/where/why question. Cite `confidence: "high"` or `grounding: "extracted"` directly; `degraded` means judge by `retrieval_quality`. `symbol_bodies` has live bodies. |
-| `get_context(targets=[...])` | Triage card for files/modules/symbols: docs, signatures, hotspot, fix history. No source bytes — `include=["skeleton"]` for the whole file verified, `["callers"|"decisions"]` for depth. Batch targets. |
-| `get_symbol(id, depth?)` | **Follow-up, not an entry point** — one verified body for an id a prior response named (`path.py::Name`, `path.py:140-180`, `repowise#<hex>`). Never walk a file symbol by symbol; Read it. |
-| `search_codebase(query)` | Hybrid search, auto-routed by query shape; force with `mode=symbol|path|concept|hybrid`. A hit whose `sources` are `[fts]` only has no semantic agreement, so verify it. |
-| `get_why(query, targets?)` | Why the code is shaped this way: decision records, git archaeology, rationale comments. Call before a refactor or a pattern divergence. |
-| `get_risk(targets, changed_files?, include?)` | File history and structural reach. PR mode leads with `directive`; its 0-10 structural heuristic is uncalibrated, not a probability. Read typed test recommendations and coverage state first. |
-| `get_change_risk(revspec?, extensions?, exclude_patterns?)` | Deterministic live-diff review signal for a commit or range. Lead with benchmarked percentile/classification; the 0-10 diff-shape score is supporting, not a probability. `get_risk` scores paths. |
-| `get_health(targets?, include?)` | Defect / maintainability / performance scores and findings. Self-check the files you touched before finishing. |
-| `get_dead_code(tier?, min_confidence?, safe_only?)` | Confidence-tiered unreachable files / unused exports / zombie packages. For cleanup sweeps, not targeted fixes. |
-| `get_overview()` | Architecture map. Call once, first, in an unfamiliar repo; skip it after that. |
-
-### Architecture
-Point is a personal photo blog engine that ingests raw media and metadata files through a self-hosted backend, processes them into optimized thumbnails and extracted EXIF data via Go services, and serves an interactive timeline, world map, and admin UI to visitors and MCP clients. Designed for photographers and self-hosters, the application consolidates media management, geo-tagging, comments, and automated social cross-posting into a single container deployment. The codebase combines two distinct architectural views to power its capabilities: a robust backend execution model and a reactive client-side presentation layer. The backend manages database persistence, background task scheduling, and an in-process Model Context Protocol (MCP) server that enables remote administration through AI clients.
-
-### Key modules
-- `api/internal` — The internal codebase is organized into specialized functional boundaries that manage everything from server configuration to protocol…
-- `frontend/src/utils` — Operating directly against the Document Object Model, the subsystem provides structural encapsulation for viewport and overlay behaviours
-- `api/internal/services` — The services layer orchestrates complex workflows across the application domains, balancing concerns between content publication, metadata…
-- `api/internal/models` — The subsystem organizes data access into discrete functional domains handled by api/internal/repository/queries_posts.go…
-- `frontend` — The subsystem hosts the entry point frontend/src/app.js, which is loaded directly by frontend/index.html to initialize the client…
-- `frontend/src/plugins` — The plugins subsystem delegates detailed responsibilities to specialized sub-components
-- `frontend/src/api` — At the architectural foundation lies frontend/src/api/client.js, a thin fetch wrapper that handles JSON serialisation and deserialisation…
-- `api/internal/api` — The frontend API client layer is partitioned into specialized handler files that coordinate domain logic across posts, media…
-- `frontend/src/components/shared` — The user-facing overlay system relies on a consistent inheritance model descending from Component
-- `frontend/src/components` — The subsystem is organized around a class hierarchy anchored by the base Component pattern, extended across administrative sections, public…
-
-### Entry points
-- `frontend/src/app.js`
-- `api/internal/mcp/server.go`
-- `api/cmd/api/cli.go`
-- `api/cmd/api/main.go`
-- `api/cmd/api/server.go`
-- `api/cmd/migrate-paths/main.go`
-
-### Files that need care (bug-fix history first, then churn — check `get_risk` before editing)
-- `frontend/src/pages/light/PostEditPage.js` — 11 bug fixes, last fix 2 weeks ago (bug magnet); 27 commits/90d
-- `frontend/src/plugins/carousel/index.js` — 3 bug fixes, last fix today (bug magnet); 23 commits/90d
-- `api/cmd/api/main.go` — 9 bug fixes, last fix 2 weeks ago (bug magnet); 43 commits/90d
-- `frontend/test/CarouselStudioPage.test.js` — 3 bug fixes, last fix today (bug magnet); 19 commits/90d
-- `frontend/src/components/light/PhotoLibraryPickerDialog.js` — 5 bug fixes, last fix 2 weeks ago (bug magnet); 13 commits/90d
-
-### Code health
-Three co-equal signals: code health 6.04/10 avg (Fair), hotspot health 4.33/10 (stable), worst `api/internal/services/post_publish.go` at 1.0/10 · maintainability 7.01/10 · performance risk 153 open static I/O-in-loop / N+1 findings. Detail: `get_health()`.
-
-Critical files:
-- `frontend/src/components/light/MediaBrowser.js` — god class (MediaBrowser) — impact −2.1
-- `frontend/src/utils/icons.js` — untested hotspot — impact −2.0
-- `frontend/src/components/light/VisualEditor.js` — god class (VisualEditor) — impact −2.0
-- `frontend/src/components/shared/MediaViewer.js` — god class (MediaViewer) — impact −1.9
-- `frontend/src/utils/icons.js` — change entropy — impact −1.8
-
-### Commands
-- Build: `npm run build`
-- Test: `npm run test`
-- Lint: `npm run lint`
-- Typecheck: `npm run typecheck`
-
-<!-- REPOWISE_AGENTS:END -->

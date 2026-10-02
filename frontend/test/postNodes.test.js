@@ -11,7 +11,7 @@ import {
   insertPathIntoCarousel,
   removePathFromCarousel,
   dedupeCarouselKeys,
-} from '../src/utils/postNodes.js';
+} from '../src/utils/postNodes.ts';
 
 const CAROUSEL_ONE = ':::{.carousel-block}\n\n/2026/08/slide-1.jpg\n\n:::';
 const CAROUSEL_TWO =

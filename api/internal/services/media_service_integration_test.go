@@ -835,7 +835,7 @@ func TestSafeImagingDecode_GarbageBytes(t *testing.T) {
 }
 
 func TestSafeImagingDecode_PanicRecovery(t *testing.T) {
-	// An empty reader causes imaging.Decode to return an error (EOF).
+	// An empty reader causes the decoder to return an error (EOF).
 	// This exercises the defer/recover path without requiring a crafted exploit file.
 	_, err := safeImagingDecode(bytes.NewReader(nil))
 	if err == nil {
@@ -1669,8 +1669,8 @@ func TestPurgingVariantsLeavesVideoPostersIntact(t *testing.T) {
 	}
 }
 
-// Every lifecycle path that destroys or moves a source must sweep all four
-// rungs. A rung has no DB row, so one left behind is invisible and permanent.
+// Every lifecycle path that destroys or moves a source must sweep every
+// rung. A rung has no DB row, so one left behind is invisible and permanent.
 func TestLifecycleSweepsAllVariants(t *testing.T) {
 	ctx := context.Background()
 
@@ -1692,7 +1692,7 @@ func TestLifecycleSweepsAllVariants(t *testing.T) {
 	upload := func(t *testing.T, service *MediaService, name string) models.Medium {
 		t.Helper()
 		m, err := service.UploadFile(ctx, UploadFileParams{
-			Content:  jpegBytes(t, 2000, 1500),
+			Content:  jpegBytes(t, 2400, 1800),
 			Filename: name,
 			MimeType: "image/jpeg",
 		})

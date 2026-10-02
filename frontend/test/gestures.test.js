@@ -14,7 +14,7 @@ describe("GestureController", () => {
     if (typeof globalThis.window === "undefined") {
       globalThis.window = { innerWidth: 1000 };
     }
-    const mod = await import("../src/core/gestures.js");
+    const mod = await import("../src/core/gestures.ts");
     GestureController = mod.GestureController;
   });
 

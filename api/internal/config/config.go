@@ -58,6 +58,12 @@ type Config struct {
 	// eviction.
 	PageCacheBudgetMB int `mapstructure:"PAGE_CACHE_BUDGET_MB"`
 
+	// SetupToken, when set, is required by POST /api/setup: the first-run
+	// wizard only creates the owner for a request that carries it. Managed
+	// hosting sets it so a stranger who finds the hostname first cannot claim
+	// the install. Unset keeps the open wizard for self-hosters.
+	SetupToken string `mapstructure:"SETUP_TOKEN"`
+
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
@@ -148,6 +154,12 @@ type Config struct {
 	// duration). Default 3600. A legitimately slow upload that trips this is
 	// reported as a failure — raise it rather than leave the alert firing.
 	BackupHookTimeoutSeconds int `mapstructure:"BACKUP_HOOK_TIMEOUT_SECONDS"`
+	// BackupManaged pins scheduled backups on for a host that sells them.
+	// When true, the scheduler ignores enable_backup=false, retention never
+	// drops below services.ManagedMinBackupKeep, and the Backups settings show
+	// the schedule as managed by the host. Default false: a self-hoster keeps
+	// full control of the toggle.
+	BackupManaged bool `mapstructure:"BACKUP_MANAGED"`
 }
 
 // ParseTrustedProxies turns a TRUSTED_PROXIES value — a comma-separated list of
@@ -213,6 +225,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("PAGE_CACHE_BUDGET_MB", 64)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")
+	v.SetDefault("SETUP_TOKEN", "")
 	v.SetDefault("SMTP_HOST", "")
 	v.SetDefault("SMTP_PORT", 587)
 	v.SetDefault("SMTP_USERNAME", "")
@@ -234,6 +247,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("TRUSTED_PROXIES", "")
 	v.SetDefault("BACKUP_HOOK", "")
 	v.SetDefault("BACKUP_HOOK_TIMEOUT_SECONDS", 3600)
+	v.SetDefault("BACKUP_MANAGED", false)
 
 	err = v.ReadInConfig()
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -48,6 +49,12 @@ type SystemHandler struct {
 	// health is the background-job outcome registry surfaced by GetHealth.
 	// Nil is valid: the endpoint then reports no jobs.
 	health *services.HealthRegistry
+	// jobs is the durable job store shown by ListJobs. Nil is valid: the
+	// endpoint then reports no jobs.
+	jobs *services.JobService
+	// ffmpeg is the detected video toolchain reported by GetHealth. Nil is
+	// valid: the endpoint then reports ffmpeg as absent.
+	ffmpeg *services.FFmpeg
 	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
 	// reported by GetStats. 0 means unlimited and is omitted from the response.
 	storageQuotaMB int
@@ -58,6 +65,68 @@ type SystemHandler struct {
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
 	return h
+}
+
+// WithJobs attaches the durable job store for ListJobs and RetryJob.
+func (h *SystemHandler) WithJobs(j *services.JobService) *SystemHandler {
+	h.jobs = j
+	return h
+}
+
+// WithFFmpeg attaches the detected ffmpeg/ffprobe pair for GetHealth.
+func (h *SystemHandler) WithFFmpeg(f *services.FFmpeg) *SystemHandler {
+	h.ffmpeg = f
+	return h
+}
+
+// ListJobs reports the jobs table: a count per state, and the queued,
+// running and failed jobs (newest first, at most 100). Each job shows its
+// kind and the ids in its payload, not the raw payload.
+func (h *SystemHandler) ListJobs(c echo.Context) error {
+	if h.jobs == nil {
+		return c.JSON(http.StatusOK, map[string]any{"counts": map[string]int64{}, "jobs": []services.JobView{}})
+	}
+	ctx := c.Request().Context()
+	counts, err := h.jobs.Counts(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not count jobs")
+	}
+	jobs, err := h.jobs.List(ctx, 100)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not list jobs")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"counts": counts, "jobs": jobs})
+}
+
+// RetryJob sets a failed job back to queued so that the worker runs it again.
+func (h *SystemHandler) RetryJob(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid job id")
+	}
+	if h.jobs == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "No job store")
+	}
+	if err := h.jobs.Retry(c.Request().Context(), id); err != nil {
+		if errors.Is(err, services.ErrJobNotFailed) {
+			return echo.NewHTTPError(http.StatusNotFound, "No failed job with that id")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not retry job")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"status": "queued"})
+}
+
+// ClearFailedJobs removes every failed job and returns the count. It is the
+// only path that removes failed jobs; the daily prune leaves them.
+func (h *SystemHandler) ClearFailedJobs(c echo.Context) error {
+	if h.jobs == nil {
+		return c.JSON(http.StatusOK, map[string]any{"deleted": 0})
+	}
+	n, err := h.jobs.ClearFailed(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not clear failed jobs")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"deleted": n})
 }
 
 // WithStorageQuotaMB attaches the operator-configured storage allowance. A
@@ -114,7 +183,27 @@ func (h *SystemHandler) GetHealth(c echo.Context) error {
 		"tasks":    out,
 		"degraded": degraded,
 		"uptime":   int64(time.Since(startTime).Seconds()),
+		// capabilities lists optional tools the server found at startup.
+		// The slim image has no ffmpeg, so it serves video originals as is.
+		"capabilities": map[string]any{"ffmpeg": h.ffmpeg.Available()},
+		"backup":       h.backupHealth(c.Request().Context()),
 	})
+}
+
+// backupHealth is the backup block of GetHealth: whether the host manages
+// backups, whether scheduled backups run, and the newest archive time. A
+// host's dead-man check reads last_backup with an API key; it comes from the
+// disk, so it survives a restart, unlike the task entries above.
+func (h *SystemHandler) backupHealth(ctx context.Context) map[string]any {
+	setting, _ := h.settingsService.GetSetting(ctx, "enable_backup", "true")
+	out := map[string]any{
+		"managed": h.systemService.BackupManaged(),
+		"enabled": h.systemService.BackupEnabled(setting),
+	}
+	if last := h.systemService.LastBackupTime(); !last.IsZero() {
+		out["last_backup"] = last
+	}
+	return out
 }
 
 var startTime = time.Now()
@@ -437,6 +526,8 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 			keep = n
 		}
 	}
+
+	keep = h.systemService.BackupKeep(keep)
 
 	// Run in the background: a multi-GB archive can take minutes — far longer than
 	// a request should stay open. Progress is observable via ListBackups (the

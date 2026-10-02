@@ -37,7 +37,7 @@ describe('picker dialogs drop their Escape handler when unmounted', () => {
   });
 
   test('MediaPickerDialog', async () => {
-    const { MediaPickerDialog } = await import('../src/components/light/MediaPickerDialog.js');
+    const { MediaPickerDialog } = await import('../src/components/light/MediaPickerDialog.ts');
     const picker = new MediaPickerDialog({ onConfirm: () => {} });
     picker.mount();
     picker.open();
@@ -60,7 +60,7 @@ describe('picker dialogs drop their Escape handler when unmounted', () => {
 
   test('PhotoLibraryPickerDialog', async () => {
     const { PhotoLibraryPickerDialog } = await import(
-      '../src/components/light/PhotoLibraryPickerDialog.js'
+      '../src/components/light/PhotoLibraryPickerDialog.ts'
     );
     const picker = new PhotoLibraryPickerDialog({ onImport: () => {} });
     picker.open();

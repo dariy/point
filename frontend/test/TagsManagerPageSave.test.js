@@ -9,7 +9,7 @@
  *
  * The tests drive the real modal — _openModal renders the real editor form and
  * wires the real submit handler — and assert on the HTTP requests that leave
- * api/client.js. Nothing between the click and fetch is stubbed.
+ * api/client.ts. Nothing between the click and fetch is stubbed.
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
@@ -56,8 +56,8 @@ describe('TagsManagerPage._handleSave', () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
 
-    ({ getToast, setToast } = await import('../src/store.js'));
-    const { default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js');
+    ({ getToast, setToast } = await import('../src/store.ts'));
+    const { default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts');
 
     page = new TagsManagerPage(dom.document.createElement('div'));
     page.state.loading = false;

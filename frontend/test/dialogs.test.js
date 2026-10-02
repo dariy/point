@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { showConfirm, showPrompt } from "../src/utils/dialogs.js";
+import { showConfirm, showPrompt } from "../src/utils/dialogs.ts";
 import { beforeEach, afterEach } from "node:test";
 import { setupDOM } from "./helpers/dom.js";
 

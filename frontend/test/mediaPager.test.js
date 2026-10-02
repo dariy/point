@@ -73,7 +73,7 @@ before(async () => {
     addEventListener() {},
     removeEventListener() {},
   };
-  ({ MediaPager, getMediaZoom, setMediaZoom } = await import('../src/core/mediaPager.js'));
+  ({ MediaPager, getMediaZoom, setMediaZoom } = await import('../src/core/mediaPager.ts'));
 });
 
 /** A pager wired to stub elements, recording every load and fetch it requests. */

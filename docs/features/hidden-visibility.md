@@ -145,7 +145,7 @@ The frontend is stateless with respect to visibility rules:
 - `is_hidden` / `is_hidden_by_tag` absent → field is `undefined` → falsy → no lock icon
 - `is_hidden: true` or `is_hidden_by_tag: true` → lock icon rendered
 
-Lock icon is the shared `LOCK_SVG` constant from `frontend/src/utils/icons.js`, applied in:
+Lock icon is the shared `LOCK_SVG` constant from `frontend/src/utils/icons.ts`, applied in:
 `PostCard`, `PostContent`, `PublicHeader` (breadcrumb), `PublicHeaderTagsBar`, `TagCloud`, `TagsPage`.
 
 The `is-hidden` CSS class is added to the article/list-item element for additional styling (e.g., dimming) for admin users viewing hidden content.
@@ -162,8 +162,8 @@ exactly what a visitor gets.
 It is implemented as a *narrowing* of the request, not a second rendering mode:
 
 - The client stores the state in `localStorage` (`revelio`, absent = on) and
-  `frontend/src/utils/revelio.js` adds `X-Point-Revelio: off` to every API
-  request from `api/client.js`.
+  `frontend/src/utils/revelio.ts` adds `X-Point-Revelio: off` to every API
+  request from `api/client.ts`.
 - `OptionalAuthMiddleware` resolves the principal as usual and then withholds
   it, so every downstream `c.Get("user") == nil` test takes the public branch.
   Nothing else in the codebase has to know the switch exists.

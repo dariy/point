@@ -40,15 +40,15 @@
  * rather than a placeholder.
  */
 
-import { Component } from "../../components/Component.js";
+import { Component } from "../../components/Component.ts";
 import {
   adminLayoutTemplate,
   setupAdminLayout,
-} from "../../components/light/AdminLayout.js";
-import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
-import { MediaViewer } from "../../components/shared/MediaViewer.js";
-import { getPost, updatePost } from "../../api/posts.js";
-import { deleteMedia } from "../../api/media.js";
+} from "../../components/light/AdminLayout.ts";
+import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.ts";
+import { MediaViewer } from "../../components/shared/MediaViewer.ts";
+import { getPost, updatePost } from "../../api/posts.ts";
+import { deleteMedia } from "../../api/media.ts";
 import {
   deleteCarousel,
   deleteCarouselTemplate,
@@ -58,11 +58,11 @@ import {
   saveCarousel,
   saveCarouselTemplate,
 } from "../../api/carousel.js";
-import { getSettings, setToast } from "../../store.js";
-import { showConfirm } from "../../utils/dialogs.js";
-import { html, navigate } from "../../utils/helpers.js";
-import { newCarouselKey, parseNodes } from "../../utils/postNodes.js";
-import { attachPointerReorder } from "../../utils/pointerReorder.js";
+import { getSettings, setToast } from "../../store.ts";
+import { showConfirm } from "../../utils/dialogs.ts";
+import { html, navigate } from "../../utils/helpers.ts";
+import { newCarouselKey, parseNodes } from "../../utils/postNodes.ts";
+import { attachPointerReorder } from "../../utils/pointerReorder.ts";
 import {
   canvasSize,
   deckSlideRects,
@@ -490,7 +490,7 @@ function applyMessage(name, report) {
  * `query.post` carries the target post id; `renderDeps` overrides the browser
  * render backend (tests inject a fake).
  *
- * @typedef {import('../../router.js').PageProps
+ * @typedef {import('../../router.ts').PageProps
  *   & { renderDeps?: import('./render.js').RenderDeps }} CarouselStudioProps
  */
 
@@ -1379,7 +1379,7 @@ export default class CarouselStudioPage extends Component {
    * entry itself (see below).
    *
    * @param {*} doc  the next document
-   * @param {import('../../components/Component.js').ComponentState} [patch]  state
+   * @param {import('../../components/Component.ts').ComponentState} [patch]  state
    *   to set alongside it
    * @param {{history?: boolean}} [options]
    */
@@ -3413,7 +3413,7 @@ export default class CarouselStudioPage extends Component {
   /** Everything the builder markup needs, read off the state in one place —
    *  `studio/panels.js` answers no questions about the page itself.
    *
-   * @param {import('../../utils/helpers.js').Slot} tray  the gallery and the
+   * @param {import('../../utils/helpers.ts').Slot} tray  the gallery and the
    *   import report, built once by `_renderStudio` so the same markup reaches
    *   the tray row whether or not a source is picked. */
   _renderBuilder(tray) {

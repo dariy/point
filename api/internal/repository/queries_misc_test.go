@@ -80,7 +80,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if _, err := repo.ListMediaFolders(ctx, ""); err == nil {
 		t.Error("ListMediaFolders: expected error")
 	}
-	if _, err := repo.ListMediaFiltered(ctx, "", "", 10, 0); err == nil {
+	if _, err := repo.ListMediaFiltered(ctx, "", "", "", 10, 0); err == nil {
 		t.Error("ListMediaFiltered: expected error")
 	}
 	if _, err := repo.ListPublishedPostStubs(ctx); err == nil {
@@ -122,7 +122,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if err := repo.UpsertTagLocation(ctx, 1, 1.0, 2.0); err == nil {
 		t.Error("UpsertTagLocation: expected error")
 	}
-	if _, err := repo.CountMediaFiltered(ctx, "", ""); err == nil {
+	if _, err := repo.CountMediaFiltered(ctx, "", "", ""); err == nil {
 		t.Error("CountMediaFiltered: expected error")
 	}
 	if err := repo.SetMediaPublic(ctx, 1, true, nil); err == nil {
@@ -149,7 +149,7 @@ func TestRepository_BranchCoverage(t *testing.T) {
 	if _, _, err := repo.GetPostNavigation(ctx, 1, false, ""); err != nil {
 		t.Fatalf("GetPostNavigation (not public): %v", err)
 	}
-	if _, err := repo.CountMediaFiltered(ctx, "image", "2024/01"); err != nil {
+	if _, err := repo.CountMediaFiltered(ctx, "image", "2024/01", ""); err != nil {
 		t.Fatalf("CountMediaFiltered with folder: %v", err)
 	}
 	if _, err := repo.GetPostsByTagIDs(ctx, []int64{1}, false, true, false, 10, 0); err != nil {

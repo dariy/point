@@ -1,7 +1,7 @@
 # Timeline
 
 An interactive horizontal pan/zoom control over year tags (`kind='year'`), shipped as
-the `timeline` slot plugin (`frontend/src/plugins/timeline/index.js`, ~1500 lines). Two
+the `timeline` slot plugin (`frontend/src/plugins/timeline/index.ts`, ~1500 lines). Two
 modes:
 
 - **Filter mode** (HomePage, map): the centered year/range filters posts/pins live and

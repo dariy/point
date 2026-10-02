@@ -8,8 +8,8 @@ import {
   attachFlyoutTrigger,
   setupTagFlyout,
   createHotZone
-} from '../src/utils/tagFlyout.js';
-import { setupScrollableStrip, setupTagStrip } from '../src/utils/tagStrip.js';
+} from '../src/utils/tagFlyout.ts';
+import { setupScrollableStrip, setupTagStrip } from '../src/utils/tagStrip.ts';
 
 describe('tags flyout and UI', () => {
   let anchorEl, excludeEl, navigateFn;

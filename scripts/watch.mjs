@@ -29,7 +29,7 @@ const TREES = [
   // Plugin CSS partials live beside their JS under frontend/src/plugins/<id>/.
   {
     dir: "frontend/src",
-    classify: (f) => cssOnly(f) ?? (/\.(m?js|json)$/.test(f) ? "js" : null),
+    classify: (f) => cssOnly(f) ?? (/\.(m?[jt]s|json)$/.test(f) ? "js" : null),
   },
   // common/theme.css is not a partial: the server writes the active theme
   // there at startup and on every theme switch, and serves it unbundled.

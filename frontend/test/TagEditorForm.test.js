@@ -7,7 +7,7 @@ import {
   renderTagToggles as _renderTagToggles,
   slugifyTagName,
   tagEditorSelection,
-} from '../src/components/light/tags/TagEditorForm.js';
+} from '../src/components/light/tags/TagEditorForm.ts';
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take, so unwrap once here.

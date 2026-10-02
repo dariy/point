@@ -1,7 +1,7 @@
 /* ===========================
    Tags manager — parent/child picker
    The tag-badge checkboxes and collapsible picker tree of
-   frontend/src/components/light/tags/tagToggleTree.js.
+   frontend/src/components/light/tags/tagToggleTree.ts.
    =========================== */
 
 .tag-toggles-container {

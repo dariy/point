@@ -31,7 +31,7 @@ globalThis.window = {
   matchMedia: () => ({ matches: false }),
 };
 
-const { initPointerMode, hasFinePointer, eventPointerType } = await import('../src/utils/pointerMode.js');
+const { initPointerMode, hasFinePointer, eventPointerType } = await import('../src/utils/pointerMode.ts');
 
 const fire = (type, event = {}) => (listeners[type] || []).forEach((fn) => fn(event));
 const mouse = () => fire('pointerdown', { pointerType: 'mouse' });

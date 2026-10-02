@@ -14,7 +14,7 @@
  * opens a create form where they expected to edit.
  *
  * These tests mount the real page against the real admin layout and assert on
- * the requests leaving api/client.js. Nothing between the click and fetch is
+ * the requests leaving api/client.ts. Nothing between the click and fetch is
  * stubbed.
  */
 
@@ -22,7 +22,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire } from './helpers/dom.js';
-import { getToast, setToast, setUser } from '../src/store.js';
+import { getToast, setToast, setUser } from '../src/store.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
@@ -109,7 +109,7 @@ describe('TagsManagerPage — loading and data operations', () => {
     onNavChanged = () => { navRefreshes++; };
     dom.document.addEventListener('nav-changed', onNavChanged);
 
-    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js'));
+    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts'));
   });
 
   afterEach(() => {

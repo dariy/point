@@ -498,6 +498,36 @@ var schema = []struct{ name, sql string }{
 			ALTER TABLE carousels_rekeyed RENAME TO carousels;
 			PRAGMA foreign_keys = ON`,
 	},
+	{
+		// Decode did not apply EXIF orientation before, so a rotated photo
+		// stored its sensor size. SQLite reads every SET right-hand side from
+		// the old row, so this swaps the two columns.
+		"swap_dims_for_rotated_exif",
+		`UPDATE media SET width = height, height = width
+			WHERE json_valid(metadata)
+			AND json_extract(metadata, '$.Orientation') IN ('5', '6', '7', '8')`,
+	},
+	{
+		// The durable job store (services.JobService). Times are unix seconds
+		// so the worker compares integers, not date strings.
+		"create_jobs",
+		`CREATE TABLE IF NOT EXISTS jobs (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				kind TEXT NOT NULL,
+				payload TEXT NOT NULL DEFAULT '{}',
+				state TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'running', 'done', 'failed')),
+				attempts INTEGER NOT NULL DEFAULT 0,
+				max_attempts INTEGER NOT NULL DEFAULT 5,
+				next_run_at INTEGER NOT NULL,
+				last_error TEXT NOT NULL DEFAULT '',
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			)`,
+	},
+	{
+		"create_jobs_due_index",
+		`CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(next_run_at, id) WHERE state = 'queued'`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

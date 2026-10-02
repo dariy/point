@@ -258,6 +258,54 @@ func TestLoginPageCSPAllowsRedirectOrigin(t *testing.T) {
 	}
 }
 
+// TestLoginPageNamesRedirectHost guards the consent fix: registration is open,
+// so the page must say where the code goes, and warn when that host is not
+// this machine. It must not show a client-chosen name.
+func TestLoginPageNamesRedirectHost(t *testing.T) {
+	_, challenge := pkcePair()
+	cases := []struct {
+		uri, host string
+		warn      bool
+	}{
+		{"https://attacker.example/cb", "attacker.example", true},
+		{"http://localhost:33418/callback", "localhost:33418", false},
+		{"http://127.0.0.1:9000/cb", "127.0.0.1:9000", false},
+		{"http://[::1]:9000/cb", "[::1]:9000", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			_, srv := newTestProvider(t, Config{})
+			clientID := registerClient(t, srv, tc.uri)
+			q := url.Values{
+				"response_type":         {"code"},
+				"client_id":             {clientID},
+				"redirect_uri":          {tc.uri},
+				"code_challenge":        {challenge},
+				"code_challenge_method": {"S256"},
+			}
+			resp, err := http.Get(srv.URL + "/oauth/authorize?" + q.Encode())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			body, _ := io.ReadAll(resp.Body)
+			if !strings.Contains(string(body), "Access goes to <strong>"+tc.host+"</strong>") {
+				t.Errorf("page does not name host %q", tc.host)
+			}
+			if got := strings.Contains(string(body), `class="warn"`); got != tc.warn {
+				t.Errorf("warning shown = %v, want %v", got, tc.warn)
+			}
+		})
+	}
+}
+
+func TestRedirectHostCustomScheme(t *testing.T) {
+	host, foreign := redirectHost("myapp:callback")
+	if host != "myapp:callback" || !foreign {
+		t.Errorf("redirectHost = %q, %v; want the whole URI, foreign", host, foreign)
+	}
+}
+
 func TestFormActionOrigin(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"https://claude.ai/api/mcp/auth_callback", "https://claude.ai"},
@@ -646,6 +694,17 @@ func TestTokenFromRefresh(t *testing.T) {
 		}
 	})
 
+	t.Run("refresh-token-carries-ttl", func(t *testing.T) {
+		p, srv := newTestProvider(t, Config{RefreshTokenTTL: 30 * 24 * time.Hour})
+		refresh := exchange(t, srv)["refresh_token"].(string)
+		p.mu.RLock()
+		exp := p.tokens[refresh].ExpiresAt
+		p.mu.RUnlock()
+		if d := time.Until(exp); d < 30*24*time.Hour-time.Minute || d > 30*24*time.Hour {
+			t.Errorf("refresh expires in %v, want about 30 days", d)
+		}
+	})
+
 	t.Run("expired-refresh-token", func(t *testing.T) {
 		p, srv := newTestProvider(t, Config{RefreshTokenTTL: time.Hour})
 		first := exchange(t, srv)
@@ -653,12 +712,15 @@ func TestTokenFromRefresh(t *testing.T) {
 		p.mu.Lock()
 		p.tokens[refresh].ExpiresAt = time.Now().Add(-time.Second)
 		p.mu.Unlock()
-		_, status := postToken(t, srv, url.Values{
+		out, status := postToken(t, srv, url.Values{
 			"grant_type":    {"refresh_token"},
 			"refresh_token": {refresh},
 		})
 		if status != http.StatusBadRequest {
 			t.Errorf("status = %d, want 400", status)
+		}
+		if out["error"] != "invalid_grant" {
+			t.Errorf("error = %v, want invalid_grant", out["error"])
 		}
 		p.mu.RLock()
 		_, still := p.tokens[refresh]
@@ -1159,5 +1221,139 @@ func TestStoreNeverSeesRawTokens(t *testing.T) {
 	}
 	if _, hashed := store.tokens[hashToken(access)]; !hashed {
 		t.Fatal("token not stored under its hash")
+	}
+}
+
+func (s *fakeStore) DeleteAllTokens(_ context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clear(s.tokens)
+	return nil
+}
+
+func (s *fakeStore) DeleteClient(_ context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.clients, clientID)
+	for k, v := range s.tokens {
+		if v.clientID == clientID {
+			delete(s.tokens, k)
+		}
+	}
+	return nil
+}
+
+// --- revocation ---
+
+// issuePair runs the full authorization-code flow and returns the client id and
+// the issued access and refresh tokens.
+func issuePair(t *testing.T, srv *httptest.Server) (clientID, access, refresh string) {
+	t.Helper()
+	verifier, challenge := pkcePair()
+	clientID, code := getCode(t, srv, challenge)
+	out, status := postToken(t, srv, url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://app.test/cb"},
+		"code_verifier": {verifier},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("token exchange failed: %d", status)
+	}
+	return clientID, out["access_token"].(string), out["refresh_token"].(string)
+}
+
+// TestRevokeAll: after a credential change, no issued token works, in memory or
+// in the Store, and the refresh grant answers invalid_grant.
+func TestRevokeAll(t *testing.T) {
+	store := newFakeStore()
+	p, srv := newTestProvider(t, Config{Store: store})
+	clientID, access, refresh := issuePair(t, srv)
+
+	if err := p.RevokeAll(t.Context()); err != nil {
+		t.Fatalf("RevokeAll: %v", err)
+	}
+	if p.ValidateToken(t.Context(), access) {
+		t.Error("access token still valid after RevokeAll")
+	}
+	if len(store.tokens) != 0 {
+		t.Errorf("store keeps %d tokens after RevokeAll", len(store.tokens))
+	}
+	out, status := postToken(t, srv, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh}})
+	if status != http.StatusBadRequest || out["error"] != "invalid_grant" {
+		t.Errorf("refresh after RevokeAll = %d %v, want 400 invalid_grant", status, out["error"])
+	}
+	// The client stays registered, so it can sign in again.
+	if _, ok := p.lookupClient(t.Context(), clientID); !ok {
+		t.Error("RevokeAll removed the client registration")
+	}
+}
+
+// TestRevokeClient removes one client and its tokens and leaves the others.
+func TestRevokeClient(t *testing.T) {
+	store := newFakeStore()
+	p, srv := newTestProvider(t, Config{Store: store})
+	gone, goneAccess, _ := issuePair(t, srv)
+	_, keptAccess, _ := issuePair(t, srv)
+
+	if err := p.RevokeClient(t.Context(), gone); err != nil {
+		t.Fatalf("RevokeClient: %v", err)
+	}
+	if p.ValidateToken(t.Context(), goneAccess) {
+		t.Error("revoked client's token still valid")
+	}
+	if !p.ValidateToken(t.Context(), keptAccess) {
+		t.Error("another client's token was revoked")
+	}
+	if _, ok := p.lookupClient(t.Context(), gone); ok {
+		t.Error("revoked client still resolves")
+	}
+	if _, ok := store.clients[gone]; ok {
+		t.Error("revoked client still in store")
+	}
+}
+
+// TestCachedTokenRereadsStore: a revoke that bypasses the provider (the offline
+// reset-password CLI) takes effect when the cached copy is older than
+// tokenCacheTTL.
+func TestCachedTokenRereadsStore(t *testing.T) {
+	store := newFakeStore()
+	p, srv := newTestProvider(t, Config{Store: store})
+	_, access, _ := issuePair(t, srv)
+
+	if err := store.DeleteAllTokens(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !p.ValidateToken(t.Context(), access) {
+		t.Fatal("a fresh cache entry should still be trusted")
+	}
+	p.mu.Lock()
+	p.tokens[access].CachedAt = time.Now().Add(-tokenCacheTTL - time.Second)
+	p.mu.Unlock()
+	if p.ValidateToken(t.Context(), access) {
+		t.Error("stale cache entry trusted after the store revoked the token")
+	}
+	p.mu.RLock()
+	_, still := p.tokens[access]
+	p.mu.RUnlock()
+	if still {
+		t.Error("revoked token left in the memory tier")
+	}
+}
+
+// TestMemOnlyTokenSkipsReread: a token whose Store write failed is not in the
+// Store, so the re-read must not reject it.
+func TestMemOnlyTokenSkipsReread(t *testing.T) {
+	store := newFakeStore()
+	store.failSaves = true
+	p, srv := newTestProvider(t, Config{Store: store})
+	_, access, _ := issuePair(t, srv)
+
+	p.mu.Lock()
+	p.tokens[access].CachedAt = time.Now().Add(-tokenCacheTTL - time.Second)
+	p.mu.Unlock()
+	if !p.ValidateToken(t.Context(), access) {
+		t.Error("memory-only token rejected after the cache TTL")
 	}
 }

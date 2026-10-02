@@ -3,13 +3,13 @@
  *
  * Import order is the whole trick: the shim patches window.fetch and
  * XMLHttpRequest as a side effect of being imported, and ES modules evaluate in
- * order, so it is installed before app.js runs its top-level loadThemeCss()
+ * order, so it is installed before app.ts runs its top-level loadThemeCss()
  * fetch and before anything else touches the network.
  *
- * app.js itself is imported unmodified — the demo runs the real application,
+ * app.ts itself is imported unmodified — the demo runs the real application,
  * not a copy of it.
  */
 
 import "./shim.js";
 import "./banner.js";
-import "../../frontend/src/app.js";
+import "../../frontend/src/app.ts";

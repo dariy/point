@@ -13,7 +13,7 @@
  * without following it there is a silently dead control.
  */
 
-import { html, raw } from "../../../utils/helpers.js";
+import { html, raw } from "../../../utils/helpers.ts";
 import {
   CHEVRON_SVG,
   COPY_SVG,
@@ -26,7 +26,7 @@ import {
   REFRESH_SVG,
   TRASH_SVG,
   UNDO_SVG,
-} from "../../../utils/icons.js";
+} from "../../../utils/icons.ts";
 import {
   canvasSize,
   fitReport,
@@ -424,7 +424,7 @@ function layerLabel(layer) {
  * @param {string} [o.error]      a load/save failure, shown in the toolbar row
  *   rather than pushed above it — the page has one error slot regardless of
  *   whether a source is picked yet (see `_renderStudio` in `index.js`).
- * @param {import('../../../utils/helpers.js').Slot} [o.tray]  extra markup for
+ * @param {import('../../../utils/helpers.ts').Slot} [o.tray]  extra markup for
  *   the tray row, appended after the rendered strip — `index.js` hands in the
  *   template gallery and the import report, which have to reach the tray
  *   whether or not a source is picked (`pickPrompt` takes the body row instead
@@ -1210,7 +1210,7 @@ function spanRangeLabel(covered) {
  *
  * @param {import('../document.js').CarouselLayer[]} layers
  * @param {{scope: "slide"|"span", selectedLayer: number|null,
- *   meta?: (j: number) => string, labelledBy: string, formHtml?: import('../../../utils/helpers.js').Slot}} o
+ *   meta?: (j: number) => string, labelledBy: string, formHtml?: import('../../../utils/helpers.ts').Slot}} o
  *   `formHtml`, when given, is the selected layer's property form — spliced
  *   in as its own `<li>` right after the row it belongs to, rather than
  *   after both lists, so the form and the object it edits stay adjacent. It
@@ -1301,8 +1301,8 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy, formHtml })
  * apart on the `aria-pressed` the mode drives.
  *
  * @param {{mode: "draw"|"erase"}} session  the mode is all either button reads
- * @returns {{erase: import('../../../utils/helpers.js').Slot,
- *   done: import('../../../utils/helpers.js').Slot}}
+ * @returns {{erase: import('../../../utils/helpers.ts').Slot,
+ *   done: import('../../../utils/helpers.ts').Slot}}
  */
 export function inkActions(session) {
   return {
@@ -1614,7 +1614,7 @@ export function layerForm(layer, logoUrl) {
         : "none picked"
     : "";
 
-  /** @type {import('../../../utils/helpers.js').Slot} */
+  /** @type {import('../../../utils/helpers.ts').Slot} */
   let body = "";
   if (text) {
     body = html`

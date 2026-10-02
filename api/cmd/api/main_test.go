@@ -240,7 +240,7 @@ func TestDeploymentHeadInjection(t *testing.T) {
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
 
-	req := httptest.NewRequest(http.MethodGet, "/some-spa-route", nil)
+	req := httptest.NewRequest(http.MethodGet, "/search", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -283,7 +283,7 @@ func TestDeploymentHeadInjection(t *testing.T) {
 	// A logged-in admin viewing a PUBLIC page (admin controls are present there
 	// too) must also get the injection-free shell — the session cookie is the
 	// signal, so the third-party script never runs in an authenticated DOM.
-	authReq := httptest.NewRequest(http.MethodGet, "/some-spa-route", nil)
+	authReq := httptest.NewRequest(http.MethodGet, "/search", nil)
 	authReq.AddCookie(&http.Cookie{Name: "session", Value: "tok"})
 	authRec := httptest.NewRecorder()
 	e.ServeHTTP(authRec, authReq)

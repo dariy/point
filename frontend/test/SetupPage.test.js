@@ -3,6 +3,7 @@ import assert from 'node:assert';
 
 describe('SetupPage', () => {
   let SetupPage;
+  let setupTokenFrom;
 
   before(async () => {
     // Mock enough globals for the Component and SetupPage to import
@@ -23,8 +24,9 @@ describe('SetupPage', () => {
       dispatchEvent: () => {}
     };
 
-    const mod = await import('../src/pages/light/SetupPage.js');
+    const mod = await import('../src/pages/light/SetupPage.ts');
     SetupPage = mod.default;
+    setupTokenFrom = mod.setupTokenFrom;
   });
 
   test('renders email field as type="text" with autocomplete="off"', () => {
@@ -61,5 +63,12 @@ describe('SetupPage', () => {
     
     assert.ok(passwordMatch && passwordMatch[1].includes('form-input'), 'Password field should have form-input class');
     assert.ok(confirmMatch && confirmMatch[1].includes('form-input'), 'Confirm password field should have form-input class');
+  });
+
+  test('setupTokenFrom reads the token from the setup link', () => {
+    assert.strictEqual(setupTokenFrom('?token=abc-123'), 'abc-123');
+    assert.strictEqual(setupTokenFrom('?x=1&token=a%2Bb'), 'a+b');
+    assert.strictEqual(setupTokenFrom(''), '');
+    assert.strictEqual(setupTokenFrom('?token='), '');
   });
 });

@@ -6,6 +6,12 @@ Single-admin authentication with several credential surfaces. Services:
 
 ## What is implemented
 
+- **First-run setup**: `POST /api/setup` creates the owner while no user exists.
+  When `SETUP_TOKEN` is set, the request must carry the same value in `token`
+  (the wizard reads it from `/setup?token=…`); a missing or wrong token gets 403.
+  The compare is constant-time. The token needs no revocation: after the owner
+  exists, every request gets 409. With `SETUP_TOKEN` unset, the first visitor
+  completes setup, as before. The `point setup` CLI never needs the token.
 - **Password auth** with modern hashing: passwords hash with Argon2id (legacy bcrypt
   hashes are transparently rehashed on successful login — there's a known logging gap
   on rehash failures).
@@ -25,7 +31,9 @@ Single-admin authentication with several credential surfaces. Services:
   - **Offline CLI**: `point reset-password` (`api/cmd/api/resetpassword.go`) for
     operators locked out without SMTP — runs against the DB directly.
 - **MCP OAuth 2.1** is a separate surface with its own provider but validates the same
-  admin credential (see [mcp.md](mcp.md)).
+  admin credential (see [mcp.md](mcp.md)). A password change, a password reset (web or
+  CLI) and "log out all other devices" revoke every OAuth token too. The API Keys panel
+  lists the connected OAuth apps and revokes one at a time.
 - **Guest filtering is server-side everywhere** — see
   [hidden-visibility.md](hidden-visibility.md); admin routes sit behind
   `AuthMiddleware`, public reads behind `OptionalAuthMiddleware`.
@@ -41,6 +49,11 @@ Single-admin authentication with several credential surfaces. Services:
   accepted (admin API, public reads, MCP), not just on `/api/api-keys`.
 - Secrets (API keys, reset tokens, Instagram/Gemini credentials) are never returned by
   any endpoint; `*_is_set` booleans drive the UI.
+
+- `SETUP_TOKEN` is opt-in. Managed hosting sets it because the hostname is in
+  Certificate Transparency logs before the owner visits, and bots race open
+  install wizards. A self-hoster who opens the site right after install does not
+  get an extra step.
 
 ## Session tokens
 

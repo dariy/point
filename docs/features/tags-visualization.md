@@ -85,7 +85,7 @@ page to the owner who just flipped the switch.
 World map of geo-tags (tags with `latitude`/`longitude`): country polygon fills for
 country-type tags, proportional circle markers for cities; clicking a marker navigates
 to the tag archive. Supports year filtering via the timeline. Leaflet is vendored and
-lazy-loaded per page (`frontend/src/utils/leaflet.js`) so it never enters the core
+lazy-loaded per page (`frontend/src/utils/leaflet.ts`) so it never enters the core
 bundle. A fetch failure must render a visible error state, not a silent empty map.
 
 Hidden places are marked the same way as on the Atlas — hollow dashed marker, dashed
@@ -100,7 +100,7 @@ second graph viz cannot silently double-claim the path.
 
 ### `tags-graph` (force graph)
 
-Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.js`) making two
+Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.ts`) making two
 relationship types explicit:
 
 1. **Parent/child** — hierarchy edges (solid/accent).

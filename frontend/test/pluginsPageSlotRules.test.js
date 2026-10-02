@@ -42,7 +42,7 @@ describe('PluginsPage slot rules', () => {
     };
     global.localStorage = global.window.localStorage;
 
-    const mod = await import('../src/pages/light/PluginsPage.js');
+    const mod = await import('../src/pages/light/PluginsPage.ts');
     PluginsPage = mod.PluginsPage || mod.default;
   });
 

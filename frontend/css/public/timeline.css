@@ -22,7 +22,7 @@
    Keyed on height rather than `(orientation: landscape)` because height is the
    thing that is actually scarce: a 1200×450 desktop window has the same problem
    and no orientation that describes it.
-   The twin of this query lives in utils/helpers.js (SHORT_VIEWPORT_QUERY) —
+   The twin of this query lives in utils/helpers.ts (SHORT_VIEWPORT_QUERY) —
    the pages read it to put the year back in the breadcrumb, since suppressing
    that crumb is only correct while the timeline is on screen to replace it. */
 @media (max-height: 30em) {
@@ -39,7 +39,7 @@
     cursor: grab;
 }
 
-/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.ts. */
 @media (pointer: coarse) {
     :where(html:not(.pointer-fine)) .timeline-track-wrapper {
         height: 64px;
@@ -279,7 +279,7 @@
 
 /* Mobile: always visible when overflowing, smaller size.
    Split from one `(max-width: 48em), (pointer: coarse)` list because only the
-   coarse half is a guess about the input device — see utils/pointerMode.js. A
+   coarse half is a guess about the input device — see utils/pointerMode.ts. A
    narrow window still gets this whatever is plugged in. */
 @media (max-width: 48em) {
     .timeline-nav-btn {

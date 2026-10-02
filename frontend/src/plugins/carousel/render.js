@@ -43,7 +43,7 @@ import {
   spanLayerRect,
   wrapText,
 } from './geometry.js';
-import { deleteMedia, uploadMedia } from '../../api/media.js';
+import { deleteMedia, uploadMedia } from '../../api/media.ts';
 
 /** Fixed so identical inputs encode to identical bytes → SHA256 dedup reuses
  *  the same media row and re-render is idempotent. */

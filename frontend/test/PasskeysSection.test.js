@@ -23,7 +23,7 @@ describe('PasskeysSection', () => {
       dispatchEvent: () => {}
     };
 
-    const mod = await import('../src/components/light/sections/PasskeysSection.js');
+    const mod = await import('../src/components/light/sections/PasskeysSection.ts');
     PasskeysSection = mod.PasskeysSection;
   });
 

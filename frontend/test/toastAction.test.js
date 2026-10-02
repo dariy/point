@@ -19,7 +19,7 @@ describe('toast action', () => {
 
   beforeEach(async () => {
     dom = setupDOM();
-    ({ ToastContainer } = await import('../src/components/shared/Toast.js'));
+    ({ ToastContainer } = await import('../src/components/shared/Toast.ts'));
     host = dom.document.createElement('div');
     dom.document.body.appendChild(host);
     container = new ToastContainer(host);

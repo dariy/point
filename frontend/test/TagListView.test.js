@@ -8,7 +8,7 @@ import {
   renderTagList as _renderTagList,
   renderFilterChips as _renderFilterChips,
   renderQuickFilters as _renderQuickFilters,
-} from '../src/components/light/tags/TagListView.js';
+} from '../src/components/light/tags/TagListView.ts';
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take, so unwrap once here.

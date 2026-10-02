@@ -23,7 +23,7 @@
  * imported file is untrusted input from the internet and is only ever read.
  */
 
-import { parseMarkup } from '../../../utils/helpers.js';
+import { parseMarkup } from '../../../utils/helpers.ts';
 
 /**
  * An element's name with any namespace prefix removed. Reads `nodeName` for

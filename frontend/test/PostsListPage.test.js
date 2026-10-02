@@ -17,8 +17,8 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire, type, check } from './helpers/dom.js';
-import { getToast, setSettings, setToast, setUser } from '../src/store.js';
-import { clearPostReadCache } from '../src/api/posts.js';
+import { getToast, setSettings, setToast, setUser } from '../src/store.ts';
+import { clearPostReadCache } from '../src/api/posts.ts';
 
 const settle = () => new Promise(r => setImmediate(r));
 
@@ -97,7 +97,7 @@ describe('PostsListPage', () => {
     setUser({ username: 'owner', is_admin: true });
     setSettings({ blog_title: 'Test blog' });
     setToast(null);
-    ({ default: PostsListPage } = await import('../src/pages/light/PostsListPage.js'));
+    ({ default: PostsListPage } = await import('../src/pages/light/PostsListPage.ts'));
   });
 
   afterEach(() => {

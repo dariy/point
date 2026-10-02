@@ -47,7 +47,7 @@ describe('LightSidebar Manage group', () => {
       querySelectorAll: () => [],
       addEventListener: () => {},
     };
-    ({ LightSidebar } = await import('../src/components/light/LightSidebar.js'));
+    ({ LightSidebar } = await import('../src/components/light/LightSidebar.ts'));
   });
 
   beforeEach(() => prefs.clear());

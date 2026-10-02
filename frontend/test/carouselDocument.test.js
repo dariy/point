@@ -45,7 +45,7 @@ import {
   toTemplate,
 } from '../src/plugins/carousel/document.js';
 import { MIN_SLIDES, MAX_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
-import { carouselFence } from '../src/utils/postNodes.js';
+import { carouselFence } from '../src/utils/postNodes.ts';
 import {
   canvasSize,
   sliceRects,

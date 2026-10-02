@@ -172,6 +172,25 @@ through `slog` and lets the process live. The Instagram import additionally rese
 helper is that same pattern. These sites are **not** counted in `point_panics_total` —
 that counter is for the two middleware-style choke points, not every goroutine.
 
+The job worker (`JobService`, `api/internal/services/jobs.go`) runs under `utils.SafeGo`,
+and it also recovers each job handler. A panic in a handler counts as a failed attempt: the
+row keeps `last_error = "panic: …"` and goes back to `queued` with an exponential backoff
+(30 s × 2ⁿ, at most 6 h) until `max_attempts`, then goes to `failed`. At startup, rows in
+`running` go back to `queued`, because the process that ran them stopped.
+
+The admin System page has a **Job Queue** card (`GET /api/system/jobs`). It shows the count
+of jobs in each state and lists the queued, running and failed jobs: kind, the ids from the
+payload, attempts / max, next run and the last error. The raw payload is not shown. A failed
+job has a **Retry** button (`POST /api/system/jobs/:id/retry`): the job goes back to `queued`
+with zero attempts, due now, and the worker wakes.
+
+A daily scheduler task, **job prune** (05:00), removes `done` rows whose `updated_at` is
+older than 7 days (`JobService.PruneDone`). It records its outcome in the health registry. It
+never removes `queued`, `running` or `failed` rows. A failed row is evidence, so only the
+operator removes it: the **Clear failed** button on the Job Queue card (shown when failed jobs
+exist, with a confirm step) calls `POST /api/system/jobs/clear-failed`, which removes all
+failed rows and returns `{"deleted": n}`.
+
 `safeImagingDecode` (`api/internal/services/media_service.go`) already turned decode
 panics from crafted images into a returned error; it now also logs them at `warn` with a
 stack, so a caller that swallows the error does not make the panic invisible.
