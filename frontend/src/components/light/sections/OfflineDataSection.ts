@@ -7,6 +7,7 @@
 import { Component } from "../../Component.ts";
 import { getOfflineStats, getOfflineSnapshot } from "../../../api/offline.ts";
 import { saveSnapshot, saveMeta, getMeta } from "../../../utils/offlineStore.ts";
+import type { OfflineSnapshot } from "../../../utils/offlineStore.ts";
 import { preCacheImages, clearImageCache } from "../../../utils/imageCache.ts";
 import { thumbUrl } from "../../../utils/mediaUrl.ts";
 import { mediaTypeFromPath } from "../../../utils/postMedia.ts";
@@ -161,18 +162,18 @@ export class OfflineDataSection extends Component {
    * for. Remote URLs are skipped entirely: `cache.add` cannot store an opaque
    * cross-origin response, and the service worker never sees those requests.
    */
-  _imageUrls(data: { posts?: Array<{ media_url?: string }>; media?: Array<{ path?: string }> }): { thumbs: string[]; originals: string[] } {
+  _imageUrls(data: OfflineSnapshot): { thumbs: string[]; originals: string[] } {
     const thumbs = new Set<string>();
     const originals = new Set<string>();
     const local = (u: unknown): u is string => typeof u === "string" && u.startsWith("/");
 
-    (data.posts || []).forEach((p) => {
+    ((data.posts || []) as Array<{ media_url?: unknown }>).forEach((p) => {
       if (!local(p.media_url)) return;
       if (mediaTypeFromPath(p.media_url) === "image") originals.add(p.media_url);
       thumbs.add(thumbUrl(p.media_url, 512));
       thumbs.add(thumbUrl(p.media_url, 1024));
     });
-    (data.media || []).forEach((m) => {
+    ((data.media || []) as Array<{ path?: unknown }>).forEach((m) => {
       if (!local(m.path)) return;
       originals.add(m.path);
       thumbs.add(thumbUrl(m.path, 256));

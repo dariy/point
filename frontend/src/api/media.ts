@@ -31,6 +31,8 @@ export interface Media {
   /** As captured at upload. */
   original_metadata: Record<string, any> | null;
   is_public: boolean;
+  /** Admin responses only: set on an HEVC video that this install cannot convert. */
+  hevc_note?: boolean;
 }
 
 /**

@@ -9,7 +9,7 @@
 
 import { Component } from "../../Component.ts";
 import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.ts";
-import type { OAuthClient } from "../../../api/auth.ts";
+import type { ApiKey, OAuthClient } from "../../../api/auth.ts";
 import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
@@ -42,7 +42,7 @@ export class ApiKeysSection extends Component {
               <tbody>
                 ${apiKeys
                   .map(
-                    (k) => html`
+                    (k: ApiKey) => html`
                   <tr>
                     <td><strong>${k.name}</strong></td>
                     <td><code class="font-mono">${k.prefix}…</code></td>
@@ -103,7 +103,7 @@ export class ApiKeysSection extends Component {
       btn.addEventListener("click", () => this._handleDelete(Number(btn.dataset.id)));
     });
     this.$$(".revoke-oauth-client-btn").forEach((btn) => {
-      btn.addEventListener("click", () => this._handleRevokeClient(btn.dataset.id));
+      btn.addEventListener("click", () => this._handleRevokeClient(btn.dataset.id!));
     });
   }
 
@@ -139,7 +139,7 @@ export class ApiKeysSection extends Component {
           });
           this._load();
         } catch (err) {
-          setToast({ message: err.message || "Failed to create API key.", type: "error" });
+          setToast({ message: (err as Error).message || "Failed to create API key.", type: "error" });
         }
       },
     });
@@ -156,7 +156,7 @@ export class ApiKeysSection extends Component {
           await deleteApiKey(id);
           this._load();
         } catch (err) {
-          setToast({ message: err.message || "Failed to delete API key.", type: "error" });
+          setToast({ message: (err as Error).message || "Failed to delete API key.", type: "error" });
         }
       },
     });
@@ -173,7 +173,7 @@ export class ApiKeysSection extends Component {
           await revokeOAuthClient(clientId);
           this._load();
         } catch (err) {
-          setToast({ message: err.message || "Failed to revoke the app.", type: "error" });
+          setToast({ message: (err as Error).message || "Failed to revoke the app.", type: "error" });
         }
       },
     });

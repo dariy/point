@@ -131,7 +131,7 @@ export class VersionCheckSection extends Component {
       });
     } catch (err) {
       this.setState({ checking: false });
-      setToast({ message: err.message || "Version check failed.", type: "error" });
+      setToast({ message: (err as Error).message || "Version check failed.", type: "error" });
     }
   }
 }
