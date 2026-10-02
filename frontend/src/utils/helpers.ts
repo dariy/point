@@ -99,8 +99,8 @@ export function debounce<F extends (...args: any[]) => any>(
   fn: F,
   ms: number,
 ): (...args: Parameters<F>) => void {
-  let timer;
-  return function (...args) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return function (this: unknown, ...args: Parameters<F>) {
     clearTimeout(timer);
     timer = setTimeout(() => fn.apply(this, args), ms);
   };
@@ -118,7 +118,7 @@ export function throttle<F extends (...args: any[]) => any>(
   ms: number,
 ): (...args: Parameters<F>) => void {
   let last = 0;
-  return function (...args) {
+  return function (this: unknown, ...args: Parameters<F>) {
     const now = Date.now();
     if (now - last >= ms) {
       last = now;
@@ -247,7 +247,7 @@ export async function sharePost(data: { title: string, url: string }) {
       await navigator.share(data);
       return;
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if ((err as Error | null)?.name === 'AbortError') return;
       console.error('Share failed:', err);
     }
   }
@@ -272,9 +272,9 @@ export function setupLongPress(
   callback: (e: Event) => void,
   duration: number = 400,
 ): () => void {
-  let timer = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const start = (e) => {
+  const start = (e: Event) => {
     if (timer) return;
     timer = setTimeout(() => {
       timer = null;
@@ -283,7 +283,7 @@ export function setupLongPress(
   };
 
   const cancel = () => {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     timer = null;
   };
 
@@ -330,7 +330,7 @@ export function isRawHtml(value: unknown): boolean {
   return value instanceof RawHtml;
 }
 
-function processValue(val, isUrl) {
+function processValue(val: unknown, isUrl: boolean): string {
   if (Array.isArray(val)) {
     return val.map(v => processValue(v, isUrl)).join('');
   }
@@ -340,7 +340,7 @@ function processValue(val, isUrl) {
   if (val === null || val === undefined) {
     return '';
   }
-  return isUrl ? safeUrl(val) : escapeHtml(val);
+  return isUrl ? safeUrl(val as string) : escapeHtml(val);
 }
 
 /**

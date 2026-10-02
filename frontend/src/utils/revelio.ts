@@ -27,7 +27,7 @@ export function isRevelioOn() {
 }
 
 /** Persist the switch. Callers reload afterwards — see PublicFooter. */
-export function setRevelio(on) {
+export function setRevelio(on: boolean) {
   try {
     if (on) localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, "off");

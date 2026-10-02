@@ -33,7 +33,7 @@ function hasCaret(el: Element): el is HTMLTextAreaElement | HTMLInputElement {
 }
 
 /** Escape an attribute value for use inside a `[attr="…"]` selector. */
-const quote = (value) => String(value).replace(/["\\]/g, '\\$&');
+const quote = (value: unknown) => String(value).replace(/["\\]/g, '\\$&');
 
 /**
  * A selector that will find this element again after its markup is rewritten,
@@ -44,8 +44,8 @@ const quote = (value) => String(value).replace(/["\\]/g, '\\$&');
  * button whichever row the user was actually on — a wrong answer that looks
  * like a right one, and worse than leaving focus on the body.
  */
-function focusSelector(container, el) {
-  const unique = (selector) => {
+function focusSelector(container: ParentNode, el: Element) {
+  const unique = (selector: string | false | null) => {
     if (!selector) return null;
     try {
       return container.querySelectorAll(selector).length === 1 ? selector : null;
@@ -53,7 +53,7 @@ function focusSelector(container, el) {
       return null; // an id or name that does not survive being a selector
     }
   };
-  return unique(el.id && `#${globalThis.CSS?.escape ? CSS.escape(el.id) : el.id}`)
+  return unique(el.id && `#${typeof globalThis.CSS?.escape === 'function' ? CSS.escape(el.id) : el.id}`)
     ?? unique(el.getAttribute?.('name') && `${el.tagName.toLowerCase()}[name="${quote(el.getAttribute('name'))}"]`)
     ?? unique(el.getAttribute?.('data-action') && `[data-action="${quote(el.getAttribute('data-action'))}"]`);
 }
@@ -93,7 +93,7 @@ export function captureInteraction(container: HTMLElement): () => HTMLElement | 
 
     // Unique when it was snapshotted; the rebuild may have made it otherwise,
     // and the same argument applies — no restore beats the wrong one.
-    const matches = container.querySelectorAll(selector);
+    const matches = container.querySelectorAll<HTMLInputElement>(selector);
     if (matches.length !== 1) return null;
     const el = matches[0];
     if (typeof el.focus !== 'function') return null;

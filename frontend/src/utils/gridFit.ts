@@ -33,12 +33,12 @@ const MAX_COLS = 6;      // and never fan out past this many columns
 
 /** The stored zoom (column count), or 0 when unset (auto width-based layout). */
 export function getZoom() {
-  const v = parseInt(localStorage.getItem(ZOOM_KEY), 10);
+  const v = parseInt(localStorage.getItem(ZOOM_KEY) ?? '', 10);
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
 /** Persist a zoom column count; 0/falsy clears it back to auto. */
-export function setZoom(cols) {
+export function setZoom(cols: number) {
   if (cols > 0) localStorage.setItem(ZOOM_KEY, String(cols));
   else localStorage.removeItem(ZOOM_KEY);
 }
@@ -52,12 +52,12 @@ export function maxZoomCols() {
 }
 
 /** Clamp a desired column count to what fits the current viewport. */
-export function clampZoom(cols) {
+export function clampZoom(cols: number) {
   return Math.max(1, Math.min(cols, maxZoomCols()));
 }
 
 /** Live column count of a rendered grid (from its resolved template). */
-export function gridCols(gridEl) {
+export function gridCols(gridEl: Element | null | undefined) {
   if (!gridEl) return 0;
   const cs = window.getComputedStyle(gridEl);
   return cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length || 0;
@@ -157,7 +157,7 @@ export function measureCardImageSizes(gridEl: HTMLElement | null) {
  * @param rowW - width of the whole grid — the hero spans it.
  */
 export function applyCardImageSizes(cardW: number, rowW: number, root: ParentNode = document) {
-  const px = (v) => (v > 0 ? `${Math.round(v)}px` : CARD_SIZES_FALLBACK);
+  const px = (v: number) => (v > 0 ? `${Math.round(v)}px` : CARD_SIZES_FALLBACK);
   const card = px(cardW);
   const hero = px(rowW > 0 ? rowW : cardW);
   if (card === _cardSizes && hero === _heroSizes) return;
@@ -181,7 +181,7 @@ export function applyCardImageSizes(cardW: number, rowW: number, root: ParentNod
 let _rows = 0;
 
 /** Pin (or, with 0, release) the row tracks a zoomed grid lays out on. */
-export function applyRowsVar(rows) {
+export function applyRowsVar(rows: number) {
   _rows = rows > 0 ? rows : 0;
   if (_rows) document.body.style.setProperty('--posts-grid-rows', String(_rows));
   else document.body.style.removeProperty('--posts-grid-rows');
@@ -205,12 +205,12 @@ export function zoomCapacity() {
  * floor argument is irrelevant to that side effect (it only stands in when the
  * geometry is unmeasurable), hence 1.
  */
-export function pinZoomRows(gridEl) {
+export function pinZoomRows(gridEl: HTMLElement | null) {
   if (gridEl) computePerPage(1, gridEl);
 }
 
 /** Set an absolute zoom column count (from the footer slider) and apply it. */
-export function requestZoom(cols, gridEl = null) {
+export function requestZoom(cols: number, gridEl: HTMLElement | null = null) {
   setZoom(clampZoom(cols));
   applyZoomVar();
   pinZoomRows(gridEl);
@@ -222,7 +222,7 @@ export function requestZoom(cols, gridEl = null) {
  *
  * @returns the new clamped column count.
  */
-export function stepZoom(gridEl, delta): number {
+export function stepZoom(gridEl: HTMLElement | null, delta: number): number {
   // Clamp the seed so a stored value wider than the current viewport (or the
   // grid's own column count) doesn't waste the first step on a no-op.
   const current = clampZoom(getZoom() || gridCols(gridEl) || 1);
@@ -241,9 +241,9 @@ const FOOTER_FALLBACK = 96;
 let _cache = 0;
 
 // Height of the pagination + footer band that must stay visible under the grid.
-function belowGridReserve(gridEl) {
+function belowGridReserve(gridEl: Element | null) {
   const doc = (gridEl && gridEl.ownerDocument) || document;
-  const measure = (sel) => {
+  const measure = (sel: string) => {
     const el = doc.querySelector(sel);
     return el ? el.getBoundingClientRect().height : 0;
   };
@@ -294,7 +294,7 @@ const CHROME_MOUNTS = ['#header-mount', '#timeline-mount', '#pagination-mount', 
  */
 export function watchChromeFit(root: ParentNode, onSettle: () => void): () => void {
   if (!root || typeof ResizeObserver === 'undefined') return () => {};
-  let timer;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const ro = new ResizeObserver(() => {
     clearTimeout(timer);
     // Debounced: a slot that renders in two passes would otherwise re-fit twice,
@@ -452,7 +452,7 @@ export function layoutViewportHeight(): number {
   );
 }
 
-function columnsForWidth(width, colW, gap) {
+function columnsForWidth(width: number, colW: number, gap: number) {
   if (!width || !colW) return 1;
   return Math.max(1, Math.floor((width + gap) / (colW + gap)));
 }

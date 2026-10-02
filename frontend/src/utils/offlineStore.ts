@@ -54,15 +54,24 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
+/** A full offline snapshot: one row list per object store. */
+export interface OfflineSnapshot {
+  posts?: unknown[];
+  tags?: unknown[];
+  tag_relationships?: unknown[];
+  tag_locations?: unknown[];
+  media?: unknown[];
+}
+
 /** Save a full snapshot to IndexedDB. */
-export async function saveSnapshot(data): Promise<void> {
+export async function saveSnapshot(data: OfflineSnapshot): Promise<void> {
   const db = await openDB();
   const tx = db.transaction(
     ['posts', 'tags', 'tag_relationships', 'tag_locations', 'media'],
     'readwrite'
   );
 
-  const clearAndPut = (storeName, items) => {
+  const clearAndPut = (storeName: string, items: unknown[] | undefined) => {
     const store = tx.objectStore(storeName);
     store.clear();
     if (items) {
@@ -85,7 +94,7 @@ export async function saveSnapshot(data): Promise<void> {
 /**
  * Get a post by its slug.
  */
-export async function getPostBySlug(slug) {
+export async function getPostBySlug(slug: string) {
   const db = await openDB();
   const tx = db.transaction('posts', 'readonly');
   const store = tx.objectStore('posts');
@@ -126,7 +135,7 @@ export async function listPosts() {
 /**
  * Get metadata (e.g. last_sync).
  */
-export async function getMeta(key) {
+export async function getMeta(key: string) {
   const db = await openDB();
   const tx = db.transaction('meta', 'readonly');
   const store = tx.objectStore('meta');
@@ -139,7 +148,7 @@ export async function getMeta(key) {
 }
 
 /** Save metadata. */
-export async function saveMeta(key, value): Promise<void> {
+export async function saveMeta(key: string, value: unknown): Promise<void> {
   const db = await openDB();
   const tx = db.transaction('meta', 'readwrite');
   const store = tx.objectStore('meta');

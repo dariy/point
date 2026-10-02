@@ -31,14 +31,14 @@ export function attachPointerReorder({
   isEnabled?: Function;
   onDrop: Function;
 }): Function {
-  let item = null;      // the element being moved
-  let from = null;      // container it started in
-  let indicator = null; // the drop line
-  let pointerId = null;
-  let handleEl = null;
+  let item: Element | null = null;      // the element being moved
+  let from: Element | null = null;      // container it started in
+  let indicator: HTMLElement | null = null; // the drop line
+  let pointerId: number | null = null;
+  let handleEl: Element | null = null;
   let lastX = 0;
   let lastY = 0;
-  let scrollRaf = null;
+  let scrollRaf: number | null = null;
 
   const stopAutoScroll = () => {
     if (scrollRaf !== null) cancelAnimationFrame(scrollRaf);
@@ -65,7 +65,7 @@ export function attachPointerReorder({
    * fold — simply cannot be reached: the pointer is captured, so the usual
    * touch-scroll and edge-scroll behaviours are gone for the duration.
    */
-  const edgeVelocity = (y) => {
+  const edgeVelocity = (y: number) => {
     const EDGE = 64;
     const SPEED = 16;
     if (y < EDGE) return -SPEED * (1 - y / EDGE);
@@ -91,7 +91,7 @@ export function attachPointerReorder({
   };
 
   /** The container under the pointer, or the one the gesture started in. */
-  const containerAt = (x, y) => {
+  const containerAt = (x: number, y: number): Element | null => {
     for (const c of containers()) {
       if (!c || !c.isConnected) continue;
       const r = c.getBoundingClientRect();
@@ -104,7 +104,8 @@ export function attachPointerReorder({
   };
 
   /** Place the drop line inside `container` for pointer position `y`. */
-  const showIndicator = (container, y) => {
+  const showIndicator = (container: Element | null, y: number) => {
+    if (!container) return;
     if (!indicator) {
       indicator = document.createElement("div");
       indicator.className = "reorder-indicator";
@@ -119,13 +120,13 @@ export function attachPointerReorder({
     else container.appendChild(indicator);
   };
 
-  const onPointerDown = (e) => {
+  const onPointerDown = (e: PointerEvent) => {
     if (!isEnabled() || e.button > 0) return;
-    const handle = e.target.closest?.(handleSelector);
+    const handle = (e.target as Element | null)?.closest?.(handleSelector);
     if (!handle) return;
     const el = handle.closest(itemSelector);
     if (!el) return;
-    const container = containers().find((c) => c?.contains(el));
+    const container = containers().find((c: Element | null) => c?.contains(el));
     if (!container) return;
 
     item = el;
@@ -138,11 +139,11 @@ export function attachPointerReorder({
     // under the finger, and a mouse that leaves the handle stops reporting.
     try { handle.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
     e.preventDefault();
-    item.classList.add("is-dragging");
+    el.classList.add("is-dragging");
     showIndicator(container, e.clientY);
   };
 
-  const onPointerMove = (e) => {
+  const onPointerMove = (e: PointerEvent) => {
     if (!item || e.pointerId !== pointerId) return;
     e.preventDefault();
     lastX = e.clientX;
@@ -151,7 +152,7 @@ export function attachPointerReorder({
     startAutoScroll();
   };
 
-  const onPointerUp = (e) => {
+  const onPointerUp = (e: PointerEvent) => {
     if (!item || e.pointerId !== pointerId) return;
     const to = indicator?.parentElement || from;
     // The item the drop line sits after — the caller's anchor for "goes here".
@@ -165,7 +166,7 @@ export function attachPointerReorder({
   };
 
   const onCancel = () => { if (item) cleanupDrag(); };
-  const onKeyDown = (e) => { if (e.key === "Escape" && item) cleanupDrag(); };
+  const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape" && item) cleanupDrag(); };
 
   document.addEventListener("pointerdown", onPointerDown, true);
   document.addEventListener("pointermove", onPointerMove, true);

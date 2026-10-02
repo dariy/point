@@ -63,13 +63,13 @@ export function setupTextareaMaximizer(container: HTMLElement) {
           placeholder = document.createElement('div');
           placeholder.className = 'textarea-placeholder';
           placeholder.style.height = parent.offsetHeight + 'px';
-          parent.parentNode.insertBefore(placeholder, parent);
+          parent.parentNode?.insertBefore(placeholder, parent);
           document.body.appendChild(parent);
         }
       } else {
         releaseScrollLock(textarea);
         if (parent && placeholder) {
-          placeholder.parentNode.insertBefore(parent, placeholder);
+          placeholder.parentNode?.insertBefore(parent, placeholder);
           placeholder.remove();
           placeholder = null;
         }

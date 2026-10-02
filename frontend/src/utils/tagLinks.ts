@@ -48,7 +48,43 @@ export function parseTagUrl(url: string): { tag: string, navPath: string | null 
  *
  * Buckets: 'year' (a year/decade tag), 'geo' (carries lat/long), else 'tag'.
  */
-export function tagKind(tag) {
+/** Any tag-like value the tag helpers accept: a bare slug or a tag object. */
+export type TagLike = string | {
+  name?: string;
+  slug?: string;
+  url?: string;
+  kind?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+/** One nav-tree node as buildTagIndex reads it. */
+export interface TagIndexSource {
+  name: string;
+  slug: string;
+  post_count?: number;
+  show_in_ancestors?: boolean;
+  children?: TagIndexSource[];
+}
+
+/** A tag as the index stores it: name, slug and post count. */
+export interface TagIndexTag {
+  name: string;
+  slug: string;
+  count?: number;
+}
+
+export interface TagIndexEntry {
+  tag: TagIndexTag;
+  parentSlug: string | null;
+  isLeaf: boolean;
+  children: TagIndexTag[];
+  showInAncestors: boolean;
+}
+
+export type TagIndex = Map<string, TagIndexEntry>;
+
+export function tagKind(tag: TagLike | null | undefined) {
   if (!tag || typeof tag === 'string') return 'tag';
   if (tag.kind === 'year') return 'year';
   if (typeof tag.latitude === 'number' && typeof tag.longitude === 'number') return 'geo';
@@ -64,7 +100,7 @@ export function tagKind(tag) {
  *   at the call site.
  */
 export function renderTagLink(
-  tag,
+  tag: TagLike,
   { active = false, extra = '', prefix = '', suffix = '' } = {},
 ): RawHtml {
   const name = typeof tag === 'string' ? tag : tag.name;
@@ -75,9 +111,13 @@ export function renderTagLink(
   return html`<a href="${href}" class="${classes}"${isExternal ? html` target="_blank" rel="noopener noreferrer"` : ''}>${raw(prefix)}${name}${raw(suffix)}</a>`;
 }
 
-export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
+export function buildTagIndex(
+  navTags: TagIndexSource[],
+  parentSlug: string | null = null,
+  map: TagIndex = new Map(),
+): TagIndex {
   for (const tag of navTags) {
-    const children = (tag.children || []).map(c => ({ name: c.name, slug: c.slug, count: c.post_count }));
+    const children = (tag.children || []).map((c: TagIndexSource) => ({ name: c.name, slug: c.slug, count: c.post_count }));
     map.set(tag.slug, { 
       tag: { name: tag.name, slug: tag.slug, count: tag.post_count }, 
       parentSlug, 
@@ -90,8 +130,8 @@ export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
   return map;
 }
 
-export function getTagAncestors(slug, index) {
-  const ancestors = [];
+export function getTagAncestors(slug: string, index: TagIndex): TagIndexTag[] {
+  const ancestors: TagIndexTag[] = [];
   const visited = new Set([slug]);
   let entry = index.get(slug);
   while (entry?.parentSlug) {

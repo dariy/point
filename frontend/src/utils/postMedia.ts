@@ -36,7 +36,7 @@ const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", 
  * "a.jpg?s=512&v=x" would otherwise classify as an extension of its own and
  * come back null.
  */
-export function mediaTypeFromPath(path) {
+export function mediaTypeFromPath(path: unknown) {
   const bare = String(path ?? "").split(/[?#]/)[0];
   const ext = (bare.split(".").pop() || "").toLowerCase();
   if (VIDEO_EXTS.has(ext)) return "video";
@@ -46,7 +46,7 @@ export function mediaTypeFromPath(path) {
 }
 
 /** Strip all HTML tags, returning plain text. */
-export function stripHtml(html) {
+export function stripHtml(html: string | null | undefined) {
   if (!html) return "";
   let previous;
   do {
@@ -57,7 +57,7 @@ export function stripHtml(html) {
 }
 
 /** Extract media items from a single HTML fragment (no <hr> splitting). */
-export function extractMedia(html): MediaItem[] {
+export function extractMedia(html: string): MediaItem[] {
   const items: MediaItem[] = [];
   for (const m of html.matchAll(/<img[^>]+>/gi)) {
     const src = (m[0].match(/\ssrc="([^"]*)"/i) || [])[1] || "";
@@ -92,7 +92,7 @@ const VOID_TAGS = new Set([
  * Regex-based to match the rest of this module, which parses without a DOM so
  * it can also run for adjacent posts during preload.
  */
-export function splitTopLevelBlocks(html) {
+export function splitTopLevelBlocks(html: string) {
   const blocks = [];
   const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>/g;
   let depth = 0;
@@ -131,9 +131,9 @@ export function splitTopLevelBlocks(html) {
  * media items, and everything else accumulates into 'html' (text) slides.
  * Shared by the <hr> and no-<hr> paths so both segment content the same way.
  */
-function blocksToItems(blocks): MediaItem[] {
+function blocksToItems(blocks: string[]): MediaItem[] {
   const items: MediaItem[] = [];
-  let pending = [];
+  let pending: string[] = [];
   const flush = () => {
     if (pending.length) {
       items.push({ type: "html", html: pending.join("\n") });
@@ -147,7 +147,9 @@ function blocksToItems(blocks): MediaItem[] {
     // accounted for — so <p><img></p> and a bare list of media URLs both
     // qualify, while a <figure> with a caption does not.
     let residual = text;
-    for (const item of blockMedia) residual = residual.split(item.url).join("");
+    for (const item of blockMedia) {
+      if (item.url) residual = residual.split(item.url).join("");
+    }
     const mediaOnly = blockMedia.length > 0 && residual.trim().length === 0;
     if (mediaOnly) {
       flush();
@@ -172,7 +174,7 @@ function blocksToItems(blocks): MediaItem[] {
  * text lost all its prose the moment it was forced into immersive mode.
  * See point-924a.
  */
-export function mediaFromHtml(html): MediaItem[] {
+export function mediaFromHtml(html: string): MediaItem[] {
   if (html.includes("<hr>") || html.includes("<hr/>") || html.includes("<hr />")) {
     const items: MediaItem[] = [];
     const segments = html.split(/<hr\s*\/?>/i);

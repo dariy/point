@@ -24,7 +24,7 @@ export const MONTH_NAMES = [
 ];
 
 /** "08" → "Aug"; anything unparseable is passed through unchanged. */
-export function monthLabel(month) {
+export function monthLabel(month: string) {
   return MONTH_NAMES[parseInt(month, 10) - 1] || month;
 }
 

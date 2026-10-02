@@ -37,8 +37,8 @@ const FIRST_IMAGE_IN_TEXT_RE =
 /** @param content - Post markdown. */
 export function parseNodes(content: string): EditorNode[] {
   const lines = (content || "").split("\n");
-  const nodes = [];
-  let textBuf = [];
+  const nodes: EditorNode[] = [];
+  let textBuf: string[] = [];
 
   const flushText = () => {
     const text = textBuf.join("\n").trim();
@@ -79,7 +79,7 @@ export function serializeNodes(nodes: EditorNode[]): string {
 }
 
 /** The first image path in markdown content, or null. */
-export function firstImagePath(content) {
+export function firstImagePath(content: string | null | undefined) {
   const match = (content || "").match(FIRST_IMAGE_IN_TEXT_RE);
   return match ? match[1] : null;
 }

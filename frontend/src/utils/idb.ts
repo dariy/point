@@ -28,7 +28,15 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function addShareEntry(entry) {
+/** One queued share, in the shape the header comment gives. */
+export interface ShareEntry {
+  id: string;
+  files: Array<{ name: string, type: string, data: ArrayBuffer }>;
+  title: string;
+  timestamp: number;
+}
+
+export async function addShareEntry(entry: ShareEntry) {
   const db = await openDB();
   const tx = db.transaction(STORE, 'readwrite');
   tx.objectStore(STORE).put(entry);

@@ -54,7 +54,7 @@ function generation() {
  * the media API's `thumbnail_path` says `?s=512&v=…` — and a rung must replace
  * that query, never append to it.
  */
-function barePath(path) {
+function barePath(path: unknown) {
   const s = String(path ?? "");
   const q = s.indexOf("?");
   return q >= 0 ? s.slice(0, q) : s;
@@ -66,7 +66,7 @@ function barePath(path) {
  * thumbnail instead of a wall of 400s. Rounds up: a rung below the requested
  * size would be visibly upscaled.
  */
-function nearestRung(size) {
+function nearestRung(size: unknown) {
   const ladder = thumbLadder();
   const want = Number(size);
   if (!Number.isFinite(want)) return DEFAULT_THUMB_SIZE;

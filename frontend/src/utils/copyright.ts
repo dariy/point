@@ -27,7 +27,7 @@ export function renderCopyright(settings: StoreSettings = {}): RawHtml {
     ? `/posts/${settings.about_post_id}`
     : "/light";
 
-  const tokens = {
+  const tokens: Record<string, RawHtml> = {
     author_name: author ? html`<a href="${aboutHref}">${author}</a>` : html``,
     engine: html`<a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>`,
   };
@@ -42,7 +42,7 @@ export function renderCopyright(settings: StoreSettings = {}): RawHtml {
   // `url` is the verdict only — the attribute interpolates the raw href, so
   // the tag applies safeUrl() to it exactly once. Feeding the already-escaped
   // `url` back in would escape its ampersands a second time.
-  const link = (text, href) => {
+  const link = (text: string, href: string) => {
     const url = safeUrl(href);
     if (url === "#" || url.startsWith("//")) return null;
     return /^https?:\/\//i.test(url)
@@ -66,11 +66,11 @@ export function renderCopyright(settings: StoreSettings = {}): RawHtml {
   // eslint-disable-next-line point/restricted-syntax
   return raw(template.replace(
     /\{\{(\w+)\}\}|\[([^\]]*)\]\(([^)\s]+)\)|([^{[]+|[{[])/g,
-    (m, token, text, href, literal) => {
+    (m: string, token?: string, text?: string, href?: string, literal?: string) => {
       if (token !== undefined)
         return token in tokens ? String(tokens[token]) : escapeHtml(m);
-      if (href !== undefined) return String(link(text, href) ?? escapeHtml(m));
-      return escapeHtml(literal);
+      if (href !== undefined) return String(link(text ?? '', href) ?? escapeHtml(m));
+      return escapeHtml(literal ?? '');
     },
   ));
 }

@@ -41,15 +41,15 @@ const NOOP_LOG = Object.assign(NOOP, {
  * In the release build this returns the shared no-op and the wrappers below are
  * stripped by dead-code elimination.
  */
-export function debugLog(scope) {
+export function debugLog(scope: string) {
   if (!ENABLED) return NOOP_LOG;
   const prefix = `%c[${scope}]`;
   const style = "color:#7aa2f7;font-weight:bold";
-  const log = (...args) => console.debug(prefix, style, ...args);
-  log.warn = (...args) => console.warn(prefix, style, ...args);
-  log.error = (...args) => console.error(prefix, style, ...args);
-  log.group = (...args) => console.group(prefix, style, ...args);
+  const log = (...args: unknown[]) => console.debug(prefix, style, ...args);
+  log.warn = (...args: unknown[]) => console.warn(prefix, style, ...args);
+  log.error = (...args: unknown[]) => console.error(prefix, style, ...args);
+  log.group = (...args: unknown[]) => console.group(prefix, style, ...args);
   log.groupEnd = () => console.groupEnd();
-  log.table = (data) => console.table(data);
+  log.table = (data: unknown) => console.table(data);
   return log;
 }

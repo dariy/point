@@ -25,8 +25,8 @@
  * `beforeUnmount()`, not only from close().
  */
 
-const owners = new Set();
-let previousOverflow = null;
+const owners = new Set<unknown>();
+let previousOverflow: string | null = null;
 
 /**
  * Lock body scrolling on behalf of `owner`. Idempotent per owner.

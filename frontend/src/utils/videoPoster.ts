@@ -24,12 +24,12 @@ const MAX_EDGE = 1280;
 const JPEG_QUALITY = 0.85;
 
 /** True when this File/Blob is something we should try to capture from. */
-export function isVideoFile(file) {
+export function isVideoFile(file: { type?: unknown } | null | undefined) {
   return !!file && typeof file.type === "string" && file.type.startsWith("video/");
 }
 
 /** Resolve on the first of the named events, or reject on <video> error/timeout. */
-function once(video, events, timeoutMs): Promise<void> {
+function once(video: HTMLVideoElement, events: string[], timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     let done = false;
     const cleanup = () => {
@@ -79,7 +79,7 @@ export function sameOriginUrl(value: string): string | null {
  * Pick the timestamp to grab. Many clips open on a black or blank frame, so
  * skip a little way in — but never past a very short clip's own end.
  */
-function posterTime(duration) {
+function posterTime(duration: number) {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
   return Math.min(1, duration / 2);
 }

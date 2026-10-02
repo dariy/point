@@ -16,38 +16,38 @@
  * Attach the handlers and return a function that removes them.
  * `onFile(file)` is called once per dropped image or video.
  */
-export function attachWindowFileDrop({ onFile }) {
+export function attachWindowFileDrop({ onFile }: { onFile: (file: File) => void }) {
   let dragCount = 0;
   let internalDrag = false;
 
-  const hasFiles = (e) => {
-    const types = e.dataTransfer?.types;
+  const hasFiles = (e: Event) => {
+    const types = (e as DragEvent).dataTransfer?.types;
     return !!types && Array.from(types).includes("Files");
   };
 
   const onDragStart = () => { internalDrag = true; };
   const onDragEnd = () => { internalDrag = false; };
 
-  const onDragEnter = (e) => {
+  const onDragEnter = (e: Event) => {
     if (internalDrag || !hasFiles(e)) return;
     dragCount++;
     document.body.classList.add("drag-active");
   };
-  const onDragLeave = (e) => {
+  const onDragLeave = (e: Event) => {
     if (internalDrag || !hasFiles(e)) return;
     dragCount--;
     if (dragCount === 0) document.body.classList.remove("drag-active");
   };
   // Without preventDefault the browser navigates to the dropped file.
-  const onDragOver = (e) => {
+  const onDragOver = (e: Event) => {
     if (!internalDrag) e.preventDefault();
   };
-  const onDrop = (e: DragEvent) => {
+  const onDrop = (e: Event) => {
     if (internalDrag) return;
     e.preventDefault();
     dragCount = 0;
     document.body.classList.remove("drag-active");
-    Array.from(e.dataTransfer.files)
+    Array.from((e as DragEvent).dataTransfer?.files ?? [])
       .filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"))
       .forEach((f) => onFile(f));
   };

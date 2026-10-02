@@ -26,6 +26,8 @@
 // now" and ruinous for "where it is going" — a running glide would fold its own
 // offset into the destination.
 const FLIP = Symbol('flip');
+/** A card, carrying the glide currently playing on it. */
+type FlipSlot = HTMLElement & { [FLIP]?: Animation };
 
 const DURATION = 260;
 const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
@@ -49,10 +51,10 @@ export function flipGrid(
   mutate: () => void,
   { duration = DURATION }: { duration?: number } = {},
 ) {
-  const slots = grid ? [...grid.children] : [];
+  const slots = (grid ? [...grid.children] : []) as FlipSlot[];
   // Nothing to animate from, no animation to play with, or the visitor has
   // asked for none: the change still has to happen, just without the motion.
-  if (!slots.length || typeof slots[0].animate !== 'function' || prefersReducedMotion()) {
+  if (!grid || !slots.length || typeof slots[0].animate !== 'function' || prefersReducedMotion()) {
     mutate();
     return;
   }
@@ -104,7 +106,7 @@ export function flipGrid(
  *
  * @returns the origin to measure from.
  */
-function containingBlockOrigin(grid): {left: number, top: number} {
+function containingBlockOrigin(grid: HTMLElement): {left: number, top: number} {
   for (let node = grid.parentElement; node; node = node.parentElement) {
     const cs = window.getComputedStyle(node);
     if (cs.transform !== 'none' || cs.filter !== 'none' || cs.perspective !== 'none') {
@@ -121,7 +123,12 @@ function containingBlockOrigin(grid): {left: number, top: number} {
  * long as the fade runs, and are dropped afterwards so the class is all that is
  * left holding it — nothing to unwind if the grid is rebuilt mid-fade.
  */
-function fadeOutInPlace(el, rect, origin, duration) {
+function fadeOutInPlace(
+  el: FlipSlot,
+  rect: DOMRect,
+  origin: {left: number, top: number},
+  duration: number,
+) {
   const restore = el.style.cssText;
   Object.assign(el.style, {
     display: 'block',
