@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { getChildrenOf, getSiblingBefore } from '../src/components/light/tags/tagOrdering.js';
+import { getChildrenOf, getSiblingBefore } from '../src/components/light/tags/tagOrdering.ts';
 
 // Travel's stored child order is Japan, France, Peru — deliberately not the
 // order the tags appear in the flat list, and not alphabetical.

@@ -22,7 +22,7 @@ describe('VersionCheckSection', () => {
       dispatchEvent: () => {}
     };
 
-    const mod = await import('../src/components/light/sections/VersionCheckSection.js');
+    const mod = await import('../src/components/light/sections/VersionCheckSection.ts');
     VersionCheckSection = mod.VersionCheckSection;
   });
 

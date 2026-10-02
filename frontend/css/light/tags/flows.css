@@ -1,8 +1,8 @@
 /* ===========================
    Tags manager — select mode & dialogs
    Bulk toolbar and selection styling from
-   frontend/src/components/light/tags/tagFlows.js, and the Move…/Merge…/drop-onto
-   dialogs of TagPickerDialog.js.
+   frontend/src/components/light/tags/tagFlows.ts, and the Move…/Merge…/drop-onto
+   dialogs of TagPickerDialog.ts.
    =========================== */
 
 .tm-bulk-toolbar {

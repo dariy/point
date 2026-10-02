@@ -17,7 +17,7 @@ type ImportOutcome[R any] struct {
 
 // importWorkers is the parallelism used for bulk media import.
 //
-// Thumbnailing is CPU-bound (imaging.Fill with Lanczos), so the useful ceiling
+// Thumbnailing is CPU-bound (Catmull-Rom resampling and JPEG encode), so the useful ceiling
 // is the core count. It is capped anyway: an import is a background convenience
 // running on a machine that is also serving a site, and saturating every core
 // to make a bulk import finish sooner is a bad trade for the visitor waiting on

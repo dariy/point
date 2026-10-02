@@ -20,8 +20,8 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, fire } from './helpers/dom.js';
-import { Component } from '../src/components/Component.js';
-import { html } from '../src/utils/helpers.js';
+import { Component } from '../src/components/Component.ts';
+import { html } from '../src/utils/helpers.ts';
 
 describe('Component — auto-released resources', () => {
   let dom;

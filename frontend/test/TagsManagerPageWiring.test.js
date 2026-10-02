@@ -17,14 +17,14 @@
  *     since the public nav is built from the same hierarchy the flow just moved.
  *
  * The page is mounted for real, against the real admin layout, and asserts on
- * the requests leaving api/client.js.
+ * the requests leaving api/client.ts.
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, type } from './helpers/dom.js';
-import { getToast, setToast, setUser } from '../src/store.js';
+import { getToast, setToast, setUser } from '../src/store.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
@@ -104,7 +104,7 @@ describe('TagsManagerPage — wiring', () => {
     navRefreshes = 0;
     dom.document.addEventListener('nav-changed', () => { navRefreshes++; });
 
-    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js'));
+    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts'));
   });
 
   afterEach(() => {

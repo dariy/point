@@ -9,7 +9,7 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { pluginHost } from '../src/core/pluginHost.js';
+import { pluginHost } from '../src/core/pluginHost.ts';
 
 describe('PostEditPage — Carousel Studio menu item', () => {
   let PostEditPage;
@@ -40,7 +40,7 @@ describe('PostEditPage — Carousel Studio menu item', () => {
       addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => {},
     };
     global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-    ({ default: PostEditPage } = await import('../src/pages/light/PostEditPage.js'));
+    ({ default: PostEditPage } = await import('../src/pages/light/PostEditPage.ts'));
   });
 
   const makePage = (params) => {

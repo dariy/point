@@ -37,7 +37,7 @@ const render = (post) => String(new PostCard(null, { post }).render());
 
 describe('PostCard media', () => {
   before(async () => {
-    ({ PostCard } = await import('../src/components/public/PostCard.js'));
+    ({ PostCard } = await import('../src/components/public/PostCard.ts'));
   });
 
   test('image cards request a thumbnail rung, never the original', () => {
@@ -58,6 +58,8 @@ describe('PostCard media', () => {
         '/2026/03/photo.jpg?s=256 256w',
         '/2026/03/photo.jpg?s=512 512w',
         '/2026/03/photo.jpg?s=1024 1024w',
+        '/2026/03/photo.jpg?s=1600 1600w',
+        '/2026/03/photo.jpg?s=2048 2048w',
       ],
     );
     // Without `sizes` a browser assumes 100vw and takes the top rung for every

@@ -18,7 +18,7 @@
  * by post, and holds the same kind of envelope.
  */
 
-import { api } from './client.js';
+import { api } from './client.ts';
 
 /**
  * The `?post=&block=` query string for one row, `block` omitted when there is no

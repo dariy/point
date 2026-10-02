@@ -11,7 +11,7 @@
  * changed anything worth committing, and how many fingers a tap had.
  */
 
-import { gestureDirection } from "../../../components/light/tags/tagGestures.js";
+import { gestureDirection } from "../../../components/light/tags/tagGestures.ts";
 
 /** Pointer travel below this is a click, not a drag. */
 export const DRAG_SLOP_PX = 3;

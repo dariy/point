@@ -21,7 +21,7 @@ describe('OfflineDataSection', () => {
     dom = domHelper.setupDOM();
     globalThis.window.__MEDIA__ = { gen: 'c0ffee01', sizes: [128, 256, 512, 1024] };
     ({ OfflineDataSection } = await import(
-      '../src/components/light/sections/OfflineDataSection.js'
+      '../src/components/light/sections/OfflineDataSection.ts'
     ));
   });
 

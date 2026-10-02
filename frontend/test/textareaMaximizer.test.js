@@ -61,7 +61,7 @@ describe('textareaMaximizer', () => {
           add: () => {},
           remove: () => {}
         },
-        // The maximizer locks page scrolling through utils/scrollLock.js, which
+        // The maximizer locks page scrolling through utils/scrollLock.ts, which
         // writes document.body.style.overflow — without a style bag the lock is
         // silently skipped and this suite would stop covering it.
         style: {},
@@ -69,7 +69,7 @@ describe('textareaMaximizer', () => {
       }
     };
 
-    const mod = await import('../src/utils/textareaMaximizer.js');
+    const mod = await import('../src/utils/textareaMaximizer.ts');
     setupTextareaMaximizer = mod.setupTextareaMaximizer;
   });
 

@@ -17,7 +17,7 @@ targeted consistency and legibility.
 
 ## What is implemented
 
-- **ViewContext** (`frontend/src/utils/viewContext.js`): the single URL-backed filter
+- **ViewContext** (`frontend/src/utils/viewContext.ts`): the single URL-backed filter
   state `{ tag, years, query, page, perPage, postSlug }`. Pages render from it;
   Timeline, header, search, and pagination *request* context changes and re-render on
   the resulting URL change — components never talk to each other directly. Designed so

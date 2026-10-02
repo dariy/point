@@ -86,7 +86,7 @@ func TestRepository_MediaFolders(t *testing.T) {
 	}
 
 	// ListMediaFiltered no filter
-	items, err := repo.ListMediaFiltered(ctx, "", "", 10, 0)
+	items, err := repo.ListMediaFiltered(ctx, "", "", "", 10, 0)
 	if err != nil {
 		t.Fatalf("ListMediaFiltered failed: %v", err)
 	}
@@ -95,13 +95,13 @@ func TestRepository_MediaFolders(t *testing.T) {
 	}
 
 	// ListMediaFiltered with folder
-	items2, _ := repo.ListMediaFiltered(ctx, "", "2024/06", 10, 0)
+	items2, _ := repo.ListMediaFiltered(ctx, "", "2024/06", "", 10, 0)
 	if len(items2) != 1 {
 		t.Errorf("expected 1 item with folder filter, got %d", len(items2))
 	}
 
 	// CountMediaFiltered
-	count, err := repo.CountMediaFiltered(ctx, "", "")
+	count, err := repo.CountMediaFiltered(ctx, "", "", "")
 	if err != nil || count != 1 {
 		t.Errorf("CountMediaFiltered: err=%v count=%d", err, count)
 	}
@@ -197,5 +197,48 @@ func TestRepository_GetStorageStats(t *testing.T) {
 	}
 	if stats.ImageCount != 1 || stats.VideoCount != 1 {
 		t.Errorf("wrong counts: %+v", stats)
+	}
+}
+
+func TestRepository_SetMediaDimensions(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (1, 'a.webp', 'p1', 'image', 'image/webp', 10, 'c1')`)
+
+	if err := repo.SetMediaDimensions(ctx, 1, 600, 400); err != nil {
+		t.Fatalf("SetMediaDimensions failed: %v", err)
+	}
+	var w, h int64
+	if err := repo.DB().QueryRow(`SELECT width, height FROM media WHERE id = 1`).Scan(&w, &h); err != nil {
+		t.Fatal(err)
+	}
+	if w != 600 || h != 400 {
+		t.Errorf("size = %dx%d, want 600x400", w, h)
+	}
+}
+
+func TestRepository_ReplaceMediaOriginal(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (1, 'a.heic', 'originals/a.heic', 'image', 'image/heic', 10, 'c1')`)
+
+	if err := repo.ReplaceMediaOriginal(ctx, 1, "a.jpg", "originals/a.jpg", "image/jpeg", 20); err != nil {
+		t.Fatalf("ReplaceMediaOriginal failed: %v", err)
+	}
+	var name, path, mt, sum string
+	var size int64
+	if err := repo.DB().QueryRow(`SELECT filename, original_path, mime_type, file_size, checksum FROM media WHERE id = 1`).Scan(&name, &path, &mt, &size, &sum); err != nil {
+		t.Fatal(err)
+	}
+	if name != "a.jpg" || path != "originals/a.jpg" || mt != "image/jpeg" || size != 20 || sum != "c1" {
+		t.Errorf("row = %s %s %s %d %s", name, path, mt, size, sum)
 	}
 }

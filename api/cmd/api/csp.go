@@ -29,7 +29,7 @@ import (
 // Three names, and the list is the security claim, so it is worth reading
 // literally:
 //
-//	point           registered in utils/helpers.js, held by setHTML() /
+//	point           registered in utils/helpers.ts, held by setHTML() /
 //	                insertHTML() / setScriptSrc() / setScriptJSON(). Every
 //	                write this frontend makes goes through it.
 //	point-leaflet   frontend/vendor/leaflet/leaflet.js, patched.

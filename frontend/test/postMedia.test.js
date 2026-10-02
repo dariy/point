@@ -7,7 +7,7 @@ import {
   splitTopLevelBlocks,
   mediaTypeFromPath,
   stripHtml,
-} from '../src/utils/postMedia.js';
+} from '../src/utils/postMedia.ts';
 
 const types = (items) => items.map((i) => i.type);
 

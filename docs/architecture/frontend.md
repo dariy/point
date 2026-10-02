@@ -50,7 +50,7 @@ Every UI element inherits from `Component`. The class handles the contract
 between a component and its DOM node.
 
 ```javascript
-// frontend/src/components/Component.js
+// frontend/src/components/Component.ts
 
 export class Component {
   /**
@@ -166,7 +166,7 @@ export class Component {
 
   /**
    * Helper: subscribe to a store key for the lifetime of the current render.
-   * Takes one of store.js's `on*` accessors, not a store and a string key.
+   * Takes one of store.ts's `on*` accessors, not a store and a string key.
    */
   subscribeStore(subscribe, callback) {
     this.registerCleanup(subscribe(callback));
@@ -448,7 +448,7 @@ there is nothing to update yet.
 The cost of "handled" is that the component now owns keeping its DOM true to its
 props. Two helpers carry most of that:
 
-**`reconcileList(container, items, keyOf, ops)`** — `frontend/src/utils/reconcileList.js`.
+**`reconcileList(container, items, keyOf, ops)`** — `frontend/src/utils/reconcileList.ts`.
 Brings a container's children into line with a list, matching nodes to items by
 key rather than by position, so a survivor is *moved* rather than rebuilt. Nodes
 carry their key in `data-rkey`; `create` gets it stamped for free, and
@@ -461,7 +461,7 @@ Departures are detached before the arrivals are placed, which is what makes a
 list that only lost a middle element cost zero moves. An element without
 `data-rkey` belongs to something else and is never moved, keyed or removed.
 
-**`preserveInteraction(container, fn)`** — `frontend/src/utils/preserveInteraction.js`.
+**`preserveInteraction(container, fn)`** — `frontend/src/utils/preserveInteraction.ts`.
 Snapshots focus, caret and scroll, runs `fn`, puts them back — for the rebuilds
 that still happen. The snapshot is a *selector*, not a node reference, because
 the node is about to stop existing: an `id`, a `name`, or a `data-action`, and
@@ -472,16 +472,16 @@ snapshot with the restore handed back as a function, for a page that reloads
 across an `await` (`PostsListPage._load`).
 
 The sites this replaced: `PostGrid.reconcile()` was this loop written by hand
-for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.js`) and
-`utils/gridFlip.js` still cover what a reconciler cannot — a swipe handed across
+for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.ts`) and
+`utils/gridFlip.ts` still cover what a reconciler cannot — a swipe handed across
 a route change, and the FLIP animation over a zoom step.
 
 ### 2.6 — Example: Simple Component
 
 ```javascript
-// frontend/src/components/shared/Pagination.js
+// frontend/src/components/shared/Pagination.ts
 import { Component } from '../Component.js';
-import { html } from '../../utils/helpers.js';
+import { html } from '../../utils/helpers.ts';
 
 export class Pagination extends Component {
   // props: { page, pages, total, minPage, onPage }
@@ -532,11 +532,11 @@ template escapes every interpolation on the way through, and
 ### 2.7 — Example: Async Component (loads data)
 
 ```javascript
-// frontend/src/pages/public/HomePage.js
-import { Component } from '../../components/Component.js';
-import { PostGrid } from '../../components/public/PostGrid.js';
-import { html } from '../../utils/helpers.js';
-import { pagesApi } from '../../api/pages.js';
+// frontend/src/pages/public/HomePage.ts
+import { Component } from '../../components/Component.ts';
+import { PostGrid } from '../../components/public/PostGrid.ts';
+import { html } from '../../utils/helpers.ts';
+import { pagesApi } from '../../api/pages.ts';
 
 export class HomePage extends Component {
   // props: {} (no external props)
@@ -601,37 +601,37 @@ export class HomePage extends Component {
 ### 3.1 — Route Table
 
 ```javascript
-// frontend/src/router.js
+// frontend/src/router.ts
 
-import { store } from './store.js';
+import { store } from './store.ts';
 
 // Public routes (no auth required)
 const PUBLIC_ROUTES = [
   {
     pattern: /^\/$/,
-    component: () => import('./pages/public/HomePage.js').then(m => m.HomePage),
+    component: () => import('./pages/public/HomePage.ts').then(m => m.HomePage),
   },
   {
     pattern: /^\/posts\/([^/]+)$/,
-    component: () => import('./pages/public/PostPage.js').then(m => m.PostPage),
+    component: () => import('./pages/public/PostPage.ts').then(m => m.PostPage),
     params: ['slug'],
   },
   {
     pattern: /^\/tag\/([^/]+)$/,
-    component: () => import('./pages/public/TagPage.js').then(m => m.TagPage),
+    component: () => import('./pages/public/TagPage.ts').then(m => m.TagPage),
     params: ['slug'],
   },
   {
     pattern: /^\/tags$/,
-    component: () => import('./pages/public/TagsPage.js').then(m => m.TagsPage),
+    component: () => import('./pages/public/TagsPage.ts').then(m => m.TagsPage),
   },
   {
     pattern: /^\/map$/,
-    component: () => import('./pages/public/MapPage.js').then(m => m.MapPage),
+    component: () => import('./pages/public/MapPage.ts').then(m => m.MapPage),
   },
   {
     pattern: /^\/preview\/([^/]+)$/,
-    component: () => import('./pages/public/PreviewPage.js').then(m => m.PreviewPage),
+    component: () => import('./pages/public/PreviewPage.ts').then(m => m.PreviewPage),
     params: ['token'],
   },
 ];
@@ -640,45 +640,45 @@ const PUBLIC_ROUTES = [
 const LIGHT_ROUTES = [
   {
     pattern: /^\/light\/login$/,
-    component: () => import('./pages/light/LoginPage.js').then(m => m.LoginPage),
+    component: () => import('./pages/light/LoginPage.ts').then(m => m.LoginPage),
     public: true,
   },
   {
     pattern: /^\/light\/?$/,
-    component: () => import('./pages/light/DashboardPage.js').then(m => m.DashboardPage),
+    component: () => import('./pages/light/DashboardPage.ts').then(m => m.DashboardPage),
   },
   {
     pattern: /^\/light\/posts$/,
-    component: () => import('./pages/light/PostsListPage.js').then(m => m.PostsListPage),
+    component: () => import('./pages/light/PostsListPage.ts').then(m => m.PostsListPage),
   },
   {
     pattern: /^\/light\/posts\/new$/,
-    component: () => import('./pages/light/PostEditPage.js').then(m => m.PostEditPage),
+    component: () => import('./pages/light/PostEditPage.ts').then(m => m.PostEditPage),
   },
   {
     pattern: /^\/light\/posts\/(\d+)$/,
-    component: () => import('./pages/light/PostEditPage.js').then(m => m.PostEditPage),
+    component: () => import('./pages/light/PostEditPage.ts').then(m => m.PostEditPage),
     params: ['id'],
   },
   {
     pattern: /^\/light\/media$/,
-    component: () => import('./pages/light/MediaPage.js').then(m => m.MediaPage),
+    component: () => import('./pages/light/MediaPage.ts').then(m => m.MediaPage),
   },
   {
     pattern: /^\/light\/tags$/,
-    component: () => import('./pages/light/TagsManagerPage.js').then(m => m.TagsManagerPage),
+    component: () => import('./pages/light/TagsManagerPage.ts').then(m => m.TagsManagerPage),
   },
   {
     pattern: /^\/light\/settings$/,
-    component: () => import('./pages/light/SettingsPage.js').then(m => m.SettingsPage),
+    component: () => import('./pages/light/SettingsPage.ts').then(m => m.SettingsPage),
   },
   {
     pattern: /^\/light\/security$/,
-    component: () => import('./pages/light/SecurityPage.js').then(m => m.SecurityPage),
+    component: () => import('./pages/light/SecurityPage.ts').then(m => m.SecurityPage),
   },
   {
     pattern: /^\/light\/system$/,
-    component: () => import('./pages/light/SystemPage.js').then(m => m.SystemPage),
+    component: () => import('./pages/light/SystemPage.ts').then(m => m.SystemPage),
   },
 ];
 
@@ -794,10 +794,10 @@ export class Router {
 ### 3.3 — App Entry Point
 
 ```javascript
-// frontend/src/app.js
-import { Router } from './router.js';
-import { store } from './store.js';
-import { authApi } from './api/auth.js';
+// frontend/src/app.ts
+import { Router } from './router.ts';
+import { store } from './store.ts';
+import { authApi } from './api/auth.ts';
 
 const router = new Router(document.getElementById('app'));
 
@@ -823,7 +823,7 @@ A minimal reactive key-value store. Components subscribe to changes in
 specific keys.
 
 ```javascript
-// frontend/src/store.js
+// frontend/src/store.ts
 
 class Store {
   constructor() {
@@ -910,23 +910,23 @@ shows up as a component that renders empty forever and a report that says "the
 toast never appears". The keys with a single call site are the worst of it,
 because there is no second use to compare a typo against.
 
-So `store.js` binds each key once and exports a get/set/subscribe triple, and
+So `store.ts` binds each key once and exports a get/set/subscribe triple, and
 the rest of the app imports those. esbuild resolves named imports at build time,
 which turns the same typo into a build failure that names the fix:
 
 ```
-✘ [ERROR] No matching export in "store.js" for import "getUsr"
+✘ [ERROR] No matching export in "store.ts" for import "getUsr"
           Did you mean to import "getUser" instead?
 ```
 
-A `no-restricted-syntax` rule (`eslint.config.js`) rejects a string-literal key
-outside `store.js` — for `merge` and `subscribeSelector` as much as for the
+A `point/restricted-syntax` lint rule (`scripts/oxlint-point.mjs`) rejects a string-literal key
+outside `store.ts` — for `merge` and `subscribeSelector` as much as for the
 basic three — so the raw form cannot come back. A hand-written list of
-"well-known keys" lived here and in a comment at the tail of `store.js` before
+"well-known keys" lived here and in a comment at the tail of `store.ts` before
 this; both had drifted to about a third of the real set, which is what a
 contract kept as prose does.
 
-**The keys, as exported (`frontend/src/store.js`):**
+**The keys, as exported (`frontend/src/store.ts`):**
 
 | Key | Accessors | Type |
 |---|---|---|
@@ -962,7 +962,7 @@ rather than growing wherever a template literal happens to be written.
 ### 5.1 — Base Client
 
 ```javascript
-// frontend/src/api/client.js
+// frontend/src/api/client.ts
 
 export class ApiError extends Error {
   constructor(status, data) {
@@ -1026,7 +1026,7 @@ export const api = {
 Each module mirrors its backend router:
 
 ```javascript
-// frontend/src/api/posts.js
+// frontend/src/api/posts.ts
 import { api } from './client.js';
 
 export const postsApi = {
@@ -1043,7 +1043,7 @@ export const postsApi = {
 ```
 
 ```javascript
-// frontend/src/api/pages.js
+// frontend/src/api/pages.ts
 import { api } from './client.js';
 
 export const pagesApi = {
@@ -1062,9 +1062,9 @@ frontend/
 |-- index.html                      <- SPA shell (never changes)
 |
 |-- src/
-|   |-- app.js                      <- Bootstrap: auth check + router start
-|   |-- router.js                   <- Router class + route table
-|   |-- store.js                    <- Global reactive state
+|   |-- app.ts                      <- Bootstrap: auth check + router start
+|   |-- router.ts                   <- Router class + route table
+|   |-- store.ts                    <- Global reactive state
 |   |
 |   |-- api/
 |   |   |-- client.js               <- Base fetch wrapper
@@ -1080,32 +1080,32 @@ frontend/
 |   |   |-- Component.js            <- Base class
 |   |   |
 |   |   |-- shared/                 <- Used in both public + light
-|   |   |   |-- Modal.js
-|   |   |   |-- Toast.js
-|   |   |   |-- Pagination.js
+|   |   |   |-- Modal.ts
+|   |   |   |-- Toast.ts
+|   |   |   |-- Pagination.ts
 |   |   |   |-- TagBadge.js
 |   |   |   |-- ThemeToggle.js
-|   |   |   |-- ConfirmDialog.js
+|   |   |   |-- ConfirmDialog.ts
 |   |   |   `-- LoadingSpinner.js
 |   |   |
 |   |   |-- public/                 <- Public blog components
 |   |   |   |-- PublicHeader.js
 |   |   |   |-- PublicFooter.js
-|   |   |   |-- PostCard.js
-|   |   |   |-- PostGrid.js
-|   |   |   |-- PostContent.js
-|   |   |   |-- MediaLightbox.js
+|   |   |   |-- PostCard.ts
+|   |   |   |-- PostGrid.ts
+|   |   |   |-- PostContent.ts
+|   |   |   |-- MediaLightbox.ts
 |   |   |   |-- TagCloud.js
 |   |   |   `-- ImmersiveViewer.js
 |   |   |
 |   |   `-- light/                  <- Admin panel components
-|   |       |-- AdminLayout.js
+|   |       |-- AdminLayout.ts
 |   |       |-- Sidebar.js
 |   |       |-- StatusSelect.js
 |   |       |-- TagSelector.js
 |   |       |-- MediaPicker.js
 |   |       |-- MediaDropZone.js
-|   |       |-- MarkdownEditor.js
+|   |       |-- MarkdownEditor.ts
 |   |       |-- DataTable.js
 |   |       |-- TreeView.js
 |   |       |-- StatCard.js
@@ -1114,27 +1114,27 @@ frontend/
 |   |
 |   |-- pages/
 |   |   |-- public/
-|   |   |   |-- HomePage.js
-|   |   |   |-- PostPage.js
-|   |   |   |-- TagPage.js
+|   |   |   |-- HomePage.ts
+|   |   |   |-- PostPage.ts
+|   |   |   |-- TagPage.ts
 |   |   |   |-- TagsPage.js
 |   |   |   |-- MapPage.js
-|   |   |   `-- PreviewPage.js
+|   |   |   `-- PreviewPage.ts
 |   |   |
 |   |   `-- light/
-|   |       |-- LoginPage.js
-|   |       |-- DashboardPage.js
-|   |       |-- PostsListPage.js
-|   |       |-- PostEditPage.js
-|   |       |-- MediaPage.js
-|   |       |-- TagsManagerPage.js
-|   |       |-- SettingsPage.js
-|   |       |-- SecurityPage.js
-|   |       `-- SystemPage.js
+|   |       |-- LoginPage.ts
+|   |       |-- DashboardPage.ts
+|   |       |-- PostsListPage.ts
+|   |       |-- PostEditPage.ts
+|   |       |-- MediaPage.ts
+|   |       |-- TagsManagerPage.ts
+|   |       |-- SettingsPage.ts
+|   |       |-- SecurityPage.ts
+|   |       `-- SystemPage.ts
 |   |
 |   `-- utils/
-|       |-- formatters.js           <- Date, file size, truncation
-|       |-- helpers.js              <- DOM helpers, escapeHtml, debounce
+|       |-- formatters.ts           <- Date, file size, truncation
+|       |-- helpers.ts              <- DOM helpers, escapeHtml, debounce
 |       `-- validators.js          <- Client-side input validation
 |
 `-- css/
@@ -1271,7 +1271,7 @@ is needed, it must be server-generated and sanitized.
 
 ```javascript
 // Global toast system via store:
-import { setToast } from '../store.js';
+import { setToast } from '../store.ts';
 setToast({ message: 'Post saved!', type: 'success' });
 ```
 
@@ -1321,7 +1321,7 @@ document.documentElement.setAttribute('data-theme', theme);
 There is exactly one HTML sink in `frontend/src`, and it is three lines long:
 
 ```javascript
-// frontend/src/utils/helpers.js
+// frontend/src/utils/helpers.ts
 export function setHTML(el, markup) {
   el.innerHTML = trusted(markup, 'setHTML');
 }
@@ -1336,7 +1336,7 @@ what the one before it misses:
    through — `safeUrl()` in `href`/`src` position, `escapeHtml()` everywhere
    else — so no caller applies either by hand and no caller forgets to.
    `raw()` is the opt-out, and it belongs around module-level constants (the
-   SVG blobs in `utils/icons.js`) and around HTML the server sanitized before
+   SVG blobs in `utils/icons.ts`) and around HTML the server sanitized before
    storing it (a post body). Nothing else.
 
 2. **`setHTML()` refuses anything else.** The tag returns a `RawHtml`, not a
@@ -1359,13 +1359,13 @@ what the one before it misses:
    is defence in depth on top of the lint rule, never a replacement.
 
    **The three names are the security claim.** `point` is the frontend's own,
-   in `utils/helpers.js`. The other two are waivers for vendored libraries that
+   in `utils/helpers.ts`. The other two are waivers for vendored libraries that
    write their own markup and were patched to route it through a policy instead
    of a plain string:
 
    | Policy | Lives in | Sinks |
    |---|---|---|
-   | `point` | `frontend/src/utils/helpers.js` | every write this frontend makes |
+   | `point` | `frontend/src/utils/helpers.ts` | every write this frontend makes |
    | `point-leaflet` | `frontend/vendor/leaflet/leaflet.js` | feature detection at import time, zoom buttons, attribution, scale, layer control, popup content, popup close button, `divIcon` markup |
    | `point-codejar` | `frontend/vendor/codejar/codejar.js` | undo restore, redo restore, and the escaped-text paste via `execCommand('insertHTML')` |
 
@@ -1382,7 +1382,7 @@ what the one before it misses:
    Prism needed no waiver. `Prism.highlightElement` writes the highlighted
    markup itself, so `PostContent` calls `Prism.highlight()` — the
    string-returning form the editors already used — and writes the result with
-   `setHTML()`. `utils/prismManual.js` switches off the automatic pass
+   `setHTML()`. `utils/prismManual.ts` switches off the automatic pass
    prism-core otherwise runs on itself at load, which went through
    `highlightElement` and was duplicated work even before it became a
    violation.
@@ -1394,7 +1394,7 @@ what the one before it misses:
    the same set, and fails if anything calls `highlightElement` again.
    `build-js.sh` additionally fails if a `createPolicy()` call lands in more
    than one chunk — a name mints once, so a graph split that duplicated
-   `helpers.js` would silently take the write path down on every page loading
+   `helpers.ts` would silently take the write path down on every page loading
    both chunks. `frontend/e2e/trustedTypes.test.js` then drives a real Chromium
    under the real header and asserts not just zero violations but that the vendored
    writers *produced* something — highlighted tokens, zoom buttons, an
@@ -1402,11 +1402,13 @@ what the one before it misses:
    buffer. Zero violations is otherwise trivially satisfied by a map that never
    initialises.
 
-`eslint.config.js` is what keeps the funnel a funnel: a bare `.innerHTML =`,
+The Oxlint rule `point/restricted-syntax` (`scripts/oxlint-point.mjs`, enabled in
+`.oxlintrc.json`) is what keeps the funnel a funnel: a bare `.innerHTML =`,
 `.outerHTML =` or `insertAdjacentHTML(` anywhere under `frontend/src` or
 `demo/mock` is an error, as is `raw()` around a template literal or a call, or
 an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.js`
-proves each of those rules still fires.
+proves each of those rules still fires, in `.js` and `.ts`, and through each
+TypeScript cast (`as`, `!`, `satisfies`, `<T>`).
 
 Three things sit outside all of this and are still worth stating:
 
@@ -1486,83 +1488,49 @@ For production, the same files are served as-is. If minification is ever
 desired, it can be added as an optional pre-deployment step without
 changing the architecture.
 
-### Typechecking the JSDoc
+### Typechecking
 
 ```bash
-npm run typecheck        # tsc --noEmit -p jsconfig.json
+npm run typecheck        # tsc -p tsconfig.json
 ```
 
-The JSDoc annotations across `frontend/src` are types, and this is what makes
-them binding. There are no `.ts` files and nothing is emitted — `tsc` reads the
-comments, and `jsconfig.json` sets `checkJs: true`, so **a new file is checked
-by default**. `scripts/check.sh` and CI both run it.
+`frontend/src` is TypeScript. `scripts/check.sh` fails on a `.js` file there;
+JS stays only in `frontend/sw.js`, `frontend/vendor/`, the tests and `demo/`.
+Nothing is emitted: Node and the bundler remove the types. The conventions
+follow from that:
 
-Three things to know before adding annotations:
-
-- **Files not yet clean carry `// @ts-nocheck` on line 1**, naming the issue that
-  will remove it. Adding a pragma to a file that does not have one is going
-  backwards; grep for it before assuming an area is covered.
+- **Erasable syntax only** (`erasableSyntaxOnly`): no `enum`, no `namespace`,
+  no parameter properties. Type-only imports use `import type`
+  (`verbatimModuleSyntax`).
+- **An import names the real file**: `./x.ts` for a TS module, `./x.js` for a
+  JS module (`allowImportingTsExtensions`).
+- **Shapes**: object shapes are `interface`. Unions, aliases and mapped types
+  are `type`.
+- **Doc comments keep their prose** and have no `{Type}` part:
+  `@param name - text`, `@returns text`.
+- **Casts use `as`**, never `<T>expr`. Do not add `!` while `strict` is off. Do
+  not add `any`, `@ts-ignore` or `@ts-nocheck` to reduce an error count.
+- **Class fields**: a class declares every `this.<prop>` it assigns as a typed
+  field.
 - **Globals live in `frontend/types/globals.d.ts`** — `__DEBUG__`, the payloads
   the server injects (`window.__MEDIA__`, `window.__PLUGINS__`), and the browser
   APIs missing from TypeScript's DOM lib (Trusted Types). Declare a genuine
   global there rather than casting at each call site.
-- **The untyped boundaries are generic, not `any`.** `api.get()` / `api.request()`
-  and `store.get()` take a `@template` that defaults to `unknown`, so the shape
-  flows in from whatever the caller declares:
+- **The untyped boundaries are generic, not `any`.** `api.get()` /
+  `api.request()` and `store.get()` take a type parameter that defaults to
+  `unknown`, so the shape flows in from whatever the caller declares:
 
-  ```javascript
-  /** @returns {Promise<{tags: any[], total: number}>} */
-  export function getTags() {
-    return api.get('/api/tags');    // T comes from the @returns above
+  ```typescript
+  export function getTags(): Promise<{ tags: Tag[]; total: number }> {
+    return api.get('/api/tags');    // T comes from the return type
   }
-
-  /** @type {Record<string, any>} */
-  const settings = store.get('settings') || {};
   ```
 
   Declaring nothing leaves it `unknown` and the caller has to narrow — which is
-  the honest answer for a wire format, and the reason the annotation on the
-  wrapper is worth writing.
+  the honest answer for a wire format.
 
 `strict` stays off on purpose: turning it on adds null-safety errors to every
-DOM read at once, which is separate work from checking what is annotated today.
-
----
-
-## Build & Deployment
-
-### Single-container deployment
-
-```
-Docker container
-|-- uvicorn (FastAPI, port 8000)
-|   |-- /api/* -> JSON API
-|   |-- /assets/* -> frontend/ static files
-|   `-- /{any} -> frontend/index.html (SPA fallback)
-`-- /data/ (volume: SQLite DB, media files, backups)
-```
-
-No nginx required for basic deployment. For scale, put nginx in front:
-
-```
-nginx
-|-- /api/* -> proxy to uvicorn:8000
-|-- /assets/* -> static file serve from frontend/
-`-- / -> frontend/index.html
-```
-
-### Docker changes
-
-```dockerfile
-# Dockerfile (addition to existing COPY statements)
-COPY frontend/ /app/frontend/
-```
-
-### Environment config
-
-The frontend has no environment variables. The API base URL is always
-`/api` (same origin). The backend's `CORS_ORIGINS` setting controls
-cross-origin access during development.
+DOM read at once, which is separate work.
 
 ---
 
@@ -1572,7 +1540,7 @@ cross-origin access during development.
 
 | Item | Convention | Example |
 |---|---|---|
-| Component files | PascalCase | `PostCard.js` |
+| Component files | PascalCase | `PostCard.ts` |
 | Component classes | PascalCase | `class PostCard` |
 | API modules | camelCase | `postsApi` |
 | CSS classes | BEM-ish kebab | `.post-card__title` |

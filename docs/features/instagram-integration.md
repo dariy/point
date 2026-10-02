@@ -33,6 +33,11 @@ containers + a `CAROUSEL` parent for multi-image), then publish it
 - Rate limit: 25 published posts / 24 h per account.
 - Long-lived tokens last ~60 days; a daily scheduler task refreshes them within ~7 days
   of expiry.
+- An auto cross-post on publish runs as a durable job of kind `instagram.crosspost`
+  (`PostService.crossPostToInstagramAsync` enqueues it; see the `jobs` table). A failed
+  attempt or a restart during the post makes the job run again, with backoff, up to 5
+  attempts. Before each attempt the job reads the post: if `instagram_media_id` is set,
+  the post is already on Instagram and the job stops, so a retry does not post twice.
 
 ### Storage
 

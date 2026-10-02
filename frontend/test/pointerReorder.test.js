@@ -22,7 +22,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM, fire } from './helpers/dom.js';
-import { attachPointerReorder } from '../src/utils/pointerReorder.js';
+import { attachPointerReorder } from '../src/utils/pointerReorder.ts';
 
 /**
  * The editor's shape: two cards in a vertical list, the second one holding a

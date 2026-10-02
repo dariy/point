@@ -24,7 +24,7 @@ describe('getMediaByPaths', () => {
       ]);
     };
 
-    const { getMediaByPaths } = await import('../src/api/media.js');
+    const { getMediaByPaths } = await import('../src/api/media.ts');
     const byPath = await getMediaByPaths(['/2026/03/a.jpg', '/2026/03/b, c.jpg']);
 
     // Repeated keys, not a joined string: a filename may contain the separator.
@@ -41,7 +41,7 @@ describe('getMediaByPaths', () => {
       return jsonResponse([]);
     };
 
-    const { getMediaByPaths } = await import('../src/api/media.js');
+    const { getMediaByPaths } = await import('../src/api/media.ts');
     await getMediaByPaths(['/2026/03/a.jpg', '/2026/03/a.jpg', '', undefined]);
 
     const params = new URLSearchParams(requested.split('?')[1]);
@@ -56,7 +56,7 @@ describe('getMediaByPaths', () => {
     };
 
     const paths = Array.from({ length: 250 }, (_, i) => `/2026/03/${i}.jpg`);
-    const { getMediaByPaths } = await import('../src/api/media.js');
+    const { getMediaByPaths } = await import('../src/api/media.ts');
     await getMediaByPaths(paths);
 
     assert.deepStrictEqual(batches.map((b) => b.length), [100, 100, 50]);
@@ -68,7 +68,7 @@ describe('getMediaByPaths', () => {
       throw new Error('should not fetch');
     };
 
-    const { getMediaByPaths } = await import('../src/api/media.js');
+    const { getMediaByPaths } = await import('../src/api/media.ts');
     assert.deepStrictEqual(await getMediaByPaths([]), {});
   });
 });

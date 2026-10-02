@@ -10,10 +10,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"point-api/internal/config"
+	"point-api/internal/migrations"
 	"point-api/internal/models"
 	"point-api/internal/services"
 
@@ -946,7 +949,7 @@ func TestSystemHandler_GetHealth(t *testing.T) {
 	registry := services.NewHealthRegistry()
 	registry.Record("daily backup", nil)
 	registry.Record("session cleanup", errors.New("db is gone"))
-	h = h.WithHealth(registry)
+	h = h.WithHealth(registry).WithFFmpeg(&services.FFmpeg{FFmpegPath: "/x/ffmpeg", FFprobePath: "/x/ffprobe"})
 
 	e := echo.New()
 	rec := httptest.NewRecorder()
@@ -995,6 +998,49 @@ func TestSystemHandler_GetHealth(t *testing.T) {
 	if resp.Tasks[1].LastRun == "" {
 		t.Error("failed task should still report last_run")
 	}
+	if !strings.Contains(rec.Body.String(), `"capabilities":{"ffmpeg":true}`) {
+		t.Errorf("expected ffmpeg present with WithFFmpeg, got %s", rec.Body.String())
+	}
+}
+
+// The backup block lets a host's dead-man check read the newest archive time
+// with an API key. It comes from the disk, and managed mode reports backups as
+// enabled even when the admin switched them off.
+func TestSystemHandler_GetHealth_Backup(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	h.systemService.WithManagedBackups(true)
+	ctx := context.Background()
+	if err := h.settingsService.SetSetting(ctx, "enable_backup", "false", "boolean"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(h.dataPath, "backups")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "backup_x.tar.gz"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/health", nil), rec)
+	if err := h.GetHealth(c); err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	var resp struct {
+		Backup struct {
+			Managed    bool   `json:"managed"`
+			Enabled    bool   `json:"enabled"`
+			LastBackup string `json:"last_backup"`
+		} `json:"backup"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Backup.Managed || !resp.Backup.Enabled || resp.Backup.LastBackup == "" {
+		t.Errorf("backup = %+v, want managed, enabled, last_backup set", resp.Backup)
+	}
 }
 
 // No registry attached (or nothing has run yet) must be an empty report, not
@@ -1014,6 +1060,9 @@ func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"tasks":[]`) {
 		t.Errorf("expected an empty task list, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"capabilities":{"ffmpeg":false}`) {
+		t.Errorf("expected ffmpeg absent without WithFFmpeg, got %s", rec.Body.String())
 	}
 }
 
@@ -1106,4 +1155,105 @@ func makeMinimalJPEGWithComment(t *testing.T, comment string) []byte {
 	out = append(out, seg...)
 	out = append(out, base[2:]...)
 	return out
+}
+
+func TestSystemHandler_ListAndRetryJobs(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := migrations.Run(ctx, h.repo); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	jobs := services.NewJobService(h.repo)
+	h = h.WithJobs(jobs)
+	id, err := jobs.Enqueue(ctx, "k", map[string]any{"post_id": 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.repo.FinishJob(ctx, id, services.JobFailed, "boom", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/api/system/jobs", nil), rec)
+	if err := h.ListJobs(c); err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	var resp struct {
+		Counts map[string]int64 `json:"counts"`
+		Jobs   []map[string]any `json:"jobs"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Counts["failed"] != 1 || len(resp.Jobs) != 1 || resp.Jobs[0]["last_error"] != "boom" {
+		t.Fatalf("resp = %+v", resp)
+	}
+	if _, ok := resp.Jobs[0]["payload"]; ok {
+		t.Fatal("raw payload is in the response")
+	}
+
+	retry := func(idStr string) error {
+		c := e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder())
+		c.SetParamNames("id")
+		c.SetParamValues(idStr)
+		return h.RetryJob(c)
+	}
+	if err := retry(strconv.FormatInt(id, 10)); err != nil {
+		t.Fatalf("RetryJob: %v", err)
+	}
+	if j, _ := h.repo.GetJob(ctx, id); j.State != services.JobQueued {
+		t.Fatalf("state = %q", j.State)
+	}
+	var he *echo.HTTPError
+	if err := retry(strconv.FormatInt(id, 10)); !errors.As(err, &he) || he.Code != http.StatusNotFound {
+		t.Fatalf("second retry: %v", err)
+	}
+	if err := retry("x"); !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+		t.Fatalf("bad id: %v", err)
+	}
+
+	// Clear failed removes only failed rows.
+	if err := h.repo.FinishJob(ctx, id, services.JobFailed, "boom", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := jobs.Enqueue(ctx, "k", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	c = e.NewContext(httptest.NewRequest(http.MethodPost, "/api/system/jobs/clear-failed", nil), rec)
+	if err := h.ClearFailedJobs(c); err != nil {
+		t.Fatalf("ClearFailedJobs: %v", err)
+	}
+	var cleared struct {
+		Deleted int64 `json:"deleted"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &cleared); err != nil || cleared.Deleted != 1 {
+		t.Fatalf("clear resp = %s, %v", rec.Body.String(), err)
+	}
+	if _, err := h.repo.GetJob(ctx, id); err == nil {
+		t.Fatal("failed job remains")
+	}
+	if _, err := h.repo.GetJob(ctx, queued); err != nil {
+		t.Fatalf("queued job gone: %v", err)
+	}
+}
+
+func TestSystemHandler_ClearFailedJobsNoStoreAndError(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	if err := h.ClearFailedJobs(e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), rec)); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("no store: %v, %d", err, rec.Code)
+	}
+	h = h.WithJobs(services.NewJobService(h.repo))
+	_ = h.repo.Close()
+	var he *echo.HTTPError
+	err := h.ClearFailedJobs(e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder()))
+	if !errors.As(err, &he) || he.Code != http.StatusInternalServerError {
+		t.Fatalf("closed DB: %v", err)
+	}
 }

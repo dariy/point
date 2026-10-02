@@ -26,6 +26,8 @@ func TestArticleSrcset_Landscape(t *testing.T) {
 		"/2026/03/photo.jpg?s=256&v=abc 256w, " +
 		"/2026/03/photo.jpg?s=512&v=abc 512w, " +
 		"/2026/03/photo.jpg?s=1024&v=abc 1024w, " +
+		"/2026/03/photo.jpg?s=1600&v=abc 1600w, " +
+		"/2026/03/photo.jpg?s=2048&v=abc 2048w, " +
 		"/2026/03/photo.jpg 4000w"
 	if got != want {
 		t.Errorf("srcset = %q, want %q", got, want)
@@ -41,6 +43,7 @@ func TestArticleSrcset_PortraitDescriptorsAreRealWidths(t *testing.T) {
 		"/2026/03/p.jpg?s=256&v=abc 144w, " +
 		"/2026/03/p.jpg?s=512&v=abc 288w, " +
 		"/2026/03/p.jpg?s=1024&v=abc 576w, " +
+		"/2026/03/p.jpg?s=1600&v=abc 900w, " +
 		"/2026/03/p.jpg 1080w"
 	if got != want {
 		t.Errorf("srcset = %q, want %q", got, want)
@@ -109,7 +112,37 @@ func TestInjectArticleSrcset(t *testing.T) {
 		t.Errorf("surrounding markup lost: %q", out)
 	}
 	if strings.Contains(out, "<picture") {
-		t.Errorf("emitted a <picture>, which postMedia.js cannot parse: %q", out)
+		t.Errorf("emitted a <picture>, which postMedia.ts cannot parse: %q", out)
+	}
+}
+
+// The stored size becomes width and height, so the browser reserves the box
+// before a lazy image loads. An author's own size wins.
+func TestInjectArticleSrcset_WidthHeight(t *testing.T) {
+	media := []models.Medium{img("/2026/03/photo.jpg", 4000, 3000)}
+
+	out := injectArticleSrcset(`<img src="/2026/03/photo.jpg" alt="a">`, media, "g")
+	if !strings.Contains(out, ` width="4000" height="3000"`) {
+		t.Errorf("width and height missing: %q", out)
+	}
+
+	in := `<img src="/2026/03/photo.jpg" width="640">`
+	out = injectArticleSrcset(in, media, "g")
+	if strings.Contains(out, `width="4000"`) || strings.Contains(out, `height=`) {
+		t.Errorf("overrode the author's size: %q", out)
+	}
+
+	// An image with its own srcset still gets its size.
+	out = injectArticleSrcset(`<img src="/2026/03/photo.jpg" srcset="/x.jpg 1w">`, media, "g")
+	if !strings.Contains(out, ` width="4000" height="3000"`) || strings.Count(out, "srcset=") != 1 {
+		t.Errorf("own srcset: %q", out)
+	}
+
+	// A tiny source gets no srcset but still gets its size.
+	tiny := []models.Medium{img("/2026/03/t.jpg", 100, 80)}
+	out = injectArticleSrcset(`<img src="/2026/03/t.jpg">`, tiny, "g")
+	if out != `<img src="/2026/03/t.jpg" width="100" height="80">` {
+		t.Errorf("tiny source: %q", out)
 	}
 }
 
@@ -119,7 +152,7 @@ func TestInjectArticleSrcset_LeavesUnknownImagesAlone(t *testing.T) {
 		"unknown path":    `<img src="/2026/03/other.jpg">`,
 		"external":        `<img src="https://example.com/x.jpg">`,
 		"no src":          `<img alt="broken">`,
-		"already has one": `<img src="/2026/03/known.jpg" srcset="/x.jpg 1w">`,
+		"already has all": `<img src="/2026/03/known.jpg" srcset="/x.jpg 1w" width="10">`,
 		"legacy ?thumb":   `<img src="/2026/03/other.jpg?thumb">`,
 	}
 	for name, in := range cases {

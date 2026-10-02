@@ -7,7 +7,7 @@ import {
   thumbUrl,
   thumbSrcset,
   thumbAttrs,
-} from '../src/utils/mediaUrl.js';
+} from '../src/utils/mediaUrl.ts';
 
 /** Stand in for the document bootstrap the server injects. */
 function bootstrap(media) {

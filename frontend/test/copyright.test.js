@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { renderCopyright as render } from "../src/utils/copyright.js";
+import { renderCopyright as render } from "../src/utils/copyright.ts";
 
 // renderCopyright returns the RawHtml html`` produces; String() to compare.
 const renderCopyright = (settings) => String(render(settings));

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"log/slog"
@@ -47,10 +48,19 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		BlogTitle  string `json:"blog_title"`
 		AuthorName string `json:"author_name"`
 		Email      string `json:"email"`
+		Token      string `json:"token"`
 	}
 
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request body"})
+	}
+
+	// With SETUP_TOKEN set, only the holder of the token can claim the
+	// install. It needs no separate invalidation: once the owner exists,
+	// every later request stops at the "setup already complete" check.
+	if h.cfg != nil && h.cfg.SetupToken != "" &&
+		subtle.ConstantTimeCompare([]byte(req.Token), []byte(h.cfg.SetupToken)) != 1 {
+		return c.JSON(http.StatusForbidden, map[string]string{"detail": "a valid setup token is required"})
 	}
 
 	req.Email = strings.TrimSpace(req.Email)
@@ -104,7 +114,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 
 		{"tags_visibility", "hidden", "string"},
 		{"atlas_post_limit", "10", "integer"},
-		{"enable_backup", "false", "boolean"},
+		{"enable_backup", "true", "boolean"},
 
 		// Header nav: tags mode with the first 4 root tags inline, so the
 		// header is useful before the menu editor is ever opened.

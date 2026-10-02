@@ -1,0 +1,62 @@
+/**
+ * ExploreBlock — homepage widget showing top tags as plain pills.
+ * Replaces the weighted TagCloud.
+ */
+
+import { Component } from "../../components/Component.ts";
+import { html } from "../../utils/helpers.ts";
+import { getNavTags } from "../../store.ts";
+import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
+import { setupTagFlyout } from "../../utils/tagFlyout.ts";
+import { ViewContext } from "../../utils/viewContext.ts";
+import type { TagCloudItem } from "../../api/pages.ts";
+
+export interface ExploreBlockProps {
+  tags?: TagCloudItem[];
+}
+
+export class ExploreBlock extends Component<ExploreBlockProps> {
+  _cleanupFlyout: (() => void) | null;
+  render() {
+    const { tags = [] } = this.props;
+    if (!tags.length) return html``;
+
+    const items = tags
+      .slice(0, 20) // Limit to top 20
+      .map(
+        (t) => html`
+        <a href="/tags/${t.slug}" class="tag-link"
+           title="${t.name} (${String(t.count)} posts)">
+          ${t.name}
+          <span class="count">${String(t.count)}</span>
+        </a>`,
+      );
+
+    return html`
+      <section class="explore-block" aria-labelledby="explore-title">
+        <div class="explore-header">
+          <h2 id="explore-title" class="explore-title">Explore</h2>
+          <a href="/tags" class="all-tags-link">All tags &rarr;</a>
+        </div>
+        <nav class="explore-tags" aria-label="Top tags">
+          ${items}
+        </nav>
+      </section>`;
+  }
+
+  afterRender() {
+    this._cleanupFlyout?.();
+    const container = this.$(".explore-tags");
+    if (!container) return;
+    const navTags = getNavTags() || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    this._cleanupFlyout = setupTagFlyout(container, tagIndex, (url) => {
+      const { tag, navPath } = parseTagUrl(url);
+      ViewContext.update({ tag, navPath, postSlug: null, query: null });
+    });
+  }
+
+  beforeUnmount() {
+    this._cleanupFlyout?.();
+  }
+}

@@ -1,10 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { buildGraph, expandFocus, nodeRadius, visibleSets } from '../src/plugins/tags-graph/graphModel.js';
+import { buildGraph, expandFocus, nodeRadius, visibleSets } from '../src/plugins/tags-graph/graphModel.ts';
 
 /**
- * graphModel.js turns the /tags payload into the node/link graph everything
+ * graphModel.ts turns the /tags payload into the node/link graph everything
  * else in the plugin runs on: the force layout, the renderer and hit-testing
  * all read what is built here. It is plain arithmetic over objects — no canvas
  * — so it is tested directly, without a DOM.

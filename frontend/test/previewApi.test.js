@@ -17,7 +17,7 @@ describe('previewPost', () => {
       };
     };
 
-    const { previewPost } = await import('../src/api/posts.js');
+    const { previewPost } = await import('../src/api/posts.ts');
     const post = await previewPost('tok/en');
 
     assert.strictEqual(requested, '/api/posts/preview/tok%2Fen');

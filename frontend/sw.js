@@ -308,7 +308,7 @@ function isMediaPath(path) {
 }
 
 // The offline image caches, most faithful first. Both are written from the page
-// context by the offline-sync plugin (utils/imageCache.js): the original bytes
+// context by the offline-sync plugin (utils/imageCache.ts): the original bytes
 // go to point-images-full-v1, the ladder rungs to point-images-v1.
 const IMAGE_CACHES = ["point-images-full-v1", "point-images-v1"];
 

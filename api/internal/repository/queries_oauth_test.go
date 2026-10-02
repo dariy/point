@@ -118,6 +118,39 @@ func TestRepository_DeleteExpiredOAuthTokens(t *testing.T) {
 	}
 }
 
+func TestRepository_ExpireUnboundedOAuthTokens(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	live := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	if err := repo.SaveOAuthToken(ctx, "legacy", "c", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveOAuthToken(ctx, "live", "c", live); err != nil {
+		t.Fatal(err)
+	}
+	bound := time.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	if err := repo.ExpireUnboundedOAuthTokens(ctx, bound); err != nil {
+		t.Fatalf("ExpireUnboundedOAuthTokens: %v", err)
+	}
+	if _, got, _, _ := repo.GetOAuthToken(ctx, "legacy"); !got.Equal(bound) {
+		t.Errorf("legacy expiry = %v, want %v", got, bound)
+	}
+	if _, got, _, _ := repo.GetOAuthToken(ctx, "live"); !got.Equal(live) {
+		t.Errorf("live expiry changed to %v, want %v", got, live)
+	}
+	// The stored text must match what SaveOAuthToken writes, so the sweep's
+	// text comparison still orders it correctly.
+	var legacy, fresh string
+	_ = repo.SaveOAuthToken(ctx, "fresh", "c", bound)
+	_ = repo.DB().QueryRowContext(ctx, `SELECT expires_at FROM oauth_tokens WHERE token_hash='legacy'`).Scan(&legacy)
+	_ = repo.DB().QueryRowContext(ctx, `SELECT expires_at FROM oauth_tokens WHERE token_hash='fresh'`).Scan(&fresh)
+	if legacy != fresh {
+		t.Errorf("backfilled format %q differs from SaveOAuthToken format %q", legacy, fresh)
+	}
+}
+
 // TestRepository_OAuthTimestampsStoredUTC pins the on-disk format. Expiry is
 // compared as text by DeleteExpiredOAuthTokens, so a row written in local time
 // ("-0400 EDT") would sort wrongly against one written after a DST change
@@ -161,5 +194,66 @@ func TestRepository_OAuthTimestampsStoredUTC(t *testing.T) {
 	}
 	if !gotAt.Equal(local) {
 		t.Errorf("registered_at round-tripped to %v, want the same instant as %v", gotAt, local)
+	}
+}
+
+func TestRepository_ListAndDeleteOAuthClients(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	if err := repo.SaveOAuthClient(ctx, "old", []string{"https://a.test/cb"}, now.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveOAuthClient(ctx, "new", []string{"https://b.test/cb"}, now); err != nil {
+		t.Fatal(err)
+	}
+	for hash, exp := range map[string]time.Time{
+		"live-1": now.Add(time.Hour), "live-2": time.Time{}, "dead": now.Add(-time.Minute),
+	} {
+		if err := repo.SaveOAuthToken(ctx, hash, "old", exp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.SaveOAuthToken(ctx, "other", "new", now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.ListOAuthClients(ctx, now)
+	if err != nil {
+		t.Fatalf("ListOAuthClients: %v", err)
+	}
+	if len(got) != 2 || got[0].ClientID != "new" || got[1].ClientID != "old" {
+		t.Fatalf("clients = %+v, want new then old", got)
+	}
+	if got[1].LiveTokens != 2 || got[0].LiveTokens != 1 {
+		t.Errorf("live tokens = old:%d new:%d, want 2 and 1", got[1].LiveTokens, got[0].LiveTokens)
+	}
+	if !got[1].RegisteredAt.Equal(now.Add(-time.Hour)) || got[1].RedirectURIs[0] != "https://a.test/cb" {
+		t.Errorf("old client = %+v", got[1])
+	}
+
+	if err := repo.DeleteOAuthClient(ctx, "old"); err != nil {
+		t.Fatalf("DeleteOAuthClient: %v", err)
+	}
+	if _, _, found, _ := repo.GetOAuthClient(ctx, "old"); found {
+		t.Error("deleted client still found")
+	}
+	if _, _, found, _ := repo.GetOAuthToken(ctx, "live-1"); found {
+		t.Error("deleted client's token still found")
+	}
+	if _, _, found, _ := repo.GetOAuthToken(ctx, "other"); !found {
+		t.Error("another client's token was deleted")
+	}
+
+	if err := repo.DeleteAllOAuthTokens(ctx); err != nil {
+		t.Fatalf("DeleteAllOAuthTokens: %v", err)
+	}
+	if _, _, found, _ := repo.GetOAuthToken(ctx, "other"); found {
+		t.Error("token survives DeleteAllOAuthTokens")
+	}
+	if _, _, found, _ := repo.GetOAuthClient(ctx, "new"); !found {
+		t.Error("DeleteAllOAuthTokens removed a client")
 	}
 }

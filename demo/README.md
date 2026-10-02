@@ -32,11 +32,11 @@ demo/
   world.mjs       tag universe, locations and topical vocabulary
   settings.mjs    the settings the demo presents (titles, footer line)
   mock/
-    entry.js      build entry — imports the shim, then the real app.js
-    shim.js       patches window.fetch + XMLHttpRequest
-    store.js      mutable in-memory model, seeded from fixtures
-    routes.js     endpoint handlers over the store
-    banner.js     demo-only banner, reset control, login hint
+    entry.ts      build entry — imports the shim, then the real app.ts
+    shim.ts       patches window.fetch + XMLHttpRequest
+    store.ts      mutable in-memory model, seeded from fixtures
+    routes.ts     endpoint handlers over the store
+    banner.ts     demo-only banner, reset control, login hint
     fixtures/     recorded API payloads (gitignored)
   scripts/
     make-content.sh      throwaway instance → generated content → fixtures
@@ -56,19 +56,19 @@ demo/
   .media-cache/   transcoded media, reused across builds (gitignored)
 ```
 
-The interception point is the **platform**, not `frontend/src/api/client.js`.
-That module is not the only caller: `router.js` fetches `/api/setup/status` on
-every `/light` navigation, `api/system.js` uploads over `XMLHttpRequest`,
-`BackupsSection.js` fetches the version endpoint directly, and the comments
+The interception point is the **platform**, not `frontend/src/api/client.ts`.
+That module is not the only caller: `router.ts` fetches `/api/setup/status` on
+every `/light` navigation, `api/system.ts` uploads over `XMLHttpRequest`,
+`BackupsSection.ts` fetches the version endpoint directly, and the comments
 plugin calls `api.*` without going through `frontend/src/api/`. Patching `fetch`
 and `XMLHttpRequest` catches all of them — including any added later — and leaves
-the real `client.js` on the code path, so the demo exercises genuine error
+the real `client.ts` on the code path, so the demo exercises genuine error
 handling and caching instead of a parallel implementation of it.
 
-`entry.js` relies on ES module evaluation order: the shim is installed before
-`app.js` runs its top-level `loadThemeCss()` fetch.
+`entry.ts` relies on ES module evaluation order: the shim is installed before
+`app.ts` runs its top-level `loadThemeCss()` fetch.
 
-**`app.js` itself is never modified.** The demo runs the real application.
+**`app.ts` itself is never modified.** The demo runs the real application.
 
 ### Two kinds of fixture data
 
@@ -87,10 +87,10 @@ and look at it: renaming a post, unpublishing it or hiding a tag changed the
 admin screen and nothing else.
 
 `demo-content` in `sessionStorage` holds the post and tag stores whole (about a
-hundred kilobytes at demo size), written by `shim.js` after every request that
-is not a GET and re-seeded by `store.js` on load. It sits at the dispatch
+hundred kilobytes at demo size), written by `shim.ts` after every request that
+is not a GET and re-seeded by `store.ts` on load. It sits at the dispatch
 boundary rather than inside each handler that writes, for the same reason the
-mock patches `fetch` rather than `client.js`: a handler added later is covered
+mock patches `fetch` rather than `client.ts`: a handler added later is covered
 without knowing it exists.
 
 **A reload still resets it.** That is the demo's promise — the next visitor gets
@@ -128,7 +128,7 @@ Three pieces of mock support stand behind that:
 
 - **Inheritance is computed, not read.** The fixture carries the `effective_*`
   flags the backend worked out at record time, which stops being true the moment
-  a visitor hides something in `/light/tags`. `routes.js hiddenSets` walks the
+  a visitor hides something in `/light/tags`. `routes.ts hiddenSets` walks the
   tag DAG the way `TagGraph` does, so the demo's own edits propagate and
   `hidden_via` names the ancestor responsible.
 - **The scheduled queue** extends the feed *left* of page 1 — page 0, then -1 —
@@ -136,7 +136,7 @@ Three pieces of mock support stand behind that:
   `pagination.min_page` and `pagination.scheduled` and read soonest-first. See
   `feedPage` and [publishing.md](../docs/features/publishing.md).
 - **Revelio**, the owner's "show me what a guest sees" switch in the public
-  footer, sends `X-Point-Revelio: off` on every request. `shim.js` answers a
+  footer, sends `X-Point-Revelio: off` on every request. `shim.ts` answers a
   narrowed *view* of the store — prototype delegation with `authenticated`
   shadowed, so handlers read the live collections and only the flag they branch
   on changes. Crucially it narrows only the paths the real server puts behind
@@ -172,7 +172,7 @@ Go server *rewrites files* in response to an admin action, and a static build
 would freeze them at whatever they were when the fixtures were recorded:
 
 - **`/assets/css/common/theme.css`** — `ThemeService.SyncActiveTheme` copies the
-  active theme over this file and appends the site's custom CSS. `shim.js`
+  active theme over this file and appends the site's custom CSS. `shim.ts`
   intercepts the path and composes the same two ingredients from the store, so
   activating a theme or saving custom CSS repaints the page immediately instead
   of only moving a highlight. The theme sources ship as `/assets/themes/*.css`.
@@ -187,7 +187,7 @@ would freeze them at whatever they were when the fixtures were recorded:
     metadata out of the same files (`theme-title`, `description`,
     `preview-color`, the `:root` colour literals behind the admin swatch, and
     whether a `[data-theme="dark"]` block is present) into
-    `/assets/themes/index.json`, which `store.js` seeds from.
+    `/assets/themes/index.json`, which `store.ts` seeds from.
   - The **activated theme is kept in `sessionStorage`**, like the auth flag and
     for the same reason: the store is module state that dies on every full page
     load, so without it the walk from `/light` out to the public site — or a
@@ -197,7 +197,7 @@ would freeze them at whatever they were when the fixtures were recorded:
     than a choice among what the demo ships, and it survives inside the tab
     until a reload the same way every other edit does.
 - **Plugin presets** — `plugins.DefaultPresets()` is seeded into the store
-  (`store.js`) and `POST /api/plugins/presets/:id/apply` reproduces the
+  (`store.ts`) and `POST /api/plugins/presets/:id/apply` reproduces the
   backend's two corrections: a core area a preset empties falls back to its
   default member, and an exclusive area keeps only its first. Without them the
   demo could show combinations the real backend refuses to produce.
@@ -205,11 +205,11 @@ would freeze them at whatever they were when the fixtures were recorded:
 ### Failing soft
 
 An unmatched endpoint returns an empty `200`, never a rejection and never a
-`401`. `client.js` turns a 401 into an `api:unauthorized` event which `app.js`
+`401`. `client.ts` turns a 401 into an `api:unauthorized` event which `app.ts`
 escalates into a hard navigation to `/light/login` — one unhandled endpoint would
 otherwise eject a visitor mid-click.
 
-The one deliberate 401 is `GET /api/auth/me` when logged out, which `client.js`
+The one deliberate 401 is `GET /api/auth/me` when logged out, which `client.ts`
 explicitly exempts from that event.
 
 ## Building
@@ -469,7 +469,7 @@ work at build time:
 - `__BUILD_VERSION__` → a fixed demo string
 - `<!-- __HEAD_HTML__ -->` → empty (the demo embeds no third-party origin)
 - **`window.__PLUGINS__` injected before `</head>`** — not optional:
-  `core/pluginHost.js` is completely inert without it, silently costing the demo
+  `core/pluginHost.ts` is completely inert without it, silently costing the demo
   its media viewer, timeline and tag visualisation. The build fails rather than
   emit an empty manifest.
 
@@ -482,9 +482,9 @@ work at build time:
 |---|---|
 | `comments` | Loads `/comments/web/embed.mjs` from a remark42 sidecar that does not exist. Omitting it also stops `CommentsAdminPage` (which calls `api.*` directly) from mounting |
 | `mcp` | Server-side capability with no meaning without a server |
-| `offline-sync` | Registers `/sw.js` and enables the IndexedDB mutation queue. A service worker would serve stale bundles, and the queue would accumulate writes that never drain |
+| `offline-sync` | Registers `/sw.ts` and enables the IndexedDB mutation queue. A service worker would serve stale bundles, and the queue would accumulate writes that never drain |
 
-`app.js` falls back to importing `offline-sync` statically when the manifest is
+`app.ts` falls back to importing `offline-sync` statically when the manifest is
 **empty**, so the manifest must be present and non-empty for that omission to
 take effect. The build enforces this.
 
@@ -538,10 +538,10 @@ without re-running `make-content.sh` leaves the demo showing the old values.
 ## Known limitations
 
 - **`?thumb` does not resolve to a thumbnail.** The client appends it to media
-  URLs in several admin views (`PostsListPage.js`, `VisualEditor.js`), and a
+  URLs in several admin views (`PostsListPage.ts`, `VisualEditor.ts`), and a
   static host ignores query strings, so the full-size image is served instead.
   `build.sh` downscales originals to compensate;
-  `utils/helpers.js dropBrokenImages()` handles anything missing.
+  `utils/helpers.ts dropBrokenImages()` handles anything missing.
 - **Backend-shaped admin surfaces are canned**: backups, log tailing,
   photo-library import, system restart, Instagram connect, passkey registration.
   They render and respond plausibly rather than being hidden — seeing that the

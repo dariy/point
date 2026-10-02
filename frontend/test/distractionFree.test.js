@@ -58,7 +58,7 @@ before(async () => {
     createElement: () => makeEl(),
     querySelectorAll: () => [], // the orphaned-toggle sweep finds nothing here
   };
-  ({ mount } = await import('../src/plugins/distraction-free/index.js'));
+  ({ mount } = await import('../src/plugins/distraction-free/index.ts'));
 });
 
 /** Mount the plugin into a fresh document, optionally already in the mode. */

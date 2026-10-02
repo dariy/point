@@ -1,8 +1,8 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
-import { setToastLog } from '../src/store.js';
-import { NotificationLogButton } from '../src/components/shared/NotificationLogButton.js';
+import { setToastLog } from '../src/store.ts';
+import { NotificationLogButton } from '../src/components/shared/NotificationLogButton.ts';
 
 // Toast log entries carry API error text and filenames — values the admin did
 // not author. The modal body used to be built with a bare template literal

@@ -1,7 +1,7 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 
-// ── Minimal globals so gridFit.js's viewport fit runs under node ──────────────
+// ── Minimal globals so gridFit.ts's viewport fit runs under node ──────────────
 // The point of these tests is the *height* the fit divides. The layout box is
 // `min-height: 100dvh` in CSS, so the probe reading `100dvh` must win over
 // `window.innerHeight` — on iPadOS Safari those are different numbers, and the
@@ -50,7 +50,7 @@ globalThis.document = {
   querySelector: () => null,
 };
 
-const { computePerPage, layoutViewportHeight } = await import('../src/utils/gridFit.js');
+const { computePerPage, layoutViewportHeight } = await import('../src/utils/gridFit.ts');
 
 /**
  * A probe table for the pre-grid estimate: no max-width and no padding/gap, a

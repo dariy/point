@@ -2,7 +2,7 @@ import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { setKey } from '../src/utils/reconcileList.js';
+import { setKey } from '../src/utils/reconcileList.ts';
 
 /**
  * PostGrid.reconcile — the in-place update a per_page refit uses.
@@ -24,7 +24,7 @@ import { setKey } from '../src/utils/reconcileList.js';
 let PostGrid;
 let dom;
 
-before(async () => { ({ PostGrid } = await import('../src/components/public/PostGrid.js')); });
+before(async () => { ({ PostGrid } = await import('../src/components/public/PostGrid.ts')); });
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => dom.cleanup());
 

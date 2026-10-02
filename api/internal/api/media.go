@@ -35,7 +35,16 @@ func NewMediaHandler(mediaService *services.MediaService, settingsService *servi
 // mediaResponse is mediaToResponse with the request's thumbnail generation
 // token already read off the settings cache.
 func (h *MediaHandler) mediaResponse(c echo.Context, m models.Medium) map[string]interface{} {
-	return mediaToResponse(m, h.mediaService.ThumbnailGeneration(c.Request().Context()))
+	return h.withVideoNote(mediaToResponse(m, h.mediaService.ThumbnailGeneration(c.Request().Context())), m)
+}
+
+// withVideoNote sets hevc_note on an admin response when the video is HEVC
+// with no transcode, so the media library can warn that it may not play.
+func (h *MediaHandler) withVideoNote(resp map[string]interface{}, m models.Medium) map[string]interface{} {
+	if h.mediaService.HEVCNeedsNote(m) {
+		resp["hevc_note"] = true
+	}
+	return resp
 }
 
 func (h *MediaHandler) UploadFile(c echo.Context) error {
@@ -175,12 +184,14 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 	page, perPage := ParsePaginationParams(c, 20)
 	fileType := c.QueryParam("file_type")
 	folder := c.QueryParam("folder")
+	filename := c.QueryParam("filename")
 
 	media, total, err := h.mediaService.ListMedia(c.Request().Context(), services.ListMediaParams{
 		Page:     page,
 		PerPage:  perPage,
 		FileType: fileType,
 		Folder:   folder,
+		Filename: filename,
 	})
 	if err != nil {
 		return MapError(err)
@@ -222,7 +233,7 @@ func (h *MediaHandler) mediaListEnvelope(c echo.Context, media []models.Medium, 
 	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	items := make([]map[string]interface{}, len(media))
 	for i, m := range media {
-		items[i] = mediaToResponse(m, gen)
+		items[i] = h.withVideoNote(mediaToResponse(m, gen), m)
 	}
 	return map[string]interface{}{
 		"media":    items,
@@ -537,8 +548,8 @@ func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": fmt.Sprintf(
-			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background.",
-			res.Purged+res.Legacy, res.Prewarming),
+			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background. Queued %d video jobs.",
+			res.Purged+res.Legacy, res.Prewarming, res.VideoJobs),
 		"stats": res,
 	})
 }

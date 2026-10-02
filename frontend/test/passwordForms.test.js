@@ -17,7 +17,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { OWNER_USERNAME } from '../src/utils/passwordForm.js';
+import { OWNER_USERNAME } from '../src/utils/passwordForm.ts';
 
 /** Render a page component and hand back its markup as a string. */
 function markupOf(PageClass, props = {}, state = null) {
@@ -41,9 +41,9 @@ describe('password forms', () => {
   before(async () => {
     dom = setupDOM();
     const [login, security, reset] = await Promise.all([
-      import('../src/pages/light/LoginPage.js'),
-      import('../src/pages/light/SecurityPage.js'),
-      import('../src/pages/light/PasswordResetPage.js'),
+      import('../src/pages/light/LoginPage.ts'),
+      import('../src/pages/light/SecurityPage.ts'),
+      import('../src/pages/light/PasswordResetPage.ts'),
     ]);
     pages = [
       ['LoginPage', () => markupOf(login.default)],

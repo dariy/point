@@ -4,7 +4,7 @@
  *
  * The policy is resolved once per module instance and memoised, so a test that
  * needs a different browser (no Trusted Types, a policy that refuses to be
- * created) imports helpers.js under a fresh specifier: ESM caches on the full
+ * created) imports helpers.ts under a fresh specifier: ESM caches on the full
  * URL, so the query string buys a module with its memo not yet filled.
  */
 
@@ -18,8 +18,8 @@ beforeEach(() => { dom = setupDOM(); });
 afterEach(() => { dom.cleanup(); });
 
 let freshCount = 0;
-/** helpers.js with an unresolved policy memo. */
-const freshHelpers = () => import(`../src/utils/helpers.js?tt=${++freshCount}`);
+/** helpers.ts with an unresolved policy memo. */
+const freshHelpers = () => import(`../src/utils/helpers.ts?tt=${++freshCount}`);
 
 /** A stand-in for window.trustedTypes that records what it was asked for. */
 function fakeTrustedTypes({ createPolicy } = {}) {

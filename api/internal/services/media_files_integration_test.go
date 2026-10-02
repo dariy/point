@@ -5,6 +5,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"image"
@@ -811,7 +812,7 @@ func TestVariant_OneRequestBuildsWholeLadder(t *testing.T) {
 	ctx := context.Background()
 
 	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2000, 1500)), nil)
+	_ = jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2400, 1800)), nil)
 	m, err := svc.UploadFile(ctx, UploadFileParams{
 		Content:  buf.Bytes(),
 		Filename: "wide.jpg",
@@ -839,7 +840,7 @@ func TestVariant_OneRequestBuildsWholeLadder(t *testing.T) {
 	}
 }
 
-// A source smaller than a rung gets no file for it: imaging.Fit does not
+// A source smaller than a rung gets no file for it: fitImage does not
 // upscale, so the rungs above it would be byte-identical copies. Callers fall
 // back to the original.
 func TestVariant_SkipsRungsAboveSource(t *testing.T) {
@@ -1005,7 +1006,7 @@ func TestRebuildThumbnails_RollsTokenAndPurges(t *testing.T) {
 	svc.WithCache(NewCacheService(storage))
 	ctx := context.Background()
 
-	m := uploadTestImage(t, svc, "wide.jpg", 1600, 1200)
+	m := uploadTestImage(t, svc, "wide.jpg", 2400, 1800)
 	before := svc.ThumbnailGeneration(ctx)
 
 	// A rendered public page, holding variant URLs stamped with `before`.
@@ -1024,8 +1025,8 @@ func TestRebuildThumbnails_RollsTokenAndPurges(t *testing.T) {
 	if got := svc.ThumbnailGeneration(ctx); got != res.Generation {
 		t.Errorf("stored generation = %q, want %q", got, res.Generation)
 	}
-	if res.Purged != len(VariantSizes) {
-		t.Errorf("purged %d files, want %d (one per rung of an upload)", res.Purged, len(VariantSizes))
+	if res.Purged != uploadRungs() {
+		t.Errorf("purged %d files, want %d (one per rung of an upload)", res.Purged, uploadRungs())
 	}
 	if _, err := svc.cache.Get(ctx, "homepage_p1_pp20.json"); err == nil {
 		t.Error("public page cache survived the rebuild; it still serves the old generation token")
@@ -1058,8 +1059,8 @@ func TestPurgeVariants_LeavesOriginalsAndPosterRoot(t *testing.T) {
 		t.Fatalf("write poster: %v", err)
 	}
 
-	if n := svc.purgeVariants(); n != len(VariantSizes) {
-		t.Errorf("purged %d, want %d", n, len(VariantSizes))
+	if n := svc.purgeVariants(); n != uploadRungs() {
+		t.Errorf("purged %d, want %d", n, uploadRungs())
 	}
 
 	for _, size := range VariantSizes {
@@ -1192,5 +1193,159 @@ func TestRebuildThumbnails_ReturnsWithoutDecodingTheLibrary(t *testing.T) {
 	}
 	if warmed != prewarmLimit {
 		t.Errorf("%d rows have a warm rung, want %d", warmed, prewarmLimit)
+	}
+}
+
+// jpegWithOrientation encodes a w×h JPEG and inserts a minimal EXIF APP1
+// segment that carries only the Orientation tag.
+func jpegWithOrientation(t *testing.T, w, h int, orientation uint16) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h)), nil); err != nil {
+		t.Fatal(err)
+	}
+	tiff := []byte{'I', 'I', 0x2a, 0, 8, 0, 0, 0, // header, IFD0 at offset 8
+		1, 0, // one entry
+		0x12, 0x01, 3, 0, 1, 0, 0, 0, byte(orientation), byte(orientation >> 8), 0, 0, // Orientation SHORT
+		0, 0, 0, 0} // no next IFD
+	payload := append([]byte("Exif\x00\x00"), tiff...)
+	seg := []byte{0xff, 0xe1, byte((len(payload) + 2) >> 8), byte(len(payload) + 2)}
+	seg = append(seg, payload...)
+	src := buf.Bytes()
+	out := append([]byte{}, src[:2]...)
+	out = append(out, seg...)
+	return append(out, src[2:]...)
+}
+
+// A phone photo stores landscape sensor pixels and Orientation 6. The stored
+// size and every variant must follow the displayed, portrait orientation.
+func TestUpload_EXIFOrientationRotatesVariantsAndDims(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 6),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if m.Width.Int64 != 400 || m.Height.Int64 != 800 {
+		t.Errorf("stored size = %dx%d, want 400x800", m.Width.Int64, m.Height.Int64)
+	}
+	path, err := svc.Variant(ctx, m, 512)
+	if err != nil {
+		t.Fatalf("Variant: %v", err)
+	}
+	if w, h := variantDims(t, path); w != 256 || h != 512 {
+		t.Errorf("rung 512 = %dx%d, want 256x512", w, h)
+	}
+}
+
+func TestOrientedMetadata(t *testing.T) {
+	for in, want := range map[string]bool{
+		`{"Orientation":"6"}`: true,
+		`{"Orientation":"2"}`: true,
+		`{"Orientation":"1"}`: false,
+		`{"Make":"X"}`:        false,
+		`not json`:            false,
+	} {
+		if got := orientedMetadata(sql.NullString{String: in, Valid: true}); got != want {
+			t.Errorf("orientedMetadata(%s) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// The one-time purge removes the rungs of a rotated image, rolls the
+// generation, and runs only once.
+func TestPurgeOrientedVariants_RunsOnce(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 6),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	rung := svc.variantFullPath(m.OriginalPath, 512)
+	if _, err := os.Stat(rung); err != nil {
+		t.Fatalf("eager rung missing: %v", err)
+	}
+	gen := svc.ThumbnailGeneration(ctx)
+
+	if n, err := svc.PurgeOrientedVariants(ctx); err != nil || n != 1 {
+		t.Fatalf("first purge = %d, %v; want 1, nil", n, err)
+	}
+	if _, err := os.Stat(rung); !os.IsNotExist(err) {
+		t.Errorf("rung still on disk after purge")
+	}
+	if svc.ThumbnailGeneration(ctx) == gen {
+		t.Errorf("generation token did not move")
+	}
+	if n, err := svc.PurgeOrientedVariants(ctx); err != nil || n != 0 {
+		t.Errorf("second purge = %d, %v; want 0, nil", n, err)
+	}
+}
+
+// The scheduler's start-up hook runs the purge and tolerates a missing media
+// service.
+func TestScheduler_PurgeOrientedVariants(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+	if _, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithOrientation(t, 800, 400, 8),
+		Filename: "phone.jpg",
+		MimeType: "image/jpeg",
+	}); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	(&SchedulerService{mediaService: svc}).purgeOrientedVariants(ctx)
+	if n, _ := svc.PurgeOrientedVariants(ctx); n != 0 {
+		t.Errorf("purge ran again after the scheduler hook: %d", n)
+	}
+	(&SchedulerService{}).purgeOrientedVariants(ctx)
+}
+
+// uploadRungs is how many rungs an upload writes for a source larger than
+// every rung: the ones up to UploadMaxVariantSize.
+func uploadRungs() int {
+	n := 0
+	for _, size := range VariantSizes {
+		if size <= UploadMaxVariantSize {
+			n++
+		}
+	}
+	return n
+}
+
+// Upload writes the rungs up to UploadMaxVariantSize only. The larger rungs
+// wait for their first request, which writes them.
+func TestUpload_DefersLargeRungs(t *testing.T) {
+	svc, storage := setupMediaService(t)
+	defer func() { _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	m := uploadTestImage(t, svc, "big.jpg", 2400, 1800)
+	for _, size := range VariantSizes {
+		_, err := os.Stat(filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size)))
+		if size <= UploadMaxVariantSize && err != nil {
+			t.Errorf("rung %d missing after upload: %v", size, err)
+		}
+		if size > UploadMaxVariantSize && err == nil {
+			t.Errorf("rung %d written at upload, want it deferred", size)
+		}
+	}
+
+	if _, err := svc.Variant(ctx, m, 2048); err != nil {
+		t.Fatalf("Variant(2048): %v", err)
+	}
+	for _, size := range []int{1600, 2048} {
+		if _, err := os.Stat(filepath.Join(storage, "media", VariantRelPath(m.OriginalPath, size))); err != nil {
+			t.Errorf("rung %d missing after first request: %v", size, err)
+		}
 	}
 }

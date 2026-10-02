@@ -32,7 +32,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, type } from './helpers/dom.js';
-import { getSettings, getToast, setSettings, setToast, setUser } from '../src/store.js';
+import { getSettings, getToast, setSettings, setToast, setUser } from '../src/store.ts';
 
 /** Home, About > Team, Blog — one nested branch, roots either side of it. */
 const MARKDOWN = [
@@ -114,7 +114,7 @@ describe('MenuPage', () => {
     setUser({ username: 'owner', is_admin: true });
     setSettings({ blog_title: 'Test blog' });
     setToast(null);
-    ({ default: MenuPage } = await import('../src/plugins/nav-menu/MenuPage.js'));
+    ({ default: MenuPage } = await import('../src/plugins/nav-menu/MenuPage.ts'));
   });
 
   afterEach(() => {

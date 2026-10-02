@@ -100,7 +100,7 @@ the list below before trusting an older reference to `main.go`.
 
 | Concern | Server side | Client side |
 |---|---|---|
-| **Plugin** | `api/internal/plugins/registry.go` — the catalog. A disabled plugin's routes 404 (`RequirePlugin`) and its JS chunk is withheld from the manifest. | `frontend/src/plugins/<id>/index.js` — exports `mount(el, ctx)` for a slot, or a page module for a route. Loaded by `frontend/src/core/pluginHost.js` from the enabled-only `window.__PLUGINS__`. |
+| **Plugin** | `api/internal/plugins/registry.go` — the catalog. A disabled plugin's routes 404 (`RequirePlugin`) and its JS chunk is withheld from the manifest. | `frontend/src/plugins/<id>/index.js` — exports `mount(el, ctx)` for a slot, or a page module for a route. Loaded by `frontend/src/core/pluginHost.ts` from the enabled-only `window.__PLUGINS__`. |
 | **Theme** | `api/internal/services/theme_service.go` scans the directory at runtime. | `frontend/themes/<name>.css` — a file of CSS custom properties plus three metadata comments. Not a template. |
 | **Migration** | `api/internal/migrations/migrations.go` — the default place to append. `api/internal/repository/bootstrap_migrations.go` only for what a query in *that* package needs before it can run at all; additive statements only. | — |
 | **MCP tool** | `api/internal/mcp/tools.go`, mounted by `registerMCPRoutes`. MCP has **no data path of its own** — `invoke.go` dispatches to the REST handlers with the caller's identity injected. Changing a handler changes the tool. | — |
@@ -112,9 +112,9 @@ the list below before trusting an older reference to `main.go`.
 The one common change that lands in four places rather than one, because a
 setting is a DB row and not a config field. In order:
 
-1. `frontend/src/pages/light/SettingsPage.js` — add the key to a group in
+1. `frontend/src/pages/light/SettingsPage.ts` — add the key to a group in
    `SETTING_GROUPS`; that alone renders an input and saves it.
-2. `frontend/src/components/light/settingsFields.js` — a label override if the
+2. `frontend/src/components/light/settingsFields.ts` — a label override if the
    snake_case name does not humanise well, plus `NUMERIC_KEYS` or
    `DEFAULT_ON_KEYS` if it is a number or an on-by-default toggle.
 3. `api/internal/api/settings.go` — add the key to `publicSettingKeys` **only**
@@ -136,12 +136,12 @@ the admin input.
 | Step | Lives in |
 |---|---|
 | Shell | `frontend/index.html` — served by the Go binary, with the CSS hashes and the bootstrap script injected at serve time. |
-| Bootstrap | `frontend/src/app.js` — loads public settings, checks the session, applies the theme, declares the route table, starts the router. |
-| Routing | `frontend/src/router.js` — History API, `load: () => import(…)` per route, auth guard. |
+| Bootstrap | `frontend/src/app.ts` — loads public settings, checks the session, applies the theme, declares the route table, starts the router. |
+| Routing | `frontend/src/router.ts` — History API, `load: () => import(…)` per route, auth guard. |
 | Page | `frontend/src/pages/public/` (reader) and `frontend/src/pages/light/` (admin, under `/light`). |
-| Component | `frontend/src/components/{public,light,shared}/`, all extending the base class in `frontend/src/components/Component.js`. |
-| Server calls | `frontend/src/api/<domain>.js`, all built on the `api` fetch wrapper in `frontend/src/api/client.js`. |
-| Shared state | `frontend/src/store.js` — a pub/sub key-value store; subscribe by key. |
+| Component | `frontend/src/components/{public,light,shared}/`, all extending the base class in `frontend/src/components/Component.ts`. |
+| Server calls | `frontend/src/api/<domain>.ts`, all built on the `api` fetch wrapper in `frontend/src/api/client.ts`. |
+| Shared state | `frontend/src/store.ts` — a pub/sub key-value store; subscribe by key. |
 | Cross-cutting machinery | `frontend/src/core/` — the plugin host, the grid and media pagers, gestures. Not a dumping ground: four files, each a subsystem a page uses rather than a helper it calls. |
 | Helpers | `frontend/src/utils/` — small, pure, individually tested (EXIF parsing, media URLs, grid fitting, post-node serialisation). |
 | Styles | `frontend/css/{common,light,public}/*.css` (sources) plus `frontend/src/plugins/<id>/*.css`. |

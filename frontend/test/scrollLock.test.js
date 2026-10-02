@@ -22,7 +22,7 @@ let lock;
 
 beforeEach(async () => {
   dom = setupDOM();
-  lock ??= await import('../src/utils/scrollLock.js');
+  lock ??= await import('../src/utils/scrollLock.ts');
 });
 afterEach(() => {
   dom.cleanup();
@@ -99,7 +99,7 @@ describe('scrollLock', () => {
 
 describe('overlays release the lock when they are unmounted', () => {
   test('CommandPalette', async () => {
-    const { CommandPalette } = await import('../src/components/light/CommandPalette.js');
+    const { CommandPalette } = await import('../src/components/light/CommandPalette.ts');
     const host = document.createElement('div');
     document.body.appendChild(host);
 
@@ -115,7 +115,7 @@ describe('overlays release the lock when they are unmounted', () => {
   });
 
   test('ShortcutHelp', async () => {
-    const { ShortcutHelp } = await import('../src/components/light/ShortcutHelp.js');
+    const { ShortcutHelp } = await import('../src/components/light/ShortcutHelp.ts');
     const host = document.createElement('div');
     document.body.appendChild(host);
 
@@ -129,7 +129,7 @@ describe('overlays release the lock when they are unmounted', () => {
   });
 
   test('AdminBottomBar — its own re-render closes the More sheet', async () => {
-    const { AdminBottomBar } = await import('../src/components/light/AdminBottomBar.js');
+    const { AdminBottomBar } = await import('../src/components/light/AdminBottomBar.ts');
     const host = document.createElement('div');
     document.body.appendChild(host);
 

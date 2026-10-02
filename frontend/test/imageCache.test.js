@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { preCacheImages, clearImageCache } from '../src/utils/imageCache.js';
+import { preCacheImages, clearImageCache } from '../src/utils/imageCache.ts';
 
 /**
  * imageCache writes the two caches the service worker reads (sw.js,

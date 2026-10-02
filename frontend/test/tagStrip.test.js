@@ -10,7 +10,7 @@ describe('renderTagStrip visibility filter', () => {
   let renderTagStrip;
 
   before(async () => {
-    ({ renderTagStrip } = await import('../src/utils/tagStrip.js'));
+    ({ renderTagStrip } = await import('../src/utils/tagStrip.ts'));
   });
 
   test('keeps tags the post carries itself', () => {

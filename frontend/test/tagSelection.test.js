@@ -6,7 +6,7 @@
  * would test nothing: every selector here is one the page depends on.
  *
  * The bulk actions are driven through their real buttons and asserted on the
- * requests leaving api/client.js — nothing between the click and fetch is
+ * requests leaving api/client.ts — nothing between the click and fetch is
  * stubbed. What the page itself would do next (re-render, reload) arrives as
  * onModeChange / onBulkDone, which is exactly the boundary the module owns.
  */
@@ -15,13 +15,13 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, check, fire, selectOption } from './helpers/dom.js';
-import { getToast, setToast } from '../src/store.js';
-import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.js';
-import { renderTagList } from '../src/components/light/tags/TagListView.js';
+import { getToast, setToast } from '../src/store.ts';
+import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.ts';
+import { renderTagList } from '../src/components/light/tags/TagListView.ts';
 import {
   selectableTags, selectAllState, renderBulkToolbar, applyRowSelection,
   updateBulkToolbar, setupSelectMode, LONG_PRESS_MS, INTERACTIVE, ROW_SELECTOR,
-} from '../src/components/light/tags/tagSelection.js';
+} from '../src/components/light/tags/tagSelection.ts';
 
 const tag = (id, name, over = {}) => ({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,

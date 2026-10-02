@@ -1,6 +1,6 @@
 import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert";
-import { pluginHost } from "../src/core/pluginHost.js";
+import { pluginHost } from "../src/core/pluginHost.ts";
 
 // Minimal enabled-only manifest mirroring window.__PLUGINS__. Entries without
 // `entry` are enabled but not yet extracted into a chunk; entries with `entry`

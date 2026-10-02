@@ -15,7 +15,7 @@
  * No DOM, no canvas, no network. Schema: `docs/features/carousel-studio.md`.
  */
 
-import { carouselFence, CAROUSEL_BLOCK_CLASS, IMAGE_PATH_RE } from '../../utils/postNodes.js';
+import { carouselFence, CAROUSEL_BLOCK_CLASS, IMAGE_PATH_RE } from '../../utils/postNodes.ts';
 import { sliceRects, clampPan } from './geometry.js';
 import { MIN_SLIDES, MAX_SLIDES } from './studio/bounds.js';
 

@@ -2,7 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { captureInteraction, preserveInteraction } from '../src/utils/preserveInteraction.js';
+import { captureInteraction, preserveInteraction } from '../src/utils/preserveInteraction.ts';
 
 /**
  * preserveInteraction — focus, caret and scroll across a rebuild.

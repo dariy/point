@@ -25,9 +25,9 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.js';
-import { store } from '../src/store.js';
-import { Component } from '../src/components/Component.js';
-import { html } from '../src/utils/helpers.js';
+import { store } from '../src/store.ts';
+import { Component } from '../src/components/Component.ts';
+import { html } from '../src/utils/helpers.ts';
 
 /** A subscriber that records what it was called with. */
 const spy = () => {
@@ -232,7 +232,7 @@ describe('Component.subscribeStoreSelector', () => {
   /**
    * An `on*Selector`-shaped subscriber for a probe key.
    *
-   * subscribeStoreSelector() takes one of store.js's accessors, not a store
+   * subscribeStoreSelector() takes one of store.ts's accessors, not a store
    * and a string key; this test is about how long the subscription lives, not
    * about any real key, so it binds a throwaway one in the same shape.
    */

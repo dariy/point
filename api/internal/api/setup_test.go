@@ -160,6 +160,10 @@ func TestSetup_Success(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	// A fresh install backs up by default (p-hosting-ready-vyok.2).
+	if v, _ := h.settingsSvc.GetSetting(context.Background(), "enable_backup", ""); v != "true" {
+		t.Errorf("enable_backup = %q, want true", v)
+	}
 }
 
 // Setup logs the new owner in: the response carries a usable session cookie, so
@@ -223,5 +227,34 @@ func TestSetupStatus_NoUser(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "false") {
 		t.Errorf("expected setup_complete: false, got: %s", rec.Body.String())
+	}
+}
+
+// With SETUP_TOKEN set, only a request that carries the token claims the
+// install, and the token stops working once the owner exists.
+func TestSetup_RequiresSetupToken(t *testing.T) {
+	const pw = `"name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","blog_title":"T","author_name":"A"`
+	h := setupHandlers(t)
+	defer h.close()
+	h.cfg.SetupToken = "s3cret-claim-token"
+	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo, h.cfg)
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want int
+	}{
+		{"NoToken", `{` + pw + `}`, http.StatusForbidden},
+		{"WrongToken", `{"token":"wrong",` + pw + `}`, http.StatusForbidden},
+		{"RightToken", `{"token":"s3cret-claim-token",` + pw + `}`, http.StatusOK},
+		{"Reused", `{"token":"s3cret-claim-token",` + pw + `}`, http.StatusConflict},
+	} {
+		c, rec := echoCtx(http.MethodPost, "/setup", tc.body)
+		if err := sh.Setup(c); err != nil {
+			t.Fatalf("%s: unexpected error: %v", tc.name, err)
+		}
+		if rec.Code != tc.want {
+			t.Errorf("%s: expected %d, got %d: %s", tc.name, tc.want, rec.Code, rec.Body.String())
+		}
 	}
 }

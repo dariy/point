@@ -2,7 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, click, type, check } from './helpers/dom.js';
-import { html, raw } from '../src/utils/helpers.js';
+import { html, raw } from '../src/utils/helpers.ts';
 
 /** Let the confirm handler's async body settle. */
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -12,7 +12,7 @@ let TagPickerDialog;
 
 beforeEach(async () => {
   dom = setupDOM();
-  TagPickerDialog ??= await import('../src/components/light/tags/TagPickerDialog.js');
+  TagPickerDialog ??= await import('../src/components/light/tags/TagPickerDialog.ts');
 });
 afterEach(() => dom.cleanup());
 
