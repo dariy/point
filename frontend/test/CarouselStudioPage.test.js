@@ -22,7 +22,7 @@ import { DOMParser } from 'linkedom';
 
 import { setupDOM, click, fire, type } from './helpers/dom.js';
 import { getToast, setSettings, setUser } from '../src/store.ts';
-import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.js';
+import { backgroundFit, deckSlideFitCSS } from '../src/plugins/carousel/geometry.ts';
 import {
   SPAN_SLIDE,
   normalizeDocument,
@@ -30,8 +30,8 @@ import {
   splitDocument,
   toDeckDocument,
   updateLayer,
-} from '../src/plugins/carousel/document.js';
-import { MAX_SLIDES, MIN_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
+} from '../src/plugins/carousel/document.ts';
+import { MAX_SLIDES, MIN_SLIDES } from '../src/plugins/carousel/studio/bounds.ts';
 
 // `node --test` has no DOMParser, and the SVG importer needs one — the import
 // dialog's test drives a real import rather than a stub, so the page's routing
@@ -130,7 +130,7 @@ describe('CarouselStudioPage', () => {
     setUser({ username: 'owner', is_admin: true });
     setSettings({ blog_title: 'Test blog' });
     ({ default: CarouselStudioPage, INK_HISTORY_LIMIT } = await import(
-      '../src/plugins/carousel/index.js'
+      '../src/plugins/carousel/index.ts'
     ));
   });
 

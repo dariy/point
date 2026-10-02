@@ -1,5 +1,5 @@
 /**
- * carousel/import/svg.js — a list of SVGs into a carousel template.
+ * carousel/import/svg.ts — a list of SVGs into a carousel template.
  *
  * The second import path, and the one that reaches the design tools PPTX does
  * not. Figma, Illustrator, Sketch and XD are proprietary on disk and all four
@@ -45,8 +45,8 @@
  * Schema: `docs/features/carousel-studio.md`.
  */
 
-import { normalizeDocument, normalizeLayer, toTemplate } from '../document.js';
-import { MAX_SLIDES } from '../studio/bounds.js';
+import { normalizeDocument, normalizeLayer, toTemplate } from '../document.ts';
+import { MAX_SLIDES } from '../studio/bounds.ts';
 import {
   ImportError,
   centreFit,
@@ -56,8 +56,8 @@ import {
   fromDataUrl,
   metaFromFilename,
   ratioLabel,
-} from './adapter.js';
-import { attr, children, local, parseXml } from './xml.js';
+} from './adapter.ts';
+import { attr, children, local, parseXml } from './xml.ts';
 
 /**
  * How many paths a slide with no text at all has to hold before this is called
@@ -233,7 +233,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 /**
  * @typedef {object} SvgContext
  * @property {ReturnType<typeof createReport>} report
- * @property {import('./adapter.js').ImportAssets} assets
+ * @property {import('./adapter.ts').ImportAssets} assets
  * @property {{kept: number, total: number}} shapes
  * @property {Map<string, string>} images `href` → the `data:` URL it became, so
  *   a logo on eight slides is decoded, inlined and counted once
@@ -250,7 +250,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
  * @property {number} index
  * @property {string} name the file it came from
  * @property {{x: number, y: number, w: number, h: number}} canvas the `viewBox`
- * @property {import('./adapter.js').ImportFit} fit
+ * @property {import('./adapter.ts').ImportFit} fit
  * @property {CssRule[]} css the file's own `<style>` rules, by specificity
  * @property {number} paths how many `<path>`s this slide dropped
  */
@@ -288,8 +288,8 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
  *   global `DOMParser` supplies its own through
  * @param {number} [options.maxAssetBytes]
  * @param {number} [options.maxTotalBytes]
- * @returns {Promise<{template: import('../document.js').CarouselTemplate,
- *   report: import('./adapter.js').ImportReport}>}
+ * @returns {Promise<{template: import('../document.ts').CarouselTemplate,
+ *   report: import('./adapter.ts').ImportReport}>}
  * @throws {ImportError} when there is no readable SVG in the list at all
  */
 export async function importSvg(files, options = {}) {
@@ -478,11 +478,11 @@ function canvasOf(root) {
  * @param {SvgContext} ctx
  * @param {{root: Element, canvas: {x: number, y: number, w: number, h: number},
  *   name: string}} parsed
- * @param {import('./adapter.js').ImportFit} deckFit
+ * @param {import('./adapter.ts').ImportFit} deckFit
  * @param {number} index the file's place in the list, which every report entry
  *   names — the source's index rather than the output's, so a file that failed
  *   does not renumber the ones after it
- * @returns {import('../document.js').CarouselSlide}
+ * @returns {import('../document.ts').CarouselSlide}
  */
 function importOne(ctx, parsed, deckFit, index) {
   const { root, canvas, name } = parsed;

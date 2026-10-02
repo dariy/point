@@ -39,8 +39,8 @@ import {
   snapBox,
   snapLines,
   zoomCrop,
-} from '../src/plugins/carousel/studio/gestures.js';
-import { createMultiTapWatcher } from '../src/plugins/carousel/studio/pointerSession.js';
+} from '../src/plugins/carousel/studio/gestures.ts';
+import { createMultiTapWatcher } from '../src/plugins/carousel/studio/pointerSession.ts';
 
 const FULL = { x: 0, y: 0, w: 1, h: 1 };
 

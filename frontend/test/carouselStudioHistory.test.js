@@ -13,8 +13,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { createHistory } from '../src/plugins/carousel/studio/history.js';
-import { normalizeDocument, splitDocument } from '../src/plugins/carousel/document.js';
+import { createHistory } from '../src/plugins/carousel/studio/history.ts';
+import { normalizeDocument, splitDocument } from '../src/plugins/carousel/document.ts';
 
 /** A document with `n` slides off one source — the studio's own starting shape. */
 function doc(n, patch = {}) {

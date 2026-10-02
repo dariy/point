@@ -1,5 +1,5 @@
 /**
- * deckTransition.js — pure geometry + DOM primitives behind the carousel
+ * deckTransition.ts — pure geometry + DOM primitives behind the carousel
  * deck's panoramic pan (p-cl69). No component involved; MediaViewer.test.js
  * covers the wiring into an actual drag/step.
  */
@@ -14,7 +14,7 @@ import {
   clearDeckClip,
   setImgTranslateX,
   clearImgTransform,
-} from '../src/utils/deckTransition.js';
+} from '../src/utils/deckTransition.ts';
 
 describe('deckTransition', () => {
   let dom;

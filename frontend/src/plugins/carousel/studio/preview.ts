@@ -38,7 +38,7 @@ import {
   layerRect,
   spanLayerRect,
   wrapText,
-} from "../geometry.js";
+} from "../geometry.ts";
 import {
   ALIGN_ANCHOR,
   ARROW_STROKE,
@@ -49,7 +49,7 @@ import {
   VALIGN_SLACK,
   counterText,
   fontSpec,
-} from "../render.js";
+} from "../render.ts";
 
 /** Behind the source image on the split stage and every split filmstrip frame —
  *  visible only where the image doesn't reach (the `pad` strategy's trailing gap
@@ -132,7 +132,7 @@ export function paintAnchorRail(rail, anchorY) {
  * by identical code.
  *
  * @param {{imgs: ArrayLike<HTMLElement>, bgs: ArrayLike<HTMLElement>}} els
- * @param {{slide: import('../document.js').CarouselSlide, srcW: number|null,
+ * @param {{slide: import('../document.ts').CarouselSlide, srcW: number|null,
  *   srcH: number|null, aspect: string, hasPad: boolean}} o  `hasPad` is the
  *   caller's answer to whether this slide leaves a letterbox to fill.
  */
@@ -173,8 +173,8 @@ export function paintDeckSlide({ imgs, bgs }, { slide, srcW, srcH, aspect, hasPa
  * "nothing to preview yet" affordance it was added for.
  *
  * @param {ArrayLike<HTMLElement>} bgs
- * @param {{slide: import('../document.js').CarouselSlide,
- *   fit: ReturnType<typeof import('../geometry.js').deckSlideFitCSS>, url: string,
+ * @param {{slide: import('../document.ts').CarouselSlide,
+ *   fit: ReturnType<typeof import('../geometry.ts').deckSlideFitCSS>, url: string,
  *   aspect: string, hasPad: boolean}} o
  */
 function paintDeckBg(bgs, { slide, fit, url, aspect, hasPad }) {
@@ -261,7 +261,7 @@ export function ensurePreviewFont() {
  * can be had, which is an environment that could not render the JPEG either.
  *
  * @param {number} weight
- * @returns {import('../geometry.js').MeasureText|null}
+ * @returns {import('../geometry.ts').MeasureText|null}
  */
 function measurer(weight) {
   const ctx = measureContext();
@@ -334,7 +334,7 @@ function baselineShift(weight, fontSize) {
  * @param {{text: string,
  *   layer: {size?: number|null, lineHeight?: number, valign?: string, align?: string},
  *   box: {x:number,y:number,w:number,h:number}, frameH: number,
- *   measure: import('../geometry.js').MeasureText}} o  `layer` is read for its
+ *   measure: import('../geometry.ts').MeasureText}} o  `layer` is read for its
  *   four typographic fields only, so a `counter` (which carries no
  *   `lineHeight`) is the same argument as a `text`
  * @returns {{fontSize:number, lines:string[], lineBox:number, top:number,
@@ -448,7 +448,7 @@ export function inkPlan(box, strokes) {
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  the slide's `[data-slice]`
  *   elements: the stage slice and the filmstrip frame
- * @param {{layers: import('../document.js').CarouselLayer[]|undefined,
+ * @param {{layers: import('../document.ts').CarouselLayer[]|undefined,
  *   aspect: string, index: number, count: number}} o
  */
 export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
@@ -492,7 +492,7 @@ export function paintDeckLayers({ hosts }, { layers, aspect, index, count }) {
  * switched off (`hidden`) is not painted.
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
- * @param {{spanLayers: import('../document.js').CarouselLayer[]|undefined,
+ * @param {{spanLayers: import('../document.ts').CarouselLayer[]|undefined,
  *   aspect: string, index: number, count: number, selected: number|null}} o
  *   `selected` is the span-layer index the panel is editing, or `null`
  */
@@ -532,7 +532,7 @@ export function paintSpanLayers({ hosts }, { spanLayers, aspect, index, count, s
  * the type paint appended with it.
  *
  * @param {HTMLElement} el
- * @param {import('../document.js').CarouselLayer} layer
+ * @param {import('../document.ts').CarouselLayer} layer
  * @param {{index: number, count: number, frameH: number, heightCqw: number,
  *   rect: {x:number,y:number,w:number,h:number}}} env  the slide's place in the
  *   deck (a `counter`'s `{i}` / `{n}`), the canvas height a numeric type size
@@ -591,8 +591,8 @@ function paintLayerContent(el, layer, env) {
  * exactly what `ALIGN_ANCHOR` plus the canvas `textAlign` come to.
  *
  * @param {HTMLElement} el
- * @param {import('../document.js').CarouselTextLayer
- *   | import('../document.js').CarouselCounterLayer} layer
+ * @param {import('../document.ts').CarouselTextLayer
+ *   | import('../document.ts').CarouselCounterLayer} layer
  * @param {{index: number, count: number, frameH: number, heightCqw: number,
  *   rect: {x:number,y:number,w:number,h:number}}} env
  */
@@ -647,7 +647,7 @@ function applyTextFit(block, plan, layer, frameH, heightCqw) {
  *
  * @param {HTMLElement} el the `.carousel-studio__layer`/`.carousel-studio__span-layer`
  *   host whose `.carousel-studio__layer-text` child is being edited
- * @param {import('../document.js').CarouselTextLayer} layer
+ * @param {import('../document.ts').CarouselTextLayer} layer
  * @param {{frameH: number, heightCqw: number, rect: {x:number,y:number,w:number,h:number}}} env
  */
 export function restyleEditingText(el, layer, { frameH, heightCqw, rect }) {
@@ -669,7 +669,7 @@ export function restyleEditingText(el, layer, { frameH, heightCqw, rect }) {
  * aspect), so the uniform `viewBox` scale is exact.
  *
  * @param {HTMLElement} el
- * @param {import('../document.js').CarouselArrowLayer} layer
+ * @param {import('../document.ts').CarouselArrowLayer} layer
  * @param {{w:number, h:number}} rect the layer's box in canvas pixels
  */
 function paintArrowContent(el, layer, rect) {
@@ -703,7 +703,7 @@ function paintArrowContent(el, layer, rect) {
  * render's geometry scaled, not an approximation of it.
  *
  * @param {HTMLElement} el
- * @param {import('../document.js').CarouselInkLayer} layer
+ * @param {import('../document.ts').CarouselInkLayer} layer
  * @param {{w:number, h:number}} rect the layer's box in canvas pixels
  */
 function paintInkContent(el, layer, rect) {
@@ -741,7 +741,7 @@ function paintInkContent(el, layer, rect) {
  * scoped to as much as on one that has drawn no stroke.
  *
  * @param {HTMLElement} el
- * @param {import('../document.js').CarouselInkLayer|null} layer a synthetic
+ * @param {import('../document.ts').CarouselInkLayer|null} layer a synthetic
  *   layer built from the session's own strokes, or `null` to hide the node
  * @param {string} aspect
  */
@@ -849,7 +849,7 @@ export function paintLayerChrome({ hosts }, { box, aspect, guides }) {
  * clipped rather than filtered, for the same reason.
  *
  * @param {{hosts: ArrayLike<HTMLElement>}} els  one slide's `[data-slice]` elements
- * @param {{layer: import('../document.js').CarouselLayer|null, aspect: string,
+ * @param {{layer: import('../document.ts').CarouselLayer|null, aspect: string,
  *   index: number, count: number, guides: {v: number[], h: number[]}}} o
  */
 export function paintSpanChrome({ hosts }, { layer, aspect, index, count, guides }) {

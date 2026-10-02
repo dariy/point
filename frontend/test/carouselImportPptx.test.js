@@ -19,9 +19,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DOMParser } from 'linkedom';
 
-import { normalizeDocument, applyTemplate } from '../src/plugins/carousel/document.js';
-import { importPptx } from '../src/plugins/carousel/import/pptx.js';
-import { ImportError, IMPORT_ACCEPT, IMPORTERS, adapterFor } from '../src/plugins/carousel/import/index.js';
+import { normalizeDocument, applyTemplate } from '../src/plugins/carousel/document.ts';
+import { importPptx } from '../src/plugins/carousel/import/pptx.ts';
+import { ImportError, IMPORT_ACCEPT, IMPORTERS, adapterFor } from '../src/plugins/carousel/import/index.ts';
 
 globalThis.DOMParser = DOMParser;
 

@@ -16,8 +16,8 @@
  */
 
 import { carouselFence, CAROUSEL_BLOCK_CLASS, IMAGE_PATH_RE } from '../../utils/postNodes.ts';
-import { sliceRects, clampPan } from './geometry.js';
-import { MIN_SLIDES, MAX_SLIDES } from './studio/bounds.js';
+import { sliceRects, clampPan } from './geometry.ts';
+import { MIN_SLIDES, MAX_SLIDES } from './studio/bounds.ts';
 
 /** Bumped only on a breaking schema change; present since the first commit. */
 export const DOC_VERSION = 1;

@@ -24,7 +24,7 @@ import {
   ZipError,
   openZip,
   readZip,
-} from '../src/plugins/carousel/import/zip.js';
+} from '../src/plugins/carousel/import/zip.ts';
 
 const FIXTURE = readFileSync(fileURLToPath(new URL('./fixtures/zip-shape.pptx', import.meta.url)));
 

@@ -714,7 +714,7 @@ type GetCarouselByBlockKeyParams struct {
 // CAROUSELS
 // One Carousel Studio document per carousel block, keyed (post_id, block_key):
 // a post may hold several independent carousels. doc is opaque JSON, stored and
-// returned verbatim; the schema lives in frontend/src/plugins/carousel/document.js.
+// returned verbatim; the schema lives in frontend/src/plugins/carousel/document.ts.
 //
 // ListCarouselsByPostID names its columns and omits doc for the same reason
 // ListCarouselTemplates does: the caller wants to know which of a post's blocks

@@ -1,5 +1,5 @@
 /**
- * carousel/import/zip.js — a read-only ZIP reader, no dependencies.
+ * carousel/import/zip.ts — a read-only ZIP reader, no dependencies.
  *
  * A `.pptx` is a ZIP of XML, and `docs/vendors.md` allows the frontend no npm
  * runtime dependency — but reading one does not need a library:

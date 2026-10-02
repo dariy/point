@@ -16,7 +16,7 @@ import {
   MAX_SLIDES,
   DEFAULT_SLIDES,
   clampSlides,
-} from '../src/plugins/carousel/studio/bounds.js';
+} from '../src/plugins/carousel/studio/bounds.ts';
 
 describe('carousel studio bounds', () => {
   test('the range is 2..20, defaulting to 3', () => {

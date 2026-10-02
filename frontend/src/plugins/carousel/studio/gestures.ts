@@ -110,8 +110,8 @@
  * and the same direction-declaring touch claim, mirrored to the other axis.
  */
 
-import { clampPan, deckSlideFitCSS } from "../geometry.js";
-import { isTouchLayout } from "./layout.js";
+import { clampPan, deckSlideFitCSS } from "../geometry.ts";
+import { isTouchLayout } from "./layout.ts";
 import {
   DRAG_SLOP_PX,
   claimPointer,
@@ -121,7 +121,7 @@ import {
   pastSlop,
   releasePointer,
   resolveTouchClaim,
-} from "./pointerSession.js";
+} from "./pointerSession.ts";
 
 /** Wheel-notch → zoom factor. One notch (100px) is ~16%, and the exponential
  *  keeps zooming in and back out along the same path. */
@@ -593,9 +593,9 @@ export function panScale(crop, fit, box, { srcW, srcH, aspect }) {
  *   The pixel size of slide `i`'s source, and the deck's aspect — read per
  *   event, never cached. Per slide, because a deck can name a different photo
  *   on each one and a crop is normalized against its own source.
- * @property {(i: number) => import('../document.js').CarouselSlide|null} slideAt
+ * @property {(i: number) => import('../document.ts').CarouselSlide|null} slideAt
  *   The document's slide `i`, or null if there is none.
- * @property {(i: number, slide: import('../document.js').CarouselSlide) => void} paint
+ * @property {(i: number, slide: import('../document.ts').CarouselSlide) => void} paint
  *   Paint a provisional slide straight to the DOM, without committing it.
  * @property {(i: number, crop: {x: number, y: number, w: number, h: number}) => void} commit
  *   Write a finished crop into the document. Already clamped, and already

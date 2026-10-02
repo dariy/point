@@ -26,7 +26,7 @@
  * case.
  */
 
-import { serializeDocument } from "../document.js";
+import { serializeDocument } from "../document.ts";
 
 /** How many documents to keep. Deep enough to cover a working session, small
  *  enough that the retained slide metadata stays trivial next to the media. */

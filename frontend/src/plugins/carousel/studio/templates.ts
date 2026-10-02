@@ -13,7 +13,7 @@
  * `index.js`'s, which is the only half that can fail halfway.
  */
 
-import { ASSET_LIMITS, fromDataUrl } from '../import/adapter.js';
+import { ASSET_LIMITS, fromDataUrl } from '../import/adapter.ts';
 
 /**
  * The caps the studio checks *before* a template is stored, so an oversized

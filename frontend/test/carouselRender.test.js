@@ -18,19 +18,19 @@ import {
   renderDeck,
   renderCarousel,
   renderAndUpload,
-} from '../src/plugins/carousel/render.js';
+} from '../src/plugins/carousel/render.ts';
 import {
   sliceRects,
   deckSlideRects,
   canvasSize,
   layerRect,
-} from '../src/plugins/carousel/geometry.js';
+} from '../src/plugins/carousel/geometry.ts';
 import {
   normalizeDocument,
   normalizeLayer,
   splitDocument,
   toDeckDocument,
-} from '../src/plugins/carousel/document.js';
+} from '../src/plugins/carousel/document.ts';
 
 /** Gradient handles the fake ctx has handed out, so a `fillStyle` carrying one
  *  logs as the plain string `'gradient'` instead of an unassertable object. */

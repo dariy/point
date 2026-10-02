@@ -1,5 +1,5 @@
 /**
- * carousel/import/xml.js — the XML side of an import, prefix-agnostic.
+ * carousel/import/xml.ts — the XML side of an import, prefix-agnostic.
  *
  * Both importers read a namespaced XML tree: OOXML through `p:`/`a:`/`r:`, SVG
  * through no prefix at all until someone's exporter adds one. So every lookup

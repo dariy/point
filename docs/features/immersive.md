@@ -38,7 +38,7 @@ through the same choice, so a keyboard step and a finger step look identical.
 
 ### The deck strategy: panoramic
 
-`frontend/src/utils/deckTransition.js` — pure geometry plus four DOM primitives, no
+`frontend/src/utils/deckTransition.ts` — pure geometry plus four DOM primitives, no
 viewer internals. The studio slices one photo into continuity-matched columns, so two
 adjacent slides are two halves of one picture and the step should read as a **pan
 across a single image**, not a swap of two pictures.

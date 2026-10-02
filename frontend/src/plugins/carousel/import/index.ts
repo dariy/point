@@ -1,5 +1,5 @@
 /**
- * carousel/import/index.js — the import adapter registry.
+ * carousel/import/index.ts — the import adapter registry.
  *
  * One place that knows what Point can import, so the import dialog builds its
  * file input and its error messages from a list rather than from a switch it has
@@ -15,10 +15,10 @@
  * `adapter.js`, which is also where the parts they share live.
  */
 
-import { importPptx } from './pptx.js';
-import { importSvg } from './svg.js';
+import { importPptx } from './pptx.ts';
+import { importSvg } from './svg.ts';
 
-export { ImportError, ASSET_LIMITS } from './adapter.js';
+export { ImportError, ASSET_LIMITS } from './adapter.ts';
 
 /**
  * @typedef {object} ImportAdapter
@@ -27,8 +27,8 @@ export { ImportError, ASSET_LIMITS } from './adapter.js';
  * @property {string[]} extensions lower-case, with the dot
  * @property {string} accept the `<input type="file" accept>` value
  * @property {boolean} takesList `true` when one template comes from many files
- * @property {(input: *, options?: *) => Promise<{template: import('../document.js').CarouselTemplate,
- *   report: import('./adapter.js').ImportReport}>} read
+ * @property {(input: *, options?: *) => Promise<{template: import('../document.ts').CarouselTemplate,
+ *   report: import('./adapter.ts').ImportReport}>} read
  */
 
 /** @type {ImportAdapter} */

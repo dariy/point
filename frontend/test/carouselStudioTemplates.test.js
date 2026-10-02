@@ -17,8 +17,8 @@ import {
   replaceAssets,
   templateLimitError,
   templateSlug,
-} from '../src/plugins/carousel/studio/templates.js';
-import { normalizeDocument, toTemplate } from '../src/plugins/carousel/document.js';
+} from '../src/plugins/carousel/studio/templates.ts';
+import { normalizeDocument, toTemplate } from '../src/plugins/carousel/document.ts';
 
 /** A tiny `data:` image URL — the shape an importer inlines. */
 function inlined(bytes, mime = 'image/png') {

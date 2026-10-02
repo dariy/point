@@ -1,5 +1,5 @@
 /**
- * carousel/import/adapter.js — what every import adapter shares.
+ * carousel/import/adapter.ts — what every import adapter shares.
  *
  * An importer's job is to turn somebody else's file into the envelope
  * `document.js` already defines. That leaves four things which are the same
@@ -23,8 +23,8 @@
  * Pure: no DOM, no network, no canvas.
  */
 
-import { ASPECTS } from '../document.js';
-import { canvasSize } from '../geometry.js';
+import { ASPECTS } from '../document.ts';
+import { canvasSize } from '../geometry.ts';
 
 /**
  * A typed import failure. `code` is what a caller branches on and `part` names
@@ -57,7 +57,7 @@ export class ImportError extends Error {
  * decoration limits — they are what keeps a template storable at all. The
  * total is counted **on the encoded URLs**, not on the raw bytes, because that
  * is what the envelope actually costs and what the store's 8 MB cap
- * (`api/carousel.js` `TEMPLATE_MAX_BYTES`) measures. Base64 is 4 bytes per 3,
+ * (`api/carousel.ts` `TEMPLATE_MAX_BYTES`) measures. Base64 is 4 bytes per 3,
  * so ~5.8 MB of photographs is the real ceiling; the per-asset cap keeps one
  * hero image from spending it alone.
  */
@@ -493,7 +493,7 @@ export function createReport(meta) {
  * `{ id: 'bold-quote-deck', name: 'Bold Quote Deck' }`.
  *
  * `id` is a slug because that is what the template store is keyed by
- * (`api/carousel.js`), and the name keeps the author's capitalisation because
+ * (`api/carousel.ts`), and the name keeps the author's capitalisation because
  * they chose it. Uniqueness is not settled here — two decks with one name are
  * the save path's problem, and it is the one place that can ask.
  *

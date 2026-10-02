@@ -20,7 +20,7 @@ import {
   isTouchLayout,
   isWideViewport,
   readPropsPref,
-} from '../src/plugins/carousel/studio/layout.js';
+} from '../src/plugins/carousel/studio/layout.ts';
 
 /** A window stand-in whose media query answers whatever it is told to. */
 const fakeWin = (matches) => ({ matchMedia: (q) => ({ matches: q === SHEET_BREAKPOINT && matches }) });

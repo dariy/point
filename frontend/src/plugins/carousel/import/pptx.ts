@@ -1,5 +1,5 @@
 /**
- * carousel/import/pptx.js — a `.pptx` deck into a carousel template.
+ * carousel/import/pptx.ts — a `.pptx` deck into a carousel template.
  *
  * This is the main import path, and it is one importer for what looks like two
  * jobs: PPTX is what a PowerPoint template already is, and it is also what
@@ -43,9 +43,9 @@
  * S3. Schema: `docs/features/carousel-studio.md`.
  */
 
-import { normalizeDocument, normalizeLayer, toTemplate } from '../document.js';
-import { MAX_SLIDES } from '../studio/bounds.js';
-import { openZip, ZipError } from './zip.js';
+import { normalizeDocument, normalizeLayer, toTemplate } from '../document.ts';
+import { MAX_SLIDES } from '../studio/bounds.ts';
+import { openZip, ZipError } from './zip.ts';
 import {
   ImportError,
   centreFit,
@@ -53,7 +53,7 @@ import {
   createAssets,
   createReport,
   metaFromFilename,
-} from './adapter.js';
+} from './adapter.ts';
 import {
   attr,
   attrBool,
@@ -64,7 +64,7 @@ import {
   local,
   parseXml,
   path,
-} from './xml.js';
+} from './xml.ts';
 
 /** English Metric Units, the unit every OOXML coordinate is in: 914400 to the
  *  inch, so 9525 to a CSS pixel at 96 dpi and 12700 to a point. */
@@ -115,12 +115,12 @@ const utf8 = new TextDecoder('utf-8');
 
 /**
  * @typedef {object} PptxContext
- * @property {import('./zip.js').ZipReader} zip
+ * @property {import('./zip.ts').ZipReader} zip
  * @property {typeof DOMParser|undefined} parser
  * @property {Map<string, string>} theme scheme colour name → `#rrggbb`
- * @property {import('./adapter.js').ImportFit} fit
+ * @property {import('./adapter.ts').ImportFit} fit
  * @property {ReturnType<typeof createReport>} report
- * @property {import('./adapter.js').ImportAssets} assets
+ * @property {import('./adapter.ts').ImportAssets} assets
  * @property {{kept: number, total: number}} shapes
  * @property {number} srcW source canvas width, EMU
  * @property {number} srcH source canvas height, EMU
@@ -155,8 +155,8 @@ const utf8 = new TextDecoder('utf-8');
  *   should be testable rather than skipped
  * @param {number} [options.maxAssetBytes]
  * @param {number} [options.maxTotalBytes]
- * @returns {Promise<{template: import('../document.js').CarouselTemplate,
- *   report: import('./adapter.js').ImportReport}>}
+ * @returns {Promise<{template: import('../document.ts').CarouselTemplate,
+ *   report: import('./adapter.ts').ImportReport}>}
  * @throws {ImportError} when the file is not a deck this can read at all
  */
 export async function importPptx(bytes, options = {}) {
@@ -235,7 +235,7 @@ export async function importPptx(bytes, options = {}) {
  * them — which is the line this function draws. Everything after it costs at
  * most one slide.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {typeof DOMParser} [parser]
  * @returns {Promise<{srcW: number, srcH: number, listed: Element[]}>}
  */
@@ -260,7 +260,7 @@ async function readDeck(zip, parser) {
  *
  * @param {PptxContext} ctx
  * @param {string[]} parts
- * @returns {Promise<import('../document.js').CarouselSlide[]>}
+ * @returns {Promise<import('../document.ts').CarouselSlide[]>}
  */
 async function importSlides(ctx, parts) {
   const slides = [];
@@ -294,7 +294,7 @@ function named(names) {
  * only the two "we will not read this" cases need folding together.
  *
  * @param {Uint8Array|ArrayBuffer} bytes
- * @returns {import('./zip.js').ZipReader}
+ * @returns {import('./zip.ts').ZipReader}
  */
 function openArchive(bytes) {
   try {
@@ -310,7 +310,7 @@ function openArchive(bytes) {
  * one, and `DOMParser` treats a leading `U+FEFF` as content sitting before the
  * declaration, which fails the parse.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {string} part
  * @returns {Promise<string>}
  */
@@ -323,7 +323,7 @@ async function readText(zip, part) {
  * corrupt member inside a slide costs that slide through the same catch as a
  * malformed one, and a caller has one error vocabulary rather than two.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {string} part
  * @returns {Promise<Uint8Array>}
  */
@@ -340,8 +340,8 @@ async function readBytes(zip, part) {
  * A ZIP failure code as an import one. Only the two "we will not read this"
  * cases need folding together; the rest line up.
  *
- * @param {import('./zip.js').ZipErrorCode} code
- * @returns {import('./adapter.js').ImportErrorCode}
+ * @param {import('./zip.ts').ZipErrorCode} code
+ * @returns {import('./adapter.ts').ImportErrorCode}
  */
 function importCode(code) {
   if (code === 'too-large') return 'too-large';
@@ -352,7 +352,7 @@ function importCode(code) {
  * Parse one XML member, or `null` when it is absent or is not the part it
  * claims to be. The caller decides what that costs — see `xml.js` `parseXml`.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {string} part
  * @param {string} root expected root element, local name
  * @param {typeof DOMParser} [parser]
@@ -371,7 +371,7 @@ async function readPart(zip, part, root, parser) {
  * working when someone else's server does, and inlining is the whole point of
  * the envelope.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {string} part the part the relationships belong to
  * @param {typeof DOMParser} [parser]
  * @returns {Promise<Map<string, string>>}
@@ -423,7 +423,7 @@ function resolvePart(dir, target) {
  * the only authority on order in any case — a deck whose slides were reordered
  * keeps its original part names.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {Element[]} listed the `<p:sldId>` entries, in order
  * @param {ReturnType<typeof createReport>} report
  * @param {typeof DOMParser} [parser]
@@ -471,7 +471,7 @@ function relFor(sldId, rels) {
  * is not. Best effort throughout: a deck with no readable theme simply resolves
  * fewer colours.
  *
- * @param {import('./zip.js').ZipReader} zip
+ * @param {import('./zip.ts').ZipReader} zip
  * @param {typeof DOMParser} [parser]
  * @returns {Promise<Map<string, string>>}
  */
@@ -666,7 +666,7 @@ function addLayer(ctx, page, layer) {
  * @param {PptxContext} ctx
  * @param {string} part
  * @param {number} index
- * @returns {Promise<import('../document.js').CarouselSlide>}
+ * @returns {Promise<import('../document.ts').CarouselSlide>}
  * @throws {ImportError} when this slide cannot be read — costing this slide only
  */
 async function importSlide(ctx, part, index) {
@@ -734,7 +734,7 @@ async function readSlideBg(ctx, cSld, page) {
  * @param {PptxContext} ctx
  * @param {Element} bgPr
  * @param {number} index
- * @returns {import('../document.js').CarouselBg|null}
+ * @returns {import('../document.ts').CarouselBg|null}
  */
 function bgFill(ctx, bgPr, index) {
   const solid = solidFill(bgPr, ctx.theme);

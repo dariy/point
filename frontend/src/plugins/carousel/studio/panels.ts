@@ -33,9 +33,9 @@ import {
   safeAreaRect,
   slideCountOptions,
   spanLayerCoverage,
-} from "../geometry.js";
-import { IMPORT_ACCEPT, IMPORTERS } from "../import/index.js";
-import { MAX_SLIDES, MIN_SLIDES } from "./bounds.js";
+} from "../geometry.ts";
+import { IMPORT_ACCEPT, IMPORTERS } from "../import/index.ts";
+import { MAX_SLIDES, MIN_SLIDES } from "./bounds.ts";
 
 /** Fit-panel radio: the two `cover` variants (free count vs. width-filling
  *  count) plus the two pixel-exact strategies. `fill` stores `strategy: 'cover'`
@@ -310,7 +310,7 @@ function deckLayers() {
  * fills them from `layerCSS`; an element whose `data-layer` outruns the list —
  * a layer deleted since the last paint — is hidden there.
  *
- * @param {import('../document.js').CarouselSlide} slide
+ * @param {import('../document.ts').CarouselSlide} slide
  */
 function layerNodes(slide) {
   return (slide.layers || []).map(
@@ -326,7 +326,7 @@ function layerNodes(slide) {
  * same discontinuity the JPEG will. A node whose `data-span-layer` outruns the
  * list is hidden there.
  *
- * @param {import('../document.js').CarouselDoc} doc
+ * @param {import('../document.ts').CarouselDoc} doc
  */
 function spanLayerNodes(doc) {
   return (doc.spanLayers || []).map(
@@ -400,7 +400,7 @@ function layerLabel(layer) {
  * (`carousel.css`); below that they simply stack in document flow.
  *
  * @param {object} o
- * @param {import('../document.js').CarouselDoc} o.doc
+ * @param {import('../document.ts').CarouselDoc} o.doc
  * @param {boolean} o.showGuides
  * @param {number} o.selected      the raw selection, for the strip's highlight
  * @param {number} o.deckIndex     the selection pinned inside the deck
@@ -855,7 +855,7 @@ export function builder({
  * document worth building (`pickPrompt` takes the body row then) — `index.js`
  * calls this straight from `_renderStudio` in both branches.
  *
- * @param {{doc: import('../document.js').CarouselDoc, renderedPaths: string[]}} o
+ * @param {{doc: import('../document.ts').CarouselDoc, renderedPaths: string[]}} o
  */
 export function renderedStrip({ doc, renderedPaths }) {
   if (!renderedPaths.length) return "";
@@ -1022,7 +1022,7 @@ export function modeToggle({ mode, canDeck, busy }) {
  * is not shown here at all — none of those controls drives a deck slide, and
  * leaving them live would be a lie.
  *
- * @param {{doc: import('../document.js').CarouselDoc, index: number,
+ * @param {{doc: import('../document.ts').CarouselDoc, index: number,
  *   hasPad: boolean}} o  `hasPad` is the selected slide's own answer: the
  *   caller owns the source pixels the question needs.
  */
@@ -1098,7 +1098,7 @@ export function deckPanel({ doc, index, hasPad }) {
  * are committed through `_setSlideFraming` in `index.js`, so `normalizeBg` is
  * the only thing that decides what a value means.
  *
- * @param {{index: number, slide: import('../document.js').CarouselSlide}} o
+ * @param {{index: number, slide: import('../document.ts').CarouselSlide}} o
  */
 export function bgControl({ index, slide }) {
   const bg = slide.bg;
@@ -1208,7 +1208,7 @@ function spanRangeLabel(covered) {
  * buttons — it is a layer switched off, not a deleted one — and only dims
  * (`is-hidden`).
  *
- * @param {import('../document.js').CarouselLayer[]} layers
+ * @param {import('../document.ts').CarouselLayer[]} layers
  * @param {{scope: "slide"|"span", selectedLayer: number|null,
  *   meta?: (j: number) => string, labelledBy: string, formHtml?: import('../../../utils/helpers.ts').Slot}} o
  *   `formHtml`, when given, is the selected layer's property form — spliced
@@ -1458,7 +1458,7 @@ function addLayerChips(scope) {
  * a span layer is dragged, resized and snapped on the stage as well, in deck
  * coordinates (`gestures.js`), and both routes commit through `updateLayer`.
  *
- * @param {{doc: import('../document.js').CarouselDoc, index: number,
+ * @param {{doc: import('../document.ts').CarouselDoc, index: number,
  *   selectedLayer: number|null, layerScope: "slide"|"span", logoUrl: string}} o
  */
 export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", logoUrl }) {
@@ -1514,7 +1514,7 @@ export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", lo
  * the fields that layer's `type` has, each with a `#carousel-layer-*` id
  * `index.js` wires for a live-preview `input` and a commit-on-`change`.
  *
- * @param {import('../document.js').CarouselLayer} layer a normalized layer
+ * @param {import('../document.ts').CarouselLayer} layer a normalized layer
  * @param {string} logoUrl the `logo_url` setting — shown as an `image` layer's
  *   default source when it carries none of its own
  */
@@ -1715,7 +1715,7 @@ export function layerForm(layer, logoUrl) {
  * noise. `paintAnchorRail` (`studio/preview.js`) moves it during a drag; the
  * stylesheet fades it in with the stage's `is-anchoring` class.
  *
- * @param {{doc: import('../document.js').CarouselDoc, srcW: number|null,
+ * @param {{doc: import('../document.ts').CarouselDoc, srcW: number|null,
  *   srcH: number|null}} o
  */
 export function anchorRail({ doc, srcW, srcH }) {
@@ -1754,7 +1754,7 @@ export function anchorRail({ doc, srcW, srcH }) {
  * `createAnchorGesture` in `studio/gestures.js`) and the two write the same
  * field through the same `_setSplit({ anchorY })`.
  *
- * @param {{doc: import('../document.js').CarouselDoc, srcW: number|null,
+ * @param {{doc: import('../document.ts').CarouselDoc, srcW: number|null,
  *   srcH: number|null, fitMode: string}} o
  */
 export function fitPanel({ doc, srcW, srcH, fitMode }) {
@@ -2114,7 +2114,7 @@ export function saveTemplateDialog({ name, slug, busy, error }) {
  * not have, and Point renders type in the active theme's family; saying so
  * once, plainly, is what stops the author hunting for a font picker.
  *
- * @param {import('../import/adapter.js').ImportReport} report
+ * @param {import('../import/adapter.ts').ImportReport} report
  */
 export function importReportPanel(report) {
   if (!report) return "";

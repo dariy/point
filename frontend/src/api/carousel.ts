@@ -11,7 +11,7 @@
  * server addresses the post's first carousel, which is how a caller written
  * against the one-carousel API keeps working.
  *
- * `doc` is the carousel document (see plugins/carousel/document.js). The server
+ * `doc` is the carousel document (see plugins/carousel/document.ts). The server
  * stores and returns it verbatim, validating only that it is a JSON object.
  *
  * The template store under /api/carousel/templates is keyed by slug instead of
@@ -54,7 +54,7 @@ export function getCarousel(postId, blockKey) {
  * carousels untouched. The post must already exist.
  *
  * @param {number} postId
- * @param {import('../plugins/carousel/document.js').CarouselDoc} doc
+ * @param {import('../plugins/carousel/document.ts').CarouselDoc} doc
  * @param {string} [blockKey]  Omitted: the post's first carousel.
  * @returns {Promise<{ post_id: number, block_key: string, doc: object, created_at: string, updated_at: string }>}
  */
@@ -141,7 +141,7 @@ export function getCarouselTemplate(slug) {
  *
  * @param {string} slug
  * @param {string} name
- * @param {import('../plugins/carousel/document.js').CarouselTemplate} doc
+ * @param {import('../plugins/carousel/document.ts').CarouselTemplate} doc
  * @returns {Promise<CarouselTemplate>}
  */
 export function saveCarouselTemplate(slug, name, doc) {

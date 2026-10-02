@@ -19,7 +19,7 @@ const carouselBlockClass = "carousel-block"
 
 // carouselFenceRe matches a `:::{…}\n…\n:::` fenced div, non-greedy to its
 // first closing `:::` (a slide path can never contain one) — mirrors
-// carouselFences in frontend/src/plugins/carousel/document.js so the sweep and
+// carouselFences in frontend/src/plugins/carousel/document.ts so the sweep and
 // the studio agree on which fences a post's content holds.
 var carouselFenceRe = regexp.MustCompile(`:::\{([^}\n]*)\}\n(?s:.*?)\n:::`)
 

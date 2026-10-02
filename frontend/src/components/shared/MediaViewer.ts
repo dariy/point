@@ -23,7 +23,7 @@ import { getPostBySlug, getPostNavigation } from '../../api/posts.ts';
 import { mediaFromHtml } from '../../utils/postMedia.ts';
 import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.ts';
 import { immersiveNavTargets } from '../../utils/immersiveNav.ts';
-import { imgEl, computeDeckGeometry, applyDeckClip, clearDeckClip, setImgTranslateX, clearImgTransform } from '../../utils/deckTransition.js';
+import { imgEl, computeDeckGeometry, applyDeckClip, clearDeckClip, setImgTranslateX, clearImgTransform } from '../../utils/deckTransition.ts';
 import type { MediaItem } from '../../utils/postMedia.ts';
 import type { Post, PostMediaRef, PostStub } from '../../api/posts.ts';
 import type { Slot } from '../../utils/helpers.ts';

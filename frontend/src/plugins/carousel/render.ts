@@ -42,7 +42,7 @@ import {
   sliceRects,
   spanLayerRect,
   wrapText,
-} from './geometry.js';
+} from './geometry.ts';
 import { deleteMedia, uploadMedia } from '../../api/media.ts';
 
 /** Fixed so identical inputs encode to identical bytes → SHA256 dedup reuses
@@ -177,7 +177,7 @@ export function browserDeps() {
  * normalized — which then falls through to the default fill rather than
  * throwing out of `addColorStop` half way through an encode.
  *
- * @param {import('./document.js').CarouselBg|null|undefined} bg
+ * @param {import('./document.ts').CarouselBg|null|undefined} bg
  * @returns {{angle: number, stops: Array<{at:number,color:string}>}|null}
  */
 function gradientFill(bg) {
@@ -220,7 +220,7 @@ export function fontSpec(weight, size, family) {
  * layer can leak state into the next one.
  *
  * @param {any} ctx 2D context
- * @param {import('./document.js').CarouselTextLayer} layer a normalized layer
+ * @param {import('./document.ts').CarouselTextLayer} layer a normalized layer
  * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
  * @param {number} frameH canvas height — what a numeric `size` is a fraction of
  * @param {string} family the resolved font stack
@@ -314,7 +314,7 @@ function alphaOf(layer) {
  * painted: one broken logo must never cost a whole carousel.
  *
  * @param {any} ctx 2D context
- * @param {import('./document.js').CarouselImageLayer} layer
+ * @param {import('./document.ts').CarouselImageLayer} layer
  * @param {{bitmap: any, x: number, y: number, w: number, h: number}} [placed]
  */
 function paintImageLayer(ctx, layer, placed) {
@@ -340,7 +340,7 @@ function paintImageLayer(ctx, layer, placed) {
  * one too: a square scrim beats a thrown render.
  *
  * @param {any} ctx 2D context
- * @param {import('./document.js').CarouselRectLayer} layer
+ * @param {import('./document.ts').CarouselRectLayer} layer
  * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
  */
 function paintRectLayer(ctx, layer, box) {
@@ -392,7 +392,7 @@ export function counterText(format, index, count) {
  * than a fixed aspect the box would have to be reconciled with.
  *
  * @param {any} ctx 2D context
- * @param {import('./document.js').CarouselArrowLayer} layer
+ * @param {import('./document.ts').CarouselArrowLayer} layer
  * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
  */
 function paintArrowLayer(ctx, layer, box) {
@@ -437,7 +437,7 @@ function paintArrowLayer(ctx, layer, box) {
  * cannot hold its own stroke, so it is skipped whole.
  *
  * @param {any} ctx 2D context
- * @param {import('./document.js').CarouselInkLayer} layer
+ * @param {import('./document.ts').CarouselInkLayer} layer
  * @param {{x:number,y:number,w:number,h:number}} box from {@link layerRect}
  */
 function paintInkLayer(ctx, layer, box) {
@@ -554,7 +554,7 @@ function paintDispatch(ctx, layer, box, env) {
  * starts lying about the render.
  *
  * @param {any} ctx 2D context
- * @param {import('./document.js').CarouselLayer[]|null|undefined} layers
+ * @param {import('./document.ts').CarouselLayer[]|null|undefined} layers
  * @param {string} aspect the aspect key `ctx`'s canvas was sized from
  * @param {{font?: string, index?: number, count?: number,
  *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>}} [env]
@@ -598,7 +598,7 @@ function resolveLayerEnv(aspect, env) {
  * clips the overflow for free.
  *
  * @param {any} ctx 2D context
- * @param {Array<{layer: import('./document.js').CarouselLayer,
+ * @param {Array<{layer: import('./document.ts').CarouselLayer,
  *   box: {x:number,y:number,w:number,h:number}}>|null|undefined} entries
  * @param {string} aspect the aspect key `ctx`'s canvas was sized from
  * @param {Parameters<typeof paintLayers>[3]} [env]
@@ -617,11 +617,11 @@ export function paintSpanLayers(ctx, entries, aspect, env = {}) {
  * two render sequencers so a split deck and a deck deck slice span layers the
  * same way.
  *
- * @param {import('./document.js').CarouselLayer[]|null|undefined} spanLayers
+ * @param {import('./document.ts').CarouselLayer[]|null|undefined} spanLayers
  * @param {number} i slide index
  * @param {number} n slides in the deck
  * @param {string} aspect aspect key
- * @returns {Array<{layer: import('./document.js').CarouselLayer,
+ * @returns {Array<{layer: import('./document.ts').CarouselLayer,
  *   box: {x:number,y:number,w:number,h:number}}>}
  */
 function spanLayersForSlide(spanLayers, i, n, aspect) {
@@ -668,12 +668,12 @@ function spanLayersForSlide(spanLayers, i, n, aspect) {
  *   from `sliceRects` (split) or `deckSlideRects` (deck)
  * @param {number} w canvas width
  * @param {number} h canvas height
- * @param {import('./document.js').CarouselBg|null} [bg] fill for the pad region
- * @param {import('./document.js').CarouselLayer[]} [layers] the slide's own
+ * @param {import('./document.ts').CarouselBg|null} [bg] fill for the pad region
+ * @param {import('./document.ts').CarouselLayer[]} [layers] the slide's own
  *   layers, painted back to front over the image
  * @param {{aspect?: string, font?: string, index?: number, count?: number,
  *   images?: Map<any, {bitmap:any,x:number,y:number,w:number,h:number}>,
- *   spanLayers?: Array<{layer: import('./document.js').CarouselLayer,
+ *   spanLayers?: Array<{layer: import('./document.ts').CarouselLayer,
  *     box: {x:number,y:number,w:number,h:number}}>}} [opts]
  *   `aspect` is the key `w`/`h` were sized from — layer boxes resolve against
  *   it; `font` is the stack resolved once per render by `deps.resolveFont`;
@@ -725,7 +725,7 @@ export function paintSlide(ctx, bitmap, rect, w, h, bg, layers, opts = {}) {
  * {@link paintImageLayer} skips what it cannot find. One broken layer must not
  * be able to fail a whole render.
  *
- * @param {import('./document.js').CarouselLayer[]|undefined} layers
+ * @param {import('./document.ts').CarouselLayer[]|undefined} layers
  * @param {string|undefined} aspect the slide's aspect key
  * @param {((source: string) => Promise<{blob: Blob, w: number, h: number}>)|undefined} load
  * @param {RenderDeps} deps
@@ -794,14 +794,14 @@ async function loadLayerImages(layers, aspect, load, deps, spanEntries) {
  * @param {Blob} blob the source image bytes
  * @param {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:any}} rect
  *   from `sliceRects` (split) or `deckSlideRects` (deck)
- * @param {import('./document.js').CarouselBg|null|undefined} bg background fill
+ * @param {import('./document.ts').CarouselBg|null|undefined} bg background fill
  *   for the pad region
  * @param {number} slideW @param {number} slideH canvas size
  * @param {RenderDeps} deps
- * @param {{aspect?: string, layers?: import('./document.js').CarouselLayer[],
+ * @param {{aspect?: string, layers?: import('./document.ts').CarouselLayer[],
  *   font?: string, index?: number, count?: number,
  *   load?: (source: string) => Promise<{blob: Blob, w: number, h: number}>,
- *   spanLayers?: Array<{layer: import('./document.js').CarouselLayer,
+ *   spanLayers?: Array<{layer: import('./document.ts').CarouselLayer,
  *     box: {x:number,y:number,w:number,h:number}}>}} [paint]
  *   what `paintSlide` draws over the image
  * @returns {Promise<Blob>}
@@ -939,13 +939,13 @@ function sourceLoader(deps, seed) {
  * @property {string} aspect
  * @property {'cover'|'exact'|'pad'} [strategy]
  * @property {number} [anchorY]
- * @property {import('./document.js').CarouselBg|null} [bg]
+ * @property {import('./document.ts').CarouselBg|null} [bg]
  * @property {number} [srcW]
  * @property {number} [srcH]
- * @property {import('./document.js').CarouselLayer[][]} [layers]  each column's
+ * @property {import('./document.ts').CarouselLayer[][]} [layers]  each column's
  *   own layer list, index-aligned with the slides. Layers are not deck-only: a
  *   split deck carrying a headline is the headline use case.
- * @property {import('./document.js').CarouselLayer[]} [spanLayers]  the deck's
+ * @property {import('./document.ts').CarouselLayer[]} [spanLayers]  the deck's
  *   spanning layers, sliced per column by {@link spanLayerRect} — a headline
  *   that runs across the seams of a split deck is exactly this.
  */
@@ -1031,7 +1031,7 @@ export async function renderSplit(spec, deps, onProgress, keep) {
  * every one of them, so a letterbox on two opposite sides is painted by the same
  * code as the split path's single tail column.
  *
- * @param {import('./document.js').CarouselDoc} doc a normalized deck document
+ * @param {import('./document.ts').CarouselDoc} doc a normalized deck document
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
  * @param {Array<{id:number,path:string}|null>} [keep] per-slide reuse — see `renderSplit`
@@ -1090,7 +1090,7 @@ export async function renderDeck(doc, deps, onProgress, keep, opts = {}) {
  * one `sliceRects` can leave a pad on; the layers come from every slide, since
  * unlike `crop`/`fit` they are painted in both modes.
  *
- * @param {import('./document.js').CarouselDoc} doc a normalized document
+ * @param {import('./document.ts').CarouselDoc} doc a normalized document
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide
  * @param {Array<{id:number,path:string}|null>} [keep] per-slide reuse — see `renderSplit`
@@ -1136,7 +1136,7 @@ export async function renderCarousel(doc, deps, onProgress, keep, opts = {}) {
  * the upload and partial-failure unwind below are shared by both paths rather
  * than copied into a deck-shaped twin.
  *
- * @param {({ doc: import('./document.js').CarouselDoc } & RenderOpts & { postId: number })
+ * @param {({ doc: import('./document.ts').CarouselDoc } & RenderOpts & { postId: number })
  *   | (SplitSpec & { postId: number })} spec
  * @param {RenderDeps} deps
  * @param {(p: { done: number, total: number }) => void} [onProgress] fired after each slide

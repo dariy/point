@@ -57,7 +57,7 @@ import {
   listCarouselTemplates,
   saveCarousel,
   saveCarouselTemplate,
-} from "../../api/carousel.js";
+} from "../../api/carousel.ts";
 import { getSettings, setToast } from "../../store.ts";
 import { showConfirm } from "../../utils/dialogs.ts";
 import { html, navigate } from "../../utils/helpers.ts";
@@ -72,7 +72,7 @@ import {
   safeAreaRect,
   spanLayerCoverage,
   spanLayerRect,
-} from "./geometry.js";
+} from "./geometry.ts";
 import {
   addLayer,
   addSlide,
@@ -96,17 +96,17 @@ import {
   toTemplate,
   updateLayer,
   updateSlideFraming,
-} from "./document.js";
-import { adapterFor, IMPORTERS } from "./import/index.js";
-import { browserDeps, DEFAULT_MARK_COLOR, renderAndUpload } from "./render.js";
-import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
+} from "./document.ts";
+import { adapterFor, IMPORTERS } from "./import/index.ts";
+import { browserDeps, DEFAULT_MARK_COLOR, renderAndUpload } from "./render.ts";
+import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.ts";
 import {
   PROPS_PREF_KEY,
   ZOOM_STEP,
   clampZoom,
   isTouchLayout,
   readPropsPref,
-} from "./studio/layout.js";
+} from "./studio/layout.ts";
 import {
   actionsBar,
   builder,
@@ -115,7 +115,7 @@ import {
   pickPrompt,
   saveTemplateDialog,
   templateGallery,
-} from "./studio/panels.js";
+} from "./studio/panels.ts";
 import {
   dataAssets,
   decodeAsset,
@@ -123,7 +123,7 @@ import {
   replaceAssets,
   templateLimitError,
   templateSlug,
-} from "./studio/templates.js";
+} from "./studio/templates.ts";
 import {
   ensurePreviewFont,
   paintAnchorRail,
@@ -135,9 +135,9 @@ import {
   paintSpanLayers,
   paintSplit,
   restyleEditingText,
-} from "./studio/preview.js";
-import { createAnchorGesture, createDeckGestures } from "./studio/gestures.js";
-import { createHistory } from "./studio/history.js";
+} from "./studio/preview.ts";
+import { createAnchorGesture, createDeckGestures } from "./studio/gestures.ts";
+import { createHistory } from "./studio/history.ts";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
  *  angle inputs then edit them, and `normalizeBg` is the only clamp. */
@@ -465,7 +465,7 @@ function importRefusal(files) {
  * the slide as well; this is what tells the author to go looking.
  *
  * @param {string} name
- * @param {import('./document.js').CarouselTemplateReport} report
+ * @param {import('./document.ts').CarouselTemplateReport} report
  * @returns {string}
  */
 function applyMessage(name, report) {
@@ -491,7 +491,7 @@ function applyMessage(name, report) {
  * render backend (tests inject a fake).
  *
  * @typedef {import('../../router.ts').PageProps
- *   & { renderDeps?: import('./render.js').RenderDeps }} CarouselStudioProps
+ *   & { renderDeps?: import('./render.ts').RenderDeps }} CarouselStudioProps
  */
 
 /** @extends {Component<CarouselStudioProps>} */
@@ -1038,7 +1038,7 @@ export default class CarouselStudioPage extends Component {
    *  first; the document-level pair is the fallback, which is the whole answer
    *  for a deck that shares one photo.
    *
-   * @param {import('./document.js').CarouselSlide} [slide]
+   * @param {import('./document.ts').CarouselSlide} [slide]
    * @returns {{srcW: number|null, srcH: number|null}}
    */
   _dimsFor(slide) {
@@ -1057,7 +1057,7 @@ export default class CarouselStudioPage extends Component {
    * pad, so the control and the preview cannot disagree with the render. False
    * with no source or no source dimensions: there is nothing to fill around.
    *
-   * @param {import('./document.js').CarouselSlide} slide
+   * @param {import('./document.ts').CarouselSlide} slide
    */
   _hasPad(slide) {
     const { srcW, srcH } = this._dimsFor(slide);
@@ -1308,7 +1308,7 @@ export default class CarouselStudioPage extends Component {
    *  one slide's dimensions cannot answer for another once a deck carries more
    *  than one photo.
    *
-   * @param {import('./document.js').CarouselDoc} doc
+   * @param {import('./document.ts').CarouselDoc} doc
    */
   _probeSources(doc) {
     for (const path of new Set((doc.slides || []).map((s) => s.source).filter(Boolean))) {
@@ -2943,8 +2943,8 @@ export default class CarouselStudioPage extends Component {
    * exactly those on a failure part way through, the way `renderAndUpload`
    * unwinds its own.
    *
-   * @param {import('./document.js').CarouselDoc} doc
-   * @param {import('./render.js').RenderDeps} deps
+   * @param {import('./document.ts').CarouselDoc} doc
+   * @param {import('./render.ts').RenderDeps} deps
    * @param {Array<{id: number, path: string}>} uploaded  appended to
    * @returns {Promise<Map<string, string>>}
    */
@@ -3682,7 +3682,7 @@ export default class CarouselStudioPage extends Component {
    * otherwise, which is what keeps a drag and a commit painting identically.
    *
    * @param {number} i
-   * @param {import('./document.js').CarouselSlide} slide
+   * @param {import('./document.ts').CarouselSlide} slide
    */
   _paintDeckSlide(i, slide) {
     const { srcW, srcH } = this._dimsFor(slide);
@@ -3885,7 +3885,7 @@ export default class CarouselStudioPage extends Component {
    * field. A value the schema rejects (an empty number field) is left to
    * `updateLayer` to drop back to the layer's own — its `base` argument.
    *
-   * @param {import('./document.js').CarouselLayer} layer
+   * @param {import('./document.ts').CarouselLayer} layer
    * @returns {Record<string, unknown>}  The fields' raw values, not yet validated.
    */
   _layerFromFields(layer) {
@@ -3940,8 +3940,8 @@ export default class CarouselStudioPage extends Component {
    * `to`, and a hand-authored document with more stops renders them all but
    * loses the middle ones the moment this panel writes.
    *
-   * @param {import('./document.js').CarouselSlide} slide
-   * @returns {import('./document.js').CarouselBg|null}
+   * @param {import('./document.ts').CarouselSlide} slide
+   * @returns {import('./document.ts').CarouselBg|null}
    */
   _bgFromFields(slide) {
     const value = (sel, fallback) => {

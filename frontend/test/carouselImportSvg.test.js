@@ -17,14 +17,14 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { DOMParser } from 'linkedom';
 
-import { normalizeDocument, applyTemplate } from '../src/plugins/carousel/document.js';
-import { importSvg, naturalOrder } from '../src/plugins/carousel/import/svg.js';
+import { normalizeDocument, applyTemplate } from '../src/plugins/carousel/document.ts';
+import { importSvg, naturalOrder } from '../src/plugins/carousel/import/svg.ts';
 import {
   ImportError,
   IMPORT_ACCEPT,
   IMPORTERS,
   adapterFor,
-} from '../src/plugins/carousel/import/index.js';
+} from '../src/plugins/carousel/import/index.ts';
 
 globalThis.DOMParser = DOMParser;
 

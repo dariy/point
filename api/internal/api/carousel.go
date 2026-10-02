@@ -18,7 +18,7 @@ import (
 
 // CarouselHandler serves the Carousel Studio document: one JSON document per
 // carousel block, stored opaque in the carousels table. The document schema is
-// owned by the frontend (frontend/src/plugins/carousel/document.js) — this
+// owned by the frontend (frontend/src/plugins/carousel/document.ts) — this
 // endpoint validates only that doc is a JSON object and otherwise round-trips
 // it byte for byte.
 //

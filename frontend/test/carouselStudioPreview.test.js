@@ -23,10 +23,10 @@ import {
   paintSpanLayers,
   paintSplit,
   textPlan,
-} from '../src/plugins/carousel/studio/preview.js';
-import { paintLayers } from '../src/plugins/carousel/render.js';
-import { canvasSize, layerRect } from '../src/plugins/carousel/geometry.js';
-import { normalizeLayer } from '../src/plugins/carousel/document.js';
+} from '../src/plugins/carousel/studio/preview.ts';
+import { paintLayers } from '../src/plugins/carousel/render.ts';
+import { canvasSize, layerRect } from '../src/plugins/carousel/geometry.ts';
+import { normalizeLayer } from '../src/plugins/carousel/document.ts';
 
 /** Every glyph is half an em wide — the same law `carouselRender.test.js` gives
  *  its recording ctx, which is what lets the preview's typesetting and the

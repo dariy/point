@@ -120,20 +120,11 @@ step_js_lint() {
 # fails this step, so the move to TypeScript cannot go back. JS stays only in
 # frontend/sw.js, frontend/vendor/, the tests and demo/. Part of --lint,
 # because a broken type is a static error like any other.
-#
-# carousel-studio only: the Carousel Studio files are still .js, so the guard
-# skips them. Bead p-glwq converts them; then this list goes away.
-js_under_src() {
-    find frontend/src -name '*.js' \
-        -not -path 'frontend/src/plugins/carousel/*' \
-        -not -path 'frontend/src/api/carousel.js' \
-        -not -path 'frontend/src/utils/deckTransition.js' "$@"
-}
 step_js_typecheck() {
     cd "$ROOT_DIR"
-    if [ -n "$(js_under_src -print -quit)" ]; then
+    if [ -n "$(find frontend/src -name '*.js' -print -quit)" ]; then
         echo "  FAIL  .js file under frontend/src (write it as .ts):" >&2
-        js_under_src -printf '        %p\n' >&2
+        find frontend/src -name '*.js' -printf '        %p\n' >&2
         return 1
     fi
     node_modules/.bin/tsc -p tsconfig.json
