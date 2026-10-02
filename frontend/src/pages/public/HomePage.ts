@@ -29,15 +29,62 @@ import { ViewContext } from '../../utils/viewContext.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.ts';
 import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+import type { PageProps } from '../../router.ts';
+import type { Post } from '../../api/posts.ts';
+import type { Pagination as PagePagination } from '../../api/pages.ts';
 
-/** @extends {Component<PageProps>} */
-export default class HomePage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+/** The timeline plugin component, as the grid pages drive it. */
+export interface TimelineHandle extends Component {
+  setScope(scope: { from: number, to: number } | null): void;
+  setCount(count: number): void;
+}
+
+/** A mounted post-list plugin. `reconcile` takes a new list in place. */
+export interface PostListHandle extends Component {
+  reconcile?(posts: Post[]): boolean;
+}
+
+/** Arguments of the timeline's onRangeChange callback. */
+export interface TimelineRange {
+  from: number;
+  to: number;
+  isFullExtent: boolean;
+}
+
+/** The ViewContext fields that _buildParams reads. */
+export type GridViewParams = Pick<ViewContext, 'page' | 'perPage' | 'years' | 'query' | 'tag'>;
+
+/** Query parameters that the grid pages send with a page fetch. */
+export interface GridFetchParams {
+  page: number;
+  per_page: number;
+  year_from?: number;
+  year_to?: number;
+  q?: string;
+  tag?: string;
+  status?: string;
+  path?: string;
+}
+
+export default class HomePage extends Component<PageProps> {
+  _fitLatch: ReturnType<typeof createFitLatch>;
+  _resizeGate: ReturnType<typeof createResizeGate>;
+  _pager: GridPager;
+  _immersivePushed: boolean;
+  _loadedVc: ViewContext | undefined;
+  _refitRefresh: boolean;
+  _loadedPerPage: number;
+  _fitOwned: boolean;
+  _resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  _resizeHandler: (() => void) | undefined;
+  _unwatchChrome: (() => void) | null | undefined;
+  _canShowTimeline: boolean;
+  _headerChild: Component | undefined;
+  _footerChild: Component | undefined;
+  _timeline: TimelineHandle | undefined;
+  _postChildren: PostListHandle[];
+
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     this.state = { loading: true, data: null, error: null, forceImmersive: false, startIndex: 0 };
     // Stops the viewport fit chasing a per_page whose own chrome moves the
@@ -51,11 +98,11 @@ export default class HomePage extends Component {
     this._pager = new GridPager({
       gridMount: () => this.$('#grid-mount'),
       gestureRoot: () => this.$('.site-main'),
-      fetchPosts: async (page) => {
+      fetchPosts: async (page: number) => {
         const data = await getHomePage(this._buildParams({ ...ViewContext.current(), page }));
         return data.posts || [];
       },
-      gotoPage: (p) => ViewContext.update({ page: p }),
+      gotoPage: (p: number) => ViewContext.update({ page: p }),
       onZoomCommit: () => {
         this._fitLatch.reset(); // a new column count is a new question to fit
         this._reconcilePerPage({ fromResize: true });
@@ -65,7 +112,7 @@ export default class HomePage extends Component {
     });
   }
 
-  onRouteUpdate(params, query) {
+  onRouteUpdate(params: PageProps['params'], query: PageProps['query']) {
     // Any URL-driven change invalidates the history entry enterImmersive() pushed.
     this._immersivePushed = false;
     const prevVc = this._loadedVc;
@@ -94,7 +141,7 @@ export default class HomePage extends Component {
   // Eligible when only the year scope and/or page differ: the post grid, filter
   // chips and pagination change, but the page chrome (header, tag cloud, timeline)
   // does not. A tag/query change alters that chrome, so fall back to a full render.
-  _canPartialUpdate(prev, next) {
+  _canPartialUpdate(prev: ViewContext | undefined, next: ViewContext) {
     if (!prev || !this.state.data || this.state.error) return false;
     if (this._isStaticHome()) return false;
     return prev.tag === next.tag && prev.query === next.query && prev.postSlug === next.postSlug;
@@ -119,7 +166,7 @@ export default class HomePage extends Component {
     const seamless = this._pager.takeSeamless();
     const fromSwipe = seamless || this._pager.isMidSwipe();
 
-    let fadeOut = Promise.resolve();
+    let fadeOut: Promise<unknown> = Promise.resolve();
     if (gridMount && !fromSwipe && !refit) {
       gridMount.style.transition = 'opacity 0.2s ease-in';
       gridMount.style.opacity = '0';
@@ -171,12 +218,12 @@ export default class HomePage extends Component {
     return (getSettings() || {}).posts_per_page || 10;
   }
 
-  _buildParams(vc) {
+  _buildParams(vc: GridViewParams) {
     // per_page is the device-fit value from the URL, or the cached estimate for
     // a fresh load that hasn't been reconciled against the real grid yet.
     const perPage = vc.perPage || cachedPerPage(this._minPerPage());
     this._loadedPerPage = perPage;
-    const params = { page: vc.page, per_page: perPage };
+    const params: GridFetchParams = { page: vc.page, per_page: perPage };
     if (vc.years) {
       params.year_from = vc.years[0];
       params.year_to = vc.years[1];
@@ -349,7 +396,7 @@ export default class HomePage extends Component {
         forceImmersive: immersive,
         startIndex: startIndex,
         onExitImmersive: () => exitImmersive(this),
-        onEnterImmersive: (idx = 0) => enterImmersive(this, idx),
+        onEnterImmersive: (idx: number = 0) => enterImmersive(this, idx),
       });
       return;
     }
@@ -365,7 +412,7 @@ export default class HomePage extends Component {
         mode: 'filter',
         canShow: this._canShowTimeline,
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range) => this._onTimelineRangeChange(range),
+        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
         total,
       }).then(comps => {
         if (comps[0] && !this._unmounted) {
@@ -438,7 +485,7 @@ export default class HomePage extends Component {
    * shows that one instead). Kept apart from _mountPostContent so a refit can
    * re-point it without the grid beside it being rebuilt.
    */
-  _syncPagination(pagination) {
+  _syncPagination(pagination: PagePagination) {
     const existing = this._postChildren[1];
     // min_page is 1 for everyone but the owner of a site with a scheduled
     // queue, whose feed runs 0, -1, … to the left of page 1. A single
@@ -455,7 +502,7 @@ export default class HomePage extends Component {
         pages: pagination.pages,
         minPage,
         total: pagination.total,
-        onPage: (p) => ViewContext.update({ page: p }),
+        onPage: (p: number) => ViewContext.update({ page: p }),
       };
       if (existing) existing.setProps(props);
       else this._postChildren[1] = this.mountChild(Pagination, '#pagination-mount', props);
@@ -475,7 +522,7 @@ export default class HomePage extends Component {
    * Apply a per_page refit without remounting anything: hand the grid its new
    * tail, re-point the paginator, re-arm the pager on the new page count.
    *
-   * @returns {boolean} false when the grid could not take the new list in place
+   * @returns false when the grid could not take the new list in place
    *   (the lists diverge), leaving the caller to fall back to a remount.
    */
   _applyRefit() {
@@ -498,8 +545,8 @@ export default class HomePage extends Component {
     this._pager.disarm();
   }
 
-  _onTimelineRangeChange({ from, to, isFullExtent }) {
-    const years = isFullExtent ? null : /** @type {[number, number]} */ ([from, to]);
+  _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange) {
+    const years = isFullExtent ? null : [from, to] as [number, number];
     const vc = ViewContext.current();
     const same = years
       ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]

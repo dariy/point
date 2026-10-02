@@ -13,7 +13,7 @@ export interface PaginationProps {
   /**
    * First page — 1 normally. The home feed lowers it to 0 or below for the
    * owner, where the non-positive pages hold the scheduled queue (see
-   * pages/public/HomePage.js).
+   * pages/public/HomePage.ts).
    */
   minPage?: number;
   /** Total items. */

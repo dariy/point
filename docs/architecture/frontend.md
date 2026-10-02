@@ -532,7 +532,7 @@ template escapes every interpolation on the way through, and
 ### 2.7 — Example: Async Component (loads data)
 
 ```javascript
-// frontend/src/pages/public/HomePage.js
+// frontend/src/pages/public/HomePage.ts
 import { Component } from '../../components/Component.ts';
 import { PostGrid } from '../../components/public/PostGrid.ts';
 import { html } from '../../utils/helpers.ts';
@@ -609,29 +609,29 @@ import { store } from './store.ts';
 const PUBLIC_ROUTES = [
   {
     pattern: /^\/$/,
-    component: () => import('./pages/public/HomePage.js').then(m => m.HomePage),
+    component: () => import('./pages/public/HomePage.ts').then(m => m.HomePage),
   },
   {
     pattern: /^\/posts\/([^/]+)$/,
-    component: () => import('./pages/public/PostPage.js').then(m => m.PostPage),
+    component: () => import('./pages/public/PostPage.ts').then(m => m.PostPage),
     params: ['slug'],
   },
   {
     pattern: /^\/tag\/([^/]+)$/,
-    component: () => import('./pages/public/TagPage.js').then(m => m.TagPage),
+    component: () => import('./pages/public/TagPage.ts').then(m => m.TagPage),
     params: ['slug'],
   },
   {
     pattern: /^\/tags$/,
-    component: () => import('./pages/public/TagsPage.js').then(m => m.TagsPage),
+    component: () => import('./pages/public/TagsPage.ts').then(m => m.TagsPage),
   },
   {
     pattern: /^\/map$/,
-    component: () => import('./pages/public/MapPage.js').then(m => m.MapPage),
+    component: () => import('./pages/public/MapPage.ts').then(m => m.MapPage),
   },
   {
     pattern: /^\/preview\/([^/]+)$/,
-    component: () => import('./pages/public/PreviewPage.js').then(m => m.PreviewPage),
+    component: () => import('./pages/public/PreviewPage.ts').then(m => m.PreviewPage),
     params: ['token'],
   },
 ];
@@ -1114,12 +1114,12 @@ frontend/
 |   |
 |   |-- pages/
 |   |   |-- public/
-|   |   |   |-- HomePage.js
-|   |   |   |-- PostPage.js
-|   |   |   |-- TagPage.js
+|   |   |   |-- HomePage.ts
+|   |   |   |-- PostPage.ts
+|   |   |   |-- TagPage.ts
 |   |   |   |-- TagsPage.js
 |   |   |   |-- MapPage.js
-|   |   |   `-- PreviewPage.js
+|   |   |   `-- PreviewPage.ts
 |   |   |
 |   |   `-- light/
 |   |       |-- LoginPage.ts

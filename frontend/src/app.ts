@@ -258,7 +258,7 @@ async function resolveVizModule(slot: string, candidates: string[]) {
       : candidates.find((id) => pluginHost.isEnabled(id)) || "";
 
   if (!active || (visibility !== "all" && !isAdmin)) {
-    return import("./pages/public/RedirectHome.js");
+    return import("./pages/public/RedirectHome.ts");
   }
 
   const claimed = await pluginHost.claimRoute(slot, (entries) =>
@@ -266,7 +266,7 @@ async function resolveVizModule(slot: string, candidates: string[]) {
   );
   if (claimed) return claimed;
 
-  return import("./pages/public/RedirectHome.js");
+  return import("./pages/public/RedirectHome.ts");
 }
 
 /** /tags — the tag-cloud graph, the sole `tags-route` claimant. */
@@ -313,15 +313,15 @@ const routes: Route[] = [
   },
 
   // Public blog
-  { path: "/", load: () => import("./pages/public/HomePage.js"), public: true },
+  { path: "/", load: () => import("./pages/public/HomePage.ts"), public: true },
   {
     path: "/posts/:slug",
-    load: () => import("./pages/public/PostPage.js"),
+    load: () => import("./pages/public/PostPage.ts"),
     public: true,
   },
   {
     path: "/tags/:slug",
-    load: () => import("./pages/public/TagPage.js"),
+    load: () => import("./pages/public/TagPage.ts"),
     public: true,
   },
   // Two public viz pages, each owned by a single-claim slot and gated by
@@ -340,12 +340,12 @@ const routes: Route[] = [
   },
   {
     path: "/search",
-    load: () => import("./pages/public/SearchPage.js"),
+    load: () => import("./pages/public/SearchPage.ts"),
     public: true,
   },
   {
     path: "/preview/:token",
-    load: () => import("./pages/public/PreviewPage.js"),
+    load: () => import("./pages/public/PreviewPage.ts"),
     public: true,
   },
 

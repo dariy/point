@@ -13,8 +13,8 @@
  *   import { router } from './router.ts';
  *
  *   router.init([
- *     { path: '/',             load: () => import('./pages/public/HomePage.js'),    public: true },
- *     { path: '/posts/:slug',   load: () => import('./pages/public/PostPage.js'),    public: true },
+ *     { path: '/',             load: () => import('./pages/public/HomePage.ts'),    public: true },
+ *     { path: '/posts/:slug',   load: () => import('./pages/public/PostPage.ts'),    public: true },
  *     { path: '/light',        load: () => import('./pages/light/DashboardPage.ts') },
  *     { path: '/light/login',  load: () => import('./pages/light/LoginPage.ts'),    public: true },
  *   ], {

@@ -18,15 +18,24 @@ import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
 import { X_SVG } from '../../utils/icons.ts';
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+import type { PageProps } from '../../router.ts';
+import type { Post, PostStub } from '../../api/posts.ts';
 
-/** @extends {Component<PageProps>} */
-export default class PostPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+/** The prev/next neighbours from getPostNavigation. */
+interface PostNav {
+  prev: PostStub | null;
+  next: PostStub | null;
+}
+
+export default class PostPage extends Component<PageProps> {
+  _headerChild: Component | null;
+  _footerChild: Component | null;
+  _contentChild: PostContent | null;
+  _loadVersion: number;
+  _spinnerTimer: ReturnType<typeof setTimeout> | undefined;
+  _immersivePushed: boolean;
+
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     this.state = {
       loading: true,
@@ -156,7 +165,7 @@ export default class PostPage extends Component {
       forceImmersive: immersive,
       startIndex: this.state.startIndex,
       onExitImmersive: () => exitImmersive(this),
-      onEnterImmersive: (idx = 0) => enterImmersive(this, idx)
+      onEnterImmersive: (idx: number = 0) => enterImmersive(this, idx)
     });
   }
 
@@ -167,7 +176,7 @@ export default class PostPage extends Component {
    * cross to (see _targetFor('fwd')).
    * Returns true when it navigated away, so the caller skips rendering this post.
    */
-  _skipNonImmersiveDuringShow(post, nav, immersive) {
+  _skipNonImmersiveDuringShow(post: Post, nav: PostNav | null, immersive: boolean) {
     if (immersive || !isSlideshowRunning()) return false;
     const {
       fwd
@@ -183,7 +192,7 @@ export default class PostPage extends Component {
    * Called by the router when navigating to another post (same route pattern).
    * Updates content in-place so header/footer don't blink.
    */
-  onRouteUpdate(params, query) {
+  onRouteUpdate(params: PageProps['params'], query: PageProps['query']) {
     // Any URL-driven change (Back/Forward, cross-post swipe) means the
     // history entry pushed by enterImmersive() is no longer ours to unwind.
     this._immersivePushed = false;
@@ -249,7 +258,7 @@ export default class PostPage extends Component {
    * Content was explicitly unmounted in onRouteUpdate(), so it is always
    * created fresh here.
    */
-  _applyPostUpdate(post, nav, startIndex, forceImmersive) {
+  _applyPostUpdate(post: Post, nav: PostNav | null, startIndex: number, forceImmersive: boolean) {
     clearTimeout(this._spinnerTimer);
     this.state = {
       loading: false,
@@ -300,7 +309,7 @@ export default class PostPage extends Component {
     // replaced by a spinner (slow load). Either way, tear down the old content
     // child before mounting the new one so its listeners don't leak. unmount()
     // clears #content-mount, so the swap is atomic.
-    const contentEl = /** @type {HTMLElement|null} */ (this.container.querySelector('#content-mount'));
+    const contentEl = this.container.querySelector('#content-mount') as HTMLElement | null;
     if (this._contentChild) {
       this._contentChild.unmount();
       this._children = this._children.filter(c => c !== this._contentChild);
@@ -314,13 +323,13 @@ export default class PostPage extends Component {
         forceImmersive: immersive,
         startIndex,
         onExitImmersive: () => exitImmersive(this),
-        onEnterImmersive: (idx = 0) => enterImmersive(this, idx)
+        onEnterImmersive: (idx: number = 0) => enterImmersive(this, idx)
       });
       this._contentChild.mount();
       this._children.push(this._contentChild);
     }
   }
-  _showContentError(msg) {
+  _showContentError(msg: string) {
     clearTimeout(this._spinnerTimer);
     const contentEl = this.container.querySelector('#content-mount');
     if (contentEl) {
@@ -345,12 +354,12 @@ export default class PostPage extends Component {
       }
     }
   }
-  _injectJsonLd(post, descText, ogImageObj) {
+  _injectJsonLd(post: Post, descText: string, ogImageObj: string | null) {
     document.getElementById('json-ld-blogposting')?.remove();
     const settings = getSettings() || {};
     const canonicalUrl = `${window.location.origin}/posts/${post.slug}`;
     const datePublished = post.published_at || post.created_at;
-    const ld = {
+    const ld: Record<string, unknown> = {
       '@context': 'https://schema.org',
       '@type': 'BlogPosting',
       headline: post.title,
@@ -382,7 +391,7 @@ export default class PostPage extends Component {
     super.mount();
     this._load(++this._loadVersion, false);
   }
-  async _load(version, isInPlaceUpdate) {
+  async _load(version: number, isInPlaceUpdate: boolean) {
     const {
       slug
     } = this.props.params || {};
@@ -401,7 +410,7 @@ export default class PostPage extends Component {
       const metaDesc = document.querySelector('meta[name="description"]');
       const descText = post.meta_description || post.excerpt || '';
       if (metaDesc) metaDesc.setAttribute('content', descText);
-      const updateMeta = (prop, content) => {
+      const updateMeta = (prop: string, content: string) => {
         if (!content) return;
         let el = document.querySelector(`meta[property="${prop}"]`);
         if (!el) {
@@ -415,7 +424,7 @@ export default class PostPage extends Component {
       updateMeta('og:url', window.location.href);
       updateMeta('og:title', post.title);
       updateMeta('og:description', descText);
-      let ogImageObj = null;
+      let ogImageObj: string | null = null;
       if (post.media && post.media.length > 0 && post.media[0].path) {
         ogImageObj = post.media[0].path;
       } else if (post.content_html) {
@@ -428,7 +437,7 @@ export default class PostPage extends Component {
         } catch (_) {/* ignore invalid URL */}
       }
       this._injectJsonLd(post, descText, ogImageObj);
-      let postNav = null;
+      let postNav: PostNav | null = null;
       try {
         postNav = await getPostNavigation(post.id);
       } catch {/* optional */}
