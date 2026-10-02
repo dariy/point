@@ -60,6 +60,22 @@ function once(video, events, timeoutMs): Promise<void> {
 }
 
 /**
+ * Resolve `value` against the page and return its href, or null when it is
+ * not an http(s) URL on this origin.
+ */
+export function sameOriginUrl(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value, location.href);
+  } catch {
+    return null;
+  }
+  if (url.origin !== location.origin) return null;
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  return url.href;
+}
+
+/**
  * Pick the timestamp to grab. Many clips open on a black or blank frame, so
  * skip a little way in — but never past a very short clip's own end.
  */
@@ -90,7 +106,10 @@ export async function captureVideoPoster(source: File | Blob | string): Promise<
     if (objectUrl) {
       video.src = objectUrl;
     } else if (typeof source === "string") {
-      video.src = source;
+      // Only a same-origin media URL may reach the decoder.
+      const url = sameOriginUrl(source);
+      if (!url) return null;
+      video.src = url;
     }
 
     await once(video, ["loadedmetadata"], CAPTURE_TIMEOUT_MS);
