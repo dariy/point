@@ -14,6 +14,10 @@ import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_
 import { ViewContext } from '../../utils/viewContext.ts';
 import { hideFlyout } from '../../utils/tagFlyout.ts';
 import { HeaderFold } from '../../utils/headerFold.ts';
+import type { Slot, StoreSettings } from '../../utils/helpers.ts';
+import type { NavTagNode } from '../../api/nav.ts';
+import type { Post } from '../../api/posts.ts';
+import type { Tag } from '../../api/tags.ts';
 
 /** Rows the search typeahead shows per section. */
 const TYPEAHEAD_POSTS = 3;
@@ -22,43 +26,66 @@ const TYPEAHEAD_TAGS = 5;
 /**
  * One tag-ancestry crumb. The last is the current tag, which may carry a slug
  * for a self-link.
- *
- * @typedef {object} HeaderCrumb
- * @property {string} name
- * @property {string} [slug]
- * @property {string} [href]
- * @property {boolean} [is_hidden]
- * @property {string} [tooltip]
  */
+export interface HeaderCrumb {
+  name: string;
+  slug?: string;
+  href?: string;
+  is_hidden?: boolean;
+  tooltip?: string;
+}
 
 /**
  * What a page hands the header slot. The header passes all of it on to the
  * breadcrumbs and nav-menu plugins it fills, which is why some of it is only
  * read there.
- *
- * @typedef {object} PublicHeaderProps
- * @property {import('../../utils/helpers.ts').StoreSettings} [settings]  Public
- *   settings; reads blog_title, blog_subtitle and logo_url.
- * @property {string} [currentPath]  Current pathname, for active nav highlighting.
- * @property {import('../../api/nav.ts').NavTagNode[]} [navTags]  Nav tag tree,
- *   for the crumbs' child dropdowns.
- * @property {string} [currentTagSlug]  Active tag, for the flyout highlight.
- * @property {HeaderCrumb[]} [breadcrumb]  Tag-ancestry crumbs.
- * @property {number} [total]  Post / result count, shown as a trailing crumb.
- * @property {boolean} [timelineVisible]  Suppress the year facet crumb — the
- *   timeline shows it.
- * @property {string|null} [editUrl]  Admin edit link for the page's post or tag.
- * @property {boolean} [showShare]  Offer the share button.
- * @property {(() => void)|null} [onToggleImmersive]  Offer the immersive toggle.
- * @property {boolean} [distractionToggle]  Mount the post list's
- *   distraction-free toggle among the nav actions.
- * @property {import('../../utils/helpers.ts').Slot} [slot]  Markup inserted as
- *   a middle header item (between breadcrumb and action buttons; wraps to its
- *   own full-width row on mobile), e.g. a page control. No caller passes one today.
  */
+export interface PublicHeaderProps {
+  /** Public settings; reads blog_title, blog_subtitle and logo_url. */
+  settings?: StoreSettings;
+  /** Current pathname, for active nav highlighting. */
+  currentPath?: string;
+  /** Nav tag tree, for the crumbs' child dropdowns. */
+  navTags?: NavTagNode[];
+  /** Active tag, for the flyout highlight. */
+  currentTagSlug?: string;
+  /** Tag-ancestry crumbs. */
+  breadcrumb?: HeaderCrumb[];
+  /** Post / result count, shown as a trailing crumb. */
+  total?: number;
+  /** Suppress the year facet crumb — the timeline shows it. */
+  timelineVisible?: boolean;
+  /** Admin edit link for the page's post or tag. */
+  editUrl?: string | null;
+  /** Offer the share button. */
+  showShare?: boolean;
+  /** Offer the immersive toggle. */
+  onToggleImmersive?: (() => void) | null;
+  /** Mount the post list's distraction-free toggle among the nav actions. */
+  distractionToggle?: boolean;
+  /**
+   * Markup inserted as a middle header item (between breadcrumb and action
+   * buttons; wraps to its own full-width row on mobile), e.g. a page control.
+   * No caller passes one today.
+   */
+  slot?: Slot;
+}
 
-/** @extends {Component<PublicHeaderProps>} */
-export class PublicHeader extends Component {
+/** A slot fill's mount handle, as plugins return it. */
+interface SlotMount {
+  unmount?: () => void;
+}
+
+export class PublicHeader extends Component<PublicHeaderProps> {
+  _hasTrail: boolean;
+  _group: HTMLElement | null;
+  _inner: HTMLElement | null;
+  _slotMounts: SlotMount[];
+  _docListeners: [string, EventListener][];
+  _renderGen: number;
+  _fold: HeaderFold | null;
+  _dfPlugin: SlotMount | null;
+  _typeaheadActive: boolean;
   render() {
     const {
       settings = {},
@@ -282,7 +309,7 @@ export class PublicHeader extends Component {
     // Header search (expandable)
     const searchForm = this.$('#header-search');
     if (searchForm) {
-      const input = /** @type {HTMLInputElement} */ (searchForm.querySelector('input[type="search"]'));
+      const input = searchForm.querySelector('input[type="search"]') as HTMLInputElement;
       const toggleBtn = searchForm.querySelector('.search-toggle-btn');
       const closeSearch = () => {
         searchForm.classList.remove('is-active');
@@ -301,7 +328,7 @@ export class PublicHeader extends Component {
         this._hideTypeahead();
         closeSearch();
       };
-      let debounceTimer = null;
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
       input.addEventListener('input', () => {
         const q = input.value.trim();
         clearTimeout(debounceTimer);
@@ -348,7 +375,7 @@ export class PublicHeader extends Component {
     if (burgerSearchForm) {
       burgerSearchForm.addEventListener('submit', e => {
         e.preventDefault();
-        const q = /** @type {HTMLInputElement} */ (burgerSearchForm.querySelector('input[type="search"]')).value.trim();
+        const q = (burgerSearchForm.querySelector('input[type="search"]') as HTMLInputElement).value.trim();
         if (q) ViewContext.update({
           query: q
         });
@@ -366,7 +393,7 @@ export class PublicHeader extends Component {
         navBurger.classList.toggle('is-open', !isOpen);
         burgerBtn.setAttribute('aria-expanded', String(!isOpen));
         if (!isOpen) {
-          const input = /** @type {HTMLElement|null} */ (navBurger.querySelector('input[type="search"]'));
+          const input = (navBurger.querySelector('input[type="search"]') as HTMLElement|null);
           if (input) setTimeout(() => input.focus(), 100);
         }
       });
@@ -387,14 +414,14 @@ export class PublicHeader extends Component {
    * stops propagation on some taps (a photo card's first tap reveals its
    * overlay), which would otherwise leave the burger or search stuck open.
    */
-  _onDocument(type, handler) {
+  _onDocument(type: string, handler: EventListener) {
     document.addEventListener(type, handler, true);
     this._docListeners.push([type, handler]);
   }
 
   /** Keep a slot fill's mounts, or unmount them if their render is already gone. */
-  _keepSlotMounts(gen, comps) {
-    const mounts = [].concat(comps || []).filter(Boolean);
+  _keepSlotMounts(gen: number, comps: SlotMount | SlotMount[] | null) {
+    const mounts = ([] as SlotMount[]).concat(comps || []).filter(Boolean);
     if (gen !== this._renderGen || this._unmounted) {
       mounts.forEach(m => m.unmount?.());
       return;
@@ -501,15 +528,15 @@ export class PublicHeader extends Component {
     if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
     return toolsRect.right <= right + 1;
   }
-  _saveRecentSearch(q) {
+  _saveRecentSearch(q: string) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
     const next = [q, ...recent.filter(s => s !== q)].slice(0, 5);
     localStorage.setItem('recentSearches', JSON.stringify(next));
   }
-  async _showTypeahead(q, input) {
+  async _showTypeahead(q: string, input: HTMLInputElement) {
     this._typeaheadActive = true;
     const vc = ViewContext.current();
-    const params = {
+    const params: Parameters<typeof listPosts>[0] = {
       q,
       per_page: TYPEAHEAD_POSTS,
       status: 'published'
@@ -528,12 +555,12 @@ export class PublicHeader extends Component {
       console.error('Typeahead failed:', err);
     }
   }
-  _showRecentSearches(input) {
+  _showRecentSearches(input: HTMLInputElement) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
     if (!recent.length) return;
     this._renderTypeaheadResults('', [], [], input, recent);
   }
-  _renderTypeaheadResults(q, posts, tags, input, recent = []) {
+  _renderTypeaheadResults(q: string, posts: Post[], tags: Tag[], input: HTMLInputElement, recent: string[] = []) {
     const mount = document.getElementById('search-typeahead-mount');
     if (!mount) return;
     const inputRect = input.getBoundingClientRect();
@@ -543,7 +570,7 @@ export class PublicHeader extends Component {
     mount.classList.add('is-open');
     // Collected rather than concatenated: `+=` would drop html`` output back to
     // a plain string.
-    const parts = [];
+    const parts: Slot[] = [];
     if (recent.length) {
       parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Recent</div>`);
       recent.forEach(s => {
@@ -571,7 +598,7 @@ export class PublicHeader extends Component {
       parts.push(html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`);
     }
     setHTML(mount, html`${parts}`);
-    /** @type {NodeListOf<HTMLElement>} */ (mount.querySelectorAll('.typeahead-item')).forEach(item => {
+    (mount.querySelectorAll('.typeahead-item') as NodeListOf<HTMLElement>).forEach(item => {
       item.addEventListener('click', e => {
         e.preventDefault();
         const searchQ = item.dataset.q;

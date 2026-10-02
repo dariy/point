@@ -114,7 +114,7 @@ describe('MenuPage', () => {
     setUser({ username: 'owner', is_admin: true });
     setSettings({ blog_title: 'Test blog' });
     setToast(null);
-    ({ default: MenuPage } = await import('../src/plugins/nav-menu/MenuPage.js'));
+    ({ default: MenuPage } = await import('../src/plugins/nav-menu/MenuPage.ts'));
   });
 
   afterEach(() => {

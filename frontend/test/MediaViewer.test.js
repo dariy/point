@@ -2,7 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM, click, fire } from './helpers/dom.js';
 import { MediaViewer } from '../src/components/shared/MediaViewer.ts';
-import { ImmersiveSheetViewer } from '../src/plugins/immersive/ImmersiveSheetViewer.js';
+import { ImmersiveSheetViewer } from '../src/plugins/immersive/ImmersiveSheetViewer.ts';
 import { setSettings } from '../src/store.ts';
 
 describe('MediaViewer', () => {

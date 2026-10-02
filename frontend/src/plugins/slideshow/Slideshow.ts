@@ -35,18 +35,44 @@ let crossing = false;
 // binding that start() never touches. The DOM is the one thing both bundles
 // share, so that's where the cross-bundle signal goes.
 const RUNNING_CLASS = 'slideshow-running';
-const setRunning = v => {
+const setRunning = (v: boolean) => {
   running = v;
   document.body.classList.toggle(RUNNING_CLASS, v);
 };
 export const isSlideshowRunning = () => document.body.classList.contains(RUNNING_CLASS);
-const clampInterval = n => Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
+const clampInterval = (n: number) => Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
 const loadInterval = () => clampInterval(parseInt(localStorage.getItem('slideshow.interval'), 10));
 const loadShuffle = () => localStorage.getItem('slideshow.shuffle') === 'true';
 // Loop defaults ON (the historical behaviour: the show wraps the feed forever).
 const loadLoop = () => localStorage.getItem('slideshow.loop') !== 'false';
+/** The small controller that MediaViewer hands to the slideshow slot. */
+export interface SlideshowController {
+  count: number;
+  index(): number;
+  goTo(i: number): boolean | void;
+  activeVideo(): HTMLVideoElement | null;
+}
 export class Slideshow {
-  constructor(wrapper, ctx) {
+  wrapper: HTMLElement;
+  ctx: SlideshowController;
+  interval: number;
+  shuffle: boolean;
+  loop: boolean;
+  order: number[];
+  _onPointer: () => void;
+  _onNav: () => void;
+  _onVisibility: () => void;
+  _btn: HTMLButtonElement | null;
+  _idleTimer: ReturnType<typeof setTimeout> | undefined;
+  _timer: ReturnType<typeof setTimeout> | null;
+  _armedVideo: HTMLVideoElement | null;
+  _onEnded: (() => void) | null;
+  _bar: HTMLDivElement | null;
+  _intervalLabel: HTMLElement | null;
+  _loopBtn: HTMLElement | null;
+  _shuffleBtn: HTMLElement | null;
+  _paused: boolean;
+  constructor(wrapper: HTMLElement, ctx: SlideshowController) {
     this.wrapper = wrapper;
     this.ctx = ctx;
     this.interval = loadInterval();
@@ -96,7 +122,7 @@ export class Slideshow {
   // ── Start / stop ──────────────────────────────────────────────────────────
   start({
     resumed = false
-  } = {}) {
+  }: { resumed?: boolean } = {}) {
     setRunning(true);
     // NB: don't reset `crossing` here. On a cross-post remount this start() races
     // the old instance's unmount() (which reads `crossing`); clearing it would let
@@ -263,7 +289,7 @@ export class Slideshow {
               aria-label="Shuffle" aria-pressed="${this.shuffle}">${raw(SHUFFLE_SVG)}</button>`);
     // Keep taps on the bar from reaching the viewer's close/hide handler.
     bar.addEventListener('click', e => e.stopPropagation());
-    bar.querySelectorAll('[data-step]').forEach((/** @type {HTMLElement} */ b) => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));
+    bar.querySelectorAll<HTMLElement>('[data-step]').forEach((b: HTMLElement) => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));
     this._intervalLabel = bar.querySelector('.slideshow-interval');
     this._loopBtn = bar.querySelector('.slideshow-loop');
     this._loopBtn.addEventListener('click', () => this._toggleLoop());
@@ -285,7 +311,7 @@ export class Slideshow {
     this._loopBtn?.classList.toggle('active', this.loop);
     this._loopBtn?.setAttribute('aria-pressed', String(this.loop));
   }
-  _changeInterval(delta) {
+  _changeInterval(delta: number) {
     this.interval = clampInterval(this.interval + delta);
     localStorage.setItem('slideshow.interval', String(this.interval));
     if (this._intervalLabel) this._intervalLabel.textContent = `${this.interval}s`;
@@ -303,7 +329,7 @@ export class Slideshow {
   // User activity reshows the chrome; deliberate nav (keyboard/touch) also
   // resets the advance timer from the new slide so a manual jump doesn't
   // double-advance. The viewer owns arrow-key navigation; we only listen.
-  _activity(resetAdvance) {
+  _activity(resetAdvance: boolean) {
     this._showChrome();
     this._resetInactivity();
     // Only deliberate navigation resets the advance timer — mouse movement must

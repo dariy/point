@@ -9,14 +9,14 @@ import { getNavTags } from "../../store.ts";
 import { buildTagIndex, parseTagUrl } from "../../utils/tagLinks.ts";
 import { setupTagFlyout } from "../../utils/tagFlyout.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
+import type { TagCloudItem } from "../../api/pages.ts";
 
-/**
- * @typedef {object} ExploreBlockProps
- * @property {import('../../api/pages.ts').TagCloudItem[]} [tags]
- */
+export interface ExploreBlockProps {
+  tags?: TagCloudItem[];
+}
 
-/** @extends {Component<ExploreBlockProps>} */
-export class ExploreBlock extends Component {
+export class ExploreBlock extends Component<ExploreBlockProps> {
+  _cleanupFlyout: (() => void) | null;
   render() {
     const { tags = [] } = this.props;
     if (!tags.length) return html``;

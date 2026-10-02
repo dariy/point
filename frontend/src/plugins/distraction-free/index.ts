@@ -29,12 +29,12 @@ function readPref() {
     return false;
   }
 }
-function writePref(on) {
+function writePref(on: boolean) {
   try {
     localStorage.setItem(KEY, on ? '1' : '0');
   } catch {/* ignore */}
 }
-export function mount(el) {
+export function mount(el: HTMLElement) {
   if (!el) return null;
 
   // A rapid re-render (e.g. the list's loading→data header swap) can mount a

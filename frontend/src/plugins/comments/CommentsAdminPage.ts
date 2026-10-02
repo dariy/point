@@ -10,6 +10,7 @@ import {
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { api } from "../../api/client.ts";
 import { setToast } from "../../store.ts";
+import type { Slot } from "../../utils/helpers.ts";
 import { html, parseMarkup, raw } from "../../utils/helpers.ts";
 import { formatDate } from "../../utils/formatters.ts";
 import {
@@ -21,12 +22,13 @@ import {
   X_SVG,
 } from "../../utils/icons.ts";
 
-function textOf(html) {
+function textOf(html: string) {
   return parseMarkup(html || "", "text/html").body.textContent.trim();
 }
 
 export default class CommentsAdminPage extends Component {
-  constructor(container, props = {}) {
+  _swipeCleanup: (() => void) | null;
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -35,7 +37,7 @@ export default class CommentsAdminPage extends Component {
       comments: [],
       blocked: [],
       selectMode: false,
-      selectedIds: new Set(),
+      selectedIds: new Set<number>(),
     };
   }
 
@@ -75,8 +77,7 @@ export default class CommentsAdminPage extends Component {
         <button id="tab-blocked" role="tab" aria-selected="${tab === "blocked"}" class="btn btn-sm ${tab === "blocked" ? "btn-primary" : "btn-secondary"}">Blocked users${blocked.length ? ` (${blocked.length})` : ""}</button>
       </div>`;
 
-    /** @type {import("../../utils/helpers.ts").Slot} */
-    let bulkToolbar = "";
+    let bulkToolbar: Slot = "";
     if (selectMode) {
       const isRecent = tab === "recent";
       bulkToolbar = html`
@@ -353,7 +354,7 @@ export default class CommentsAdminPage extends Component {
           if (e.touches.length !== 1) return;
           if (
             card === openCard &&
-            /** @type {HTMLElement} */ (e.target).closest(
+            (e.target as HTMLElement).closest(
               ".post-card-swipe-actions",
             )
           )
@@ -364,9 +365,7 @@ export default class CommentsAdminPage extends Component {
           dragging = false;
           decided = false;
           dx = 0;
-          const actions = /** @type {HTMLElement|null} */ (
-            card.querySelector(".post-card-swipe-actions")
-          );
+          const actions = (card.querySelector(".post-card-swipe-actions") as HTMLElement|null);
           actionsWidth = actions ? actions.offsetWidth : 0;
           card.style.transition = "none";
         },
@@ -567,7 +566,7 @@ export default class CommentsAdminPage extends Component {
 
   _handleBulkDelete() {
     const { comments, selectedIds } = this.state;
-    const toDelete = Array.from(selectedIds)
+    const toDelete = Array.from(selectedIds as Set<number>)
       .map((i) => comments[i])
       .filter(Boolean);
     if (!toDelete.length) return;
@@ -599,7 +598,7 @@ export default class CommentsAdminPage extends Component {
 
   _handleBulkBlock() {
     const { comments, selectedIds } = this.state;
-    const users = Array.from(selectedIds)
+    const users = Array.from(selectedIds as Set<number>)
       .map((i) => comments[i]?.user)
       .filter(Boolean);
     // filter unique users to prevent multiple requests for the same user
@@ -635,7 +634,7 @@ export default class CommentsAdminPage extends Component {
 
   _handleBulkUnblock() {
     const { blocked, selectedIds } = this.state;
-    const toUnblock = Array.from(selectedIds)
+    const toUnblock = Array.from(selectedIds as Set<number>)
       .map((i) => blocked[i])
       .filter(Boolean);
     if (!toUnblock.length) return;

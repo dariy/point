@@ -538,8 +538,8 @@ export default class TagPage extends Component<PageProps> {
       gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), gridProps);
     } else {
       const mod = active === 'dynamic-post-list'
-        ? await import('../../plugins/dynamic-post-list/index.js')
-        : await import('../../plugins/simple-post-list/index.js');
+        ? await import('../../plugins/dynamic-post-list/index.ts')
+        : await import('../../plugins/simple-post-list/index.ts');
       gridComp = mod.mount(this.$('#grid-mount'), gridProps);
     }
 

@@ -14,17 +14,18 @@ import { tagHref } from '../../utils/tagLinks.ts';
 import {
   showCrumbDropdown, hideFlyout, attachFlyoutTrigger, HOVER_OPEN_MS,
 } from '../../utils/tagFlyout.ts';
+import type { FlyoutCrumb } from '../../utils/tagFlyout.ts';
+import type { PublicHeaderProps } from '../public-header/PublicHeader.ts';
 
 /**
  * The header's own props, passed on whole, plus the header group — clicks
  * inside it do not dismiss an open crumb dropdown.
- *
- * @typedef {import('../public-header/PublicHeader.js').PublicHeaderProps
- *   & { group?: HTMLElement }} BreadcrumbsProps
  */
+export interface BreadcrumbsProps extends PublicHeaderProps {
+  group?: HTMLElement;
+}
 
-/** @extends {Component<BreadcrumbsProps>} */
-export class Breadcrumbs extends Component {
+export class Breadcrumbs extends Component<BreadcrumbsProps> {
   render() {
     const {
       navTags = [],
@@ -129,7 +130,7 @@ export class Breadcrumbs extends Component {
    */
   _buildPath(upToIndex) {
     const { settings = {}, breadcrumb = [] } = this.props;
-    const path = [{ name: settings.blog_title || 'Photo Blog', href: '/' }];
+    const path: FlyoutCrumb[] = [{ name: settings.blog_title || 'Photo Blog', href: '/' }];
     breadcrumb.slice(0, upToIndex + 1).forEach((c, i) => {
       path.push({
         name: c.name,

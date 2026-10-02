@@ -7,14 +7,14 @@ import { SHARE_SVG } from '../../utils/icons.ts';
 // Mounted into the `.media-viewer-wrapper` via the `immersive-share` slot;
 // disabling the plugin drops the button everywhere MediaViewer renders. CSS
 // (.carousel-share-btn) stays in the global immersive styles.
-export function mount(wrapper, _ctx) {
+export function mount(wrapper: HTMLElement, _ctx?: unknown) {
   if (!wrapper) return null;
   const btn = document.createElement('button');
   btn.className = 'header-action-btn share-btn carousel-share-btn';
   btn.type = 'button';
   btn.setAttribute('aria-label', 'Share');
   setHTML(btn, html`${raw(SHARE_SVG)}`);
-  const onClick = e => {
+  const onClick = (e: Event) => {
     e.stopPropagation();
     sharePost({
       title: document.title,

@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.js';
-import { NavMenu } from '../src/plugins/nav-menu/NavMenu.js';
+import { NavMenu } from '../src/plugins/nav-menu/NavMenu.ts';
 import { setUser, store } from '../src/store.ts';
 import { pluginHost } from '../src/core/pluginHost.ts';
 

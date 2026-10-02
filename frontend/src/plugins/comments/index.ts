@@ -8,15 +8,16 @@
 // beforehand; it exposes window.REMARK42.{createInstance,changeTheme,destroy}
 // and fires "REMARK42::ready" on window after the first init.
 
-import CommentsAdminPage from './CommentsAdminPage.js';
+import CommentsAdminPage from './CommentsAdminPage.ts';
 import { getSettings } from '../../store.ts';
 import { setScriptSrc } from '../../utils/helpers.ts';
+import type { Post } from '../../api/posts.ts';
 
 const SCRIPT_ID = 'remark42-embed-script';
 
 // Admin-tunable embed appearance settings default to ON: absent (never saved)
 // must read as true, so only an explicit "false" turns them off.
-function boolSetting(v) {
+function boolSetting(v: unknown) {
   return v !== false && v !== 'false';
 }
 
@@ -77,7 +78,7 @@ function themeCss() {
   return `:root, :root .dark{${rules.join(';')}}`;
 }
 
-function syncColors(root) {
+function syncColors(root: HTMLElement) {
   const iframe = root.querySelector('iframe');
   const doc = iframe && iframe.contentDocument;
   if (!doc || !doc.head) return false;
@@ -94,12 +95,12 @@ function syncColors(root) {
 }
 
 // The iframe appears asynchronously after createInstance; retry briefly.
-function scheduleColorSync(root, attempt = 0) {
+function scheduleColorSync(root: HTMLElement, attempt = 0) {
   if (syncColors(root) || attempt > 20) return;
   setTimeout(() => scheduleColorSync(root, attempt + 1), 150);
 }
 
-export function mount(el, ctx) {
+export function mount(el: HTMLElement, ctx: { post?: Post; url?: string }) {
   if (!el) return null;
   const post = ctx?.post;
 

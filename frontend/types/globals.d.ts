@@ -20,7 +20,7 @@ interface MediaBootstrap {
 }
 
 /**
- * The remark42 embed's config object — see plugins/comments/index.js, which
+ * The remark42 embed's config object — see plugins/comments/index.ts, which
  * writes it before the embed script reads it on load.
  */
 interface RemarkConfig {

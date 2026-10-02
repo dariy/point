@@ -33,7 +33,7 @@ describe('PublicFooter copyright template', () => {
       documentElement: { style: { setProperty() {} }, classList: { add() {}, remove() {}, contains: () => false } },
       querySelector: () => null,
     };
-    ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.js'));
+    ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.ts'));
   });
 
   /** Render with the given settings and return just the copyright line's HTML. */
@@ -110,7 +110,7 @@ describe('PublicFooter revelio toggle', () => {
       removeItem: (k) => mem.delete(k),
     };
     global.window.localStorage = global.localStorage;
-    ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.js'));
+    ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.ts'));
     ({ setUser } = await import('../src/store.ts'));
     ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });

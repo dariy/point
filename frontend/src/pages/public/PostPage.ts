@@ -15,7 +15,7 @@ import { formatDate } from '../../utils/formatters.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.ts';
-import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
+import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.ts';
 import { X_SVG } from '../../utils/icons.ts';
 
 import type { PageProps } from '../../router.ts';

@@ -19,6 +19,7 @@
  * the classic MediaViewer is left untouched.
  */
 
+import type { MediaViewerProps } from '../../components/shared/MediaViewer.ts';
 import { MediaViewer } from '../../components/shared/MediaViewer.ts';
 import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.ts';
@@ -32,7 +33,18 @@ import { immersiveNavTargets } from '../../utils/immersiveNav.ts';
 import { renderCopyright } from '../../utils/copyright.ts';
 const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
 export class ImmersiveSheetViewer extends MediaViewer {
-  constructor(container, props = {}) {
+  _sheetOpen: boolean;
+  _sheetHeight: number;
+  _currentOffset: number;
+  _sheetDrag: boolean;
+  _wrapper: HTMLElement | null;
+  _sheetExifMeta: ReturnType<typeof metadataForSrc>[] | null;
+  _sheetFlyoutCleanup: (() => void) | null;
+  _sheetCommentsComps: { unmount?: () => void }[] | null;
+  _onResize: (() => void) | null;
+  _sheetObserver: ResizeObserver | null;
+  _swipeAxis: 'v' | 'h' | null;
+  constructor(container: HTMLElement, props: MediaViewerProps = {}) {
     super(container, props);
     this._sheetOpen = false; // current snap state
     this._sheetHeight = 0; // px the stage travels when fully open
@@ -240,8 +252,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
    * body first; the sheet scroller isn't focusable, so scroll it by hand rather
    * than hoping the browser's default lands on it.
    */
-  _onKeyDown(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  _onKeyDown(e: KeyboardEvent) {
+    const tag = (e.target as Element).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (this._zoomState.scale > 1) return super._onKeyDown(e);
     if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -265,7 +278,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
    * Returns false when it was already at that end, so the caller can fall
    * through to collapsing the sheet.
    */
-  _scrollSheet(dir) {
+  _scrollSheet(dir: number) {
     const el = this.$('.immersive-sheet-scroll');
     if (!el) return false;
     const room = dir < 0 ? el.scrollTop : el.scrollHeight - el.clientHeight - el.scrollTop;
@@ -287,7 +300,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
 
   // ── Vertical gesture → sheet ───────────────────────────────────────────────
 
-  _onSwipeMove(dx, dy) {
+  _onSwipeMove(dx: number, dy: number) {
     if (this._zoomState.scale > 1) return super._onSwipeMove(dx, dy);
 
     // Latch the axis on the first move so a diagonal drag can't flip handlers
@@ -316,7 +329,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (this._sheetOpen) return;
     super._onSwipeMove(dx, 0);
   }
-  _onSwipeCommit(dir) {
+  _onSwipeCommit(dir: 'left' | 'right' | 'up' | 'down') {
     this._swipeAxis = null;
     if (this._zoomState.scale > 1) return super._onSwipeCommit(dir);
     if (dir === 'up') return this._openSheet();
@@ -337,7 +350,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     }
     super._onSwipeCancel();
   }
-  _setSheetOffset(px, animate) {
+  _setSheetOffset(px: number, animate: boolean) {
     this._currentOffset = px;
     const t = animate ? SHEET_ANIM : 'none';
     const visuals = this.$('.immersive-visuals');
@@ -378,7 +391,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     super._updateExif();
     this._updateSheetExif();
   }
-  _finalizeSwap(newIndex) {
+  _finalizeSwap(newIndex: number) {
     super._finalizeSwap(newIndex);
     this._updateSheetExif();
   }

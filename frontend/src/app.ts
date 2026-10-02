@@ -138,7 +138,7 @@ async function bootstrap() {
     } catch { /* ignore */ }
   } else if (!pluginHost.size || pluginHost.isEnabled("offline-sync")) {
     try {
-      const mod = await import("./plugins/offline-sync/index.js");
+      const mod = await import("./plugins/offline-sync/index.ts");
       if (mod && mod.mount) await mod.mount();
     } catch { /* ignore */ }
   }

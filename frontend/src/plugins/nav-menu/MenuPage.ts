@@ -10,13 +10,21 @@ import { html, setHTML, raw } from "../../utils/helpers.ts";
 
 import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.ts';
-import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
+import { getAdminNavMenu, updateAdminNavMenu } from './api.ts';
+import type { NavTagNode } from '../../api/nav.ts';
 import { getSettings, mergeSettings, setToast } from '../../store.ts';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';
 import { HeaderFold } from '../../utils/headerFold.ts';
 import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.ts';
 
 // ── Markdown parser/serialiser ────────────────────────────────────────────────
+
+/** One row of the custom menu editor. */
+interface MenuItem {
+  label: string;
+  url: string;
+  depth: number;
+}
 
 /**
  * Parse markdown menu format into a flat list of {label, url, depth} items.
@@ -26,7 +34,7 @@ import { SEARCH_SVG, MENU_SVG } from '../../utils/icons.ts';
  *   - Label               → group header (no url)
  *   (leading spaces × 2 per level determine depth)
  */
-function parseMarkdown(text) {
+function parseMarkdown(text: string): MenuItem[] {
   const lines = (text || '').split('\n');
   const items = [];
   for (const raw of lines) {
@@ -59,7 +67,7 @@ function parseMarkdown(text) {
  * visual editor (see _collectVisualItems) and have no markdown spelling — a
  * bare `- ` or `- [](url)` does not round-trip back through parseMarkdown.
  */
-function serializeMarkdown(items) {
+function serializeMarkdown(items: MenuItem[]) {
   return namedItems(items).map(({
     label,
     url,
@@ -71,11 +79,13 @@ function serializeMarkdown(items) {
 }
 
 /** The items that are actually a menu entry — i.e. have a label. */
-function namedItems(items) {
+function namedItems(items: MenuItem[]) {
   return items.filter(i => i.label);
 }
 export default class MenuPage extends Component {
-  constructor(container, props = {}) {
+  _tagItems: NavTagNode[];
+  _previewFolds: HeaderFold[];
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -264,7 +274,7 @@ export default class MenuPage extends Component {
    */
   _currentItems() {
     if (this.state.mode !== 'custom') return this.state.items;
-    return this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown(/** @type {HTMLTextAreaElement|null} */ (this.$('#menu-markdown-input'))?.value || '');
+    return this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown((this.$('#menu-markdown-input') as HTMLTextAreaElement|null)?.value || '');
   }
 
   /** Menu items to preview, as {name, hasChildren} — depends on the mode. */
@@ -307,10 +317,10 @@ export default class MenuPage extends Component {
             <span class="pvh-iconbtn pvh-burger">${raw(MENU_SVG)}</span>
           </span>
         </div>`);
-      const root = /** @type {HTMLElement} */ (vp.querySelector('.pvh'));
-      const nav = /** @type {HTMLElement} */ (root.querySelector('.pvh-nav'));
-      const more = /** @type {HTMLElement} */ (root.querySelector('.nav-more'));
-      const moreBtn = /** @type {HTMLElement} */ (root.querySelector('.nav-more-btn'));
+      const root = (vp.querySelector('.pvh') as HTMLElement);
+      const nav = (root.querySelector('.pvh-nav') as HTMLElement);
+      const more = (root.querySelector('.nav-more') as HTMLElement);
+      const moreBtn = (root.querySelector('.nav-more-btn') as HTMLElement);
       const links = [...nav.querySelectorAll('.nav-menu-link')].filter(l => !l.closest('.nav-more'));
       let foldedCount = 0;
       const syncMore = () => {
@@ -368,7 +378,7 @@ export default class MenuPage extends Component {
     });
     this.container.querySelector('#mode-visual-btn')?.addEventListener('click', () => {
       if (this.state.editFormat === 'markdown') {
-        const text = /** @type {HTMLTextAreaElement} */ (this.$('#menu-markdown-input')).value;
+        const text = (this.$('#menu-markdown-input') as HTMLTextAreaElement).value;
         this.setState({
           editFormat: 'visual',
           items: parseMarkdown(text)
@@ -523,8 +533,8 @@ export default class MenuPage extends Component {
     const items = [];
     rows.forEach(row => {
       items.push({
-        label: /** @type {HTMLInputElement} */ (row.querySelector('.item-label')).value.trim(),
-        url: /** @type {HTMLInputElement} */ (row.querySelector('.item-url')).value.trim(),
+        label: (row.querySelector('.item-label') as HTMLInputElement).value.trim(),
+        url: (row.querySelector('.item-url') as HTMLInputElement).value.trim(),
         depth: parseInt(row.dataset.depth, 10) || 0
       });
     });
@@ -567,7 +577,7 @@ export default class MenuPage extends Component {
    */
   _setSaving(saving) {
     this.state.saving = saving;
-    const btn = /** @type {HTMLButtonElement|null} */ (this.$('#save-menu-btn'));
+    const btn = (this.$('#save-menu-btn') as HTMLButtonElement|null);
     if (!btn) return;
     btn.disabled = saving;
     btn.textContent = saving ? 'Saving…' : 'Save Menu Configuration';

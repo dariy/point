@@ -207,7 +207,7 @@ export default class SearchPage extends Component<PageProps> {
         emptyMessage: 'No posts matched your search.'
       });
     } else {
-      const mod = active === 'dynamic-post-list' ? await import('../../plugins/dynamic-post-list/index.js') : await import('../../plugins/simple-post-list/index.js');
+      const mod = active === 'dynamic-post-list' ? await import('../../plugins/dynamic-post-list/index.ts') : await import('../../plugins/simple-post-list/index.ts');
       gridComp = mod.mount(this.$('#grid-mount'), {
         posts,
         showViewCount: !!settings.show_view_counts,

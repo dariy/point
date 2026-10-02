@@ -1,13 +1,14 @@
 import { onUser } from '../../store.ts';
 import { loadNav } from '../../api/nav.ts';
-import { NavMenu } from './NavMenu.js';
-import MenuPage from './MenuPage.js';
+import { NavMenu } from './NavMenu.ts';
+import type { NavMenuCtx } from './NavMenu.ts';
+import MenuPage from './MenuPage.ts';
 
-export async function mount(navEl, ctx) {
+export async function mount(navEl: HTMLElement, ctx: NavMenuCtx) {
   // Only mount if the elements exist
-  const navItemsEl = navEl.querySelector('.site-nav-items');
-  const burgerTagsEl = navEl.querySelector('#burger-tags-slot');
-  const burgerSitemapEl = navEl.querySelector('.burger-sitemap');
+  const navItemsEl = navEl.querySelector<HTMLElement>('.site-nav-items');
+  const burgerTagsEl = navEl.querySelector<HTMLElement>('#burger-tags-slot');
+  const burgerSitemapEl = navEl.querySelector<HTMLElement>('.burger-sitemap');
 
   if (!navItemsEl || !burgerTagsEl || !burgerSitemapEl) return null;
 

@@ -5,6 +5,8 @@
 import { Component } from "../../components/Component.ts";
 import { Pagination } from "../../components/shared/Pagination.ts";
 import { renderCopyright } from "../../utils/copyright.ts";
+import type { Slot, StoreSettings } from "../../utils/helpers.ts";
+import type { PostTag } from "../../api/posts.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import {
   renderTagLink,
@@ -53,17 +55,21 @@ import {
  */
 let drawerOpen = false;
 
-/**
- * @typedef {object} PublicFooterProps
- * @property {import('../../utils/helpers.ts').StoreSettings} [settings]  Public
- *   settings; reads blog_title and author_name.
- * @property {import('../../api/posts.ts').PostTag[]} [immersiveTags]  When
- *   non-empty, the footer renders them as the immersive tag bar in place of
- *   the pagination slot.
- */
+export interface PublicFooterProps {
+  /** Public settings; reads blog_title and author_name. */
+  settings?: StoreSettings;
+  /**
+   * When non-empty, the footer renders them as the immersive tag bar in place
+   * of the pagination slot.
+   */
+  immersiveTags?: PostTag[];
+}
 
-/** @extends {Component<PublicFooterProps>} */
-export class PublicFooter extends Component {
+export class PublicFooter extends Component<PublicFooterProps> {
+  _onZoomSync: ((e: CustomEvent<{ cols?: number }>) => void) | null;
+  _pagination: Pagination | null;
+  _unsubPagination: Function | null;
+  _cleanupFlyout: (() => void) | null;
   render() {
     const { settings = {}, immersiveTags = [] } = this.props;
 
@@ -72,8 +78,7 @@ export class PublicFooter extends Component {
     // sheet's footer so the two render the same line.
     const copyright = renderCopyright(settings);
 
-    /** @type {import("../../utils/helpers.ts").Slot} */
-    let centerSlot = "";
+    let centerSlot: Slot = "";
     if (immersiveTags.length) {
       const navTags = getNavTags() || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
@@ -167,7 +172,7 @@ export class PublicFooter extends Component {
   afterRender() {
     // Zoom slider → ask the grid page to apply the zoom (it owns the debounced
     // per_page refit); sync back from every zoom change (pinch, wheel, keys).
-    const zoomEl = /** @type {HTMLInputElement|null} */ (this.$("#footer-zoom"));
+    const zoomEl = (this.$("#footer-zoom") as HTMLInputElement|null);
     if (zoomEl) {
       zoomEl.addEventListener("input", () => {
         const cols = Number(zoomEl.max) + 1 - Number(zoomEl.value);

@@ -50,8 +50,8 @@ describe('Immersive navigation controls', () => {
     ({ setRoute, setUser } = await import('../src/store.ts'));
     setRoute({ pathname: '/posts/demo', params: {}, query: {} });
 
-    ({ PublicHeader } = await import('../src/plugins/public-header/PublicHeader.js'));
-    ({ ImmersiveSheetViewer } = await import('../src/plugins/immersive/ImmersiveSheetViewer.js'));
+    ({ PublicHeader } = await import('../src/plugins/public-header/PublicHeader.ts'));
+    ({ ImmersiveSheetViewer } = await import('../src/plugins/immersive/ImmersiveSheetViewer.ts'));
 
     container = {
       querySelector: () => null,
