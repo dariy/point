@@ -1,0 +1,300 @@
+/**
+ * PluginSettingsPanel — a right slide-in drawer holding one plugin's settings.
+ *
+ * Opened from a plugin card on the Plugins page (PluginsPage._openPanel). A
+ * plugin's drawer is composed of two optional parts:
+ *   - a settings form rendered from its `keys` (via the shared settingsFields
+ *     renderer), saved together through PUT /api/settings with a Save button;
+ *   - one or more rich `sections` — self-contained Components (backups, the
+ *     Instagram importer, passkeys, API keys) that manage their own state and
+ *     actions, mounted into the drawer body.
+ *
+ * Mounted into a throwaway node appended to <body>; `onClose` is responsible for
+ * unmounting this component and removing that node.
+ */
+
+import { Component } from "../Component.ts";
+import { GestureController } from "../../core/gestures.ts";
+import { renderFields, collectUpdates } from "./settingsFields.ts";
+import { updateSettings } from "../../api/settings.ts";
+import { mergeSettings, setToast } from "../../store.ts";
+import { html, raw } from "../../utils/helpers.ts";
+import type { Slot } from "../../utils/helpers.ts";
+import { acquireScrollLock, releaseScrollLock } from "../../utils/scrollLock.ts";
+import { CHECK_SVG, X_SVG } from "../../utils/icons.ts";
+import { BackupsSection } from "./sections/BackupsSection.ts";
+import { InstagramImportSection } from "./sections/InstagramImportSection.ts";
+import { PasskeysSection } from "./sections/PasskeysSection.ts";
+import { ApiKeysSection } from "./sections/ApiKeysSection.ts";
+import { OfflineDataSection } from "./sections/OfflineDataSection.ts";
+import { SyncQueueSection } from "./sections/SyncQueueSection.ts";
+import { VersionCheckSection } from "./sections/VersionCheckSection.ts";
+import { RebuildThumbnailsSection } from "./sections/RebuildThumbnailsSection.ts";
+import type { Settings } from "../../api/settings.ts";
+import type { getInstagramStatus } from "../../api/instagram.ts";
+
+// Section key → component class. Referenced by PLUGIN_SETTINGS in PluginsPage.
+const SECTIONS = {
+  backups: BackupsSection,
+  "instagram-import": InstagramImportSection,
+  passkeys: PasskeysSection,
+  "api-keys": ApiKeysSection,
+  "offline-data": OfflineDataSection,
+  "sync-queue": SyncQueueSection,
+  "version-check": VersionCheckSection,
+  "rebuild-thumbnails": RebuildThumbnailsSection,
+};
+
+export interface PluginSettingsPanelProps {
+  /** Drives the Instagram connection block. */
+  pluginId?: string;
+  /** Heading shown in the drawer header. */
+  title?: string;
+  /** Setting keys to render and collect. */
+  keys?: string[]|null;
+  /** Section keys to mount; see SECTIONS. */
+  sections?: string[]|null;
+  /** Current settings map, for `keys`. */
+  settings?: Settings;
+  /** Instagram connection status (instagram only). */
+  igStatus?: Awaited<ReturnType<typeof getInstagramStatus>> | null;
+  /** Tear-down callback. */
+  onClose?: () => void;
+}
+
+export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
+  _opened: boolean;
+  _closing: boolean;
+  _onKeydown: (e: KeyboardEvent) => void;
+  _gestures: GestureController;
+
+  constructor(container: HTMLElement, props: PluginSettingsPanelProps = {}) {
+    super(container, props);
+    this.state = { saving: false };
+  }
+
+  get _hasForm() {
+    return Array.isArray(this.props.keys) && this.props.keys.length > 0;
+  }
+
+  render() {
+    const { title, sections, settings, pluginId } = this.props;
+    const { saving } = this.state;
+
+    let formHtml: Slot = "";
+    if (this._hasForm) {
+      const { inputs, toggles } = renderFields(this.props.keys, settings, {});
+      const toggleSection = toggles ? html`<div class="settings-toggles">${toggles}</div>` : "";
+      const connection = pluginId === "instagram" ? this._renderInstagramConnection() : "";
+      formHtml = html`
+        <form id="plugin-settings-form" class="plugin-settings-form">
+          ${inputs}
+          ${toggleSection}
+          ${connection}
+        </form>`;
+    }
+
+    const sectionsHtml =
+      Array.isArray(sections) && sections.length
+        ? html`<div class="plugin-settings-sections">${sections
+            .map((_, i) => html`<div class="plugin-section-mount" data-section-index="${i}"></div>`)}</div>`
+        : "";
+
+    const saveBtn = this._hasForm
+      ? html`<button type="submit" form="plugin-settings-form" class="btn btn-primary" ${saving ? "disabled" : ""}>
+           ${raw(CHECK_SVG)}<span class="btn-label">${saving ? "Saving…" : "Save"}</span>
+         </button>`
+      : "";
+
+    return html`
+      <div class="plugin-settings-overlay" data-close></div>
+      <aside class="plugin-settings-drawer${this._opened ? " is-open" : ""}" role="dialog" aria-modal="true" aria-label="${title} settings">
+        <header class="plugin-settings-header">
+          <h2 class="plugin-settings-title">${title}</h2>
+          <button type="button" class="plugin-settings-close" data-close aria-label="Close">${raw(X_SVG)}</button>
+        </header>
+        <div class="plugin-settings-body">
+          ${formHtml}
+          ${sectionsHtml}
+        </div>
+        <footer class="plugin-settings-footer">
+          <button type="button" class="btn btn-secondary" data-close>${this._hasForm ? "Cancel" : "Close"}</button>
+          ${saveBtn}
+        </footer>
+      </aside>`;
+  }
+
+  /** Connect/disconnect block for the Instagram plugin (ported from SettingsPage). */
+  _renderInstagramConnection() {
+    const { settings, igStatus } = this.props;
+    // The wire map, so the flag is a string (see api/settings.ts).
+    const isEnabled =
+      settings.enable_instagram === "true" ||
+      settings.enable_instagram === "1";
+    if (!isEnabled || !igStatus) return "";
+
+    if (igStatus.connected) {
+      return html`
+        <div class="ig-connection-status connected">
+          <p>Connected as <strong>@${igStatus.username}</strong></p>
+          <button type="button" class="btn btn-sm btn-danger" id="ig-disconnect-btn">Disconnect Instagram</button>
+        </div>`;
+    }
+    const authUrl = `/api/instagram/connect?state=${encodeURIComponent(location.origin + "/light/plugins")}`;
+    return html`
+      <div class="ig-connection-status disconnected">
+        <p>Cross-posting is on but Instagram isn't connected.</p>
+        <a href="${authUrl}" class="btn btn-sm btn-primary">Connect Instagram</a>
+      </div>`;
+  }
+
+  afterRender() {
+    // Lock the page behind the drawer so swiping the panel doesn't scroll it.
+    // afterRender re-runs on every setState (e.g. the save spinner); the lock is
+    // idempotent per owner, so the pre-lock overflow is captured once and a
+    // repeat acquire cannot record the already-locked "hidden" and restore
+    // *that* on close — which used to leave the page unscrollable (point-ti5d).
+    acquireScrollLock(this);
+
+    // Slide in on the next frame so the CSS transition runs from off-screen —
+    // but only for the first render. `is-open` is also part of render()'s output
+    // once open, because afterRender re-runs on every setState: a re-render while
+    // the drawer is open (the Save spinner) produces a fresh element without the
+    // class, which snaps it off-screen and replays the slide-in. Saving then read
+    // as the panel reopening itself before closing.
+    if (!this._opened) {
+      requestAnimationFrame(() => {
+        this._opened = true;
+        this.$(".plugin-settings-drawer")?.classList.add("is-open");
+      });
+    }
+
+    this.$$("[data-close]").forEach((el) =>
+      el.addEventListener("click", () => this._close()),
+    );
+
+    this._onKeydown = (e) => {
+      if (e.key === "Escape") this._close();
+    };
+    document.addEventListener("keydown", this._onKeydown);
+
+    this.$("#plugin-settings-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      this._save();
+    });
+
+    this.$("#ig-disconnect-btn")?.addEventListener("click", () => this._disconnectInstagram());
+
+    // Mount rich section components (as children so they're torn down with us).
+    (this.props.sections || []).forEach((key, i) => {
+      const Cls = SECTIONS[key];
+      const mountEl = this.$(`.plugin-section-mount[data-section-index="${i}"]`);
+      if (Cls && mountEl) this.mountChild(Cls, mountEl, {});
+    });
+
+    this._bindSwipeToClose();
+  }
+
+  /**
+   * Drag the drawer rightward with a finger to dismiss it. Built on the shared
+   * GestureController, which axis-locks the touch — vertical drags stay as native
+   * scrolling inside the body and only a dominant rightward swipe moves the drawer.
+   * A drag past 35% of the drawer width commits to a close; anything shorter snaps
+   * back via the CSS transition.
+   */
+  _bindSwipeToClose() {
+    const drawer = this.$(".plugin-settings-drawer");
+    if (!drawer) return;
+
+    let dx = 0;
+    const reset = () => {
+      drawer.style.transition = "";
+      drawer.style.transform = "";
+    };
+
+    this._gestures = new GestureController(drawer, {
+      // Swipe-to-reveal rows (e.g. the backups list) own their horizontal drag;
+      // a swipe starting on one must not also close the drawer. Empty space still
+      // closes it.
+      ignoreSelector: ".backup-swipe-item",
+      onSwipeMove: (mx, my) => {
+        // Ignore vertical drags (the controller still reports them here).
+        if (Math.abs(my) > Math.abs(mx)) return;
+        dx = Math.max(0, mx); // rightward only; the drawer can't open further left
+        drawer.style.transition = "none";
+        drawer.style.transform = `translateX(${dx}px)`;
+      },
+      onSwipeCommit: (dir) => {
+        if (dir === "right" && dx > drawer.offsetWidth * 0.35) {
+          reset(); // restore the transition so _close animates out from here
+          this._close();
+        } else {
+          reset();
+        }
+        dx = 0;
+      },
+      onSwipeCancel: () => {
+        reset();
+        dx = 0;
+      },
+    });
+  }
+
+  beforeUnmount() {
+    if (this._onKeydown) document.removeEventListener("keydown", this._onKeydown);
+    releaseScrollLock(this);
+    this._gestures?.destroy();
+  }
+
+  /** Animate the drawer out, then hand control back to the opener to tear down. */
+  _close() {
+    if (this._closing) return;
+    this._closing = true;
+    const drawer = this.$(".plugin-settings-drawer");
+    const done = () => this.props.onClose?.();
+    if (!drawer) return done();
+    // Cleared before the class is removed so a re-render landing mid-animation
+    // renders the closed state rather than putting `is-open` straight back.
+    this._opened = false;
+    drawer.classList.remove("is-open");
+    let called = false;
+    const once = () => {
+      if (called) return;
+      called = true;
+      done();
+    };
+    drawer.addEventListener("transitionend", once, { once: true });
+    setTimeout(once, 300); // fallback if transitionend doesn't fire
+  }
+
+  async _save() {
+    const form = (this.$("#plugin-settings-form") as HTMLFormElement|null);
+    if (!form) return;
+    this.setState({ saving: true });
+
+    const updates = collectUpdates(form, this.props.keys);
+    try {
+      await updateSettings(updates);
+      // Reflect changes immediately in the global settings store.
+      const { normalizeSettings } = await import("../../utils/helpers.ts");
+      mergeSettings(normalizeSettings(updates));
+      setToast({ message: "Settings saved.", type: "success" });
+      this._close();
+    } catch (err) {
+      console.error("[PluginSettingsPanel] save error:", err);
+      setToast({ message: err.message || "Could not save settings.", type: "error" });
+      this.setState({ saving: false });
+    }
+  }
+
+  async _disconnectInstagram() {
+    try {
+      const { disconnectInstagram } = await import("../../api/instagram.ts");
+      await disconnectInstagram();
+      setToast({ message: "Instagram disconnected.", type: "success" });
+      this._close();
+    } catch (err) {
+      setToast({ message: err.message || "Failed to disconnect.", type: "error" });
+    }
+  }
+}

@@ -645,7 +645,7 @@ body {
    coarse pointers, and the share button carries that class. Match it across the
    whole cluster — otherwise the share button alone grows and the ladder, still
    stepping by the 40px size, packs the buttons together. Same :not(.pointer-fine)
-   scope as that rule (utils/pointerMode.js), and targeted at body because the
+   scope as that rule (utils/pointerMode.ts), and targeted at body because the
    default above is declared on body: an inherited value from <html> would lose
    to it. */
 @media (pointer: coarse) {

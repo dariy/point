@@ -109,24 +109,28 @@ step_govulncheck() {
     govulncheck ./...
 }
 
-# The lockfile-pinned eslint (flat config, eslint.config.js) — the system eslint
-# may be a different major version reading a different config format.
+# The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.mjs).
 step_js_lint() {
     cd "$ROOT_DIR"
-    node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs \
+    node_modules/.bin/oxlint frontend/src frontend/sw.js scripts/*.mjs \
         demo/mock demo/*.mjs demo/scripts/*.mjs
 }
 
-# The JSDoc annotations in frontend/src are types, and this is what makes them
-# binding: tsc with checkJs, no emit, no .ts files. Files not yet clean carry
-# `// @ts-nocheck` on line 1 — see jsconfig.json. Part of --lint, because a
-# broken annotation is a static error like any other.
+# frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
+# fails this step, so the move to TypeScript cannot go back. JS stays only in
+# frontend/sw.js, frontend/vendor/, the tests and demo/. Part of --lint,
+# because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
-    node_modules/.bin/tsc --noEmit -p jsconfig.json
+    if [ -n "$(find frontend/src -name '*.js' -print -quit)" ]; then
+        echo "  FAIL  .js file under frontend/src (write it as .ts):" >&2
+        find frontend/src -name '*.js' -printf '        %p\n' >&2
+        return 1
+    fi
+    node_modules/.bin/tsc -p tsconfig.json
 }
 
-# What the AST rules in eslint.config.js cannot see: hand-applied escapeHtml in
+# What the AST rules in scripts/oxlint-point.mjs cannot see: hand-applied escapeHtml in
 # an interpolation, and growth in the set of raw() exceptions.
 step_html_escaping() {
     "$SCRIPT_DIR/check-html-escaping.sh"
@@ -180,7 +184,7 @@ if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
         case "$f" in
             api/*|scripts/check-sql-layer.sh|scripts/coverage-gate.sh) go=1 ;;
-            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|eslint.config.js|jsconfig.json)
+            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|.oxlintrc.json|tsconfig.json)
                 js=1; e2e=1 ;;
             scripts/check-html-escaping.sh|scripts/check-vendor-sinks.sh) js=1 ;;
             scripts/run-e2e.sh|scripts/build-css.sh|scripts/build-js.sh) e2e=1 ;;
@@ -274,11 +278,21 @@ run_lane() {
 mkdir -p "$LOG_DIR"
 for s in "${!SELECTED[@]}"; do rm -f "$LOG_DIR/$s.log" "$LOG_DIR/$s.status"; done
 
-# Both JS lanes need node_modules; installing once here keeps them from racing
-# two `npm ci` runs over the same directory.
 needs_node=""
 for s in "${JS_LANE[@]}" "${E2E_LANE[@]}"; do [ -z "${SELECTED[$s]}" ] || needs_node=1; done
-if [ -n "$needs_node" ] && { [ ! -x "$ROOT_DIR/node_modules/.bin/eslint" ] || [ ! -x "$ROOT_DIR/node_modules/.bin/tsc" ]; }; then
+# The frontend tests import .ts files; Node must remove their types itself.
+if [ -n "$needs_node" ]; then
+    case "$(node -p 'process.features.typescript' 2>/dev/null)" in
+        strip|transform) ;;
+        *) echo "This Node cannot remove TypeScript types (process.features.typescript is false)."
+           echo "Install an official Node $(cat "$ROOT_DIR/.nvmrc") build from https://nodejs.org/ — distro builds leave it out."
+           exit 1 ;;
+    esac
+fi
+
+# Both JS lanes need node_modules; installing once here keeps them from racing
+# two `npm ci` runs over the same directory.
+if [ -n "$needs_node" ] && { [ ! -x "$ROOT_DIR/node_modules/.bin/oxlint" ] || [ ! -x "$ROOT_DIR/node_modules/.bin/tsc" ]; }; then
     echo "npm ci (node_modules is missing) — log: tmp/check/npm-ci.log"
     (cd "$ROOT_DIR" && npm ci --no-audit --no-fund) >"$LOG_DIR/npm-ci.log" 2>&1 || {
         tail -n "$TAIL" "$LOG_DIR/npm-ci.log"

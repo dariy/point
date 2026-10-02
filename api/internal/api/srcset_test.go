@@ -112,7 +112,7 @@ func TestInjectArticleSrcset(t *testing.T) {
 		t.Errorf("surrounding markup lost: %q", out)
 	}
 	if strings.Contains(out, "<picture") {
-		t.Errorf("emitted a <picture>, which postMedia.js cannot parse: %q", out)
+		t.Errorf("emitted a <picture>, which postMedia.ts cannot parse: %q", out)
 	}
 }
 

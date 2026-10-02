@@ -16,7 +16,7 @@ describe('immersiveNav', () => {
       addEventListener: () => {},
       removeEventListener: () => {},
     };
-    const mod = await import('../src/utils/immersiveNav.js');
+    const mod = await import('../src/utils/immersiveNav.ts');
     ({ enterImmersive, exitImmersive, decodeImmersiveHash } = mod);
   });
 

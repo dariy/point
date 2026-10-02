@@ -4,7 +4,7 @@ package main
 // tab strip sees *before* any JS runs.
 //
 // The SPA sets its own title after hydration (frontend/src/utils/
-// documentTitle.js), which is far too late for a client that does not execute
+// documentTitle.ts), which is far too late for a client that does not execute
 // scripts — a link shared into a chat app would unfurl as "Loading…" with no
 // description and no card image. So the shell handler asks shellMeta() what the
 // requested URL is about and splices the answer into the shell it was going to
@@ -199,7 +199,7 @@ func tagMeta(c echo.Context, svcs *AppServices, settings map[string]string, slug
 
 	// A post opened from inside the archive is served at the archive's URL:
 	// ViewContext serialises that view as /tags/<tag>?slug=<post>
-	// (frontend/src/utils/viewContext.js), and it is what a reader copies out of
+	// (frontend/src/utils/viewContext.ts), and it is what a reader copies out of
 	// the address bar while reading. The document is about the post then, so it
 	// is described as one — and canonicalises to the post's own URL, which is
 	// where TagPage.js points the canonical after it hydrates.
@@ -365,7 +365,7 @@ func metaText(s string) string {
 }
 
 // titleWithSite composes "<page> — <site>" exactly as setPageTitle() does on
-// the client (frontend/src/utils/documentTitle.js), including its refusal to
+// the client (frontend/src/utils/documentTitle.ts), including its refusal to
 // produce "Blog — Blog". The client's "Point" fallback is deliberately not
 // mirrored: an install with no blog title yet should say nothing, not invent a
 // name a crawler would then index.

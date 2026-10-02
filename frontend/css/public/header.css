@@ -404,7 +404,7 @@
     box-shadow: var(--shadow-sm);
 }
 
-/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.ts. */
 @media (pointer: coarse) {
     :where(html:not(.pointer-fine)) .header-action-btn::after,
     :where(html:not(.pointer-fine)) .theme-toggle::after,
@@ -670,7 +670,7 @@
 }
 
 /* Coarse pointer search overlay. Scoped to :not(.pointer-fine) — see
-   utils/pointerMode.js — so a mouse keeps the inline field. */
+   utils/pointerMode.ts — so a mouse keeps the inline field. */
 @media (pointer: coarse) {
     :where(html:not(.pointer-fine)) .header-search-form.is-active {
         position: fixed;

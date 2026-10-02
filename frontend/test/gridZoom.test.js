@@ -1,7 +1,7 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
 
-// ── Minimal globals so gridFit.js's zoom helpers run under node ────────────────
+// ── Minimal globals so gridFit.ts's zoom helpers run under node ────────────────
 // tokenPx() appends a probe and reads offsetWidth; a stub that returns 0 makes
 // maxZoomCols fall back to window.innerWidth (maxW || innerWidth), which is
 // exactly the path we want to exercise deterministically.
@@ -36,7 +36,7 @@ const {
   createResizeGate, TOOLBAR_BAND_PX,
   applyZoomVar, applyRowsVar, zoomCapacity,
   cardImageSizes, applyCardImageSizes,
-} = await import('../src/utils/gridFit.js');
+} = await import('../src/utils/gridFit.ts');
 
 describe('grid zoom', () => {
   beforeEach(() => { store.clear(); });

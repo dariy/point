@@ -17,7 +17,7 @@ let dom, buildFieldGroups, renderGroup;
 
 before(async () => {
   dom = setupDOM();
-  ({ buildFieldGroups, renderGroup } = await import('../src/components/light/postEditorFields.js'));
+  ({ buildFieldGroups, renderGroup } = await import('../src/components/light/postEditorFields.ts'));
   dom.cleanup();
 });
 
@@ -75,7 +75,7 @@ describe('post editor field groups', () => {
 describe('settings field inputs', () => {
   let renderFields;
   before(async () => {
-    ({ renderFields } = await import('../src/components/light/settingsFields.js'));
+    ({ renderFields } = await import('../src/components/light/settingsFields.ts'));
   });
 
   const preview = (url) =>

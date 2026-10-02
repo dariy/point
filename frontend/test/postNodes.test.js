@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { parseNodes, serializeNodes, firstImagePath } from '../src/utils/postNodes.js';
+import { parseNodes, serializeNodes, firstImagePath } from '../src/utils/postNodes.ts';
 
 describe('parseNodes', () => {
   test('a bare media path on its own line becomes an image node', () => {

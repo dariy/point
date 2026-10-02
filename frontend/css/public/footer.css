@@ -137,7 +137,7 @@ body.grid-zoomable .footer-zoom {
     box-shadow: var(--shadow-sm);
 }
 
-/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. */
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.ts. */
 @media (pointer: coarse) {
     :where(html:not(.pointer-fine)) .footer-action-btn::after {
         content: "";

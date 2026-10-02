@@ -28,7 +28,7 @@ import (
 //
 // The output size uses one truncation rule: the side that hits the bound is
 // the bound, and the other side is int(bound * aspect). articleSrcset in
-// api/internal/api/srcset.go and thumbSrcset in frontend/src/utils/mediaUrl.js
+// api/internal/api/srcset.go and thumbSrcset in frontend/src/utils/mediaUrl.ts
 // compute width descriptors with the same expression, so a change here must
 // change them too. TestFitSizeRule pins it.
 func fitImage(src image.Image, maxW, maxH int) image.Image {

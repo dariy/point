@@ -1,0 +1,598 @@
+/**
+ * VisualEditor — visual image-sequence editor for immersive posts.
+ */
+
+import { Component } from "../Component.ts";
+import { html } from "../../utils/helpers.ts";
+import { updateMedia, reextractMediaEXIF } from "../../api/media.ts";
+import { setToast } from "../../store.ts";
+import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.ts";
+import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
+import { thumbAttrs } from "../../utils/mediaUrl.ts";
+import type { EditorNode } from "../../utils/postNodes.ts";
+import type { Media } from "../../api/media.ts";
+
+// .ve-thumb is a fixed 80x56 box (--ve-thumb-width/-height). data-full still
+// points at the original: the card's lightbox (see _bindLightbox) opens the
+// full image, not the rung the card painted.
+const VE_THUMB_SIZES = "80px";
+
+export interface VisualEditorProps {
+  /** The document, in order. Text edits are written into these nodes in place. */
+  nodes?: EditorNode[];
+  /** Media records keyed by path, for each image card's EXIF panel. */
+  mediaByPath?: Record<string, Media>;
+  /** Called with the new list on any structural change. */
+  onChange?: (nodes: EditorNode[]) => void;
+  /** Called after an in-place text edit. */
+  onInput?: () => void;
+  /** Open the picker to insert at `index`. */
+  onAddMedia?: (index: number) => void;
+  /** Inline rename of an image card's file. */
+  onRename?: (oldPath: string, newFilename: string) => Promise<void>;
+}
+
+export class VisualEditor extends Component<VisualEditorProps> {
+  render() {
+    const { nodes = [] } = this.props;
+
+    const cards = nodes.map((node, i) => {
+      if (node.type === "image") return this._renderImageCard(node, i);
+      return this._renderTextCard(node, i);
+    });
+
+    const empty =
+      nodes.length === 0
+        ? html`<p class="ve-empty">No content yet. Use the buttons to add text or media.</p>`
+        : "";
+
+    return html`
+      <div class="ve-root">
+        <div class="ve-list" id="ve-list">
+          ${cards}
+          ${this._renderInsertZone(nodes.length)}
+          ${empty}
+        </div>
+      </div>`;
+  }
+
+  // ── Cards ──────────────────────────────────────────────────────────────
+
+  _renderInsertZone(index) {
+    return html`<div class="ve-insert-zone" data-insert-at="${index}">
+       <div class="ve-insert-actions">
+         <button class="ve-insert-btn ve-insert-text" type="button" title="Insert text node">+ Text</button>
+         <button class="ve-insert-btn ve-insert-media" type="button" title="Insert media node">+ Media</button>
+       </div>
+     </div>`;
+  }
+
+  _renderImageCard(node, i) {
+    const filename = node.path.split("/").pop();
+    const mediaByPath = this.props.mediaByPath || {};
+    const media = mediaByPath[node.path];
+    const mediaId = media ? String(media.id) : "";
+
+    const exifBtn = mediaId
+      ? html`<button class="ve-exif-toggle btn btn-sm" data-media-id="${mediaId}" type="button" title="Edit EXIF">\u2139</button>`
+      : "";
+    const exifPanel = mediaId
+      ? html`<div class="ve-exif-panel" data-media-id="${mediaId}" hidden>
+         ${this._renderVeExifRows(media)}
+         <div class="exif-actions">
+           <button class="btn btn-sm ve-exif-add-btn" type="button">+ Add field</button>
+           <button class="btn btn-sm ve-exif-save-btn" data-media-id="${mediaId}" type="button">Save EXIF</button>
+           <button class="btn btn-sm ve-exif-reextract-btn" data-media-id="${mediaId}" type="button">Re-extract</button>
+         </div>
+       </div>`
+      : "";
+
+    return html`
+    ${this._renderInsertZone(i)}
+    <div class="ve-card" data-index="${i}">
+      <div class="ve-handle" title="Drag to reorder">
+        <span class="ve-handle-dots"></span>
+      </div>
+      <img class="ve-thumb" ${thumbAttrs(node.path, {
+        sizes: VE_THUMB_SIZES,
+        width: media?.width,
+        height: media?.height,
+      })}
+           alt="${filename}"
+           data-full="${node.path}"
+           loading="lazy" decoding="async" draggable="false">
+      <div class="ve-card-row">
+        <span class="ve-path">${node.path}</span>
+        ${exifBtn}
+        <button class="ve-remove" data-index="${i}" type="button"
+                aria-label="Remove image" title="Remove">&times;</button>
+      </div>
+      ${exifPanel}
+    </div>`;
+  }
+
+  _renderTextCard(node, i) {
+    return html`
+    ${this._renderInsertZone(i)}
+    <div class="ve-card ve-card--text" data-index="${i}">
+      <div class="ve-handle" title="Drag to reorder">
+        <span class="ve-handle-dots"></span>
+      </div>
+      <span class="ve-text-icon" aria-hidden="true">¶</span>
+      <div class="ve-text-body">
+        <input class="ve-block-class" type="text" placeholder="Block class (optional)"
+               value="${node.blockClass || ""}" aria-label="Block class">
+        <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${node.text || ""}</textarea>
+      </div>
+      <button class="ve-remove" data-index="${i}" type="button"
+              aria-label="Remove text block" title="Remove">&times;</button>
+    </div>`;
+  }
+
+  afterRender() {
+    this._bindRemove();
+    this._bindDrag();
+    this._bindLightbox();
+    this._bindInlineRename();
+    this._bindInsertZones();
+    this._bindTextCards();
+    this._bindVeExif();
+    setupTextareaMaximizer(this.container);
+  }
+
+  _renderVeExifRows(media) {
+    const metadata = (media && media.metadata) || {};
+    const rows = Object.entries(metadata)
+      .map(
+        ([k, v]) =>
+          html`<tr>
+        <td><input class="exif-key" value="${String(k)}" placeholder="Field name" aria-label="EXIF field name"></td>
+        <td><input class="exif-val" value="${String(v)}" placeholder="Value" aria-label="EXIF value"></td>
+        <td><button class="exif-delete-btn" type="button" title="Remove">\u00d7</button></td>
+      </tr>`,
+      );
+    return html`<table class="exif-table"><thead><tr><th>Field</th><th>Value</th><th></th></tr></thead><tbody class="exif-rows">${rows}</tbody></table>`;
+  }
+
+  _bindVeExif() {
+    this.$$(".ve-exif-toggle").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const panel = btn.closest(".ve-card").querySelector(".ve-exif-panel") as HTMLElement;
+        if (panel) panel.hidden = !panel.hidden;
+      });
+    });
+
+    const bindDelete = (scope) => {
+      scope.querySelectorAll(".exif-delete-btn").forEach((b) => {
+        b.addEventListener("click", () => b.closest("tr").remove());
+      });
+    };
+    bindDelete(this.container);
+
+    this.$$(".ve-exif-add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tbody = btn.closest(".ve-exif-panel").querySelector(".exif-rows");
+        const tr = document.createElement("tr");
+        ["Field name", "Value"].forEach((placeholder, colIdx) => {
+          const td = document.createElement("td");
+          const input = document.createElement("input");
+          input.className = colIdx === 0 ? "exif-key" : "exif-val";
+          input.placeholder = placeholder;
+          input.setAttribute("aria-label", `EXIF ${placeholder.toLowerCase()}`);
+          td.appendChild(input);
+          tr.appendChild(td);
+        });
+        const tdDel = document.createElement("td");
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "exif-delete-btn";
+        delBtn.title = "Remove";
+        delBtn.textContent = "\u00d7";
+        delBtn.addEventListener("click", () => tr.remove());
+        tdDel.appendChild(delBtn);
+        tr.appendChild(tdDel);
+        tbody.appendChild(tr);
+      });
+    });
+
+    this.$$(".ve-exif-save-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = parseInt(btn.dataset.mediaId, 10);
+        const panel = btn.closest(".ve-exif-panel");
+        const metadata = {};
+        panel.querySelectorAll(".exif-rows tr").forEach((tr) => {
+          const key = (tr.querySelector(".exif-key") as HTMLInputElement)?.value.trim();
+          const val = (tr.querySelector(".exif-val") as HTMLInputElement)?.value.trim();
+          if (key) metadata[key] = val;
+        });
+        try {
+          await updateMedia(id, { metadata });
+          setToast({ message: "EXIF saved.", type: "success" });
+        } catch (err) {
+          setToast({
+            message: err.message || "Save failed.",
+            type: "error",
+          });
+        }
+      });
+    });
+
+    this.$$(".ve-exif-reextract-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mountEl = document.createElement("div");
+        document.body.appendChild(mountEl);
+        const dialog = new ConfirmDialog(mountEl, {
+          title: "Re-extract EXIF",
+          message: "Re-extract will overwrite manual EXIF edits. Continue?",
+          confirmText: "Re-extract",
+          variant: "danger",
+          onConfirm: async () => {
+            dialog.unmount();
+            mountEl.remove();
+            const id = parseInt(btn.dataset.mediaId, 10);
+            try {
+              const updated = await reextractMediaEXIF(id);
+              const metadata = updated.metadata || {};
+              const panel = btn.closest(".ve-exif-panel");
+              const tbody = panel.querySelector(".exif-rows");
+              while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+              Object.entries(metadata).forEach(([k, v]) => {
+                const tr = document.createElement("tr");
+                ["exif-key", "exif-val"].forEach((cls, i) => {
+                  const td = document.createElement("td");
+                  const input = document.createElement("input");
+                  input.className = cls;
+                  input.value = String(i === 0 ? k : v);
+                  input.placeholder = i === 0 ? "Field name" : "Value";
+                  td.appendChild(input);
+                  tr.appendChild(td);
+                });
+                const tdDel = document.createElement("td");
+                const delBtn = document.createElement("button");
+                delBtn.type = "button";
+                delBtn.className = "exif-delete-btn";
+                delBtn.title = "Remove";
+                delBtn.textContent = "\u00d7";
+                delBtn.addEventListener("click", () => tr.remove());
+                tdDel.appendChild(delBtn);
+                tr.appendChild(tdDel);
+                tbody.appendChild(tr);
+              });
+              const msg = Object.keys(metadata).length
+                ? "EXIF re-extracted."
+                : "No EXIF data found in this file.";
+              setToast({ message: msg, type: "success" });
+            } catch (err) {
+              setToast({
+                message: err.message || "Re-extract failed.",
+                type: "error",
+              });
+            }
+          },
+          onCancel: () => {
+            dialog.unmount();
+            mountEl.remove();
+          },
+        });
+        dialog.mount();
+      });
+    });
+  }
+
+  /**
+   * Read current node state from DOM (capturing live textarea values)
+   * and serialize to the plain-text content format.
+   * Called by PostEditPage at save time.
+   */
+  serializeNodes(): string {
+    const nodes = this.props.nodes || [];
+    return nodes
+      .map((node, i) => {
+        if (node.type === "image") return node.path;
+        const card = this.container.querySelector(
+          `.ve-card[data-index="${i}"]`,
+        );
+        const ta = (card?.querySelector(".ve-text-area") as HTMLTextAreaElement);
+        const blockClassInput = (card?.querySelector(".ve-block-class") as HTMLInputElement);
+        const text = ta ? ta.value : node.text || "";
+        const blockClass = (
+          blockClassInput ? blockClassInput.value : node.blockClass || ""
+        ).trim();
+        if (blockClass) {
+          return `:::{.${blockClass}}\n${text}\n:::\n---`;
+        }
+        return text + "\n---";
+      })
+      .join("\n");
+  }
+
+  _bindInsertZones() {
+    this.$$(".ve-insert-text").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const zone = (btn.closest(".ve-insert-zone") as HTMLElement);
+        if (!zone) return;
+        const at = parseInt(zone.dataset.insertAt, 10);
+        const next = [...this.props.nodes];
+        next.splice(at, 0, { type: "text", text: "" });
+        this.props.onChange(next);
+        // After parent re-renders via setProps, focus the new textarea
+        requestAnimationFrame(() => {
+          const cards = this.$$(".ve-card");
+          (cards[at]?.querySelector(".ve-text-area") as HTMLElement)?.focus();
+        });
+      });
+    });
+
+    this.$$(".ve-insert-media").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const zone = (btn.closest(".ve-insert-zone") as HTMLElement);
+        if (!zone) return;
+        const at = parseInt(zone.dataset.insertAt, 10);
+        if (this.props.onAddMedia) {
+          this.props.onAddMedia(at);
+        }
+      });
+    });
+  }
+
+  _bindTextCards() {
+    (this.$$(".ve-text-area") as NodeListOf<HTMLTextAreaElement>).forEach((ta) => {
+      const resize = () => {
+        ta.style.height = "auto";
+        ta.style.height = ta.scrollHeight + "px";
+      };
+      resize();
+      ta.addEventListener("input", () => {
+        resize();
+        const card = (ta.closest(".ve-card") as HTMLElement);
+        if (card) {
+          const idx = parseInt(card.dataset.index, 10);
+          if (this.props.nodes[idx]) {
+            this.props.nodes[idx].text = ta.value;
+          }
+        }
+        if (this.props.onInput) {
+          this.props.onInput();
+        }
+      });
+    });
+
+    (this.$$(".ve-block-class") as NodeListOf<HTMLInputElement>).forEach((input) => {
+      input.addEventListener("input", () => {
+        const card = (input.closest(".ve-card") as HTMLElement);
+        if (card) {
+          const idx = parseInt(card.dataset.index, 10);
+          if (this.props.nodes[idx]) {
+            this.props.nodes[idx].blockClass = input.value;
+          }
+        }
+        if (this.props.onInput) this.props.onInput();
+      });
+    });
+  }
+
+  _bindRemove() {
+    this.$$(".ve-remove").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.index, 10);
+        const next = [...this.props.nodes];
+        next.splice(idx, 1);
+        this.props.onChange(next);
+      });
+    });
+  }
+
+  // Drag and lightbox wired in later tasks — stubs to avoid errors
+  _bindDrag() {
+    const list = this.$("#ve-list");
+    if (!list) return;
+
+    let dragIdx = null;
+    let indicator = null;
+
+    const getCards = () => [...list.querySelectorAll(".ve-card")];
+
+    const removeIndicator = () => {
+      indicator?.remove();
+      indicator = null;
+    };
+
+    const insertIndicator = (referenceCard, before) => {
+      removeIndicator();
+      indicator = document.createElement("div");
+      indicator.className = "ve-drop-indicator";
+      if (before) {
+        list.insertBefore(indicator, referenceCard);
+      } else {
+        referenceCard.insertAdjacentElement("afterend", indicator);
+      }
+    };
+
+    // Compute drop slot index (0 = before first card, n = after last card)
+    const slotFromEvent = (e) => {
+      const cards = getCards();
+      for (let i = 0; i < cards.length; i++) {
+        const rect = cards[i].getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (e.clientY < mid) return i;
+      }
+      return cards.length;
+    };
+
+    // Enable dragging only when mousedown starts on the handle
+    list.addEventListener("mousedown", (e) => {
+      const handle = (e.target as HTMLElement).closest(".ve-handle");
+      if (!handle) return;
+      const card = handle.closest(".ve-card");
+      if (card) card.setAttribute("draggable", "true");
+    });
+
+    list.addEventListener("dragstart", (e) => {
+      const card = (e.target as HTMLElement).closest(".ve-card") as HTMLElement;
+      if (!card || card.getAttribute("draggable") !== "true") return;
+      dragIdx = parseInt(card.dataset.index, 10);
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+
+    list.addEventListener("dragover", (e) => {
+      if (dragIdx === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+
+      const cards = getCards();
+      const slot = slotFromEvent(e);
+
+      if (slot === 0) {
+        if (cards[0]) insertIndicator(cards[0], true);
+      } else if (slot >= cards.length) {
+        if (cards[cards.length - 1])
+          insertIndicator(cards[cards.length - 1], false);
+      } else {
+        insertIndicator(cards[slot], true);
+      }
+    });
+
+    list.addEventListener("dragleave", (e) => {
+      if (!list.contains((e.relatedTarget as Node))) removeIndicator();
+    });
+
+    list.addEventListener("drop", (e) => {
+      if (dragIdx === null) return;
+      e.preventDefault();
+      removeIndicator();
+
+      const slot = slotFromEvent(e);
+      const next = [...this.props.nodes];
+      const [moved] = next.splice(dragIdx, 1);
+      // Adjust insertion index after removal
+      const insertAt = slot > dragIdx ? slot - 1 : slot;
+      next.splice(insertAt, 0, moved);
+
+      dragIdx = null;
+      this.props.onChange(next);
+    });
+
+    list.addEventListener("dragend", () => {
+      dragIdx = null;
+      removeIndicator();
+      list.querySelectorAll(".ve-card").forEach((c) => {
+        c.classList.remove("dragging");
+        c.removeAttribute("draggable");
+      });
+    });
+  }
+  _bindInlineRename() {
+    this.$$(".ve-path").forEach((span) => {
+      span.addEventListener("click", () => {
+        const card = (span.closest(".ve-card") as HTMLElement);
+        if (!card) return;
+        const idx = parseInt(card.dataset.index, 10);
+        const node = this.props.nodes[idx];
+        if (!node || node.type !== "image") return;
+        this._startRename(span, node.path);
+      });
+    });
+  }
+
+  _startRename(span, path) {
+    const lastSlash = path.lastIndexOf("/");
+    const prefix = path.slice(0, lastSlash + 1); // e.g. "/2026/02/"
+    const fullName = path.slice(lastSlash + 1); // e.g. "photo.jpg"
+    const lastDot = fullName.lastIndexOf(".");
+    const base = lastDot !== -1 ? fullName.slice(0, lastDot) : fullName;
+    const ext = lastDot !== -1 ? fullName.slice(lastDot) : "";
+
+    const form = document.createElement("span");
+    form.className = "ve-rename-form";
+
+    const prefixEl = document.createElement("span");
+    prefixEl.className = "ve-rename-prefix";
+    prefixEl.textContent = prefix;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "ve-rename-input";
+    input.value = base;
+
+    const extEl = document.createElement("span");
+    extEl.className = "ve-rename-ext";
+    extEl.textContent = ext;
+
+    form.appendChild(prefixEl);
+    form.appendChild(input);
+    form.appendChild(extEl);
+
+    span.replaceWith(form);
+    input.focus();
+    input.select();
+
+    const cancel = () => {
+      if (document.body.contains(form)) form.replaceWith(span);
+    };
+
+    let submitting = false;
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        cancel();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        // Sanitise: keep only letters, digits, hyphens, underscores and spaces.
+        const newBase = input.value.trim().replace(/[^a-zA-Z0-9\-_ ]/g, "");
+        if (!newBase || newBase === base) {
+          cancel();
+          return;
+        }
+        const promise = this.props.onRename?.(path, newBase + ext);
+        if (!promise) {
+          cancel();
+          return;
+        }
+        submitting = true;
+        input.disabled = true;
+        promise.catch(() => {
+          submitting = false;
+          input.disabled = false;
+          input.focus();
+        });
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      if (submitting) return;
+      setTimeout(() => {
+        if (!submitting && document.body.contains(form)) cancel();
+      }, 150);
+    });
+  }
+
+  _bindLightbox() {
+    this.$$(".ve-thumb").forEach((img) => {
+      img.addEventListener("click", () => {
+        const full = img.dataset.full;
+        if (!full) return;
+
+        const overlay = document.createElement("div");
+        overlay.className = "ve-lightbox";
+
+        const fullImg = document.createElement("img");
+        fullImg.src = full;
+        fullImg.alt = "";
+        overlay.appendChild(fullImg);
+        document.body.appendChild(overlay);
+
+        const close = () => {
+          overlay.remove();
+          document.removeEventListener("keydown", onKey);
+        };
+        overlay.addEventListener("click", close);
+        const onKey = (e) => {
+          if (e.key === "Escape") close();
+        };
+        document.addEventListener("keydown", onKey);
+      });
+    });
+  }
+}

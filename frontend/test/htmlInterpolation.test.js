@@ -8,7 +8,7 @@
  *   html`<div>${cond ? `<button>Hi</button>` : ''}</div>`
  *                      ^ escaped into &lt;button&gt;Hi&lt;/button&gt;
  *
- * Nothing catches this today. eslint's `no-restricted-syntax` selectors cannot
+ * Nothing catches this today. The `point/restricted-syntax` selectors cannot
  * see the difference between that and the legitimate shape one line away —
  * `${count ? ` (${count})` : ''}`, plain text an author *wants* escaped —
  * because telling them apart means looking at the literal's contents, not its
@@ -23,18 +23,19 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse } from 'espree';
+import { parseSync } from 'oxc-parser';
 
 const SRC = new URL('../src', import.meta.url).pathname;
 
 /** Looks like an HTML element rather than prose that happens to contain "<". */
 const MARKUP = /<\/[a-z][a-z0-9-]*\s*>|<[a-z][a-z0-9-]*(\s[^<>]*)?\/?>/i;
 
-function jsFiles(dir) {
+/** Every .js and .ts source; .d.ts holds no code. */
+function sourceFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) return jsFiles(full);
-    return name.endsWith('.js') ? [full] : [];
+    if (statSync(full).isDirectory()) return sourceFiles(full);
+    return /\.[jt]s$/.test(name) && !name.endsWith('.d.ts') ? [full] : [];
   });
 }
 
@@ -60,6 +61,11 @@ function untaggedLiteralsIn(node, out = []) {
   return out;
 }
 
+/** oxc gives byte offsets only; the report wants a line. */
+function lineOf(source, offset) {
+  return source.slice(0, offset).split('\n').length;
+}
+
 function walk(node, visit) {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
@@ -76,10 +82,12 @@ function walk(node, visit) {
 
 test('no untagged markup literal is interpolated into html``', () => {
   const offences = [];
-  for (const file of jsFiles(SRC)) {
+  for (const file of sourceFiles(SRC)) {
     const source = readFileSync(file, 'utf8');
     if (!source.includes('html`')) continue;
-    const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module', loc: true });
+    const { program: ast, errors } = parseSync(file, source, { sourceType: 'module' });
+    // A parse error yields a partial AST, and a partial AST hides offences.
+    assert.deepEqual(errors.map((e) => e.message), [], `${file} does not parse`);
     walk(ast, (node) => {
       if (node.type !== 'TaggedTemplateExpression') return;
       if (node.tag.type !== 'Identifier' || node.tag.name !== 'html') return;
@@ -88,7 +96,7 @@ test('no untagged markup literal is interpolated into html``', () => {
           const text = lit.quasis.map((q) => q.value.cooked ?? '').join('');
           if (!MARKUP.test(text)) continue;
           offences.push(
-            `${file.slice(SRC.length + 1)}:${lit.loc.start.line}  ${text.trim().slice(0, 70)}`,
+            `${file.slice(SRC.length + 1)}:${lineOf(source, lit.start)}  ${text.trim().slice(0, 70)}`,
           );
         }
       }

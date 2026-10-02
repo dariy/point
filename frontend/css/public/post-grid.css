@@ -51,7 +51,7 @@
 }
 
 /* Card hover affordances key off `.pointer-fine` rather than `(hover: hover)`
-   — see utils/pointerMode.js. A laptop with a touchscreen answers that media
+   — see utils/pointerMode.ts. A laptop with a touchscreen answers that media
    query "no", which left every mouse user on such a machine with a completely
    inert grid. */
 :where(html.pointer-fine) .post-card-slot:hover {
@@ -237,7 +237,7 @@
     cursor: pointer;
 }
 
-/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js — so a mouse gets the
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.ts — so a mouse gets the
    hover-reveal below instead of a permanently half-visible button. */
 @media (pointer: coarse) {
     :where(html:not(.pointer-fine)) .post-card-edit-btn {
@@ -530,7 +530,7 @@
 /* ===========================
    Pinch zoom (near-square cards)
    =========================== */
-/* `--posts-grid-cols` is set on <body> from the stored zoom (see gridFit.js).
+/* `--posts-grid-cols` is set on <body> from the stored zoom (see gridFit.ts).
    The column count is pinned and every slot is squared so rows auto-fit the
    viewport — fewer columns = a few big squares, more = many small ones.
    ponytail: image cards dominate the list, so aspect-ratio squares them cleanly;

@@ -5,7 +5,7 @@
  * The shipped frontend/index.html is a template: the Go server rewrites it in
  * memory on every request and never touches the file on disk. A static build has
  * to do that work itself, and the plugin manifest in particular is not optional
- * — core/pluginHost.js is completely inert without window.__PLUGINS__, which
+ * — core/pluginHost.ts is completely inert without window.__PLUGINS__, which
  * silently costs the demo its media viewer, timeline and tag visualisation.
  *
  * See api/cmd/api/main.go (setupEcho, the SPA fallback handler) for the
@@ -43,7 +43,7 @@ const FIXTURES = resolve(
  * offline-sync  — registers /sw.js and enables the IndexedDB mutation queue.
  *                 In a demo the service worker only serves stale bundles, and
  *                 the queue would silently accumulate writes that never drain.
- *                 Note app.js falls back to importing this plugin statically
+ *                 Note app.ts falls back to importing this plugin statically
  *                 when the manifest is EMPTY, so the manifest must be present
  *                 and non-empty for the omission to take effect.
  */
@@ -97,7 +97,7 @@ async function main() {
   if (manifest.length === 0) {
     console.error(
       "REFUSING: empty plugin manifest — the demo would lose the media viewer,\n" +
-        "timeline and tag visualisation, and app.js would fall back to loading\n" +
+        "timeline and tag visualisation, and app.ts would fall back to loading\n" +
         "the offline-sync plugin (registering a service worker).",
     );
     process.exit(1);
@@ -118,7 +118,7 @@ async function main() {
     .replace("</head>", `${script}\n</head>`);
 
   // The shell ships <title>Loading…</title> because the server replaces it
-  // per-post. Nothing does that here, so give the demo a real default; app.js
+  // per-post. Nothing does that here, so give the demo a real default; app.ts
   // overwrites it from settings once booted.
   out = out.replace("<title>Loading…</title>", "<title>Point — live demo</title>");
 

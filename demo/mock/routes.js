@@ -471,7 +471,7 @@ function atlasCloud(state, tag, query) {
     };
     // The owner's marking for what a guest would not get: the Atlas draws a
     // node as concealed when it carries a non-public status or `is_hidden`
-    // (isConcealed, frontend/src/plugins/tags-atlas/index.js), and the backend
+    // (isConcealed, frontend/src/plugins/tags-atlas/index.ts), and the backend
     // only sends either to a viewer allowed to see hidden items.
     if (state.authenticated) {
       node.status = p.status;
@@ -836,7 +836,7 @@ export const routes = [
     },
   ],
   ["GET", "/api/pages/map", ({ state }) => ok(state.pages.map ?? { locations: [] })],
-  // `menu` is the header's tree and `tags` the site-title dropdown's; api/nav.js
+  // `menu` is the header's tree and `tags` the site-title dropdown's; api/nav.ts
   // falls back to `menu` when `tags` is absent, which is what the server sends
   // in the default "tags" mode. The empty fallback has to use the same key —
   // `{items: []}` would leave navTags undefined and refetch on every mount.
@@ -1003,7 +1003,7 @@ export const routes = [
   ],
 
   [
-    // What the admin editor loads a post with (PostEditPage → api/posts.js
+    // What the admin editor loads a post with (PostEditPage → api/posts.ts
     // getPost). Missing, it fell to the soft empty 200 and the edit form opened
     // with every field blank — a post that reads fine on the public site and
     // has no title, slug or excerpt the moment you edit it.

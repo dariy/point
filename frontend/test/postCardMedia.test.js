@@ -37,7 +37,7 @@ const render = (post) => String(new PostCard(null, { post }).render());
 
 describe('PostCard media', () => {
   before(async () => {
-    ({ PostCard } = await import('../src/components/public/PostCard.js'));
+    ({ PostCard } = await import('../src/components/public/PostCard.ts'));
   });
 
   test('image cards request a thumbnail rung, never the original', () => {

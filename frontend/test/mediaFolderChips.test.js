@@ -17,7 +17,7 @@ describe('folderChips', () => {
   ];
 
   before(async () => {
-    ({ folderChips, groupFoldersByYear } = await import('../src/utils/mediaFolders.js'));
+    ({ folderChips, groupFoldersByYear } = await import('../src/utils/mediaFolders.ts'));
   });
 
   test('at the root: All media plus one chip per year, newest first', () => {

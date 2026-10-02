@@ -42,7 +42,7 @@ Read a file before you edit it — always.
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
-| Frontend typecheck | `npm run typecheck` — `tsc --noEmit` over the JSDoc types; no `.ts` files, no emit |
+| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.js`; no emit, erasable syntax only |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
@@ -73,6 +73,19 @@ command you add cannot run unattended, mark it in the source with
   `api/sql/queries.sql` (and `schema.sql` for DDL), then `cd api && sqlc generate`. Config lives in
   `api/sqlc.yaml`. `extra.go` in the same package is hand-written. Keep `queries.sql` ASCII: sqlc
   expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
+
+**`frontend/src` is TypeScript, and only TypeScript.** `scripts/check.sh` fails on a `.js` file
+there. JS stays in `frontend/sw.js`, `frontend/vendor/`, `frontend/test/`, `frontend/e2e/` and
+`demo/`. Node and the bundler remove the types, so there is no emit and the rules follow from that:
+
+- Erasable syntax only: no `enum`, no `namespace`, no parameter properties. Type-only imports use
+  `import type`.
+- An import names the real file: `./x.ts` for a TS module, `./x.js` for a JS module.
+- Object shapes are `interface`. Unions, aliases and mapped types are `type`.
+- Doc comments keep their prose and have no `{Type}`: `@param name - text`, `@returns text`.
+- Casts use `as`, never `<T>expr`. `strict` is off: do not add `!`. Do not add `any`, `@ts-ignore`
+  or `@ts-nocheck` to make an error go away.
+- A class declares every `this.<prop>` it assigns as a typed field.
 
 **Two vendored files carry a Point patch.** `frontend/vendor/leaflet/leaflet.js`
 and `frontend/vendor/codejar/codejar.js` route their own HTML writes through a
@@ -150,7 +163,7 @@ Two calls, and they take seconds:
 
 - `get_context(targets=[…])` on what you are about to edit — it reports the fix history and hotspot
   score. Some files here are bug magnets (`api/cmd/api/main.go`,
-  `frontend/src/pages/light/PostEditPage.js`), and knowing that before you start changes how much
+  `frontend/src/pages/light/PostEditPage.ts`), and knowing that before you start changes how much
   test you write.
 - `get_risk(targets=[…])` when the file is shared — a repository method, a `frontend/src/core/`
   module, a plugin registry entry. It names the callers that a signature change will break.

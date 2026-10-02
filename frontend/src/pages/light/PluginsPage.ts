@@ -1,0 +1,779 @@
+/**
+ * PluginsPage — admin plugin management.
+ *
+ * Lists the full plugin catalog (enabled and disabled) grouped by type in
+ * collapsible cards and lets the admin toggle each plugin on/off. Toggling
+ * persists via PATCH /api/plugins/:id and changes the enabled-only manifest
+ * injected on the next page load.
+ *
+ * Presets (Minimalistic / Standalone / Fully featured) apply a whole set of
+ * toggles at once; their membership is editable and persisted server-side.
+ *
+ * The "Site map" card renders schematic wireframes of the key pages (home,
+ * post, tags, media viewer, admin) with each plugin's spot marked; map regions
+ * and catalog rows cross-highlight on hover, and clicking a region jumps to
+ * the row. The geometry is frontend-owned (see _renderMap) — the backend
+ * registry knows slots, not where a slot sits on a page.
+ *
+ * How many plugins a slot takes is the slot's own rule (`slot_rule` on each row,
+ * mirroring plugins.Cardinality on the backend): a single-claim slot turns its
+ * candidates into a radio group — enabling one flips the others off — and a slot
+ * that requires a claimant has its last enabled one marked `locked` by the
+ * backend, rendered read-only here. The tag maps (`map-route`, 0-1) and the
+ * immersive viewers (`post-viewer`, exactly 1) are the slots with several
+ * candidates; both are switched the same way, by enabling the one you want.
+ * `tags-route` (0-1) carries the same rule with a single candidate — the graph —
+ * so it renders as a plain row, not as a group of alternatives.
+ *
+ * This page is the one admin surface that reveals disabled plugins; the public
+ * site never sees them (server-side enabled-only manifest + 404'd chunks/routes).
+ */
+
+import { Component } from "../../components/Component.ts";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
+import { getPlugins, setPluginEnabled, getPresets, updatePreset, applyPreset } from "../../api/plugins.ts";
+import { getAllSettings } from "../../api/settings.ts";
+import { getInstagramStatus } from "../../api/instagram.ts";
+import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.ts";
+import { setPluginToggled, setToast } from "../../store.ts";
+import { html, raw } from "../../utils/helpers.ts";
+import type { Slot } from "../../utils/helpers.ts";
+import { pluginHost } from "../../core/pluginHost.ts";
+
+import type { Settings } from "../../api/settings.ts";
+
+// Slot cardinalities that make a slot's candidates alternatives (at most one
+// enabled) and that keep a slot occupied (its last claimant can't be turned
+// off). Values mirror the plugins.Cardinality constants in the Go registry.
+const SINGLE_CLAIM_SLOT = new Set(["0-1", "1"]);
+const REQUIRED_SLOT = new Set(["1", "1+"]);
+
+// Group headings keyed by Descriptor.Type, rendered in this order.
+const TYPE_GROUPS = [
+  { type: "route", title: "Routes & pages", hint: "Plugins that own a route or admin page." },
+  { type: "slot", title: "Shell slots", hint: "Plugins that fill a region of the public shell." },
+  { type: "enhancer", title: "Content enhancers", hint: "Plugins that augment post content." },
+  { type: "service", title: "Backend services", hint: "Server-side capabilities; disabling 404s their API routes." },
+];
+
+// Presets in display order. Ids must match the backend's DefaultPresets keys.
+const PRESETS = [
+  { id: "minimalistic", title: "Minimalistic", hint: "Just the photo grid and photo page — no header, footer, search or tags." },
+  { id: "standalone", title: "Standalone", hint: "Header, footer and browsing; no AI analysis or Instagram." },
+  { id: "fully-featured", title: "Fully featured", hint: "Every plugin enabled." },
+];
+const PRESET_TITLES = Object.fromEntries(PRESETS.map((p) => [p.id, p.title]));
+
+// Frontend-owned map from plugin id to an existing admin page where the plugin
+// is configured by a full editor (themes, menu). Only plugins whose settings
+// live on a dedicated page appear here; the backend stays decoupled from routes.
+const SETTINGS_PAGE_PATHS = {
+  "custom-css": "/light/themes",
+  "nav-menu": "/light/menu",
+};
+
+// Plugins configured inline in a per-plugin drawer (PluginSettingsPanel). Each
+// entry may declare `keys` (settings fields extracted from /light/settings,
+// saved together) and/or `sections` (rich blocks extracted from /light/system
+// and /light/security — see SECTIONS in PluginSettingsPanel). `tags_visibility`
+// is one shared gate over all three tag vizzes, across both slots (`tags-route`
+// for /tags and `map-route` for /map) — not a per-viz switch.
+const PLUGIN_SETTINGS = {
+  "ai-analysis": {
+    keys: [
+      "gemini_model",
+      "gemini_api_key",
+      "gemini_prompt_title",
+      "gemini_prompt_tags",
+      "gemini_prompt_excerpt",
+    ],
+  },
+  instagram: {
+    keys: ["enable_instagram", "instagram_client_id", "instagram_client_secret"],
+    sections: ["instagram-import"],
+  },
+  immersive: { keys: ["immersive_nav_direction"] },
+  "immersive-sheet": { keys: ["immersive_nav_direction"] },
+  "tags-atlas": { keys: ["tags_visibility", "min_tag_posts_to_show", "atlas_post_limit"] },
+  "tags-map": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
+  "tags-graph": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
+  "tag-cloud": { keys: ["min_tag_posts_to_show"] },
+  "simple-post-list": { keys: ["enable_video_hover_autoplay"], sections: ["rebuild-thumbnails"] },
+  "dynamic-post-list": { keys: ["enable_video_hover_autoplay"], sections: ["rebuild-thumbnails"] },
+  "public-header": { keys: ["show_title_dropdown"] },
+  "public-footer": { keys: ["footer_copyright"] },
+  backups: { sections: ["backups"] },
+  passkeys: { sections: ["passkeys"] },
+  "api-keys": { sections: ["api-keys"] },
+  "offline-sync": { sections: ["offline-data", "sync-queue"] },
+  "version-check": { sections: ["version-check"] },
+  comments: {
+    keys: [
+      "remark_simple_view",
+      "remark_no_footer",
+      "remark_auth_anon",
+      "remark_auth_email_enable",
+      "remark_auth_github_cid",
+      "remark_auth_github_csec",
+      "remark_auth_google_cid",
+      "remark_auth_google_csec",
+      "remark_smtp_host",
+      "remark_smtp_port",
+      "remark_smtp_username",
+      "remark_smtp_password",
+      "remark_smtp_tls",
+      "remark_email_from",
+      "remark_telegram_token",
+      "remark_telegram_chan",
+    ],
+  },
+};
+
+const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+// Titles for the site-map panels, keyed by panel id (see _renderMap). The map
+// itself is frontend-owned: the backend registry knows slot names, not where a
+// slot sits on a page, so the schematic geometry lives here.
+const MAP_PANELS = [
+  { id: "home", title: "Post list", path: "/" },
+  { id: "post", title: "Post page", path: "/:slug" },
+  { id: "tags", title: "Tags page", path: "/tags" },
+  { id: "map", title: "Map page", path: "/map" },
+  { id: "viewer", title: "Media viewer", path: "photo opened" },
+  { id: "admin", title: "Admin area", path: "/light" },
+];
+
+// Display name: the registry's tuned `title` when set, else title-cased id.
+function humanize(id: string, title?: string) {
+  if (title) return title;
+  return id
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+export default class PluginsPage extends Component {
+  _mappedIds: Set<string>;
+  _settingsCache: Settings | null;
+  _panel: PluginSettingsPanel | null;
+
+  constructor(container: HTMLElement, props = {}) {
+    super(container, props);
+    this.state = {
+      loading: true,
+      error: null,
+      plugins: [],
+      presets: {},
+      activePreset: "custom",
+      editingPreset: null, // preset id while editing membership, else null
+      pending: ({} as Record<string, boolean>), // id -> true while a toggle request is in flight
+      collapsed: ({} as Record<string, boolean>), // type -> true while a group card is collapsed
+    };
+  }
+
+  render() {
+    return adminLayoutTemplate({
+      title: "Plugins",
+      actions: html`
+        <button type="button" class="btn btn-sm btn-secondary" id="expand-all-groups" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
+        <button type="button" class="btn btn-sm btn-secondary" id="collapse-all-groups" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>
+      `,
+      content: this._renderContent(),
+    });
+  }
+
+  _renderContent() {
+    const { loading, error } = this.state;
+
+    if (loading) return html`<div class="loading-spinner" aria-label="Loading plugins…"></div>`;
+    if (error) return html`<p class="error-state" role="alert">${error}</p>`;
+
+    return html`
+      <p class="page-intro">
+        Toggle features on or off. Disabled plugins are removed from the public
+        site entirely — their code is never served and their routes return 404.
+      </p>
+      ${this._renderPresets()}
+      ${this._renderMap()}
+      ${TYPE_GROUPS.map((g) => this._renderGroup(g))}`;
+  }
+
+  /**
+   * Schematic "site map": one mini wireframe per key page showing where each
+   * plugin renders. Regions carry `data-plugins` (space-separated ids) and
+   * cross-highlight with the catalog rows below; disabled plugins render dashed.
+   * Reuses the .plugins-group collapse pattern (data-group="map").
+   */
+  _renderMap() {
+    const collapsed = !!this.state.collapsed.map;
+    // _mr side-effect: collects every plugin id placed on the map so the
+    // leftover (no visual spot) list below can be derived, never hand-kept.
+    this._mappedIds = new Set();
+
+    const headerRow = (extra: Slot = "") => html`
+      <div class="pmap-row pmap-hdr">
+        ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
+      </div>`;
+
+    const bodies = {
+      home: html`
+        ${headerRow(this._mr("distraction-free", "Focus"))}
+        ${this._mr("tag-cloud", "Tag cloud", "pmap-band")}
+        ${this._mr("timeline", "Timeline", "pmap-band")}
+        <div class="pmap-main pmap-choice" aria-label="One post list plugin is active">
+          ${this._mr("simple-post-list", "Simple")}${this._mr("dynamic-post-list", "Dynamic")}
+        </div>
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      post: html`
+        ${headerRow()}
+        ${this._ms("Post content · photos", "pmap-main")}
+        ${this._mr("custom-css", "Custom CSS", "pmap-band")}
+        ${this._mr("post-navigation", "Prev / Next", "pmap-band")}
+        ${this._mr("comments", "Comments", "pmap-band")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      tags: html`
+        ${headerRow()}
+        ${this._mr("tags-graph", "Graph", "pmap-main")}
+        ${this._mr("timeline", "Timeline", "pmap-band")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      map: html`
+        ${headerRow()}
+        <div class="pmap-main pmap-choice" aria-label="One map plugin owns /map">
+          ${this._mr("tags-atlas", "Atlas")}${this._mr("tags-map", "Map")}
+        </div>
+        ${this._mr("timeline", "Timeline", "pmap-band")}
+        ${this._mr("public-footer", "Footer", "pmap-band")}`,
+      viewer: html`
+        <div class="pmap-row">
+          ${this._mr("slideshow", "Slideshow")}${this._mr("immersive-share", "Share")}
+        </div>
+        <div class="pmap-main pmap-choice" aria-label="One immersive viewer is active">
+          ${this._mr("immersive", "Standard")}${this._mr("immersive-sheet", "Sheet")}
+        </div>`,
+      admin: html`
+        ${this._ms("/light — Dashboard", "pmap-band")}
+        ${this._ms("/light/posts", "pmap-band")}
+        ${this._ms("/light/media", "pmap-band")}
+        ${this._mr("nav-menu", "/light/menu", "pmap-band")}
+        ${this._mr("comments", "/light/comments", "pmap-band")}`,
+    };
+
+    const panels = MAP_PANELS.map(
+      (p) => html`
+        <div class="pmap-page">
+          <div class="pmap-page-title">${p.title} <code>${p.path}</code></div>
+          <div class="pmap-frame${p.id === "viewer" ? " pmap-overlay" : ""}">${bodies[p.id]}</div>
+        </div>`,
+    );
+
+    // Everything not placed above has no spot on the public pages (services).
+    const offMap = this.state.plugins
+      .filter((p) => !this._mappedIds.has(p.id))
+      .map((p) => this._mr(p.id))
+      .join("");
+
+    return html`
+      <section class="card plugins-group pmap-card${collapsed ? " collapsed" : ""}" data-group="map">
+        <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
+          <div class="plugins-group-heading">
+            <h2 class="plugins-group-title">Site map</h2>
+            <p class="plugins-group-hint">Where each plugin sits. Hover to match it with the list below; click to jump to it.</p>
+          </div>
+          ${raw(CHEVRON)}
+        </div>
+        <div class="card-body">
+          <div class="pmap-grid">${panels}</div>
+          ${offMap ? html`<div class="pmap-offmap"><span class="pmap-offmap-label">Server-side, no visual spot:</span>${raw(offMap)}</div>` : ""}
+        </div>
+      </section>`;
+  }
+
+  /** Map region for one or more plugin ids (space-joined into data-plugins). */
+  _mr(ids, label = "", cls = "") {
+    const list = Array.isArray(ids) ? ids : [ids];
+    const known = list
+      .map((id) => this.state.plugins.find((p) => p.id === id))
+      .filter(Boolean);
+    if (!known.length) return ""; // id missing from the catalog — drop the region
+    known.forEach((p) => this._mappedIds.add(p.id));
+    const on = known.some((p) => p.enabled);
+    const text = label || humanize(known[0].id, known[0].title);
+    const tip = known
+      .map((p) => `${humanize(p.id, p.title)} — ${p.enabled ? "enabled" : "disabled"}`)
+      .join("\n");
+    return html`<button type="button" class="pmap-region${cls ? " " + cls : ""}${on ? "" : " is-off"}"
+      data-plugins="${list.join(" ")}" title="${tip}">${text}</button>`;
+  }
+
+  /** Static (non-plugin) wireframe block, for context only. */
+  _ms(label, cls = "") {
+    return html`<span class="pmap-static${cls ? " " + cls : ""}">${label}</span>`;
+  }
+
+  _renderPresets() {
+    const { activePreset, editingPreset } = this.state;
+    const editing = editingPreset !== null;
+
+    const pills = PRESETS.map((p) => {
+      const selected = editing ? p.id === editingPreset : p.id === activePreset;
+      return html`<button type="button" class="preset-pill${selected ? " is-active" : ""}"
+        data-preset="${p.id}" title="${p.hint}">${p.title}</button>`;
+    });
+
+    const status = editing
+      ? html`Editing <strong>${PRESET_TITLES[editingPreset] || editingPreset}</strong> — tick the plugins it should enable.`
+      : activePreset && activePreset !== "custom"
+        ? html`Active preset: <strong>${PRESET_TITLES[activePreset] || activePreset}</strong>`
+        : html`Active preset: <strong>Custom</strong>`;
+
+    return html`
+      <section class="card plugin-presets-card">
+        <div class="card-header plugin-presets-header" data-static>
+          <h2>Presets</h2>
+          <button type="button" class="btn btn-secondary btn-sm preset-edit-toggle">
+            ${editing ? "Done editing" : "Edit presets"}
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="preset-pill-group" role="group" aria-label="Plugin presets">${pills}</div>
+          <p class="preset-status">${status}</p>
+          ${editing ? html`<p class="preset-edit-hint">Editing only changes what the preset enables — apply it afterwards to take effect.</p>` : ""}
+        </div>
+      </section>`;
+  }
+
+  _renderGroup(group) {
+    const items = this.state.plugins.filter((p) => p.type === group.type);
+    if (items.length === 0) return "";
+    const collapsed = !!this.state.collapsed[group.type];
+
+    const TARGET_SLOTS = ["post-list", "post-viewer", "tags-route", "map-route"];
+    const grouped = [];
+    const slotMap = new Map();
+
+    items.forEach(p => {
+      if (TARGET_SLOTS.includes(p.slot)) {
+        if (!slotMap.has(p.slot)) {
+          const arr = [];
+          slotMap.set(p.slot, arr);
+          grouped.push({ type: 'slot-group', slot: p.slot, items: arr });
+        }
+        slotMap.get(p.slot).push(p);
+      } else {
+        grouped.push({ type: 'single', plugin: p });
+      }
+    });
+
+    const renderItem = (item) => {
+      // A slot with a single candidate (tags-route holds only the graph) has no
+      // alternatives to compare, so it renders as a plain row without a heading.
+      if (item.type === 'slot-group' && item.items.length === 1) {
+        return this._renderPlugin(item.items[0]);
+      }
+      if (item.type === 'slot-group') {
+        return html`
+          <div class="plugins-slot-group">
+            <div class="plugins-slot-group-title">Alternatives for <code>${item.slot}</code></div>
+            <div class="plugins-slot-group-items">
+              ${item.items.map(p => this._renderPlugin(p))}
+            </div>
+          </div>`;
+      }
+      return this._renderPlugin(item.plugin);
+    };
+
+    return html`
+      <section class="card plugins-group${collapsed ? " collapsed" : ""}" data-group="${group.type}">
+        <div class="card-header plugins-group-header" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">
+          <div class="plugins-group-heading">
+            <h2 class="plugins-group-title">${group.title}</h2>
+            <p class="plugins-group-hint">${group.hint}</p>
+          </div>
+          ${raw(CHEVRON)}
+        </div>
+        <div class="card-body">
+          <div class="plugins-list">
+            ${grouped.map(renderItem)}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  /** How many plugins are candidates for `slot` (tags trio, immersive pair, …). */
+  _slotSize(slot) {
+    if (!slot) return 0;
+    return this.state.plugins.filter((p) => p.slot === slot).length;
+  }
+
+  _renderPlugin(plugin) {
+    const pending = !!this.state.pending[plugin.id];
+    const editing = this.state.editingPreset !== null;
+
+    const meta = [];
+    // Rows competing for the same single-claim slot say so, so it is obvious why
+    // enabling one switched another off.
+    if (SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1) {
+      meta.push(html`<span class="plugin-badge">Alternative</span>`);
+    }
+    if (plugin.slot) meta.push(html`<span class="plugin-meta-text">slot: ${plugin.slot}</span>`);
+    if (Array.isArray(plugin.routes) && plugin.routes.length) {
+      meta.push(html`<span class="plugin-meta-text">${plugin.routes.join(", ")}</span>`);
+    }
+
+    // Every meta entry is html`` output already; raw() covers only the join,
+    // which is what turns the array back into a plain string.
+    // eslint-disable-next-line point/restricted-syntax -- see above.
+    const metaJoined = raw(meta.join(" · "));
+    return html`
+      <div class="plugin-card${plugin.enabled ? " is-enabled" : ""}" data-id="${plugin.id}">
+        <div class="plugin-info">
+          <span class="plugin-name">${humanize(plugin.id, plugin.title)}</span>
+          ${meta.length ? html`<span class="plugin-meta">${metaJoined}</span>` : ""}
+        </div>
+        <div class="plugin-actions">
+          ${editing ? this._renderInclude(plugin) : this._renderRowControls(plugin, pending)}
+        </div>
+      </div>`;
+  }
+
+  /** Enable/disable controls + settings link (normal, non-editing view). */
+  _renderRowControls(plugin, pending) {
+    // Settings control only when the plugin is enabled: an inline drawer for
+    // plugins whose settings were extracted here, else a link to its admin page.
+    let settingsLink: Slot = "";
+    if (plugin.enabled && PLUGIN_SETTINGS[plugin.id]) {
+      settingsLink = html`<button type="button" class="plugin-settings-link" data-settings-id="${plugin.id}">Settings</button>`;
+    } else if (plugin.enabled && SETTINGS_PAGE_PATHS[plugin.id]) {
+      settingsLink = html`<a class="plugin-settings-link" href="${SETTINGS_PAGE_PATHS[plugin.id]}">Settings</a>`;
+    }
+
+    const isAlternative = SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1;
+
+    if (plugin.locked && !isAlternative) {
+      // Required slot with NO alternatives: dead end.
+      const lockHint = "Required — this slot must keep an enabled plugin";
+      return html`${settingsLink}
+        <span class="plugin-pill plugin-pill-locked" title="${lockHint}">
+          <span class="plugin-lock" aria-hidden="true">🔒</span>
+          <span class="setting-pill-label">Required</span>
+        </span>`;
+    }
+
+    const inputType = isAlternative ? "radio" : "checkbox";
+    const nameAttr = isAlternative ? html` name="slot-${plugin.slot}"` : "";
+
+    return html`${settingsLink}
+      <label class="setting-pill plugin-pill">
+        <input type="${inputType}"${nameAttr} class="setting-pill-input plugin-toggle"
+          data-id="${plugin.id}" ${plugin.enabled ? "checked" : ""} ${pending ? "disabled" : ""}>
+        <span class="setting-pill-label">${plugin.enabled ? "Enabled" : "Disabled"}</span>
+      </label>`;
+  }
+
+  /** Preset-membership checkbox (edit mode). */
+  _renderInclude(plugin) {
+    const list = this.state.presets[this.state.editingPreset] || [];
+    const included = list.includes(plugin.id);
+    // Sole candidate for a slot that requires one: on regardless of the preset.
+    const forced = REQUIRED_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) <= 1;
+
+    return html`
+      <label class="setting-pill plugin-pill plugin-include">
+        <input type="checkbox" class="setting-pill-input plugin-include-toggle"
+          data-id="${plugin.id}" ${included || forced ? "checked" : ""} ${forced ? "disabled" : ""}>
+        <span class="setting-pill-label">${forced ? "Always on" : "Include"}</span>
+      </label>`;
+  }
+
+  afterRender() {
+    setupAdminLayout(this, {
+      currentPath: "/light/plugins",
+    });
+
+    if (this.state.loading || this.state.error) return;
+
+    this.$("#expand-all-groups")?.addEventListener("click", () => this._setAllCollapsed(false));
+    this.$("#collapse-all-groups")?.addEventListener("click", () => this._setAllCollapsed(true));
+
+    // Collapse/expand group cards (header click, ignoring the presets header).
+    this.$$(".plugins-group-header").forEach((header) => {
+      const card = (header.closest(".plugins-group") as HTMLElement);
+      const type = card?.dataset.group;
+      const toggle = () => {
+        const nowCollapsed = card.classList.toggle("collapsed");
+        header.setAttribute("aria-expanded", String(!nowCollapsed));
+        this.state.collapsed[type] = nowCollapsed; // persist across re-renders, no re-render needed
+      };
+      header.addEventListener("click", toggle);
+      header.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle();
+        }
+      });
+    });
+
+    // Preset pills: apply (normal) or select-to-edit (editing).
+    this.$$(".preset-pill").forEach((btn) => {
+      btn.addEventListener("click", () => this._handlePresetPill(btn.dataset.preset));
+    });
+    this.$(".preset-edit-toggle")?.addEventListener("click", () => this._toggleEdit());
+
+    // Enable/disable toggles.
+    this.$$(".plugin-toggle").forEach((input: HTMLInputElement) => {
+      input.addEventListener("change", () => this._handleToggle(input.dataset.id, input.checked));
+      if (input.type === "radio") {
+        input.addEventListener("click", (e) => {
+          const id = input.dataset.id;
+          const p = this.state.plugins.find(x => x.id === id);
+          if (p && p.slot_rule === "0-1" && p.enabled) {
+            e.preventDefault();
+            this._handleToggle(id, false);
+          }
+        });
+      }
+    });
+
+    // Per-plugin settings drawer triggers.
+    this.$$("[data-settings-id]").forEach((btn) => {
+      btn.addEventListener("click", () => this._openPanel(btn.dataset.settingsId));
+    });
+
+    // Preset-membership checkboxes (edit mode).
+    this.$$(".plugin-include-toggle").forEach((input: HTMLInputElement) => {
+      input.addEventListener("change", () => this._handleInclude(input.dataset.id, input.checked));
+    });
+
+    this._wireMap();
+  }
+
+  /**
+   * Site map ↔ catalog cross-highlight. Hovering a map region highlights the
+   * matching plugin rows (and vice versa); clicking a region expands the row's
+   * group, scrolls to it and flashes it. Pure class toggling — no re-render.
+   */
+  _wireMap() {
+    const cards = new Map();
+    this.$$(".plugin-card").forEach((c) => cards.set(c.dataset.id, c));
+
+    this.$$(".pmap-region").forEach((region) => {
+      const ids = (region.dataset.plugins || "").split(" ").filter(Boolean);
+      const mark = (onOff) => ids.forEach((id) => cards.get(id)?.classList.toggle("map-hit", onOff));
+      region.addEventListener("mouseenter", () => mark(true));
+      region.addEventListener("mouseleave", () => mark(false));
+      region.addEventListener("focus", () => mark(true));
+      region.addEventListener("blur", () => mark(false));
+      region.addEventListener("click", () => this._revealPlugin(ids[0], cards));
+    });
+
+    this.$$(".plugin-card").forEach((card) => {
+      // ~= matches the id inside the space-separated data-plugins list.
+      const regions = this.$$(`.pmap-region[data-plugins~="${CSS.escape(card.dataset.id)}"]`);
+      card.addEventListener("mouseenter", () => regions.forEach((r) => r.classList.add("map-hit")));
+      card.addEventListener("mouseleave", () => regions.forEach((r) => r.classList.remove("map-hit")));
+    });
+  }
+
+  /** Expand the group holding `id`'s row, scroll to it and flash it. */
+  _revealPlugin(id, cards) {
+    const card = cards.get(id);
+    if (!card) return;
+    const group = card.closest(".plugins-group");
+    if (group?.classList.contains("collapsed")) {
+      group.classList.remove("collapsed");
+      group.querySelector(".plugins-group-header")?.setAttribute("aria-expanded", "true");
+      this.state.collapsed[group.dataset.group] = false;
+    }
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.remove("map-flash"); // restart the animation on repeat clicks
+    void card.offsetWidth;
+    card.classList.add("map-flash");
+  }
+
+  beforeUnmount() {
+    this._closePanel();
+  }
+
+  mount() {
+    super.mount();
+    this._load();
+  }
+
+  /**
+   * Open the per-plugin settings drawer. Settings are fetched (and cached on the
+   * instance) only when the plugin has a settings form; Instagram additionally
+   * needs its live connection status for the connect/disconnect block.
+   */
+  async _openPanel(id) {
+    const cfg = PLUGIN_SETTINGS[id];
+    if (!cfg) return;
+    this._closePanel();
+    try {
+      let settings = {};
+      if (cfg.keys) {
+        if (!this._settingsCache) this._settingsCache = await getAllSettings();
+        settings = this._settingsCache;
+      }
+      const igStatus = id === "instagram" ? await getInstagramStatus().catch(() => null) : null;
+      const mount = document.createElement("div");
+      document.body.appendChild(mount);
+      this._panel = new PluginSettingsPanel(mount, {
+        pluginId: id,
+        title: humanize(id, this.state.plugins.find((p) => p.id === id)?.title),
+        keys: cfg.keys || null,
+        sections: cfg.sections || null,
+        settings,
+        igStatus,
+        onClose: () => this._closePanel(),
+      });
+      this._panel.mount();
+    } catch (err) {
+      console.error("[PluginsPage] open settings error:", err);
+      setToast({ message: "Could not load plugin settings.", type: "error" });
+    }
+  }
+
+  _closePanel() {
+    if (!this._panel) return;
+    const mount = this._panel.container;
+    this._panel.unmount();
+    mount?.remove();
+    this._panel = null;
+    // Settings may have changed; drop the cache so the next open re-fetches.
+    this._settingsCache = null;
+  }
+
+  _setAllCollapsed(isCollapsed) {
+    const collapsed = { ...this.state.collapsed };
+    collapsed.map = isCollapsed;
+    TYPE_GROUPS.forEach(g => {
+      collapsed[g.type] = isCollapsed;
+    });
+    this.setState({ collapsed });
+  }
+
+  async _load() {
+    try {
+      const [plugins, presetData] = await Promise.all([getPlugins(), getPresets()]);
+      this.setState({
+        loading: false,
+        plugins: Array.isArray(plugins) ? plugins : [],
+        presets: (presetData && presetData.presets) || {},
+        activePreset: (presetData && presetData.active) || "custom",
+        error: null,
+      });
+    } catch (err) {
+      console.error("[PluginsPage] load error:", err);
+      this.setState({ loading: false, error: "Could not load plugins." });
+    }
+  }
+
+  async _handleToggle(id, enabled) {
+    this.setState({ pending: { ...this.state.pending, [id]: true } });
+    try {
+      const updated = await setPluginEnabled(id, enabled);
+      let plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
+      // Single-claim slot: enabling one candidate disables its peers server-side;
+      // mirror that here so the sibling toggles flip off without a reload.
+      if (enabled && updated.slot && SINGLE_CLAIM_SLOT.has(updated.slot_rule)) {
+        plugins = plugins.map((p) =>
+          p.id !== id && p.slot === updated.slot ? { ...p, enabled: false } : p,
+        );
+      }
+      const pending = { ...this.state.pending };
+      delete pending[id];
+      // An individual toggle diverges from any preset (backend does the same).
+      this.setState({ plugins: this._withLocks(plugins), pending, activePreset: "custom" });
+
+      // Mutate pluginHost directly so navigation menus can immediately appear/disappear without a hard refresh.
+      if (enabled) {
+        pluginHost._byId.set(id, updated);
+        if (!pluginHost._manifest.some(e => e.id === id)) pluginHost._manifest.push(updated);
+      } else {
+        pluginHost._byId.delete(id);
+        pluginHost._manifest = pluginHost._manifest.filter(e => e.id !== id);
+      }
+      setPluginToggled(Date.now());
+
+      setToast({
+        message: `${humanize(id)} ${enabled ? "enabled" : "disabled"}. Reload the public site to see the change.`,
+        type: "success",
+      });
+
+      if (window.__DEMO__) {
+        window.location.reload();
+      }
+    } catch (err) {
+      // Revert the optimistic checkbox state on failure (e.g. a locked claimant).
+      const pending = { ...this.state.pending };
+      delete pending[id];
+      this.setState({ pending });
+      setToast({ message: err.message || "Failed to update plugin.", type: "error" });
+    }
+  }
+
+  /**
+   * Recompute the `locked` flag client-side after a toggle so the last claimant
+   * of a required slot immediately becomes read-only without a reload.
+   */
+  _withLocks(plugins) {
+    return plugins.map((p) => {
+      if (!REQUIRED_SLOT.has(p.slot_rule)) return p;
+      const enabledInSlot = plugins.filter((q) => q.slot === p.slot && q.enabled);
+      return { ...p, locked: p.enabled && enabledInSlot.length === 1 };
+    });
+  }
+
+  _handlePresetPill(id) {
+    if (!id) return;
+    if (this.state.editingPreset !== null) {
+      this.setState({ editingPreset: id });
+      return;
+    }
+    this._applyPreset(id);
+  }
+
+  _toggleEdit() {
+    if (this.state.editingPreset !== null) {
+      this.setState({ editingPreset: null });
+      return;
+    }
+    const start = PRESET_TITLES[this.state.activePreset] ? this.state.activePreset : PRESETS[0].id;
+    this.setState({ editingPreset: start });
+  }
+
+  async _applyPreset(id) {
+    try {
+      const plugins = await applyPreset(id);
+      this.setState({
+        plugins: Array.isArray(plugins) ? plugins : this.state.plugins,
+        activePreset: id,
+      });
+      setToast({
+        message: `Applied “${PRESET_TITLES[id] || id}” preset. Reload the public site to see the change.`,
+        type: "success",
+      });
+
+      if (window.__DEMO__) {
+        window.location.reload();
+      }
+    } catch (err) {
+      setToast({ message: err.message || "Failed to apply preset.", type: "error" });
+    }
+  }
+
+  async _handleInclude(id, included) {
+    const presetId = this.state.editingPreset;
+    if (!presetId) return;
+    const current = this.state.presets[presetId] || [];
+    const next = included ? [...new Set([...current, id])] : current.filter((p) => p !== id);
+    try {
+      const data = await updatePreset(presetId, next);
+      this.setState({ presets: (data && data.presets) || { ...this.state.presets, [presetId]: next } });
+    } catch (err) {
+      // Revert by re-rendering from unchanged state.
+      this.setState({ presets: { ...this.state.presets } });
+      setToast({ message: err.message || "Failed to update preset.", type: "error" });
+    }
+  }
+}

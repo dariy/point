@@ -27,7 +27,7 @@ All five phases of the original refactor are done.
 - Admin API: `GET /api/plugins` (full catalog — the one surface allowed to reveal
   disabled plugins, behind `AuthMiddleware`), `PATCH /api/plugins/:id`.
 
-### Frontend (`frontend/src/core/pluginHost.js`)
+### Frontend (`frontend/src/core/pluginHost.ts`)
 
 - Reads `window.__PLUGINS__` at bootstrap. A slot is *claimed* only when the plugin has
   a built chunk (`entry` URL); `fill(slot, el, ctx)` lazily imports and mounts claimants;
@@ -71,7 +71,7 @@ All five phases of the original refactor are done.
 ### Per-plugin settings drawer
 
 `PLUGIN_SETTINGS` in `PluginsPage.js` maps a plugin id to the settings it shows in
-the right-hand drawer (`PluginSettingsPanel.js`): `keys` renders plain settings
+the right-hand drawer (`PluginSettingsPanel.ts`): `keys` renders plain settings
 fields saved together through `PUT /api/settings`, `sections` mounts self-contained
 components from `components/light/sections/` (backups, Instagram import, passkeys,
 API keys, offline data, sync queue, version check). Plugins whose configuration is a

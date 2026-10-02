@@ -1,7 +1,7 @@
 // Reads an esbuild metafile and writes frontend/js/plugin-manifest.json:
 // a flat { "<plugin-id>": "<chunk-filename>" } map the Go server consumes
 // (plugins.LoadChunkMap). The plugin id is the directory name of each entry
-// point (frontend/src/plugins/<id>/index.js); the chunk filename is the
+// point (frontend/src/plugins/<id>/index.ts or index.js); the chunk filename is the
 // basename of that entry's output (e.g. "<id>-ABC123.js"). Shared chunks
 // (entries without an entryPoint) are intentionally omitted — only entry
 // chunks are addressable plugin URLs.
@@ -20,7 +20,7 @@ const manifest = {};
 for (const [outFile, info] of Object.entries(meta.outputs || {})) {
   const entry = info.entryPoint;
   if (!entry || !entry.startsWith("frontend/src/plugins/")) continue;
-  // entry: frontend/src/plugins/<id>/index.js  →  id = <id>
+  // entry: frontend/src/plugins/<id>/index.{ts,js}  →  id = <id>
   const id = basename(dirname(entry));
   manifest[id] = basename(outFile);
 }

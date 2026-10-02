@@ -465,7 +465,7 @@ func TestPrerenderWithholdsPostsHiddenByTag(t *testing.T) {
 }
 
 // Reading a post from inside a tag archive keeps the archive's URL and carries
-// the post in ?slug= (frontend/src/utils/viewContext.js) — so that URL, the one
+// the post in ?slug= (frontend/src/utils/viewContext.ts) — so that URL, the one
 // a reader copies while reading, is about the post and not about the archive.
 func TestPrerenderPostOpenedInsideATagArchive(t *testing.T) {
 	env, get := seoFixture(t)

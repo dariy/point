@@ -64,7 +64,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
     if (win[k]) def(k, win[k]);
   }
 
-  // api/client.js routes every mutating call through the offline mutation
+  // api/client.ts routes every mutating call through the offline mutation
   // queue (IndexedDB) when `navigator.onLine` is falsy. Node's `navigator`
   // exists but has no `onLine`, so without this the harness would silently
   // send nothing over fetch and hang on a database no test provides.
@@ -85,7 +85,7 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   }));
 
   // Missing entirely in linkedom, and a missing constructor is a ReferenceError,
-  // not a no-op: the admin header's compact check (utils/headerCompact.js) runs
+  // not a no-op: the admin header's compact check (utils/headerCompact.ts) runs
   // from setupAdminLayout, so without this NO /light page can be mounted at all.
   // Nothing resizes in a test, so the callback would never fire on its own —
   // `observers` exposes the live ones so a test can run one deliberately, and

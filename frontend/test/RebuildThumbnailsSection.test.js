@@ -14,10 +14,10 @@ describe('RebuildThumbnailsSection', () => {
     dom = domHelper.setupDOM();
     click = domHelper.click;
 
-    const mod = await import('../src/components/light/sections/RebuildThumbnailsSection.js');
+    const mod = await import('../src/components/light/sections/RebuildThumbnailsSection.ts');
     RebuildThumbnailsSection = mod.RebuildThumbnailsSection;
 
-    ({ onToast, setToast } = await import('../src/store.js'));
+    ({ onToast, setToast } = await import('../src/store.ts'));
   });
 
   after(() => {

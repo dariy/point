@@ -7,7 +7,8 @@ change easy to verify: state what you ran, and what you saw.
 
 ## Getting the project running
 
-You need Go (the version in `api/go.mod`), Node 22+, and `git`. Nothing else — no database to
+You need Go (the version in `api/go.mod`), Node 24+ (an official build from nodejs.org: distro builds
+cannot remove TypeScript types, and the frontend tests import `.ts` files), and `git`. Nothing else — no database to
 install, no services to configure. `./scripts/doctor.sh` checks all of that on your machine and
 says what to install if something is missing or too old.
 

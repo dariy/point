@@ -53,7 +53,7 @@ describe('flipGrid', () => {
       matchMedia: (q) => ({ matches: q.includes('reduced-motion') && reducedMotion }),
       getComputedStyle: () => ({ transform: 'none', filter: 'none', perspective: 'none' }),
     };
-    ({ flipGrid } = await import('../src/utils/gridFlip.js'));
+    ({ flipGrid } = await import('../src/utils/gridFlip.ts'));
   });
 
   beforeEach(() => { reducedMotion = false; });

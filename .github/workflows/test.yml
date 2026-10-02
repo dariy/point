@@ -64,7 +64,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
           cache: npm
 
       # The E2E step builds the Go backend; without a warm build cache that
@@ -361,7 +361,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
           cache: npm
 
       # ./scripts/run.sh is the first command AGENTS.md and CONTRIBUTING.md give

@@ -104,7 +104,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 }
 
 // guestEXIFKeys is the EXIF a guest may read: the six fields the viewer shows
-// (EXIF_FIELDS in frontend/src/utils/exif.js). GPS is never among them.
+// (EXIF_FIELDS in frontend/src/utils/exif.ts). GPS is never among them.
 var guestEXIFKeys = []string{"ExposureTime", "FNumber", "FocalLength", "ISOSpeedRatings", "Make", "Model"}
 
 // guestMediaMetadata decides the metadata a guest gets for one media item.
