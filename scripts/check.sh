@@ -122,11 +122,9 @@ step_js_lint() {
 # because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
-    local stray
-    stray=$(find frontend/src -name '*.js' -print)
-    if [ -n "$stray" ]; then
+    if [ -n "$(find frontend/src -name '*.js' -print -quit)" ]; then
         echo "  FAIL  .js file under frontend/src (write it as .ts):" >&2
-        echo "$stray" | sed 's/^/        /' >&2
+        find frontend/src -name '*.js' -printf '        %p\n' >&2
         return 1
     fi
     node_modules/.bin/tsc -p tsconfig.json
