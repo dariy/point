@@ -15,7 +15,7 @@
     "test:e2e": "node --test frontend/e2e/*.test.js"
   },
   "devDependencies": {
-    "@playwright/cli": "0.1.21",
+    "@playwright/cli": "0.1.22",
     "@types/node": "^26.6.2",
     "esbuild": "^0.28.2",
     "linkedom": "^0.18.13",
