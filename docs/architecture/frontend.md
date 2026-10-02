@@ -1488,86 +1488,49 @@ For production, the same files are served as-is. If minification is ever
 desired, it can be added as an optional pre-deployment step without
 changing the architecture.
 
-### Typechecking the JSDoc
+### Typechecking
 
 ```bash
 npm run typecheck        # tsc -p tsconfig.json
 ```
 
-The JSDoc annotations across `frontend/src` are types, and this is what makes
-them binding. `.ts` files in `frontend/src` are checked too. Nothing is
-emitted — Node and the bundler remove the types, so `tsconfig.json` allows only
-erasable syntax (`erasableSyntaxOnly`), type-only imports use `import type`
-(`verbatimModuleSyntax`), and an import names the real file, `./x.ts` or
-`./x.js` (`allowImportingTsExtensions`). `checkJs: true` is set, so **a new
-file is checked by default**. `scripts/check.sh` and CI both run it.
+`frontend/src` is TypeScript. `scripts/check.sh` fails on a `.js` file there;
+JS stays only in `frontend/sw.js`, `frontend/vendor/`, the tests and `demo/`.
+Nothing is emitted: Node and the bundler remove the types. The conventions
+follow from that:
 
-Three things to know before adding annotations:
-
-- **Files not yet clean carry `// @ts-nocheck` on line 1**, naming the issue that
-  will remove it. Adding a pragma to a file that does not have one is going
-  backwards; grep for it before assuming an area is covered.
+- **Erasable syntax only** (`erasableSyntaxOnly`): no `enum`, no `namespace`,
+  no parameter properties. Type-only imports use `import type`
+  (`verbatimModuleSyntax`).
+- **An import names the real file**: `./x.ts` for a TS module, `./x.js` for a
+  JS module (`allowImportingTsExtensions`).
+- **Shapes**: object shapes are `interface`. Unions, aliases and mapped types
+  are `type`.
+- **Doc comments keep their prose** and have no `{Type}` part:
+  `@param name - text`, `@returns text`.
+- **Casts use `as`**, never `<T>expr`. Do not add `!` while `strict` is off. Do
+  not add `any`, `@ts-ignore` or `@ts-nocheck` to reduce an error count.
+- **Class fields**: a class declares every `this.<prop>` it assigns as a typed
+  field.
 - **Globals live in `frontend/types/globals.d.ts`** — `__DEBUG__`, the payloads
   the server injects (`window.__MEDIA__`, `window.__PLUGINS__`), and the browser
   APIs missing from TypeScript's DOM lib (Trusted Types). Declare a genuine
   global there rather than casting at each call site.
-- **The untyped boundaries are generic, not `any`.** `api.get()` / `api.request()`
-  and `store.get()` take a `@template` that defaults to `unknown`, so the shape
-  flows in from whatever the caller declares:
+- **The untyped boundaries are generic, not `any`.** `api.get()` /
+  `api.request()` and `store.get()` take a type parameter that defaults to
+  `unknown`, so the shape flows in from whatever the caller declares:
 
-  ```javascript
-  /** @returns {Promise<{tags: any[], total: number}>} */
-  export function getTags() {
-    return api.get('/api/tags');    // T comes from the @returns above
+  ```typescript
+  export function getTags(): Promise<{ tags: Tag[]; total: number }> {
+    return api.get('/api/tags');    // T comes from the return type
   }
-
-  /** @type {Record<string, any>} */
-  const settings = store.get('settings') || {};
   ```
 
   Declaring nothing leaves it `unknown` and the caller has to narrow — which is
-  the honest answer for a wire format, and the reason the annotation on the
-  wrapper is worth writing.
+  the honest answer for a wire format.
 
 `strict` stays off on purpose: turning it on adds null-safety errors to every
-DOM read at once, which is separate work from checking what is annotated today.
-
----
-
-## Build & Deployment
-
-### Single-container deployment
-
-```
-Docker container
-|-- uvicorn (FastAPI, port 8000)
-|   |-- /api/* -> JSON API
-|   |-- /assets/* -> frontend/ static files
-|   `-- /{any} -> frontend/index.html (SPA fallback)
-`-- /data/ (volume: SQLite DB, media files, backups)
-```
-
-No nginx required for basic deployment. For scale, put nginx in front:
-
-```
-nginx
-|-- /api/* -> proxy to uvicorn:8000
-|-- /assets/* -> static file serve from frontend/
-`-- / -> frontend/index.html
-```
-
-### Docker changes
-
-```dockerfile
-# Dockerfile (addition to existing COPY statements)
-COPY frontend/ /app/frontend/
-```
-
-### Environment config
-
-The frontend has no environment variables. The API base URL is always
-`/api` (same origin). The backend's `CORS_ORIGINS` setting controls
-cross-origin access during development.
+DOM read at once, which is separate work.
 
 ---
 

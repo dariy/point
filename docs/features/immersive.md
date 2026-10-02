@@ -4,8 +4,8 @@ Full-screen, distraction-free post viewing. The viewer is a plugin family around
 `post-viewer` enhancer slot:
 
 - **`immersive`** (default) — the standard full-screen carousel
-  (`frontend/src/plugins/immersive/MediaViewer.js`): keyboard navigation
-  (arrows/Home/End/PageUp/PageDown), swipe with gesture handling (`gestures.js`),
+  (`frontend/src/components/shared/MediaViewer.ts`): keyboard navigation
+  (arrows/Home/End/PageUp/PageDown), swipe with gesture handling (`core/gestures.ts`),
   pinch-to-zoom and drag-to-pan on touch, slide indicators, chrome auto-hide
   (`body.ui-hidden` fades header/footer/close/dots), cross-post navigation (advancing
   past the last slide routes to the next post), and a per-slide URL hash.

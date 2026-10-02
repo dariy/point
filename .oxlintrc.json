@@ -82,7 +82,6 @@
   "overrides": [
     {
       "files": [
-        "frontend/src/**/*.js",
         "frontend/src/**/*.ts",
         "demo/mock/**/*.js"
       ],

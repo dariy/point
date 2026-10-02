@@ -150,7 +150,7 @@ provenance by category and level, with a floor that is countable from the commit
 
 ```
 api/          Go backend (Echo v4, sqlc, SQLite)
-frontend/     Vanilla JS SPA (no framework; esbuild bundles src/ into js/)
+frontend/     TypeScript SPA (no framework; esbuild bundles src/ into js/)
 build/        Dockerfile, compose file, rebuild script
 scripts/      Dev scripts (run, checks, tests, CSS/JS bundling)
 quickstart/   Quickstart docker-compose and install script

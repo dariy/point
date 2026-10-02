@@ -116,12 +116,19 @@ step_js_lint() {
         demo/mock demo/*.mjs demo/scripts/*.mjs
 }
 
-# The JSDoc annotations in frontend/src are types, and this is what makes them
-# binding: tsc with checkJs, no emit, no .ts files. Files not yet clean carry
-# `// @ts-nocheck` on line 1 — see tsconfig.json. Part of --lint, because a
-# broken annotation is a static error like any other.
+# frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
+# fails this step, so the move to TypeScript cannot go back. JS stays only in
+# frontend/sw.js, frontend/vendor/, the tests and demo/. Part of --lint,
+# because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
+    local stray
+    stray=$(find frontend/src -name '*.js' -print)
+    if [ -n "$stray" ]; then
+        echo "  FAIL  .js file under frontend/src (write it as .ts):" >&2
+        echo "$stray" | sed 's/^/        /' >&2
+        return 1
+    fi
     node_modules/.bin/tsc -p tsconfig.json
 }
 

@@ -1,28 +1,21 @@
 {
-  // What this file is for: the frontend is JS with JSDoc types, moving to
-  // TypeScript file by file; this turns those types into a build gate
-  // (`npm run typecheck`). There is no emit: Node and the browser bundle
+  // What this file is for: frontend/src is TypeScript, and this makes its
+  // types a build gate (`npm run typecheck`). There is no emit: Node and the browser bundle
   // remove the types, so only erasable syntax is allowed (erasableSyntaxOnly),
   // type-only imports use `import type` (verbatimModuleSyntax), and an import
   // names the real file, `./x.ts` or `./x.js` (allowImportingTsExtensions).
   //
-  // checkJs is on, so a new file is checked by default. The files that are not
-  // yet clean carry `// @ts-nocheck` on line 1 naming the issue that will
-  // remove it — grep for it before assuming an area is covered.
+  // allowJs and checkJs stay on for frontend/sw.js, the one checked JS file.
+  // scripts/check.sh fails on a .js file under frontend/src.
   //
   // strict stays off deliberately: turning it on adds null-safety errors to
   // every DOM read at once, which is a separate piece of work.
-  //
-  // Since TypeScript 7 a JSDoc `{object}` is the `object` type, not `any`:
-  // reading a property off one is an error. Name the shape — a typedef, the
-  // API module's response type, or `Component<Props>` via `@extends` for a
-  // component's props (see components/Component.ts).
   //
   // frontend/test/** is deliberately NOT in the checked set. Checking it once
   // cost 401 errors across 70 files, and a file-by-file audit of them found
   // exactly one real defect: linkedom's DOM is not the DOM lib's DOM, mocks are
   // partial objects on purpose, and tests attach their own tracker properties
-  // to instances. The value of this gate is enforcing the JSDoc in src/, and
+  // to instances. The value of this gate is enforcing the types in src/, and
   // the src/ types a test exercises are checked from src/ either way. An honest
   // exclusion beats 70 @ts-nocheck pragmas nobody intends to remove.
   "compilerOptions": {
@@ -41,7 +34,6 @@
     "skipLibCheck": true
   },
   "include": [
-    "frontend/src/**/*.js",
     "frontend/src/**/*.ts",
     "frontend/*.js",
     "frontend/index.html",
