@@ -44,7 +44,7 @@ export class ToastContainer extends Component {
   }
 
   afterRender() {
-    this.subscribeStore(onToast, (payload) => {
+    this.subscribeStore(onToast, (payload: ToastPayload | null) => {
       if (payload) this._add(payload);
     });
   }
@@ -90,7 +90,7 @@ export class ToastContainer extends Component {
     const idx = this._toasts.findIndex((t) => t.id === id);
     if (idx === -1) return;
     const [entry] = this._toasts.splice(idx, 1);
-    clearTimeout(entry.timer);
+    if (entry.timer) clearTimeout(entry.timer);
     entry.el.classList.remove('toast-visible');
     entry.el.addEventListener('transitionend', () => entry.el.remove(), { once: true });
     // Fallback remove if transition doesn't fire.

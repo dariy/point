@@ -42,6 +42,6 @@ export function setRevelio(on: boolean) {
  * and testing for a session here would mean reading state the client may not
  * have loaded yet.
  */
-export function revelioHeaders() {
+export function revelioHeaders(): Record<string, string> {
   return isRevelioOn() ? {} : { [REVELIO_HEADER]: "off" };
 }

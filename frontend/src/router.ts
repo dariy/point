@@ -30,7 +30,7 @@
 
 import { setRoute, setToast } from "./store.ts";
 import { setPageTitle } from "./utils/documentTitle.ts";
-import { subclassHooks } from "./components/Component.ts";
+import { subclassHooks, type Component } from "./components/Component.ts";
 
 /**
  * What the router hands every page it mounts, and again to onRouteUpdate() on
@@ -93,7 +93,7 @@ class Router {
       authGuard = null,
       loginPath = "/light/login",
       setupPath = "/setup",
-    }: { mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string },
+    }: { mountPoint: HTMLElement, authGuard?: Function | null, loginPath?: string, setupPath?: string },
   ) {
     this._routes = routes;
     this._mountPoint = mountPoint;
@@ -162,8 +162,8 @@ class Router {
     this._render(location.pathname + location.search + location.hash);
   }
 
-  _onNavigate(event) {
-    const { path, replace } = event.detail;
+  _onNavigate(event: Event) {
+    const { path, replace } = (event as CustomEvent<{ path: string; replace?: boolean }>).detail;
     this.navigate(path, { replace });
   }
 
@@ -174,7 +174,7 @@ class Router {
   }
 
   /** Intercept clicks on same-origin <a> elements. */
-  _onLinkClick(event) {
+  _onLinkClick(event: MouseEvent) {
     if (event.defaultPrevented) return;
 
     // A modified click asks for a destination other than "here" — a new tab or
@@ -191,7 +191,7 @@ class Router {
       return;
     }
 
-    const anchor = event.target.closest("a[href]");
+    const anchor = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
     if (!anchor) return;
 
     const href = anchor.getAttribute("href");
@@ -354,7 +354,7 @@ class Router {
     if (
       this._currentPage &&
       sameRoute &&
-      typeof hooks.onRouteUpdate === "function"
+      typeof hooks?.onRouteUpdate === "function"
     ) {
       setRoute({ pathname, params, query });
       this._currentRoute = matchedRoute;
@@ -383,9 +383,10 @@ class Router {
     try {
       const mod = await matchedRoute.load();
       const PageClass = mod.default;
-      this._currentPage = new PageClass(this._mountPoint, { params, query });
+      const page: Component = new PageClass(this._mountPoint, { params, query });
+      this._currentPage = page;
       this._currentRoute = matchedRoute;
-      this._currentPage.mount();
+      page.mount();
     } catch (err) {
       console.error("[Router] Failed to load page:", err);
       if (pathname.startsWith("/light") && pathname !== "/light") {

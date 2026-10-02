@@ -68,6 +68,7 @@ export class MediaLightbox {
   }
 
   _show() {
+    if (!this._el) return;
     this._el.classList.add('active');
     document.body.classList.add('ui-hidden'); // hide main site header/footer
     
@@ -87,7 +88,7 @@ export class MediaLightbox {
   }
 
   _hide() {
-    this._el.classList.remove('active');
+    this._el?.classList.remove('active');
     document.body.classList.remove('ui-hidden');
     this._viewer?.unmount();
     this._viewer = null;

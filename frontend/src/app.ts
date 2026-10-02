@@ -84,7 +84,7 @@ window.addEventListener("app:login-required", (event) => {
 const _cssPublic = (document.getElementById("css-public") as HTMLLinkElement | null);
 const _cssLight = (document.getElementById("css-light") as HTMLLinkElement | null);
 
-function _applySection(pathname) {
+function _applySection(pathname: string) {
   const isLight = pathname.startsWith("/light") || pathname === "/setup";
   const pubMedia = isLight ? "not all" : "all";
   const lgtMedia = isLight ? "all" : "not all";
@@ -98,12 +98,12 @@ _applySection(location.pathname);
 
 // ── Theme ─────────────────────────────────────────────────────────────────
 
-function applyTheme(theme) {
+function applyTheme(theme: string | null | undefined) {
   document.documentElement.setAttribute("data-theme", theme || "auto");
   setTheme(theme || "auto");
 }
 
-function loadTheme(settings) {
+function loadTheme(settings: { default_theme?: string } | null | undefined) {
   // The first-run wizard runs before any setting exists, and setup seeds
   // default_theme: dark (api/internal/api/setup.go) — so render it in the theme
   // the install is about to have, instead of filling in a white form and
@@ -210,7 +210,7 @@ async function bootstrap() {
 
   // 6. Start the router.
   router.init(routes, {
-    mountPoint: document.getElementById("app"),
+    mountPoint: document.getElementById("app")!,
     authGuard: () => !!getUser(),
     loginPath: "/light/login",
   });
@@ -414,7 +414,7 @@ const routes: Route[] = [
 ];
 
 /** "/light/comments" → "Comments" — a readable name for a plugin admin page. */
-function adminRouteLabel(path) {
+function adminRouteLabel(path: string) {
   const segment = path.split("/").filter(Boolean).pop() || "";
   const words = segment.replace(/[-_]+/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
@@ -427,7 +427,7 @@ function adminRouteLabel(path) {
 // ships route-plugin chunks; a plugin route never overrides a core path of the
 // same pattern.
 for (const entry of pluginHost.routes()) {
-  for (const path of entry.routes) {
+  for (const path of entry.routes ?? []) {
     // A plugin's `routes` mixes frontend paths, server API prefixes and
     // server-proxied paths (e.g. the comments plugin's /comments reverse
     // proxy); only /light admin pages belong in the client router — public

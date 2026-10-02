@@ -40,9 +40,9 @@ export interface PostCardProps {
 }
 
 export class PostCard extends Component<PostCardProps> {
-  _stopHoverVideo: (() => void) | null;
-  _startTouchVideo: (() => void) | null;
-  _hoverVideo: HTMLVideoElement | null;
+  _stopHoverVideo?: (() => void) | null;
+  _startTouchVideo?: (() => void) | null;
+  _hoverVideo?: HTMLVideoElement | null;
 
   render() {
     const { post, showViewCount = false, isHero = false } = this.props;

@@ -117,7 +117,7 @@ class Store {
    */
   subscribeSelector(key: string, select: Function, callback: Function): Function {
     let previous = select(this._state[key]);
-    return this.subscribe(key, (value) => {
+    return this.subscribe(key, (value: unknown) => {
       const next = select(value);
       if (Object.is(previous, next)) return;
       previous = next;
@@ -290,6 +290,6 @@ export const { get: getTagsView } = keyed('tags_view');
  * accessors that own the format instead of a template literal at the call
  * site: the key space stays enumerable, and `bc:tag:` appears once.
  */
-const tagBreadcrumbKey = (slug) => `bc:tag:${slug}`;
-export const getTagBreadcrumb = (slug) => store.get(tagBreadcrumbKey(slug));
-export const setTagBreadcrumb = (slug, crumbs) => store.set(tagBreadcrumbKey(slug), crumbs);
+const tagBreadcrumbKey = (slug: string) => `bc:tag:${slug}`;
+export const getTagBreadcrumb = (slug: string) => store.get<unknown[] | undefined>(tagBreadcrumbKey(slug));
+export const setTagBreadcrumb = (slug: string, crumbs: unknown[]) => store.set(tagBreadcrumbKey(slug), crumbs);

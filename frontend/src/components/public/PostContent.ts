@@ -130,8 +130,8 @@ export interface PostContentProps {
 }
 
 export class PostContent extends Component<PostContentProps> {
-  _viewer: ReturnType<typeof pluginHost.fillOne> | null;
-  _comments: ReturnType<typeof pluginHost.fill> | null;
+  _viewer?: ReturnType<typeof pluginHost.fillOne> | null;
+  _comments?: ReturnType<typeof pluginHost.fill> | null;
 
   render() {
     const { post, prevPost, nextPost, forceImmersive = false } = this.props;
@@ -202,7 +202,7 @@ export class PostContent extends Component<PostContentProps> {
             ViewContext.update({ postSlug: null });
           }
         },
-        onStep: (index) => {
+        onStep: (index: number) => {
           // Forced-immersive posts keep #1 on the first slide — the hash is
           // what marks the forced state, so it must survive stepping back.
           const forced = !shouldUseImmersive(post);
@@ -303,14 +303,14 @@ export class PostContent extends Component<PostContentProps> {
     const fallbackAlt = post?.excerpt || post?.title || "";
     body.querySelectorAll("img").forEach((img) => { if (!img.getAttribute("alt")) img.setAttribute("alt", fallbackAlt); });
     if (onEnterImmersive) {
-      const items = mediaFromHtml(post.content_html || "");
+      const items = mediaFromHtml(post?.content_html || "");
       const images = Array.from(body.querySelectorAll("img")).filter((img) => !img.closest("a[href]"));
       images.forEach((img) => {
         img.classList.add("zoomable");
         img.setAttribute("tabindex", "0");
         const enter = () => {
           const src = img.getAttribute("src");
-          const idx = items.findIndex((item) => item.url === src || (item.type === "html" && item.html.includes(src)));
+          const idx = items.findIndex((item) => item.url === src || (item.type === "html" && src !== null && !!item.html?.includes(src)));
           onEnterImmersive(idx >= 0 ? idx : 0);
         };
         img.addEventListener("click", enter);

@@ -89,8 +89,8 @@ export class MediaViewer extends Component<MediaViewerProps> {
   _exifMeta: (object | null)[] | null;
   _exifControl: ReturnType<typeof createImmersiveExifControl> | null;
   _goTo: (i: number) => boolean;
-  _gesture: GestureController;
-  _trackpad: TrackpadDetector;
+  _gesture: GestureController | null;
+  _trackpad: TrackpadDetector | null;
 
   /**
    * @param container
@@ -118,6 +118,15 @@ export class MediaViewer extends Component<MediaViewerProps> {
     this._peekEl = null; // neighbor element currently being dragged into view
     this._peekDir = null;
     this._neighborVersion = 0; // guards stale async preloads
+    // Built by afterRender(); empty until the first render.
+    this._slides = [];
+    this._dots = [];
+    this._slotMounts = [];
+    this._exifMeta = null;
+    this._exifControl = null;
+    this._goTo = () => false;
+    this._gesture = null;
+    this._trackpad = null;
   }
   render() {
     const {
@@ -173,7 +182,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
   _renderItem(item: MediaItem) {
     if (item.type === 'html') {
       // Post body markup, already sanitised server-side by the bluemonday policy.
-      return html`<div class="immersive-text-slide"><div class="immersive-text-content">${raw(item.html)}</div></div>`;
+      return html`<div class="immersive-text-slide"><div class="immersive-text-content">${raw(item.html ?? '')}</div></div>`;
     }
     const url = item.url;
     if (item.type === 'video') {
@@ -212,7 +221,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
       this._fillSlot('slideshow', wrapper, {
         count: (this.props.items || []).length,
         index: () => this._index,
-        goTo: i => this._goTo(i),
+        goTo: (i: number) => this._goTo(i),
         activeVideo: () => this._slides?.[this._index]?.querySelector('video') || null
       });
     }
@@ -377,7 +386,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
         this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
         this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
         this._zoomState.scale = newScale;
-        this._gesture.setZoomed(newScale > 1);
+        this._gesture?.setZoomed(newScale > 1);
         wrapper.classList.toggle('zoomed', newScale > 1);
         this._updateVisuals();
       },
@@ -397,7 +406,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
         this._zoomState.scale = max;
         this._zoomState.x = (W / 2 - x) * (max - 1);
         this._zoomState.y = (H / 2 - y) * (max - 1);
-        this._gesture.setZoomed(true);
+        this._gesture?.setZoomed(true);
         wrapper.classList.add('zoomed');
         this._updateVisuals();
       }
@@ -490,7 +499,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
         item
       };
       if (item && item.type === 'image') {
-        new Image().src = safeUrl(item.url); // warm the browser cache
+        new Image().src = safeUrl(item.url ?? ''); // warm the browser cache
         this._buildEdgeGhost(dir, item);
       }
     };
@@ -556,7 +565,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
     return true;
   }
   _isBlocked(dir: EdgeDir) {
-    const n = this.props.items.length;
+    const n = (this.props.items || []).length;
     const isAtEdge = dir === 'back' ? this._index === 0 : this._index === n - 1;
     if (!isAtEdge) return false;
     return !this._targetFor(dir);
@@ -568,7 +577,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
    * ghost when at a post boundary. Null when there's nothing to reveal.
    */
   _neighborEl(dir: EdgeDir): HTMLElement | null {
-    const n = this.props.items.length;
+    const n = (this.props.items || []).length;
     const idx = dir === 'fwd' ? this._index + 1 : this._index - 1;
     if (idx >= 0 && idx < n) return this._slides?.[idx] || null;
     return this._ghost[dir];
@@ -582,7 +591,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
    */
   _commitHorizontal(dir: EdgeDir) {
     const newIndex = dir === 'fwd' ? this._index + 1 : this._index - 1;
-    const n = this.props.items.length;
+    const n = (this.props.items || []).length;
     const crossing = newIndex < 0 || newIndex >= n;
     const neighbor = this._neighborEl(dir);
 
@@ -711,7 +720,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
     };
     this._updateVisuals();
     this._gesture?.setZoomed(false);
-    this.$('.media-viewer-wrapper').classList.remove('zoomed');
+    this.$('.media-viewer-wrapper')?.classList.remove('zoomed');
   }
 
   /**
@@ -810,7 +819,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
     neighbor.style.zIndex = '11';
   }
   _getMaxScale() {
-    const img = (this.$('.carousel-slide.active') || this.$('.immersive-visuals')).querySelector('img, video') as HTMLImageElement | HTMLVideoElement | null;
+    const img = (this.$('.carousel-slide.active') || this.$('.immersive-visuals'))?.querySelector('img, video') as HTMLImageElement | HTMLVideoElement | null | undefined;
     if (!img) return 2;
     const rect = img.getBoundingClientRect();
     const nw = ('naturalWidth' in img ? img.naturalWidth : img.videoWidth) || rect.width * 2;

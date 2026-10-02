@@ -35,26 +35,28 @@ const STATE = {
   PANNING: "PANNING",
 };
 
+export type SwipeDir = 'left' | 'right' | 'up' | 'down';
+
 /** GestureController options. Every callback is optional. */
 export interface GestureOptions {
   /** (dx, dy) — real-time drag feedback */
-  onSwipeMove?: Function;
+  onSwipeMove?: (dx: number, dy: number) => void;
   /** (dir: 'left'|'right'|'up'|'down') */
-  onSwipeCommit?: Function;
+  onSwipeCommit?: (dir: SwipeDir) => void;
   /** () — drag ended without commit */
-  onSwipeCancel?: Function;
+  onSwipeCancel?: () => void;
   /** (dx, dy) — pan while zoomed */
-  onPanMove?: Function;
+  onPanMove?: (dx: number, dy: number) => void;
   /** (scaleDelta, cx, cy) — multiplicative */
-  onPinchMove?: Function;
+  onPinchMove?: (delta: number, cx: number, cy: number) => void;
   /** () */
-  onPinchEnd?: Function;
+  onPinchEnd?: () => void;
   /** (x, y) */
-  onTap?: Function;
+  onTap?: (x: number, y: number) => void;
   /** (x, y) */
-  onDoubleTap?: Function;
+  onDoubleTap?: (x: number, y: number) => void;
   /** (x, y) */
-  onTwoFingerTap?: Function;
+  onTwoFingerTap?: (x: number, y: number) => void;
   /**
    * CSS selector; touches starting on a matching element (or its ancestor) are
    * ignored so the consumer can cede that region to a nested gesture handler.
@@ -162,8 +164,8 @@ export class GestureController {
     this._zoomed = zoomed;
   }
 
-  _emit(name: GestureCallback, ...args: unknown[]) {
-    const fn = this._opts[name];
+  _emit<K extends GestureCallback>(name: K, ...args: Parameters<NonNullable<GestureOptions[K]>>) {
+    const fn = this._opts[name] as ((...a: typeof args) => void) | undefined;
     if (typeof fn === "function") fn(...args);
   }
 
@@ -383,7 +385,7 @@ export class GestureController {
  */
 export class TrackpadDetector {
   _el: HTMLElement;
-  onHorizontal: Function;
+  onHorizontal: (dir: 'left' | 'right') => void;
   thresholdDeltaX: number;
   maxDeltaY: number;
   dominanceRatio: number;
@@ -407,7 +409,7 @@ export class TrackpadDetector {
       dominanceRatio = 1.5,
       cooldownMs = 600,
     }: {
-      onHorizontal: Function;
+      onHorizontal: (dir: 'left' | 'right') => void;
       thresholdDeltaX?: number;
       maxDeltaY?: number;
       dominanceRatio?: number;
