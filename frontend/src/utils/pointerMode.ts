@@ -34,7 +34,7 @@ const TOUCH_ECHO_MS = 700;
 const GESTURE_MS = 1_000;
 
 // The device that opened the gesture in progress — see `eventPointerType`.
-let gestureType = null;
+let gestureType: string | null = null;
 let gestureAt = 0;
 
 export function initPointerMode() {
@@ -51,7 +51,7 @@ export function initPointerMode() {
   let fine = root.classList.contains(CLASS);
   let lastTouch = 0;
 
-  const remember = (value) => {
+  const remember = (value: boolean) => {
     try {
       if (value) localStorage.setItem(KEY, "1");
       else localStorage.removeItem(KEY);
@@ -60,7 +60,7 @@ export function initPointerMode() {
     }
   };
 
-  const promote = (e) => {
+  const promote = (e: PointerEvent) => {
     // Only a mouse or trackpad counts. A stylus reports "pen" and wants the
     // larger targets; touch reports "touch" and obviously doesn't qualify.
     if (e.pointerType !== "mouse") return;
@@ -110,9 +110,9 @@ export function initPointerMode() {
  * activation reports no pointer type and belongs to the session verdict, see
  * `hasFinePointer`).
  */
-export function eventPointerType(event) {
+export function eventPointerType(event: Event | null | undefined): string | null {
   if (gestureType && Date.now() - gestureAt < GESTURE_MS) return gestureType;
-  return event?.pointerType || null;
+  return (event as PointerEvent | null | undefined)?.pointerType || null;
 }
 
 /**

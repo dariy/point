@@ -14,8 +14,14 @@
  * invalidates it).
  */
 
+/** The page that hosts the immersive viewer. */
+export interface ImmersivePage {
+  _immersivePushed?: boolean;
+  setState(state: { forceImmersive: boolean, startIndex?: number }): void;
+}
+
 /** Enter forced immersive mode at slide `idx`, pushing a history entry. */
-export function enterImmersive(page, idx = 0) {
+export function enterImmersive(page: ImmersivePage, idx = 0) {
   window.history.pushState(
     null,
     "",
@@ -32,7 +38,7 @@ export function enterImmersive(page, idx = 0) {
  * #N link directly, so there is no article entry beneath — strips the hash
  * in place.
  */
-export function exitImmersive(page) {
+export function exitImmersive(page: ImmersivePage) {
   if (page._immersivePushed) {
     page._immersivePushed = false;
     window.history.back();
@@ -50,7 +56,7 @@ export function exitImmersive(page) {
  * Decode the slide hash: "#1" → slide 1 immersive, "#3" → slide 3 immersive.
  * Returns { startIndex, forceImmersive }.
  */
-export function decodeImmersiveHash(hash) {
+export function decodeImmersiveHash(hash: string | null | undefined) {
   let startIndex = 0;
   let forceImmersive = false;
   if (hash && hash.startsWith("#")) {
@@ -79,7 +85,11 @@ export function decodeImmersiveHash(hash) {
  * slideshow's cross-post skip all read the direction from here, so they can
  * never disagree about which way is forward.
  */
-export function immersiveNavTargets(settings, prev, next) {
+export function immersiveNavTargets<T>(
+  settings: { immersive_nav_direction?: string } | null | undefined,
+  prev: T,
+  next: T,
+) {
   const feedMode = (settings || {}).immersive_nav_direction === "feed";
   return feedMode ? { back: next, fwd: prev } : { back: prev, fwd: next };
 }

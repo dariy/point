@@ -17,6 +17,7 @@ import { setupLongPress } from './helpers.ts';
 import { LOCK_SVG } from './icons.ts';
 import { hasFinePointer, eventPointerType } from './pointerMode.ts';
 import { tagHref, getTagAncestors } from './tagLinks.ts';
+import type { TagIndex, TagIndexTag } from './tagLinks.ts';
 
 /** Hover-intent delay before a header dropdown opens, in ms. */
 export const HOVER_OPEN_MS = 180;
@@ -27,8 +28,12 @@ export const HOVER_OPEN_MS = 180;
  * Track document mousemove and fire onLeave once the cursor exits all elements
  * returned by getEls.
  */
-export function createHotZone(getEls, onLeave, pad = 8) {
-  const check = e => {
+export function createHotZone(
+  getEls: () => Array<Element | null>,
+  onLeave: () => void,
+  pad = 8,
+) {
+  const check = (e: MouseEvent) => {
     const inside = getEls().some(el => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
@@ -52,14 +57,14 @@ export function createHotZone(getEls, onLeave, pad = 8) {
 
 // ── Flyout singleton ─────────────────────────────────────────────────────────
 
-let _flyoutEl = null;
-let _activeLink = null;
-let _activeCard = null;
-let _hotZone = null;
-let _openTimer = null;
+let _flyoutEl: HTMLElement | null = null;
+let _activeLink: Element | null = null;
+let _activeCard: Element | null = null;
+let _hotZone: { stop: () => void } | null = null;
+let _openTimer: ReturnType<typeof setTimeout> | undefined;
 let _flyoutShowTime = 0;
-let _flyoutDismiss = null;
-function _getFlyoutEl() {
+let _flyoutDismiss: ((e: MouseEvent) => void) | null = null;
+function _getFlyoutEl(): HTMLElement {
   if (!_flyoutEl) {
     _flyoutEl = document.createElement('div');
     _flyoutEl.className = 'tag-family-flyout hidden';
@@ -67,7 +72,13 @@ function _getFlyoutEl() {
   }
   return _flyoutEl;
 }
-function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
+function _showFlyout(
+  anchorEl: Element,
+  slug: string,
+  index: TagIndex,
+  excludeEl: Element | null,
+  navigateFn: (url: string) => void,
+) {
   const entry = index.get(slug);
   if (!entry) return;
   const ancestors = getTagAncestors(slug, index);
@@ -75,7 +86,7 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   const children = entry.children || [];
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
-  const createItem = (t, className, href) => {
+  const createItem = (t: TagIndexTag, className: string, href: string) => {
     const a = document.createElement('a');
     a.href = href || `/tags/${t.slug}`;
     a.className = `flyout-item ${className}`;
@@ -142,10 +153,10 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     _hotZone = createHotZone(() => [_activeCard, anchorEl, _flyoutEl], () => _hideFlyout());
   }
   if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
-  _flyoutDismiss = e => {
+  _flyoutDismiss = (e: MouseEvent) => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
-    if (_flyoutEl.contains(e.target)) return;
-    if (excludeEl && excludeEl.contains(e.target)) return;
+    if (_flyoutEl.contains(e.target as Node)) return;
+    if (excludeEl && excludeEl.contains(e.target as Node)) return;
     _hideFlyout();
   };
   // Capture phase — a photo card's first tap stops propagation to reveal its
@@ -191,7 +202,7 @@ export function flyoutEl() {
  * surface just opened — on touch both happen in the same click dispatch, which
  * made every breadcrumb/nav tap open a panel and immediately close it again.
  */
-export function hideFlyoutWithin(root) {
+export function hideFlyoutWithin(root: Element | null | undefined) {
   if (root && _activeLink && root.contains(_activeLink)) _hideFlyout();
 }
 
@@ -202,8 +213,8 @@ export function hideFlyoutWithin(root) {
  * always appears where the finger tapped instead of sliding up from the
  * screen edge.
  */
-function _anchorFlyoutTo(anchorEl) {
-  const flyout = _flyoutEl;
+function _anchorFlyoutTo(anchorEl: Element) {
+  const flyout = _getFlyoutEl();
   const gap = 8;
   const margin = 8;
 
@@ -293,7 +304,7 @@ export function showCrumbDropdown(
   anchorEl: HTMLElement,
   spec: FlyoutItem[] | {path?: FlyoutCrumb[], children?: FlyoutItem[]},
   navigateFn: Function,
-  excludeEl: HTMLElement = null,
+  excludeEl: HTMLElement | null = null,
 ) {
   _hideFlyout();
   const flyout = _getFlyoutEl();
@@ -341,10 +352,10 @@ export function showCrumbDropdown(
     _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
   }
   if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss, true);
-  _flyoutDismiss = e => {
+  _flyoutDismiss = (e: MouseEvent) => {
     if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
-    if (_flyoutEl.contains(e.target)) return;
-    if (excludeEl && excludeEl.contains(e.target)) return;
+    if (_flyoutEl.contains(e.target as Node)) return;
+    if (excludeEl && excludeEl.contains(e.target as Node)) return;
     _hideFlyout();
   };
   document.addEventListener('click', _flyoutDismiss, true);
@@ -368,12 +379,12 @@ export function attachFlyoutTrigger(
   el: HTMLElement,
   getSpec: Function,
   navigateFn: Function,
-  excludeEl: HTMLElement = null,
+  excludeEl: HTMLElement | null = null,
 ) {
-  let timer = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const cancel = () => {
     clearTimeout(timer);
-    timer = null;
+    timer = undefined;
   };
   el.addEventListener('pointerenter', e => {
     if (e.pointerType !== 'mouse') return;
@@ -417,11 +428,16 @@ export function attachFlyoutTrigger(
     showCrumbDropdown(el, getSpec(), navigateFn, excludeEl);
   });
 }
-export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
+export function setupTagFlyout(
+  containerEl: Element,
+  tagIndex: TagIndex | null | undefined,
+  navigateFn: (url: string) => void,
+  hostEl: Element | null = null,
+) {
   if (!tagIndex) return () => {};
   const excludeEl = hostEl || containerEl;
-  const cleanups = [];
-  containerEl.querySelectorAll('.tag-link').forEach(link => {
+  const cleanups: Array<() => void> = [];
+  containerEl.querySelectorAll<HTMLElement>('.tag-link').forEach(link => {
     const href = link.getAttribute('href');
     if (!href || href.startsWith('http') || !href.startsWith('/tags/')) return;
     const slug = href.replace('/tags/', '').split('?')[0];
@@ -430,7 +446,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     const onEnter = () => {
       clearTimeout(_openTimer);
       _openTimer = setTimeout(() => {
-        _openTimer = null;
+        _openTimer = undefined;
         if (_activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden')) return;
         _hideFlyout();
         _showFlyout(link, slug, tagIndex, excludeEl, navigateFn);

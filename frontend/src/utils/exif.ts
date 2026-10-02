@@ -16,8 +16,17 @@
  *   'all'   → shown to everyone
  */
 
+/** A raw EXIF metadata object, keyed by EXIF tag name. */
+export type ExifMetadata = object;
+
+/** One curated EXIF row as the overlay shows it. */
+export interface ExifRow {
+  label: string;
+  value: string;
+}
+
 // Public field allowlist, in display order. fmt: optional value formatter.
-const EXIF_FIELDS = [
+const EXIF_FIELDS: Array<{ key: string, label: string, fmt: ((val: unknown) => string) | null }> = [
   { key: "ExposureTime", label: "Shutter", fmt: _fmtShutter },
   { key: "FNumber", label: "Aperture", fmt: _fmtFNumber },
   { key: "FocalLength", label: "Focal", fmt: _fmtFocal },
@@ -26,14 +35,14 @@ const EXIF_FIELDS = [
   { key: "Model", label: "Model", fmt: null },
 ];
 
-function _evalFraction(val) {
+function _evalFraction(val: unknown) {
   const s = String(val);
   const m = s.match(/^(-?\d+)\/(\d+)$/);
   if (m) return parseInt(m[1], 10) / parseInt(m[2], 10);
   return parseFloat(s);
 }
 
-function _fmtShutter(val) {
+function _fmtShutter(val: unknown) {
   const s = String(val);
   // Keep fraction form if denominator > 1 (e.g. "1/200"), add "s"
   if (/^\d+\/\d+$/.test(s)) return `${s} s`;
@@ -42,24 +51,24 @@ function _fmtShutter(val) {
   return n >= 1 ? `${n} s` : `1/${Math.round(1 / n)} s`;
 }
 
-function _fmtFNumber(val) {
+function _fmtFNumber(val: unknown) {
   const n = _evalFraction(val);
   if (!Number.isFinite(n)) return String(val);
   return `f/${Number(n.toFixed(1))}`;
 }
 
-function _fmtFocal(val) {
+function _fmtFocal(val: unknown) {
   const n = _evalFraction(val);
   if (!Number.isFinite(n)) return String(val);
   return `${Math.round(n)} mm`;
 }
 
-function _fmtISO(val) {
+function _fmtISO(val: unknown) {
   return `ISO ${val}`;
 }
 
 /** True when EXIF should be shown for the given settings / current user. */
-export function exifVisible(settings: { exif_visibility?: string } = {}, user = null) {
+export function exifVisible(settings: { exif_visibility?: string } = {}, user: unknown = null) {
   const v = settings.exif_visibility || "hide";
   if (v === "hide") return false;
   if (v === "admin" && !user) return false;
@@ -67,18 +76,19 @@ export function exifVisible(settings: { exif_visibility?: string } = {}, user = 
 }
 
 /** The curated, formatted rows present in this metadata object ([] if none). */
-function _curatedRows(metadata) {
+function _curatedRows(metadata: ExifMetadata | null | undefined): ExifRow[] {
   if (!metadata) return [];
+  const fields = metadata as Record<string, unknown>;
   return EXIF_FIELDS.filter(
-    ({ key }) => key in metadata && metadata[key] != null && metadata[key] !== "",
+    ({ key }) => key in fields && fields[key] != null && fields[key] !== "",
   ).map(({ key, label, fmt }) => ({
     label,
-    value: fmt ? fmt(metadata[key]) : String(metadata[key]),
+    value: fmt ? fmt(fields[key]) : String(fields[key]),
   }));
 }
 
 /** True when a metadata object has at least one publicly-shown field. */
-export function hasExif(metadata) {
+export function hasExif(metadata: ExifMetadata | null | undefined) {
   return _curatedRows(metadata).length > 0;
 }
 
@@ -88,13 +98,15 @@ export function hasExif(metadata) {
  * Exposed for consumers that render EXIF inline rather than via the flyout
  * control (e.g. the immersive sheet overlay).
  */
-export function curatedExifRows(metadata) {
+export function curatedExifRows(metadata: ExifMetadata | null | undefined) {
   return _curatedRows(metadata);
 }
 
 /** Build a Map of public media path → metadata from a post's media array. */
-export function buildExifMap(media = []) {
-  const map = new Map();
+export function buildExifMap(
+  media: Array<{ path?: string, metadata?: ExifMetadata | null } | null> = [],
+): Map<string, ExifMetadata> {
+  const map = new Map<string, ExifMetadata>();
   for (const m of media) {
     if (m && m.path && m.metadata) map.set(m.path, m.metadata);
   }
@@ -120,14 +132,14 @@ export function normalizeSrc(src = "") {
 }
 
 /** Resolve the metadata object for an image src, or null. */
-export function metadataForSrc(map, src) {
+export function metadataForSrc(map: Map<string, ExifMetadata>, src: string) {
   return map.get(normalizeSrc(src)) || null;
 }
 
 // ── DOM builders ───────────────────────────────────────────────────────────
 
 /** Build a <table> of curated rows. */
-function _buildTable(rows) {
+function _buildTable(rows: ExifRow[]) {
   const table = document.createElement("table");
   const tbody = document.createElement("tbody");
   rows.forEach(({ label, value }) => {
@@ -155,7 +167,7 @@ function _buildButton(variant = "") {
 }
 
 /** Build the overlay panel shell (title + provided body element). */
-function _buildOverlay(variant, body) {
+function _buildOverlay(variant: string, body: Element) {
   const overlay = document.createElement("div");
   overlay.className = variant ? `exif-overlay exif-overlay--${variant}` : "exif-overlay";
   overlay.setAttribute("role", "complementary");
@@ -168,8 +180,8 @@ function _buildOverlay(variant, body) {
 }
 
 /** Wire the button to toggle the overlay's visibility. */
-function _wireToggle(btn, overlay) {
-  btn.addEventListener("click", (e) => {
+function _wireToggle(btn: HTMLElement, overlay: HTMLElement) {
+  btn.addEventListener("click", (e: MouseEvent) => {
     e.stopPropagation();
     const visible = overlay.classList.toggle("is-visible");
     btn.classList.toggle("is-active", visible);
@@ -181,7 +193,7 @@ function _wireToggle(btn, overlay) {
  * Normal article layout: wrap an <img> in a positioned figure and attach a
  * per-image info button + overlay. No-op when there are no publicly-shown fields.
  */
-export function attachExifToImage(img, metadata) {
+export function attachExifToImage(img: Element, metadata: ExifMetadata | null | undefined) {
   const rows = _curatedRows(metadata);
   if (!rows.length || !img.parentNode) return;
 
@@ -212,7 +224,7 @@ export function createImmersiveExifControl() {
   overlay.classList.add("hidden");
   _wireToggle(btn, overlay);
 
-  function setMetadata(metadata) {
+  function setMetadata(metadata: ExifMetadata | null | undefined) {
     const rows = _curatedRows(metadata);
     // Reset to a closed state on every slide change.
     overlay.classList.remove("is-visible");

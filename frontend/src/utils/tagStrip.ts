@@ -10,6 +10,7 @@
 import { CHEVRON_SVG } from './icons.ts';
 import { html, raw } from './helpers.ts';
 import { renderTagLink } from './tagLinks.ts';
+import type { TagIndex, TagLike } from './tagLinks.ts';
 import { setupTagFlyout } from './tagFlyout.ts';
 
 /**
@@ -21,7 +22,7 @@ import { setupTagFlyout } from './tagFlyout.ts';
  * that closure — otherwise one photo of a fern lists location/country/city/…
  * while the post page lists three tags.
  */
-export function renderTagStrip(postTags) {
+export function renderTagStrip(postTags: Array<TagLike & { inherited?: boolean }> | null | undefined) {
   const visibleTags = (postTags || []).filter((t) => !t.inherited);
   const links = visibleTags.map((t) => renderTagLink(t));
   // Falsy, not html``: RawHtml('') is a String object and therefore truthy,
@@ -35,7 +36,7 @@ export function renderTagStrip(postTags) {
     </div>`;
 }
 
-export function setupScrollableStrip(trackEl, scrollEl) {
+export function setupScrollableStrip(trackEl: Element | null, scrollEl: Element | null) {
   if (!trackEl || !scrollEl) return () => {};
   const btnLeft  = trackEl.querySelector('.tags-scroll-btn--left');
   const btnRight = trackEl.querySelector('.tags-scroll-btn--right');
@@ -53,7 +54,7 @@ export function setupScrollableStrip(trackEl, scrollEl) {
   };
   // The strip can live inside a fully clickable post card — once an arrow acts on
   // a click, stop it reaching the card's "navigate to post" handler.
-  const scrollBy = (dx) => (e) => {
+  const scrollBy = (dx: number) => (e: Event) => {
     if (!isRevealed()) return;
     e.preventDefault();
     e.stopPropagation();
@@ -75,12 +76,17 @@ export function setupScrollableStrip(trackEl, scrollEl) {
   };
 }
 
-export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
+export function setupTagStrip(
+  container: Element,
+  tagIndex: TagIndex | null | undefined,
+  navigateFn: (url: string) => void,
+  hostEl: Element | null = null,
+) {
   const track = container.querySelector('.tag-strip-track');
   const tagsEl = container.querySelector('.tag-strip-scroll');
   if (!tagsEl) return () => {};
-  const cleanups = [];
-  const stop = (e) => e.stopPropagation();
+  const cleanups: Array<() => void> = [];
+  const stop = (e: Event) => e.stopPropagation();
   tagsEl.addEventListener('touchstart', stop, { passive: true });
   tagsEl.addEventListener('touchmove',  stop, { passive: true });
   cleanups.push(() => {

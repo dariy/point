@@ -97,16 +97,16 @@ export class ViewContext {
     const next = ViewContext.current();
 
     // Apply changes
-    if ('tag' in changes) next.tag = changes.tag;
+    if ('tag' in changes) next.tag = changes.tag ?? null;
     // The navigation trail belongs to a specific tag: honour an explicit value,
     // otherwise drop any stale trail when the tag itself changes.
-    if ('navPath' in changes) next.navPath = changes.navPath;
+    if ('navPath' in changes) next.navPath = changes.navPath ?? null;
     else if ('tag' in changes) next.navPath = null;
-    if ('years' in changes) next.years = changes.years;
-    if ('query' in changes) next.query = changes.query;
-    if ('page' in changes) next.page = changes.page;
-    if ('per_page' in changes) next.perPage = changes.per_page;
-    if ('postSlug' in changes) next.postSlug = changes.postSlug;
+    if ('years' in changes) next.years = changes.years ?? null;
+    if ('query' in changes) next.query = changes.query ?? null;
+    if ('page' in changes) next.page = changes.page ?? next.page;
+    if ('per_page' in changes) next.perPage = changes.per_page ?? null;
+    if ('postSlug' in changes) next.postSlug = changes.postSlug ?? null;
 
     // Reset page to 1 if primary filters change, unless page was explicitly provided
     const filtersChanged = ('tag' in changes || 'query' in changes || 'years' in changes);

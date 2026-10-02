@@ -21,7 +21,7 @@ export async function syncQueue() {
   isSyncing = true;
   console.log(`[Sync] Starting sync of ${pending.length} operations...`);
 
-  const idMap = {}; // tempId -> realId
+  const idMap: Record<string, unknown> = {}; // tempId -> realId
 
   try {
     for (const op of pending) {
@@ -70,7 +70,7 @@ export async function syncQueue() {
 
       } catch (err) {
         console.error(`[Sync] Operation ${op.id} failed:`, err);
-        await updateOpStatus(op.id, 'failed', err.message || 'Server error');
+        await updateOpStatus(op.id, 'failed', (err as Error | null)?.message || 'Server error');
         await updateStatus();
         window.dispatchEvent(new CustomEvent('sync:failed'));
         // Halt on first error
@@ -85,13 +85,13 @@ export async function syncQueue() {
 }
 
 // Replace any local_… segment in a URL with the real server ID from idMap.
-function resolveUrl(url, idMap) {
-  return url.replace(/local_[^/?#]+/g, (match) => idMap[match] ?? match);
+function resolveUrl(url: string, idMap: Record<string, unknown>) {
+  return url.replace(/local_[^/?#]+/g, (match) => String(idMap[match] ?? match));
 }
 
-function resolveTempIds(obj, idMap) {
+function resolveTempIds(obj: unknown, idMap: Record<string, unknown>): unknown {
   if (!obj || typeof obj !== 'object') return obj;
-  const newObj = Array.isArray(obj) ? [] : {};
+  const newObj = (Array.isArray(obj) ? [] : {}) as Record<string, unknown>;
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'string' && idMap[value]) {
       newObj[key] = idMap[value];
@@ -117,7 +117,7 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-async function updateOpStatus(id, status, error = null) {
+async function updateOpStatus(id: string, status: QueuedOp['status'], error: string | null = null) {
   const db = await openDB();
   const tx = db.transaction('mutation_queue', 'readwrite');
   const store = tx.objectStore('mutation_queue');
@@ -133,14 +133,14 @@ async function updateOpStatus(id, status, error = null) {
   return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
 }
 
-async function deleteOp(id) {
+async function deleteOp(id: string) {
   const db = await openDB();
   const tx = db.transaction('mutation_queue', 'readwrite');
   tx.objectStore('mutation_queue').delete(id);
   return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
 }
 
-async function getBlob(id): Promise<QueuedBlob> {
+async function getBlob(id: string): Promise<QueuedBlob> {
   const db = await openDB();
   const tx = db.transaction('blobs', 'readonly');
   return new Promise((res, rej) => {
@@ -150,7 +150,7 @@ async function getBlob(id): Promise<QueuedBlob> {
   });
 }
 
-async function deleteBlob(id) {
+async function deleteBlob(id: string) {
   const db = await openDB();
   const tx = db.transaction('blobs', 'readwrite');
   tx.objectStore('blobs').delete(id);

@@ -29,7 +29,7 @@ const PRECACHE_CONCURRENCY = 5;
 export async function preCacheImages(
   urls: string[],
   type: 'thumbnails' | 'full' = 'thumbnails',
-  onProgress: (p: {completed: number, total: number, current: string}) => void = null,
+  onProgress: ((p: {completed: number, total: number, current: string}) => void) | null = null,
 ) {
   if (typeof caches === 'undefined') {
     console.warn('Cache API not available in this environment.');

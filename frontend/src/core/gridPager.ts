@@ -432,7 +432,7 @@ export class GridPager {
     // the new geometry go inside the FLIP so the cards glide into it rather
     // than cutting to it — see utils/gridFlip.ts.
     flipGrid((grid as HTMLElement), () => {
-      stepZoom(grid, delta);
+      stepZoom(grid as HTMLElement, delta);
       this._trimToCapacity(grid);
     });
     clearTimeout(this._zoomCommitTimer);

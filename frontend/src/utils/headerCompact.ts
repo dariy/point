@@ -5,13 +5,13 @@
  * class "compact" to .light-header so buttons collapse to icon-only mode.
  */
 
-export function setupHeaderCompact(header) {
+export function setupHeaderCompact(header: Element | null) {
   if (!header) return () => {};
   const h1 = header.querySelector('h1');
   const actions = header.querySelector('.header-actions');
   if (!h1 || !actions) return () => {};
 
-  function check() {
+  const check = () => {
     // Measure without compact so we get natural sizes.
     header.classList.remove('compact');
 
@@ -41,7 +41,7 @@ export function setupHeaderCompact(header) {
     if (sameRow && (contentOverflows || maxRight + 16 >= actionsRect.left)) {
       header.classList.add('compact');
     }
-  }
+  };
 
   const ro = new ResizeObserver(check);
   ro.observe(header);
