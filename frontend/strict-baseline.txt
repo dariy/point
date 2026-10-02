@@ -1,0 +1,25 @@
+# tsc --strict errors per directory. Written by scripts/ts-strict-ratchet.sh --update.
+59 frontend
+19 frontend/src
+18 frontend/src/api
+2 frontend/src/components
+387 frontend/src/components/light
+24 frontend/src/components/public
+50 frontend/src/components/shared
+181 frontend/src/core
+355 frontend/src/pages/light
+45 frontend/src/pages/public
+23 frontend/src/plugins/breadcrumbs
+59 frontend/src/plugins/comments
+1 frontend/src/plugins/distraction-free
+16 frontend/src/plugins/immersive
+47 frontend/src/plugins/nav-menu
+7 frontend/src/plugins/public-footer
+32 frontend/src/plugins/public-header
+16 frontend/src/plugins/slideshow
+2 frontend/src/plugins/tag-cloud
+16 frontend/src/plugins/tags-atlas
+12 frontend/src/plugins/tags-graph
+11 frontend/src/plugins/tags-map
+41 frontend/src/plugins/timeline
+278 frontend/src/utils
