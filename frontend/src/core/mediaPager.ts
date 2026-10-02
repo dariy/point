@@ -45,12 +45,12 @@ const MAX_COLS = 12;
 
 /** The stored media-grid zoom (column count), or 0 when unset (auto layout). */
 export function getMediaZoom() {
-  const v = parseInt(localStorage.getItem(ZOOM_KEY), 10);
+  const v = parseInt(localStorage.getItem(ZOOM_KEY) ?? '', 10);
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
 /** Persist a zoom column count; 0/falsy clears it back to auto. */
-export function setMediaZoom(cols) {
+export function setMediaZoom(cols: number) {
   if (cols > 0) localStorage.setItem(ZOOM_KEY, String(cols));else localStorage.removeItem(ZOOM_KEY);
 }
 /** What the host (MediaBrowser) hands the pager. */
@@ -71,37 +71,40 @@ export interface MediaPagerOptions {
   isAlive: () => boolean;
 }
 
+/** Which neighbouring page a ghost holds. */
+type Dir = 'prev' | 'next';
+
 export class MediaPager {
   _o: MediaPagerOptions;
-  _ghosts: { prev: HTMLElement | null, next: HTMLElement | null };
+  _ghosts: Record<Dir, HTMLElement | null>;
   /**
    * The listing's paging state, as arm() last received it. Empty until then,
    * hence the optional properties every reader defaults.
    */
   _pagination: { page?: number, pages?: number, total?: number };
-  _ghostKey: string | null;
-  _ghostVersion: number;
-  _committedGhost: HTMLElement | null;
-  _peekGhost: HTMLElement | null;
-  _gesture: GestureController | null;
-  _trackpad: TrackpadDetector | null;
-  _touchEl: HTMLElement | null;
-  _onTouchDown: () => void;
-  _onKeyNav: ((e: KeyboardEvent) => void) | null;
-  _navArrows: HTMLButtonElement[] | null;
-  _stride: number | null;
-  _pageNavPending: boolean;
-  _pageNavWatchdog: ReturnType<typeof setTimeout>;
-  _pinchAccum: number;
-  _zoomCommitTimer: ReturnType<typeof setTimeout>;
-  _wheelAccum: number;
-  _gestureScale: number;
-  _onZoomKey: ((e: KeyboardEvent) => void) | null;
-  _onZoomWheel: ((e: WheelEvent) => void) | null;
-  _onGestureStart: (e: Event) => void;
-  _onGestureChange: (e: SafariGestureEvent) => void;
-  _onGestureEnd: (e: Event) => void;
-  _zoomWheelEl: HTMLElement | null;
+  _ghostKey: string | null = null;
+  _ghostVersion = 0;
+  _committedGhost: HTMLElement | null = null;
+  _peekGhost: HTMLElement | null = null;
+  _gesture: GestureController | null = null;
+  _trackpad: TrackpadDetector | null = null;
+  _touchEl: HTMLElement | null = null;
+  _onTouchDown: () => void = () => {};
+  _onKeyNav: ((e: KeyboardEvent) => void) | null = null;
+  _navArrows: HTMLButtonElement[] | null = null;
+  _stride: number | null = null;
+  _pageNavPending = false;
+  _pageNavWatchdog?: ReturnType<typeof setTimeout>;
+  _pinchAccum = 1;
+  _zoomCommitTimer?: ReturnType<typeof setTimeout>;
+  _wheelAccum = 0;
+  _gestureScale = 1;
+  _onZoomKey: ((e: KeyboardEvent) => void) | null = null;
+  _onZoomWheel: ((e: WheelEvent) => void) | null = null;
+  _onGestureStart: (e: Event) => void = () => {};
+  _onGestureChange: (e: Event) => void = () => {};
+  _onGestureEnd: (e: Event) => void = () => {};
+  _zoomWheelEl: HTMLElement | null = null;
 
   constructor(opts: MediaPagerOptions) {
     this._o = opts;
@@ -195,16 +198,16 @@ export class MediaPager {
       // the folder chip strip scrolls sideways, and the EXIF editor and the
       // selection toolbar are full of controls.
       ignoreSelector: '.mb-folder-chips, .exif-panel, .mb-selection-bar',
-      onPinchMove: scaleDelta => this._pinchStep(scaleDelta),
+      onPinchMove: (scaleDelta: number) => this._pinchStep(scaleDelta),
       onPinchEnd: () => this._onPinchEnd(),
-      onSwipeMove: (dx, dy) => {
+      onSwipeMove: (dx: number, dy: number) => {
         // A commit is already animating to the next page; ignore new drags
         // until it settles so a second commit can't orphan the first's ghost.
         if (this._pageNavPending) return;
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const area = this._o.area();
         if (!area) return;
-        const dir = dx < 0 ? 'next' : 'prev';
+        const dir: Dir = dx < 0 ? 'next' : 'prev';
         const blocked = dir === 'next' && atEnd() || dir === 'prev' && atStart();
         const tx = blocked ? rubberBand(dx) : dx;
         const stride = this._cachedStride();
@@ -229,7 +232,7 @@ export class MediaPager {
         }
       },
       onSwipeCancel: () => this._resetSwipe(),
-      onSwipeCommit: dir => {
+      onSwipeCommit: (dir: string) => {
         // Only horizontal swipes paginate; a vertical one scrolled the grid.
         if (dir !== 'left' && dir !== 'right') return;
         if (this._pageNavPending) return;
@@ -238,9 +241,9 @@ export class MediaPager {
       }
     });
     this._trackpad = new TrackpadDetector(root, {
-      onHorizontal: dir => {
+      onHorizontal: (dir: string) => {
         if (this._pageNavPending) return;
-        if (dir === 'left' && !atEnd()) this._o.gotoPage(pag.page + 1);else if (dir === 'right' && !atStart()) this._o.gotoPage(pag.page - 1);
+        if (dir === 'left' && !atEnd()) this._o.gotoPage((pag.page || 1) + 1);else if (dir === 'right' && !atStart()) this._o.gotoPage((pag.page || 1) - 1);
       }
     });
 
@@ -292,9 +295,9 @@ export class MediaPager {
     const pag = this._pagination;
     if (!pag || (pag.pages || 1) <= 1) return;
     const version = this._ghostVersion = (this._ghostVersion || 0) + 1;
-    const build = async dir => {
-      const page = dir === 'next' ? pag.page + 1 : pag.page - 1;
-      if (page < 1 || page > pag.pages) return;
+    const build = async (dir: Dir) => {
+      const page = dir === 'next' ? (pag.page || 1) + 1 : (pag.page || 1) - 1;
+      if (page < 1 || page > (pag.pages || 1)) return;
       let _html;
       try {
         _html = await this._o.fetchPage(page);
@@ -320,7 +323,7 @@ export class MediaPager {
    * is a document-flow element taller than the screen, and a ghost that tall
    * would slide a strip of off-screen markup past the user's thumb.
    */
-  _anchorGhost(el) {
+  _anchorGhost(el: HTMLElement) {
     const area = this._o.area();
     if (!area || !el) return;
     const r = area.getBoundingClientRect();
@@ -338,7 +341,7 @@ export class MediaPager {
 
   /** Re-anchor both resting ghosts (the one peeking mid-drag is left alone). */
   _positionGhosts() {
-    for (const dir of ['prev', 'next']) {
+    for (const dir of ['prev', 'next'] as const) {
       const el = this._ghosts[dir];
       if (el && el !== this._peekGhost) this._anchorGhost(el);
     }
@@ -347,7 +350,7 @@ export class MediaPager {
   /** Remove the off-screen ghosts and invalidate any in-flight preload. */
   _clearGhosts() {
     this._ghostVersion = (this._ghostVersion || 0) + 1;
-    for (const dir of ['prev', 'next']) {
+    for (const dir of ['prev', 'next'] as const) {
       this._ghosts[dir]?.remove();
       this._ghosts[dir] = null;
     }
@@ -355,7 +358,7 @@ export class MediaPager {
   }
 
   /** Snap a ghost peeking from the wrong side back off-screen instantly. */
-  _clearOtherPeek(dir) {
+  _clearOtherPeek(dir: Dir) {
     const g = this._peekGhost;
     if (g && g.dataset.edge !== dir) {
       const stride = this._cachedStride();
@@ -407,9 +410,9 @@ export class MediaPager {
    * new page renders beneath the ghost and arm() drops the ghost, so the motion
    * flows unbroken with no spinner blink.
    */
-  _commitPageSwipe(dir) {
+  _commitPageSwipe(dir: Dir) {
     const pag = this._pagination;
-    const targetPage = dir === 'next' ? pag.page + 1 : pag.page - 1;
+    const targetPage = dir === 'next' ? (pag.page || 1) + 1 : (pag.page || 1) - 1;
     const ghost = this._ghosts[dir];
     this._beginPageNav();
 
@@ -461,7 +464,7 @@ export class MediaPager {
     if (!w) return MAX_COLS;
     return Math.max(1, Math.min(MAX_COLS, Math.floor(w / MIN_CARD_PX)));
   }
-  _clampCols(cols) {
+  _clampCols(cols: number) {
     return Math.max(1, Math.min(cols, this._maxCols()));
   }
 
@@ -496,7 +499,7 @@ export class MediaPager {
   }
 
   /** Accumulate incremental pinch scale and step a column once it crosses ±40%. */
-  _pinchStep(scaleDelta) {
+  _pinchStep(scaleDelta: number) {
     this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
     if (this._pinchAccum > 1.4) {
       this._zoomBy(-1);
@@ -513,7 +516,7 @@ export class MediaPager {
   }
 
   /** Apply a ±1 column zoom step: instant CSS re-flow, deferred per_page refit. */
-  _zoomBy(delta) {
+  _zoomBy(delta: number) {
     // Seed from the grid's current column count the first time, so the first
     // pinch continues from what is on screen rather than jumping.
     const current = this._clampCols(getMediaZoom() || this._liveCols() || 1);
@@ -564,7 +567,8 @@ export class MediaPager {
       e.preventDefault();
       this._gestureScale = 1;
     };
-    this._onGestureChange = e => {
+    this._onGestureChange = ev => {
+      const e = ev as SafariGestureEvent;
       e.preventDefault();
       const rel = e.scale / (this._gestureScale || 1);
       if (rel > 1.4) {
@@ -597,7 +601,7 @@ export class MediaPager {
     if (this._onZoomKey) window.removeEventListener('keydown', this._onZoomKey);
     this._onZoomKey = null;
     if (this._zoomWheelEl) {
-      this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
+      if (this._onZoomWheel) this._zoomWheelEl.removeEventListener('wheel', this._onZoomWheel);
       this._zoomWheelEl.removeEventListener('gesturestart', this._onGestureStart);
       this._zoomWheelEl.removeEventListener('gesturechange', this._onGestureChange);
       this._zoomWheelEl.removeEventListener('gestureend', this._onGestureEnd);
@@ -635,7 +639,7 @@ export class MediaPager {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
-    const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const CHEVRON = (d: string) => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     const arrowSpecs: Array<[string, () => void, string, string]> = [
       ['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
       ['next', goNext, 'Next page', 'M9 18l6-6-6-6'],
@@ -655,6 +659,7 @@ export class MediaPager {
 }
 
 /** True when the event target is a field the user is typing into. */
-function isTyping(t) {
+function isTyping(target: EventTarget | null) {
+  const t = target as HTMLElement | null;
   return !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 }
