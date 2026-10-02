@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "@playwright/cli": "0.1.21",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "esbuild": "^0.28.2",
     "linkedom": "^0.18.13",
     "oxc-parser": "0.152.0",
