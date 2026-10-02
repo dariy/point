@@ -27,15 +27,22 @@ import { openMoveDialog, openMergeDialog, openDropOnConfirm } from '../../compon
 import { renderBulkToolbar, setupSelectMode } from '../../components/light/tags/tagSelection.ts';
 import { setupListFilters } from '../../components/light/tags/tagListFilters.ts';
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+import type { PageProps } from '../../router.ts';
+import type { Tag, TagStub } from '../../api/tags.ts';
+import type { SelectModeHandle } from '../../components/light/tags/tagSelection.ts';
 
-/** @extends {Component<PageProps>} */
-export default class TagsManagerPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+export default class TagsManagerPage extends Component<PageProps> {
+  _modal: HTMLDivElement | null;
+  _modalKeyHandler: ((e: KeyboardEvent) => void) | null;
+  _listSearch: string;
+  _listFilterParents: TagStub[];
+  _listFilterFlags: string[];
+  _initialParentIds: number[];
+  _initialChildIds: number[];
+  _swipeCleanup: (() => void) | null;
+  _select: SelectModeHandle | null;
+
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     this.state = {
       loading: true,
@@ -130,7 +137,7 @@ export default class TagsManagerPage extends Component {
     };
   }
   _applyListFilter() {
-    const byId = new Map(this.state.tags.map(t => [t.id, t]));
+    const byId = new Map((this.state.tags as Tag[]).map(t => [t.id, t]));
     this.$$('.tm-tag-row').forEach(row => {
       const tag = byId.get(parseInt(row.dataset.id, 10));
       row.classList.toggle('hidden', !tag || !matchesListFilter(tag, this._listView()));
@@ -140,7 +147,7 @@ export default class TagsManagerPage extends Component {
     const chips = this.$('#tm-filter-chips');
     if (!chips) return;
     setHTML(chips, html`${renderFilterChips(this._listFilterParents)}`);
-    chips.querySelectorAll('.tm-filter-chip').forEach((/** @type {HTMLElement} */ chip) => {
+    chips.querySelectorAll('.tm-filter-chip').forEach((chip: HTMLElement) => {
       chip.addEventListener('click', () => {
         const id = parseInt(chip.dataset.removeId, 10);
         this._listFilterParents = this._listFilterParents.filter(p => p.id !== id);
@@ -174,7 +181,7 @@ export default class TagsManagerPage extends Component {
     this._listSearch = '';
     this._listFilterParents = [];
     this._listFilterFlags = [];
-    const searchInput = /** @type {HTMLInputElement|null} */ (this.$('.tm-list-search'));
+    const searchInput = (this.$('.tm-list-search') as HTMLInputElement|null);
     if (searchInput) searchInput.value = '';
     this.$$('.tm-quick-filter-btn').forEach(btn => {
       btn.classList.remove('btn-primary');
@@ -307,7 +314,8 @@ export default class TagsManagerPage extends Component {
         },
         onParentFilter: parent => {
           if (this._listFilterParents.find(p => p.id === parent.id)) return;
-          this._listFilterParents.push(parent);
+          // The button carries no slug; the filter reads only id and name.
+          this._listFilterParents.push(parent as TagStub);
           this._updateFilterChips();
           this._applyListFilter();
           this._syncClearBtn();
@@ -503,8 +511,8 @@ export default class TagsManagerPage extends Component {
     }
 
     // Auto-slug from name
-    const nameInput = /** @type {HTMLInputElement} */ (modal.querySelector('[name="name"]'));
-    const slugInput = /** @type {HTMLInputElement} */ (modal.querySelector('#modal-slug'));
+    const nameInput = (modal.querySelector('[name="name"]') as HTMLInputElement);
+    const slugInput = (modal.querySelector('#modal-slug') as HTMLInputElement);
     if (isEdit) slugInput.dataset.manual = '1';
     nameInput.addEventListener('input', () => {
       if (!slugInput.dataset.manual) slugInput.value = slugifyTagName(nameInput.value);
@@ -514,14 +522,14 @@ export default class TagsManagerPage extends Component {
     });
 
     // Toggle nav order field visibility
-    const inNavCheck = /** @type {HTMLInputElement|null} */ (modal.querySelector('#in-nav-check'));
+    const inNavCheck = (modal.querySelector('#in-nav-check') as HTMLInputElement|null);
     const navOrderRow = modal.querySelector('#nav-order-row');
     inNavCheck?.addEventListener('change', () => {
       navOrderRow.classList.toggle('hidden', !inNavCheck.checked);
     });
 
     // Collapsible sections
-    modal.querySelectorAll('.tm-section-toggle').forEach((/** @type {HTMLElement} */ btn) => {
+    modal.querySelectorAll('.tm-section-toggle').forEach((btn: HTMLElement) => {
       btn.addEventListener('click', () => {
         const targetId = btn.dataset.target;
         const body = modal.querySelector(`#${targetId}`);
@@ -534,10 +542,10 @@ export default class TagsManagerPage extends Component {
 
     // Parse / Geocode
     modal.querySelector('#gmaps-parse-btn')?.addEventListener('click', async () => {
-      const coordInput = /** @type {HTMLInputElement} */ (modal.querySelector('#coordinates-input'));
-      const latInput = /** @type {HTMLInputElement} */ (modal.querySelector('#coord-lat'));
-      const lngInput = /** @type {HTMLInputElement} */ (modal.querySelector('#coord-lng'));
-      const parseBtn = /** @type {HTMLButtonElement} */ (modal.querySelector('#gmaps-parse-btn'));
+      const coordInput = (modal.querySelector('#coordinates-input') as HTMLInputElement);
+      const latInput = (modal.querySelector('#coord-lat') as HTMLInputElement);
+      const lngInput = (modal.querySelector('#coord-lng') as HTMLInputElement);
+      const parseBtn = (modal.querySelector('#gmaps-parse-btn') as HTMLButtonElement);
       const raw = coordInput.value.trim();
       const setLocked = locked => {
         coordInput.disabled = locked;
@@ -666,7 +674,7 @@ export default class TagsManagerPage extends Component {
     const fd = new FormData(form);
     // FormData reads are typed `string|File`; this form has no file input, and a
     // missing key still comes back null, which every read below already handles.
-    const field = (/** @type {string} */ key) => /** @type {string} */ (fd.get(key));
+    const field = (key: string) => fd.get(key) as string;
     const name = (field('name') || '').trim();
     const slug = (field('slug') || '').trim();
     const description = (field('description') || '').trim();

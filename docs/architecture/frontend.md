@@ -640,45 +640,45 @@ const PUBLIC_ROUTES = [
 const LIGHT_ROUTES = [
   {
     pattern: /^\/light\/login$/,
-    component: () => import('./pages/light/LoginPage.js').then(m => m.LoginPage),
+    component: () => import('./pages/light/LoginPage.ts').then(m => m.LoginPage),
     public: true,
   },
   {
     pattern: /^\/light\/?$/,
-    component: () => import('./pages/light/DashboardPage.js').then(m => m.DashboardPage),
+    component: () => import('./pages/light/DashboardPage.ts').then(m => m.DashboardPage),
   },
   {
     pattern: /^\/light\/posts$/,
-    component: () => import('./pages/light/PostsListPage.js').then(m => m.PostsListPage),
+    component: () => import('./pages/light/PostsListPage.ts').then(m => m.PostsListPage),
   },
   {
     pattern: /^\/light\/posts\/new$/,
-    component: () => import('./pages/light/PostEditPage.js').then(m => m.PostEditPage),
+    component: () => import('./pages/light/PostEditPage.ts').then(m => m.PostEditPage),
   },
   {
     pattern: /^\/light\/posts\/(\d+)$/,
-    component: () => import('./pages/light/PostEditPage.js').then(m => m.PostEditPage),
+    component: () => import('./pages/light/PostEditPage.ts').then(m => m.PostEditPage),
     params: ['id'],
   },
   {
     pattern: /^\/light\/media$/,
-    component: () => import('./pages/light/MediaPage.js').then(m => m.MediaPage),
+    component: () => import('./pages/light/MediaPage.ts').then(m => m.MediaPage),
   },
   {
     pattern: /^\/light\/tags$/,
-    component: () => import('./pages/light/TagsManagerPage.js').then(m => m.TagsManagerPage),
+    component: () => import('./pages/light/TagsManagerPage.ts').then(m => m.TagsManagerPage),
   },
   {
     pattern: /^\/light\/settings$/,
-    component: () => import('./pages/light/SettingsPage.js').then(m => m.SettingsPage),
+    component: () => import('./pages/light/SettingsPage.ts').then(m => m.SettingsPage),
   },
   {
     pattern: /^\/light\/security$/,
-    component: () => import('./pages/light/SecurityPage.js').then(m => m.SecurityPage),
+    component: () => import('./pages/light/SecurityPage.ts').then(m => m.SecurityPage),
   },
   {
     pattern: /^\/light\/system$/,
-    component: () => import('./pages/light/SystemPage.js').then(m => m.SystemPage),
+    component: () => import('./pages/light/SystemPage.ts').then(m => m.SystemPage),
   },
 ];
 
@@ -1122,15 +1122,15 @@ frontend/
 |   |   |   `-- PreviewPage.js
 |   |   |
 |   |   `-- light/
-|   |       |-- LoginPage.js
-|   |       |-- DashboardPage.js
-|   |       |-- PostsListPage.js
-|   |       |-- PostEditPage.js
-|   |       |-- MediaPage.js
-|   |       |-- TagsManagerPage.js
-|   |       |-- SettingsPage.js
-|   |       |-- SecurityPage.js
-|   |       `-- SystemPage.js
+|   |       |-- LoginPage.ts
+|   |       |-- DashboardPage.ts
+|   |       |-- PostsListPage.ts
+|   |       |-- PostEditPage.ts
+|   |       |-- MediaPage.ts
+|   |       |-- TagsManagerPage.ts
+|   |       |-- SettingsPage.ts
+|   |       |-- SecurityPage.ts
+|   |       `-- SystemPage.ts
 |   |
 |   `-- utils/
 |       |-- formatters.ts           <- Date, file size, truncation

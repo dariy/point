@@ -15,7 +15,7 @@ import { formatFileSize, formatDateShort } from '../../utils/formatters.ts';
 import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.ts';
 
 export default class DashboardPage extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], drafts: [], error: null, versionBanner: null };
   }
@@ -201,7 +201,7 @@ export default class DashboardPage extends Component {
     });
 
     // Compose strip interactions
-    const textarea = /** @type {HTMLTextAreaElement|null} */ (this.$('#compose-textarea'));
+    const textarea = (this.$('#compose-textarea') as HTMLTextAreaElement|null);
     if (textarea) {
       textarea.addEventListener('input', () => {
         textarea.style.height = 'auto';

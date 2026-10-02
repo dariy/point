@@ -57,7 +57,7 @@ describe('TagsManagerPage._handleSave', () => {
     fakeFetch();
 
     ({ getToast, setToast } = await import('../src/store.ts'));
-    const { default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js');
+    const { default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts');
 
     page = new TagsManagerPage(dom.document.createElement('div'));
     page.state.loading = false;

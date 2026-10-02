@@ -285,7 +285,7 @@ const routes: Route[] = [
   // any third-party markup injected into it.
   {
     path: "/light/login",
-    load: () => import("./pages/light/LoginPage.js"),
+    load: () => import("./pages/light/LoginPage.ts"),
     public: true,
     title: "Sign in · Light",
   },
@@ -293,7 +293,7 @@ const routes: Route[] = [
   // First-run setup wizard (public — no auth required)
   {
     path: "/setup",
-    load: () => import("./pages/light/SetupPage.js"),
+    load: () => import("./pages/light/SetupPage.ts"),
     public: true,
     title: "Setup",
   },
@@ -301,13 +301,13 @@ const routes: Route[] = [
   // Password reset (public — no auth required)
   {
     path: "/light/pss",
-    load: () => import("./pages/light/PasswordResetPage.js"),
+    load: () => import("./pages/light/PasswordResetPage.ts"),
     public: true,
     title: "Password reset · Light",
   },
   {
     path: "/light/pss/:token",
-    load: () => import("./pages/light/PasswordResetPage.js"),
+    load: () => import("./pages/light/PasswordResetPage.ts"),
     public: true,
     title: "Password reset · Light",
   },
@@ -352,63 +352,63 @@ const routes: Route[] = [
   // Admin (Light) — protected
   {
     path: "/light",
-    load: () => import("./pages/light/DashboardPage.js"),
+    load: () => import("./pages/light/DashboardPage.ts"),
     title: "Light",
   },
   {
     path: "/light/posts",
-    load: () => import("./pages/light/PostsListPage.js"),
+    load: () => import("./pages/light/PostsListPage.ts"),
     title: "Posts · Light",
   },
   {
     path: "/light/media",
-    load: () => import("./pages/light/MediaPage.js"),
+    load: () => import("./pages/light/MediaPage.ts"),
     title: "Media · Light",
   },
   {
     path: "/light/posts/new",
-    load: () => import("./pages/light/PostEditPage.js"),
+    load: () => import("./pages/light/PostEditPage.ts"),
     title: "New post · Light",
   },
   {
     path: "/light/posts/:id/edit",
-    load: () => import("./pages/light/PostEditPage.js"),
+    load: () => import("./pages/light/PostEditPage.ts"),
     title: "Edit post · Light",
   },
   {
     path: "/light/tags",
-    load: () => import("./pages/light/TagsManagerPage.js"),
+    load: () => import("./pages/light/TagsManagerPage.ts"),
     title: "Tags · Light",
   },
   {
     path: "/light/tags/:slug",
-    load: () => import("./pages/light/TagsManagerPage.js"),
+    load: () => import("./pages/light/TagsManagerPage.ts"),
     title: "Tags · Light",
   },
 
   {
     path: "/light/themes",
-    load: () => import("./pages/light/ThemesPage.js"),
+    load: () => import("./pages/light/ThemesPage.ts"),
     title: "Themes · Light",
   },
   {
     path: "/light/plugins",
-    load: () => import("./pages/light/PluginsPage.js"),
+    load: () => import("./pages/light/PluginsPage.ts"),
     title: "Plugins · Light",
   },
   {
     path: "/light/settings",
-    load: () => import("./pages/light/SettingsPage.js"),
+    load: () => import("./pages/light/SettingsPage.ts"),
     title: "Settings · Light",
   },
   {
     path: "/light/security",
-    load: () => import("./pages/light/SecurityPage.js"),
+    load: () => import("./pages/light/SecurityPage.ts"),
     title: "Security · Light",
   },
   {
     path: "/light/system",
-    load: () => import("./pages/light/SystemPage.js"),
+    load: () => import("./pages/light/SystemPage.ts"),
     title: "System · Light",
   },
 ];

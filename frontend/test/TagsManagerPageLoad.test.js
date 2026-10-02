@@ -109,7 +109,7 @@ describe('TagsManagerPage — loading and data operations', () => {
     onNavChanged = () => { navRefreshes++; };
     dom.document.addEventListener('nav-changed', onNavChanged);
 
-    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js'));
+    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts'));
   });
 
   afterEach(() => {

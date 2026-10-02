@@ -37,7 +37,10 @@ import { getInstagramStatus } from "../../api/instagram.ts";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.ts";
 import { setPluginToggled, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
+import type { Slot } from "../../utils/helpers.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
+
+import type { Settings } from "../../api/settings.ts";
 
 // Slot cardinalities that make a slot's candidates alternatives (at most one
 // enabled) and that keep a slot occupied (its last claimant can't be turned
@@ -141,7 +144,7 @@ const MAP_PANELS = [
 ];
 
 // Display name: the registry's tuned `title` when set, else title-cased id.
-function humanize(id, title) {
+function humanize(id: string, title?: string) {
   if (title) return title;
   return id
     .split("-")
@@ -150,7 +153,11 @@ function humanize(id, title) {
 }
 
 export default class PluginsPage extends Component {
-  constructor(container, props = {}) {
+  _mappedIds: Set<string>;
+  _settingsCache: Settings | null;
+  _panel: PluginSettingsPanel | null;
+
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -159,8 +166,8 @@ export default class PluginsPage extends Component {
       presets: {},
       activePreset: "custom",
       editingPreset: null, // preset id while editing membership, else null
-      pending: /** @type {Record<string, boolean>} */ ({}), // id -> true while a toggle request is in flight
-      collapsed: /** @type {Record<string, boolean>} */ ({}), // type -> true while a group card is collapsed
+      pending: ({} as Record<string, boolean>), // id -> true while a toggle request is in flight
+      collapsed: ({} as Record<string, boolean>), // type -> true while a group card is collapsed
     };
   }
 
@@ -203,7 +210,7 @@ export default class PluginsPage extends Component {
     // leftover (no visual spot) list below can be derived, never hand-kept.
     this._mappedIds = new Set();
 
-    const headerRow = (/** @type {import("../../utils/helpers.ts").Slot} */ extra = "") => html`
+    const headerRow = (extra: Slot = "") => html`
       <div class="pmap-row pmap-hdr">
         ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
       </div>`;
@@ -433,8 +440,7 @@ export default class PluginsPage extends Component {
   _renderRowControls(plugin, pending) {
     // Settings control only when the plugin is enabled: an inline drawer for
     // plugins whose settings were extracted here, else a link to its admin page.
-    /** @type {import("../../utils/helpers.ts").Slot} */
-    let settingsLink = "";
+    let settingsLink: Slot = "";
     if (plugin.enabled && PLUGIN_SETTINGS[plugin.id]) {
       settingsLink = html`<button type="button" class="plugin-settings-link" data-settings-id="${plugin.id}">Settings</button>`;
     } else if (plugin.enabled && SETTINGS_PAGE_PATHS[plugin.id]) {
@@ -491,7 +497,7 @@ export default class PluginsPage extends Component {
 
     // Collapse/expand group cards (header click, ignoring the presets header).
     this.$$(".plugins-group-header").forEach((header) => {
-      const card = /** @type {HTMLElement} */ (header.closest(".plugins-group"));
+      const card = (header.closest(".plugins-group") as HTMLElement);
       const type = card?.dataset.group;
       const toggle = () => {
         const nowCollapsed = card.classList.toggle("collapsed");
@@ -514,7 +520,7 @@ export default class PluginsPage extends Component {
     this.$(".preset-edit-toggle")?.addEventListener("click", () => this._toggleEdit());
 
     // Enable/disable toggles.
-    this.$$(".plugin-toggle").forEach((/** @type {HTMLInputElement} */ input) => {
+    this.$$(".plugin-toggle").forEach((input: HTMLInputElement) => {
       input.addEventListener("change", () => this._handleToggle(input.dataset.id, input.checked));
       if (input.type === "radio") {
         input.addEventListener("click", (e) => {
@@ -534,7 +540,7 @@ export default class PluginsPage extends Component {
     });
 
     // Preset-membership checkboxes (edit mode).
-    this.$$(".plugin-include-toggle").forEach((/** @type {HTMLInputElement} */ input) => {
+    this.$$(".plugin-include-toggle").forEach((input: HTMLInputElement) => {
       input.addEventListener("change", () => this._handleInclude(input.dataset.id, input.checked));
     });
 

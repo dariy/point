@@ -4,8 +4,12 @@ import { usernameHintField } from "../../utils/passwordForm.ts";
 import { sha256 } from "../../api/auth.ts";
 import { api } from "../../api/client.ts";
 
-export default class PasswordResetPage extends Component {
-  constructor(container, props = {}) {
+import type { PageProps } from "../../router.ts";
+
+export default class PasswordResetPage extends Component<PageProps> {
+  _token: string | null;
+
+  constructor(container: HTMLElement, props = {} as PageProps) {
     super(container, props);
     // token is present when visiting /light/pss/:token
     this._token = props.params?.token || null;
@@ -129,7 +133,7 @@ export default class PasswordResetPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const email = /** @type {HTMLInputElement|null} */ (this.$("#pss-email"))?.value.trim();
+      const email = (this.$("#pss-email") as HTMLInputElement|null)?.value.trim();
       if (!email) {
         this.setState({ error: "Email address is required." });
         return;
@@ -138,9 +142,8 @@ export default class PasswordResetPage extends Component {
       this.setState({ loading: true, error: null });
 
       try {
-        const res = /** @type {{ detail: string }} */ (
-          await api.post("/api/auth/forgot-password", { email })
-        );
+        const res = (
+          await api.post("/api/auth/forgot-password", { email }) as { detail: string });
         this.setState({ loading: false, success: res.detail });
       } catch (err) {
         this.setState({
@@ -161,8 +164,8 @@ export default class PasswordResetPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const password = /** @type {HTMLInputElement|null} */ (this.$("#pss-password"))?.value || "";
-      const confirm = /** @type {HTMLInputElement|null} */ (this.$("#pss-confirm"))?.value || "";
+      const password = (this.$("#pss-password") as HTMLInputElement|null)?.value || "";
+      const confirm = (this.$("#pss-confirm") as HTMLInputElement|null)?.value || "";
 
       if (password.length < 8) {
         this.setState({ error: "Password must be at least 8 characters." });
@@ -176,12 +179,11 @@ export default class PasswordResetPage extends Component {
       this.setState({ loading: true, error: null });
 
       try {
-        const res = /** @type {{ detail: string }} */ (
+        const res = (
           await api.post("/api/auth/reset-password", {
             token: this._token,
             name: await sha256(password),
-          })
-        );
+          }) as { detail: string });
         this.setState({ loading: false, success: res.detail });
       } catch (err) {
         this.setState({

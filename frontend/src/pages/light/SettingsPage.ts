@@ -16,6 +16,8 @@ import { html, raw } from "../../utils/helpers.ts";
 import { CHECK_SVG } from "../../utils/icons.ts";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.ts";
 
+import type { MediaPickerDialog } from "../../components/light/MediaPickerDialog.ts";
+
 const SETTING_GROUPS = [
   {
     title: "General",
@@ -47,7 +49,9 @@ const SETTING_GROUPS = [
 ];
 
 export default class SettingsPage extends Component {
-  constructor(container, props = {}) {
+  _logoPicker: MediaPickerDialog | null;
+
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -142,9 +146,9 @@ export default class SettingsPage extends Component {
         onConfirm: (items) => {
           const path = items[0]?.path;
           if (!path) return;
-          const input = /** @type {HTMLInputElement|null} */ (this.$("#logo_url"));
+          const input = (this.$("#logo_url") as HTMLInputElement|null);
           if (input) input.value = path;
-          let preview = /** @type {HTMLImageElement|null} */ (this.$(".settings-logo-preview"));
+          let preview = (this.$(".settings-logo-preview") as HTMLImageElement|null);
           if (!preview) {
             preview = document.createElement("img");
             preview.className = "settings-logo-preview";
@@ -182,7 +186,7 @@ export default class SettingsPage extends Component {
   }
 
   async _save() {
-    const form = /** @type {HTMLFormElement|null} */ (this.$("#settings-form"));
+    const form = (this.$("#settings-form") as HTMLFormElement|null);
     if (!form) return;
 
     this.setState({ saving: true });

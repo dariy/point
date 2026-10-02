@@ -34,17 +34,36 @@ import { attachWindowFileDrop } from "../../utils/windowFileDrop.ts";
 import { FIXED_TO_CANVAS, readFieldOrder, readPinnedFields, persistFieldOrder, persistPinnedFields, orderIndex, moveInOrder } from "../../components/light/editorFieldLayout.ts";
 import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../components/light/postEditorFields.ts";
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+import type { PageProps } from '../../router.ts';
+import type { Media } from '../../api/media.ts';
+import type { EditorNode } from '../../utils/postNodes.ts';
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
-/** @extends {Component<PageProps>} */
-export default class PostEditPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+export default class PostEditPage extends Component<PageProps> {
+  _pinned: ReturnType<typeof readPinnedFields>;
+  _order: ReturnType<typeof readFieldOrder>;
+  _tags: string[];
+  _nodes: EditorNode[];
+  _analyzing: boolean;
+  _idleTimer: ReturnType<typeof setTimeout> | null;
+  _maxWaitTimer: ReturnType<typeof setTimeout> | null;
+  _chipInterval: ReturnType<typeof setInterval> | null;
+  _detachReorder: ReturnType<typeof attachPointerReorder> | null;
+  _detachFileDrop: ReturnType<typeof attachWindowFileDrop> | null;
+  _mediaPicker: MediaPickerDialog | null;
+  _tagsInputRef: TagsInput | null;
+  _cssEditorRef: CssEditor | null;
+  _markdownEditorRef: MarkdownEditor | null;
+  _visualEditorRef: VisualEditor | null;
+  _mediaByPath: Record<string, Media> | null;
+  _onKeyDown: ((e: KeyboardEvent) => void) | null;
+  _onAutosaveRetry: (() => void) | null;
+  _debouncedPreview: (() => void) | null;
+  _previewMql: MediaQueryList | null;
+  _onPreviewMqlChange: ((e: MediaQueryListEvent) => void) | null;
+
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     const id = this.props.params?.id ? parseInt(this.props.params.id, 10) : null;
     this.state = {
@@ -296,11 +315,10 @@ export default class PostEditPage extends Component {
     // feature would be pointer-only.
     this.$(".editor-layout")?.addEventListener("keydown", e => {
       if (!this.state.arranging) return;
-      const handle = /** @type {HTMLElement|null} */ (
-        /** @type {HTMLElement} */ (e.target).closest?.(".details-group-handle")
-      );
+      const handle = (
+        (e.target as HTMLElement).closest?.(".details-group-handle") as HTMLElement|null);
       if (!handle) return;
-      const group = /** @type {HTMLElement} */ (handle.closest(".details-group"));
+      const group = (handle.closest(".details-group") as HTMLElement);
       const host = group.parentElement;
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -322,7 +340,7 @@ export default class PostEditPage extends Component {
       e.preventDefault();
       // Land at the position the shared order asks for, not at the end.
       const idx = this._orderIndex(group.dataset.group);
-      const sibs = /** @type {HTMLElement[]} */ ([...to.querySelectorAll(":scope > .details-group")]);
+      const sibs = ([...to.querySelectorAll(":scope > .details-group")] as HTMLElement[]);
       const after = sibs.filter(s => this._orderIndex(s.dataset.group) < idx).pop() || null;
       this._dropGroup(group, to, after);
       handle.focus();
@@ -415,7 +433,7 @@ export default class PostEditPage extends Component {
   }
 
   /** Toggle (or force) the Details rail/sheet without a full re-render. */
-  _toggleDetails(force) {
+  _toggleDetails(force?: boolean) {
     const open = typeof force === "boolean" ? force : !this.state.detailsOpen;
     this.state.detailsOpen = open;
     this.$(".editor-layout")?.classList.toggle("is-details-open", open);
@@ -429,10 +447,10 @@ export default class PostEditPage extends Component {
   /** Refresh the one-line summary shown on each collapsed Details group. */
   _updateDetailsSummaries() {
     // Every #id read below is a form control, and they all carry `.value`.
-    const q = (/** @type {string} */ sel) =>
-      /** @type {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null} */ (this.$(sel));
-    const check = (/** @type {string} */ sel) =>
-      /** @type {HTMLInputElement|null} */ (this.$(sel));
+    const q = (sel: string) =>
+      (this.$(sel) as HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null);
+    const check = (sel: string) =>
+      (this.$(sel) as HTMLInputElement|null);
     const set = (id, text) => {
       const el = this.$(`#${id}`);
       if (el) el.textContent = text;
@@ -494,7 +512,7 @@ export default class PostEditPage extends Component {
     // layout so a group added later (a plugin section rendered through
     // `renderGroup`) behaves the same with no extra wiring.
     this.$(".editor-layout")?.addEventListener("click", e => {
-      const summary = /** @type {HTMLElement} */ (e.target).closest?.("summary.details-group-summary-row");
+      const summary = (e.target as HTMLElement).closest?.("summary.details-group-summary-row");
       if (!summary) return;
       if (this.state.arranging || summary.parentElement?.classList.contains("is-pinned")) e.preventDefault();
     });
@@ -594,7 +612,7 @@ export default class PostEditPage extends Component {
     this._onAutosaveRetry = () => this._save();
     window.addEventListener("autosave:retry", this._onAutosaveRetry);
     const featuredToggle = this.$("#featured-toggle");
-    const featuredCheck = /** @type {HTMLInputElement} */ (this.$("#featured-check"));
+    const featuredCheck = (this.$("#featured-check") as HTMLInputElement);
     featuredToggle?.addEventListener("click", () => {
       const newVal = !featuredCheck.checked;
       featuredCheck.checked = newVal;
@@ -603,8 +621,8 @@ export default class PostEditPage extends Component {
       featuredToggle.title = newVal ? "Unmark as featured" : "Mark as featured";
       this._onInput();
     });
-    const statusSelect = /** @type {HTMLSelectElement|null} */ (this.$("#status-select"));
-    const scheduleInput = /** @type {HTMLInputElement|null} */ (this.$("#schedule-input"));
+    const statusSelect = (this.$("#status-select") as HTMLSelectElement|null);
+    const scheduleInput = (this.$("#schedule-input") as HTMLInputElement|null);
     statusSelect?.addEventListener("change", () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
@@ -779,7 +797,7 @@ export default class PostEditPage extends Component {
         this.state.post = result;
         // Show the date title the backend assigned to an untitled post — a
         // re-render here would wipe the caret, so write the field directly.
-        const titleEl = /** @type {HTMLInputElement|null} */ (this.$("#title-input"));
+        const titleEl = (this.$("#title-input") as HTMLInputElement|null);
         if (titleEl && !titleEl.value.trim() && result.title) titleEl.value = result.title;
         history.replaceState(null, "", `/light/posts/${result.id}/edit`);
       } else {
@@ -930,7 +948,7 @@ export default class PostEditPage extends Component {
           if (!items.length) return;
           this._rememberMedia(items);
           this._nodes.splice(index, 0, ...items.map(item => ({
-            type: "image",
+            type: "image" as const,
             path: item.path
           })));
           this._mountVisualEditor();
@@ -1030,7 +1048,7 @@ export default class PostEditPage extends Component {
     if (!entries.length) return;
     const [current, ...backlog] = entries;
     if (current.title) {
-      const titleEl = /** @type {HTMLInputElement|null} */ (this.$("#title-input"));
+      const titleEl = (this.$("#title-input") as HTMLInputElement|null);
       if (titleEl && !titleEl.value.trim()) titleEl.value = current.title;
     }
     for (const fileEntry of current.files) {
@@ -1119,10 +1137,10 @@ export default class PostEditPage extends Component {
   }
   _collectFormData() {
     // Same narrowing as _updateDetailsSummaries: every id below is a control.
-    const field = (/** @type {string} */ sel) =>
-      /** @type {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null} */ (this.$(sel));
-    const check = (/** @type {string} */ sel) =>
-      /** @type {HTMLInputElement|null} */ (this.$(sel));
+    const field = (sel: string) =>
+      (this.$(sel) as HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null);
+    const check = (sel: string) =>
+      (this.$(sel) as HTMLInputElement|null);
     return {
       title: (field("#title-input")?.value || "").trim(),
       slug: (field("#slug-input")?.value || "").trim() || null,
@@ -1180,7 +1198,7 @@ export default class PostEditPage extends Component {
   async _doAnalyzeField(field, item) {
     if (!item) return;
     const snap = this._collectFormData();
-    this.$$(`.field-ai-btn`).forEach((/** @type {HTMLButtonElement} */ b) => {
+    this.$$(`.field-ai-btn`).forEach((b: HTMLButtonElement) => {
       b.disabled = true;
     });
     const post = {

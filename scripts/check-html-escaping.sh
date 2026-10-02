@@ -64,7 +64,7 @@ frontend/src/components/light/MarkdownEditor.ts 1
 frontend/src/components/light/settingsFields.ts 1
 frontend/src/components/light/tags/TagEditorForm.ts 2
 frontend/src/components/public/PostContent.ts 1
-frontend/src/pages/light/PluginsPage.js 1
+frontend/src/pages/light/PluginsPage.ts 1
 frontend/src/plugins/tags-map/index.js 2
 frontend/src/utils/copyright.ts 1
 frontend/src/utils/helpers.ts 3

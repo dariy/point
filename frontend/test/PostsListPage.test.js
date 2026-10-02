@@ -97,7 +97,7 @@ describe('PostsListPage', () => {
     setUser({ username: 'owner', is_admin: true });
     setSettings({ blog_title: 'Test blog' });
     setToast(null);
-    ({ default: PostsListPage } = await import('../src/pages/light/PostsListPage.js'));
+    ({ default: PostsListPage } = await import('../src/pages/light/PostsListPage.ts'));
   });
 
   afterEach(() => {

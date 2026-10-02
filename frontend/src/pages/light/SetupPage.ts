@@ -7,15 +7,15 @@ import { APP_LOGO_SVG } from '../../utils/icons.ts';
 /**
  * The one-time setup token from the setup link (`/setup?token=…`). Managed
  * installs require it (SETUP_TOKEN); self-hosted installs ignore it.
- * @param {string} search - a `location.search` string
- * @returns {string} the token, or '' when the link has none
+ * @param search - a `location.search` string
+ * @returns the token, or '' when the link has none
  */
-export function setupTokenFrom(search) {
+export function setupTokenFrom(search: string): string {
   return new URLSearchParams(search).get('token') || '';
 }
 
 export default class SetupPage extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: false,
@@ -102,8 +102,8 @@ export default class SetupPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const field = (/** @type {string} */ id) =>
-        /** @type {HTMLInputElement} */ (this.$(id)).value;
+      const field = (id: string) =>
+        (this.$(id) as HTMLInputElement).value;
       const blog_title = field('#blog_title').trim();
       const author_name = field('#author_name').trim();
       const email = field('#email').trim();

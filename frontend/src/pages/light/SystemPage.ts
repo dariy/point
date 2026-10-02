@@ -31,7 +31,7 @@ import { formatFileSize } from "../../utils/formatters.ts";
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 
 export default class SystemPage extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -140,9 +140,8 @@ export default class SystemPage extends Component {
   /**
    * Background-job health. Answers "is anything quietly broken" — before this
    * a failing scheduled task was only visible by reading the server log.
-   * @param {Awaited<ReturnType<typeof getHealth>>|null} health
    */
-  _renderHealthSection(health) {
+  _renderHealthSection(health: Awaited<ReturnType<typeof getHealth>> | null) {
     if (!health) return '';
 
     const rows = (health.tasks || [])
@@ -192,9 +191,8 @@ export default class SystemPage extends Component {
   /**
    * The durable job queue. Unlike the health section it survives a restart:
    * a job in backoff or failed after max_attempts is visible here.
-   * @param {Awaited<ReturnType<typeof getJobs>>|null} jobs
    */
-  _renderJobsSection(jobs) {
+  _renderJobsSection(jobs: Awaited<ReturnType<typeof getJobs>> | null) {
     if (!jobs) return "";
     const counts = jobs.counts || {};
     const countLine = ["queued", "running", "failed", "done"]
@@ -252,9 +250,8 @@ export default class SystemPage extends Component {
 
   /**
    * Render an ISO timestamp as a coarse time from now; a past time is "now".
-   * @param {string|undefined} iso
    */
-  _until(iso) {
+  _until(iso: string | undefined) {
     if (!iso) return "—";
     const then = Date.parse(iso);
     if (Number.isNaN(then)) return "—";
@@ -269,9 +266,8 @@ export default class SystemPage extends Component {
   /**
    * Render an ISO timestamp as a coarse relative age. Returns an em dash for a
    * missing value — "never run" must not render as an epoch date.
-   * @param {string|undefined} iso
    */
-  _ago(iso) {
+  _ago(iso: string | undefined) {
     if (!iso) return "—";
     const then = Date.parse(iso);
     if (Number.isNaN(then)) return "—";

@@ -16,21 +16,19 @@ import { getUser, setUser } from '../../store.ts';
 import { html, navigate } from '../../utils/helpers.ts';
 import { usernameHintField } from '../../utils/passwordForm.ts';
 
-/**
- * @typedef {import('../../router.ts').PageProps & {
- *   next?: string,
- *   onSuccess?: (user: import('../../api/auth.ts').User) => unknown,
- *   onCancel?: () => unknown,
- * }} LoginPageProps
- */
+import type { PageProps } from '../../router.ts';
+import type { User } from '../../api/auth.ts';
 
-/** @extends {Component<LoginPageProps>} */
-export default class LoginPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {LoginPageProps} [props]
-   */
-  constructor(container, props) {
+export interface LoginPageProps extends Partial<PageProps> {
+  next?: string;
+  onSuccess?: (user: User) => unknown;
+  onCancel?: () => unknown;
+}
+
+export default class LoginPage extends Component<LoginPageProps> {
+  _onKeyDown: ((e: KeyboardEvent) => void) | null;
+
+  constructor(container: HTMLElement, props?: LoginPageProps) {
     super(container, props);
     this.state = {
       loading: false,
@@ -48,7 +46,7 @@ export default class LoginPage extends Component {
   // navigates into the app. Staying in this (freshly loaded, third-party-free)
   // document is fine — the authenticated session never shares it with injected
   // markup.
-  _finish(user) {
+  _finish(user: User) {
     if (this.props.onSuccess) return this.props.onSuccess(user);
     navigate(this._next(), { replace: true });
   }
@@ -115,7 +113,7 @@ export default class LoginPage extends Component {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const password = /** @type {HTMLInputElement|null} */ (this.$('#password-input'))?.value || '';
+      const password = (this.$('#password-input') as HTMLInputElement|null)?.value || '';
 
       if (!password) {
         this.setState({ error: 'Password is required.' });

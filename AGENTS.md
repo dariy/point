@@ -150,7 +150,7 @@ Two calls, and they take seconds:
 
 - `get_context(targets=[…])` on what you are about to edit — it reports the fix history and hotspot
   score. Some files here are bug magnets (`api/cmd/api/main.go`,
-  `frontend/src/pages/light/PostEditPage.js`), and knowing that before you start changes how much
+  `frontend/src/pages/light/PostEditPage.ts`), and knowing that before you start changes how much
   test you write.
 - `get_risk(targets=[…])` when the file is shared — a repository method, a `frontend/src/core/`
   module, a plugin registry entry. It names the callers that a signature change will break.

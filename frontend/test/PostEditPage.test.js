@@ -56,7 +56,7 @@ describe('PostEditPage', () => {
       setItem: () => {},
       removeItem: () => {}
     };
-    const mod = await import('../src/pages/light/PostEditPage.js');
+    const mod = await import('../src/pages/light/PostEditPage.ts');
     PostEditPage = mod.default;
   });
 

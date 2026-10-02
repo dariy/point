@@ -41,9 +41,9 @@ describe('password forms', () => {
   before(async () => {
     dom = setupDOM();
     const [login, security, reset] = await Promise.all([
-      import('../src/pages/light/LoginPage.js'),
-      import('../src/pages/light/SecurityPage.js'),
-      import('../src/pages/light/PasswordResetPage.js'),
+      import('../src/pages/light/LoginPage.ts'),
+      import('../src/pages/light/SecurityPage.ts'),
+      import('../src/pages/light/PasswordResetPage.ts'),
     ]);
     pages = [
       ['LoginPage', () => markupOf(login.default)],

@@ -18,7 +18,7 @@ import { loadThemeCss } from "../../utils/themeLoader.ts";
 const CSS_COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\)|hsla?\([0-9.,%\s/deg]+\))$/i;
 
 export default class ThemesPage extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,

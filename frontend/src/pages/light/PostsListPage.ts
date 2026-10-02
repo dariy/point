@@ -13,6 +13,8 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.ts";
 import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.ts";
+import type { Slot } from "../../utils/helpers.ts";
+import type { PageProps } from "../../router.ts";
 import { formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { captureInteraction } from "../../utils/preserveInteraction.ts";
@@ -47,8 +49,24 @@ const CARD_THUMB_SIZES = "48px";
 const videoThumb = (mediaUrl, sizes) => html`${raw(PLAY_SVG)}${mediaUrl ? html`<img ${thumbAttrs(mediaUrl, {
   sizes
 })} class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">` : ""}`;
-export default class PostsListPage extends Component {
-  constructor(container, props = {}) {
+/** The list filters that _load and _syncUrl override. */
+interface PostsListFilters {
+  status?: string;
+  tag?: string;
+  search?: string;
+  page?: number;
+}
+
+export default class PostsListPage extends Component<Partial<PageProps>> {
+  _restoreInteraction: (() => HTMLElement | null) | null;
+  _perPage: number;
+  _onResize: (() => void) | null;
+  _onKeyNav: ((e: KeyboardEvent) => void) | null;
+  _navArrows: HTMLButtonElement[] | null;
+  _hasFitToViewport: boolean;
+  _swipeCleanup: (() => void) | null;
+
+  constructor(container: HTMLElement, props: Partial<PageProps> = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -60,7 +78,7 @@ export default class PostsListPage extends Component {
       search: props.query?.search || "",
       page: parseInt(props.query?.page || "1", 10),
       selectMode: false,
-      selectedIds: new Set()
+      selectedIds: new Set<number>()
     };
   }
   render() {
@@ -90,8 +108,7 @@ export default class PostsListPage extends Component {
     const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
     const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
     const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
-    /** @type {import("../../utils/helpers.ts").Slot} */
-    let thumbInner = "";
+    let thumbInner: Slot = "";
     if (isImage && p.media_url) {
       thumbInner = html`<img ${thumbAttrs(p.media_url, {
         sizes: CARD_THUMB_SIZES
@@ -196,8 +213,7 @@ export default class PostsListPage extends Component {
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
       const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
       const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
-      /** @type {import("../../utils/helpers.ts").Slot} */
-      let previewHtml = "";
+      let previewHtml: Slot = "";
       if (isImage && p.media_url) {
         previewHtml = html`<img ${thumbAttrs(p.media_url, {
           sizes: TABLE_THUMB_SIZES
@@ -369,11 +385,11 @@ export default class PostsListPage extends Component {
     if (searchInput) {
       searchInput.addEventListener("input", debounce(e => {
         // Update state without re-rendering — the input already shows the new value
-        this.state.search = /** @type {HTMLInputElement} */ (e.target).value;
+        this.state.search = (e.target as HTMLInputElement).value;
         this.state.page = 1;
         this._load({
           page: 1,
-          search: /** @type {HTMLInputElement} */ (e.target).value
+          search: (e.target as HTMLInputElement).value
         });
       }, 350));
     }
@@ -382,7 +398,7 @@ export default class PostsListPage extends Component {
     const statusFilterEl = this.$("#status-filter");
     if (statusFilterEl) {
       statusFilterEl.addEventListener("change", e => {
-        const val = /** @type {HTMLSelectElement} */ (e.target).value;
+        const val = (e.target as HTMLSelectElement).value;
         statusFilterEl.className = `status-select badge-${val || "draft"} filter-select`;
         this.setState({
           statusFilter: val,
@@ -425,7 +441,7 @@ export default class PostsListPage extends Component {
       this.$$(".status-change-btn").forEach(select => {
         select.addEventListener("change", async e => {
           const id = parseInt(select.dataset.id, 10);
-          const newStatus = /** @type {HTMLSelectElement} */ (e.target).value;
+          const newStatus = (e.target as HTMLSelectElement).value;
           await this._updatePostStatus(id, newStatus, select);
         });
       });
@@ -514,7 +530,7 @@ export default class PostsListPage extends Component {
       if (!isTrash) {
         let longPressTimer = null;
         card.addEventListener("pointerdown", e => {
-          if (/** @type {HTMLElement} */ (e.target).closest("select, button, a, input")) return;
+          if ((e.target as HTMLElement).closest("select, button, a, input")) return;
           longPressTimer = setTimeout(() => {
             longPressTimer = null;
             if (!this.state.selectMode) {
@@ -536,7 +552,7 @@ export default class PostsListPage extends Component {
         card.addEventListener("pointercancel", cancelTimer);
       }
       card.addEventListener("click", e => {
-        if (/** @type {HTMLElement} */ (e.target).closest("select, button, a, input")) return;
+        if ((e.target as HTMLElement).closest("select, button, a, input")) return;
         if (isTrash) return;
         if (this.state.selectMode) {
           this._toggleCardSelection(postId);
@@ -587,9 +603,9 @@ export default class PostsListPage extends Component {
   _updateBulkToolbar() {
     const n = this.state.selectedIds.size;
     const bulkCount = this.$("#bulk-count");
-    const applyBtn = /** @type {HTMLButtonElement|null} */ (this.$("#bulk-apply-btn"));
-    const deleteBtn = /** @type {HTMLButtonElement|null} */ (this.$("#bulk-delete-btn"));
-    const selectAllCb = /** @type {HTMLInputElement|null} */ (this.$("#select-all-cb"));
+    const applyBtn = (this.$("#bulk-apply-btn") as HTMLButtonElement|null);
+    const deleteBtn = (this.$("#bulk-delete-btn") as HTMLButtonElement|null);
+    const selectAllCb = (this.$("#select-all-cb") as HTMLInputElement|null);
     if (bulkCount) bulkCount.textContent = `${n} selected`;
     if (applyBtn) applyBtn.disabled = n === 0;
     if (deleteBtn) deleteBtn.disabled = n === 0;
@@ -608,8 +624,8 @@ export default class PostsListPage extends Component {
     }
   }
   async _handleBulkApply() {
-    const status = /** @type {HTMLSelectElement} */ (this.$("#bulk-status-select")).value;
-    const ids = Array.from(this.state.selectedIds);
+    const status = (this.$("#bulk-status-select") as HTMLSelectElement).value;
+    const ids = Array.from(this.state.selectedIds as Set<number>);
     let successCount = 0;
     let failCount = 0;
     for (const id of ids) {
@@ -640,7 +656,7 @@ export default class PostsListPage extends Component {
   _handleBulkDelete() {
     const n = this.state.selectedIds.size;
     this._showConfirm("Move to Trash", `Move ${n} posts to Trash? You can restore them later.`, "Move to Trash", "danger", async () => {
-      const ids = Array.from(this.state.selectedIds);
+      const ids = Array.from(this.state.selectedIds as Set<number>);
       let successCount = 0;
       let failCount = 0;
       for (const id of ids) {
@@ -697,7 +713,7 @@ export default class PostsListPage extends Component {
     };
     this._onKeyNav = e => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      const t = e.target;
+      const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') {
         e.preventDefault();
@@ -708,9 +724,8 @@ export default class PostsListPage extends Component {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
-    const CHEVRON = d => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-    /** @type {[string, () => void, string, string][]} */
-    const arrowSpecs = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']];
+    const CHEVRON = (d: string) => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const arrowSpecs: [string, () => void, string, string][] = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'], ['next', goNext, 'Next page', 'M9 18l6-6-6-6']];
     this._navArrows = arrowSpecs.map(([dir, go, label, d]) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -772,7 +787,7 @@ export default class PostsListPage extends Component {
   }
 
   /** Update the browser URL to reflect current filters without triggering a full navigation. */
-  _syncUrl(overrides = {}) {
+  _syncUrl(overrides: PostsListFilters = {}) {
     const status = overrides.status ?? this.state.statusFilter;
     const tag = overrides.tag ?? this.state.tagFilter;
     const search = overrides.search ?? this.state.search;
@@ -786,7 +801,7 @@ export default class PostsListPage extends Component {
     const url = "/light/posts" + (qs ? "?" + qs : "");
     history.replaceState(null, "", url);
   }
-  async _load(overrides = {}) {
+  async _load(overrides: PostsListFilters = {}) {
     // Snapshot focus and caret before any DOM mutation, so the search box a
     // user is still typing in survives the reload it just triggered.
     const restoreInteraction = captureInteraction(this.container);
@@ -804,7 +819,7 @@ export default class PostsListPage extends Component {
     }
     this.state.loading = true;
     this.state.error = null;
-    const params = {
+    const params: Parameters<typeof listPosts>[0] = {
       page: overrides.page ?? this.state.page,
       per_page: this._perPage ?? 20
     };
@@ -976,14 +991,14 @@ export default class PostsListPage extends Component {
       card.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
         // Let buttons in the already-open drawer handle their own taps
-        if (card === openCard && /** @type {HTMLElement} */ (e.target).closest('.post-card-swipe-actions')) return;
+        if (card === openCard && (e.target as HTMLElement).closest('.post-card-swipe-actions')) return;
         const t = e.touches[0];
         startX = t.clientX;
         startY = t.clientY;
         dragging = false;
         decided = false;
         dx = 0;
-        const actions = /** @type {HTMLElement|null} */ (card.querySelector('.post-card-swipe-actions'));
+        const actions = (card.querySelector('.post-card-swipe-actions') as HTMLElement|null);
         actionsWidth = actions ? actions.offsetWidth : 0;
         card.style.transition = 'none';
       }, {
@@ -1102,7 +1117,7 @@ export default class PostsListPage extends Component {
       });
     }
   }
-  async _updatePostStatus(id, status, select) {
+  async _updatePostStatus(id, status, select?) {
     if (status === "scheduled") {
       navigate(`/light/posts/${id}/edit?openSchedule=1`);
       return;

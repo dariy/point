@@ -212,7 +212,7 @@ describe('setupAdminLayout — the leak it caused', () => {
       json: async () => ({ tags: [], total: 0 }),
     });
     setUser({ username: 'tester' });
-    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js'));
+    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts'));
 
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);

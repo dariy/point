@@ -104,7 +104,7 @@ describe('TagsManagerPage — wiring', () => {
     navRefreshes = 0;
     dom.document.addEventListener('nav-changed', () => { navRefreshes++; });
 
-    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.js'));
+    ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts'));
   });
 
   afterEach(() => {

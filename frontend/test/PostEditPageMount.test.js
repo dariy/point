@@ -133,7 +133,7 @@ describe('PostEditPage (mounted)', () => {
       { id: 'ai-analysis', type: 'service' },
       { id: 'custom-css', type: 'enhancer' },
     ]);
-    ({ default: PostEditPage } = await import('../src/pages/light/PostEditPage.js'));
+    ({ default: PostEditPage } = await import('../src/pages/light/PostEditPage.ts'));
   });
 
   afterEach(() => {

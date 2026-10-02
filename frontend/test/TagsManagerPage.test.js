@@ -37,7 +37,7 @@ describe('TagsManagerPage', () => {
     const storeMod = await import('../src/store.ts');
     global.store = storeMod.store;
 
-    const mod = await import('../src/pages/light/TagsManagerPage.js');
+    const mod = await import('../src/pages/light/TagsManagerPage.ts');
     TagsManagerPage = mod.default;
   });
 

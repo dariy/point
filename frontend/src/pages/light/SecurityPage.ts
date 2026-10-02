@@ -17,7 +17,7 @@ import { usernameHintField } from '../../utils/passwordForm.ts';
 import { formatDateShort } from '../../utils/formatters.ts';
 
 export default class SecurityPage extends Component {
-  constructor(container, props = {}) {
+  constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
       loading: true,
@@ -174,8 +174,8 @@ export default class SecurityPage extends Component {
   }
 
   async _handleChangePassword() {
-    const oldEl = /** @type {HTMLInputElement} */ (this.$('#old-password'));
-    const newEl = /** @type {HTMLInputElement} */ (this.$('#new-password'));
+    const oldEl = (this.$('#old-password') as HTMLInputElement);
+    const newEl = (this.$('#new-password') as HTMLInputElement);
     const oldPassword = oldEl.value;
     const newPassword = newEl.value;
 
@@ -193,8 +193,8 @@ export default class SecurityPage extends Component {
   }
 
   async _handleChangeEmail() {
-    const emailEl = /** @type {HTMLInputElement} */ (this.$('#account-email'));
-    const passEl = /** @type {HTMLInputElement} */ (this.$('#email-password'));
+    const emailEl = (this.$('#account-email') as HTMLInputElement);
+    const passEl = (this.$('#email-password') as HTMLInputElement);
     const email = emailEl.value.trim();
     const password = passEl.value;
 

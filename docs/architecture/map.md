@@ -112,7 +112,7 @@ the list below before trusting an older reference to `main.go`.
 The one common change that lands in four places rather than one, because a
 setting is a DB row and not a config field. In order:
 
-1. `frontend/src/pages/light/SettingsPage.js` — add the key to a group in
+1. `frontend/src/pages/light/SettingsPage.ts` — add the key to a group in
    `SETTING_GROUPS`; that alone renders an input and saves it.
 2. `frontend/src/components/light/settingsFields.ts` — a label override if the
    snake_case name does not humanise well, plus `NUMERIC_KEYS` or

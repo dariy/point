@@ -15,8 +15,8 @@
  *   router.init([
  *     { path: '/',             load: () => import('./pages/public/HomePage.js'),    public: true },
  *     { path: '/posts/:slug',   load: () => import('./pages/public/PostPage.js'),    public: true },
- *     { path: '/light',        load: () => import('./pages/light/DashboardPage.js') },
- *     { path: '/light/login',  load: () => import('./pages/light/LoginPage.js'),    public: true },
+ *     { path: '/light',        load: () => import('./pages/light/DashboardPage.ts') },
+ *     { path: '/light/login',  load: () => import('./pages/light/LoginPage.ts'),    public: true },
  *   ], {
  *     mountPoint: document.getElementById('app'),
  *     authGuard: () => !!getUser(),

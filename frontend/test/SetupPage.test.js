@@ -24,7 +24,7 @@ describe('SetupPage', () => {
       dispatchEvent: () => {}
     };
 
-    const mod = await import('../src/pages/light/SetupPage.js');
+    const mod = await import('../src/pages/light/SetupPage.ts');
     SetupPage = mod.default;
     setupTokenFrom = mod.setupTokenFrom;
   });
